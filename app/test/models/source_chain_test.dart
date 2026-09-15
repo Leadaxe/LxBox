@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 
 // §393 C1 — модель источника-цепочки (SPEC 110), канон
@@ -19,11 +20,22 @@ void main() {
   group('SourceChain: запись sources[] round-trip', () {
     test('минимальная цепочка: hops переживают запись и чтение В ПОРЯДКЕ ПАКЕТА',
         () {
-      const c = SourceChain(tag: 'via-de', hops: ['home-vps', 'de-exit']);
+      const c = SourceChain(tag: 'via-de', hops: [
+        NodeLink(tag: 'home-vps'),
+        NodeLink(folderId: 'sub-1', tag: 'de-exit'),
+      ]);
       final back = _roundTrip(c);
       // Порядок — смысл записи: перевернув его, получим работающий, но
-      // другой маршрут (SPEC 110 T3).
-      expect(back.hops, ['home-vps', 'de-exit']);
+      // другой маршрут (SPEC 110 T3). Пара едет парой, корневая — без
+      // folder_id (D-112).
+      expect(back.hops, const [
+        NodeLink(tag: 'home-vps'),
+        NodeLink(folderId: 'sub-1', tag: 'de-exit'),
+      ]);
+      expect(chainToRecord(c)['hops'], [
+        {'tag': 'home-vps'},
+        {'folder_id': 'sub-1', 'tag': 'de-exit'},
+      ]);
       expect(back.tag, 'via-de');
       expect(back.enabled, isTrue);
     });
@@ -32,7 +44,7 @@ void main() {
       const c = SourceChain(
         tag: 'tuned',
         label: 'Tuned',
-        hops: ['a', 'b', 'c'],
+        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b'), NodeLink(tag: 'c')],
         idleTimeout: '10m',
         stripEvasion: false,
         strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
@@ -57,7 +69,7 @@ void main() {
       // по смыслу — звено сохранило бы поле, которое пользователь снимал.
       const c = SourceChain(
         tag: 'c',
-        hops: ['a', 'b'],
+        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         rewrite: {
           'vless': {'flow': null},
         },
@@ -71,12 +83,12 @@ void main() {
       // Отсутствие ключа = умолчание ядра (true), false = явное выключение.
       // Схлопнув их в bool, мы потеряли бы выбор пользователя при смене
       // дефолта ядра.
-      const unset = SourceChain(tag: 'c', hops: ['a', 'b']);
+      const unset = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       expect(_body(unset).containsKey('strip_evasion'), isFalse);
       expect(unset.stripEvasion, isNull);
       expect(unset.stripEvasionEnabled, isTrue);
 
-      const off = SourceChain(tag: 'c', hops: ['a', 'b'], stripEvasion: false);
+      const off = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], stripEvasion: false);
       expect(_body(off)['strip_evasion'], isFalse);
       expect(off.stripEvasionEnabled, isFalse);
       expect(_roundTrip(off).stripEvasion, isFalse);
@@ -84,7 +96,7 @@ void main() {
     });
 
     test('пустые каталоги ключей в записи не создают', () {
-      const c = SourceChain(tag: 'c', hops: ['a', 'b']);
+      const c = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       final j = _body(c);
       expect(j.containsKey('strip'), isFalse);
       expect(j.containsKey('rewrite'), isFalse);
@@ -109,7 +121,7 @@ void main() {
       }, notes: notes);
       final back = read.value!;
       // Строка — корневая ссылка формы до 1.0; не ссылка — отброс с отметкой.
-      expect(back.hops, ['a', 'b']);
+      expect(back.hops, const [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       expect(notes, hasLength(2));
       expect(read.unknownKeys,
           ['body.strip.nonsense', 'body.strip.tls.fragment']);
@@ -119,7 +131,7 @@ void main() {
 
     test('copyWith не трогает tag и умеет снять strip_evasion в «умолчание»',
         () {
-      const c = SourceChain(tag: 'c', hops: ['a', 'b'], stripEvasion: false);
+      const c = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], stripEvasion: false);
       final off = c.copyWith(label: 'X');
       expect(off.tag, 'c');
       expect(off.label, 'X');
@@ -152,28 +164,28 @@ void main() {
 
   group('chainEmitError — инварианты ядра', () {
     test('валидная цепочка ошибок не даёт', () {
-      expect(chainEmitError(const SourceChain(tag: 'c', hops: ['a', 'b'])), '');
+      expect(chainEmitError(const SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])), '');
     });
 
     test('меньше двух позиций', () {
       expect(chainEmitError(const SourceChain(tag: 'c')),
           contains('no positions set'));
-      expect(chainEmitError(const SourceChain(tag: 'c', hops: ['a'])),
+      expect(chainEmitError(const SourceChain(tag: 'c', hops: [NodeLink(tag: 'a')])),
           contains('at least two'));
     });
 
     test('пустая позиция, самоссылка, дубль', () {
-      expect(chainEmitError(const SourceChain(tag: 'c', hops: ['a', '  '])),
+      expect(chainEmitError(const SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: '  ')])),
           contains('position 2 is empty'));
-      expect(chainEmitError(const SourceChain(tag: 'c', hops: ['a', 'c'])),
+      expect(chainEmitError(const SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'c')])),
           contains('references the chain itself'));
-      expect(chainEmitError(const SourceChain(tag: 'c', hops: ['a', 'a'])),
+      expect(chainEmitError(const SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'a')])),
           contains('repeats'));
     });
 
     test('неизвестный ключ strip называет допустимые', () {
       final err = chainEmitError(const SourceChain(
-          tag: 'c', hops: ['a', 'b'], strip: {'tls.nope': true}));
+          tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], strip: {'tls.nope': true}));
       expect(err, contains('unknown key'));
       expect(err, contains('tls.utls'));
     });
@@ -181,11 +193,17 @@ void main() {
 
   group('chainOutboundObject', () {
     test('ключ ядра — outbounds, порядок хопов сохраняется', () {
+      // Финальные теги позиций даёт сборка (node_link_resolve.dart): модель
+      // их не знает, объект берёт их списком в порядке hops.
       final ob = chainOutboundObject(
-          const SourceChain(tag: 'via-de', hops: ['home', 'de']));
+          const SourceChain(tag: 'via-de', hops: [
+            NodeLink(tag: 'home'),
+            NodeLink(folderId: 'sub-1', tag: 'de'),
+          ]),
+          ['home', 'S de']);
       expect(ob['type'], 'chain');
       expect(ob['tag'], 'via-de');
-      expect(ob['outbounds'], ['home', 'de']);
+      expect(ob['outbounds'], ['home', 'S de']);
       // Умолчания в конфиг не пишутся — иначе явный выбор пользователя стал
       // бы неотличим от дефолта уже в файле.
       expect(ob.containsKey('strip_evasion'), isFalse);
@@ -195,22 +213,22 @@ void main() {
     test('strip обходится по каталогу, а не по порядку ключей Map', () {
       final ob = chainOutboundObject(const SourceChain(
         tag: 'c',
-        hops: ['a', 'b'],
+        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         // Намеренно обратный каталогу порядок.
         strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
-      ));
+      ), const ['a', 'b']);
       expect((ob['strip'] as Map).keys.toList(), ['tls.fragment', 'tls.utls']);
     });
 
     test('rewrite копируется, а не разделяется с моделью', () {
       const c = SourceChain(
         tag: 'c',
-        hops: ['a', 'b'],
+        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         rewrite: {
           'vless': {'flow': ''},
         },
       );
-      final ob = chainOutboundObject(c);
+      final ob = chainOutboundObject(c, const ['a', 'b']);
       (ob['rewrite'] as Map)['vless'] = {'hacked': true};
       expect(c.rewrite['vless'], {'flow': ''});
     });

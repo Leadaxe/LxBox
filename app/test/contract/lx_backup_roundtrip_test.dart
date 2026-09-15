@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -70,7 +72,8 @@ Future<LxBackupExport> _export(_State s) => buildLxBackup(
       ),
     );
 
-/// Импорт теми же чистыми функциями, что экран бэкапа.
+/// Импорт теми же чистыми функциями, что экран бэкапа (`_onLxImport`):
+/// корень результата для подъёма `{tag}` и перевод ссылок файла `linkOf`.
 LxBackupFile _import(_State s, String raw) {
   final file = parseLxBackup(
     raw,
@@ -85,11 +88,19 @@ LxBackupFile _import(_State s, String raw) {
     sourceIds: subs.ids,
     addedSources: subs.added,
     sourceDetours: subs.detours,
+    rootNames: {
+      kDirectOutboundTag,
+      kBlockOutboundTag,
+      for (final d in [...s.directions, ...file.directions]) ...[d.tag, d.autoTag],
+      for (final c in s.chains) c.tag,
+      for (final c in file.chains) c.tag,
+    },
   );
   s.lists = servers.lists;
   s.chains = [
     ...s.chains,
-    ...resolveBackupChainHops(file, servers.lists, servers.folderIds),
+    ...resolveBackupChainHops(file, servers.lists, servers.folderIds,
+        linkOf: servers.linkOf),
   ];
   s.rules = renumberBackupAxis(file.rules, servers.lists, servers.touched);
   final dns = applyDnsBackup(
@@ -169,7 +180,9 @@ _State _source() {
         name: 'root-jp',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: DetourPolicy.defaults.copyWith(overrideDetour: 'EU de-1'),
+        // Ссылка на член папки — пара {id папки, сырой тег} (D-112).
+        detourPolicy: DetourPolicy.defaults
+            .copyWith(overrideDetour: const NodeLink(folderId: 'fold-a', tag: 'de-1')),
         origin: UserSource.manual,
         rawBody:
             'vless://11111111-1111-1111-1111-111111111111@example-3.com:443?type=tcp&security=tls&sni=example-3.com#root-jp',
@@ -211,7 +224,7 @@ _State _source() {
           FolderMember(
             raw: 'trojan://secret@example-5.com:443#nl-1',
             enabled: false,
-            detour: 'root-jp',
+            detour: const NodeLink(tag: 'root-jp'),
           ),
           FolderMember(raw: 'not a node at all'),
         ],
@@ -231,7 +244,7 @@ _State _source() {
     chains: const [
       SourceChain(
         tag: 'jp-via-eu',
-        hops: ['EU de-1', 'root-jp'],
+        hops: [NodeLink(folderId: 'fold-a', tag: 'de-1'), NodeLink(tag: 'root-jp')],
         idleTimeout: '0s',
         stripEvasion: false,
         strip: {'tls.utls': true},
@@ -242,7 +255,8 @@ _State _source() {
       SourceChain(
         tag: 'sub-then-dir',
         enabled: false,
-        hops: ['PR node-x', 'vpn-1'],
+        // Узел подписки — пара {id подписки, сырой тег} (NODE_LINK §2.2).
+        hops: [NodeLink(folderId: 'sub-1', tag: 'node-x'), NodeLink(tag: 'vpn-1')],
       ),
     ],
     rules: [
@@ -384,9 +398,8 @@ void main() {
     });
 
     // §439 — экспорт пишет ссылку так, как она лежит в записи хранения
-    // (`_LinkIndex` снят). Пока модели держат финальный тег строкой, это
-    // корневая `{tag}`; форму `{folder_id, tag}` даёт трек N1 вместе с
-    // моделями, и сверка с записью хранения переживает его без правки.
+    // (NODE_LINK §7.1): член папки — пара {id папки, сырой тег}, корневой
+    // узел — {tag}.
     test('ссылки: как в записи хранения, preset DNS → preset_id:tag', () async {
       final state = _source();
       final doc = jsonDecode((await _export(state)).json) as Map<String, dynamic>;
@@ -396,8 +409,12 @@ void main() {
         expect(entry['hops'], chainToRecord(c)['hops'], reason: c.tag);
       }
       expect(sources.firstWhere((s) => s['tag'] == 'jp-via-eu')['hops'], [
-        {'tag': 'EU de-1'},
+        {'folder_id': 'fold-a', 'tag': 'de-1'},
         {'tag': 'root-jp'},
+      ]);
+      expect(sources.firstWhere((s) => s['tag'] == 'sub-then-dir')['hops'], [
+        {'folder_id': 'sub-1', 'tag': 'node-x'},
+        {'tag': 'vpn-1'},
       ]);
       final root = sources.firstWhere((s) => s['tag'] == 'root-jp');
       expect(root['detour'], sourceToRecord(state.lists[1])['detour']);
@@ -458,11 +475,18 @@ void main() {
         (state.lists[0] as SubscriptionServers).copyWith(
           onUpdateAction: SubscriptionOnUpdateAction.reload,
           detourPolicy: DetourPolicy.defaults
-              .copyWith(overrideDetour: 'vpn-1', registerDetourServers: true),
+              .copyWith(
+                  overrideDetour: const NodeLink(tag: 'vpn-1'),
+                  registerDetourServers: true),
         ),
         (state.lists[3] as FolderServers).copyWith(pingUrl: 'https://example-1.com/204'),
       ];
-      state.chains = const [SourceChain(tag: 'c', label: 'Named', hops: ['a', 'b'])];
+      state.chains = const [
+        SourceChain(
+            tag: 'c',
+            label: 'Named',
+            hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+      ];
       state.rules = [CustomRuleJson(name: 'Broken', json: 'not json')];
       state.dnsRules = [
         ...state.dnsRules,

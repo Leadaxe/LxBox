@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_sections.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -146,7 +149,7 @@ void main() {
       expect(got.members, hasLength(1));
     });
 
-    test('хоп в папку файла получает префикс совпавшей папки', () {
+    test('хоп в папку файла — пара с id папки здесь, чужой контейнер — как есть', () {
       final raw = _file({
         'sources': [
           {
@@ -174,10 +177,28 @@ void main() {
       final subs = mergeBackupSubscriptions(const [], file.subscriptions);
       final servers =
           mergeBackupServers(subs.lists, file.servers, folders: file.folders);
-      final chain =
-          resolveBackupChainHops(file, servers.lists, servers.folderIds).single;
-      expect(chain.hops, ['eu de', 'jp', 'ghost'],
-          reason: 'ссылка без папки ввозится как есть');
+      final folderId = servers.lists.whereType<FolderServers>().single.id;
+      expect(servers.folderIds['FILE'], folderId);
+      // NODE_LINK §7.2: folder_id — по карте контейнеров, тег сырой (префикс
+      // папки в ссылку не входит); контейнера нет ни в файле, ни здесь —
+      // ссылка ввозится как есть, её разбирает сборка.
+      final expected = [
+        NodeLink(folderId: folderId, tag: 'de'),
+        const NodeLink(tag: 'jp'),
+        const NodeLink(folderId: 'NOWHERE', tag: 'ghost'),
+      ];
+      expect(
+          resolveBackupChainHops(file, servers.lists, servers.folderIds)
+              .single
+              .hops,
+          expected);
+      expect(
+          resolveBackupChainHops(file, servers.lists, servers.folderIds,
+                  linkOf: servers.linkOf)
+              .single
+              .hops,
+          expected,
+          reason: 'путь экрана бэкапа даёт те же ссылки');
     });
   });
 
@@ -214,7 +235,7 @@ void main() {
       expect((cleared.lists.single as UserServer).sections, isNull);
     });
 
-    test('секции у подписки — not_allowed; член папки chain — kind_unsupported; unsupported с исходником — член', () {
+    test('секции у подписки — not_allowed; член папки chain — kind_unsupported, auto — группа; unsupported с исходником — член', () {
       final file = parseLxBackup(_file({
         'sources': [
           {'kind': 'subscription', 'url': 'https://example-1.com/s', 'name': 'S',
@@ -240,11 +261,15 @@ void main() {
           .where((w) => w.code == kWarnSourceKindUnsupported)
           .map((w) => w.kind)
           .toList();
-      expect(kinds, ['chain', 'auto', 'auto']);
-      expect(file.servers.single.uri, 'weird://thing');
+      // §439 N2 — auto в папке ввозится группой; в корне sources[] у LxBox
+      // группы нет (BACKUP.md §2).
+      expect(kinds, ['chain', 'auto']);
       final folder = _apply(const [], file).lists.whereType<FolderServers>().single;
-      expect(folder.members.single.raw, 'weird://thing');
-      expect(folder.members.single.node, isNull, reason: 'нечитаемый член виден в папке');
+      expect(folder.members.map((m) => m.node?.tag), ['grp', null]);
+      expect(folder.members[0].node, isA<AutoSelectSpec>());
+      final odd = folder.members[1];
+      expect(odd.raw, 'weird://thing');
+      expect(odd.node, isNull, reason: 'нечитаемый член виден в папке');
     });
   });
 
@@ -408,8 +433,9 @@ void main() {
         File('test/fixtures/lx_backup/launcher_v8_export10.json').readAsStringSync(),
         knownPresets: {for (final p in presets) p['preset_id'] as String},
       );
+      // §439 N2 — группа «быстрые» папки ввозится autogroup'ом, потерей не
+      // называется.
       expect([for (final w in file.warnings) '${w.code} ${w.detail}'], [
-        '$kWarnSourceKindUnsupported Личные: быстрые',
         '$kWarnDnsEntrySkipped dns.servers: russian:yandex_udp',
         '$kWarnDnsEntrySkipped dns.rules: russian',
       ]);
@@ -420,14 +446,20 @@ void main() {
           reason: 'порядок файла');
       final root = state.lists[0] as UserServer;
       expect(root.name, '🇯🇵 Tokyo');
-      expect(root.detourPolicy.overrideDetour, '[P] NL-1',
-          reason: 'префикс подписки «[P] » у LxBox — «[P]» и пробел');
+      final sub = state.lists[2] as SubscriptionServers;
+      expect(root.detourPolicy.overrideDetour,
+          NodeLink(folderId: sub.id, tag: 'NL-1'),
+          reason: 'ссылка на узел подписки — пара с сырым тегом (NODE_LINK §2.2)');
       expect(root.sections!.dnsServers.single.tag, '@{self}-dns');
       final folder = state.lists[1] as FolderServers;
       expect(folder.tagPrefix, '[F]');
-      expect(folder.members.single.raw, 'ss://Y2hhY2hh@de.example:8388#DE-1',
+      expect(folder.members.first.raw, 'ss://Y2hhY2hh@de.example:8388#DE-1',
           reason: 'исходник члена едет как есть (что LxBox из него разберёт — дело парсера)');
-      final sub = state.lists[2] as SubscriptionServers;
+      final group = folder.members[1].node as AutoSelectSpec;
+      expect(group.tag, 'быстрые');
+      expect((group.membership as ExplicitMembers).members,
+          [NodeLink(folderId: folder.id, tag: 'DE-1')],
+          reason: 'S1: член {tag} внутри папки — пара своей папки');
       expect(sub.tagPrefix, '[P]');
       expect(sub.updateIntervalHours, 6);
       expect(sub.disabledHashes.keys, ['DE-2']);
@@ -442,7 +474,7 @@ void main() {
         sourceDetours: subs.detours,
       );
       expect(resolveBackupChainHops(file, servers.lists, servers.folderIds).single.hops,
-          ['🇯🇵 Tokyo', '[P] NL-1']);
+          [const NodeLink(tag: '🇯🇵 Tokyo'), NodeLink(folderId: sub.id, tag: 'NL-1')]);
       expect(
         [for (final r in state.rules) '${r.kind.name}:${r.name}:${r.orderNum}'],
         ['preset:ru-direct:960', 'inline:X:1000', 'json:blocked:1005', 'srs:three sets:1010'],

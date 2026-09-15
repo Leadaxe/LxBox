@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -53,7 +54,7 @@ void main() {
         name: 'Solo',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: DetourPolicy(overrideDetour: overrideDetour),
+        detourPolicy: DetourPolicy(overrideDetour: NodeLink(tag: overrideDetour)),
         origin: UserSource.paste,
         rawBody: memberRaw('solo-node'),
       );
@@ -79,7 +80,7 @@ void main() {
       await seed();
       final c = SubscriptionController();
       await c.init();
-      expect(c.entries.single.list.detourPolicy.overrideDetour, 'vpn-2');
+      expect(c.entries.single.list.detourPolicy.overrideDetour, const NodeLink(tag: 'vpn-2'));
 
       // Storage-heal (то, что делают UI/Debug API перед ресинком).
       final vpn2 = (await SettingsStorage.getDirections())
@@ -90,7 +91,7 @@ void main() {
 
       // (а) in-memory entries вылечены зеркально.
       c.syncDetourDirectionRefsCleared('vpn-2');
-      expect(c.entries.single.list.detourPolicy.overrideDetour, '');
+      expect(c.entries.single.list.detourPolicy.overrideDetour, NodeLink.none);
 
       // (б) контроллерная мутация с _persist (выключение; имя одиночного
       // сервера записью §439 не хранится) НЕ воскрешает 'vpn-2' на диске —
@@ -99,7 +100,7 @@ void main() {
       SettingsStorage.resetCacheForTesting(); // читаем реально с диска
       final saved = (await SettingsStorage.getServerLists()).single;
       expect(saved.enabled, isFalse);
-      expect(saved.detourPolicy.overrideDetour, '',
+      expect(saved.detourPolicy.overrideDetour, NodeLink.none,
           reason: '_persist после ресинка не должен воскрешать ссылку');
     });
 
@@ -112,7 +113,7 @@ void main() {
 
       c.syncDetourDirectionRefsCleared('vpn-9');
       expect(identical(c.entries.single.list, before), isTrue);
-      expect(c.entries.single.list.detourPolicy.overrideDetour, 'vpn-2');
+      expect(c.entries.single.list.detourPolicy.overrideDetour, const NodeLink(tag: 'vpn-2'));
     });
   });
 
@@ -120,13 +121,13 @@ void main() {
     test('tag-матч: overrideDetour одиночки → \'\', count 1', () {
       final r = clearDetourDirectionRefs(soloWithDetour('vpn-2'), 'vpn-2');
       expect(r.count, 1);
-      expect(r.healed!.detourPolicy.overrideDetour, '');
+      expect(r.healed!.detourPolicy.overrideDetour, NodeLink.none);
     });
 
     test('autoTag-матч: ссылка на urltest-двойник тоже Направление', () {
       final r = clearDetourDirectionRefs(soloWithDetour('vpn-2-auto'), 'vpn-2');
       expect(r.count, 1);
-      expect(r.healed!.detourPolicy.overrideDetour, '');
+      expect(r.healed!.detourPolicy.overrideDetour, NodeLink.none);
     });
 
     test('не-матч → healed null, count 0', () {
@@ -135,18 +136,20 @@ void main() {
       expect(r.healed, isNull);
     });
 
-    test('омоним-пропуск: bare-тег члена той же папки означает члена', () {
-      // policy и member.detour = 'vpn-2', но 'vpn-2' — bare-тег члена ТОЙ ЖЕ
-      // папки (приоритет bareIndex FolderDetourPlan) → Направление ни при чём.
+    test('омоним-пропуск: пара на члена-тёзку — не Направление', () {
+      // policy и member.detour указывают на члена с сырым тегом 'vpn-2' ТОЙ ЖЕ
+      // папки — пара {f1, vpn-2} (D-112); корневое имя Направления с ней не
+      // совпадает, и Направление ни при чём.
+      const member = NodeLink(folderId: 'f1', tag: 'vpn-2');
       final folder = FolderServers(
         id: 'f1',
         name: 'Homonym',
         enabled: true,
         tagPrefix: 'hm-',
-        detourPolicy: const DetourPolicy(overrideDetour: 'vpn-2'),
+        detourPolicy: const DetourPolicy(overrideDetour: member),
         members: [
           FolderMember(raw: memberRaw('vpn-2')),
-          FolderMember(raw: memberRaw('node-b'), detour: 'vpn-2'),
+          FolderMember(raw: memberRaw('node-b'), detour: member),
         ],
       );
       final r = clearDetourDirectionRefs(folder, 'vpn-2');
@@ -160,18 +163,19 @@ void main() {
         name: 'F',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: const DetourPolicy(overrideDetour: 'vpn-2'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2')),
         members: [
-          FolderMember(raw: memberRaw('node-a'), detour: 'vpn-2'),
-          FolderMember(raw: memberRaw('node-b'), detour: 'vpn-2-auto'),
-          FolderMember(raw: memberRaw('node-c'), detour: 'Jump'),
+          FolderMember(raw: memberRaw('node-a'), detour: NodeLink(tag: 'vpn-2')),
+          FolderMember(raw: memberRaw('node-b'), detour: NodeLink(tag: 'vpn-2-auto')),
+          FolderMember(raw: memberRaw('node-c'), detour: NodeLink(tag: 'Jump')),
         ],
       );
       final r = clearDetourDirectionRefs(folder, 'vpn-2');
       expect(r.count, 3);
       final healed = r.healed as FolderServers;
-      expect(healed.detourPolicy.overrideDetour, '');
-      expect(healed.members.map((m) => m.detour), ['', '', 'Jump']);
+      expect(healed.detourPolicy.overrideDetour, NodeLink.none);
+      expect(healed.members.map((m) => m.detour),
+          const [NodeLink.none, NodeLink.none, NodeLink(tag: 'Jump')]);
     });
   });
 }

@@ -1,7 +1,7 @@
 // §438 — проверка документа по JSON Schema в объёме, который использует
 // `contract/schema/backup.schema.json`: `$ref` на `#/$defs/…`, `type`,
 // `properties`, `required`, `additionalProperties`, `enum`, `const`, `items`,
-// `allOf`, `if`/`then`, `minimum`/`maximum`, `minLength`. `format`,
+// `allOf`, `anyOf`, `if`/`then`, `minimum`/`maximum`, `minLength`. `format`,
 // `default`, `title`, `description` проверки не несут.
 //
 // Библиотеки валидатора в зависимостях проекта нет, а тянуть её ради одного
@@ -26,6 +26,7 @@ const Set<String> _known = {
   'const',
   'items',
   'allOf',
+  'anyOf',
   'if',
   'then',
   'minimum',
@@ -132,6 +133,14 @@ void _validate(
 
   for (final sub in (schema['allOf'] as List? ?? const [])) {
     _validate(value, (sub as Map).cast<String, dynamic>(), root, at, errors);
+  }
+
+  // Контракт 1.0.1: `group.default` — ссылка объектом или строка dev-формы.
+  final anyOf = schema['anyOf'];
+  if (anyOf is List &&
+      !anyOf.any((sub) =>
+          _matches(value, (sub as Map).cast<String, dynamic>(), root))) {
+    errors.add('$at: matches none of anyOf');
   }
 
   final ifSchema = schema['if'];

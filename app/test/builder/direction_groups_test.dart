@@ -59,7 +59,7 @@ void main() {
     );
   }
 
-  /// §322 — те же узлы + узел автовыбора (`autogroup://`) в том же списке.
+  /// §322 — те же узлы + узел автовыбора в том же списке.
   Future<UserServer> nodesWithAutoGroup() async {
     final base = await nodes();
     final auto = AutoSelectSpec(

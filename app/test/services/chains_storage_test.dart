@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/backup_service.dart';
@@ -100,13 +101,13 @@ void main() {
       await SettingsStorage.updateChain(const SourceChain(
         tag: 'via-de',
         label: 'Германия',
-        hops: ['home', 'de-exit'],
+        hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')],
         idleTimeout: '10m',
         stripEvasion: false,
       ));
       final got = (await SettingsStorage.getChains()).single;
       expect(got.label, 'Германия');
-      expect(got.hops, ['home', 'de-exit']);
+      expect(got.hops, const [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')]);
       expect(got.idleTimeout, '10m');
       expect(got.stripEvasion, isFalse);
 
@@ -121,14 +122,14 @@ void main() {
       // Каскад рекурсивен только через цепочки-позиции: удаление `inner`
       // снимает позицию `inner` у `outer`, но `outer` живёт дальше.
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'inner', hops: ['a', 'b']),
-        SourceChain(tag: 'outer', hops: ['inner', 'c', 'd']),
+        SourceChain(tag: 'inner', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'outer', hops: [NodeLink(tag: 'inner'), NodeLink(tag: 'c'), NodeLink(tag: 'd')]),
       ]);
       final healed = await SettingsStorage.deleteChain('inner');
       final left = await SettingsStorage.getChains();
       expect(left.map((c) => c.tag), ['outer'],
           reason: 'сама цепочка НЕ удаляется каскадом');
-      expect(left.single.hops, ['c', 'd'],
+      expect(left.single.hops, const [NodeLink(tag: 'c'), NodeLink(tag: 'd')],
           reason: 'ушла ровно позиция удалённого');
       expect(healed.positions, 1,
           reason: 'счётчик виден пользователю: маршрут стал короче');
@@ -140,13 +141,13 @@ void main() {
       // Принято как есть: не эмитится (существующая деградация
       // `chainEmitError`), но данные пользователя не стираются — чинит руками.
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'inner', hops: ['a', 'b']),
-        SourceChain(tag: 'outer', hops: ['inner', 'c']),
+        SourceChain(tag: 'inner', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'outer', hops: [NodeLink(tag: 'inner'), NodeLink(tag: 'c')]),
       ]);
       await SettingsStorage.deleteChain('inner');
       final left = await SettingsStorage.getChains();
       expect(left.map((c) => c.tag), ['outer']);
-      expect(left.single.hops, ['c']);
+      expect(left.single.hops, const [NodeLink(tag: 'c')]);
       expect(chainEmitError(left.single), isNotEmpty,
           reason: 'одна позиция — ядру не годится, цепочка не эмитится');
     });
@@ -154,26 +155,26 @@ void main() {
     test('§393 D2 heal чужого источника снимает позицию у всех цепочек',
         () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c1', hops: ['gone', 'a', 'b']),
-        SourceChain(tag: 'c2', hops: ['a', 'gone']),
-        SourceChain(tag: 'c3', hops: ['a', 'b']),
+        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'gone'), NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c2', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'gone')]),
+        SourceChain(tag: 'c3', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
       ]);
       final healed = await SettingsStorage.healChainHops('gone');
       expect(healed.positions, 2);
       expect(healed.touched, ['c1', 'c2']);
       final left = await SettingsStorage.getChains();
-      expect(left.map((c) => c.hops), [
-        ['a', 'b'],
-        ['a'],
-        ['a', 'b'],
+      expect(left.map((c) => c.hops), const [
+        [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
+        [NodeLink(tag: 'a')],
+        [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
       ]);
     });
 
     test('порядок списка сохраняется — им держится антицикл', () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c3', hops: ['a', 'b']),
-        SourceChain(tag: 'c1', hops: ['a', 'b']),
-        SourceChain(tag: 'c2', hops: ['a', 'b']),
+        SourceChain(tag: 'c3', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c2', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
       ]);
       expect((await SettingsStorage.getChains()).map((c) => c.tag),
           ['c3', 'c1', 'c2']);
@@ -183,7 +184,7 @@ void main() {
       const c = SourceChain(
         tag: 'tuned',
         label: 'Tuned',
-        hops: ['a', 'b'],
+        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         idleTimeout: '0s',
         stripEvasion: false,
         strip: {kChainStripTlsUtls: true},
@@ -208,9 +209,9 @@ void main() {
   group('место в общем списке источников', () {
     test('порядок записей держит порядок чтения', () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c1', hops: ['a', 'b']),
-        SourceChain(tag: 'c2', hops: ['a', 'b']),
-        SourceChain(tag: 'c3', hops: ['a', 'b']),
+        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c2', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c3', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
       ]);
       SettingsStorage.resetCacheForTesting();
       final got = await SettingsStorage.getChains();
@@ -224,8 +225,8 @@ void main() {
 
     test('reorder меняет взаимный порядок цепочек', () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c1', hops: ['a', 'b']),
-        SourceChain(tag: 'c2', hops: ['a', 'b']),
+        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c2', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
       ]);
       final now = await SettingsStorage.getChains();
       await SettingsStorage.reorderChains([now[1], now[0]]);
@@ -237,8 +238,8 @@ void main() {
     test('сохранение источников не трогает цепочки, цепочки — источники',
         () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c1', hops: ['a', 'b']),
-        SourceChain(tag: 'c2', hops: ['c1', 'b']),
+        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c2', hops: [NodeLink(tag: 'c1'), NodeLink(tag: 'b')]),
       ]);
       await SettingsStorage.saveServerLists([
         UserServer(
@@ -251,8 +252,8 @@ void main() {
         ),
       ]);
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'c2', hops: ['a', 'b']),
-        SourceChain(tag: 'c1', hops: ['a', 'b']),
+        SourceChain(tag: 'c2', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
       ]);
       SettingsStorage.resetCacheForTesting();
 
@@ -286,7 +287,7 @@ void main() {
       final got = await SettingsStorage.getChains();
       expect(got.map((c) => c.tag), ['first', 'second', 'no-order']);
       // Маршрут не тронут — мигрируются позиции в списке, а не хопы.
-      expect(got[1].hops, ['first', 'c']);
+      expect(got[1].hops, const [NodeLink(tag: 'first'), NodeLink(tag: 'c')]);
       final records = ((await readFile())['sources'] as List)
           .cast<Map<String, dynamic>>();
       expect(records.map((r) => r['kind']),
@@ -297,7 +298,7 @@ void main() {
   group('внутренний backup/restore', () {
     test('цепочки переживают export→restore в категории routing', () async {
       await SettingsStorage.setChains(const [
-        SourceChain(tag: 'via-de', label: 'DE', hops: ['home', 'de']),
+        SourceChain(tag: 'via-de', label: 'DE', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de')]),
       ]);
       final raw = await readFile();
 
@@ -319,12 +320,12 @@ void main() {
       await SettingsStorage.replaceRaw(exported.cast<String, dynamic>());
       final back = await SettingsStorage.getChains();
       expect(back.single.tag, 'via-de');
-      expect(back.single.hops, ['home', 'de']);
+      expect(back.single.hops, const [NodeLink(tag: 'home'), NodeLink(tag: 'de')]);
     });
 
     test('без галки routing цепочки в архив не идут', () async {
       await SettingsStorage.setChains(
-          const [SourceChain(tag: 'c', hops: ['a', 'b'])]);
+          const [SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])]);
       final exported = BackupService.filterStorageForExport(
         await readFile(),
         include: {BackupCategory.appSettings},
@@ -340,7 +341,7 @@ void main() {
       final dropped = await SettingsStorage.replaceRaw({
         'storage_version': 1,
         'sources': [
-          chainToRecord(const SourceChain(tag: 'c', hops: ['a', 'b'])),
+          chainToRecord(const SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])),
         ],
       });
       expect(dropped, isEmpty);
@@ -355,7 +356,7 @@ void main() {
         ],
       });
       expect(dropped, isEmpty);
-      expect((await SettingsStorage.getChains()).single.hops, ['a', 'b']);
+      expect((await SettingsStorage.getChains()).single.hops, const [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       final file = await readFile();
       expect(file.containsKey('chains'), isFalse);
       expect(file['storage_version'], 1);

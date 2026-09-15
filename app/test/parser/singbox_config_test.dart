@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -492,9 +493,11 @@ void main() {
       final g = r.last as AutoSelectSpec;
       expect(g.label, 'auto');
       expect(g.membership, isA<ExplicitMembers>());
-      expect((g.membership as ExplicitMembers).keys, [
-        'vless|a.com|443|u-a',
-        'vless|b.com|443|u-b',
+      // §439 — члены — ссылки на сырые теги узлов своего контейнера (без
+      // folder_id: id подписки парсер не знает, NODE_LINK §5.1 № 8).
+      expect((g.membership as ExplicitMembers).members, const [
+        NodeLink(tag: 'a'),
+        NodeLink(tag: 'b'),
       ]);
     });
 
@@ -574,7 +577,7 @@ void main() {
         ])
       ]);
       final outer = r.firstWhere((n) => n.label == 'outer') as AutoSelectSpec;
-      expect((outer.membership as ExplicitMembers).keys, hasLength(1));
+      expect((outer.membership as ExplicitMembers).members, hasLength(1));
       expect(outer.warnings, contains(const GroupMemberMissingWarning(1)));
     });
 
@@ -601,7 +604,7 @@ void main() {
         ]),
       ]);
       final g = r.firstWhere((n) => n.isGroup) as AutoSelectSpec;
-      expect((g.membership as ExplicitMembers).keys, hasLength(2));
+      expect((g.membership as ExplicitMembers).members, hasLength(2));
       expect(g.warnings.whereType<GroupMemberMissingWarning>(), isEmpty);
     });
 
@@ -614,7 +617,7 @@ void main() {
         ])
       ]);
       final g = r.firstWhere((n) => n.isGroup) as AutoSelectSpec;
-      expect((g.membership as ExplicitMembers).keys, hasLength(1));
+      expect((g.membership as ExplicitMembers).members, hasLength(1));
     });
   });
 

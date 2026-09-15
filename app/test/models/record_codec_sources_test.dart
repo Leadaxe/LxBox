@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/import_rule.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
@@ -70,7 +71,7 @@ SubscriptionServers _richSubscription() => SubscriptionServers(
         registerDetourServers: true,
         registerDetourInAuto: true,
         useDetourServers: false,
-        overrideDetour: 'vpn-2',
+        overrideDetour: NodeLink(tag: 'vpn-2'),
         replaceDetourChain: true,
       ),
       url: 'https://example.com/sub?token=test',
@@ -164,7 +165,7 @@ void main() {
         enabled: true,
         tagPrefix: 'T',
         detourPolicy: const DetourPolicy(
-          overrideDetour: 'Jump',
+          overrideDetour: NodeLink(tag: 'Jump'),
           useDetourServers: false,
         ),
         rawBody: _jsonOutbound,
@@ -203,12 +204,12 @@ void main() {
         // Префикс, заданный через Debug API, с хвостовым пробелом.
         tagPrefix: 'F ',
         detourPolicy: const DetourPolicy(
-            overrideDetour: 'vpn-1', registerDetourServers: true),
+            overrideDetour: NodeLink(tag: 'vpn-1'), registerDetourServers: true),
         createdAt: DateTime.utc(2026, 7, 4, 12, 30, 1, 250),
         pingUrl: 'http://1.1.1.1/cdn-cgi/trace',
         pingTimeoutMs: 3000,
         members: [
-          FolderMember(raw: _uriAlpha, detour: 'Beta'),
+          FolderMember(raw: _uriAlpha, detour: NodeLink(tag: 'Beta')),
           FolderMember(raw: _uriBeta, enabled: false),
           FolderMember(raw: 'foo://not-a-node'),
           FolderMember(raw: _jsonOutbound, sections: _sections()),
@@ -236,7 +237,7 @@ void main() {
         tag: 'chain-1',
         label: 'Work',
         enabled: false,
-        hops: ['PR NL-1', 'Tokyo', 'vpn-1'],
+        hops: [NodeLink(tag: 'PR NL-1'), NodeLink(tag: 'Tokyo'), NodeLink(tag: 'vpn-1')],
         idleTimeout: '5m',
         stripEvasion: false,
         strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
@@ -269,7 +270,7 @@ void main() {
           createdAt: DateTime.utc(2026),
           members: [FolderMember(raw: 'garbage')],
         ),
-        const SourceChain(tag: 'c', hops: ['a', 'b']),
+        const SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
       ];
       for (final x in all) {
         final first = x is SourceChain
@@ -349,7 +350,7 @@ void main() {
 
     test('цепочка: настройки в body, позиции ссылками, поля позиции нет', () {
       final record = chainToRecord(const SourceChain(
-          tag: 'c', label: 'L', hops: ['a', 'b'], idleTimeout: '1m'));
+          tag: 'c', label: 'L', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], idleTimeout: '1m'));
       expect(record, {
         'kind': 'chain',
         'tag': 'c',
@@ -372,19 +373,21 @@ void main() {
         'detour': 'vpn-1',
         'origin': {'kind': 'uri', 'raw': _uriAlpha},
       }).value!;
-      expect(l.detourPolicy.overrideDetour, 'vpn-1');
+      expect(l.detourPolicy.overrideDetour, const NodeLink(tag: 'vpn-1'));
     });
 
-    test('ссылка на член папки: сырой тег и отметка в notes', () {
+    test('ссылка на член папки читается парой как есть, без отметки', () {
+      // D-112 — пара — рабочая форма ссылки; разбирает её сборка.
       final notes = <String>[];
       final l = sourceFromRecord({
         'kind': 'server',
         'id': 'u',
-        'detour': {'folder_id': 'f1', 'tag': 'Alpha'},
+        'detour': {'folder_id': ' f1 ', 'tag': 'Alpha'},
         'origin': {'kind': 'uri', 'raw': _uriBeta},
       }, notes: notes).value!;
-      expect(l.detourPolicy.overrideDetour, 'Alpha');
-      expect(notes.single, contains('f1'));
+      expect(l.detourPolicy.overrideDetour,
+          const NodeLink(folderId: 'f1', tag: 'Alpha'));
+      expect(notes, isEmpty);
     });
 
     test('незнакомые ключи — путями в unknownKeys, запись живёт', () {

@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
@@ -93,12 +94,12 @@ void main() {
     final body = r.body as Map<String, dynamic>;
     expect(body['tag'], 'chain-1');
     expect(body['label'], 'Via Germany');
-    expect(body['hops'], ['direct-out', 'vpn-1']);
+    expect(body['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
     expect(body['idle_timeout'], '30s');
 
     final stored = await SettingsStorage.getChains();
     expect(stored.single.tag, 'chain-1');
-    expect(stored.single.hops, ['direct-out', 'vpn-1']);
+    expect(stored.single.hops, const [NodeLink(tag: 'direct-out'), NodeLink(tag: 'vpn-1')]);
   });
 
   test('POST /chains без тела — пустая цепочка (как в UI: сперва запись)',
@@ -158,7 +159,7 @@ void main() {
         ctx(),
       );
       expect(asMap(r)['label'], 'Renamed');
-      expect(asMap(r)['hops'], ['direct-out', 'vpn-1']);
+      expect(asMap(r)['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
     });
 
     test('тег immutable → 400', () async {
@@ -347,7 +348,7 @@ void main() {
         }),
         ctx(),
       );
-      expect(asMap(ok)['hops'], ['chain-1', 'vpn-1']);
+      expect(asMap(ok)['hops'], [{'tag': 'chain-1'}, {'tag': 'vpn-1'}]);
     });
 
     test('вложенная цепочка НЕ на позиции 0 → 400', () async {
@@ -385,7 +386,7 @@ void main() {
       final stored = await SettingsStorage.getChains();
       expect(stored.map((c) => c.tag), ['chain-2'],
           reason: 'каскад снимает ПОЗИЦИЮ, а не цепочку');
-      expect(stored.single.hops, ['vpn-1', 'direct-out']);
+      expect(stored.single.hops, const [NodeLink(tag: 'vpn-1'), NodeLink(tag: 'direct-out')]);
 
       await expectLater(
         chainsHandler(req('DELETE', '/chains/chain-1'), ctx()),
@@ -412,7 +413,7 @@ void main() {
     );
     final stored = await SettingsStorage.getChains();
     expect(stored.single.tag, 'chain-1');
-    expect(stored.single.hops, ['direct-out', 'vpn-1']);
+    expect(stored.single.hops, const [NodeLink(tag: 'direct-out'), NodeLink(tag: 'vpn-1')]);
 
     await expectLater(
       chainsHandler(

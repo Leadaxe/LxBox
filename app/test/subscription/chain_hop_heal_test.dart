@@ -8,6 +8,7 @@ import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/direction_mutations.dart';
@@ -16,6 +17,10 @@ import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
 /// §393 D2 — каскад «источник удалён → из цепочек вычищается ЕГО ПОЗИЦИЯ».
+///
+/// §439 (D-114) — позиция — ссылка на узел: корневой узел `{tag}`, член папки
+/// и узел подписки — пара `{id контейнера, сырой тег}`. Гасит их реестр
+/// ссылок, задетые приходят уведомлением контроллера (`takeLinkNotices`).
 ///
 /// Директива оператора 24.08. Проверяем РОД источника, а не одну точку кода:
 /// одиночный сервер, подписка целиком, папка, Направление, другая цепочка —
@@ -82,6 +87,11 @@ void main() {
     SettingsStorage.resetCacheForTesting();
   }
 
+  /// Позиций, погашенных удалением: сумма по уведомлениям контроллера.
+  int clearedPositions(SubscriptionController ctrl) => ctrl
+      .takeLinkNotices()
+      .fold(0, (n, notice) => n + notice.change.positions);
+
   Future<SubscriptionController> boot() async {
     final ctrl = SubscriptionController();
     await ctrl.init();
@@ -93,7 +103,11 @@ void main() {
     await seed(
       lists: [sourceToRecord(solo('u1', 'alpha')), sourceToRecord(solo('u2', 'beta'))],
       chains: const [
-        SourceChain(tag: 'route', hops: ['alpha', 'beta', 'vpn-1']),
+        SourceChain(tag: 'route', hops: [
+          NodeLink(tag: 'alpha'),
+          NodeLink(tag: 'beta'),
+          NodeLink(tag: 'vpn-1'),
+        ]),
       ],
     );
     final ctrl = await boot();
@@ -101,16 +115,20 @@ void main() {
 
     final chains = await SettingsStorage.getChains();
     expect(chains.single.tag, 'route', reason: 'цепочка НЕ удалена каскадом');
-    expect(chains.single.hops, ['beta', 'vpn-1']);
-    expect(ctrl.lastChainPositionsRemoved, 1,
-        reason: 'счётчик для snackbar — укорачивание маршрута заметно');
+    expect(chains.single.hops, const [NodeLink(tag: 'beta'), NodeLink(tag: 'vpn-1')]);
+    final notices = ctrl.takeLinkNotices();
+    expect(notices, hasLength(1),
+        reason: 'уведомление для snackbar — укорачивание маршрута заметно');
+    expect(notices.single.subject.name, 'alpha');
+    expect(notices.single.change.positions, 1);
+    expect(notices.single.change.touchedChains, ['route']);
   });
 
   test('подписка целиком удалена → уходят позиции всех её узлов', () async {
-    // Позиция ссылается на ТЕГ КОНФИГА: у подписки с префиксом это
-    // «<префикс> <узел>». Узлы подписки на диск не пишутся (регидрация из
-    // HTTP-кэша), поэтому ставим их прямо в живую запись контроллера — так же,
-    // как их поставил бы фетч.
+    // Позиция на узел подписки — пара {id подписки, сырой тег}: префикс в
+    // ссылку не входит (NODE_LINK §2.2). Узлы подписки на диск не пишутся
+    // (регидрация из HTTP-кэша), поэтому ставим их прямо в живую запись
+    // контроллера — так же, как их поставил бы фетч.
     final sub = SubscriptionServers(
       id: 's1',
       name: 'Sub',
@@ -122,7 +140,11 @@ void main() {
     await seed(
       lists: [sourceToRecord(sub)],
       chains: const [
-        SourceChain(tag: 'route', hops: ['RU n1', 'vpn-1', 'direct-out']),
+        SourceChain(tag: 'route', hops: [
+          NodeLink(folderId: 's1', tag: 'n1'),
+          NodeLink(tag: 'vpn-1'),
+          NodeLink(tag: 'direct-out'),
+        ]),
       ],
     );
     final ctrl = await boot();
@@ -132,8 +154,9 @@ void main() {
     await ctrl.removeAt(0);
 
     final chains = await SettingsStorage.getChains();
-    expect(chains.single.hops, ['vpn-1', 'direct-out']);
-    expect(ctrl.lastChainPositionsRemoved, 1);
+    expect(chains.single.hops,
+        const [NodeLink(tag: 'vpn-1'), NodeLink(tag: 'direct-out')]);
+    expect(clearedPositions(ctrl), 1);
   });
 
   test('папка удалена вместе с серверами → уходят позиции её членов',
@@ -151,20 +174,26 @@ void main() {
     await seed(
       lists: [sourceToRecord(folder)],
       chains: const [
-        SourceChain(tag: 'route', hops: ['m1', 'vpn-1', 'direct-out']),
+        SourceChain(tag: 'route', hops: [
+          NodeLink(folderId: 'f1', tag: 'm1'),
+          NodeLink(tag: 'vpn-1'),
+          NodeLink(tag: 'direct-out'),
+        ]),
       ],
     );
     final ctrl = await boot();
     await ctrl.deleteFolderAt(0, keepServers: false);
 
     final chains = await SettingsStorage.getChains();
-    expect(chains.single.hops, ['vpn-1', 'direct-out']);
-    expect(ctrl.lastChainPositionsRemoved, 1);
+    expect(chains.single.hops,
+        const [NodeLink(tag: 'vpn-1'), NodeLink(tag: 'direct-out')]);
+    expect(clearedPositions(ctrl), 1);
   });
 
   test('роспуск папки С СОХРАНЕНИЕМ серверов позиции на членов не трогает',
       () async {
-    // Узлы остаются в конфиге одиночными серверами — позиция на них законна.
+    // Узлы остаются в конфиге одиночными серверами — позиция на них законна:
+    // пара на члена переписывается корневой ссылкой (D-113), не гаснет.
     final folder = FolderServers(
       id: 'f1',
       name: 'Folder',
@@ -178,15 +207,18 @@ void main() {
     await seed(
       lists: [sourceToRecord(folder)],
       chains: const [
-        SourceChain(tag: 'route', hops: ['m1', 'vpn-1']),
+        SourceChain(tag: 'route', hops: [
+          NodeLink(folderId: 'f1', tag: 'm1'),
+          NodeLink(tag: 'vpn-1'),
+        ]),
       ],
     );
     final ctrl = await boot();
     await ctrl.deleteFolderAt(0, keepServers: true);
 
     final chains = await SettingsStorage.getChains();
-    expect(chains.single.hops, ['m1', 'vpn-1']);
-    expect(ctrl.lastChainPositionsRemoved, 0);
+    expect(chains.single.hops, const [NodeLink(tag: 'm1'), NodeLink(tag: 'vpn-1')]);
+    expect(ctrl.takeLinkNotices(), isEmpty);
   });
 
   test('член папки удалён → его позиция уходит', () async {
@@ -204,22 +236,31 @@ void main() {
     await seed(
       lists: [sourceToRecord(folder)],
       chains: const [
-        SourceChain(tag: 'route', hops: ['m1', 'm2', 'vpn-1']),
+        SourceChain(tag: 'route', hops: [
+          NodeLink(folderId: 'f1', tag: 'm1'),
+          NodeLink(folderId: 'f1', tag: 'm2'),
+          NodeLink(tag: 'vpn-1'),
+        ]),
       ],
     );
     final ctrl = await boot();
     await ctrl.removeMemberAt(0, 0);
 
     final chains = await SettingsStorage.getChains();
-    expect(chains.single.hops, ['m2', 'vpn-1']);
-    expect(ctrl.lastChainPositionsRemoved, 1);
+    expect(chains.single.hops,
+        const [NodeLink(folderId: 'f1', tag: 'm2'), NodeLink(tag: 'vpn-1')]);
+    expect(clearedPositions(ctrl), 1);
   });
 
   test('Направление удалено → его позиция уходит, цепочка живёт', () async {
     await seed(
       lists: [sourceToRecord(solo('u1', 'alpha'))],
       chains: const [
-        SourceChain(tag: 'route', hops: ['alpha', 'vpn-2', 'vpn-1']),
+        SourceChain(tag: 'route', hops: [
+          NodeLink(tag: 'alpha'),
+          NodeLink(tag: 'vpn-2'),
+          NodeLink(tag: 'vpn-1'),
+        ]),
       ],
       directions: const [
         Direction(tag: 'vpn-1', label: 'Main'),
@@ -232,7 +273,7 @@ void main() {
     expect(healed.chainPositions, 1,
         reason: 'счётчик едет вместе с rules/detours/includes');
     final chains = await SettingsStorage.getChains();
-    expect(chains.single.hops, ['alpha', 'vpn-1']);
+    expect(chains.single.hops, const [NodeLink(tag: 'alpha'), NodeLink(tag: 'vpn-1')]);
   });
 
   test('цепочка-позиция: удаление A вычищает A из B, B живёт (рекурсия)',
@@ -240,8 +281,12 @@ void main() {
     await seed(
       lists: [sourceToRecord(solo('u1', 'alpha'))],
       chains: const [
-        SourceChain(tag: 'A', hops: ['alpha', 'vpn-1']),
-        SourceChain(tag: 'B', hops: ['A', 'alpha', 'vpn-1']),
+        SourceChain(tag: 'A', hops: [NodeLink(tag: 'alpha'), NodeLink(tag: 'vpn-1')]),
+        SourceChain(tag: 'B', hops: [
+          NodeLink(tag: 'A'),
+          NodeLink(tag: 'alpha'),
+          NodeLink(tag: 'vpn-1'),
+        ]),
       ],
     );
     await boot();
@@ -252,14 +297,14 @@ void main() {
     final chains = await SettingsStorage.getChains();
     expect(chains.map((c) => c.tag), ['B'],
         reason: 'каскад рекурсивен только через позиции, B не удаляется');
-    expect(chains.single.hops, ['alpha', 'vpn-1']);
+    expect(chains.single.hops, const [NodeLink(tag: 'alpha'), NodeLink(tag: 'vpn-1')]);
   });
 
   test('2-хоповая после heal остаётся в storage, но не эмитится', () async {
     await seed(
       lists: [sourceToRecord(solo('u1', 'alpha')), sourceToRecord(solo('u2', 'beta'))],
       chains: const [
-        SourceChain(tag: 'short', hops: ['alpha', 'beta']),
+        SourceChain(tag: 'short', hops: [NodeLink(tag: 'alpha'), NodeLink(tag: 'beta')]),
       ],
     );
     final ctrl = await boot();
@@ -268,7 +313,7 @@ void main() {
     final chains = await SettingsStorage.getChains();
     expect(chains.single.tag, 'short',
         reason: 'данные пользователя не стираются — чинит руками');
-    expect(chains.single.hops, ['beta']);
+    expect(chains.single.hops, const [NodeLink(tag: 'beta')]);
     expect(chainEmitError(chains.single), isNotEmpty,
         reason: 'одна позиция → существующая деградация, цепочка не эмитится');
   });
@@ -277,18 +322,21 @@ void main() {
     await seed(
       lists: [sourceToRecord(solo('u1', 'alpha')), sourceToRecord(solo('u2', 'beta'))],
       chains: const [
-        SourceChain(tag: 'long', hops: ['alpha', 'beta', 'vpn-1']),
+        SourceChain(tag: 'long', hops: [
+          NodeLink(tag: 'alpha'),
+          NodeLink(tag: 'beta'),
+          NodeLink(tag: 'vpn-1'),
+        ]),
       ],
     );
     final ctrl = await boot();
     await ctrl.removeAt(0);
 
     final chains = await SettingsStorage.getChains();
-    expect(chains.single.hops, ['beta', 'vpn-1']);
+    expect(chains.single.hops, const [NodeLink(tag: 'beta'), NodeLink(tag: 'vpn-1')]);
     expect(chainEmitError(chains.single), isEmpty,
         reason: 'осознанное решение оператора: маршрут эмитится короче');
-    expect(ctrl.lastChainPositionsRemoved, 1,
-        reason: 'но пользователь ОБЯЗАН узнать');
+    expect(clearedPositions(ctrl), 1, reason: 'но пользователь ОБЯЗАН узнать');
   });
 
   test('ГРАНИЦА: обновление подписки НЕ вычищает позиции', () async {
@@ -313,7 +361,10 @@ void main() {
         },
       ],
       chains: const [
-        SourceChain(tag: 'route', hops: ['gone', 'vpn-1']),
+        SourceChain(tag: 'route', hops: [
+          NodeLink(folderId: 's1', tag: 'gone'),
+          NodeLink(tag: 'vpn-1'),
+        ]),
       ],
     );
     final ctrl = await boot();
@@ -326,8 +377,9 @@ void main() {
     );
 
     final chains = await SettingsStorage.getChains();
-    expect(chains.single.hops, ['gone', 'vpn-1'],
+    expect(chains.single.hops,
+        const [NodeLink(folderId: 's1', tag: 'gone'), NodeLink(tag: 'vpn-1')],
         reason: 'позиция цела — узел может вернуться');
-    expect(ctrl.lastChainPositionsRemoved, 0);
+    expect(ctrl.takeLinkNotices(), isEmpty);
   });
 }

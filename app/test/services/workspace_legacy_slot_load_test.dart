@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/workspaces/workspace_controller.dart';
 import 'package:lxbox/services/workspaces/workspace_store.dart';
@@ -125,7 +126,7 @@ void main() {
 
     // Состояние перечитано моделями из мигрированной сцены.
     expect((await SettingsStorage.getServerLists()).single.id, 'srv-old');
-    expect((await SettingsStorage.getChains()).single.hops, ['Tokyo', 'vpn-1']);
+    expect((await SettingsStorage.getChains()).single.hops, const [NodeLink(tag: 'Tokyo'), NodeLink(tag: 'vpn-1')]);
     expect((await SettingsStorage.getCustomRules()).single.name, 'Ads');
     final onScene = read(scene());
     expect(onScene['storage_version'], 1);

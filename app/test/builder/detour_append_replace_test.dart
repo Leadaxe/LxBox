@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/codec/source_record.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -63,7 +64,7 @@ void main() {
         name: 'Test',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: const DetourPolicy(overrideDetour: 'jump-out'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'jump-out')),
         origin: UserSource.paste,
         nodes: [spec],
       );
@@ -94,7 +95,7 @@ void main() {
         enabled: true,
         tagPrefix: '',
         detourPolicy: const DetourPolicy(
-          overrideDetour: 'jump-out',
+          overrideDetour: NodeLink(tag: 'jump-out'),
           replaceDetourChain: true,
         ),
         origin: UserSource.paste,
@@ -160,7 +161,7 @@ void main() {
         tagPrefix: '',
         detourPolicy: const DetourPolicy(
           useDetourServers: false,
-          overrideDetour: 'jump-out',
+          overrideDetour: NodeLink(tag: 'jump-out'),
         ),
         origin: UserSource.paste,
         nodes: [spec],
@@ -208,7 +209,7 @@ void main() {
         enabled: true,
         tagPrefix: '',
         // §080: picker сохраняет display-form 'Home WG' (= _withPrefix).
-        detourPolicy: const DetourPolicy(overrideDetour: 'Home WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'Home WG')),
         origin: UserSource.paste,
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
@@ -234,8 +235,8 @@ void main() {
           reason: 'целевой outbound эмитится как prefixed-form "Home WG"');
     });
 
-    test('bare-form override (старый баг) → detour деградирует, конфиг валиден '
-        '(§172)', () async {
+    test('bare-form override (старый баг) → узел выпадает fail-closed, конфиг '
+        'валиден (§439, NODE_LINK §5.1)', () async {
       final consumer = UserServer(
         id: 'consumer-bad',
         name: 'Consumer',
@@ -243,7 +244,7 @@ void main() {
         tagPrefix: '',
         // Pre-§080 поведение: picker сохранял bare 'WG'. Целевой outbound
         // эмитится как 'Home WG' → 'WG' не существует → dangling reference.
-        detourPolicy: const DetourPolicy(overrideDetour: 'WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'WG')),
         origin: UserSource.paste,
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
@@ -258,20 +259,25 @@ void main() {
       );
 
       final outs = (result.config['outbounds'] as List).cast<Map>();
-      final main = outs.firstWhere((o) => o['tag'] == 'Main');
       final tags = outs.map((o) => o['tag']).toSet();
-      // §172 — detour 'WG' указывал на несуществующий outbound (есть только
-      // 'Home WG') → healDanglingDetours СНЯЛ его. Нода 'Main' осталась,
-      // работает напрямую. Конфиг валиден (раньше был fatal DanglingDetourRef).
-      expect(main.containsKey('detour'), false,
-          reason: '§172 снял битый detour "WG"');
-      expect(tags.contains('Main'), true, reason: 'нода не выброшена');
+      // §439 — корневая ссылка 'WG' не разрешается (корневой узел эмитится
+      // как 'Home WG'). Узел с неразрешённым detour не эмитится: напрямую
+      // трафик не уходит (до §439 §172 снимал detour, и узел шёл напрямую).
+      expect(tags.contains('Main'), false,
+          reason: 'носитель висячей ссылки выпадает, а не идёт напрямую');
+      expect(tags.contains('Home WG'), true, reason: 'цель на месте');
       expect(tags.contains('WG'), false,
           reason: 'bare "WG" не эмитится — это и есть §080 баг');
       expect(result.validation.hasFatal, false,
-          reason: '§172 — битый detour деградировал, не fatal');
-      // warning о снятом detour присутствует.
-      expect(result.emitWarnings.any((w) => w.contains('Detour removed')), true);
+          reason: 'выпавший узел не делает конфиг невалидным');
+      expect(
+          result.emitWarnings,
+          contains(allOf(
+            contains('Node "Main" was skipped: its detour "WG" did not resolve'),
+            contains('never goes direct'),
+          )));
+      expect(result.emitWarnings.any((w) => w.contains('Detour removed')),
+          isFalse);
     });
 
     test('empty tagPrefix target: display-form == bare (regression-free)',
@@ -290,7 +296,7 @@ void main() {
         name: 'Consumer',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: const DetourPolicy(overrideDetour: 'WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'WG')),
         origin: UserSource.paste,
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
@@ -331,7 +337,7 @@ void main() {
         name: 'Consumer',
         enabled: true,
         tagPrefix: '',
-        detourPolicy: const DetourPolicy(overrideDetour: 'Home WG'),
+        detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'Home WG')),
         origin: UserSource.paste,
         nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
       );
@@ -379,12 +385,12 @@ void main() {
       });
       expect(policy.replaceDetourChain, false);
       expect(policy.registerDetourServers, true);
-      expect(policy.overrideDetour, 'x');
+      expect(policy.overrideDetour, const NodeLink(tag: 'x'));
     });
 
     test('true: serialized round-trip', () {
       const original = DetourPolicy(
-        overrideDetour: 'x',
+        overrideDetour: NodeLink(tag: 'x'),
         replaceDetourChain: true,
       );
       final record = sourceToRecord(withPolicy(original));
@@ -407,7 +413,7 @@ void main() {
       const a = DetourPolicy();
       final b = a.copyWith(replaceDetourChain: true);
       expect(b.replaceDetourChain, true);
-      expect(b.overrideDetour, '');
+      expect(b.overrideDetour, NodeLink.none);
       // == check: разные → not equal
       expect(b == a, false);
     });

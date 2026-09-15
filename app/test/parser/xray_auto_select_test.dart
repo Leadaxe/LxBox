@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/builder/server_list_build.dart';
+import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -109,16 +111,15 @@ void main() {
       expect(nodes.whereType<AutoSelectSpec>(), isEmpty);
     });
 
-    test('узел-группа: нет адреса; URI синтетический', () {
+    test('узел-группа: нет адреса и URI-формы', () {
       final a = parse([
         withBalancer('Авто', [vless('1.1.1.1', tag: 'proxy-1')])
       ]).whereType<AutoSelectSpec>().single;
       expect(a.isGroup, isTrue);
       expect(a.server, isEmpty);
       expect(a.port, 0);
-      // §7 — форма autogroup:// нужна для хранения в папке, но это не ссылка
-      // на сервер: адреса в ней нет, только правило и параметры.
-      expect(a.toUri(), startsWith('autogroup://'));
+      // §439 — в папке группа хранится записью kind: auto, URI-формы нет.
+      expect(a.toUri(), isEmpty);
     });
 
     test('эмитит urltest, а не прокси', () {
@@ -463,6 +464,8 @@ void main() {
   });
 
   group('явный список', () {
+    // §439 — явный член — ссылка {folder_id, tag} на СЫРОЙ тег узла контейнера
+    // (у подписки — тег, уникализированный в источнике, NODE_LINK §2.2).
     test('порядок задаёт список, не обход контейнера', () {
       final nodes = parse([
         plain('A', [vless('1.1.1.1', uuid: 'u-a')]),
@@ -474,14 +477,17 @@ void main() {
         tag: 'auto',
         label: 'Auto',
         membership: const ExplicitMembers([
-          'vless|2.2.2.2|443|u-b',
-          'vless|1.1.1.1|443|u-a',
+          NodeLink(folderId: 'sub', tag: 'B'),
+          NodeLink(folderId: 'sub', tag: 'A'),
         ]),
       );
-      expect(resolveAutoSelectMembers(a, resolved), ['L: B', 'L: A']);
+      expect(
+          resolveAutoSelectMembers(a, resolved,
+              containerId: 'sub', rawTags: sourceNodeRawTags(nodes)),
+          ['L: B', 'L: A']);
     });
 
-    test('неизвестный ключ пропускается, остальные остаются', () {
+    test('неизвестный член отсекается с warning, остальные остаются', () {
       final nodes = parse([
         plain('A', [vless('1.1.1.1', uuid: 'u-a')])
       ]);
@@ -490,12 +496,40 @@ void main() {
         tag: 'auto',
         label: 'Auto',
         membership: const ExplicitMembers([
-          'vless|9.9.9.9|443|gone',
-          'vless|1.1.1.1|443|u-a',
+          NodeLink(folderId: 'sub', tag: 'gone'),
+          NodeLink(folderId: 'sub', tag: 'A'),
         ]),
       );
-      expect(resolveAutoSelectMembers(a, {for (final n in nodes) n: 'L: A'}),
+      final warnings = <String>[];
+      expect(
+          resolveAutoSelectMembers(a, {for (final n in nodes) n: 'L: A'},
+              containerId: 'sub',
+              rawTags: sourceNodeRawTags(nodes),
+              warn: warnings.add),
           ['L: A']);
+      expect(warnings, [contains('member "gone" was dropped')]);
+    });
+
+    test('член чужого контейнера в группу не входит (§322 §2)', () {
+      final nodes = parse([
+        plain('A', [vless('1.1.1.1', uuid: 'u-a')])
+      ]);
+      final a = AutoSelectSpec(
+        id: 'x',
+        tag: 'auto',
+        label: 'Auto',
+        membership: const ExplicitMembers([
+          NodeLink(folderId: 'other', tag: 'A'),
+        ]),
+      );
+      final warnings = <String>[];
+      expect(
+          resolveAutoSelectMembers(a, {for (final n in nodes) n: 'L: A'},
+              containerId: 'sub',
+              rawTags: sourceNodeRawTags(nodes),
+              warn: warnings.add),
+          isEmpty);
+      expect(warnings, [contains('not a node of this container')]);
     });
   });
 
@@ -553,82 +587,12 @@ void main() {
     });
   });
 
-  group('URI-форма autogroup:// (§7)', () {
-    AutoSelectSpec rt(AutoSelectSpec a) => parseUri(a.toUri()) as AutoSelectSpec;
-
-    test('правило переживает round-trip', () {
-      final a = AutoSelectSpec(
-        id: 'x',
-        tag: 't',
-        label: '🇪🇺 Авто | Лучший ⚡',
-        membership: const RuleMembers(include: '^(proxy)', exclude: 'decoy'),
-        params: const AutoSelectParams(
-          mode: UrltestMode.roundRobin,
-          pool: 7,
-          poolTolerance: 1500,
-          interval: '2m',
-        ),
-      );
-      final b = rt(a);
-      expect(b.label, '🇪🇺 Авто | Лучший ⚡');
-      final m = b.membership as RuleMembers;
-      expect(m.include, '^(proxy)');
-      expect(m.exclude, 'decoy');
-      expect(b.params.mode, UrltestMode.roundRobin);
-      expect(b.params.pool, 7);
-      expect(b.params.poolTolerance, 1500);
-      expect(b.params.interval, '2m');
-    });
-
-    test('явный список переживает round-trip', () {
-      final a = AutoSelectSpec(
-        id: 'y',
-        tag: 't',
-        label: 'E',
-        membership: const ExplicitMembers([
-          'vless|1.1.1.1|443|u-1',
-          'vless|2.2.2.2|443|u-2',
-        ]),
-      );
-      expect((rt(a).membership as ExplicitMembers).keys,
-          ['vless|1.1.1.1|443|u-1', 'vless|2.2.2.2|443|u-2']);
-    });
-
-    test('interrupt переживает round-trip', () {
-      final a = AutoSelectSpec(
-        id: 'i',
-        tag: 't',
-        label: 'A',
-        params: const AutoSelectParams(interruptExistConnections: true),
-      );
-      expect((parseUri(a.toUri()) as AutoSelectSpec)
-          .params
-          .interruptExistConnections, isTrue);
-    });
-
-    test('дефолты в URI не пишутся', () {
-      final uri = AutoSelectSpec(id: 'z', tag: 't', label: 'A').toUri();
-      expect(uri, isNot(contains('url=')));
-      expect(uri, isNot(contains('interval=')));
-      expect(uri, isNot(contains('pool=')));
-    });
-
-    test('пустое правило = все члены контейнера', () {
-      final b = rt(AutoSelectSpec(id: 'z', tag: 't', label: 'A'));
-      final m = b.membership as RuleMembers;
-      expect(m.include, isEmpty);
-      expect(m.exclude, isEmpty);
-    });
-
-    test('снятые sticky-чипы переживают round-trip (§210 sentinel)', () {
-      final a = AutoSelectSpec(
-        id: 'z',
-        tag: 't',
-        label: 'A',
-        params: const AutoSelectParams(
-            mode: UrltestMode.roundRobin, stickyHash: []),
-      );
-      expect(rt(a).params.stickyHash, isEmpty);
+  group('URI-формы у группы нет (§439 N2)', () {
+    test('autogroup:// не разбирается, toUri пуст', () {
+      // Группа в папке хранится записью kind: auto (codec/auto_group_record),
+      // текст autogroup:// переводит только миграция.
+      expect(AutoSelectSpec(id: 'z', tag: 't', label: 'A').toUri(), isEmpty);
+      expect(parseUri('autogroup://?include=DE#Old'), isNot(isA<AutoSelectSpec>()));
     });
 
     test('чужая схема не парсится как группа', () {

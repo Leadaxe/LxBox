@@ -6,6 +6,7 @@ import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/import_rule.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -64,7 +65,7 @@ SubscriptionServers _subscription({
 }) _richState() => (
       lists: [
         _subscription(
-          detourPolicy: _flags.copyWith(overrideDetour: 'vpn-1'),
+          detourPolicy: _flags.copyWith(overrideDetour: NodeLink(tag: 'vpn-1')),
           importRules: _importRules,
           importRulesEnabled: false,
           onUpdateAction: SubscriptionOnUpdateAction.reload,
@@ -89,7 +90,7 @@ SubscriptionServers _subscription({
           members: [FolderMember(raw: _memberUri)],
         ),
       ],
-      chains: const [SourceChain(tag: 'relay', label: 'Relay', hops: ['a', 'b'])],
+      chains: const [SourceChain(tag: 'relay', label: 'Relay', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])],
       rules: [
         CustomRuleSrs(
           id: 'r-geo',
@@ -243,15 +244,15 @@ void main() {
 
     test('имя цепочки, равное тегу, и пустое — не потеря', () async {
       final out = await _export(const [], chains: const [
-        SourceChain(tag: 'a', label: 'a', hops: ['x', 'y']),
-        SourceChain(tag: 'b', hops: ['x', 'y']),
+        SourceChain(tag: 'a', label: 'a', hops: [NodeLink(tag: 'x'), NodeLink(tag: 'y')]),
+        SourceChain(tag: 'b', hops: [NodeLink(tag: 'x'), NodeLink(tag: 'y')]),
       ]);
       expect(out.warnings, isEmpty);
     });
 
     test('ключ записи вне таблицы срезается с названием', () {
       final stored = {
-        ...chainToRecord(const SourceChain(tag: 'c', hops: ['x', 'y'])),
+        ...chainToRecord(const SourceChain(tag: 'c', hops: [NodeLink(tag: 'x'), NodeLink(tag: 'y')])),
         'future_key': 1,
       };
       final slice = sliceBackupRecord(BackupRecord.chain, stored);
@@ -274,7 +275,7 @@ void main() {
       final folder = (s.lists[2] as FolderServers).copyWith(members: [
         FolderMember(
           raw: _memberUri,
-          detour: 'Tokyo',
+          detour: NodeLink(tag: 'Tokyo'),
           sections: NodeSections.fromJson({
             'rules': [
               {
@@ -289,7 +290,7 @@ void main() {
         FolderMember(raw: 'not a node'),
       ]);
       final server = (s.lists[1] as UserServer).copyWith(
-        detourPolicy: _flags.copyWith(overrideDetour: 'EU de-1'),
+        detourPolicy: _flags.copyWith(overrideDetour: NodeLink(tag: 'EU de-1')),
         sections: folder.members.first.sections,
       );
       Set<String> table(BackupRecord kind) => {
@@ -313,7 +314,7 @@ void main() {
             tag: 'c',
             label: 'L',
             enabled: false,
-            hops: ['x'],
+            hops: [NodeLink(tag: 'x')],
             idleTimeout: '1m',
             stripEvasion: true,
           )));

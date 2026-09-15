@@ -8,6 +8,7 @@ import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -67,7 +68,7 @@ void main() {
           name: 'Solo',
           enabled: true,
           tagPrefix: '',
-          detourPolicy: const DetourPolicy(overrideDetour: 'vpn-3'),
+          detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-3')),
           origin: UserSource.paste,
           rawBody: memberRaw('solo-node'),
         )),
@@ -76,7 +77,7 @@ void main() {
           name: 'Sub',
           enabled: true,
           tagPrefix: '',
-          detourPolicy: const DetourPolicy(overrideDetour: 'vpn-3-auto'),
+          detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-3-auto')),
           url: 'https://example.com/sub',
         )),
         sourceToRecord(FolderServers(
@@ -84,23 +85,27 @@ void main() {
           name: 'Folder',
           enabled: true,
           tagPrefix: '',
-          detourPolicy: const DetourPolicy(overrideDetour: 'vpn-3'),
+          detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-3')),
           members: [
-            FolderMember(raw: memberRaw('node-a'), detour: 'vpn-3'),
+            FolderMember(
+                raw: memberRaw('node-a'), detour: const NodeLink(tag: 'vpn-3')),
             FolderMember(raw: memberRaw('node-b')),
           ],
         )),
-        // Папка-омоним: член с bare-тегом 'vpn-3' → ссылки 'vpn-3' внутри
-        // НЕЁ означают ЧЛЕНА (приоритет bareIndex FolderDetourPlan).
+        // Папка-омоним: член с сырым тегом 'vpn-3' → ссылки на него — пары
+        // {f2, vpn-3} (D-112), с корневым именем Направления не совпадают.
         sourceToRecord(FolderServers(
           id: 'f2',
           name: 'Homonym',
           enabled: true,
           tagPrefix: 'hm-',
-          detourPolicy: const DetourPolicy(overrideDetour: 'vpn-3'),
+          detourPolicy: const DetourPolicy(
+              overrideDetour: NodeLink(folderId: 'f2', tag: 'vpn-3')),
           members: [
             FolderMember(raw: memberRaw('vpn-3')),
-            FolderMember(raw: memberRaw('node-c'), detour: 'vpn-3'),
+            FolderMember(
+                raw: memberRaw('node-c'),
+                detour: const NodeLink(folderId: 'f2', tag: 'vpn-3')),
           ],
         )),
       ],
@@ -122,15 +127,16 @@ void main() {
     final res = await SettingsStorage.updateDirection(
         (await vpn3()).copyWith(isDetour: false));
 
-    expect((await listById('u1')).detourPolicy.overrideDetour, '');
-    expect((await listById('s1')).detourPolicy.overrideDetour, '');
+    expect((await listById('u1')).detourPolicy.overrideDetour, NodeLink.none);
+    expect((await listById('s1')).detourPolicy.overrideDetour, NodeLink.none);
     final f1 = await listById('f1') as FolderServers;
-    expect(f1.detourPolicy.overrideDetour, '');
-    expect(f1.members.first.detour, '');
+    expect(f1.detourPolicy.overrideDetour, NodeLink.none);
+    expect(f1.members.first.detour, NodeLink.none);
     // Омоним-папка: и policy, и member ссылаются на ЧЛЕНА 'vpn-3' — не трогаем.
+    const member = NodeLink(folderId: 'f2', tag: 'vpn-3');
     final f2 = await listById('f2') as FolderServers;
-    expect(f2.detourPolicy.overrideDetour, 'vpn-3');
-    expect(f2.members[1].detour, 'vpn-3');
+    expect(f2.detourPolicy.overrideDetour, member);
+    expect(f2.members[1].detour, member);
     // Счётчики: u1 + s1(autoTag) + f1.policy + f1.member = 4.
     expect(res.detours, 4);
     expect(res.rules, 0);
@@ -145,7 +151,7 @@ void main() {
     await SettingsStorage.updateDirection(
         (await vpn3()).copyWith(isDetour: true));
 
-    expect((await listById('u1')).detourPolicy.overrideDetour, '');
+    expect((await listById('u1')).detourPolicy.overrideDetour, NodeLink.none);
   });
 
   test('disable detour-Направления лечит detour-ссылки', () async {
@@ -154,7 +160,7 @@ void main() {
     final res = await SettingsStorage.updateDirection(
         (await vpn3()).copyWith(enabled: false));
 
-    expect((await listById('u1')).detourPolicy.overrideDetour, '');
+    expect((await listById('u1')).detourPolicy.overrideDetour, NodeLink.none);
     expect(res.detours, 4);
   });
 
@@ -163,8 +169,8 @@ void main() {
 
     final res = await SettingsStorage.deleteDirection('vpn-3');
 
-    expect((await listById('u1')).detourPolicy.overrideDetour, '');
-    expect((await listById('s1')).detourPolicy.overrideDetour, '');
+    expect((await listById('u1')).detourPolicy.overrideDetour, NodeLink.none);
+    expect((await listById('s1')).detourPolicy.overrideDetour, NodeLink.none);
     expect(res.detours, 4);
   });
 

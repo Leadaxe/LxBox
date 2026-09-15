@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -592,7 +593,7 @@ void main() {
 }''';
       final file = parseLxBackup(raw);
       expect(file.chains, hasLength(1));
-      expect(file.chains.single.hops, ['hop-1', 'hop-2'],
+      expect(file.chains.single.hops, const [NodeLink(tag: 'hop-1'), NodeLink(tag: 'hop-2')],
           reason: 'порядок файла нормативен — побеждает первая');
       expect(file.warnings.map((w) => w.code), [kWarnChainExists]);
     });
@@ -632,7 +633,7 @@ void main() {
       final c = parseLxBackup(raw).chains.single;
       expect(c.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
       expect(c.label, 'Мой маршрут');
-      expect(c.hops, ['a', 'b']);
+      expect(c.hops, const [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       expect(c.idleTimeout, '0s');
       // Трёхзначность: явный false НЕ должен слипаться с «ключа не было».
       expect(c.stripEvasion, isFalse);
@@ -706,7 +707,7 @@ void main() {
       const source = SourceChain(
         tag: 'chain-1',
         label: 'Мой маршрут',
-        hops: ['warp', 'vpn ②'],
+        hops: [NodeLink(tag: 'warp'), NodeLink(tag: 'vpn ②')],
         idleTimeout: '0s',
         stripEvasion: false,
         strip: {'tls.utls': false},
@@ -754,9 +755,9 @@ void main() {
         rules: const [],
         vars: const {},
         chains: const [
-          SourceChain(tag: 'chain-1', label: 'chain-1', hops: ['a', 'b']),
-          SourceChain(tag: 'chain-2', label: '', hops: ['a', 'b']),
-          SourceChain(tag: 'chain-3', label: 'Мой маршрут', hops: ['a', 'b']),
+          SourceChain(tag: 'chain-1', label: 'chain-1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+          SourceChain(tag: 'chain-2', label: '', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+          SourceChain(tag: 'chain-3', label: 'Мой маршрут', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       );
       for (final e in _sourcesOf(built.json, 'chain')) {
@@ -780,7 +781,7 @@ void main() {
           Direction(tag: 'de', label: 'Германия'),
         ],
         chains: const [
-          SourceChain(tag: 'chain-1', label: 'Мой маршрут', hops: ['a', 'b']),
+          SourceChain(tag: 'chain-1', label: 'Мой маршрут', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       )).json;
 
@@ -818,7 +819,7 @@ void main() {
         rules: const [],
         vars: const {},
         chains: const [
-          SourceChain(tag: 'off', enabled: false, hops: ['a', 'b']),
+          SourceChain(tag: 'off', enabled: false, hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
         ],
       )).json;
       final entry = _sourcesOf(out, 'chain').single;
@@ -831,8 +832,8 @@ void main() {
       // Ссылка на цепочку выше по списку = антицикл: перестановка сломала бы
       // ровно тот инвариант, ради которого порядок объявлен нормативным.
       const chains = [
-        SourceChain(tag: 'z-first', hops: ['a', 'b']),
-        SourceChain(tag: 'a-second', hops: ['z-first', 'c']),
+        SourceChain(tag: 'z-first', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+        SourceChain(tag: 'a-second', hops: [NodeLink(tag: 'z-first'), NodeLink(tag: 'c')]),
       ];
       final out = (await buildLxBackup(
         lists: const [],

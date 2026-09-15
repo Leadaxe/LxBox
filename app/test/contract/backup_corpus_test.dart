@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -11,7 +12,6 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
-import 'package:lxbox/services/tag_resolver.dart';
 
 // Конформанс-раннер корпуса LX Backup (SPEC 103, фаза 4), сторона LxBox.
 // Тот же набор гоняет Go (core/backup/corpus_test.go).
@@ -439,32 +439,25 @@ void _checkChains(_State state, Map<String, dynamic> expected) {
   }
 }
 
-/// В какой узел состояния попадает ссылка модели (тег конфига): член папки
+/// В какой контейнер состояния указывает ссылка (NodeLink, D-112): член папки
 /// (`folder:<имя>/<сырой тег>`), узел подписки
-/// (`subscription:<url>/<сырой тег>`), иначе корневая ссылка (`/<тег>`):
-/// корневой узел, Направление,
-/// цепочка, служебный тег или тег, которого нет.
-({String tag, String view}) _resolveHop(String hop, List<ServerList> lists) {
+/// (`subscription:<url>/<сырой тег>`), пара на контейнер, которого в состоянии нет
+/// (`folder_id:<id>/<тег>`), иначе корневая ссылка (`/<тег>`): корневой узел,
+/// Направление, цепочка, служебный тег или тег, которого нет.
+({String tag, String view}) _resolveHop(NodeLink hop, List<ServerList> lists) {
+  if (hop.isRoot) return (tag: hop.tag, view: '/${hop.tag}');
   for (final l in lists) {
+    if (l.id != hop.folderId) continue;
     switch (l) {
       case FolderServers():
-        for (final m in l.members) {
-          final bare = m.node?.tag;
-          if (bare != null && TagResolver.displayTag(l.tagPrefix, bare) == hop) {
-            return (tag: bare, view: 'folder:${l.name}/$bare');
-          }
-        }
+        return (tag: hop.tag, view: 'folder:${l.name}/${hop.tag}');
       case SubscriptionServers():
-        for (final n in l.nodes) {
-          if (TagResolver.displayTag(l.tagPrefix, n.tag) == hop) {
-            return (tag: n.tag, view: 'subscription:${l.url}/${n.tag}');
-          }
-        }
+        return (tag: hop.tag, view: 'subscription:${l.url}/${hop.tag}');
       case UserServer():
         break;
     }
   }
-  return (tag: hop, view: '/$hop');
+  return (tag: hop.tag, view: 'folder_id:${hop.folderId}/${hop.tag}');
 }
 
 /// Ссылка ожидания (`README.md` корпуса, «Ссылка в ожиданиях») в той же

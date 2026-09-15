@@ -182,7 +182,8 @@ void main() {
       req('PATCH', '/folders/$id/members/1', body: {'detour': 'jump-de'}),
       ctx(),
     );
-    expect((asMap(r2)['member'] as Map)['detour'], 'jump-de');
+    // §439 — строка в запросе читается корневой ссылкой, ответ — ссылкой.
+    expect((asMap(r2)['member'] as Map)['detour'], {'tag': 'jump-de'});
 
     await expectLater(
       foldersHandler(

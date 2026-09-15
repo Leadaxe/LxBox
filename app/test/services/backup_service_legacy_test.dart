@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/backup_service.dart';
@@ -197,7 +198,7 @@ void main() {
         ),
       ]);
       await SettingsStorage.setChains(
-          const [SourceChain(tag: 'mine', hops: ['a', 'b'])]);
+          const [SourceChain(tag: 'mine', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])]);
 
       final svc = const BackupService();
       final contents = await svc.parseImport(envelope(legacyStorage()));
@@ -227,7 +228,7 @@ void main() {
         ),
       ]);
       await SettingsStorage.setChains(
-          const [SourceChain(tag: 'mine', hops: ['a', 'b'])]);
+          const [SourceChain(tag: 'mine', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])]);
 
       final svc = const BackupService();
       final contents = await svc.parseImport(envelope(legacyStorage()));

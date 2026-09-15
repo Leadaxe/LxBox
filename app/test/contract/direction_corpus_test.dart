@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/auto_select.dart';
+import 'package:lxbox/models/codec/node_link_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
@@ -305,7 +306,9 @@ Direction _toDirection(Map<String, dynamic> c) {
 SourceChain _toChain(Map<String, dynamic> c) => SourceChain(
       tag: c['tag'] as String? ?? '',
       label: c['label'] as String? ?? '',
-      hops: ((c['hops'] as List?) ?? const []).cast<String>().toList(),
+      hops: [
+        for (final h in (c['hops'] as List?) ?? const []) ?nodeLinkFromRecord(h),
+      ],
       idleTimeout: c['idle_timeout'] as String? ?? '',
       stripEvasion:
           c['strip_evasion'] is bool ? c['strip_evasion'] as bool : null,

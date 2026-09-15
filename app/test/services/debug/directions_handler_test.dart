@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
@@ -424,7 +425,7 @@ void main() {
           name: 'Solo',
           enabled: true,
           tagPrefix: '',
-          detourPolicy: const DetourPolicy(overrideDetour: 'vpn-2'),
+          detourPolicy: const DetourPolicy(overrideDetour: NodeLink(tag: 'vpn-2')),
           origin: UserSource.paste,
         ),
       ]);
@@ -441,7 +442,7 @@ void main() {
       });
       expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
       final solo = (await SettingsStorage.getServerLists()).single;
-      expect(solo.detourPolicy.overrideDetour, '');
+      expect(solo.detourPolicy.overrideDetour, NodeLink.none);
     });
 
     test('§393 A3 — healed.includes в DELETE: тег вычеркнут из include '
@@ -566,7 +567,7 @@ void main() {
       name: 'Solo',
       enabled: true,
       tagPrefix: '',
-      detourPolicy: DetourPolicy(overrideDetour: tag),
+      detourPolicy: DetourPolicy(overrideDetour: NodeLink(tag: tag)),
       origin: UserSource.paste,
       rawBody: 'vless://u-a@h.com:443?type=ws&security=tls#solo-node',
     );
@@ -581,7 +582,7 @@ void main() {
       await c.init();
       expect(
         c.entries.single.list.detourPolicy.overrideDetour,
-        tag,
+        NodeLink(tag: tag),
         reason: 'stale-ссылка должна доехать до in-memory entries',
       );
       DebugRegistry.I.sub = c;
@@ -610,11 +611,11 @@ void main() {
 
         // Storage вылечен...
         final solo = (await SettingsStorage.getServerLists()).single;
-        expect(solo.detourPolicy.overrideDetour, '');
+        expect(solo.detourPolicy.overrideDetour, NodeLink.none);
         // ...и зеркало контроллера тоже — иначе _persist воскресит ссылку.
         expect(
           c.entries.single.list.detourPolicy.overrideDetour,
-          '',
+          NodeLink.none,
           reason: 'без ресинка следующий _persist воскресил бы vpn-2',
         );
       },
@@ -638,7 +639,7 @@ void main() {
         expect(saved.enabled, isFalse);
         expect(
           saved.detourPolicy.overrideDetour,
-          '',
+          NodeLink.none,
           reason: '_persist после ресинка не должен воскрешать ссылку',
         );
       },
@@ -661,7 +662,7 @@ void main() {
         'includes': 0,
         'chain_positions': 0,
       });
-      expect(c.entries.single.list.detourPolicy.overrideDetour, '');
+      expect(c.entries.single.list.detourPolicy.overrideDetour, NodeLink.none);
     });
 
     test('DELETE /directions/{tag}: heal зеркалится в entries', () async {
@@ -681,7 +682,7 @@ void main() {
         'includes': 0,
         'chain_positions': 0,
       });
-      expect(c.entries.single.list.detourPolicy.overrideDetour, '');
+      expect(c.entries.single.list.detourPolicy.overrideDetour, NodeLink.none);
     });
 
     test('sub == null (UI не готов): heal storage без падения', () async {
@@ -701,7 +702,7 @@ void main() {
       final solo = (await SettingsStorage.getServerLists()).single;
       expect(
         solo.detourPolicy.overrideDetour,
-        '',
+        NodeLink.none,
         reason: 'без контроллера нет и entries, которые разъезжаются',
       );
     });

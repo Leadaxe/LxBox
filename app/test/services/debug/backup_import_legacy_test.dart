@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
@@ -190,7 +191,7 @@ void main() {
     expect((lists[0] as SubscriptionServers).tagPrefix, 'PR');
     expect((lists[0] as SubscriptionServers).updateIntervalHours, 12);
     expect(lists[1].nodes.single.tag, 'Tokyo');
-    expect((await SettingsStorage.getChains()).single.hops, ['Tokyo', 'vpn-1']);
+    expect((await SettingsStorage.getChains()).single.hops, const [NodeLink(tag: 'Tokyo'), NodeLink(tag: 'vpn-1')]);
     final rules = await SettingsStorage.getCustomRules();
     expect(rules.map((x) => x.name), ['Ads', 'Raw', 'Raw #2']);
     expect(rules.map((x) => x.orderNum), [1000, 1001, 1001]);

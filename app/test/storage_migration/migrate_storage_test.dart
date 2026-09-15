@@ -10,6 +10,7 @@ import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/debug_entry.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/services/app_log.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/storage_migration/legacy_form_v0.dart';
@@ -214,7 +215,7 @@ void main() {
       ];
       expect(chains.map((c) => c.tag), ['early', 'late', 'no-order']);
       expect(chains.first.label, 'E');
-      expect(chains[1].hops, ['early', 'vpn-1']);
+      expect(chains[1].hops, const [NodeLink(tag: 'early'), NodeLink(tag: 'vpn-1')]);
       expect(_records(r.doc['sources']).every((s) => !s.containsKey('order')),
           isTrue);
     });
@@ -317,8 +318,16 @@ void main() {
       expect(r.info, contains('rules: 3 rules → 3 records'));
       expect(r.info, contains('dns: 3 servers, 4 rules'));
       expect(r.summary, r.info.join('; '));
-      expect(r.warnings, isEmpty);
-      expect(r.toReportJson(), {'migrated': true, 'info': r.info});
+      // Документ без Направлений: ссылки на vpn-2 и позиции «a», «b» ни во
+      // что не разрешаются — миграция ссылок оставляет их корнем и называет
+      // (сборка разберёт fail-closed). vpn-1 — цель route_final шаблона.
+      expect(r.warnings, [
+        'server "Tokyo": detour "vpn-2" matches no node, kept as a root link',
+        'chain "no-order": position 1 "a" matches no node, kept as a root link',
+        'chain "no-order": position 2 "b" matches no node, kept as a root link',
+      ]);
+      expect(r.toReportJson(),
+          {'migrated': true, 'info': r.info, 'warnings': r.warnings});
     });
 
     test('warnings называют потерянное по именам записей', () {
