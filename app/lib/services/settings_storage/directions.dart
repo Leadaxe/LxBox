@@ -13,7 +13,7 @@ part of '../settings_storage.dart';
 /// §248 — счётчики вылеченных ссылок при мутации Направления (SnackBar в UI,
 /// тело ответа Debug API). `rules` — route_final/custom-rule → vpn-1
 /// (только disable/delete, §274 снял flag-set-триггер); `detours` —
-/// overrideDetour/member.detour → '' (None) при disable/delete/flag-unset;
+/// overrideDetour/member.detour → нет ссылки (None) при disable/delete/flag-unset;
 /// `includes` — §393 A3, `Direction.include` чужих Направлений → тег вычеркнут
 /// (только delete, см. [clearIncludeDirectionRefs]).
 /// §393 D2 — `chainPositions`: ПОЗИЦИИ цепочек с тегом удалённого Направления
@@ -211,14 +211,13 @@ Future<int> _healDirectionRefs(String deletedTag) async {
   return count;
 }
 
-/// §248 — сброс detour-ссылок на Направление → '' (None/direct): overrideDetour
+/// §248 — сброс detour-ссылок на Направление → нет ссылки (None): overrideDetour
 /// одиночки/подписки/папки + личные `FolderMember.detour`. Вызывается, когда
 /// Направление перестаёт быть detour-мишенью: галка detour снята, Направление выключен
 /// или удалён. Необратимо (Решение B §202). Возвращает число сброшенных.
 ///
-/// Интра-омонимия: значение, равное bare-тегу члена ТОЙ ЖЕ папки, — интра-
-/// ссылка на члена (приоритет bareIndex в FolderDetourPlan), Направление тут ни
-/// при чём — пропускаем. Ссылка «на Направление» = tag ИЛИ `<tag>-auto` (двойник).
+/// Ссылка «на Направление» — корневая `{tag}` с tag ИЛИ `<tag>-auto`
+/// (двойник); пара адресует узел контейнера и Направлением не бывает (D-112).
 /// Всё flush:false — атомарный `_save()` на вызывающем.
 Future<int> _healDetourDirectionRefs(String tag) async {
   final lists = await _getServerLists();

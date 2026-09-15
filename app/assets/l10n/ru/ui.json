@@ -341,6 +341,14 @@
       "other": "%d сервера"
     }
   },
+  "%d servers deleted": {
+    "value": {
+      "one": "Удалён %d сервер",
+      "few": "Удалено %d сервера",
+      "many": "Удалено %d серверов",
+      "other": "Удалено %d сервера"
+    }
+  },
   "%d src": {
     "value": {
       "one": "%d источник",
@@ -1992,6 +2000,9 @@
       "many": "В папке «%2$s» %1$d серверов.",
       "other": "В папке «%2$s» %1$d сервера."
     }
+  },
+  "Folder \"%s\" deleted": {
+    "value": "Папка «%s» удалена"
   },
   "Folder has no servers yet": {
     "value": "В папке пока нет серверов"
@@ -3740,6 +3751,9 @@
   "Server": {
     "value": "Сервер"
   },
+  "Server \"%s\" deleted": {
+    "value": "Сервер «%s» удалён"
+  },
   "Server %d": {
     "value": "Сервер %d"
   },
@@ -3982,6 +3996,9 @@
         "value": "Подписка"
       }
     }
+  },
+  "Subscription \"%s\" deleted": {
+    "value": "Подписка «%s» удалена"
   },
   "Subscription URL": {
     "value": "URL подписки"
@@ -4609,6 +4626,9 @@
   },
   "deleted": {
     "value": "удалён"
+  },
+  "detour removed from %s source(s)": {
+    "value": "detour снят у источников: %s"
   },
   "detour → %s": {
     "value": "detour → %s"

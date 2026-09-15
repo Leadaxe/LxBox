@@ -150,9 +150,11 @@ extension ServerListBuild on ServerList {
             entries: [...raw.all],
             node: server,
           ));
+      // Ключ `detour` держателя не снимается до второго прохода: разрешённая
+      // ссылка пишется на то же место в map (порядок ключей конфига прежний),
+      // а не разрешённая роняет узел целиком.
       if (replaceMode) {
         // REPLACE — цепочка дропнута (skipDetour=true), main → override.
-        main.map.remove('detour');
         defer(main);
       } else if (!policy.useDetourServers) {
         main.map.remove('detour');
@@ -160,12 +162,10 @@ extension ServerListBuild on ServerList {
         // §073 APPEND — нативная цепочка сохранена, override хвостом.
         if (detours.isEmpty) {
           // Цепочки нет в raw config → 1-hop (как replace).
-          main.map.remove('detour');
           defer(main);
         } else {
           // node → detours.first → ... → detours.last → overrideDetour
           main.map['detour'] = detours.first.tag;
-          detours.last.map.remove('detour');
           defer(detours.last);
         }
       } else if (detours.isNotEmpty) {

@@ -190,6 +190,14 @@ PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled
                                                  register_detour_in_auto,use_detour_servers,replace_detour_chain,
                                                  on_update_action,import_rules_enabled,identity}.
                                                  url applies to SubscriptionServers only (no-op for UserServer).
+                                                 override_detour = node link {"folder_id"?:"...","tag":"..."}
+                                                 (null clears): a folder member or subscription node is
+                                                 {folder_id, raw tag}, a standalone server or direction is
+                                                 {tag}. A string is read as {tag} (for a folder — as its
+                                                 member's raw tag when one matches). Responses carry the same
+                                                 shape (null when unset). tag_prefix of a standalone server is
+                                                 part of its root address: changing it rewrites links to it.
+                                                 DELETE of a source clears links to its nodes.
                                                  on_update_action: rebuild|reload|none.
                                                  identity is a tristate: omit = keep, null = Default (global
                                                  identity), object = Custom. The object is a PATCH over the
@@ -295,6 +303,13 @@ PATCH  /chains/{tag}[?rebuild=true]              Partial update: {label,enabled,
                                                  hops = positions IN PACKET ORDER: [0] is the first hop from the
                                                  client, the last one is what the target sees. NOT "who through
                                                  whom" — detour's arrow points the other way.
+                                                 Each position is a node link {"folder_id"?:"...","tag":"..."}:
+                                                 a folder member or subscription node (and a subscription
+                                                 group) is {folder_id: <folder/subscription id>, tag: <raw tag,
+                                                 before the prefix>}; a standalone server, direction, direct-out
+                                                 or another chain is {tag} with no folder_id. A plain string is
+                                                 read as {tag}. The build resolves links to final tags; a
+                                                 position that does not resolve drops the whole chain.
                                                  idle_timeout: "" = core default (5m), "0s" = live until stop.
                                                  strip_evasion is a TRISTATE: omit = keep, null = core default
                                                  (true, key not written), bool = explicit choice.
@@ -365,7 +380,11 @@ POST   /folders/{id}/members[?rebuild=true]    Add members. Body: exactly one of
                                                  URL is not stored, no auto-update)
 PATCH  /folders/{id}/members/{idx}[?rebuild=true]
                                                Subset {raw,enabled,detour}. raw must parse (400 keeps old);
-                                                 detour = personal member detour tag ('' clears)
+                                                 detour = personal member detour as a node link
+                                                 {"folder_id"?:"...","tag":"..."} (null clears). A plain string
+                                                 is read as a sibling member's raw tag when one matches, else as
+                                                 a root {tag}. A detour that does not resolve at build drops
+                                                 the node (never goes direct).
 DELETE /folders/{id}/members/{idx}[?rebuild=true]  Remove member
 POST   /folders/{id}/members/reorder[?rebuild=true]
                                                Body {"order":[old indexes in new order]} — full permutation
@@ -611,7 +630,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single entry'},
     {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries)'},
-    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
+    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
     {'method': 'POST', 'path': '/subs/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids)'},
@@ -633,7 +652,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, label, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},
     {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},
     {'method': 'POST', 'path': '/chains', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"tag":"...","label":"..."} + any PATCH field', 'description': 'Create chain → 201. No tag → first free chain-N. Tag is checked against BOTH chains and directions; rejected → 409 with the machine reason: empty|reserved|duplicate|auto_twin. A body without hops creates an empty chain (same as the UI).'},
-    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
+    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client), each a node link {folder_id?, tag} (a string is read as {tag}). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
     {'method': 'DELETE', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove chain. Positions of other chains pointing at it are NOT cleaned (the build degrades such a chain as a whole, "chain_hop_missing"); the response lists them in "dangling_refs".'},
     {'method': 'GET', 'path': '/chains/{tag}/probe', 'params': {'url': 'probe URL (default: global ping_options)', 'timeout_ms': 'per-layer budget (default: global ping_options)'}, 'description': 'Layer-by-layer probe: measures PREFIXES of the route (layer k = path from the client through position k) via the tag the core registers for it, "<chain>#<k>" — the same scheme as the launcher (config.ChainLayerTag). A hop price is the difference of neighbouring layers, never a measurement of its own. Needs a running VPN (409 otherwise): those tags exist only in the running core. Positions come from the BUILT config; 409 if the chain is not in it (disabled, degraded, never built). Sequential — worst case positions × timeout_ms. Response: layers[{pos, tag, probe_tag, cumulative_ms?, delta_ms?, error?, not_reached?}]; the first failing layer carries the core text and everything behind it is not_reached.'},
     // Folders CRUD (server folders)
@@ -642,7 +661,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/folders/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single folder + members'},
     {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place.'},
     {'method': 'POST', 'path': '/folders/{id}/members', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'exactly one of {"input":"<uri|WG-ini|JSON>","name_fallback"?} (paste) or {"url":"..."} (one-shot snapshot)', 'description': 'Add members. Snapshot: fetch → static members, URL not stored.'},
-    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour ("" clears).'},
+    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour, node link {folder_id?, tag} (null clears; a string is read as a sibling raw tag or a root {tag}).'},
     {'method': 'DELETE', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove member (indexes shift — use the returned folder snapshot)'},
     {'method': 'POST', 'path': '/folders/{id}/members/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder members (full permutation required)'},
     {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour)'},
