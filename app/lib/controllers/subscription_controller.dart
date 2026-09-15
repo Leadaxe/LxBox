@@ -70,6 +70,13 @@ class SubscriptionController extends ChangeNotifier {
   List<SubscriptionEntry> _entries = [];
   List<SubscriptionEntry> get entries => _entries;
 
+  /// §446 — подстановка состава подписок в тестах, без похода в хранение и
+  /// сеть. Продовый путь наполнения — `loadFromStorage` / `add*`.
+  @visibleForTesting
+  void debugSetEntries(List<SubscriptionEntry> entries) {
+    _entries = entries;
+  }
+
   /// AutoUpdater устанавливается внешним кодом (HomeScreen) после construction —
   /// конструкторы циклические (AutoUpdater хочет controller, controller хочет
   /// updater для ручного resetFailCount). Optional — контроллер работает и без.

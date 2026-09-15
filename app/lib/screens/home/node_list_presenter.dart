@@ -55,10 +55,22 @@ String autoModeLabel(String mode) => switch (mode) {
 ///
 /// Повторы схлопываются с числом: два финских узла → `🇫🇮[2]`. Порядок —
 /// как в пуле (слоты ядра, отсортированы им же).
+/// §446 — кэш скомпилированных regexp значков. `poolBadges` зовётся из
+/// `itemBuilder` на каждую строку автовыбора каждый кадр, а компиляция
+/// unicode-regexp дорогая. Паттернов единицы (дефолт плюс правки
+/// пользователя), так что кэш не растёт; `null` для битого паттерна
+/// кэшируется тоже — иначе опечатка компилировалась бы заново каждый раз.
+final Map<String, RegExp?> _badgeRegexCache = {};
+
+RegExp? _cachedBadgeRegex(String badge) => _badgeRegexCache.putIfAbsent(
+      badge,
+      () => tryCompileRegex(badge, unicode: true),
+    );
+
 String poolBadges(List<String> memberLabels, String badge) {
   if (badge.isEmpty || memberLabels.isEmpty) return '';
   // Битый regexp — молча без значков (инвариант §125: не роняем UI).
-  final re = tryCompileRegex(badge, unicode: true);
+  final re = _cachedBadgeRegex(badge);
   if (re == null) return '';
   final counts = <String, int>{};
   for (final l in memberLabels) {

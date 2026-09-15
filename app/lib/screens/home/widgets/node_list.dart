@@ -561,7 +561,7 @@ String? _autoLabelWithBadges(
   if (base == null) return null;
   // Тег в конфиге — с префиксом контейнера и, возможно, суффиксом
   // уникализации; ищем группу, чей базовый тег в нём содержится.
-  final badge = _poolBadgeOf(subs, tag);
+  final badge = poolBadgeOf(subs, tag);
   if (badge.isEmpty) return base;
   final slots = controller.poolSlots(tag);
   if (slots == null || slots.isEmpty) return base;
@@ -569,13 +569,53 @@ String? _autoLabelWithBadges(
   return badges.isEmpty ? base : '$base $badges';
 }
 
+/// §446 — плоский срез spec'ов автовыбора из всех подписок: пара
+/// `(тег, regexp значков)` в том же порядке обхода, что был у линейного
+/// поиска. Пересобирается только когда сменился состав подписок.
+///
+/// Матчинг суффиксный (`tag.endsWith(spec.tag)`), поэтому Map по тегу здесь
+/// не годится — итоговый тег несёт префикс контейнера и суффикс
+/// уникализации. Зато сам срез теперь короткий: узлов автовыбора единицы,
+/// а прежний обход шёл по ВСЕМ узлам всех подписок (сотни при большой
+/// сборной подписке) — и делал это на каждую видимую строку каждый кадр.
+List<(String, String)> _autoSpecs = const [];
+List<List<NodeSpec>>? _autoSpecsSource;
+
+/// Сброс кэша между тестами: кэш держит ссылки на списки узлов, и соседний
+/// тест с другим набором подписок получил бы чужие значки (§290 — глобальное
+/// состояние течёт между тестами).
+@visibleForTesting
+void resetPoolBadgeCache() {
+  _autoSpecs = const [];
+  _autoSpecsSource = null;
+}
+
+List<(String, String)> _autoSpecsOf(SubscriptionController subs) {
+  // Ключ — identity самих списков узлов: `_replaceList` ставит новый список,
+  // мутация на месте состав spec'ов не меняет.
+  final source = [for (final e in subs.entries) e.list.nodes];
+  final cached = _autoSpecsSource;
+  if (cached != null &&
+      cached.length == source.length &&
+      Iterable<int>.generate(source.length)
+          .every((i) => identical(cached[i], source[i]))) {
+    return _autoSpecs;
+  }
+  _autoSpecsSource = source;
+  _autoSpecs = [
+    for (final nodes in source)
+      for (final n in nodes)
+        if (n is AutoSelectSpec) (n.tag, n.poolBadge),
+  ];
+  return _autoSpecs;
+}
+
 /// §322 — regexp значков у группы с итоговым тегом [tag]. Дефолт, если группа
 /// не нашлась (узел мог приехать из конфиг-редактора, минуя подписки).
-String _poolBadgeOf(SubscriptionController subs, String tag) {
-  for (final e in subs.entries) {
-    for (final n in e.list.nodes) {
-      if (n is AutoSelectSpec && tag.endsWith(n.tag)) return n.poolBadge;
-    }
+@visibleForTesting
+String poolBadgeOf(SubscriptionController subs, String tag) {
+  for (final (specTag, badge) in _autoSpecsOf(subs)) {
+    if (tag.endsWith(specTag)) return badge;
   }
   return kDefaultPoolBadge;
 }
