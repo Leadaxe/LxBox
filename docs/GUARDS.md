@@ -152,6 +152,7 @@ Three channels, and they are not interchangeable.
 | `fp` is a known xray alias (`hellochrome_120`, …), 9 prefixes | canonicalised **silently** | silent (deliberate) | `utls_fingerprint.dart:41-51, 60-62` | a synonym is not a degradation (principle 3) | §281 |
 | `fp` in any case / with spaces | `trim().toLowerCase()` | silent | `utls_fingerprint.dart:57` | Xray accepts any case | §281 |
 | `fp` empty while `reality != null` | default `chrome` | silent | `utls_fingerprint.dart:78` | REALITY requires a uTLS block ("uTLS is required by reality client" — fatal on outbound creation), and an empty fingerprint emits no block | §281 |
+| `reality != null` and `fp` outside the chrome family (`firefox`, `safari`, `randomized`, …; `random` excluded) | **none** — the value stays in the node and in the config | `RealityFingerprintWarning` (`reality_fp_not_chrome`) | `utls_fingerprint.dart:110-113` | Xray servers since v26.9.8 reject a ClientHello without the `X25519MLKEM768` key share, which only the chrome family carries; the warning suggests `chrome`. The node's fingerprint comes from the subscription and goes into the config as is — the app does not rewrite the source's choice. 2.23.2 replaced it with `chrome` at build time (D-104); dropped in 2.24.0. `random` gets no warning: the parser's default for an empty `fp` cannot be told apart from an explicit one | §444 (D-119) |
 
 ### 1.3 Hysteria2 obfuscation (`hysteria2_obfs.dart`)
 
@@ -380,6 +381,8 @@ with a warning rather than hand the core a file it will reject"
 | Known xray fingerprint alias | canonicalised | **silent** | `heal_unknown_utls_fingerprints.dart:51-58` | a synonym, not a degradation | §281 |
 | Unrecognised fingerprint | → `chrome` | `emitWarnings` (`:578`) | `heal_unknown_utls_fingerprints.dart:57-58` | outside the core's case-sensitive vocabulary is a whole-config fatal; discarding would lose a live server | §281 |
 | Whitespace-only fingerprint | key removed, utls stays enabled | silent | `heal_unknown_utls_fingerprints.dart:53-56` | the core treats an empty fingerprint as chrome | §281 |
+| REALITY with a missing, empty or `random` fingerprint | → `chrome`, written explicitly | **silent** | `heal_unknown_utls_fingerprints.dart:78-85` | no choice was made: `random` is the vless/anytls/Xray-JSON parsers' default for an empty `fp` (D-009) and the model does not tell it apart from an explicit `fp=random`, so every `random` is replaced (same as the launcher). Explicit so the config does not depend on the core's default | §444 (D-119) |
+| REALITY with any other fingerprint from the vocabulary (`firefox`, `safari`, `randomized`, …) | **left as is** | `RealityFingerprintWarning` on the node (parser) | `heal_unknown_utls_fingerprints.dart:80-85` | the node's fingerprint comes from the subscription and goes into the config as is; the app does not rewrite the source's choice. 2.23.2 replaced it with `chrome` (D-104) | §444 (D-119) |
 
 ### 4.3 Core capability gate (`chain_nodes.dart`, `core_chain_capability.dart`)
 

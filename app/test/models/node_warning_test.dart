@@ -29,8 +29,9 @@ void main() {
       );
     });
 
-    // SPEC 083 — предупреждение REALITY + не-chrome отпечаток: равенство по
-    // значению, машинный рендер — английский ключ с подставленным именем.
+    // SPEC 083 / §444 — предупреждение REALITY + не-chrome отпечаток: равенство
+    // по значению, машинный рендер — английский ключ с подставленным именем;
+    // текст советует chrome, а не утверждает подмену.
     test('RealityFingerprintWarning equality + renderEn', () {
       expect(const RealityFingerprintWarning('firefox'),
           const RealityFingerprintWarning('firefox'));
@@ -41,8 +42,8 @@ void main() {
       expect(
           const RealityFingerprintWarning('firefox').renderEn(),
           'REALITY with uTLS fingerprint "firefox": Xray servers since '
-          'v26.9.8 accept only a Chrome-like ClientHello, so "chrome" is used '
-          'when connecting.');
+          'v26.9.8 reject this ClientHello. If the connection fails, try '
+          '"chrome".');
       expect(const RealityFingerprintWarning('firefox').severity,
           WarningSeverity.warning);
     });

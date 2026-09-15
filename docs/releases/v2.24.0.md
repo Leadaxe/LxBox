@@ -5,7 +5,7 @@ desktop launcher [v1.6.0](https://github.com/Leadaxe/singbox-launcher/releases/t
 is out and writes only LX Backup 1.0 files, which 2.23.2 refused as newer than
 supported. 2.24.0 imports them, and the phone now keeps subscriptions,
 servers, folders, chains, rules and DNS in the same records as that file
-(contract 1.0.2): export no longer loses fields, and the app's own settings
+(contract 1.0.3): export no longer loses fields, and the app's own settings
 travel in the backup too. The switch runs once, on the first start, and the
 built config does not change. Detours and chain positions point at a node
 rather than at a tag string, so renaming or moving a node rewrites them. All
@@ -18,7 +18,7 @@ backup made on 2.24.0. The core is `v1.14.0-lx.39` (UDP through SOCKS5).
 вышел и пишет только файлы LX Backup 1.0, а 2.23.2 отвергала их как «новее
 поддерживаемого». 2.24.0 их импортирует, а телефон теперь хранит подписки,
 серверы, папки, цепочки, правила и DNS теми же записями, что этот файл
-(контракт 1.0.2): экспорт больше не теряет поля, и собственные настройки
+(контракт 1.0.3): экспорт больше не теряет поля, и собственные настройки
 приложения тоже едут в бэкапе. Переход выполняется один раз при первом
 запуске, собранный конфиг не меняется. detour и позиции цепочек указывают на
 узел, а не на строку тега, поэтому переименование и перенос узла их
@@ -31,7 +31,7 @@ backup made on 2.24.0. The core is `v1.14.0-lx.39` (UDP through SOCKS5).
 <details open>
 <summary><h2>🇬🇧 English</h2></summary>
 
-## 💾 Backup shared with the desktop launcher 1.6.0 ([docs/spec/tasks/438](docs/spec/tasks/438-lx-backup-1-0-read-write.md), [docs/spec/features/439](docs/spec/features/439%20storage-contract-1-0/spec.md), contract 1.0.2)
+## 💾 Backup shared with the desktop launcher 1.6.0 ([docs/spec/tasks/438](docs/spec/tasks/438-lx-backup-1-0-read-write.md), [docs/spec/features/439](docs/spec/features/439%20storage-contract-1-0/spec.md), contract 1.0.3)
 
 The desktop launcher [v1.6.0](https://github.com/Leadaxe/singbox-launcher/releases/tag/v1.6.0)
 has been released and writes only LX Backup 1.0. Until the phone is updated to
@@ -142,7 +142,7 @@ References saved by 2.23.2 are converted on the switch. An ambiguous one is
 kept as it was and named in the log; a detour of a node onto itself and the
 edge that closed a ring inside a folder are removed.
 
-## 🧮 Variables of template DNS servers and presets ([docs/spec/tasks/441](docs/spec/tasks/441-template-preset-vars-in-record.md), [docs/spec/tasks/443](docs/spec/tasks/443-contract-1-0-2-spec129.md), contract 1.0.2)
+## 🧮 Variables of template DNS servers and presets ([docs/spec/tasks/441](docs/spec/tasks/441-template-preset-vars-in-record.md), [docs/spec/tasks/443](docs/spec/tasks/443-contract-1-0-2-spec129.md), contract 1.0.3)
 
 This concerns the variables of DNS servers from the template (Google,
 Cloudflare, AdGuard…) and of rule presets (RU direct, BitTorrent…).
@@ -203,6 +203,8 @@ Bugs present in 2.23.2:
 
 | Before | Now |
 |---|---|
+| REALITY nodes had `firefox` and other fingerprints replaced with `chrome` in the config, and connections to some servers did not come up | The node's fingerprint from the subscription goes into the config as is; the app does not rewrite the source's choice. The node warning suggests trying `chrome` ([docs/spec/tasks/444](docs/spec/tasks/444-reality-fingerprint-no-override.md)) |
+| On the Home screen the Direction field wrapped its placeholder onto a second line and cut it in half | The placeholder and a long Direction name stay on one line with an ellipsis |
 | Importing a backup turned off rules whose target was `direct-out` | They arrive as they were |
 | A user DNS rule written without the `enabled` key (backup import, Debug API) was skipped by the build | It is in the config |
 | An srs DNS rule with its body in `body` never reached the config | It is in the config |
@@ -225,7 +227,7 @@ For scripts working with the local Debug API:
 
 ## 📜 Contract
 
-The contract copy is synced with the desktop launcher, contract 1.0.2: wave 3
+The contract copy is synced with the desktop launcher, contract 1.0.3: wave 3
 of contract 1.0 and the canonical Tailscale bundle, the node reference form
 `{folder_id, tag}` with its rename and delete rules (autoselect groups
 included), "one rule — one body", the app's settings declared in the backup
@@ -263,7 +265,7 @@ by tests and `sing-box check`, not on the emulator.
 <details open>
 <summary><h2>🇷🇺 Русский</h2></summary>
 
-## 💾 Бэкап, общий с десктопным лаунчером 1.6.0 ([docs/spec/tasks/438](docs/spec/tasks/438-lx-backup-1-0-read-write.md), [docs/spec/features/439](docs/spec/features/439%20storage-contract-1-0/spec.md), контракт 1.0.2)
+## 💾 Бэкап, общий с десктопным лаунчером 1.6.0 ([docs/spec/tasks/438](docs/spec/tasks/438-lx-backup-1-0-read-write.md), [docs/spec/features/439](docs/spec/features/439%20storage-contract-1-0/spec.md), контракт 1.0.3)
 
 Десктопный лаунчер [v1.6.0](https://github.com/Leadaxe/singbox-launcher/releases/tag/v1.6.0)
 выпущен и пишет только LX Backup 1.0. Пока телефон не обновлён до 2.24.0, файл
@@ -370,7 +372,7 @@ detour подписки, сервера и папки, личный detour чл�
 как была и называется в журнале; detour узла на самого себя и ребро,
 замыкавшее кольцо в папке, снимаются.
 
-## 🧮 Переменные шаблонных DNS-серверов и пресетов ([docs/spec/tasks/441](docs/spec/tasks/441-template-preset-vars-in-record.md), [docs/spec/tasks/443](docs/spec/tasks/443-contract-1-0-2-spec129.md), контракт 1.0.2)
+## 🧮 Переменные шаблонных DNS-серверов и пресетов ([docs/spec/tasks/441](docs/spec/tasks/441-template-preset-vars-in-record.md), [docs/spec/tasks/443](docs/spec/tasks/443-contract-1-0-2-spec129.md), контракт 1.0.3)
 
 Касается переменных DNS-серверов из шаблона (Google, Cloudflare, AdGuard…) и
 пресетов правил (RU direct, BitTorrent…).
@@ -430,6 +432,8 @@ detour подписки, сервера и папки, личный detour чл�
 
 | Было | Стало |
 |---|---|
+| У REALITY-узлов отпечаток `firefox` и другие подменялся в конфиге на `chrome` — соединение с частью серверов не устанавливалось | Отпечаток узла из подписки уходит в конфиг как есть: приложение не переписывает выбор источника. Предупреждение на узле советует попробовать `chrome` ([docs/spec/tasks/444](docs/spec/tasks/444-reality-fingerprint-no-override.md)) |
+| На главном экране подсказка поля Направления переносилась на вторую строку и обрезалась пополам | Подсказка («Направление») и длинное имя Направления — в одну строку с многоточием |
 | Импорт бэкапа выключал правила с целью `direct-out` | Правила приезжают как были |
 | Пользовательское DNS-правило без ключа `enabled` (импорт бэкапа, Debug API) сборка пропускала | Попадает в конфиг |
 | srs-правило DNS с телом в `body` в конфиг не попадало никогда | Попадает в конфиг |
@@ -452,7 +456,7 @@ detour подписки, сервера и папки, личный detour чл�
 
 ## 📜 Контракт
 
-Копия контракта синхронизирована с десктопным лаунчером, контракт 1.0.2:
+Копия контракта синхронизирована с десктопным лаунчером, контракт 1.0.3:
 волна 3 контракта 1.0 и каноническая связка Tailscale, форма ссылки на узел
 `{folder_id, tag}` с правилами переименования и удаления (и для групп
 автовыбора), норма «одно правило — одно тело», настройки приложения,

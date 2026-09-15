@@ -84,7 +84,7 @@ void main() {
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
           '&fp=firefox&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'firefox',
-          reason: 'entry нормативен для контракта — подмена в post-step');
+          reason: '§444: отпечаток источника не подменяется ни в entry, ни в конфиге');
       expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
           'firefox');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
