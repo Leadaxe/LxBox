@@ -277,7 +277,9 @@ Future<Map<String, dynamic>> _migrateOnLoad(
 
 /// §439 п. 8 — тела подписок из `sub_cache` для перевода ссылок на их узлы
 /// ([migrateStorageDoc]): адрес → тело. Кэша нет — узлы подписки ищутся по
-/// финальной форме тега, а не нашедшиеся ссылки остаются корнем.
+/// финальной форме тега, а не нашедшиеся ссылки остаются корнем. Один на все
+/// входы старой формы (`_load`, внутренний бэкап, Debug API, `replaceRaw`):
+/// иначе один и тот же документ мигрировал бы в разные ссылки.
 Future<Map<String, String>> _subscriptionBodiesForMigration(
     Map<String, dynamic> doc) async {
   final lists = doc['server_lists'];

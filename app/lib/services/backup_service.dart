@@ -87,16 +87,20 @@ const _varDebugKeys = SettingsStorage.debugApiVarKeys;
 class BackupContents {
   /// [presetIdByDnsServerTag] — `ref` preset-серверов DNS при миграции блока
   /// (см. [presetIdsByDnsServerTag]); пусто — `ref` = тег.
+  /// [subscriptionBodies] — тела подписок из `sub_cache` для перевода ссылок
+  /// на их узлы (§439 п. 8, тот же словарь, что у `_load`).
   BackupContents({
     this.createdAt,
     this.sourceAppVersion,
     Map<String, dynamic>? storage,
     this.vpnSettings,
     Map<String, String> presetIdByDnsServerTag = const {},
+    Map<String, String> subscriptionBodies = const {},
   }) : storageMigration = storage == null
             ? null
             : migrateStorageDoc(storage,
-                presetIdByDnsServerTag: presetIdByDnsServerTag);
+                presetIdByDnsServerTag: presetIdByDnsServerTag,
+                subscriptionBodies: subscriptionBodies);
 
   final DateTime? createdAt;
   final String? sourceAppVersion;
@@ -348,13 +352,19 @@ class BackupService {
       vpn = Map<String, dynamic>.from(rawVpn);
     }
 
+    final legacy = storageDocNeedsMigration(storage);
     return BackupContents(
       createdAt: createdAt,
       sourceAppVersion: decoded['source_app_version']?.toString(),
       storage: storage,
       vpnSettings: vpn,
-      presetIdByDnsServerTag: storageDocNeedsMigration(storage)
+      presetIdByDnsServerTag: legacy
           ? await SettingsStorage.presetIdsForMigration()
+          : const {},
+      // §439 п. 8 — без тел подписок позиция цепочки на узел подписки
+      // («PR DE-1») оставалась корневой ссылкой и не разрешалась на сборке.
+      subscriptionBodies: legacy
+          ? await SettingsStorage.subscriptionBodiesForMigration(storage)
           : const {},
     );
   }

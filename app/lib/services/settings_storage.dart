@@ -921,6 +921,14 @@ class SettingsStorage {
   static Future<Map<String, String>> presetIdsForMigration() =>
       _presetIdsForMigration();
 
+  /// §439 п. 8 — тела подписок документа [doc] формы 2.23.2 из `sub_cache`
+  /// («адрес → тело») для [migrateStorageDoc] на входах старой формы: ссылки
+  /// на узлы подписок переводятся в пары тем же словарём, что в `_load`.
+  /// Кэша нет — пусто.
+  static Future<Map<String, String>> subscriptionBodiesForMigration(
+          Map<String, dynamic> doc) =>
+      _subscriptionBodiesForMigration(doc);
+
   /// §413 — подключи `vars` Debug API: секрет и адрес сервера конкретного
   /// устройства. Экспорт их по умолчанию не включает; полная замена
   /// ([replaceRaw], `merge=false`) переносит их из текущего стораджа, если

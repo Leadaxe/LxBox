@@ -41,9 +41,13 @@ Future<List<String>> _replaceRaw(
   // §439 §3.4 — снимок формы 2.23.2 мигрирует до allowlist'а. Входы бэкапа и
   // Debug API мигрируют раньше (им нужен отчёт); здесь это no-op, а вызов
   // страхует прочих вызывающих.
+  final doc = jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>;
   final migration = migrateStorageDoc(
-    jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>,
+    doc,
     presetIdByDnsServerTag: presetIdsByDnsServerTag(template.selectableRules),
+    subscriptionBodies: storageDocNeedsMigration(doc)
+        ? await _subscriptionBodiesForMigration(doc)
+        : const {},
   );
   if (migration.info.isNotEmpty) {
     AppLog.I.info('replaceRaw: snapshot migrated to storage_version '

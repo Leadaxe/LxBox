@@ -243,6 +243,29 @@ void main() {
     });
   });
 
+  // §439 п. 8 — вход старой формы через внутренний бэкап мигрирует ссылки
+  // тем же словарём, что `_load` (тела подписок из `sub_cache`): источники и
+  // цепочки после разбора бэкапа — те же записи, что в файле после первого
+  // чтения хранения. До правки позиция на узел подписки («PR DE-1») в бэкапе
+  // оставалась корневой ссылкой, и rich_v0 терял chain-1 и chain-2.
+  for (final name in kStorageFixtures) {
+    test('$name: миграция блока бэкапа = миграция _load (sources[])',
+        timeout: kGoldenTimeout, () async {
+      await box.seed(name);
+      final loaded = await SettingsStorage.exportRaw();
+      final raw = await fixtureFile(name).readAsString();
+      final contents = await const BackupService()
+          .parseImport(envelope(jsonDecode(raw) as Map<String, dynamic>));
+      expect(jsonEncode(contents.storage!['sources']),
+          jsonEncode(loaded['sources']));
+      if (name == 'rich_v0') {
+        expect(contents.storageMigration!.warnings,
+            isNot(contains(contains('matches no node'))),
+            reason: 'ссылки rich_v0 все находятся по словарю');
+      }
+    });
+  }
+
   // §4.2 — снимок хранения 2.23.2, восстановленный из внутреннего бэкапа в
   // пустое хранение, собирает тот же config.json, что и само хранение
   // (эталон golden_config_test).

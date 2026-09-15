@@ -98,10 +98,15 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
     // §439 §3.4 — форма 2.23.2 мигрирует здесь, до replaceRaw: отчёт уходит
     // в ответ. Шаблон — ради `ref` preset-серверов DNS.
     final template = await TemplateLoader.load();
+    final legacy = storageDocNeedsMigration(storage);
     final migration = migrateStorageDoc(
       storage,
-      presetIdByDnsServerTag: storageDocNeedsMigration(storage)
+      presetIdByDnsServerTag: legacy
           ? presetIdsByDnsServerTag(template.selectableRules)
+          : const {},
+      // §439 п. 8 — ссылки на узлы подписок тем же словарём, что у `_load`.
+      subscriptionBodies: legacy
+          ? await SettingsStorage.subscriptionBodiesForMigration(storage)
           : const {},
     );
     applied['migrated'] = migration.migrated;
