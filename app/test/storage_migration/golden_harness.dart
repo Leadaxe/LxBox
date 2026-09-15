@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/direction.dart';
-import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/direction_mutations.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -251,18 +250,12 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
   final chains = await SettingsStorage.getChains();
   final routeFinal = await SettingsStorage.getRouteFinal();
   final exportWarnings = <LxBackupWarning>[];
-  final template = await TemplateLoader.load();
   final dns = dnsToBackup(
-    servers: [
-      for (final s in await SettingsStorage.getDnsServers()) s.toJson()
-    ],
-    rules: [
-      for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
-    ],
+    servers: await SettingsStorage.getDnsServers(),
+    rules: await SettingsStorage.getDnsRulesList(),
     dnsFinal: vars['dns_final'] ?? '',
     strategy: vars['dns_strategy'] ?? '',
     defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
-    presetIdByServerTag: presetIdByDnsServerTag(template.selectableRules),
     warnings: exportWarnings,
   );
   final warpAccount = await SettingsStorage.getWarpAccount();
@@ -299,7 +292,6 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
 /// (его `warnings` — то, что не применилось).
 Future<LxBackupFile> importGoldenLxBackup(String raw) async {
   final template = await TemplateLoader.load();
-  final presetIdByServerTag = presetIdByDnsServerTag(template.selectableRules);
   final lists = await SettingsStorage.getServerLists();
   final directions = await SettingsStorage.getDirections();
   final chains = await SettingsStorage.getChains();
@@ -314,14 +306,11 @@ Future<LxBackupFile> importGoldenLxBackup(String raw) async {
     knownPresets: {for (final p in template.selectableRules) p.presetId},
     knownChains: {for (final c in chains) c.tag},
   );
-  await _applyParsed(parsed, presetIdByServerTag);
+  await _applyParsed(parsed);
   return parsed;
 }
 
-Future<void> _applyParsed(
-  LxBackupFile parsed,
-  Map<String, String> presetIdByServerTag,
-) async {
+Future<void> _applyParsed(LxBackupFile parsed) async {
   final appliedPing = <String, LxDirectionPing?>{};
   if (parsed.directions.isNotEmpty) {
     final current = await SettingsStorage.getDirections();
@@ -355,6 +344,7 @@ Future<void> _applyParsed(
     folders: parsed.folders,
     sourceIds: subMerge.ids,
     addedSources: subMerge.added,
+    sourceDetours: subMerge.detours,
   );
   final incomingChains = resolveBackupChainHops(
     parsed,
@@ -409,23 +399,14 @@ Future<void> _applyParsed(
     final vars = await SettingsStorage.getAllVars();
     final result = applyDnsBackup(
       incoming: dns,
-      servers: [
-        for (final s in await SettingsStorage.getDnsServers()) s.toJson()
-      ],
-      rules: [
-        for (final r in await SettingsStorage.getDnsRulesList()) r.toJson()
-      ],
+      servers: await SettingsStorage.getDnsServers(),
+      rules: await SettingsStorage.getDnsRulesList(),
       dnsFinal: vars['dns_final'] ?? '',
       strategy: vars['dns_strategy'] ?? '',
       defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
-      presetIdByServerTag: presetIdByServerTag,
     );
-    await SettingsStorage.saveDnsServers([
-      for (final m in result.servers) ?DnsServerRef.fromJson(m),
-    ], flush: false);
-    await SettingsStorage.saveDnsRulesList([
-      for (final m in result.rules) ?DnsRuleRef.fromJson(m),
-    ], flush: false);
+    await SettingsStorage.saveDnsServers(result.servers, flush: false);
+    await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
     await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);
     await SettingsStorage.setVar('dns_strategy', result.strategy, flush: false);
     if (result.defaultDomainResolver.isNotEmpty) {

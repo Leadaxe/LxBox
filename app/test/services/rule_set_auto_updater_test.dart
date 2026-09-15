@@ -140,24 +140,27 @@ void main() {
           0);
     });
 
-    test('старое правило без ключа читается как неделя', () {
-      final back = CustomRuleSrs.fromJson({
+    test('запись без ключа читается как неделя', () {
+      final back = ruleFromRecord({
+        'kind': 'srs',
         'id': 'abc',
         'name': 'old',
-        'kind': 'srs',
-        'srsUrl': 'http://a/b.srs',
-      });
+        'ref': 'http://a/b.srs',
+      }).value! as CustomRuleSrs;
       expect(back.updateIntervalHours, kDefaultSrsTtlHours);
     });
 
     test('мусор в поле → дефолт', () {
-      final back = CustomRuleSrs.fromJson({
-        'id': 'abc',
-        'name': 'bad',
-        'kind': 'srs',
-        'updateIntervalHours': -5,
-      });
-      expect(back.updateIntervalHours, kDefaultSrsTtlHours);
+      for (final bad in [-5, 'soon', true]) {
+        final back = ruleFromRecord({
+          'kind': 'srs',
+          'id': 'abc',
+          'name': 'bad',
+          'ref': 'http://a/b.srs',
+          'update_interval_hours': bad,
+        }).value! as CustomRuleSrs;
+        expect(back.updateIntervalHours, kDefaultSrsTtlHours, reason: '$bad');
+      }
     });
 
     test('copyWith сохраняет TTL, если его не передали', () {

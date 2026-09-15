@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -1171,20 +1172,23 @@ void main() {
     // вместо `user` и вдобавок `srs` у правил.
     test('dns: круг сохраняет состав, final и strategy', () async {
       final section = dnsToBackup(
-        servers: [
-          {'kind': 'template', 'tag': 'dns-google', 'enabled': true},
-          {
-            'kind': 'inline',
-            'tag': 'my-doh',
-            'enabled': true,
-            'body': {'type': 'https', 'server': '1.1.1.1'},
-          },
+        servers: const [
+          DnsServerTemplate(enabled: true, tag: 'dns-google'),
+          DnsServerInline(
+            enabled: true,
+            tag: 'my-doh',
+            body: {'type': 'https', 'server': '1.1.1.1'},
+          ),
         ],
-        rules: [
-          {'kind': 'inline', 'name': 'Local', 'enabled': true,
-           'rule': {'domain_suffix': ['lan'], 'server': 'my-doh'}},
-          {'kind': 'srs', 'id': 'srs-1', 'name': 'Geo', 'enabled': true,
-           'server': 'my-doh'},
+        rules: const [
+          DnsRuleInline(
+            name: 'Local',
+            rule: {
+              'domain_suffix': ['lan'],
+              'server': 'my-doh',
+            },
+          ),
+          DnsRuleSrs(name: 'Geo', id: 'srs-1', server: 'my-doh'),
         ],
         dnsFinal: 'my-doh',
         strategy: 'prefer_ipv4',
@@ -1217,14 +1221,23 @@ void main() {
       );
       expect(applied.dnsFinal, 'my-doh');
       expect(applied.strategy, 'prefer_ipv4');
-      expect(applied.servers.map((e) => e['kind']), ['template', 'inline'],
+      expect(applied.servers.map((e) => e.kind), ['template', 'inline'],
           reason: 'канонический user не вернулся мобильным inline');
+      expect(applied.rules, const [
+        DnsRuleInline(
+          name: 'Local',
+          rule: {
+            'domain_suffix': ['lan'],
+            'server': 'my-doh',
+          },
+        ),
+      ]);
       // §401 (П3) — `srs`-правило В ФАЙЛ НЕ ЕДЕТ и обратно не приезжает.
       // Раньше оно возилось карманом `extensions` и «возвращалось целиком»;
       // карман упразднён, потому что провоз непонятого делал экспорт
       // нечистой функцией состояния (П1). Круг обязан быть ЧЕСТНЫМ: то, чего
       // в файле нет, из файла не появляется.
-      expect(applied.rules.where((e) => e['kind'] == 'srs'), isEmpty,
+      expect(applied.rules.whereType<DnsRuleSrs>(), isEmpty,
           reason: 'srs приехал обратно — значит карман провоза жив');
     });
 
@@ -1233,14 +1246,12 @@ void main() {
       final warnings = <LxBackupWarning>[];
       final section = dnsToBackup(
         servers: const [],
-        rules: const [
-          {'kind': 'srs', 'id': 'srs-1', 'name': 'Geo', 'enabled': true},
-        ],
+        rules: const [DnsRuleSrs(name: 'Geo', id: 'srs-1')],
         dnsFinal: '',
         strategy: '',
         warnings: warnings,
       );
-      expect(section.rules, isEmpty,
+      expect(section?['rules'], isNull,
           reason: 'происхождения srs у канона нет — записи в файле быть не '
               'должно');
       // П6 — молчаливых потерь нет: пользователь обязан узнать, что правило
@@ -1252,19 +1263,16 @@ void main() {
     test('dns: своя запись сильнее приехавшей (merge не перетирает)', () {
       const incoming = LxDns(
         servers: [
-          LxDnsRef(kind: 'user', name: 'my-doh', value: {'server': '9.9.9.9'}),
+          DnsServerInline(
+              enabled: true, tag: 'my-doh', body: {'server': '9.9.9.9'}),
         ],
         finalServer: 'my-doh',
       );
       final applied = applyDnsBackup(
         incoming: incoming,
-        servers: [
-          {
-            'kind': 'inline',
-            'tag': 'my-doh',
-            'enabled': true,
-            'body': {'server': '1.1.1.1'},
-          },
+        servers: const [
+          DnsServerInline(
+              enabled: true, tag: 'my-doh', body: {'server': '1.1.1.1'}),
         ],
         rules: const [],
         dnsFinal: 'other',
@@ -1272,7 +1280,8 @@ void main() {
       );
       expect(applied.servers, hasLength(1),
           reason: 'приехавшая запись задвоила своё под тем же тегом');
-      expect((applied.servers.single['body'] as Map)['server'], '1.1.1.1',
+      expect((applied.servers.single as DnsServerInline).body['server'],
+          '1.1.1.1',
           reason: 'своё тело перетёрто приехавшим');
       // final приезжает непустым и применяется: это не состав, а указатель.
       expect(applied.dnsFinal, 'my-doh');
@@ -1306,7 +1315,8 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.manual,
-        rawBody: 'vless://11111111-1111-1111-1111-111111111111@example-1.com:443',
+        rawBody:
+            'vless://11111111-1111-1111-1111-111111111111@example-1.com:443#Manual',
       );
       final raw = (await buildLxBackup(
         lists: [server],
@@ -1314,10 +1324,12 @@ void main() {
         vars: const {},
       )).json;
       final entry = _sourcesOf(raw, 'server').single;
-      // §438 — исходник узла едет `origin`, имя узла — `tag`.
+      // §438 — исходник узла едет `origin`, имя узла — `tag`. §439 п. 1 —
+      // `tag` записи из разобранного узла, а не из `name` модели.
       expect(entry['origin'], {
         'kind': 'uri',
-        'raw': 'vless://11111111-1111-1111-1111-111111111111@example-1.com:443',
+        'raw':
+            'vless://11111111-1111-1111-1111-111111111111@example-1.com:443#Manual',
       });
       expect(entry['tag'], 'Manual');
       expect(entry['id'], 'srv-1');

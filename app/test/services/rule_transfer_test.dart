@@ -2,12 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/rule_transfer.dart';
 
 /// §396 — экспорт/импорт правил файлом: конверт, парс, санация ссылок,
 /// вставка (имя/num). Схема wire-формата — в спеке §396 §3.
-/// Элемент `rules[]` файла правил `format: 1` — ровно то, что пишет экспорт.
+/// Элемент `rules[]` файла правил — ровно то, что пишет экспорт (`format: 2`,
+/// запись хранения 1.0). Чтение `format: 1` — `rule_transfer_format1_test.dart`.
 Map<String, dynamic> _fileEntry(CustomRule r) =>
     ((jsonDecode(buildRulesExport([r])) as Map)['rules'] as List).single
         as Map<String, dynamic>;
@@ -96,8 +98,8 @@ void main() {
 
     test('parse отвергает format из будущего', () {
       expect(
-        () => parseRulesImport(
-            '{"app":"lxbox","kind":"rules","format":2,"rules":[{}]}'),
+        () => parseRulesImport('{"app":"lxbox","kind":"rules",'
+            '"format":${kRulesExportFormatVersion + 1},"rules":[{}]}'),
         throwsA(predicate(
             (e) => e is FormatException && e.message.contains('newer'))),
       );
@@ -300,11 +302,14 @@ void main() {
     test('buildRulesExport пишет dns_servers/dns_rules, parse их читает', () {
       final json = buildRulesExport(
         [CustomRuleInline(name: 'R', domains: ['a.com'])],
-        dnsServers: [
-          {'enabled': true, 'kind': 'inline', 'tag': 'my-doh', 'body': {'type': 'udp', 'server': '10.0.0.1'}},
+        dnsServers: const [
+          DnsServerInline(
+              enabled: true,
+              tag: 'my-doh',
+              body: {'type': 'udp', 'server': '10.0.0.1'}),
         ],
-        dnsRules: [
-          {'kind': 'inline', 'name': 'ntc', 'rule': {'domain': 'ntc.party'}},
+        dnsRules: const [
+          DnsRuleInline(name: 'ntc', rule: {'domain': 'ntc.party'}),
         ],
       );
       final contents = parseRulesImport(json);
@@ -333,7 +338,8 @@ void main() {
     });
 
     group('sanitizeImportedDnsServer', () {
-      SanitizedImportDnsItem srv(dynamic raw, {Set<String> existing = const {}}) =>
+      SanitizedImportDnsItem<DnsServerRef> srv(dynamic raw,
+              {Set<String> existing = const {}}) =>
           sanitizeImportedDnsServer(
             raw,
             existingTags: existing,
@@ -342,20 +348,27 @@ void main() {
 
       test('inline-сервер с новым tag → importable', () {
         final s = srv({
-          'enabled': true,
-          'kind': 'inline',
+          'kind': 'user',
           'tag': 'my-doh',
+          'enabled': true,
           'body': {'type': 'udp', 'server': '10.0.0.1'},
           'description': 'Mine',
         });
         expect(s.importable, isTrue);
-        expect(s.item!['tag'], 'my-doh');
+        expect(
+            s.item,
+            const DnsServerInline(
+              enabled: true,
+              tag: 'my-doh',
+              body: {'type': 'udp', 'server': '10.0.0.1'},
+              description: 'Mine',
+            ));
         expect(s.label, 'Mine (my-doh)');
       });
 
       test('tag уже существует → alreadyExists, настройки не трогаются', () {
         final s = srv(
-          {'enabled': true, 'kind': 'inline', 'tag': 'my-doh', 'body': {'type': 'udp', 'server': '1.2.3.4'}},
+          {'kind': 'user', 'tag': 'my-doh', 'enabled': true, 'body': {'type': 'udp', 'server': '1.2.3.4'}},
           existing: {'my-doh'},
         );
         expect(s.importable, isFalse);
@@ -363,15 +376,15 @@ void main() {
       });
 
       test('template-сервер: известный шаблону → importable, чужой → notAvailable', () {
-        final known = srv({'enabled': true, 'kind': 'template', 'tag': 'google_udp'});
+        final known = srv({'kind': 'template', 'tag': 'google_udp', 'enabled': true});
         expect(known.importable, isTrue);
-        final unknown = srv({'enabled': true, 'kind': 'template', 'tag': 'quantum_dns'});
+        final unknown = srv({'kind': 'template', 'tag': 'quantum_dns', 'enabled': true});
         expect(unknown.importable, isFalse);
         expect(unknown.skipReason, ImportDnsSkipReason.notAvailable);
       });
 
       test('preset-сервер → managedByPresets; мусор → unsupportedEntry', () {
-        final preset = srv({'enabled': true, 'kind': 'preset', 'tag': 'fakeip'});
+        final preset = srv({'kind': 'preset', 'ref': 'dns-fake:fakeip', 'enabled': true});
         expect(preset.skipReason, ImportDnsSkipReason.managedByPresets);
         expect(srv(42).skipReason, ImportDnsSkipReason.unsupportedEntry);
         expect(srv({'kind': 'hologram', 'tag': 'x'}).skipReason,
@@ -380,45 +393,59 @@ void main() {
     });
 
     group('sanitizeImportedDnsRule', () {
-      SanitizedImportDnsItem rule(dynamic raw,
-              {List<Map<String, dynamic>> existing = const []}) =>
+      SanitizedImportDnsItem<DnsRuleRef> rule(dynamic raw,
+              {List<DnsRuleRef> existing = const []}) =>
           sanitizeImportedDnsRule(raw,
               existingRules: existing, template: template);
 
       test('inline новое → importable, enabled автора переносится', () {
         final s = rule({
-          'enabled': false,
-          'kind': 'inline',
+          'kind': 'user',
           'name': 'ntc',
-          'rule': {'domain': 'ntc.party', 'action': 'predefined'},
+          'enabled': false,
+          'body': {'domain': 'ntc.party', 'action': 'predefined'},
         });
         expect(s.importable, isTrue);
-        expect(s.item!['enabled'], isFalse);
-        expect(s.item!['name'], 'ntc');
+        expect(
+            s.item,
+            const DnsRuleInline(
+              name: 'ntc',
+              rule: {'domain': 'ntc.party', 'action': 'predefined'},
+              enabled: false,
+            ));
       });
 
       test('inline точный дубль → alreadyExists', () {
         final entry = {
-          'kind': 'inline',
+          'kind': 'user',
           'name': 'ntc',
-          'rule': {'domain': 'ntc.party'},
+          'enabled': true,
+          'body': {'domain': 'ntc.party'},
         };
-        final s = rule(Map<String, dynamic>.from(entry),
-            existing: [Map<String, dynamic>.from(entry)]);
+        final s = rule(entry, existing: const [
+          DnsRuleInline(name: 'ntc', rule: {'domain': 'ntc.party'}),
+        ]);
         expect(s.skipReason, ImportDnsSkipReason.alreadyExists);
+        // Тумблер — часть дубля: выключенная копия у получателя не дубль.
+        expect(
+            rule(entry, existing: const [
+              DnsRuleInline(
+                  name: 'ntc', rule: {'domain': 'ntc.party'}, enabled: false),
+            ]).importable,
+            isTrue);
       });
 
       test('preset: есть → alreadyExists; неизвестен → notAvailable; известен → importable', () {
         expect(
-          rule({'kind': 'preset', 'presetId': 'block-ads'},
-              existing: [{'kind': 'preset', 'presetId': 'block-ads'}]).skipReason,
+          rule({'kind': 'preset', 'ref': 'block-ads'},
+              existing: const [DnsRulePreset(presetId: 'block-ads')]).skipReason,
           ImportDnsSkipReason.alreadyExists,
         );
         expect(
-          rule({'kind': 'preset', 'presetId': 'from-the-future'}).skipReason,
+          rule({'kind': 'preset', 'ref': 'from-the-future'}).skipReason,
           ImportDnsSkipReason.notAvailable,
         );
-        expect(rule({'kind': 'preset', 'presetId': 'block-ads'}).importable,
+        expect(rule({'kind': 'preset', 'ref': 'block-ads'}).importable,
             isTrue);
       });
 
@@ -430,8 +457,10 @@ void main() {
           'body': {'rule_set': 'x'},
         });
         expect(s.importable, isTrue);
-        expect(s.item!['id'], isNot('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'));
-        expect(s.item!['name'], 'geo');
+        final item = s.item! as DnsRuleSrs;
+        expect(item.id, isNot('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'));
+        expect(item.name, 'geo');
+        expect(item.body, {'rule_set': 'x'});
       });
     });
   });

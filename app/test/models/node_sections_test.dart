@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/dns_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
@@ -230,13 +231,17 @@ void main() {
           isFalse);
     });
 
-    test('DnsRuleInline.enabled: false пишется, отсутствие = true', () {
+    test('DnsRuleInline.enabled: запись пишет всегда, отсутствие ключа = true',
+        () {
       const on = DnsRuleInline(name: 'a', rule: {'server': 'x'});
-      expect(on.toJson().containsKey('enabled'), isFalse);
+      expect(dnsRuleToRecord(on)['enabled'], isTrue);
       const off = DnsRuleInline(name: 'a', rule: {'server': 'x'}, enabled: false);
-      expect(off.toJson()['enabled'], false);
-      expect((DnsRuleRef.fromJson(off.toJson()) as DnsRuleInline).enabled, isFalse);
-      expect((DnsRuleRef.fromJson(on.toJson()) as DnsRuleInline).enabled, isTrue);
+      expect(dnsRuleToRecord(off)['enabled'], false);
+      expect(dnsRuleFromRecord(dnsRuleToRecord(off)).value, off);
+      expect(dnsRuleFromRecord(dnsRuleToRecord(on)).value, on);
+      final withoutKey = dnsRuleToRecord(on)..remove('enabled');
+      expect((dnsRuleFromRecord(withoutKey).value! as DnsRuleInline).enabled,
+          isTrue);
     });
   });
 }

@@ -3,10 +3,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
-import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
@@ -41,8 +42,8 @@ class _State {
   List<ServerList> lists;
   List<SourceChain> chains;
   List<CustomRule> rules;
-  List<Map<String, dynamic>> dnsServers;
-  List<Map<String, dynamic>> dnsRules;
+  List<DnsServerRef> dnsServers;
+  List<DnsRuleRef> dnsRules;
   String dnsFinal = '';
   String dnsStrategy = '';
   String dnsResolver = '';
@@ -51,8 +52,6 @@ class _State {
   Map<String, String> vars = const {};
   String? routeFinal;
 }
-
-const _presetIdByServerTag = {'yandex_udp': 'ru-direct'};
 
 Future<LxBackupExport> _export(_State s) => buildLxBackup(
       lists: s.lists,
@@ -68,7 +67,6 @@ Future<LxBackupExport> _export(_State s) => buildLxBackup(
         dnsFinal: s.dnsFinal,
         strategy: s.dnsStrategy,
         defaultDomainResolver: s.dnsResolver,
-        presetIdByServerTag: _presetIdByServerTag,
       ),
     );
 
@@ -86,6 +84,7 @@ LxBackupFile _import(_State s, String raw) {
     folders: file.folders,
     sourceIds: subs.ids,
     addedSources: subs.added,
+    sourceDetours: subs.detours,
   );
   s.lists = servers.lists;
   s.chains = [
@@ -100,7 +99,6 @@ LxBackupFile _import(_State s, String raw) {
     dnsFinal: s.dnsFinal,
     strategy: s.dnsStrategy,
     defaultDomainResolver: s.dnsResolver,
-    presetIdByServerTag: _presetIdByServerTag,
   );
   s.dnsServers = dns.servers;
   s.dnsRules = dns.rules;
@@ -289,24 +287,24 @@ _State _source() {
         orderNum: 1120,
       ),
     ],
-    dnsServers: [
-      {
-        'enabled': true,
-        'kind': 'inline',
-        'tag': 'my-doh',
-        'body': {'type': 'https', 'server': 'example-4.com', 'path': '/dns-query'},
-      },
-      {'enabled': true, 'kind': 'template', 'tag': 'dns-google'},
-      {'enabled': false, 'kind': 'preset', 'tag': 'yandex_udp'},
+    dnsServers: const [
+      DnsServerInline(
+        enabled: true,
+        tag: 'my-doh',
+        body: {'type': 'https', 'server': 'example-4.com', 'path': '/dns-query'},
+      ),
+      DnsServerTemplate(enabled: true, tag: 'dns-google'),
+      DnsServerPreset(enabled: false, tag: 'yandex_udp', presetId: 'ru-direct'),
     ],
-    dnsRules: [
-      {
-        'kind': 'inline',
-        'name': 'Local',
-        'enabled': true,
-        'rule': {'domain_suffix': ['.lan'], 'server': 'my-doh'},
-      },
-      {'kind': 'preset', 'presetId': 'ru-direct', 'enabled': true},
+    dnsRules: const [
+      DnsRuleInline(
+        name: 'Local',
+        rule: {
+          'domain_suffix': ['.lan'],
+          'server': 'my-doh',
+        },
+      ),
+      DnsRulePreset(presetId: 'ru-direct', enabled: true),
     ],
   )
     ..dnsFinal = 'my-doh'
@@ -340,8 +338,8 @@ Object? _snapshot(_State s) {
     'lists': [for (final l in s.lists) sourceToRecord(l)],
     'chains': [for (final c in s.chains) chainToRecord(c)],
     'rules': [for (final r in s.rules) ruleToRecord(r)],
-    'dns_servers': s.dnsServers,
-    'dns_rules': s.dnsRules,
+    'dns_servers': [for (final d in s.dnsServers) dnsServerToRecord(d)],
+    'dns_rules': [for (final r in s.dnsRules) dnsRuleToRecord(r)],
     'dns_final': s.dnsFinal,
     'dns_strategy': s.dnsStrategy,
     'dns_resolver': s.dnsResolver,
@@ -385,25 +383,29 @@ void main() {
       expect(validateJsonSchema(doc, schema), isEmpty);
     });
 
-    test('ссылки: префикс папки и подписки → folder_id, preset DNS → preset_id:tag', () async {
-      final doc = jsonDecode((await _export(_source())).json) as Map<String, dynamic>;
+    // §439 — экспорт пишет ссылку так, как она лежит в записи хранения
+    // (`_LinkIndex` снят). Пока модели держат финальный тег строкой, это
+    // корневая `{tag}`; форму `{folder_id, tag}` даёт трек N1 вместе с
+    // моделями, и сверка с записью хранения переживает его без правки.
+    test('ссылки: как в записи хранения, preset DNS → preset_id:tag', () async {
+      final state = _source();
+      final doc = jsonDecode((await _export(state)).json) as Map<String, dynamic>;
       final sources = (doc['sources'] as List).cast<Map<String, dynamic>>();
-      final chain = sources.firstWhere((s) => s['tag'] == 'jp-via-eu');
-      expect(chain['hops'], [
-        {'folder_id': 'fold-a', 'tag': 'de-1'},
+      for (final c in state.chains) {
+        final entry = sources.firstWhere((s) => s['tag'] == c.tag);
+        expect(entry['hops'], chainToRecord(c)['hops'], reason: c.tag);
+      }
+      expect(sources.firstWhere((s) => s['tag'] == 'jp-via-eu')['hops'], [
+        {'tag': 'EU de-1'},
         {'tag': 'root-jp'},
       ]);
-      final toSub = sources.firstWhere((s) => s['tag'] == 'sub-then-dir');
-      expect(toSub['hops'], [
-        {'folder_id': 'sub-1', 'tag': 'node-x'},
-        {'tag': 'vpn-1'},
-      ]);
       final root = sources.firstWhere((s) => s['tag'] == 'root-jp');
-      expect(root['detour'], {'folder_id': 'fold-a', 'tag': 'de-1'});
+      expect(root['detour'], sourceToRecord(state.lists[1])['detour']);
       final folder = sources.firstWhere((s) => s['id'] == 'fold-a');
       final members = (folder['nodes'] as List).cast<Map<String, dynamic>>();
       expect(members.map((m) => m['kind']), ['server', 'server', 'unsupported']);
-      expect(members[1]['detour'], {'tag': 'root-jp'});
+      expect(members[1]['detour'],
+          (sourceToRecord(state.lists[3])['nodes'] as List)[1]['detour']);
       expect((members[2]['origin'] as Map)['raw'], 'not a node at all');
 
       final rules = (doc['rules'] as List).cast<Map<String, dynamic>>();
@@ -455,7 +457,8 @@ void main() {
       state.lists = [
         (state.lists[0] as SubscriptionServers).copyWith(
           onUpdateAction: SubscriptionOnUpdateAction.reload,
-          detourPolicy: DetourPolicy.defaults.copyWith(overrideDetour: 'vpn-1'),
+          detourPolicy: DetourPolicy.defaults
+              .copyWith(overrideDetour: 'vpn-1', registerDetourServers: true),
         ),
         (state.lists[3] as FolderServers).copyWith(pingUrl: 'https://example-1.com/204'),
       ];
@@ -463,26 +466,34 @@ void main() {
       state.rules = [CustomRuleJson(name: 'Broken', json: 'not json')];
       state.dnsRules = [
         ...state.dnsRules,
-        {'kind': 'srs', 'id': 's1', 'name': 'Geo', 'enabled': true},
+        const DnsRuleSrs(name: 'Geo', id: 's1'),
       ];
       final out = await _export(state);
       expect(
         out.warnings.map((w) => '${w.code} ${w.detail}').toList(),
         [
-          '$kWarnLocalOnlyDropped Provider: on_update_action, detour_policy',
+          // §439 — общий detour подписки едет ссылкой, срезаются флаги.
+          '$kWarnLocalOnlyDropped Provider: detour_policy, on_update_action',
           '$kWarnLocalOnlyDropped EU: ping_url',
           '$kWarnLocalOnlyDropped c: label',
           '$kWarnLocalOnlyDropped Broken: json',
         ],
       );
+      final provider = ((jsonDecode(out.json) as Map)['sources'] as List).first as Map;
+      expect(provider['detour'], {'tag': 'vpn-1'});
+      expect(provider.containsKey('detour_policy'), isFalse);
+      final dnsWarnings = <LxBackupWarning>[];
       final dns = dnsToBackup(
         servers: state.dnsServers,
         rules: state.dnsRules,
         dnsFinal: '',
         strategy: '',
-        warnings: [],
+        warnings: dnsWarnings,
       );
-      expect(dns.rules.map((r) => r.kind), ['user', 'preset']);
+      expect([for (final r in dns!['rules'] as List) (r as Map)['kind']],
+          ['user', 'preset']);
+      expect([for (final w in dnsWarnings) '${w.code} ${w.detail}'],
+          ['$kWarnLocalOnlyDropped dns: Geo: srs']);
     });
 
     test('валидатор схемы не пропускает чужую форму', () {

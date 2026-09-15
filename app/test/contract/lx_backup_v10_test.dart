@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -40,6 +41,7 @@ Map<String, dynamic> _server(String tag, String host, {Object? sections}) => {
     folders: file.folders,
     sourceIds: subs.ids,
     addedSources: subs.added,
+    sourceDetours: subs.detours,
   );
   return (
     lists: servers.lists,
@@ -377,9 +379,9 @@ void main() {
         dnsFinal: '',
         strategy: '',
       );
-      expect(first.servers.map((e) => e['tag']), ['yandex_udp', 'yandex_doh', 'yandex_dot'],
+      expect(first.servers.map((e) => e.tag), ['yandex_udp', 'yandex_doh', 'yandex_dot'],
           reason: 'preset без тега не схлопывается в одну запись');
-      expect(first.rules.map((e) => e['name']), ['.corp', '.corp-2']);
+      expect(first.rules.map((e) => (e as DnsRuleInline).name), ['.corp', '.corp-2']);
       expect(first.defaultDomainResolver, 'local');
 
       final again = applyDnsBackup(
@@ -437,6 +439,7 @@ void main() {
         folders: file.folders,
         sourceIds: subs.ids,
         addedSources: subs.added,
+        sourceDetours: subs.detours,
       );
       expect(resolveBackupChainHops(file, servers.lists, servers.folderIds).single.hops,
           ['🇯🇵 Tokyo', '[P] NL-1']);
@@ -445,7 +448,9 @@ void main() {
         ['preset:ru-direct:960', 'inline:X:1000', 'json:blocked:1005', 'srs:three sets:1010'],
       );
       expect(state.rules[3].outbound, kOutboundReject);
-      expect(file.dns!.servers.map((s) => s.kind), ['template', 'user']);
+      expect(file.dns!.servers.map((s) => dnsServerToRecord(s)['kind']),
+          ['template', 'user']);
+      expect(file.dns!.servers.last, isA<DnsServerInline>());
     });
   });
 
