@@ -854,6 +854,12 @@ class CustomRuleEditController extends ChangeNotifier {
       snapshot() != initial ||
       (_kind == CustomRuleKind.json && jsonCtrl.text != initial.json);
 
+  /// §447 — единственная проверка перед сохранением: Save формы, Save в
+  /// AppBar и Save из диалога несохранённых правок. `null` — сохранять можно,
+  /// иначе текст причины (тот же, что под полем JSON). Текст формы не
+  /// трогается — пользователь исправляет набранное.
+  String? get saveBlockReason => jsonError;
+
   /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
   /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое
   /// описание. Пустой ввод считается «ещё не заполнено» (ошибка), т.к.
