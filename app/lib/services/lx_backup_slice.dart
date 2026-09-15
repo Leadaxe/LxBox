@@ -233,7 +233,8 @@ BackupSlice sliceBackupRecord(
       continue;
     }
     if (!field.travels) {
-      if (field.fate == BackupFieldFate.setting && !_isDefault(e.value)) {
+      if (field.fate == BackupFieldFate.setting &&
+          !_isDefault(record, e.key, e.value, stored)) {
         dropped.add(e.key);
       }
       continue;
@@ -281,11 +282,21 @@ bool _carriesSections(BackupRecord record) =>
     record == BackupRecord.server || record == BackupRecord.folderNode;
 
 /// Поле настройки со значением «ничего не задано» потерей не называется.
-bool _isDefault(Object? v) =>
+///
+/// Имя цепочки, равное её тегу, — то же, что пустое: показ падает на тег
+/// (`SourceChain.displayLabel`), а Debug API заводит цепочку с `label` = тег.
+/// Приехавшая без имени цепочка выглядит так же, потери нет.
+bool _isDefault(
+  BackupRecord record,
+  String key,
+  Object? v,
+  Map<String, dynamic> stored,
+) =>
     v == null ||
     (v is String && v.isEmpty) ||
     (v is Map && v.isEmpty) ||
-    (v is List && v.isEmpty);
+    (v is List && v.isEmpty) ||
+    (record == BackupRecord.chain && key == 'label' && v == stored['tag']);
 
 List<dynamic> _sliceNodes(List<dynamic> nodes, List<String> dropped) => [
       for (var i = 0; i < nodes.length; i++)
