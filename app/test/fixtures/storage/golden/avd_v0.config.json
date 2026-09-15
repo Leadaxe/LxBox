@@ -342,7 +342,7 @@
     {
       "type": "socks",
       "tag": "⚡ test",
-      "server": "139.59.102.20",
+      "server": "139.59.120.20",
       "server_port": 1080,
       "version": "5",
       "username": "user03",
