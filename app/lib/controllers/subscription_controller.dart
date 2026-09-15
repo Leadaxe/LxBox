@@ -1056,7 +1056,7 @@ class SubscriptionController extends ChangeNotifier {
     await _relink(
       before,
       goneContainers: {if (list is! UserServer) list.id},
-      subject: NodeLinkSubject.of(list),
+      subject: NodeLinkSubject.of(list, name: gone.displayName),
     );
     await _persist();
     notifyListeners();
@@ -2747,16 +2747,18 @@ class SubscriptionController extends ChangeNotifier {
 final class NodeLinkSubject {
   const NodeLinkSubject._(this.kind, this.name, [this.count = 1]);
 
-  /// Источник целиком: одиночный сервер, подписка или папка.
-  factory NodeLinkSubject.of(ServerList list) => switch (list) {
+  /// Источник целиком: одиночный сервер, подписка или папка. [name] —
+  /// подпись записи в списке (у подписки без имени — адрес).
+  factory NodeLinkSubject.of(ServerList list, {String? name}) =>
+      switch (list) {
         UserServer u => NodeLinkSubject._(
             NodeLinkSubjectKind.server,
             u.nodes.isNotEmpty
                 ? containerFinalForm(u, u.nodes.first.tag)
-                : u.name,
+                : (name ?? u.name),
           ),
-        SubscriptionServers s =>
-          NodeLinkSubject._(NodeLinkSubjectKind.subscription, s.name),
+        SubscriptionServers s => NodeLinkSubject._(
+            NodeLinkSubjectKind.subscription, name ?? s.name),
         FolderServers f =>
           NodeLinkSubject._(NodeLinkSubjectKind.folder, f.name),
       };

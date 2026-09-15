@@ -41,8 +41,10 @@ final class NodeLinkChange {
   /// Цепочки после операции.
   final List<SourceChain> chains;
 
-  /// Носители detour, чья ссылка переписана или погашена: имена для показа
-  /// (подписка и папка — имя, сервер и член папки — тег узла).
+  /// Носители ссылки, переписанной или погашенной: detour источника и члена,
+  /// состав autogroup. Имя для показа — подписка и папка — имя, сервер, член
+  /// папки и группа — тег узла; пустое имя (член без разобранного узла)
+  /// считается, но не показывается.
   final List<String> detourCarriers;
 
   /// Подписи цепочек, у которых задета позиция.
@@ -241,10 +243,7 @@ NodeLinkChange _mapLinks(
   return NodeLinkChange(
     lists: outLists,
     chains: outChains,
-    detourCarriers: [
-      for (final c in carriers)
-        if (c.isNotEmpty) c,
-    ],
+    detourCarriers: carriers,
     touchedChains: touched,
     positions: positions,
   );
@@ -287,10 +286,7 @@ String _sourceName(ServerList l) => switch (l) {
       UserServer u => u.nodes.isNotEmpty
           ? containerFinalForm(u, u.nodes.first.tag)
           : u.name,
+      SubscriptionServers s when s.name.isEmpty =>
+        Uri.tryParse(s.url)?.host ?? s.url,
       _ => l.name,
     };
-
-/// Как назвать узел [node] источника [l] пользователю: финальная форма тега
-/// (префикс источника + тег).
-String nodeDisplayName(ServerList l, NodeSpec node) =>
-    containerFinalForm(l, node.tag);

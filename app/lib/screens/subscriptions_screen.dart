@@ -240,7 +240,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   /// эмитится укороченной, 2-хоповая перестаёт эмититься вовсе.
   void _notifyLinksCleared(NodeLinkNotice notice) {
     if (!mounted) return;
-    String names(List<String> all) {
+    String names(List<String> carriers) {
+      final all = [
+        for (final n in carriers)
+          if (n.isNotEmpty) n,
+      ];
       if (all.isEmpty) return '';
       final shown = all.take(3).map((n) => '"$n"').join(', ');
       return ' ($shown${all.length > 3 ? ' +${all.length - 3}' : ''})';

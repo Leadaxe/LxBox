@@ -432,9 +432,10 @@ class SettingsStorage {
   /// цепочек (сами они остаются); счётчик снятого — в [ChainHealResult].
   static Future<ChainHealResult> deleteChain(String tag) => _deleteChain(tag);
 
-  /// §393 D2 — вычистить позиции с тегом [tag] из всех цепочек. Зовётся при
-  /// осознанном удалении ЧУЖОГО источника (сервер, подписка, папка,
-  /// Направление). Обновление подписки сюда НЕ входит — см. `_healChainHops`.
+  /// §393 D2 — вычистить позиции-корневые ссылки на [tag] из всех цепочек.
+  /// Зовётся при удалении Направления; ссылки на узлы (сервер, член папки,
+  /// узел подписки) гасит реестр ссылок (`node_link_registry.dart`).
+  /// Обновление подписки сюда НЕ входит — см. `_healChainHops`.
   static Future<ChainHealResult> healChainHops(String tag, {bool flush = true}) =>
       _healChainHops(tag, flush: flush);
 
