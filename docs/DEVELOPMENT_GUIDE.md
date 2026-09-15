@@ -123,20 +123,21 @@ button), SRS rule sets, and the speed test.
 ### 4. Config generation pipeline (Parser v2)
 
 ```
-SettingsStorage (server_lists) + WizardTemplate
+SettingsStorage (sources[], rules[], dns{} — §439) + WizardTemplate
         ↓
 buildConfig(lists, settings)  ─  spec 026
   1. Load template, substitute @vars
   2. For each ServerList: list.build(ctx: EmitContext)
       ├─ per-node emit(vars) → SingboxEntry (Outbound | Endpoint)
       ├─ allocateTag with tagPrefix
-      └─ apply detour policy (register/use/override)
+      └─ apply detour policy (register/use/override); NodeLink detours resolve in a
+         second pass after all lists (§439, node_link_resolve.dart)
   3. Post-steps (ordered):
       ├─ applyPresetBundles     — expand `CustomRule(kind: preset)` → rule_set/dns/route (spec 033)
       ├─ applyCustomRules       — user inline + local-SRS rules (spec 030)
       ├─ applyTlsFragment       — first-hop only, skip on detour
       ├─ applyMixedCaseSni      — randomise server_name case (spec 028)
-      └─ applyCustomDns         — DNS-rules + servers (spec 041: `dns_options.rules` named/toggleable; multi-kind: user/template/preset/srs)
+      └─ applyCustomDns         — DNS-rules + servers (spec 041: storage `dns.rules` records, §439; multi-kind: user/template/preset/srs)
   4. Cache remote SRS (parallel)
   5. validator → ValidationResult{ fatal[], warnings[] }
   6. → BuildResult{ config, configJson, validation, emitWarnings }
@@ -267,7 +268,8 @@ added; the source of truth is the `flutter test` summary):
 - `test/parser/` — URI/JSON/INI parsers plus round-trips (parseUri → toUri → parseUri)
 - `test/builder/` — build_config, validator, mixed-case SNI, preset_expand, applyCustomDns, dns_rules_resolver
 - `test/subscription/` — sources (UrlSource/InlineSource/QrSource/File), content-disposition, inline headers
-- `test/migration/` — proxy_sources → server_lists, one-shot
+- `test/storage_migration/` — §439: the 2.23.2 form → contract 1.0 records, golden `config.json` and LX Backup from two fixtures
+- `test/migration/` — one-shot state heals (for example the detour direction heal)
 - `test/services/` — haptic_service, rule_set_downloader and others
 - `test/vpn/` — the BoxVpnClient wrapper
 - `test/pipeline_e2e_test.dart` — full InlineSource → parseFromSource → buildConfig
@@ -364,7 +366,9 @@ The full specification is
 Detour servers are intermediate (chained) proxies that traffic passes through on
 its way to the final server. The UI marks them with a **⚙** prefix. In Parser v2
 they are NodeSpecs attached through the `chained` field (a full nested spec) or
-through `overrideDetour` at the `ServerList.detourPolicy` level.
+through `overrideDetour` at the `ServerList.detourPolicy` level. Since §439
+`overrideDetour` (and a folder member's `detour`) is a NodeLink `{folder_id?, tag}`
+resolved to a final tag at build — see [STORAGE.md](STORAGE.md#node-references--nodelink-439-d-112).
 
 ### Per-subscription settings (`ServerList.detourPolicy`)
 
@@ -373,7 +377,7 @@ through `overrideDetour` at the `ServerList.detourPolicy` level.
 | **Register** | `registerDetourServers` | Add the ⚙ nodes to the selector groups (visible in the list) |
 | **Register in Auto** | `registerDetourInAuto` | Add the ⚙ nodes to the auto-proxy-out urltest |
 | **Use** | `useDetourServers` | Use this subscription's `chained` node chains; when off, the detour is removed |
-| **Override** | `overrideDetour` | Force a detour tag for every node of the subscription — overwrites main.map['detour'] |
+| **Override** | `overrideDetour` | Force a detour for every node of the subscription (a NodeLink, §439) — overwrites main.map['detour'] with the resolved final tag |
 
 Defaults: `registerDetourServers=false`, `useDetourServers=true`, the rest
 false/empty (v1.3.0).
@@ -387,7 +391,8 @@ false/empty (v1.3.0).
 2. `server.getEntries(ctx, skipDetour)` — when skipping, `NodeEntries.detours` is empty.
 3. Detours go first (allocateTag with a prefix), then main.
 4. **Detour policy** on main:
-   - `overrideDetour.isNotEmpty` → `main.map['detour'] = overrideDetour`
+   - `overrideDetour.isNotEmpty` → the holder is deferred; the second pass writes the link's final tag
+     into `main.map['detour']`, or drops the node with a warning when the link does not resolve (§439)
    - `!useDetourServers` → `main.map.remove('detour')`
    - `detours.isNotEmpty` → `main.map['detour'] = detours.first.tag`
    - otherwise leave it as emitted (it may come from `NodeSpec.chained`).
@@ -398,7 +403,8 @@ false/empty (v1.3.0).
 
 For a `UserServer` (a single added server) the detour is set through a dropdown in
 `NodeSettingsScreen`, which writes to `entry.detourPolicy.overrideDetour` (not
-into the node's JSON), then `persistSources` runs and the builder applies it.
+into the node's JSON; a NodeLink since §439, stored as the record's `detour`), then
+`persistSources` runs and the builder applies it.
 
 Why not into the JSON: `parseSingboxEntry` does not restore the `detour` field on
 save → reparse, so it would be lost. Fixed in v1.3.1.
