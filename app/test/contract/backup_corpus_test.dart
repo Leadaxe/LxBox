@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/config/consts.dart';
+import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/node_sections.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -30,11 +33,17 @@ const _contractRoot = 'contract';
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
 /// с работой, которая его закрывает.
 const Map<String, String> _pendingCases = {
-  // Ссылка на узел подписки без узлов (`{folder_id: <подписка>, tag: US-1}`)
-  // и висячая ссылка (`folder_id` без контейнера) моделью, которая держит
-  // финальный тег строкой, не выражаются (§439 §6.4, NODE_LINK.md).
-  'v10_node_links': 'до трека N1: модели держат ссылку на узел финальным '
-      'тегом строкой, NodeLink {folder_id, tag} в моделях — трек N1',
+  // Контракт 1.0.1: базовое ожидание без `.expected.lxbox.json` требует
+  // selector-группу с `default` и импорт без предупреждений. У LxBox по
+  // согласованному ответу 6 (TASKS_LXBOX.md §17.8) selector читается
+  // urltest'ом без `default` с `backup_group_degraded` — как в
+  // `v10_group_degraded.expected.lxbox.json`. Ожидание не подгоняется:
+  // нужен side-specific файл от лаунчера. Перепись членов и позиций этих
+  // кейсов закреплена в lx_backup_group_links_test.dart.
+  'v10_group_links': 'расхождение с ответом 6: selector → urltest + '
+      'backup_group_degraded, нет v10_group_links.expected.lxbox.json',
+  'v10_dev_forms': 'расхождение с ответом 6: selector → urltest + '
+      'backup_group_degraded, нет v10_dev_forms.expected.lxbox.json',
 };
 
 
@@ -121,6 +130,7 @@ void main() {
         _checkDirections(file, expected);
         _checkChains(state, expected);
         _checkDetours(state, expected);
+        _checkGroups(state, expected);
 
         // §393 B12 — отметки выключенных узлов (§4 BACKUP.md). Паритет с
         // Go-раннером (`corpus_test.go:checkDisabledHashes`): ожидание —
@@ -198,6 +208,8 @@ class _State {
       knownChains: {for (final c in chains) c.tag},
     );
     final subs = mergeBackupSubscriptions(lists, file.subscriptions);
+    // Корень результата для подъёма `{tag}` (NODE_LINK §7.3) и перевод
+    // ссылок файла — как у `_onLxImport`.
     final servers = mergeBackupServers(
       subs.lists,
       file.servers,
@@ -205,11 +217,19 @@ class _State {
       sourceIds: subs.ids,
       addedSources: subs.added,
       sourceDetours: subs.detours,
+      rootNames: {
+        kDirectOutboundTag,
+        kBlockOutboundTag,
+        for (final d in file.directions) ...[d.tag, d.autoTag],
+        for (final c in chains) c.tag,
+        for (final c in file.chains) c.tag,
+      },
     );
     lists = servers.lists;
     chains = [
       ...chains,
-      ...resolveBackupChainHops(file, servers.lists, servers.folderIds),
+      ...resolveBackupChainHops(file, servers.lists, servers.folderIds,
+          linkOf: servers.linkOf),
     ];
     // `rules[]` — единственная секция полной замены (BACKUP.md §9 п. 7).
     rules = renumberBackupAxis(file.rules, servers.lists, servers.touched);
@@ -373,6 +393,12 @@ void _checkDirections(LxBackupFile file, Map<String, dynamic> expected) {
     expect(got.auto != null, want['has_auto'] ?? false,
         reason: '$tag: автовыбор');
     // §409 — бюджет теста узла, та же указательная семантика, что у `label`.
+    // Контракт 1.0.1 — опции-теги в порядке записи; отсутствие ключа — «не
+    // проверяем», пустой список — «опций нет».
+    final wantInclude = (want['include'] as List?)?.cast<String>();
+    if (wantInclude != null) {
+      expect(got.include, wantInclude, reason: '$tag: опции include');
+    }
     final gotPing = file.directionPing[tag];
     final wantPingUrl = want['ping_url'];
     if (wantPingUrl is String) {
@@ -393,11 +419,10 @@ void _checkDirections(LxBackupFile file, Map<String, dynamic> expected) {
 /// `chain` сверяется DEEP-EQUAL канона, без чувствительности к порядку ключей
 /// и ВКЛЮЧАЯ `null` внутри `rewrite` (RFC 7396).
 ///
-/// §438 — `hops` ожидания — позиции как ССЫЛКИ (тег + имя папки). У LxBox
-/// позиция — тег конфига: у члена папки это тег с префиксом папки. Раннер
-/// находит, в какой узел состояния позиция попадает, и сверяет пару
-/// «сырой тег + папка»: перепись `folder_id` по карте id видна именно так.
-/// Канон при этом сверяется с сырыми тегами — так его пишет корпус.
+/// §438 — `hops` ожидания — позиции как ССЫЛКИ (тег + имя папки). Позиция
+/// LxBox — NodeLink (D-112): раннер находит контейнер по `folder_id` и сверяет
+/// пару «сырой тег + папка»: перепись `folder_id` по карте id видна именно
+/// так. Канон сверяется с сырыми тегами строками — так его пишет корпус.
 void _checkChains(_State state, Map<String, dynamic> expected) {
   final wantChains =
       ((expected['chains'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -426,14 +451,13 @@ void _checkChains(_State state, Map<String, dynamic> expected) {
     final canon = _canonOf(got!);
     final wantHops = (want['hops'] as List?)?.cast<Map<String, dynamic>>();
     if (wantHops != null) {
-      final resolved = [for (final h in got.hops) _resolveHop(h, state.lists)];
       expect(
-        [for (final r in resolved) r.view],
+        [for (final h in got.hops) _resolveHop(h, state.lists).view],
         [for (final w in wantHops) _wantLinkView(w)],
         reason: '$tag: позиции как ссылки (контейнер/тег)',
       );
-      canon['hops'] = [for (final r in resolved) r.tag];
     }
+    canon['hops'] = [for (final h in got.hops) h.tag];
     expect(canon, _deepEqualsJson(want['chain']),
         reason: '$tag: канон цепочки искажён');
   }
@@ -494,6 +518,48 @@ void _checkDetours(_State state, Map<String, dynamic> expected) {
     for (final e in want.entries)
       e.key: _wantLinkView((e.value as Map).cast<String, dynamic>()),
   }, reason: 'detour узлов: носители и ссылки');
+}
+
+/// Контракт 1.0.1 — `groups`: тег провайдерской группы (`kind: auto` в папке)
+/// → `members` по порядку и `default`. Карта ИСЧЕРПЫВАЮЩАЯ, как `detours`.
+/// Член без `folder_id` внутри папки — член этой папки (NODE_LINK §5.1 № 8);
+/// группа по правилу явного состава не несёт — `members: []`. `default` у
+/// urltest-группы LxBox нет: ожидание с ключом `default` расходится.
+void _checkGroups(_State state, Map<String, dynamic> expected) {
+  final want = (expected['groups'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  final got = <String, List<String>>{
+    for (final l in state.lists)
+      if (l is FolderServers)
+        for (final m in l.members)
+          if (m.node case final AutoSelectSpec g)
+            g.tag: switch (g.membership) {
+              ExplicitMembers(:final members) => [
+                  for (final link in members)
+                    _resolveHop(
+                            link.isRoot
+                                ? NodeLink(folderId: l.id, tag: link.tag)
+                                : link,
+                            state.lists)
+                        .view,
+                ],
+              RuleMembers() => const <String>[],
+            },
+  };
+  expect(got.keys.toSet(), want.keys.toSet(), reason: 'набор групп');
+  for (final entry in want.entries) {
+    final w = (entry.value as Map).cast<String, dynamic>();
+    expect(
+      got[entry.key],
+      [
+        for (final m in (w['members'] as List? ?? const []))
+          _wantLinkView((m as Map).cast<String, dynamic>()),
+      ],
+      reason: '${entry.key}: члены группы',
+    );
+    expect(w.containsKey('default'), isFalse,
+        reason: '${entry.key}: default у urltest-группы LxBox не хранится');
+  }
 }
 
 /// §401 / контракт 0.12 — ПАПКА: ожидание — карта {имя папки → теги членов}
