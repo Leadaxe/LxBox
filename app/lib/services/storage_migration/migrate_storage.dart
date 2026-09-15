@@ -10,25 +10,22 @@
 /// называется в [StorageMigrationResult.warnings] с именами записей.
 library;
 
-import '../../models/auto_select.dart';
 import '../../models/codec/auto_group_record.dart';
 import '../../models/codec/chain_record.dart';
 import '../../models/codec/dns_record.dart';
 import '../../models/codec/rule_record.dart';
 import '../../models/codec/source_record.dart';
 import '../../models/custom_rule.dart';
-import '../../models/direction.dart' show StickyHashKey, UrltestMode;
 import '../../models/dns_ref.dart';
 import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
 import '../../models/parser_config.dart' show SelectableRule;
 import '../../models/server_list.dart';
 import '../json_clone.dart' show deepCloneJson;
-import '../node_identity.dart';
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
-import '../parser/uri_utils.dart' show newUuidV4, tagFromLabel;
 import '../settings_storage_keys.dart';
+import 'legacy_autogroup.dart';
 import 'legacy_form_v0.dart';
 import 'migrate_node_links.dart';
 
@@ -407,15 +404,11 @@ String _sourceName(Map<String, dynamic> j) {
 
 // ─── autogroup (§439 N2) ────────────────────────────────────────────────────
 
-/// Схема члена-группы папки в хранении до §439 N2 (`FolderMember.raw`).
-const String _kLegacyAutogroupScheme = 'autogroup://';
-
+/// Член папки с исходником `autogroup://` (`FolderMember.raw` до §439 N2).
 bool _isLegacyAutogroup(Object? node) {
   if (node is! Map) return false;
   final origin = node['origin'];
-  final raw = origin is Map ? origin['raw'] : null;
-  return raw is String &&
-      raw.trimLeft().toLowerCase().startsWith(_kLegacyAutogroupScheme);
+  return isLegacyAutogroupText(origin is Map ? origin['raw'] : null);
 }
 
 bool _hasLegacyAutogroups(Object? sources) =>
@@ -514,135 +507,35 @@ Map<String, dynamic>? _autogroupRecord(
   String where,
   List<String> warnings,
 ) {
-  final raw = ((node['origin'] as Map)['raw'] as String).trim();
-  final legacy = _readLegacyAutogroup(raw);
-  if (legacy == null) {
+  final raw = (node['origin'] as Map)['raw'] as String;
+  final read = legacyAutogroupSpec(
+    raw,
+    nodes: parsed,
+    enabledAt: (i) {
+      final n = nodes[i];
+      return !(n is Map && n['enabled'] == false);
+    },
+    linkOf: (_, tag) => NodeLink(folderId: folderId, tag: tag),
+  );
+  if (read == null) {
     warnings.add('$where: autogroup text does not read, dropped '
         '(the text stays in .v0.bak)');
     return null;
   }
-  final label = legacy.label.isEmpty ? 'Auto' : legacy.label;
-  final tag = tagFromLabel(label, 'urltest', 'auto', 0);
-  final keys = legacy.keys;
-  final AutoSelectMembership membership;
-  if (keys == null) {
-    membership = RuleMembers(include: legacy.include, exclude: legacy.exclude);
-  } else {
-    final links = <NodeLink>[];
-    for (final key in keys) {
-      final link = _linkOfKey(key, nodes, parsed, folderId);
-      if (link.error != null) {
-        warnings.add('$where "$tag": member ${link.error}, dropped');
-        continue;
-      }
-      if (!links.contains(link.link)) links.add(link.link!);
-    }
-    membership = ExplicitMembers(links);
+  final group = read.group;
+  for (final problem in read.dropped) {
+    warnings.add('$where "${group.tag}": member $problem, dropped');
   }
   if (node['detour'] != null || node['sections'] != null) {
-    warnings.add('$where "$tag": detour and sections of an auto node '
+    warnings.add('$where "${group.tag}": detour and sections of an auto node '
         'are dropped');
   }
-  final group = AutoSelectSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    membership: membership,
-    params: legacy.params,
-    poolBadge: legacy.poolBadge,
-  );
   final enabled = node['enabled'];
   return autoGroupMemberToRecord(
     FolderMember.auto(group, enabled: enabled is bool ? enabled : true),
     group,
     folderId,
   );
-}
-
-/// Ключ `protocol|server|port|credential` → пара на члена папки.
-({NodeLink? link, String? error}) _linkOfKey(
-  String key,
-  List<dynamic> nodes,
-  List<NodeSpec?> parsed,
-  String folderId,
-) {
-  bool enabledAt(int i) {
-    final n = nodes[i];
-    return !(n is Map && n['enabled'] == false);
-  }
-
-  var hits = [
-    for (var i = 0; i < parsed.length; i++)
-      if (parsed[i] case final n? when nodeIdentityKey(n) == key) i,
-  ];
-  // Сборка до N2 брала только включённых членов.
-  if (hits.length > 1) hits = hits.where(enabledAt).toList();
-  if (hits.isEmpty) return (link: null, error: 'key "$key" matches no node');
-  if (hits.length > 1) {
-    return (
-      link: null,
-      error: 'key "$key" matches ${hits.length} nodes',
-    );
-  }
-  final tag = parsed[hits.single]!.tag;
-  if (tag.isEmpty) return (link: null, error: 'key "$key" has an untagged node');
-  final sameTag = parsed.where((n) => n?.tag == tag).length;
-  if (sameTag > 1) {
-    return (link: null, error: 'tag "$tag" is carried by $sameTag nodes');
-  }
-  return (link: NodeLink(folderId: folderId, tag: tag), error: null);
-}
-
-/// Разбор `autogroup://?members=…|include=…&mode=…#Label` — замороженная
-/// форма 2.23.2 (`autoGroupFromUri`). [keys] `null` — режим правила.
-({
-  String label,
-  List<String>? keys,
-  String include,
-  String exclude,
-  AutoSelectParams params,
-  String poolBadge,
-})? _readLegacyAutogroup(String raw) {
-  final uri = Uri.tryParse(raw);
-  if (uri == null) return null;
-  try {
-    final q = uri.queryParameters;
-    const d = AutoSelectParams();
-    final rawMembers = q['members'];
-    final sticky = q['sticky'];
-    return (
-      label: Uri.decodeComponent(uri.fragment),
-      // §352 — узкое экранирование ключа: `,` и `%`.
-      keys: rawMembers?.split(',')
-          .map((e) =>
-              e.trim().replaceAll('%2C', ',').replaceAll('%25', '%'))
-          .where((e) => e.isNotEmpty)
-          .toList(),
-      include: q['include'] ?? '',
-      exclude: q['exclude'] ?? '',
-      params: AutoSelectParams(
-        url: q['url'] ?? d.url,
-        interval: q['interval'] ?? d.interval,
-        tolerance: int.tryParse(q['tolerance'] ?? '') ?? d.tolerance,
-        idleTimeout: q['idle_timeout'] ?? d.idleTimeout,
-        interruptExistConnections: q['interrupt'] == '1',
-        mode: UrltestMode.fromWire(q['mode']),
-        pool: int.tryParse(q['pool'] ?? '') ?? d.pool,
-        poolTolerance: clampPoolTolerance(
-            int.tryParse(q['pool_tolerance'] ?? '') ?? d.poolTolerance),
-        stickyHash: sticky == null
-            ? d.stickyHash
-            : sticky
-                .split(',')
-                .map((k) => StickyHashKey.fromWire(k.trim()))
-                .whereType<StickyHashKey>()
-                .toList(),
-      ),
-      poolBadge: q['badge'] ?? kDefaultPoolBadge,
-    );
-  } catch (_) {
-    return null;
-  }
 }
 
 // ─── rules ──────────────────────────────────────────────────────────────────

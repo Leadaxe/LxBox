@@ -18,7 +18,7 @@ import '../models/dns_ref.dart';
 import '../models/import_rule.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
-import '../models/node_spec.dart' show AutoSelectSpec;
+import '../models/node_spec.dart' show AutoSelectSpec, NodeSpec;
 import '../models/parser_config.dart' show kUserRuleNumStart;
 import '../models/record_codec.dart';
 import '../models/server_list.dart';
@@ -27,6 +27,7 @@ import 'lx_backup_slice.dart';
 import 'node_link_address.dart';
 import 'node_hash.dart' show deepSortKeys;
 import 'parser/uri_utils.dart' show newUuidV4;
+import 'storage_migration/legacy_autogroup.dart';
 import 'tag_resolver.dart';
 
 /// LX Backup — переносимый формат обмена настройками с десктопным лаунчером
@@ -1012,10 +1013,10 @@ LxBackupFile _parse0x(
         if (s is Map)
           _subscriptionFromJson(s.cast<String, dynamic>(), warnings),
     ],
-    servers: [
+    servers: _legacyAutogroups0x([
       for (final s in (decoded['servers'] as List? ?? const []))
         if (s is Map) _serverFromJson(s.cast<String, dynamic>(), warnings),
-    ],
+    ], warnings),
     dns: _dnsFromJson(
       (decoded['dns'] as Map?)?.cast<String, dynamic>(),
       warnings,
@@ -1723,6 +1724,68 @@ LxServer _serverFromJson(
     folder: (j['folder'] as String?)?.trim() ?? '',
   );
 }
+
+/// §439 N2 — член папки 0.x с текстом `autogroup://…` → узел автовыбора тем
+/// же путём, что миграция хранения (`legacy_autogroup.dart`): разбор текста
+/// снят, и без перевода член лёг бы нечитаемым рядом с группой. Явный состав —
+/// ключи `protocol|server|port|credential` — сопоставляется с членами той же
+/// папки файла и становится ссылками `{tag}` на их имена (`node_tag`); адрес
+/// здесь им даёт слияние ([mergeBackupServers]). Член, который не нашёлся
+/// или неоднозначен, снимается с [kWarnGroupDegraded]. Нечитаемый текст
+/// остаётся членом как есть.
+List<LxServer> _legacyAutogroups0x(
+  List<LxServer> servers,
+  List<LxBackupWarning> warnings,
+) {
+  if (!servers.any((s) => s.folder.isNotEmpty && isLegacyAutogroupText(s.uri))) {
+    return servers;
+  }
+  final byFolder = <String, List<int>>{};
+  for (var i = 0; i < servers.length; i++) {
+    final folder = servers[i].folder;
+    if (folder.isNotEmpty) (byFolder[folder] ??= []).add(i);
+  }
+  final out = servers.toList();
+  byFolder.forEach((folder, indexes) {
+    final members = [for (final i in indexes) servers[i]];
+    final nodes = <NodeSpec?>[
+      for (final m in members)
+        isLegacyAutogroupText(m.uri) ? null : FolderMember(raw: _body0x(m)).node,
+    ];
+    for (var k = 0; k < members.length; k++) {
+      final m = members[k];
+      if (!isLegacyAutogroupText(m.uri)) continue;
+      final read = legacyAutogroupSpec(
+        m.uri,
+        nodes: nodes,
+        enabledAt: (i) => members[i].enabled,
+        linkOf: (i, tag) =>
+            NodeLink(tag: members[i].name.isNotEmpty ? members[i].name : tag),
+      );
+      if (read == null) continue;
+      for (final problem in read.dropped) {
+        warnings.add(LxBackupWarning(
+          kWarnGroupDegraded,
+          read.group.tag,
+          reason: 'member $problem, dropped',
+        ));
+      }
+      out[indexes[k]] = LxServer(
+        autoGroup: read.group,
+        name: read.group.tag,
+        enabled: m.enabled,
+        folder: folder,
+        position: m.position,
+      );
+    }
+  });
+  return out;
+}
+
+/// Текст записи 0.x для разбора члена: URI или `config_json` строкой.
+String _body0x(LxServer s) => s.uri.isNotEmpty
+    ? s.uri
+    : (s.configJson == null ? '' : jsonEncode(s.configJson));
 
 /// §393 B9 — секция `dns` файла 0.12 → модели DNS.
 ///
@@ -3516,7 +3579,9 @@ BackupServerMerge mergeBackupServers(
 
     final srv = item as LxServer;
     if (srv.autoGroup != null) {
-      final at = folderAtKey[srv.folderRef];
+      final at = srv.folderRef.isNotEmpty
+          ? folderAtKey[srv.folderRef]
+          : _folder0xAt(merged, srv, folderByName, takenIds, added, position);
       if (at == null) continue;
       applied += _mergeFolderAutoGroup(merged, at, srv, autoGroups);
       continue;
@@ -3587,21 +3652,9 @@ BackupServerMerge mergeBackupServers(
       continue;
     }
 
-    // Член папки 0.x: папка — имя. Заведённая им же папка находится по имени
-    // (иначе каждая запись с тем же `folder` заводила бы новую).
-    var at = folderByName[srv.folder];
-    if (at == null || at < 0) {
-      merged.add(FolderServers(
-        id: _adoptSourceId('', takenIds),
-        name: srv.folder,
-        enabled: true,
-        tagPrefix: '',
-        detourPolicy: DetourPolicy.defaults,
-      ));
-      at = merged.length - 1;
-      folderByName[srv.folder] = at;
-      added[merged.last.id] = position;
-    }
+    // Член папки 0.x: папка — имя.
+    final at =
+        _folder0xAt(merged, srv, folderByName, takenIds, added, position);
     applied += _mergeFolderMember(merged, at, srv, body, NodeLink.none, touched,
         landings: landings);
   }
@@ -3855,6 +3908,30 @@ int _mergeFolderMember(
   merged[folderAt] = folder.copyWith(members: [...folder.members, member]);
   touched.add((list: folderAt, member: folder.members.length));
   return 1;
+}
+
+/// Папка члена 0.x [srv] по имени; заведённая им же папка находится по
+/// имени (иначе каждая запись с тем же `folder` заводила бы новую).
+int _folder0xAt(
+  List<ServerList> merged,
+  LxServer srv,
+  Map<String, int> folderByName,
+  Set<String> takenIds,
+  Map<String, int> added,
+  int position,
+) {
+  final at = folderByName[srv.folder];
+  if (at != null && at >= 0) return at;
+  merged.add(FolderServers(
+    id: _adoptSourceId('', takenIds),
+    name: srv.folder,
+    enabled: true,
+    tagPrefix: '',
+    detourPolicy: DetourPolicy.defaults,
+  ));
+  folderByName[srv.folder] = merged.length - 1;
+  added[merged.last.id] = position;
+  return merged.length - 1;
 }
 
 /// §439 N2 — член-группа файла, ждущий перевода состава в адреса здесь.
