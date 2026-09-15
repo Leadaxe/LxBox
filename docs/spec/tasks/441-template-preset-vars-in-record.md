@@ -73,6 +73,7 @@ detour DNS. Решение владельца D-114: при удалении ц�
 |---|---|---|
 | удаление и выключение Направления | тег и `<тег>-auto` → `vpn-1`, как `outbound` правила; затем Н4 (у `google_dot`/`cloudflare_dot` `vpn-1` — умолчание, ключ снимается) | `_healDirectionRefs` (`settings_storage/directions.dart`) |
 | переименование | тег → новый, `<тег>-auto` → `<новый>-auto`, затем Н4 | `directionRefRetarget(rename: true)`; у LxBox тег Направления неизменяем (Debug API `PATCH` — 400), вызывающего нет |
+| detour DNS (волна 441c) | `body.detour` пользовательского сервера (`kind: user`) в корневом `dns.servers` и в `sections.dns.servers` одиночного сервера и членов папки — те же операции, Н4 не применяется | `retargetDnsServerDetour` (`models/dns_ref.dart`), `retargetSectionsDnsDetours` (`models/server_list.dart`); зеркало секций в `_entries` контроллера — `syncSectionsDnsDetourRefsHealed`, зовёт `DirectionMutations` при `dnsServers > 0` |
 
 - Имена-цели берутся из объявления шаблона: у template-сервера DNS —
   переменные `type: outbound`, сервер вне шаблона — ключ `outbound` по имени;
@@ -80,7 +81,8 @@ detour DNS. Решение владельца D-114: при удалении ц�
   `type: outbound`. Переменные других типов не трогаются, даже если значение
   совпало с тегом. Функции — `record_vars.dart`
   (`retargetDnsServerOutboundVars`, `retargetPresetOutboundVars`).
-- Счётчик: `DirectionHealResult.dnsServers` — число template-серверов DNS.
+- Счётчик: `DirectionHealResult.dnsServers` — число DNS-серверов (template
+  с переменной-целью, user с `body.detour`, корневых и секционных).
   Пресет с переменной-целью считается в `rules` (одно на правило).
   SnackBar: «N DNS server(s) switched to vpn-1», Debug API —
   `healed.dns_servers` в ответах `POST`/`PATCH`/`DELETE /directions`.
@@ -116,6 +118,8 @@ detour DNS. Решение владельца D-114: при удалении ц�
   `avd_v0`; удаление `vpn-3` лечит `vars.outbound` у `google_dot`, сервер
   остаётся в конфиге). 441b: перепись целей и Н4 —
   `record_vars_test.dart`, Л5 — `dns_template_vars_import_test.dart`.
+  441c: detour DNS (корневой, секции, зеркало контроллера, выключение,
+  переименование) — `test/subscription/detour_direction_resync_test.dart`.
 - Конфиг `avd_v0` с выпавшим `google_udp` (правило → reject, резолверы
   вылечены) проходит `sing-box check` (бинарь `sing-box-lx` от 14.09, HEAD
   `v1.14.0-lx.39-6`).
@@ -124,6 +128,3 @@ detour DNS. Решение владельца D-114: при удалении ц�
 
 - Синк контракта 1.0.2, прогон кейса `v10_dns_template_vars`, снятие
   `_pendingPortableVars` (L7) — после выкладки у лаунчера.
-- detour пользовательского DNS-сервера (`body.detour` записи `user`) на
-  удалённое Направление в хранении не лечится: сервер выпадает на сборке
-  (Н10). В объём 441b не входил.
