@@ -15,6 +15,7 @@ import '../models/codec/source_record.dart';
 import '../models/custom_rule.dart';
 import '../models/direction.dart';
 import '../models/dns_ref.dart';
+import '../models/import_rule.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart' show AutoSelectSpec;
@@ -267,12 +268,26 @@ class LxSubscription {
     this.fullSettings = false,
     this.position = 0,
     this.detour,
+    this.detourPolicy,
+    this.importRules,
+    this.importRulesEnabled,
+    this.onUpdateAction,
   });
 
   /// §439 — общий `detour` подписки файла 1.0 (BACKUP.md §9 п. 1): ссылка как
   /// есть, тег конфига из неё получает слияние узлов ([mergeBackupServers]).
   /// У 0.x `null` и [fullSettings] ложно: своя ссылка остаётся.
   final NodeLink? detour;
+
+  /// §439 Л2 — настройки LxBox записи 1.0, которые контракт объявил
+  /// (`declared` в `lx_backup_slice.dart`) и которые в записи есть. `null` —
+  /// поля в файле нет (сторона его не носит или контракт не объявил): у
+  /// совпавшей подписки остаётся своё, у новой — умолчание.
+  /// [detourPolicy] — флаги без ссылки: ссылка едет [detour].
+  final DetourPolicy? detourPolicy;
+  final List<ImportRule>? importRules;
+  final bool? importRulesEnabled;
+  final SubscriptionOnUpdateAction? onUpdateAction;
 
   /// §438 — место записи в `sources[]` файла 1.0: новые источники встают в
   /// конец В ПОРЯДКЕ ФАЙЛА (BACKUP.md §9 п. 8), все виды вместе. У 0.x — 0.
@@ -324,12 +339,20 @@ class LxServer {
     this.detour,
     this.position = 0,
     this.autoGroup,
+    this.detourPolicy,
+    this.tagPrefix,
   });
 
   /// §439 N2 — член папки 1.0 `kind: auto`: узел автовыбора со ссылками файла
   /// как есть (член `{tag}` уже поднят до пары с [folderRef]). Адрес здесь
   /// составу даёт слияние ([mergeBackupServers]). Текста у такого члена нет.
   final AutoSelectSpec? autoGroup;
+
+  /// §439 Л2 — объявленные контрактом настройки LxBox корневого узла 1.0
+  /// (флаги `detour_policy`, префикс `tag_policy`); `null` — поля в файле нет,
+  /// см. [LxSubscription.detourPolicy]. У членов папки их нет.
+  final DetourPolicy? detourPolicy;
+  final String? tagPrefix;
 
   /// §438 — место корневой записи в `sources[]` файла 1.0 (см.
   /// [LxSubscription.position]); член папки идёт местом своей папки.
@@ -389,10 +412,20 @@ class LxFolder {
     this.tagPrefix = '',
     this.position = 0,
     this.detour,
+    this.detourPolicy,
+    this.pingUrl,
+    this.pingTimeoutMs,
   });
 
   /// §439 — общий `detour` папки (BACKUP.md §9 п. 3): ссылка файла как есть.
   final NodeLink? detour;
+
+  /// §439 Л2 — объявленные контрактом настройки LxBox папки 1.0 (флаги
+  /// `detour_policy`, `ping_url`, `ping_timeout_ms`); `null` — поля в файле
+  /// нет, см. [LxSubscription.detourPolicy].
+  final DetourPolicy? detourPolicy;
+  final String? pingUrl;
+  final int? pingTimeoutMs;
 
   /// §438 — место записи в `sources[]` файла (см. [LxSubscription.position]).
   final int position;
@@ -2249,6 +2282,15 @@ Map<String, dynamic> _sourceForCodec(
       'id': fileId.isEmpty ? _kNoFileId : fileId,
     };
 
+/// §439 Л2 — есть ли в записи файла поле LxBox, которое контракт объявил:
+/// только такое поле применяется, его отсутствие оставляет значение
+/// приёмника. Необъявленное снято до кодека и не применяется никогда.
+bool _carries(BackupRecord kind, Map<String, dynamic> j, String key) =>
+    j.containsKey(key) && declaredBackupKeys(kind).contains(key);
+
+/// Флаги политики detour без ссылки (ссылка едет полем `detour`).
+DetourPolicy _flagsOf(DetourPolicy p) => p.copyWith(overrideDetour: '');
+
 LxBackupFile _parse10(
   Map<String, dynamic> decoded, {
   required Set<String> knownOutbounds,
@@ -2430,8 +2472,15 @@ LxServer? _server10(
       reason: d.reason,
     ));
   }
+  final root = folder == null;
   return LxServer(
     detour: _link10(j['detour']),
+    detourPolicy: root && _carries(BackupRecord.server, j, 'detour_policy')
+        ? _flagsOf(node.detourPolicy)
+        : null,
+    tagPrefix: root && _carries(BackupRecord.server, j, 'tag_policy')
+        ? node.tagPrefix
+        : null,
     uri: uri,
     configJson: configJson,
     name: tag,
@@ -2516,6 +2565,7 @@ LxSubscription _subscription10(
   final read = sourceFromRecord(
       _sourceForCodec(BackupRecord.subscription, j, fileId));
   final sub = read.value! as SubscriptionServers;
+  bool carries(String key) => _carries(BackupRecord.subscription, j, key);
   _noteIdentityDropped(
     [
       for (final k in read.unknownKeys)
@@ -2537,6 +2587,11 @@ LxSubscription _subscription10(
     },
     identity: sub.identity,
     detour: _link10(j['detour']),
+    detourPolicy: carries('detour_policy') ? _flagsOf(sub.detourPolicy) : null,
+    importRules: carries('import_rules') ? sub.importRules : null,
+    importRulesEnabled:
+        carries('import_rules_enabled') ? sub.importRulesEnabled : null,
+    onUpdateAction: carries('on_update_action') ? sub.onUpdateAction : null,
     fullSettings: true,
     position: position,
   );
@@ -2553,6 +2608,7 @@ LxFolder _folder10(Map<String, dynamic> j, int position) {
     override: const {'nodes': <Object?>[]},
   ));
   final folder = read.value! as FolderServers;
+  bool carries(String key) => _carries(BackupRecord.folder, j, key);
   return LxFolder(
     position: position,
     // Члены ссылаются на папку ключом, а не именем: в файле бывают тёзки.
@@ -2565,6 +2621,9 @@ LxFolder _folder10(Map<String, dynamic> j, int position) {
     enabled: folder.enabled,
     tagPrefix: folder.tagPrefix,
     detour: _link10(j['detour']),
+    detourPolicy: carries('detour_policy') ? _flagsOf(folder.detourPolicy) : null,
+    pingUrl: carries('ping_url') ? folder.pingUrl : null,
+    pingTimeoutMs: carries('ping_timeout_ms') ? folder.pingTimeoutMs : null,
   );
 }
 
@@ -3120,6 +3179,14 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
         // override'а не переносилось бы вовсе.
         identity: sub.identity,
         clearIdentity: sub.identity == null,
+        // §439 Л2 — объявленные настройки LxBox: приехали — применяются, нет
+        // в файле — свои (сторона их не носит). Ссылку detour ставит слияние
+        // узлов по [detours].
+        detourPolicy: sub.detourPolicy?.copyWith(
+            overrideDetour: existing.detourPolicy.overrideDetour),
+        importRules: sub.importRules,
+        importRulesEnabled: sub.importRulesEnabled,
+        onUpdateAction: sub.onUpdateAction,
       );
       if (sub.id.isNotEmpty) ids[sub.id] = existing.id;
       if (sub.fullSettings) detours[existing.id] = sub.detour;
@@ -3132,7 +3199,7 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
       name: sub.label,
       enabled: sub.enabled,
       tagPrefix: sub.tagPrefix,
-      detourPolicy: DetourPolicy.defaults,
+      detourPolicy: sub.detourPolicy ?? DetourPolicy.defaults,
       url: sub.url,
       updateIntervalHours:
           sub.updateIntervalHours ?? _defaultUpdateIntervalHours,
@@ -3143,6 +3210,9 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
       disabledHashes: {
         for (final e in sub.disabled.entries) e.key: at(e.value),
       },
+      importRules: sub.importRules ?? const [],
+      importRulesEnabled: sub.importRulesEnabled ?? true,
+      onUpdateAction: sub.onUpdateAction ?? SubscriptionOnUpdateAction.rebuild,
     ));
     byUrl[sub.url] = merged.length - 1;
     if (sub.id.isNotEmpty) ids[sub.id] = merged.last.id;
@@ -3259,8 +3329,9 @@ String canonicalNodeBody(String body) {
 /// **Общий `detour` контейнера** (§439, BACKUP.md §9 пп. 1, 3): у папки 1.0
 /// берётся из её записи, у подписки — из [sourceDetours]
 /// ([mergeBackupSubscriptions]); тег конфига — по той же карте контейнеров,
-/// что у ссылок узлов. Флаги политики detour — настройки LxBox, в файл они не
-/// едут и остаются своими.
+/// что у ссылок узлов. Флаги политики detour, `ping_*` папки и префикс
+/// одиночного узла — настройки LxBox: пока контракт их не объявил (Л2), в файл
+/// они не едут и остаются своими; объявленные применяются, когда приехали.
 BackupServerMerge mergeBackupServers(
   List<ServerList> lists,
   List<LxServer> incoming, {
@@ -3373,15 +3444,21 @@ BackupServerMerge mergeBackupServers(
       final at = matchedAt[item.key];
       if (at != null) {
         final local = merged[at] as FolderServers;
-        final policy = local.detourPolicy
+        final policy = (item.detourPolicy ?? local.detourPolicy)
             .copyWith(overrideDetour: linkTag(item.detour));
+        final pingUrl = item.pingUrl ?? local.pingUrl;
+        final pingTimeoutMs = item.pingTimeoutMs ?? local.pingTimeoutMs;
         if (local.enabled != item.enabled ||
             local.tagPrefix != item.tagPrefix ||
-            local.detourPolicy != policy) {
+            local.detourPolicy != policy ||
+            local.pingUrl != pingUrl ||
+            local.pingTimeoutMs != pingTimeoutMs) {
           merged[at] = local.copyWith(
             enabled: item.enabled,
             tagPrefix: item.tagPrefix,
             detourPolicy: policy,
+            pingUrl: pingUrl,
+            pingTimeoutMs: pingTimeoutMs,
           );
           applied++;
         }
@@ -3392,8 +3469,10 @@ BackupServerMerge mergeBackupServers(
           name: item.name,
           enabled: item.enabled,
           tagPrefix: item.tagPrefix,
-          detourPolicy: DetourPolicy.defaults
+          detourPolicy: (item.detourPolicy ?? DetourPolicy.defaults)
               .copyWith(overrideDetour: linkTag(item.detour)),
+          pingUrl: item.pingUrl,
+          pingTimeoutMs: item.pingTimeoutMs,
         ));
         folderAtKey[item.key] = merged.length - 1;
         if (folderByName[item.name] == -1) {
@@ -3431,11 +3510,19 @@ BackupServerMerge mergeBackupServers(
       final key = canonicalNodeBody(body);
       final hit = singleBodies[key];
       if (hit != null) {
-        if (srv.sectionsPresent) {
-          final local = merged[hit] as UserServer;
+        final local = merged[hit] as UserServer;
+        // §439 Л2 — объявленные настройки LxBox узла: как секции, поле есть —
+        // замещает, нет — своё остаётся. Ссылку detour совпавший узел держит.
+        final flags = srv.detourPolicy
+            ?.copyWith(overrideDetour: local.detourPolicy.overrideDetour);
+        final side = (flags != null && flags != local.detourPolicy) ||
+            (srv.tagPrefix != null && srv.tagPrefix != local.tagPrefix);
+        if (srv.sectionsPresent || side) {
           merged[hit] = local.copyWith(
-            sections: srv.sections,
-            clearSections: srv.sections == null,
+            sections: srv.sectionsPresent ? srv.sections : null,
+            clearSections: srv.sectionsPresent && srv.sections == null,
+            detourPolicy: flags,
+            tagPrefix: srv.tagPrefix,
           );
           applied++;
         }
@@ -3446,9 +3533,9 @@ BackupServerMerge mergeBackupServers(
         id: _adoptSourceId(srv.id, takenIds),
         name: srv.name,
         enabled: srv.enabled,
-        tagPrefix: '',
-        detourPolicy:
-            DetourPolicy.defaults.copyWith(overrideDetour: detourOf(srv)),
+        tagPrefix: srv.tagPrefix ?? '',
+        detourPolicy: (srv.detourPolicy ?? DetourPolicy.defaults)
+            .copyWith(overrideDetour: detourOf(srv)),
         origin: UserSource.manual,
         rawBody: body,
         sections: srv.sections,
