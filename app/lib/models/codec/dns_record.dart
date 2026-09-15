@@ -4,7 +4,8 @@
 ///
 /// Словарь записи: пользовательский сервер и правило — `kind: user` (у модели
 /// `inline`), тело — `body`; preset-сервер адресуется `ref` формы
-/// `<preset_id>:<tag>`; значения переменных template-сервера — `vars`.
+/// `<preset_id>:<тег внутри пресета>` — это тег конфига сервера
+/// ([dnsServerPresetRef]); значения переменных template-сервера — `vars`.
 /// Виды LxBox (`srs`, `template` у правил) пишутся в форме модели.
 ///
 /// Тег DNS-сервера — поле записи, в `body` его нет. Строки (`tag`, `name`,
@@ -29,11 +30,10 @@ Map<String, dynamic> dnsServerToRecord(DnsServerRef s) => switch (s) {
           if (s.description != null) 'description': s.description,
         },
       // §438 — у записи preset тега нет, её идентичность — `ref` формы
-      // `<preset_id>:<tag>` (BACKUP.md §2). Пресет не известен — `ref` = тег,
-      // дальше orphan-cleanup резолвера.
+      // `<preset_id>:<tag>` (BACKUP.md §2), [dnsServerPresetRef].
       DnsServerPreset() => {
           'kind': 'preset',
-          'ref': s.presetId.isEmpty ? s.tag : '${s.presetId}:${s.tag}',
+          'ref': dnsServerPresetRef(s),
           'enabled': s.enabled,
           if (s.description != null) 'description': s.description,
         },
@@ -53,21 +53,18 @@ RecordRead<DnsServerRef> dnsServerFromRecord(Map<String, dynamic> j) {
   if (kind is! String || kind.isEmpty) {
     return const RecordRead.drop('dns server without kind');
   }
-  // preset: `ref` делится по ПЕРВОМУ `:` на пресет и тег; `ref` без `:` —
-  // тег целиком. `tag` у preset — прежняя форма этого кодека, запасной ход.
+  // preset: `ref` ([dnsServerPresetFromRef]); `tag` у preset — прежняя форма
+  // этого кодека (тег конфига), запасной ход.
   var presetId = '';
   String? tag;
-  final ref = kind == 'preset' ? _nonEmpty(j['ref']) : null;
-  if (ref != null) {
-    final at = ref.indexOf(':');
-    if (at < 0) {
-      tag = ref;
-    } else {
-      presetId = ref.substring(0, at);
-      tag = _nonEmpty(ref.substring(at + 1));
-    }
+  if (kind == 'preset') {
+    final parsed = dnsServerPresetFromRef(
+        _nonEmpty(j['ref']) ?? _nonEmpty(j['tag']) ?? '');
+    presetId = parsed?.presetId ?? '';
+    tag = parsed?.tag;
+  } else {
+    tag = _nonEmpty(j['tag']);
   }
-  tag ??= _nonEmpty(j['tag']);
   if (tag == null) return RecordRead.drop('dns server ($kind) without tag');
   final enabled = j['enabled'] != false;
   final rawDescription = j['description'];
@@ -110,10 +107,49 @@ RecordRead<DnsServerRef> dnsServerFromRecord(Map<String, dynamic> j) {
   }
 }
 
-/// `<preset_id>` из `ref` preset-сервера DNS; пусто, если `:` нет.
-String presetIdOfDnsServerRef(String ref) {
+/// `ref` записи preset-сервера DNS: `<preset_id>:<тег внутри пресета>`
+/// (BACKUP.md §2). Тег модели — тег конфига, пространство пресета в нём уже
+/// есть ([DnsServerPreset]), поэтому `ref` совпадает с ним; повтор
+/// пространства (ранние сборки 2.23.3 писали `ru-direct:ru-direct:dns_ru`)
+/// снимается. Пресет не известен — `ref` = тег.
+String dnsServerPresetRef(DnsServerPreset s) {
+  final presetId = s.presetId;
+  if (presetId.isEmpty) return s.tag;
+  return '$presetId:${_presetLocalTag(presetId, s.tag)}';
+}
+
+/// `ref` preset-сервера DNS → пресет и тег модели (тег конфига), обратное
+/// [dnsServerPresetRef]: `ref` делится по ПЕРВОМУ `:` (id пресета двоеточия
+/// не содержит, тег внутри пресета — может); `ref` без `:` — тег целиком,
+/// пресет не известен. Терпимо к повтору пространства ранних сборок 2.23.3:
+/// `ru-direct:ru-direct:dns_ru` читается как `ru-direct:dns_ru`. null — тега
+/// нет.
+({String presetId, String tag})? dnsServerPresetFromRef(String ref) {
   final at = ref.indexOf(':');
-  return at < 0 ? '' : ref.substring(0, at).trim();
+  if (at <= 0) {
+    final tag = at < 0 ? ref : ref.substring(1);
+    return tag.isEmpty ? null : (presetId: '', tag: tag);
+  }
+  final presetId = ref.substring(0, at);
+  final local = _presetLocalTag(presetId, ref.substring(at + 1));
+  if (local.isEmpty) return null;
+  return (presetId: presetId, tag: '$presetId:$local');
+}
+
+/// `<preset_id>` из `ref` preset-сервера DNS: часть до ПЕРВОГО `:`; пусто,
+/// если `:` нет.
+String presetIdOfDnsServerRef(String ref) =>
+    dnsServerPresetFromRef(ref)?.presetId ?? '';
+
+/// Тег внутри пресета [presetId]: [tag] без ведущих `<preset_id>:` (одного
+/// или повторённых).
+String _presetLocalTag(String presetId, String tag) {
+  final prefix = '$presetId:';
+  var local = tag;
+  while (local.startsWith(prefix)) {
+    local = local.substring(prefix.length);
+  }
+  return local;
 }
 
 // ─── DNS-правила ─────────────────────────────────────────────────────────────

@@ -105,7 +105,9 @@ void main() {
       expect(((r as JsonResponse).body as Map)['count'], 3);
 
       final servers = await SettingsStorage.getDnsServers();
-      expect(servers.map((s) => s.tag), ['my-doh', 'yandex_udp', 'google_doh']);
+      // Тег preset-сервера — тег конфига: `ref` целиком.
+      expect(servers.map((s) => s.tag),
+          ['my-doh', 'ru-direct:yandex_udp', 'google_doh']);
       expect((servers[1] as DnsServerPreset).presetId, 'ru-direct');
       expect((servers[2] as DnsServerTemplate).varValues, {'outbound': 'vpn-1'});
       expect((await fileDns())['servers'], records);

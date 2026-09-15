@@ -74,11 +74,12 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
 ///   в storage — append'им новую entry со значением `enabled` из template'а
 ///   (для template) либо `true` (для preset).
 ///
-/// §439 — [presetIdByTag] (тег сервера → `preset_id` пресета, который его
-/// внёс) заполняет [DnsServerPreset.presetId]: запись 1.0 адресует сервер
-/// `ref` = `<preset_id>:<tag>`. Пресет известен в момент добавления; у
-/// сохранённой записи без него (миграция не нашла пресет) id дописывается,
-/// как только пресет известен.
+/// §439 — ключи [presetServersByTag] — теги конфига: у серверов пресета они
+/// в пространстве его id (`ru-direct:dns_ru`, `namespacePresetTags`), та же
+/// форма, что у [DnsServerPreset.tag] из хранения. [presetIdByTag] (тег
+/// сервера → `preset_id` пресета, который его внёс) заполняет
+/// [DnsServerPreset.presetId] нового сервера; у сохранённого id берётся из
+/// пространства тега.
 ///
 /// §439 A1 — записи, которые кодек не читает (незнакомый вид), сюда не
 /// приходят и сохранением не стираются: их держит репозиторий.
@@ -103,11 +104,7 @@ Future<List<DnsServerRef>> resolveDnsServersList({
       DnsServerPreset() => presetServersByTag.containsKey(entry.tag),
     };
     if (!keep) continue; // orphan
-    final presetId = presetIdByTag[entry.tag];
-    result.add(
-        entry is DnsServerPreset && entry.presetId.isEmpty && presetId != null
-            ? entry.copyWith(presetId: presetId)
-            : entry);
+    result.add(entry);
     seen.add(entry.tag);
   }
 

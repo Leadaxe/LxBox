@@ -71,9 +71,8 @@ Map<String, dynamic>? dnsToBackup({
   return out.isEmpty ? null : out;
 }
 
-String _serverLabel(DnsServerRef s) => s is DnsServerPreset && s.presetId.isNotEmpty
-    ? '${s.presetId}:${s.tag}'
-    : s.tag;
+String _serverLabel(DnsServerRef s) =>
+    s is DnsServerPreset ? dnsServerPresetRef(s) : s.tag;
 
 String _ruleLabel(DnsRuleRef r) => switch (r) {
       DnsRuleInline(:final name) ||
@@ -181,8 +180,9 @@ DnsBackupApply applyDnsBackup({
 }
 
 String _serverKey(DnsServerRef s) => switch (s) {
-      DnsServerPreset(:final presetId, :final tag) =>
-        'preset\u0000${presetId.isEmpty ? tag : '$presetId:$tag'}',
+      // `ref` записи: у сервера из хранения (тег конфига) и из файла 0.x (тег
+      // внутри пресета) он один и тот же.
+      DnsServerPreset() => 'preset\u0000${dnsServerPresetRef(s)}',
       _ => '${s.kind}\u0000${s.tag}',
     };
 

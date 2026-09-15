@@ -29,12 +29,15 @@ const _eq = DeepCollectionEquality();
 sealed class DnsServerRef {
   const DnsServerRef({
     required this.enabled,
-    required this.tag,
     this.description,
   });
 
   final bool enabled;
-  final String tag;
+
+  /// Тег сервера в `config.dns.servers[]` — им на сервер ссылаются правила,
+  /// группы, `dns.final` и экраны.
+  String get tag;
+
   final String? description;
 
   /// `inline` | `preset` | `template`.
@@ -47,10 +50,13 @@ sealed class DnsServerRef {
 class DnsServerInline extends DnsServerRef {
   const DnsServerInline({
     required super.enabled,
-    required super.tag,
+    required this.tag,
     required this.body,
     super.description,
   });
+
+  @override
+  final String tag;
 
   /// Тело sing-box-сервера без `tag`/`enabled`/`description` (§044).
   final Map<String, dynamic> body;
@@ -87,17 +93,39 @@ class DnsServerInline extends DnsServerRef {
       Object.hash('inline', enabled, tag, description, _eq.hash(body));
 }
 
+/// Сервер пресета шаблона (`selectable_rules[].dns_servers[]`).
+///
+/// §439 — одна форма тега: [tag] — тег конфига. Сборка кладёт серверы пресета
+/// в пространство его id (`namespacePresetTags`, §103 C7): сервер `dns_ru`
+/// пресета `ru-direct` в конфиге, в правилах и в `dns.final` называется
+/// `ru-direct:dns_ru`. Запись 1.0 адресует его `ref` =
+/// `<preset_id>:<тег внутри пресета>` (BACKUP.md §2) — это та же строка
+/// (кодек, `dnsServerPresetRef`).
+///
+/// Тег без пространства при известном [presetId] (тег внутри пресета, так
+/// его отдаёт читатель файла 0.x) модель переводит в тег конфига.
 class DnsServerPreset extends DnsServerRef {
   const DnsServerPreset({
     required super.enabled,
-    required super.tag,
-    this.presetId = '',
+    required String tag,
+    String presetId = '',
     super.description,
-  });
+  })  : _tag = tag,
+        _presetId = presetId;
 
-  /// §439 — пресет шаблона, которому принадлежит сервер: запись 1.0 адресует
-  /// его `ref` = `<preset_id>:<tag>`. Пусто — пресет не известен (`ref` = тег).
-  final String presetId;
+  final String _tag;
+  final String _presetId;
+
+  @override
+  String get tag => _presetId.isEmpty || _tag.startsWith('$_presetId:')
+      ? _tag
+      : '$_presetId:$_tag';
+
+  /// §439 — пресет, которому принадлежит сервер. Не задан — пространство
+  /// тега (до первого `:`, [presetIdOfDnsServerTag]); пусто — тег без
+  /// пространства, пресет не известен (`ref` = тег).
+  String get presetId =>
+      _presetId.isNotEmpty ? _presetId : presetIdOfDnsServerTag(_tag);
 
   @override
   String get kind => 'preset';
@@ -131,13 +159,24 @@ class DnsServerPreset extends DnsServerRef {
       Object.hash('preset', enabled, tag, presetId, description);
 }
 
+/// Пространство тега preset-сервера DNS: часть до ПЕРВОГО `:` (id пресета
+/// двоеточия не содержит, тег внутри пресета — может); пусто, если `:` нет
+/// или он первый.
+String presetIdOfDnsServerTag(String tag) {
+  final at = tag.indexOf(':');
+  return at <= 0 ? '' : tag.substring(0, at);
+}
+
 class DnsServerTemplate extends DnsServerRef {
   const DnsServerTemplate({
     required super.enabled,
-    required super.tag,
+    required this.tag,
     this.varValues = const {},
     super.description,
   });
+
+  @override
+  final String tag;
 
   final Map<String, String> varValues;
 

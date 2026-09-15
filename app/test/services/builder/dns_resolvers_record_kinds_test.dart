@@ -64,7 +64,7 @@ void main() {
       'enabled': true,
       'body': {
         'type': 'group',
-        'servers': ['my-doh', 'yandex_udp'],
+        'servers': ['my-doh', 'ru-direct:yandex_udp'],
       },
     },
   ];
@@ -123,8 +123,14 @@ void main() {
         },
       };
 
+  // Ключ — тег конфига: сборка кладёт серверы пресета в пространство его id
+  // (`namespacePresetTags`), и `ref` записи — та же строка.
   const presetServersByTag = {
-    'yandex_udp': {'type': 'udp', 'tag': 'yandex_udp', 'server': '77.88.8.8'},
+    'ru-direct:yandex_udp': {
+      'type': 'udp',
+      'tag': 'ru-direct:yandex_udp',
+      'server': '77.88.8.8',
+    },
   };
 
   Future<void> seedFile() => settings().writeAsString(
@@ -143,7 +149,7 @@ void main() {
     final resolved = await resolveDnsServersList(
       templateServers: [templateGoogleUdp()],
       presetServersByTag: presetServersByTag,
-      presetIdByTag: const {'yandex_udp': 'ru-direct'},
+      presetIdByTag: const {'ru-direct:yandex_udp': 'ru-direct'},
     );
 
     expect(resolved, const <DnsServerRef>[
@@ -159,13 +165,14 @@ void main() {
         varValues: {'outbound': 'vpn-1', 'dns_ip': '8.8.4.4'},
         description: 'Google, via VPN',
       ),
-      DnsServerPreset(enabled: true, tag: 'yandex_udp', presetId: 'ru-direct'),
+      DnsServerPreset(
+          enabled: true, tag: 'ru-direct:yandex_udp', presetId: 'ru-direct'),
       DnsServerInline(
         enabled: true,
         tag: 'dns-group',
         body: {
           'type': 'group',
-          'servers': ['my-doh', 'yandex_udp'],
+          'servers': ['my-doh', 'ru-direct:yandex_udp'],
         },
       ),
     ]);
@@ -177,7 +184,7 @@ void main() {
     final again = await resolveDnsServersList(
       templateServers: [templateGoogleUdp()],
       presetServersByTag: presetServersByTag,
-      presetIdByTag: const {'yandex_udp': 'ru-direct'},
+      presetIdByTag: const {'ru-direct:yandex_udp': 'ru-direct'},
     );
     expect(again, resolved);
     expect(await settings().readAsString(), before);
@@ -247,10 +254,15 @@ void main() {
         },
       ],
       presetServersByTag: presetServersByTag,
-      presetIdByTag: const {'yandex_udp': 'ru-direct'},
+      presetIdByTag: const {'ru-direct:yandex_udp': 'ru-direct'},
     );
-    expect(servers.map((s) => s.tag),
-        ['my-doh', 'google_udp', 'yandex_udp', 'dns-group', 'quad9_udp']);
+    expect(servers.map((s) => s.tag), [
+      'my-doh',
+      'google_udp',
+      'ru-direct:yandex_udp',
+      'dns-group',
+      'quad9_udp',
+    ]);
 
     await resolveDnsRulesList(
       templateRules: const [

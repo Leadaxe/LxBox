@@ -99,18 +99,28 @@ final class StorageMigrationResult {
       };
 }
 
-/// Тег preset-сервера DNS → `preset_id` пресета шаблона, который его объявляет
-/// (`selectable_rules[].dns_servers[].tag`). Первый объявивший побеждает.
+/// Тег preset-сервера DNS в хранении 2.23.2 → `preset_id` пресета шаблона,
+/// который его объявляет (`selectable_rules[].dns_servers[].tag`).
+///
+/// Хранение 2.23.2 держит тег конфига — в пространстве пресета
+/// (`ru-direct:dns_ru`, `namespacePresetTags`); ключи этой формы. Тег внутри
+/// пресета (`dns_ru`, хранение до §103 C7) — запасной ключ, первый объявивший
+/// побеждает: сервер получает пространство пресета и сохраняет свой
+/// выключатель и `description`.
 Map<String, String> presetIdsByDnsServerTag(Iterable<SelectableRule> presets) {
   final out = <String, String>{};
+  final local = <String, String>{};
   for (final p in presets) {
+    if (p.presetId.isEmpty) continue;
     for (final s in p.dnsServers) {
       final tag = s['tag'];
       if (tag is String && tag.isNotEmpty) {
-        out.putIfAbsent(tag, () => p.presetId);
+        out.putIfAbsent('${p.presetId}:$tag', () => p.presetId);
+        local.putIfAbsent(tag, () => p.presetId);
       }
     }
   }
+  local.forEach((tag, id) => out.putIfAbsent(tag, () => id));
   return out;
 }
 
