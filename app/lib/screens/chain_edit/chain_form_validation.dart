@@ -13,7 +13,10 @@
 // Модуль чистый: ни виджетов, ни BuildContext, ни storage. Он и есть предмет
 // тестов C6 — вёрстка и тексты не тестируются (AGENTS.md).
 
+import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
+import '../../services/builder/node_link_pool.dart';
+import '../../services/builder/node_link_resolve.dart';
 import '../../services/l10n/locale_controller.dart';
 import 'chain_hop_candidate.dart';
 
@@ -143,13 +146,21 @@ class ChainFormState {
     this.strip = const {},
   });
 
-  ChainFormState.of(SourceChain c)
-      : tag = c.tag,
-        hops = c.hops,
+  /// [pool] и [lists] — показ позиций-ссылок финальными тегами (§439,
+  /// `nodeLinkDisplay`): форма сверяет позиции с кандидатами собранного
+  /// конфига, а они адресованы финальными тегами.
+  ChainFormState.of(
+    SourceChain c, {
+    NodeLinkTargets? pool,
+    List<ServerList> lists = const [],
+  })  : tag = c.tag,
+        hops = [for (final h in c.hops) nodeLinkDisplay(h, pool, lists: lists)],
         stripEvasion = c.stripEvasion,
         strip = c.strip;
 
   final String tag;
+
+  /// Позиции финальными тегами.
   final List<String> hops;
   final bool? stripEvasion;
   final Map<String, bool> strip;

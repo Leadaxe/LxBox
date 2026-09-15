@@ -19,6 +19,8 @@
 import 'package:collection/collection.dart';
 
 import '../services/json_clone.dart' show deepCloneJson;
+import 'codec/node_link_record.dart' show nodeLinkToRecord;
+import 'node_link.dart';
 
 /// Значение поля `type` эмитируемого outbound'а. Ядро без тега сборки
 /// `with_lx_chain` этот тип не знает и отвергает конфиг ЦЕЛИКОМ (§393 C5).
@@ -104,11 +106,15 @@ class SourceChain {
   /// шаблона или ДРУГАЯ ЦЕПОЧКА (только позицией 0 и только объявленная ВЫШЕ
   /// по списку — этим порядком исключены циклы между цепочками).
   ///
+  /// Позиция — ссылка на узел (D-112): узел папки или подписки и группа
+  /// подписки — пара `{id контейнера, сырой тег}`, остальное — корневая
+  /// `{tag}`. Финальный тег позиции вычисляет сборка.
+  ///
   /// Инварианты ядра (`protocol/chain/chain.go:85-100`): минимум две
   /// позиции, непустые, без повторов, без ссылки на саму цепочку. Нарушение
   /// ЛЮБОГО не даёт стартовать ВСЕМУ конфигу, а не одной цепочке, — поэтому
   /// проверяет их [chainEmitError], и не прошедшая цепочка не эмитится вовсе.
-  final List<String> hops;
+  final List<NodeLink> hops;
 
   /// Простой, после которого звено без живых соединений удаляется.
   /// Пусто = умолчание ядра (5m), `"0s"` = жить до остановки.
@@ -147,7 +153,7 @@ class SourceChain {
   SourceChain copyWith({
     String? label,
     bool? enabled,
-    List<String>? hops,
+    List<NodeLink>? hops,
     String? idleTimeout,
     bool? stripEvasion,
     bool clearStripEvasion = false,
@@ -173,7 +179,7 @@ class SourceChain {
   /// пользователь высказался (null = умолчание ядра), пустые каталоги ключа
   /// не создают — иначе умолчание и явный выбор стали бы неотличимы.
   Map<String, dynamic> toCanonJson() => {
-        'hops': hops,
+        'hops': [for (final h in hops) nodeLinkToRecord(h)],
         if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
         if (stripEvasion != null) 'strip_evasion': stripEvasion,
         if (strip.isNotEmpty)
@@ -219,7 +225,8 @@ typedef ChainHealResult = ({
   List<String> touched,
 });
 
-/// §393 D2 — снять позиции с тегом [deletedTag] из всех [chains].
+/// §393 D2 — снять позиции, ссылающиеся на корневое имя [deletedTag]
+/// (Направление, цепочка), из всех [chains].
 ///
 /// Вычищается ПОЗИЦИЯ, а не цепочка (директива оператора 24.08): осознанное
 /// удаление источника — высказывание про состав, и маршрут переживает его
@@ -231,7 +238,9 @@ typedef ChainHealResult = ({
 ///     списке видимой и правится руками. Удалить её значило бы каскадом
 ///     стереть пользовательские данные из-за удаления чужого источника;
 ///   • пустой [deletedTag] игнорируется: пустая позиция и так невалидна
-///     ([chainEmitError]), а вычистка «по пустому тегу» съела бы их все.
+///     ([chainEmitError]), а вычистка «по пустому тегу» съела бы их все;
+///   • ссылки на узлы (пары и корневые узлы) гасит реестр ссылок
+///     (`node_link_registry.dart`), а не эта функция.
 ///
 /// Auto-двойник `<tag>-auto` снимается заодно — по той же причине, что в
 /// [clearIncludeDirectionRefs]: UI-пикеры его не предлагают, но Debug API и
@@ -244,12 +253,13 @@ ChainHealResult clearChainHopRefs(
     return (chains: chains, positions: 0, touched: const []);
   }
   final autoTag = '$deletedTag-auto';
+  bool matches(NodeLink h) =>
+      h.isRoot && (h.tag == deletedTag || h.tag == autoTag);
   var positions = 0;
   final touched = <String>[];
   final out = <SourceChain>[];
   for (final c in chains) {
-    final kept =
-        c.hops.where((t) => t != deletedTag && t != autoTag).toList(growable: false);
+    final kept = c.hops.where((h) => !matches(h)).toList(growable: false);
     if (kept.length == c.hops.length) {
       out.add(c);
       continue;
@@ -277,12 +287,14 @@ String chainEmitError(SourceChain c) {
   if (hops.length < 2) {
     return 'chain has a single position: the core needs at least two';
   }
-  final seen = <String>{};
+  final seen = <NodeLink>{};
   for (var i = 0; i < hops.length; i++) {
     final hop = hops[i];
-    if (hop.trim().isEmpty) return 'position ${i + 1} is empty';
-    if (hop == c.tag) return 'position ${i + 1} references the chain itself';
-    if (!seen.add(hop)) return 'position ${i + 1} repeats "$hop"';
+    if (hop.tag.trim().isEmpty) return 'position ${i + 1} is empty';
+    if (hop.isRoot && hop.tag == c.tag) {
+      return 'position ${i + 1} references the chain itself';
+    }
+    if (!seen.add(hop)) return 'position ${i + 1} repeats "${hop.tag}"';
   }
   for (final typeName in c.rewrite.keys) {
     if (typeName.trim().isEmpty) return 'rewrite: empty outbound type name';
@@ -302,10 +314,14 @@ String chainEmitError(SourceChain c) {
 /// Ключ ядра — `outbounds`, наше поле — [SourceChain.hops] (см. комментарий у
 /// типа). Порядок позиций сохраняется дословно: это порядок ПАКЕТА, и
 /// сортировка/дедуп здесь были бы не нормализацией, а сменой маршрута.
-Map<String, dynamic> chainOutboundObject(SourceChain c) => {
+///
+/// [hopTags] — финальные теги позиций в порядке [SourceChain.hops]: ссылки
+/// разрешает сборка (`node_link_resolve.dart`), модель финальных тегов не
+/// знает.
+Map<String, dynamic> chainOutboundObject(SourceChain c, List<String> hopTags) => {
       'tag': c.tag,
       'type': kChainOutboundType,
-      'outbounds': [...c.hops],
+      'outbounds': [...hopTags],
       if (c.idleTimeout.trim().isNotEmpty) 'idle_timeout': c.idleTimeout.trim(),
       if (c.stripEvasion != null) 'strip_evasion': c.stripEvasion,
       if (c.strip.isNotEmpty)

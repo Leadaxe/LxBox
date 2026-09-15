@@ -1,5 +1,11 @@
 /// Кодек ссылки на узел: [NodeLink] ↔ `{folder_id?, tag}` (`$defs/nodeLink`
-/// схемы бэкапа 1.0). Общий для записей источников и цепочек.
+/// схемы бэкапа 1.0). Общий для записей источников, цепочек и Debug API.
+///
+/// Здесь же терпимое чтение ссылок (NODE_LINK §7.3, решение сторон 15.09):
+/// S1 — корневая ссылка `{tag}` внутри контейнера на его члена поднимается до
+/// пары; S3 — пара с финальным тегом группы опускается до сырого тега. Оба
+/// правила трогают ссылку, только когда кандидат ровно один; иначе ссылка
+/// остаётся как есть и её разбирает сборка.
 library;
 
 import '../node_link.dart';
@@ -9,6 +15,11 @@ Map<String, dynamic> nodeLinkToRecord(NodeLink link) => {
       if (link.folderId.isNotEmpty) 'folder_id': link.folderId,
       'tag': link.tag,
     };
+
+/// [NodeLink] → `{folder_id?, tag}`, пустая ссылка → `null` (поле detour в
+/// ответах Debug API).
+Map<String, dynamic>? nodeLinkToRecordOrNull(NodeLink link) =>
+    link.isEmpty ? null : nodeLinkToRecord(link);
 
 /// `{folder_id?, tag}` → [NodeLink]. Терпимо к форме: строка читается
 /// корневой ссылкой (так позиции и detour писались до 1.0), `folder_id`
@@ -25,25 +36,32 @@ NodeLink? nodeLinkFromRecord(Object? raw) {
   );
 }
 
-// ─── ВРЕМЕННО: модели держат финальный тег строкой ─────────────────────────
-//
-// §439 п. 8 (D-112): `DetourPolicy.overrideDetour`, `FolderMember.detour` и
-// `SourceChain.hops` переходят на [NodeLink] отдельным треком, когда придёт
-// норма резолва лаунчера (`contract/docs/NODE_LINK.md`). До тех пор кодек
-// записей переводит строку модели в корневую ссылку и обратно ТОЛЬКО здесь.
-// С переводом моделей оба помощника удаляются, а вызовы в
-// `source_record.dart` и `chain_record.dart` берут ссылку из модели.
+/// S1 — корневая ссылка [link] на члена контейнера [containerId] (сырой тег из
+/// [rawTags]) → пара. Уже пара, пустая ссылка и тег, которого среди членов
+/// нет, возвращаются как есть.
+NodeLink liftSiblingLink(
+  NodeLink link,
+  String containerId,
+  Set<String> rawTags,
+) {
+  if (!link.isRoot || link.isEmpty || containerId.isEmpty) return link;
+  if (!rawTags.contains(link.tag)) return link;
+  return NodeLink(folderId: containerId, tag: link.tag);
+}
 
-/// Строка модели → корневая ссылка записи.
-NodeLink linkOfModelTag(String tag) => NodeLink(tag: tag);
-
-/// Ссылка записи → строка модели. Ссылку на член папки модель выразить не
-/// может: без резолва финального тега берётся сырой тег, и [notes] получает
-/// строку с [where], чтобы подмена не прошла молча.
-String modelTagOfLink(NodeLink link, String where, List<String>? notes) {
-  if (!link.isRoot) {
-    notes?.add('$where: link to folder "${link.folderId}" is not resolved '
-        'yet, tag "${link.tag}" is used as the final tag');
-  }
-  return link.tag;
+/// S3 — пара [link] на контейнер [containerId], чей тег не сырой, а финальный
+/// тег группы: [groupFinalForms] — «финальная форма (префикс + сырой тег) →
+/// сырые теги групп с этой формой». Совпала ровно одна группа — пара с её
+/// сырым тегом; иначе ссылка как есть.
+NodeLink lowerGroupFinalLink(
+  NodeLink link,
+  String containerId,
+  Set<String> rawTags,
+  Map<String, List<String>> groupFinalForms,
+) {
+  if (link.isRoot || link.folderId != containerId) return link;
+  if (rawTags.contains(link.tag)) return link;
+  final candidates = groupFinalForms[link.tag];
+  if (candidates == null || candidates.length != 1) return link;
+  return NodeLink(folderId: containerId, tag: candidates.single);
 }

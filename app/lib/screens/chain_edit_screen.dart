@@ -25,7 +25,11 @@ import 'package:flutter/material.dart';
 
 import '../models/config_node.dart';
 import '../models/direction.dart';
+import '../models/node_link.dart';
+import '../models/server_list.dart';
 import '../models/source_chain.dart';
+import '../services/builder/node_link_pool.dart';
+import '../services/builder/node_link_resolve.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/reorder_grab_strip.dart';
@@ -53,6 +57,8 @@ Future<ChainEditResult?> openChainEditor(
   required ParsedConfig config,
   required List<Direction> directions,
   required List<SourceChain> chains,
+  NodeLinkTargets? pool,
+  List<ServerList> lists = const [],
 }) =>
     Navigator.push<ChainEditResult>(
       context,
@@ -62,6 +68,8 @@ Future<ChainEditResult?> openChainEditor(
           config: config,
           directions: directions,
           chains: chains,
+          pool: pool,
+          lists: lists,
         ),
       ),
     );
@@ -73,9 +81,18 @@ class ChainEditScreen extends StatefulWidget {
     required this.config,
     required this.directions,
     required this.chains,
+    this.pool,
+    this.lists = const [],
   });
 
   final SourceChain initial;
+
+  /// §439 — пул ссылок (`computeNodeLinkPool`): позиция хранится ссылкой на
+  /// узел, а показывается и сверяется с кандидатами финальным тегом.
+  final NodeLinkTargets? pool;
+
+  /// Источники — показ позиции-пары, которой нет в пуле.
+  final List<ServerList> lists;
 
   /// Последний собранный конфиг — источник ОКОНЧАТЕЛЬНЫХ тегов (см.
   /// `chain_hop_targets.dart`).
@@ -95,7 +112,9 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   late final TextEditingController _labelCtrl;
   late final TextEditingController _idleCtrl;
 
-  late List<String> _hops;
+  /// Позиции ссылками (§439); показ и проверка — финальными тегами
+  /// ([_shown]).
+  late List<NodeLink> _hops;
   late bool _enabled;
   late bool? _stripEvasion;
   late Map<String, bool> _strip;
@@ -123,9 +142,14 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       directions: widget.directions,
       chains: widget.chains,
       selfTag: c.tag,
+      pool: widget.pool,
     );
     _lookup = chainHopLookup(_cands);
   }
+
+  /// Финальный тег позиции для показа и проверки.
+  String _shown(NodeLink hop) =>
+      nodeLinkDisplay(hop, widget.pool, lists: widget.lists);
 
   @override
   void dispose() {
@@ -157,7 +181,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
         !_sameStrip(s.strip, i.strip);
   }
 
-  static bool _sameHops(List<String> a, List<String> b) {
+  static bool _sameHops(List<NodeLink> a, List<NodeLink> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -174,7 +198,8 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   }
 
   List<ChainFormIssue> _issues() => validateChainForm(
-        ChainFormState.of(_snapshot()),
+        ChainFormState.of(_snapshot(),
+            pool: widget.pool, lists: widget.lists),
         ChainFormContext(
           candidates: _lookup,
           targetsKnown: chainTargetsKnown(widget.config),
@@ -246,13 +271,14 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       directions: widget.directions,
       chains: widget.chains,
       selfTag: widget.initial.tag,
+      pool: widget.pool,
     );
     _lookup = chainHopLookup(_cands);
   }
 
   Future<void> _addHop() async {
     setState(_refreshCandidates);
-    final chosen = _hops.toSet();
+    final chosen = _hops.map(_shown).toSet();
     final options = [
       for (final c in _cands)
         if (!chosen.contains(c.tag) && c.offered) c,
@@ -274,7 +300,9 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       builder: (ctx) => _HopPickerSheet(options: options),
     );
     if (picked == null || !mounted) return;
-    setState(() => _hops = [..._hops, picked]);
+    // §439 — кандидат знает свой адрес: в позицию уходит ссылка на узел.
+    final link = _lookup[picked]?.address ?? NodeLink(tag: picked);
+    setState(() => _hops = [..._hops, link]);
   }
 
   void _removeHop(int index) {
@@ -301,8 +329,8 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     if (oldIndex == newIndex) return;
     setState(() {
       final next = [..._hops];
-      final tag = next.removeAt(oldIndex);
-      next.insert(newIndex, tag);
+      final hop = next.removeAt(oldIndex);
+      next.insert(newIndex, hop);
       _hops = next;
     });
   }
@@ -478,7 +506,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   }
 
   Widget _hopTile(int index, ColorScheme cs) {
-    final tag = _hops[index];
+    final tag = _shown(_hops[index]);
     final cand = describeChainHop(tag, _lookup,
         targetsKnown: chainTargetsKnown(widget.config));
     final lost = cand.kind == ChainHopKind.unknown;

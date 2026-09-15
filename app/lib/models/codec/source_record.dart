@@ -18,7 +18,9 @@ import 'dart:convert';
 
 import '../../services/parser/body_decoder.dart';
 import '../../services/parser/parse_all.dart';
+import '../../services/node_link_address.dart';
 import '../import_rule.dart';
+import '../node_link.dart';
 import '../node_sections.dart';
 import '../node_spec.dart';
 import '../record_codec.dart' show RecordRead;
@@ -128,8 +130,7 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (node != null && node.tag.isNotEmpty) 'tag': node.tag,
     'enabled': m.enabled,
     if (m.raw.isNotEmpty) 'origin': _originToRecord(m.raw),
-    if (m.detour.isNotEmpty)
-      'detour': nodeLinkToRecord(linkOfModelTag(m.detour)),
+    if (m.detour.isNotEmpty) 'detour': nodeLinkToRecord(m.detour),
     if (node == null) 'reason': kMemberUnparsedReason,
     if (m.sections != null) 'sections': m.sections!.toJson(),
   };
@@ -141,13 +142,13 @@ Map<String, dynamic> _tagPolicyToRecord(String prefix) => {'prefix': '$prefix '}
 /// Личный detour источника — ссылка записи (§439 п. 8), на любом виде.
 Map<String, dynamic> _detourLinkToRecord(DetourPolicy p) => {
       if (p.overrideDetour.isNotEmpty)
-        'detour': nodeLinkToRecord(linkOfModelTag(p.overrideDetour)),
+        'detour': nodeLinkToRecord(p.overrideDetour),
     };
 
 /// Флаги политики detour без ссылки; при умолчаниях поля нет.
 Map<String, dynamic> _detourPolicyToRecord(DetourPolicy p) => {
-      if (p.copyWith(overrideDetour: '') != DetourPolicy.defaults)
-        'detour_policy': p.toJson()..remove('override_detour'),
+      if (p.copyWith(overrideDetour: NodeLink.none) != DetourPolicy.defaults)
+        'detour_policy': p.toJson(),
     };
 
 /// `origin{kind, raw}`: `kind` выводится из текста (правило экспорта 438:
@@ -221,10 +222,18 @@ const Set<String> _identityKeys = {
 /// [sectionDrops] получает отбраковки секций узлов структурно (вид и причина
 /// по норме B3, `NodeSections.fromJson`): импорт бэкапа называет их кодом с
 /// `reason`, хранению хватает строк в [notes].
+///
+/// [tolerantLinks] — терпимое чтение ссылок папки (NODE_LINK §7.3): S1
+/// (корневая ссылка на члена этой папки → пара) и S3 (пара с финальным тегом
+/// группы папки → сырой тег), только при единственном кандидате. Хранение
+/// его не включает: писатель хранения пишет пары, а корневая ссылка на
+/// тёзку члена законна (узел в корне) и подъём увёл бы её на другой узел.
+/// Включают входы чужой формы — импорт файла и Debug API.
 RecordRead<ServerList> sourceFromRecord(
   Map<String, dynamic> j, {
   List<String>? notes,
   List<NodeSectionDrop>? sectionDrops,
+  bool tolerantLinks = false,
 }) {
   final kind = j['kind'];
   if (kind is! String || kind.isEmpty) {
@@ -245,7 +254,10 @@ RecordRead<ServerList> sourceFromRecord(
     kSourceKindServer => _serverFromRecord(j, id, notes, unknown, sectionDrops),
     _ => _folderFromRecord(j, id, notes, unknown, sectionDrops),
   };
-  return RecordRead.ok(list, unknownKeys: unknown..sort());
+  return RecordRead.ok(
+    tolerantLinks && list is FolderServers ? liftFolderLinks(list) : list,
+    unknownKeys: unknown..sort(),
+  );
 }
 
 SubscriptionServers _subscriptionFromRecord(
@@ -266,7 +278,7 @@ SubscriptionServers _subscriptionFromRecord(
     name: _string(j['name']),
     enabled: _bool(j['enabled'], true),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
-    detourPolicy: _detourPolicyFromRecord(j, where, notes, unknown),
+    detourPolicy: _detourPolicyFromRecord(j, unknown),
     url: _string(j['url']),
     meta: _metaFromRecord(j['meta'], where, notes),
     lastUpdated: _date(j['last_updated']),
@@ -305,7 +317,7 @@ UserServer _serverFromRecord(
     name: '',
     enabled: _bool(j['enabled'], true),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
-    detourPolicy: _detourPolicyFromRecord(j, where, notes, unknown),
+    detourPolicy: _detourPolicyFromRecord(j, unknown),
     rawBody: raw,
     sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
@@ -338,7 +350,7 @@ FolderServers _folderFromRecord(
     name: _string(j['name']),
     enabled: _bool(j['enabled'], true),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
-    detourPolicy: _detourPolicyFromRecord(j, where, notes, unknown),
+    detourPolicy: _detourPolicyFromRecord(j, unknown),
     members: members,
     // Пустой адрес — «брать глобальный», как у legacy-чтения.
     pingUrl: pingUrl is String && pingUrl.trim().isNotEmpty
@@ -385,11 +397,10 @@ FolderMember? _memberFromRecord(
     return null;
   }
   _collectUnknown(j, _memberKeys, path, unknown);
-  final link = nodeLinkFromRecord(j['detour']);
   final member = FolderMember(
     raw: _rawOf(j, path, unknown),
     enabled: _bool(j['enabled'], true),
-    detour: link == null ? '' : modelTagOfLink(link, '$where: detour', notes),
+    detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
   );
   _checkTag(j, member.node?.tag, where, notes);
@@ -441,14 +452,11 @@ String _prefixFromRecord(Object? policy, List<String> unknown) {
 
 DetourPolicy _detourPolicyFromRecord(
   Map<String, dynamic> j,
-  String where,
-  List<String>? notes,
   List<String> unknown,
 ) {
   final raw = j['detour_policy'];
   final p = raw is Map ? raw : const <String, dynamic>{};
   _collectUnknown(p, _detourPolicyKeys, 'detour_policy.', unknown);
-  final link = nodeLinkFromRecord(j['detour']);
   const d = DetourPolicy.defaults;
   return DetourPolicy(
     registerDetourServers:
@@ -456,8 +464,7 @@ DetourPolicy _detourPolicyFromRecord(
     registerDetourInAuto:
         _bool(p['register_detour_in_auto'], d.registerDetourInAuto),
     useDetourServers: _bool(p['use_detour_servers'], d.useDetourServers),
-    overrideDetour:
-        link == null ? '' : modelTagOfLink(link, '$where: detour', notes),
+    overrideDetour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     replaceDetourChain: _bool(p['replace_detour_chain'], d.replaceDetourChain),
   );
 }
@@ -537,6 +544,41 @@ NodeSections? _sectionsFromRecord(
     notes?.add('$where: sections $d');
   }
   return sections;
+}
+
+/// Терпимое чтение ссылок папки [f] (NODE_LINK §7.3): S1 и S3 над её общим
+/// detour и личными detour членов с кандидатами из членов этой же папки.
+/// Ничего не поднялось — та же папка.
+FolderServers liftFolderLinks(FolderServers f) {
+  final raw = containerRawTags(f);
+  final rawTags = raw.values.toSet();
+  final groupForms = <String, List<String>>{};
+  raw.forEach((node, tag) {
+    if (!node.isGroup) return;
+    (groupForms[containerFinalForm(f, tag)] ??= []).add(tag);
+  });
+  NodeLink lift(NodeLink l) => lowerGroupFinalLink(
+      liftSiblingLink(l, f.id, rawTags), f.id, rawTags, groupForms);
+
+  final override = lift(f.detourPolicy.overrideDetour);
+  var changed = override != f.detourPolicy.overrideDetour;
+  final members = [
+    for (final m in f.members)
+      if (lift(m.detour) case final d when d != m.detour)
+        m.copyWith(detour: d)
+      else
+        m,
+  ];
+  if (!changed) {
+    for (var i = 0; i < members.length; i++) {
+      if (!identical(members[i], f.members[i])) changed = true;
+    }
+  }
+  if (!changed) return f;
+  return f.copyWith(
+    detourPolicy: f.detourPolicy.copyWith(overrideDetour: override),
+    members: members,
+  );
 }
 
 // ─── помощники ──────────────────────────────────────────────────────────────

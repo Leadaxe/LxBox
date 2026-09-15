@@ -3392,9 +3392,9 @@ BackupServerMerge mergeBackupServers(
 
   // Карта контейнеров для ссылок: подписки (из их слияния) и папки файла.
   final linkIds = {...sourceIds, ...folderIds};
-  String linkTag(NodeLink? link) =>
-      link == null ? '' : _linkConfigTag(link, prefixById, linkIds);
-  String detourOf(LxServer srv) => linkTag(srv.detour);
+  NodeLink linkTag(NodeLink? link) =>
+      link == null ? NodeLink.none : _remapLink(link, linkIds);
+  NodeLink detourOf(LxServer srv) => linkTag(srv.detour);
 
   for (var i = 0; i < merged.length; i++) {
     final l = merged[i];
@@ -3562,7 +3562,8 @@ BackupServerMerge mergeBackupServers(
       folderByName[srv.folder] = at;
       added[merged.last.id] = position;
     }
-    applied += _mergeFolderMember(merged, at, srv, body, '', touched);
+    applied +=
+        _mergeFolderMember(merged, at, srv, body, NodeLink.none, touched);
   }
 
   applied += _bindBackupAutoGroups(merged, autoGroups, linkIds, landings);
@@ -3602,7 +3603,7 @@ int _mergeFolderMember(
   int folderAt,
   LxServer srv,
   String body,
-  String detour,
+  NodeLink detour,
   List<BackupNodeRef> touched, {
   Map<(int, String), String>? landings,
 }) {
@@ -3737,7 +3738,7 @@ List<SourceChain> resolveBackupChainHops(
     for (final l in lists)
       if (l is! UserServer) l.id: l.tagPrefix,
   };
-  String hopTag(NodeLink link) => _linkConfigTag(link, prefixById, folderIds);
+  NodeLink hopTag(NodeLink link) => _remapLink(link, folderIds);
 
   return [
     for (final c in file.chains)
@@ -3762,6 +3763,13 @@ String _linkConfigTag(
   final prefix = prefixById[ids[link.folderId] ?? link.folderId];
   if (prefix == null) return link.tag;
   return TagResolver.displayTag(prefix, link.tag);
+}
+
+/// §439 — `folder_id` ссылки файла → `id` контейнера здесь по карте [ids].
+NodeLink _remapLink(NodeLink link, Map<String, String> ids) {
+  if (link.isRoot) return link;
+  final local = ids[link.folderId];
+  return local == null ? link : NodeLink(folderId: local, tag: link.tag);
 }
 
 /// §438 — ось порядка импорта (BACKUP.md §9 п. 7, `NODE_SECTIONS.md` §5):

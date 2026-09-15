@@ -1,8 +1,10 @@
+import '../../../controllers/subscription_controller.dart';
 import '../../../models/config_node.dart';
 import '../../../models/source_chain.dart';
 import '../../../screens/chain_edit/chain_form_validation.dart';
 import '../../../screens/chain_edit/chain_hop_candidate.dart';
 import '../../../screens/chain_edit/chain_hop_targets.dart';
+import '../../builder/node_link_pool.dart';
 import '../../probe/chain_layer_probe.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -312,14 +314,20 @@ Future<void> _requireValid(
             if (c.tag == chain.tag) chain else c,
         ];
   final config = ctx.home?.state.configModel ?? const ParsedConfig.empty();
+  // §439 — пул ссылок: позиция-ссылка сверяется с кандидатами финальным тегом.
+  final lists = [
+    for (final e in ctx.sub?.entries ?? const <SubscriptionEntry>[]) e.list,
+  ];
+  final pool = computeNodeLinkPool(lists, directions: directions);
   final candidates = chainHopLookup(collectChainHopTargets(
     config: config,
     directions: directions,
     chains: ordered,
     selfTag: chain.tag,
+    pool: pool,
   ));
   final issues = validateChainForm(
-    ChainFormState.of(chain),
+    ChainFormState.of(chain, pool: pool, lists: lists),
     ChainFormContext(
       candidates: candidates,
       targetsKnown: chainTargetsKnown(config),
@@ -357,7 +365,9 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
 
   final label = fieldString(body, 'label');
   final enabled = fieldBool(body, 'enabled');
-  final hops = fieldStringList(body, 'hops');
+  // §439 (D-112) — позиции ссылками `{folder_id?, tag}`; строка — корневая
+  // ссылка (форма до 2.23.3).
+  final hops = fieldNodeLinkList(body, 'hops');
   final idleTimeout = fieldString(body, 'idle_timeout');
 
   // Трёхзначность `strip_evasion` (см. [SourceChain.stripEvasion]): ключа нет

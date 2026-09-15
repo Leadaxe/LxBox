@@ -2,7 +2,9 @@ import 'dart:async';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/import_rule.dart';
+import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
+import '../../node_link_address.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../serializers/subs.dart';
@@ -188,11 +190,19 @@ Future<DebugResponse> _update(
   final enabled = fieldBool(body, 'enabled');
   if (enabled != null) entry.enabled = enabled;
   final tagPrefix = fieldString(body, 'tag_prefix');
+  final prefixBefore = entry.tagPrefix;
   if (tagPrefix != null) entry.tagPrefix = tagPrefix;
   final interval = fieldInt(body, 'update_interval_hours');
   if (interval != null) entry.updateIntervalHours = interval;
-  final overrideDetour = fieldString(body, 'override_detour');
-  if (overrideDetour != null) entry.overrideDetour = overrideDetour;
+  // §439 (D-112) — ссылка `{folder_id?, tag}`; строка читается терпимо:
+  // корневой ссылкой, а у папки — парой, если это сырой тег её члена (S1).
+  final overrideDetour = fieldNodeLink(body, 'override_detour');
+  if (overrideDetour != null) {
+    final list = entry.list;
+    entry.overrideDetour = list is FolderServers
+        ? liftSiblingLink(overrideDetour, list.id, containerRawTagSet(list))
+        : overrideDetour;
+  }
   final regDetourServers = fieldBool(body, 'register_detour_servers');
   if (regDetourServers != null) entry.registerDetourServers = regDetourServers;
   final regDetourInAuto = fieldBool(body, 'register_detour_in_auto');
@@ -246,6 +256,10 @@ Future<DebugResponse> _update(
 
   // persist изменения setter'ов (replaceList уже persist'ит своё).
   await sub.persistSources();
+  // §439 (D-113) — префикс одиночного сервера входит в его корневой адрес.
+  if (tagPrefix != null) {
+    await sub.relinkServerTagPrefix(entry, prefixBefore);
+  }
 
   final reveal = req.qBool('reveal');
   final extras = await maybeRebuild(req, ctx);

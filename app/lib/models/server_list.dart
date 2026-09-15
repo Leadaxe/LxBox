@@ -2,8 +2,8 @@ import 'package:collection/collection.dart';
 
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
-import '../services/tag_resolver.dart';
 import 'import_rule.dart';
+import 'node_link.dart';
 import 'node_sections.dart';
 import 'node_spec.dart';
 import 'subscription_meta.dart';
@@ -407,10 +407,11 @@ final class FolderMember {
   final String raw;
   final bool enabled;
 
-  /// §237 — личный detour члена: display-form тег outbound'а ('' = нет).
-  /// Аналог `DetourPolicy.overrideDetour` одиночного сервера; политика папки
-  /// применяется к нему как подписка к родной цепочке (см. server_list_build).
-  final String detour;
+  /// §237 — личный detour члена: ссылка на узел (D-112; [NodeLink.none] —
+  /// нет). Аналог `DetourPolicy.overrideDetour` одиночного сервера; политика
+  /// папки применяется к нему как подписка к родной цепочке (см.
+  /// server_list_build). Сосед по папке — пара с `id` этой папки.
+  final NodeLink detour;
 
   /// §435 — секции узла-члена (контракт ## 13), как у `UserServer.sections`.
   final NodeSections? sections;
@@ -422,7 +423,7 @@ final class FolderMember {
   FolderMember({
     required this.raw,
     this.enabled = true,
-    this.detour = '',
+    this.detour = NodeLink.none,
     NodeSections? sections,
     NodeSpec? node,
   })  : sections = (sections == null || sections.isEmpty) ? null : sections,
@@ -446,7 +447,7 @@ final class FolderMember {
   FolderMember copyWith({
     String? raw,
     bool? enabled,
-    String? detour,
+    NodeLink? detour,
     NodeSections? sections,
     bool clearSections = false,
   }) =>
@@ -520,7 +521,7 @@ final class FolderServers extends ServerList {
 
   /// §237 — личные detour'ы, выровненные с [nodes] (тот же фильтр
   /// enabled+parsed, тот же порядок). Builder применяет их пер-нодно.
-  List<String> get nodeDetours => [
+  List<NodeLink> get nodeDetours => [
         for (final m in members)
           if (m.enabled && m.node != null) m.detour,
       ];
@@ -568,11 +569,10 @@ final class FolderServers extends ServerList {
 }
 
 /// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник
-/// `<tag>-auto`) в '' у одного списка: `detourPolicy.overrideDetour` +
-/// личные `FolderMember.detour`. Интра-омонимы пропускаются: значение,
-/// равное bare-тегу распарсенного члена ТОЙ ЖЕ папки (включая выключенных —
-/// toggle члена не должен молча менять смысл ссылки), означает члена, а не
-/// Направление. Возвращает копию с изменениями (null = нечего лечить) + счётчик.
+/// `<tag>-auto`) у одного списка: `detourPolicy.overrideDetour` + личные
+/// `FolderMember.detour`. Ссылка на Направление — корневая `{tag}` (D-112);
+/// пара адресует узел контейнера и Направлением не бывает, поэтому омонимов
+/// здесь нет. Возвращает копию с изменениями (null = нечего лечить) + счётчик.
 ///
 /// Общее ядро: storage-heal (`_healDetourDirectionRefs`) и in-memory ресинк
 /// `SubscriptionController.syncDetourDirectionRefsCleared` обязаны сбрасывать
@@ -580,20 +580,12 @@ final class FolderServers extends ServerList {
 ({ServerList? healed, int count}) clearDetourDirectionRefs(
     ServerList l, String tag) {
   final autoTag = '$tag-auto';
-  bool matches(String v) => v == tag || v == autoTag;
-
-  final memberBare = l is FolderServers
-      ? <String>{
-          for (final m in l.members)
-            if (m.node != null) m.node!.tag,
-        }
-      : const <String>{};
+  bool matches(NodeLink v) => v.isRoot && (v.tag == tag || v.tag == autoTag);
 
   var count = 0;
   ServerList next = l;
-  final override = l.detourPolicy.overrideDetour;
-  if (matches(override) && !memberBare.contains(override)) {
-    final p = l.detourPolicy.copyWith(overrideDetour: '');
+  if (matches(l.detourPolicy.overrideDetour)) {
+    final p = l.detourPolicy.copyWith(overrideDetour: NodeLink.none);
     next = switch (l) {
       SubscriptionServers s => s.copyWith(detourPolicy: p),
       UserServer u => u.copyWith(detourPolicy: p),
@@ -604,10 +596,10 @@ final class FolderServers extends ServerList {
   if (next is FolderServers) {
     var membersChanged = false;
     final ms = next.members.map((m) {
-      if (matches(m.detour) && !memberBare.contains(m.detour)) {
+      if (matches(m.detour)) {
         membersChanged = true;
         count++;
-        return m.copyWith(detour: '');
+        return m.copyWith(detour: NodeLink.none);
       }
       return m;
     }).toList();
@@ -616,46 +608,15 @@ final class FolderServers extends ServerList {
   return (healed: count > 0 ? next : null, count: count);
 }
 
-/// §393 D2 — теги конфига, которые даёт источник [l]: его узлы с приклеенным
-/// префиксом (плюс голые — префикс мог быть задан позже, чем написана
-/// позиция цепочки) и сам префикс, под которым эмитится группа подписки.
-///
-/// Нужно вычистке позиций цепочек при удалении источника: позиция ссылается
-/// на ТЕГ КОНФИГА (`collectChainHopTargets` берёт их из собранного конфига),
-/// а storage знает источник. Это единственное место, где одно переводится в
-/// другое.
-///
-/// Приблизительность осознанная и односторонняя: аллокатор тегов (§351) мог
-/// выдать узлу-тёзке суффикс, и такой тег сюда не попадёт — позиция с ним
-/// останется висячей и деградирует цепочку, как раньше. Обратной ошибки
-/// (снять лишнее) здесь нет, а она была бы дороже: это чужие маршруты.
-Set<String> sourceConfigTags(ServerList l) {
-  final out = <String>{};
-  if (l.tagPrefix.isNotEmpty) out.add(l.tagPrefix);
-  for (final n in l.nodes) {
-    if (n.tag.isEmpty) continue;
-    out.add(n.tag);
-    out.add(TagResolver.displayTag(l.tagPrefix, n.tag));
-  }
-  if (l is FolderServers) {
-    for (final m in l.members) {
-      final bare = m.node?.tag ?? '';
-      if (bare.isEmpty) continue;
-      out.add(bare);
-      out.add(TagResolver.displayTag(l.tagPrefix, bare));
-    }
-  }
-  out.removeWhere((t) => t.trim().isEmpty);
-  return out;
-}
-
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).
 /// Хранится на `ServerList`, применяется inline в `buildConfig`.
 class DetourPolicy {
   final bool registerDetourServers;
   final bool registerDetourInAuto;
   final bool useDetourServers;
-  final String overrideDetour; // '' = no override
+  /// Ссылка на узел, через который идёт источник (D-112); [NodeLink.none] —
+  /// override не задан.
+  final NodeLink overrideDetour;
   // §073 — поведение overrideDetour: false (default) = APPEND (нативная
   // цепочка из конфига сохраняется, overrideDetour подставляется как
   // tail); true = REPLACE (старое поведение, цепочка отбрасывается).
@@ -665,19 +626,18 @@ class DetourPolicy {
     this.registerDetourServers = false,
     this.registerDetourInAuto = false,
     this.useDetourServers = true,
-    this.overrideDetour = '',
+    this.overrideDetour = NodeLink.none,
     this.replaceDetourChain = false,
   });
 
   static const defaults = DetourPolicy();
 
-  /// Флаги политики именами записи; `override_detour` кодек записи
-  /// (`codec/source_record.dart`) переносит ссылкой `detour`.
+  /// Флаги политики именами записи. Ссылку [overrideDetour] кодек записи
+  /// (`codec/source_record.dart`) переносит полем `detour`.
   Map<String, dynamic> toJson() => {
         'register_detour_servers': registerDetourServers,
         'register_detour_in_auto': registerDetourInAuto,
         'use_detour_servers': useDetourServers,
-        'override_detour': overrideDetour,
         'replace_detour_chain': replaceDetourChain,
       };
 
@@ -685,7 +645,7 @@ class DetourPolicy {
     bool? registerDetourServers,
     bool? registerDetourInAuto,
     bool? useDetourServers,
-    String? overrideDetour,
+    NodeLink? overrideDetour,
     bool? replaceDetourChain,
   }) =>
       DetourPolicy(

@@ -12,6 +12,7 @@
 library;
 
 import '../../services/json_clone.dart' show deepCloneJson;
+import '../node_link.dart';
 import '../record_codec.dart' show RecordRead;
 import '../source_chain.dart';
 import 'node_link_record.dart';
@@ -46,7 +47,7 @@ Map<String, dynamic> chainToRecord(SourceChain c) => {
           },
         if (c.rewrite.isNotEmpty) 'rewrite': deepCloneJson(c.rewrite),
       },
-      'hops': [for (final h in c.hops) nodeLinkToRecord(linkOfModelTag(h))],
+      'hops': [for (final h in c.hops) nodeLinkToRecord(h)],
     };
 
 /// Запись `sources[]` вида `chain` → цепочка LxBox. Без тега цепочка не
@@ -95,7 +96,7 @@ RecordRead<SourceChain> chainFromRecord(
     }
   }
 
-  final hops = <String>[];
+  final hops = <NodeLink>[];
   final rawHops = j['hops'];
   if (rawHops is List) {
     for (var i = 0; i < rawHops.length; i++) {
@@ -104,7 +105,7 @@ RecordRead<SourceChain> chainFromRecord(
         notes?.add('$where: hops[$i] is not a link, dropped');
         continue;
       }
-      hops.add(modelTagOfLink(link, '$where: hops[$i]', notes));
+      hops.add(link);
     }
   }
 

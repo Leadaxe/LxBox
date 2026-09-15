@@ -1,5 +1,7 @@
 import '../../../controllers/subscription_controller.dart';
+import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
+import '../../node_link_address.dart';
 import '../../probe/probe_runner.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -235,8 +237,10 @@ Future<DebugResponse> _updateMember(
 
   final raw = fieldString(body, 'raw');
   final enabled = fieldBool(body, 'enabled');
-  final detour = fieldString(body, 'detour');
-  if (raw == null && enabled == null && detour == null) {
+  // §439 (D-112) — ссылка `{folder_id?, tag}`; строка читается терпимо:
+  // сырой тег соседа по папке — парой (S1), иначе корневой ссылкой.
+  final detourField = fieldNodeLink(body, 'detour');
+  if (raw == null && enabled == null && detourField == null) {
     throw const BadRequest(
         'body must contain at least one of "raw", "enabled", "detour"');
   }
@@ -248,7 +252,10 @@ Future<DebugResponse> _updateMember(
   if (enabled != null) {
     await sub.setMembersEnabled(idx, {i}, enabled);
   }
-  if (detour != null) {
+  if (detourField != null) {
+    final current = entry.list as FolderServers;
+    final detour = liftSiblingLink(
+        detourField, current.id, containerRawTagSet(current));
     // §239 — контроллер отклоняет self/цикл интра-рёбер; пробрасываем отказ.
     final err = await sub.setMemberDetour(idx, i, detour);
     if (err != null) throw BadRequest('detour rejected: ${err.renderEn()}');

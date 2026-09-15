@@ -1,5 +1,4 @@
 import 'dart:async';
-import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../services/node_identity.dart';
 import 'auto_group_edit_screen.dart';
@@ -9,8 +8,10 @@ import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
+import '../models/node_link.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
+import '../services/node_link_address.dart';
 import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_runner.dart';
 import 'probe_gate_mixin.dart';
@@ -102,19 +103,23 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   GlobalKey _memberKey(int i) => _memberKeys.putIfAbsent(i, GlobalKey.new);
 
   /// §239 — голые теги членов, служащих интра-целью detour другого члена
-  /// (⚙-бейдж; в билдере такие регистрируются по register-тогглам).
+  /// (⚙-бейдж; в билдере такие регистрируются по register-тогглам). Интра-
+  /// цель — пара с `id` этой папки (§439).
   Set<String> _chainLinkTags() {
     final folder = _folder;
-    final bare = <String>{
-      for (final m in folder.members)
-        if (m.node != null) m.node!.tag,
-    };
+    final bareByAddress = <NodeLink, String>{};
+    for (var k = 0; k < folder.members.length; k++) {
+      final a = folderMemberAddress(folder, k);
+      if (a != null) bareByAddress[a] = folder.members[k].node!.tag;
+    }
     final links = <String>{};
-    for (final m in folder.members) {
-      final d = m.detour;
-      if (d.isEmpty || !bare.contains(d)) continue;
-      if (d == m.node?.tag) continue; // self не считается
-      links.add(d);
+    for (var k = 0; k < folder.members.length; k++) {
+      final d = folder.members[k].detour;
+      if (d.isEmpty || d.folderId != folder.id) continue;
+      final bare = bareByAddress[d];
+      if (bare == null) continue;
+      if (d == folderMemberAddress(folder, k)) continue; // self не считается
+      links.add(bare);
     }
     return links;
   }
@@ -1581,7 +1586,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       switch (mode) {
         case DetourMode.use:
           widget.entry.useDetourServers = true;
-          widget.entry.overrideDetour = '';
+          widget.entry.overrideDetour = NodeLink.none;
         case DetourMode.override:
           widget.entry.useDetourServers = true;
           if (widget.entry.overrideDetour.isEmpty) {
@@ -1589,7 +1594,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           }
         case DetourMode.none:
           widget.entry.useDetourServers = false;
-          widget.entry.overrideDetour = '';
+          widget.entry.overrideDetour = NodeLink.none;
       }
     });
     unawaited(widget.controller.persistSources());
@@ -1609,8 +1614,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     );
     if (chosen == null || !mounted) return;
     setState(() {
-      widget.entry.overrideDetour = chosen.storeValue;
-      if (chosen.storeValue.isNotEmpty) widget.entry.useDetourServers = true;
+      widget.entry.overrideDetour = chosen.link;
+      if (chosen.link.isNotEmpty) widget.entry.useDetourServers = true;
     });
     unawaited(widget.controller.persistSources());
   }

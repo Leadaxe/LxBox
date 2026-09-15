@@ -22,6 +22,7 @@ import '../template_loader.dart';
 import 'chain_nodes.dart';
 import 'core_chain_capability.dart';
 import 'if_engine.dart';
+import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
 import 'rule_set_registry.dart';
@@ -259,6 +260,20 @@ Future<BuildResult> buildConfig({
   // Пользователь получал «vpn-2» опцией, ведущей в чужой сервер. Резерв
   // выключенного тега стоит ровно суффикс узлу-тёзке; ошибка стоила
   // молчаливой подмены маршрута.
+  //
+  // §439 (D-112) — словарь целей ссылок на узлы: контейнеры сборки (включая
+  // выключенные — ссылка на них «нет узла», а не «источник удалён») и
+  // корневые имена (служебные outbound'ы шаблона, Направления и их `-auto`).
+  // Финальные теги узлов под их адресами записывает `ServerList.build`.
+  final linkTargets = NodeLinkTargets()
+    ..addRootNames([
+      for (final raw in (config['outbounds'] as List<dynamic>? ?? const []))
+        if (raw is Map && raw['tag'] is String) raw['tag'] as String,
+      for (final c in directions) ...[c.tag, c.autoTag],
+    ]);
+  for (final list in lists) {
+    if (list is! UserServer) linkTargets.noteContainer(list.id, list.name);
+  }
   final ctx = _BuildCtx(
     tvars,
     ruleSets,
@@ -267,15 +282,21 @@ Future<BuildResult> buildConfig({
       for (final c in directions) ...[c.tag, c.autoTag],
     ],
     coreVersion: settings.coreVersion, // §435 — гейт tailscale
+    linkTargets: linkTargets,
   );
   for (final list in lists) {
     list.build(ctx);
   }
+  // §439 — второй проход: detour-ссылки → финальные теги. Fail-closed:
+  // носитель, чья ссылка не разрешилась (и каскадом — кто ходил через него,
+  // кольцо — все участники), выпадает из конфига, а не уходит напрямую.
+  final detourReport = resolveDeferredDetours(ctx.deferredDetours, linkTargets);
+  ctx.dropEntries(detourReport);
 
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
   // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`
   // (гейт ядра `tailscale_core_unsupported`).
-  final emitWarnings = <String>[...ctx.warnings];
+  final emitWarnings = <String>[...ctx.warnings, ...detourReport.warnings];
   for (final list in lists) {
     if (!list.enabled) continue;
     // §283 — зеркало фильтра ServerListBuild.build: выключенная нода не
@@ -324,6 +345,7 @@ Future<BuildResult> buildConfig({
   final chainResolution = resolveChains(
     settings.chains,
     knownTags: knownChainTargets,
+    targets: linkTargets,
     coreVersion: settings.coreVersion,
   );
   for (final d in chainResolution.degraded) {
@@ -753,9 +775,32 @@ class _BuildCtx implements EmitContext {
     bool passiveCheck = false,
     Iterable<String> reservedTags = const [],
     String coreVersion = '',
+    this.linkTargets,
   })  : _passiveCheck = passiveCheck,
         _coreVersion = coreVersion {
     _taken.addAll(reservedTags); // §351 — теги Направлений, эмитятся мимо аллокатора
+  }
+
+  @override
+  final NodeLinkTargets? linkTargets;
+
+  /// §439 — detour-ссылки узлов, ждущие второго прохода.
+  final deferredDetours = <DeferredDetour>[];
+
+  @override
+  void deferDetour(DeferredDetour detour) => deferredDetours.add(detour);
+
+  /// §439 — убрать узлы, выпавшие на втором проходе detour-ссылок, из всех
+  /// аккумуляторов: в конфиг, пулы Направлений и секции они не идут.
+  void dropEntries(DeferredDetourReport report) {
+    if (report.droppedEntries.isEmpty) return;
+    bool gone(SingboxEntry e) => report.droppedEntries.contains(e);
+    outbounds.removeWhere(gone);
+    endpoints.removeWhere(gone);
+    selectorEntries.removeWhere(gone);
+    autoEntries.removeWhere(gone);
+    emittedTagByNode
+        .removeWhere((node, _) => report.droppedNodes.contains(node));
   }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;

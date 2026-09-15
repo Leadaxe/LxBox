@@ -22,6 +22,7 @@ import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/import_rule.dart';
+import '../../models/node_link.dart';
 import '../../models/node_sections.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
@@ -169,7 +170,9 @@ FolderServers _readFolder(Map<String, dynamic> j) => FolderServers(
 FolderMember readLegacyFolderMember(Map<String, dynamic> j) => FolderMember(
       raw: (j['raw'] as String?) ?? '',
       enabled: (j['enabled'] as bool?) ?? true,
-      detour: (j['detour'] as String?) ?? '',
+      // 2.23.2 хранила финальный тег строкой: корневая ссылка, пару из неё
+      // делает миграция (`migrate_storage.dart`, §439 п. 8).
+      detour: NodeLink(tag: (j['detour'] as String?) ?? ''),
       sections: NodeSections.fromJson(j['sections']),
     );
 
@@ -178,7 +181,7 @@ DetourPolicy _readDetourPolicy(Map<String, dynamic> j) => DetourPolicy(
       registerDetourServers: (j['register_detour_servers'] as bool?) ?? false,
       registerDetourInAuto: (j['register_detour_in_auto'] as bool?) ?? false,
       useDetourServers: (j['use_detour_servers'] as bool?) ?? true,
-      overrideDetour: (j['override_detour'] as String?) ?? '',
+      overrideDetour: NodeLink(tag: (j['override_detour'] as String?) ?? ''),
       replaceDetourChain: (j['replace_detour_chain'] as bool?) ?? false,
     );
 
@@ -198,7 +201,7 @@ LegacyChain readLegacyChain(Map<String, dynamic> json) {
       enabled: json['enabled'] as bool? ?? true,
       hops: [
         for (final h in (json['hops'] as List? ?? const []))
-          if (h is String) h,
+          if (h is String) NodeLink(tag: h),
       ],
       idleTimeout: json['idle_timeout'] as String? ?? '',
       stripEvasion:

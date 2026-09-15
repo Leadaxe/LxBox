@@ -8,6 +8,7 @@ import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
 import '../models/direction.dart';
+import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
@@ -56,7 +57,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   String _originalTag = '';
   String _scheme = '';
   String _serverInfo = '';
-  String _detour = '';
+  NodeLink _detour = NodeLink.none;
   // Узел = AmneziaWG (WireguardSpec с непустыми AWG-obfuscation полями). У WG и
   // AWG одинаковый protocol == 'wireguard'; различие — поле `awg`. Используется
   // только для подписи схемы «AmneziaWG (wireguard)».
@@ -165,22 +166,23 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
           : '',
     );
     if (target == null || !mounted) return;
-    setState(() => _detour = target.storeValue);
-    await _persistDetour(target.storeValue);
+    setState(() => _detour = target.link);
+    await _persistDetour(target.link);
   }
 
-  /// §248 — подпись сохранённого detour: тег detour-Направления (или его
-  /// auto-двойника) → «⚙ <label>»; Направление не найден → сырой тег. Интра-омоним
-  /// (bare-тег члена СВОЕЙ папки) побеждает Направление-тёзку — резолвится в члена
-  /// (приоритет bareIndex в FolderDetourPlan), показываем как тег.
-  String _detourDisplay(String stored) {
+  /// §248 — подпись сохранённого detour: Направление → «⚙ <label>»; член
+  /// СВОЕЙ папки (пара с `id` папки) — его тег; прочий узел — финальная форма
+  /// тега (§439, [detourLinkDisplay]).
+  String _detourDisplay(NodeLink stored) {
     final list = widget.entry.list;
-    if (widget.memberIndex != null && list is FolderServers) {
-      for (final m in list.members) {
-        if (m.node?.tag == stored) return stored;
-      }
-    }
-    return detourDirectionDisplay(stored, _directions);
+    return detourLinkDisplay(
+      stored,
+      directions: _directions,
+      controller: widget.subController,
+      folder: (widget.memberIndex != null && list is FolderServers)
+          ? list
+          : null,
+    );
   }
 
   /// §252 — полная цепочка хопов от цели detour вглубь (её собственный
@@ -199,14 +201,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
 
   /// §237 — единая точка записи detour: член папки → setMemberDetour,
   /// одиночный → overrideDetour + persistSources.
-  Future<void> _persistDetour(String value) async {
+  Future<void> _persistDetour(NodeLink value) async {
     final mi = widget.memberIndex;
     if (mi != null) {
       final err =
           await widget.subController.setMemberDetour(widget.index, mi, value);
       if (err != null && mounted) {
         // §239 — отклонено (цикл/self): откатываем локальный выбор.
-        setState(() => _detour = _member?.detour ?? '');
+        setState(() => _detour = _member?.detour ?? NodeLink.none);
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(err.render())));
       }
