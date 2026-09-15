@@ -333,7 +333,13 @@ void main() {
         body: {'type': 'https', 'server': 'dns.example', 'detour': 'vpn-1'},
         description: 'Mine',
       ),
-      DnsServerPreset(enabled: true, tag: 'yandex_udp', presetId: 'ru-direct'),
+      DnsServerPreset(
+          enabled: true, tag: 'ru-direct:yandex_udp', presetId: 'ru-direct'),
+      DnsServerPreset(
+          enabled: false,
+          tag: 'ru-direct:yandex_doh',
+          presetId: 'ru-direct',
+          description: 'Yandex (off)'),
       DnsServerPreset(enabled: true, tag: 'orphan'),
       DnsServerTemplate(
         enabled: true,
@@ -387,5 +393,120 @@ void main() {
         expect(dnsRuleToRecord(back), rec);
       });
     }
+  });
+
+  // §439 — тег preset-сервера DNS в модели — тег конфига (`<preset_id>:<тег
+  // внутри пресета>`, `namespacePresetTags`), `ref` записи — та же строка.
+  // Раньше кодек клеил `presetId` к тегу конфига второй раз и при чтении
+  // резал `ref` до тега внутри пресета: резолвер не узнавал сервер, заводил
+  // новый (включённый, без description) и писал `ru-direct:ru-direct:dns_ru`.
+  group('§439 preset-сервер DNS: ref = тег конфига', () {
+    Map<String, dynamic> viaFile(Map<String, dynamic> rec) =>
+        (jsonDecode(jsonEncode(rec)) as Map).cast<String, dynamic>();
+
+    test('запись: ref без повтора пространства, выключатель и description', () {
+      const s = DnsServerPreset(
+        enabled: false,
+        tag: 'ru-direct:dns_ru',
+        presetId: 'ru-direct',
+        description: 'Mine',
+      );
+      final rec = dnsServerToRecord(s);
+      expect(rec, {
+        'kind': 'preset',
+        'ref': 'ru-direct:dns_ru',
+        'enabled': false,
+        'description': 'Mine',
+      });
+      final back = dnsServerFromRecord(viaFile(rec)).value! as DnsServerPreset;
+      expect(back, s);
+      expect(back.tag, 'ru-direct:dns_ru');
+      expect(back.presetId, 'ru-direct');
+      expect(back.enabled, isFalse);
+      expect(back.description, 'Mine');
+      expect(dnsServerToRecord(back), rec);
+    });
+
+    test('круг устойчив: запись → модель → запись три раза подряд', () {
+      var rec = <String, dynamic>{
+        'kind': 'preset',
+        'ref': 'ru-direct:yandex_doh',
+        'enabled': false,
+      };
+      for (var i = 0; i < 3; i++) {
+        rec = dnsServerToRecord(dnsServerFromRecord(viaFile(rec)).value!);
+      }
+      expect(rec, {
+        'kind': 'preset',
+        'ref': 'ru-direct:yandex_doh',
+        'enabled': false,
+      });
+    });
+
+    test('модель без presetId: пространство из тега, ref тот же', () {
+      const s = DnsServerPreset(enabled: true, tag: 'ru-direct:dns_ru');
+      expect(s.presetId, 'ru-direct');
+      expect(
+          s,
+          const DnsServerPreset(
+              enabled: true, tag: 'ru-direct:dns_ru', presetId: 'ru-direct'));
+      expect(dnsServerToRecord(s)['ref'], 'ru-direct:dns_ru');
+      expect(dnsServerFromRecord(dnsServerToRecord(s)).value, s);
+    });
+
+    test('тег внутри пресета при известном presetId (читатель файла 0.x) — '
+        'тег конфига', () {
+      const s =
+          DnsServerPreset(enabled: true, tag: 'dns_ru', presetId: 'ru-direct');
+      expect(s.tag, 'ru-direct:dns_ru');
+      expect(s, const DnsServerPreset(enabled: true, tag: 'ru-direct:dns_ru'));
+      expect(dnsServerToRecord(s)['ref'], 'ru-direct:dns_ru');
+    });
+
+    test('ранняя форма 2.23.3 с повтором пространства читается терпимо', () {
+      final back = dnsServerFromRecord({
+        'kind': 'preset',
+        'ref': 'ru-direct:ru-direct:dns_ru',
+        'enabled': false,
+        'description': 'd',
+      }).value! as DnsServerPreset;
+      expect(back.tag, 'ru-direct:dns_ru');
+      expect(back.presetId, 'ru-direct');
+      expect(back.enabled, isFalse);
+      expect(back.description, 'd');
+      expect(dnsServerToRecord(back)['ref'], 'ru-direct:dns_ru');
+      // Повтор в модели тоже не доезжает до записи.
+      expect(
+          dnsServerToRecord(const DnsServerPreset(
+              enabled: true, tag: 'ru-direct:ru-direct:dns_ru'))['ref'],
+          'ru-direct:dns_ru');
+    });
+
+    test('двоеточие в теге внутри пресета: пресет — до ПЕРВОГО `:`', () {
+      const s = DnsServerPreset(enabled: true, tag: 'p:dns:v6', presetId: 'p');
+      final rec = dnsServerToRecord(s);
+      expect(rec['ref'], 'p:dns:v6');
+      expect(presetIdOfDnsServerRef('p:dns:v6'), 'p');
+      expect(presetIdOfDnsServerRef('yandex_udp'), '');
+      final back = dnsServerFromRecord(rec).value! as DnsServerPreset;
+      expect(back.presetId, 'p');
+      expect(back.tag, 'p:dns:v6');
+      expect(back, s);
+    });
+
+    test('ref без пространства — тег целиком, пресет не известен; прежняя '
+        'форма `tag` читается так же', () {
+      final bare = dnsServerFromRecord({'kind': 'preset', 'ref': 'orphan'})
+          .value! as DnsServerPreset;
+      expect(bare.tag, 'orphan');
+      expect(bare.presetId, '');
+      expect(dnsServerToRecord(bare)['ref'], 'orphan');
+      final old = dnsServerFromRecord({'kind': 'preset', 'tag': 'ru-direct:dns_ru'})
+          .value! as DnsServerPreset;
+      expect(old,
+          const DnsServerPreset(enabled: true, tag: 'ru-direct:dns_ru'));
+      expect(dnsServerFromRecord({'kind': 'preset', 'ref': 'ru-direct:'}).dropped,
+          contains('without tag'));
+    });
   });
 }
