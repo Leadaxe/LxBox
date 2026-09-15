@@ -10,15 +10,24 @@
 /// называется в [StorageMigrationResult.warnings] с именами записей.
 library;
 
+import '../../models/auto_select.dart';
+import '../../models/codec/auto_group_record.dart';
 import '../../models/codec/chain_record.dart';
 import '../../models/codec/dns_record.dart';
 import '../../models/codec/rule_record.dart';
 import '../../models/codec/source_record.dart';
 import '../../models/custom_rule.dart';
+import '../../models/direction.dart' show StickyHashKey, UrltestMode;
 import '../../models/dns_ref.dart';
+import '../../models/node_link.dart';
+import '../../models/node_spec.dart';
 import '../../models/parser_config.dart' show SelectableRule;
 import '../../models/server_list.dart';
 import '../json_clone.dart' show deepCloneJson;
+import '../node_identity.dart';
+import '../parser/body_decoder.dart';
+import '../parser/parse_all.dart';
+import '../parser/uri_utils.dart' show newUuidV4, tagFromLabel;
 import '../settings_storage_keys.dart';
 import 'legacy_form_v0.dart';
 
@@ -114,14 +123,18 @@ int? storageDocVersion(Map<String, dynamic> doc) {
   return v is int && v >= 1 ? v : null;
 }
 
-/// Нужна ли документу [migrateStorageDoc]: нет версии или есть ключи 2.23.2.
-/// Дёшево — без разбора записей.
+/// Нужна ли документу [migrateStorageDoc]: нет версии, есть ключи 2.23.2
+/// или члены папок `autogroup://` (§439 N2). Дёшево — без разбора записей.
 bool storageDocNeedsMigration(Map<String, dynamic> doc) =>
-    storageDocVersion(doc) == null || kLegacyStorageKeys.any(doc.containsKey);
+    storageDocVersion(doc) == null ||
+    kLegacyStorageKeys.any(doc.containsKey) ||
+    _hasLegacyAutogroups(doc[kSourcesKey]);
 
 /// §439 §3.1 п. 3 — документ хранения → форма 1.0.
 ///
-/// - Есть `storage_version` и нет ключей 2.23.2 — документ не трогается.
+/// - Есть `storage_version` и нет ключей 2.23.2 — документ не трогается;
+///   исключение — члены папок `autogroup://` в `sources[]` (записи ранних
+///   сборок 2.23.3), их переводит [migrateAutogroupMembers].
 /// - Нет `storage_version` — `server_lists`/`chains` → `sources[]` (цепочки
 ///   хвостом в порядке старого `order`), `custom_rules` → `rules[]`,
 ///   `dns_options` → `dns{servers, rules}` с `ref` preset-серверов по
@@ -147,8 +160,29 @@ StorageMigrationResult migrateStorageDoc(
       if (doc.containsKey(k)) k,
   ];
   if (version != null && legacyPresent.isEmpty) {
+    final sources = doc[kSourcesKey];
+    if (sources is! List || !_hasLegacyAutogroups(sources)) {
+      return StorageMigrationResult(
+          doc: doc, migrated: false, foundVersion: version);
+    }
+    final info = <String>[];
+    final warnings = <String>[];
+    final out = deepCloneJson(doc) as Map<String, dynamic>;
+    out[kSourcesKey] = migrateAutogroupMembers(
+      [
+        for (final e in out[kSourcesKey] as List)
+          if (e is Map) e.cast<String, dynamic>(),
+      ],
+      info,
+      warnings,
+    );
     return StorageMigrationResult(
-        doc: doc, migrated: false, foundVersion: version);
+      doc: out,
+      migrated: true,
+      foundVersion: version,
+      info: info,
+      warnings: warnings,
+    );
   }
 
   final info = <String>[];
@@ -166,7 +200,8 @@ StorageMigrationResult migrateStorageDoc(
   Map<String, dynamic>? dns;
   if (convert) {
     if (doc.containsKey(_kServerLists) || doc.containsKey(_kChains)) {
-      sources = _convertSources(doc, info, warnings);
+      sources = migrateAutogroupMembers(
+          _convertSources(doc, info, warnings), info, warnings);
     }
     if (doc.containsKey(_kCustomRules)) {
       rules = _convertRules(doc[_kCustomRules], info, warnings);
@@ -356,6 +391,246 @@ String _sourceName(Map<String, dynamic> j) {
   final id = j['id'];
   final name = j['name'];
   return '(${j['type']} id "$id"${name is String && name.isNotEmpty ? ' "$name"' : ''})';
+}
+
+// ─── autogroup (§439 N2) ────────────────────────────────────────────────────
+
+/// Схема члена-группы папки в хранении до §439 N2 (`FolderMember.raw`).
+const String _kLegacyAutogroupScheme = 'autogroup://';
+
+bool _isLegacyAutogroup(Object? node) {
+  if (node is! Map) return false;
+  final origin = node['origin'];
+  final raw = origin is Map ? origin['raw'] : null;
+  return raw is String &&
+      raw.trimLeft().toLowerCase().startsWith(_kLegacyAutogroupScheme);
+}
+
+bool _hasLegacyAutogroups(Object? sources) =>
+    sources is List &&
+    sources.any((s) =>
+        s is Map &&
+        s['kind'] == kSourceKindFolder &&
+        s['nodes'] is List &&
+        (s['nodes'] as List).any(_isLegacyAutogroup));
+
+/// §439 N2 — шаг миграции над записями `sources[]`: член папки с исходником
+/// `autogroup://…` (текст, которым группа хранилась до N2; разбор снят, и
+/// кодек читает такой член `unsupported`) → запись `kind: auto`
+/// (`codec/auto_group_record.dart`).
+///
+/// - `RuleMembers` (`include`/`exclude`, «все члены») переносится как есть.
+/// - Явный состав — ключи `protocol|server|port|credential` — становится
+///   парами `{id папки, тег}` по узлам той же папки (`nodeIdentityKey` над
+///   разобранными членами). Ключ нескольких членов решает включённый, если
+///   он один (его и собирала сборка). Ключ без члена, неоднозначный ключ,
+///   член без тега или с тегом, который носит ещё кто-то в папке, — строка в
+///   [warnings], член из состава снимается.
+/// - Нечитаемый текст группы — строка в [warnings], член снимается (текст
+///   остаётся в `.v0.bak`).
+///
+/// Идемпотентен: записей `autogroup://` в результате нет.
+List<Map<String, dynamic>> migrateAutogroupMembers(
+  List<Map<String, dynamic>> sources,
+  List<String> info,
+  List<String> warnings,
+) {
+  var converted = 0;
+  final out = <Map<String, dynamic>>[];
+  for (final source in sources) {
+    final nodes = source['nodes'];
+    if (source['kind'] != kSourceKindFolder ||
+        nodes is! List ||
+        !nodes.any(_isLegacyAutogroup)) {
+      out.add(source);
+      continue;
+    }
+    final folderId = source['id'] is String ? source['id'] as String : '';
+    final name = source['name'];
+    final where = 'folder "${name is String && name.isNotEmpty ? name : folderId}"';
+    final parsed = [
+      for (final n in nodes) _isLegacyAutogroup(n) ? null : _recordNode(n),
+    ];
+    final next = <Object?>[];
+    for (var i = 0; i < nodes.length; i++) {
+      final n = nodes[i];
+      if (!_isLegacyAutogroup(n)) {
+        next.add(n);
+        continue;
+      }
+      final record = _autogroupRecord(
+        (n as Map).cast<String, dynamic>(),
+        nodes,
+        parsed,
+        folderId,
+        '$where: nodes[$i]',
+        warnings,
+      );
+      if (record != null) {
+        next.add(record);
+        converted++;
+      }
+    }
+    out.add({...source, 'nodes': next});
+  }
+  if (converted > 0) {
+    info.add('auto nodes: $converted autogroup members → kind auto');
+  }
+  return out;
+}
+
+/// Узел члена папки из исходника записи; нет исходника или не разобрался —
+/// `null`.
+NodeSpec? _recordNode(Object? node) {
+  if (node is! Map) return null;
+  final origin = node['origin'];
+  final raw = origin is Map ? origin['raw'] : null;
+  if (raw is! String || raw.trim().isEmpty) return null;
+  try {
+    final nodes = parseAll(decode(raw));
+    return nodes.isEmpty ? null : nodes.first;
+  } catch (_) {
+    return null;
+  }
+}
+
+Map<String, dynamic>? _autogroupRecord(
+  Map<String, dynamic> node,
+  List<dynamic> nodes,
+  List<NodeSpec?> parsed,
+  String folderId,
+  String where,
+  List<String> warnings,
+) {
+  final raw = ((node['origin'] as Map)['raw'] as String).trim();
+  final legacy = _readLegacyAutogroup(raw);
+  if (legacy == null) {
+    warnings.add('$where: autogroup text does not read, dropped '
+        '(the text stays in .v0.bak)');
+    return null;
+  }
+  final label = legacy.label.isEmpty ? 'Auto' : legacy.label;
+  final tag = tagFromLabel(label, 'urltest', 'auto', 0);
+  final keys = legacy.keys;
+  final AutoSelectMembership membership;
+  if (keys == null) {
+    membership = RuleMembers(include: legacy.include, exclude: legacy.exclude);
+  } else {
+    final links = <NodeLink>[];
+    for (final key in keys) {
+      final link = _linkOfKey(key, nodes, parsed, folderId);
+      if (link.error != null) {
+        warnings.add('$where "$tag": member ${link.error}, dropped');
+        continue;
+      }
+      if (!links.contains(link.link)) links.add(link.link!);
+    }
+    membership = ExplicitMembers(links);
+  }
+  if (node['detour'] != null || node['sections'] != null) {
+    warnings.add('$where "$tag": detour and sections of an auto node '
+        'are dropped');
+  }
+  final group = AutoSelectSpec(
+    id: newUuidV4(),
+    tag: tag,
+    label: label,
+    membership: membership,
+    params: legacy.params,
+    poolBadge: legacy.poolBadge,
+  );
+  final enabled = node['enabled'];
+  return autoGroupMemberToRecord(
+    FolderMember.auto(group, enabled: enabled is bool ? enabled : true),
+    group,
+    folderId,
+  );
+}
+
+/// Ключ `protocol|server|port|credential` → пара на члена папки.
+({NodeLink? link, String? error}) _linkOfKey(
+  String key,
+  List<dynamic> nodes,
+  List<NodeSpec?> parsed,
+  String folderId,
+) {
+  bool enabledAt(int i) {
+    final n = nodes[i];
+    return !(n is Map && n['enabled'] == false);
+  }
+
+  var hits = [
+    for (var i = 0; i < parsed.length; i++)
+      if (parsed[i] case final n? when nodeIdentityKey(n) == key) i,
+  ];
+  // Сборка до N2 брала только включённых членов.
+  if (hits.length > 1) hits = hits.where(enabledAt).toList();
+  if (hits.isEmpty) return (link: null, error: 'key "$key" matches no node');
+  if (hits.length > 1) {
+    return (
+      link: null,
+      error: 'key "$key" matches ${hits.length} nodes',
+    );
+  }
+  final tag = parsed[hits.single]!.tag;
+  if (tag.isEmpty) return (link: null, error: 'key "$key" has an untagged node');
+  final sameTag = parsed.where((n) => n?.tag == tag).length;
+  if (sameTag > 1) {
+    return (link: null, error: 'tag "$tag" is carried by $sameTag nodes');
+  }
+  return (link: NodeLink(folderId: folderId, tag: tag), error: null);
+}
+
+/// Разбор `autogroup://?members=…|include=…&mode=…#Label` — замороженная
+/// форма 2.23.2 (`autoGroupFromUri`). [keys] `null` — режим правила.
+({
+  String label,
+  List<String>? keys,
+  String include,
+  String exclude,
+  AutoSelectParams params,
+  String poolBadge,
+})? _readLegacyAutogroup(String raw) {
+  final uri = Uri.tryParse(raw);
+  if (uri == null) return null;
+  try {
+    final q = uri.queryParameters;
+    const d = AutoSelectParams();
+    final rawMembers = q['members'];
+    final sticky = q['sticky'];
+    return (
+      label: Uri.decodeComponent(uri.fragment),
+      // §352 — узкое экранирование ключа: `,` и `%`.
+      keys: rawMembers?.split(',')
+          .map((e) =>
+              e.trim().replaceAll('%2C', ',').replaceAll('%25', '%'))
+          .where((e) => e.isNotEmpty)
+          .toList(),
+      include: q['include'] ?? '',
+      exclude: q['exclude'] ?? '',
+      params: AutoSelectParams(
+        url: q['url'] ?? d.url,
+        interval: q['interval'] ?? d.interval,
+        tolerance: int.tryParse(q['tolerance'] ?? '') ?? d.tolerance,
+        idleTimeout: q['idle_timeout'] ?? d.idleTimeout,
+        interruptExistConnections: q['interrupt'] == '1',
+        mode: UrltestMode.fromWire(q['mode']),
+        pool: int.tryParse(q['pool'] ?? '') ?? d.pool,
+        poolTolerance: clampPoolTolerance(
+            int.tryParse(q['pool_tolerance'] ?? '') ?? d.poolTolerance),
+        stickyHash: sticky == null
+            ? d.stickyHash
+            : sticky
+                .split(',')
+                .map((k) => StickyHashKey.fromWire(k.trim()))
+                .whereType<StickyHashKey>()
+                .toList(),
+      ),
+      poolBadge: q['badge'] ?? kDefaultPoolBadge,
+    );
+  } catch (_) {
+    return null;
+  }
 }
 
 // ─── rules ──────────────────────────────────────────────────────────────────
