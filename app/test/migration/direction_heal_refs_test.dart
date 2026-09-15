@@ -153,7 +153,7 @@ void main() {
   /// указывает на vpn-3 (+второй var, который heal терять не должен).
   ///
   /// §441 — второй var объявлен пресетом и не равен умолчанию: необъявленное
-  /// имя запись хранения снимает (SPEC 128 Н2).
+  /// имя запись хранения снимает (SPEC 129 Н2).
   Future<void> seedPresetOverrideOnVpn3() async {
     final data = {
       'directions_migrated': true,

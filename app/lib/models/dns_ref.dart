@@ -212,7 +212,7 @@ class DnsServerTemplate extends DnsServerRef {
       Object.hash('template', enabled, tag, description, _eq.hash(varValues));
 }
 
-/// §441 (SPEC 128 §6, D-114) — `body.detour` пользовательского сервера —
+/// §441 (SPEC 129 §6, D-114) — `body.detour` пользовательского сервера —
 /// одиночная цель по имени: значение, названное ключом [retarget], заменено
 /// его значением. Не совпало — тот же экземпляр.
 DnsServerInline retargetDnsServerDetour(

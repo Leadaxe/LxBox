@@ -89,7 +89,7 @@ const String kWarnFinalDropped = 'backup_final_dropped';
 const String kWarnUnknownPreset = 'backup_unknown_preset';
 const String kWarnVarSkipped = 'backup_var_skipped';
 
-/// §441 (SPEC 128 §5.6) — причины [kWarnVarSkipped] ([LxBackupWarning.reason]).
+/// §441 (SPEC 129 §5.6) — причины [kWarnVarSkipped] ([LxBackupWarning.reason]).
 ///
 /// [kVarSkippedNotPortable] — корневая переменная вне реестра переносимых;
 /// [kVarSkippedUndeclared] — имя в `vars` записи (`dns:<tag>` |
@@ -743,7 +743,7 @@ class LxBackupExport {
 /// на сущность (П6).
 ///
 /// [recordVars] — §441, объявления шаблона этой стороны: `vars`
-/// правил-пресетов нормализуются молча (SPEC 128 Н2–Н4). Секцию [dns]
+/// правил-пресетов нормализуются молча (SPEC 129 Н2–Н4). Секцию [dns]
 /// нормализует `dnsToBackup` тем же набором.
 Future<LxBackupExport> buildLxBackup({
   required List<ServerList> lists,
@@ -1190,7 +1190,7 @@ _ParsedDirections _parseDirections(
 
 /// `vars` — только переносимые имена (обе формы одинаковы).
 ///
-/// §441 (SPEC 128 Н8) — корневое имя вне реестра разрешается против
+/// §441 (SPEC 129 Н8) — корневое имя вне реестра разрешается против
 /// объявлений шаблона приёмника ([rootDnsVarTarget]: объявленные пары
 /// `(tag, var)`, выигрывает самый длинный тег) и переносится в запись
 /// template-сервера ФАЙЛА до слияния:
@@ -2056,7 +2056,7 @@ DnsServerRef? _dnsServer0x(Map<String, dynamic> e, String kind) {
   }
 }
 
-/// §441 (SPEC 128 §5.2) — template-сервер DNS, которого шаблон приёмника не
+/// §441 (SPEC 129 §5.2) — template-сервер DNS, которого шаблон приёмника не
 /// объявил, не ввозится: собрать его тело не из чего. Шаблона нет
 /// ([RecordVarDecls.none]) — сверять не с чем, запись идёт как есть.
 bool _templateServerDeclared(DnsServerRef server, RecordVarDecls recordVars) =>
@@ -2324,7 +2324,7 @@ bool _isKnownOutbound(String tag, Set<String> known) {
   return _reservedOutbounds.contains(t) || known.contains(t);
 }
 
-/// §441 (SPEC 128 Н9) — известна ли цель [tag] списку [known]
+/// §441 (SPEC 129 Н9) — известна ли цель [tag] списку [known]
 /// ([lxImportKnownTargets]) с зарезервированными литералами: та же проверка,
 /// что у целей правил, для маршрута DNS-серверов.
 bool lxIsKnownImportTarget(String tag, Set<String> known) =>

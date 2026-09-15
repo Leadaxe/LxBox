@@ -1,4 +1,4 @@
-/// §441 (SPEC 128 контракта) — значения переменных, которые живут в записи:
+/// §441 (SPEC 129 контракта) — значения переменных, которые живут в записи:
 /// `dns.servers[kind=template].vars` и `rules[kind=preset].vars`.
 ///
 /// Слой 5 (§439 §2.5): чистые функции над моделями и объявлениями шаблона
@@ -98,7 +98,7 @@ class RecordVarDecls {
   /// Из JSON-объявлений: `dns_options.servers[]` (обёртка
   /// `{vars?, server{tag}}` или плоская запись с `tag`) и `presets[]` /
   /// `selectable_rules[]` (`id` или `preset_id`; умолчание — `default_value`
-  /// или алиас лаунчера `default`). Форма фикстуры корпуса SPEC 128 §9.1.
+  /// или алиас лаунчера `default`). Форма фикстуры корпуса SPEC 129 §9.1.
   factory RecordVarDecls.fromJson(Map<String, dynamic> j) {
     final dnsOptions = j['dns_options'];
     final presets = <String, List<RecordVarDecl>>{};
@@ -326,7 +326,7 @@ List<CustomRule> normalizePresetRulesVars(
   return best;
 }
 
-// ─── Ссылки на Направление в значениях (SPEC 128 §6, D-113/D-114) ───────────
+// ─── Ссылки на Направление в значениях (SPEC 129 §6, D-113/D-114) ───────────
 
 /// Карта перенацеливания ссылок на Направление [tag]: сам тег и его
 /// auto-двойник `<tag>-auto`. Удаление и выключение — оба на [to] (`vpn-1`,

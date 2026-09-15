@@ -9,13 +9,13 @@ import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
 import 'package:lxbox/services/record_vars.dart';
 
-// §441 (SPEC 128 контракта) — импорт значений переменных записи:
+// §441 (SPEC 129 контракта) — импорт значений переменных записи:
 // Н8 (корневые `dns_<tag>_<var>` → запись сервера файла), слияние §5.2
 // (наложение по именам, Н2/Н4 против шаблона приёмника), Н9 (неизвестная
 // цель маршрута выключает DNS-сервер), Н2/Н4 у `rules[kind=preset].vars`.
 
 /// Объявления приёмника с умолчаниями, как у лаунчера в кейсе корпуса
-/// `v10_dns_template_vars` (SPEC 128 §9.1): `google_dot.outbound` =
+/// `v10_dns_template_vars` (SPEC 129 §9.1): `google_dot.outbound` =
 /// `proxy-out`, пресет `russian` с `out` = `direct-out`.
 final _decls = RecordVarDecls.fromJson({
   'dns_options': {
@@ -99,7 +99,7 @@ List<String> _reasons(LxBackupFile f, String code) => [
     ];
 
 void main() {
-  group('SPEC 128 §9.1 — сценарий кейса v10_dns_template_vars', () {
+  group('SPEC 129 §9.1 — сценарий кейса v10_dns_template_vars', () {
     late LxImportPlan plan;
 
     setUpAll(() {

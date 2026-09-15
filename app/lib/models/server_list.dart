@@ -609,7 +609,7 @@ final class FolderServers extends ServerList {
   return (healed: count > 0 ? next : null, count: count);
 }
 
-/// §441 (SPEC 128 §6, D-114) — `body.detour` DNS-серверов в секциях узлов
+/// §441 (SPEC 129 §6, D-114) — `body.detour` DNS-серверов в секциях узлов
 /// списка [l] (одиночный сервер, члены папки) по [retarget]
 /// ([retargetDnsServerDetour]). Возвращает копию (null — нечего лечить) и
 /// число переписанных серверов.

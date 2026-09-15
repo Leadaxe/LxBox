@@ -11,7 +11,7 @@ import 'package:lxbox/services/template_loader.dart';
 
 import '../storage_migration/golden_harness.dart';
 
-// §441 (SPEC 128 контракта) — значения переменных записи: нормы Н2/Н3/Н4 для
+// §441 (SPEC 129 контракта) — значения переменных записи: нормы Н2/Н3/Н4 для
 // двух носителей (`dns.servers[kind=template].vars`, `rules[kind=preset].vars`)
 // и писатели, которые их применяют (репозиторий, миграция).
 
@@ -196,7 +196,7 @@ void main() {
     });
   });
 
-  group('SPEC 128 §6: цели по имени в переменных типа outbound', () {
+  group('SPEC 129 §6: цели по имени в переменных типа outbound', () {
     // google_dot — умолчание `vpn-1`; пресет `russian` объявляет цель под
     // именем `out`; `dns_ip`/`mode` — не цели, даже если значение совпало.
     final decls = RecordVarDecls.fromJson({

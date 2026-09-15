@@ -325,7 +325,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // унесёт файл на другую машину (П6).
       final exportWarnings = <LxBackupWarning>[];
       // §441 — объявления переменных записей шаблона: `vars` template-серверов
-      // и пресетов едут без умолчаний и необъявленных имён (SPEC 128 Н2–Н4).
+      // и пресетов едут без умолчаний и необъявленных имён (SPEC 129 Н2–Н4).
       final recordVars = await loadRecordVarDecls();
       // §393 B9 — секция DNS: записи хранения + final/strategy. §439 —
       // preset-сервер несёт `preset_id` в записи, шаблон не нужен.
