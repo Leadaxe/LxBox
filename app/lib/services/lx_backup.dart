@@ -3716,7 +3716,9 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
     if (name.isEmpty || at < 0 || at >= merged.length) return;
     final here =
         NodeLink(folderId: merged[at].id, tag: landings[(at, name)] ?? name);
-    (fileFinal[TagResolver.displayTag(prefix, name)] ??= {}).add(here);
+    for (final form in _fileFinalForms(prefix, name)) {
+      (fileFinal[form] ??= {}).add(here);
+    }
     (fileRaw[name] ??= {}).add(here);
     (fileRawAt[at] ??= {}).add(name);
   }
@@ -3757,7 +3759,9 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
         final groupForms = <String, List<String>>{};
         raw.forEach((node, tag) {
           if (node.isGroup) {
-            (groupForms[containerFinalForm(folder, tag)] ??= []).add(tag);
+            for (final form in _fileFinalForms(folder.tagPrefix, tag)) {
+              (groupForms[form] ??= []).add(tag);
+            }
           }
         });
         return lowerGroupFinalLink(
@@ -3798,6 +3802,16 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
     return fromHere.length == 1 ? fromHere.single : link;
   };
 }
+
+/// Финальные формы тега [raw] члена папки файла с префиксом модели [prefix]
+/// для сопоставления ссылок файла (NODE_LINK §7.3, S3): форма LxBox
+/// «префикс, пробел, тег» и форма контракта «префикс + тег» — у префикса
+/// файла без хвостового пробела (`"d:"`) финальный тег стороны-экспортёра
+/// `d:G`, а модель LxBox хранит `d:` и показывает `d: G` (§439 п. 9).
+Set<String> _fileFinalForms(String prefix, String raw) => {
+      TagResolver.displayTag(prefix, raw),
+      if (prefix.isNotEmpty) '$prefix$raw',
+    };
 
 /// Член папки [folderAt]: дедуп по канону тела в пределах этой папки, новые
 /// в конец. Возвращает, сколько применилось (0 — узнан без секций файла).
