@@ -617,7 +617,7 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 # detour; целью правил остаётся, существующие ссылки правил не трогаются
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"detour":true}' "$BASE/directions/vpn-2?rebuild=true"
-# → {"tag":"vpn-2",...,"detour":true,"healed":{"rules":0,"detours":0,"includes":0},"rebuilt":true,...}
+# → {"tag":"vpn-2",...,"detour":true,"healed":{"rules":0,"detours":0,"includes":0,"chain_positions":0,"dns_servers":0},"rebuilt":true,...}
 ```
 
 **Quirks:**
@@ -642,10 +642,15 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   нормализованный `label` — он может отличаться от присланного; скрипты,
   матчащие Направления, должны ключеваться по `tag` (он для этого и immutable).
 - Ответы мутаций (POST/PATCH/DELETE) содержат `"healed": {"rules": N,
-  "detours": M, "includes": K}` — счётчики вылеченных ссылок (API-аналог
-  UI-SnackBar'а): `rules` — route_final / custom-rule outbound → `vpn-1`
+  "detours": M, "includes": K, "chain_positions": C, "dns_servers": D}` —
+  счётчики вылеченных ссылок (API-аналог
+  UI-SnackBar'а): `rules` — route_final / custom-rule outbound (у пресета —
+  переменные типа `outbound`) → `vpn-1`
   (disable, delete; §274: detour flag-set НЕ heal-триггер — Направление
-  остаётся целью правил, `rules` при `{"detour":true}` всегда 0); `detours` —
+  остаётся целью правил, `rules` при `{"detour":true}` всегда 0);
+  `dns_servers` (§441) — template-серверы DNS, у которых переменная типа
+  `outbound` называла Направление, → `vpn-1` (disable, delete; значение,
+  равное умолчанию шаблона, снимается); `detours` —
   корневые `{tag}` на Направление в `override_detour` / `detour` члена →
   снимаются (disable, delete, detour flag-unset); пара `{folder_id, tag}`
   адресует узел и Направлением не бывает; `includes` — вычистка тега из `include[]` остальных

@@ -82,6 +82,7 @@ class DirectionMutations {
       detours: healed.detours,
       includes: healed.includes,
       chainPositions: chains.positions,
+      dnsServers: healed.dnsServers,
     );
   }
 
@@ -123,6 +124,12 @@ class DirectionMutations {
         if (healed.chainPositions > 0)
           getLocalText.s(
               '%s chain position(s) removed', '${healed.chainPositions}'),
+        // §441 — пятый род: переменная типа `outbound` template-сервера DNS
+        // называла Направление. Сервер переведён на vpn-1, а не выпал на
+        // сборке.
+        if (healed.dnsServers > 0)
+          getLocalText.s(
+              '%s DNS server(s) switched to vpn-1', '${healed.dnsServers}'),
       ];
 
   /// Ресинк идемпотентен (`clearDetourDirectionRefs` → `healed == null`, когда

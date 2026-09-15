@@ -325,3 +325,96 @@ List<CustomRule> normalizePresetRulesVars(
   }
   return best;
 }
+
+// ─── Ссылки на Направление в значениях (SPEC 128 §6, D-113/D-114) ───────────
+
+/// Карта перенацеливания ссылок на Направление [tag]: сам тег и его
+/// auto-двойник `<tag>-auto`. Удаление и выключение — оба на [to] (`vpn-1`,
+/// как цель правила). [rename] — тег на [to], двойник на `<to>-auto`
+/// (D-113: переименование переписывает; у LxBox тег Направления неизменяем,
+/// операции переименования нет).
+Map<String, String> directionRefRetarget(
+  String tag,
+  String to, {
+  bool rename = false,
+}) =>
+    {tag: to, '$tag-auto': rename ? '$to-auto' : to};
+
+/// Имена переменных типа `outbound` у template-сервера DNS [tag] — по
+/// объявлению шаблона. Сервер шаблоном не объявлен — `outbound` по имени.
+Set<String> dnsServerOutboundVarNames(String tag, RecordVarDecls decls) {
+  final declared = decls.dnsServers[tag];
+  if (declared == null) return const {kPresetOutboundVar};
+  return {
+    for (final d in declared)
+      if (!d.isRef && d.type == 'outbound') d.name,
+  };
+}
+
+/// Имена переменных типа `outbound` у пресета [presetId]: универсальная
+/// замена цели [kPresetOutboundVar] плюс объявленные шаблоном.
+Set<String> presetOutboundVarNames(String presetId, RecordVarDecls decls) => {
+      kPresetOutboundVar,
+      for (final d in decls.presets[presetId] ?? const <RecordVarDecl>[])
+        if (!d.isRef && d.type == 'outbound') d.name,
+    };
+
+/// Значения [values] с переписанными целями: имя из [names], значение —
+/// ключ [retarget]. После переписи — Н4 по объявлению из [decls] (новое имя
+/// равно умолчанию — ключ снимается). `null` — ничего не совпало.
+Map<String, String>? _retargetValues(
+  Map<String, String> values,
+  Set<String> names,
+  List<RecordVarDecl> decls,
+  Map<String, String> retarget,
+) {
+  Map<String, String>? out;
+  for (final name in names) {
+    final to = retarget[values[name]?.trim()];
+    if (to == null) continue;
+    out ??= Map<String, String>.of(values);
+    final decl = decls.where((d) => d.name == name).firstOrNull;
+    final stored = recordVarValueToStore(to, decl);
+    if (stored == null) {
+      out.remove(name);
+    } else {
+      out[name] = stored;
+    }
+  }
+  return out;
+}
+
+/// Цели по имени в переменных типа `outbound` template-сервера DNS
+/// ([dnsServerOutboundVarNames]) переписаны по [retarget]. Не совпало или
+/// сервер другого вида — тот же экземпляр.
+DnsServerRef retargetDnsServerOutboundVars(
+  DnsServerRef server,
+  RecordVarDecls decls,
+  Map<String, String> retarget,
+) {
+  if (server is! DnsServerTemplate || server.varValues.isEmpty) return server;
+  final next = _retargetValues(
+    server.varValues,
+    dnsServerOutboundVarNames(server.tag, decls),
+    decls.dnsServers[server.tag] ?? const [],
+    retarget,
+  );
+  return next == null ? server : server.copyWith(varValues: next);
+}
+
+/// То же у правила-пресета ([presetOutboundVarNames]). Правило другого вида —
+/// тот же экземпляр.
+CustomRule retargetPresetOutboundVars(
+  CustomRule rule,
+  RecordVarDecls decls,
+  Map<String, String> retarget,
+) {
+  if (rule is! CustomRulePreset || rule.varsValues.isEmpty) return rule;
+  final next = _retargetValues(
+    rule.varsValues,
+    presetOutboundVarNames(rule.presetId, decls),
+    decls.presets[rule.presetId] ?? const [],
+    retarget,
+  );
+  return next == null ? rule : rule.copyWith(varsValues: next);
+}

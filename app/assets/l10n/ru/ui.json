@@ -439,6 +439,9 @@
   "%s copied": {
     "value": "Скопировано: %s"
   },
+  "%s DNS server(s) switched to vpn-1": {
+    "value": "DNS-серверов переключено на vpn-1: %s"
+  },
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
   },

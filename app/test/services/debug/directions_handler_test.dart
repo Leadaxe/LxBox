@@ -409,6 +409,7 @@ void main() {
         'detours': 0,
         'includes': 0,
         'chain_positions': 0,
+        'dns_servers': 0,
       });
       expect(await SettingsStorage.getRouteFinal(), 'vpn-2');
     });
@@ -439,6 +440,7 @@ void main() {
         'detours': 1,
         'includes': 0,
         'chain_positions': 0,
+        'dns_servers': 0,
       });
       expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
       final solo = (await SettingsStorage.getServerLists()).single;
@@ -468,6 +470,7 @@ void main() {
         'detours': 0,
         'includes': 1,
         'chain_positions': 0,
+        'dns_servers': 0,
       });
       final vpn3 = (await SettingsStorage.getDirections()).firstWhere(
         (c) => c.tag == 'vpn-3',
@@ -607,6 +610,7 @@ void main() {
           'detours': 1,
           'includes': 0,
           'chain_positions': 0,
+          'dns_servers': 0,
         });
 
         // Storage вылечен...
@@ -661,6 +665,7 @@ void main() {
         'detours': 1,
         'includes': 0,
         'chain_positions': 0,
+        'dns_servers': 0,
       });
       expect(c.entries.single.list.detourPolicy.overrideDetour, NodeLink.none);
     });
@@ -681,6 +686,7 @@ void main() {
         'detours': 1,
         'includes': 0,
         'chain_positions': 0,
+        'dns_servers': 0,
       });
       expect(c.entries.single.list.detourPolicy.overrideDetour, NodeLink.none);
     });
@@ -698,6 +704,7 @@ void main() {
         'detours': 1,
         'includes': 0,
         'chain_positions': 0,
+        'dns_servers': 0,
       });
       final solo = (await SettingsStorage.getServerLists()).single;
       expect(

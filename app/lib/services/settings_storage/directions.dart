@@ -20,11 +20,16 @@ part of '../settings_storage.dart';
 /// (только delete, см. [clearChainHopRefs]). Цепочка при этом ОСТАЁТСЯ —
 /// снимается ровно позиция, и потому счётчик обязан быть виден: маршрут 3+
 /// хопов после вычистки эмитится укороченным.
+/// §441 — `dnsServers`: template-серверы DNS, у которых значение переменной
+/// типа `outbound` (`vars.outbound`) называло Направление, → vpn-1, как цель
+/// правила (disable/delete). Без лечения такой сервер выпадает на сборке
+/// (Н10), а его DNS-правила становятся отказом.
 typedef DirectionHealResult = ({
   int rules,
   int detours,
   int includes,
   int chainPositions,
+  int dnsServers,
 });
 
 Future<List<Direction>> _getDirections() async {
@@ -91,9 +96,14 @@ Future<DirectionHealResult> _updateDirection(Direction direction) async {
   final flagUnset = was.isDetour && !direction.isDetour;
   var rules = 0;
   var detours = 0;
+  var dnsServers = 0;
   if (disabling || flagUnset) {
     await _setDirections(directions, flush: false); // единый flush ниже
-    if (disabling) rules = await _healDirectionRefs(direction.tag);
+    if (disabling) {
+      final healed = await _healDirectionRefs(direction.tag);
+      rules = healed.rules;
+      dnsServers = healed.dnsServers;
+    }
     detours = await _healDetourDirectionRefs(direction.tag);
     await _save();
   } else {
@@ -107,11 +117,18 @@ Future<DirectionHealResult> _updateDirection(Direction direction) async {
   // Вычистить `include` здесь значило бы применить необратимость Решения B
   // (§202) к обратимому действию: пользователь вернул бы галку и обнаружил
   // пустой состав, не понимая, куда делись опции.
-  return (rules: rules, detours: detours, includes: 0, chainPositions: 0);
+  return (
+    rules: rules,
+    detours: detours,
+    includes: 0,
+    chainPositions: 0,
+    dnsServers: dnsServers,
+  );
 }
 
 /// Удалить Направление. vpn-1 неудаляем (throws). Любая ссылка на удалённый tag
-/// (route_final / custom-rule outbound → vpn-1; §248 detour-ссылки → '';
+/// (route_final / custom-rule outbound / §441 переменные типа `outbound`
+/// template-серверов DNS и пресетов → vpn-1; §248 detour-ссылки → '';
 /// §393 A3 include-ссылки → вычеркнуты) немедленно лечится для
 /// UI-консистентности; билдер дополнительно схлопывает dangling при сборке
 /// (§172-паттерн).
@@ -125,11 +142,17 @@ Future<DirectionHealResult> _deleteDirection(String tag) async {
   final (:healed, :count) = clearIncludeDirectionRefs(directions, tag);
   directions = healed;
   await _setDirections(directions, flush: false); // единый flush ниже
-  final rules = await _healDirectionRefs(tag);
+  final (:rules, :dnsServers) = await _healDirectionRefs(tag);
   final detours = await _healDetourDirectionRefs(tag);
   await _healPingOptionsGroupRefs(tag);
   await _save();
-  return (rules: rules, detours: detours, includes: count, chainPositions: 0);
+  return (
+    rules: rules,
+    detours: detours,
+    includes: count,
+    chainPositions: 0,
+    dnsServers: dnsServers,
+  );
 }
 
 /// §408 — снятие per-direction override'а ping/URLTest (`ping_options.groups`)
@@ -178,8 +201,19 @@ Future<void> _healPingOptionsGroupRefs(String deletedTag) async {
 /// §248 — ссылка «на Направление» = его тег ИЛИ тег auto-двойника `<tag>-auto`:
 /// UI-пикеры двойник не предлагают, но Debug API / правленный backup могут
 /// записать что угодно.
-Future<int> _healDirectionRefs(String deletedTag) async {
+///
+/// §441 (SPEC 128 §6, D-114) — значение переменной типа `outbound` в записи —
+/// одиночная цель по имени того же класса: у пресета (любое имя этого типа
+/// по объявлению шаблона, `outbound` — всегда) и у template-сервера DNS
+/// (`vars.outbound`; сервер вне шаблона — ключ `outbound` по имени). Лечится
+/// так же → vpn-1, затем Н4: vpn-1, равное умолчанию объявления, снимает ключ
+/// (сервер снова следует шаблону). `rules` — правила (одно на правило),
+/// `dnsServers` — template-серверы DNS.
+Future<({int rules, int dnsServers})> _healDirectionRefs(
+    String deletedTag) async {
   final autoTag = '$deletedTag-auto';
+  final retarget = directionRefRetarget(deletedTag, 'vpn-1');
+  final decls = await loadRecordVarDecls();
   var count = 0;
   // route_final
   final routeFinal = await SettingsStorage.getRouteFinal();
@@ -187,27 +221,50 @@ Future<int> _healDirectionRefs(String deletedTag) async {
     await SettingsStorage.saveRouteFinal('vpn-1', flush: false);
     count++;
   }
-  // custom-rule outbounds — kind-agnostic через общие `outbound`/`withOutbound`:
-  // inline/srs — поле `outbound`; preset — override `varsValues['outbound']`
-  // (§033 Expansion §5), без heal он уезжал в expandPreset dangling-тегом →
-  // fatal DanglingOutboundRef, VPN не стартует; json — '' (deletedTag всегда
-  // непустой 'vpn-N', не сматчит). reject/direct-out — не direction-tag'и, под
-  // deletedTag не подпадут. Build-time страховки для rule-outbound НЕТ
-  // (healDanglingDetours §172 чинит только detour-поля, валидатор §141 P0.1
-  // блокирует, не лечит) — storage-heal здесь единственное самолечение.
+  // custom-rule outbounds: inline/srs — поле `outbound`; preset — переменные
+  // типа `outbound` в `varsValues` (§033 Expansion §5, §441), без heal они
+  // уезжали в expandPreset dangling-тегом → fatal DanglingOutboundRef, VPN не
+  // стартует; json — '' (deletedTag всегда непустой, не сматчит).
+  // reject/direct-out — не direction-tag'и, под deletedTag не подпадут.
+  // Build-time страховки для rule-outbound НЕТ (healDanglingDetours §172 чинит
+  // только detour-поля, валидатор §141 P0.1 блокирует, не лечит) —
+  // storage-heal здесь единственное самолечение.
   final rules = await SettingsStorage.getCustomRules();
   var changed = false;
   final healed = rules.map((r) {
-    if (r.outbound == deletedTag || r.outbound == autoTag) {
+    final next = r is CustomRulePreset
+        ? retargetPresetOutboundVars(r, decls, retarget)
+        : (r.outbound == deletedTag || r.outbound == autoTag)
+            ? r.withOutbound('vpn-1')
+            : r;
+    if (!identical(next, r)) {
       changed = true;
       count++;
-      return r.withOutbound('vpn-1');
     }
-    return r;
+    return next;
   }).toList();
   if (changed) {
     await SettingsStorage.saveCustomRules(healed, flush: false);
   }
+  return (rules: count, dnsServers: await _healDnsServerVarRefs(retarget, decls));
+}
+
+/// §441 — переменные типа `outbound` template-серверов DNS по [retarget]
+/// ([retargetDnsServerOutboundVars]). Возвращает число вылеченных серверов.
+/// flush:false — атомарный `_save()` на вызывающем.
+Future<int> _healDnsServerVarRefs(
+  Map<String, String> retarget,
+  RecordVarDecls decls,
+) async {
+  final servers = await SettingsStorage.getDnsServers();
+  var count = 0;
+  final healed = <DnsServerRef>[];
+  for (final s in servers) {
+    final next = retargetDnsServerOutboundVars(s, decls, retarget);
+    if (!identical(next, s)) count++;
+    healed.add(next);
+  }
+  if (count > 0) await SettingsStorage.saveDnsServers(healed, flush: false);
   return count;
 }
 
