@@ -278,8 +278,9 @@ not (include survives a disable, the builder just degrades the emitted
 group). Every mutation response carries
 "healed": {"rules": N, "detours": M, "includes": K, "chain_positions": C,
 "dns_servers": D} — how many references were reset. dns_servers counts
-template DNS servers whose outbound-type variable named the direction: the
-value degrades to vpn-1 (disable/delete), like a rule target.
+DNS servers that named the direction — an outbound-type variable of a
+template server, body.detour of a user server (root list and node
+sections): the value degrades to vpn-1 (disable/delete), like a rule target.
 
 === Chains CRUD (hop chains — third source kind, SPEC 110) ===
 
@@ -650,7 +651,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/directions/{tag}', 'description': "Single direction (tag = the direction's outbound tag, e.g. vpn-1 or a custom one)"},
     {'method': 'POST', 'path': '/directions', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"...","tag":"..."} + any PATCH field', 'description': 'Create direction. No tag → first free vpn-N; a custom tag is accepted as-is. No cap on the number of directions. Rejected tag → 409 with the machine reason: empty|reserved|duplicate|auto_twin.'},
     {'method': 'PATCH', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,include,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = direction selectable as detour target (stays a valid rule target; include_block allowed); vpn-1+detour → 409; detour:false resets detour references to None. Toggling detour renames the direction: the reserved gear prefix is added to/stripped from the stored label — responses carry the normalized label. Mutation responses carry "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
-    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]; outbound-type variables of template DNS servers and rule presets degrade to vpn-1. Response carries "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
+    {'method': 'DELETE', 'path': '/directions/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove direction. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None; the tag is stripped from every other direction include[]; outbound-type variables of template DNS servers and rule presets, and body.detour of user DNS servers (root and node sections), degrade to vpn-1. Response carries "healed":{rules,detours,includes,chain_positions,dns_servers}.'},
     {'method': 'POST', 'path': '/directions/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
     // Chains CRUD (hop chains, SPEC 110)
     {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, label, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},

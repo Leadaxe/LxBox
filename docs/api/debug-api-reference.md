@@ -648,9 +648,10 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   переменные типа `outbound`) → `vpn-1`
   (disable, delete; §274: detour flag-set НЕ heal-триггер — Направление
   остаётся целью правил, `rules` при `{"detour":true}` всегда 0);
-  `dns_servers` (§441) — template-серверы DNS, у которых переменная типа
-  `outbound` называла Направление, → `vpn-1` (disable, delete; значение,
-  равное умолчанию шаблона, снимается); `detours` —
+  `dns_servers` (§441) — DNS-серверы, которые называли Направление, →
+  `vpn-1` (disable, delete): переменная типа `outbound` у template (значение,
+  равное умолчанию шаблона, снимается), `body.detour` у user — в корневом
+  списке и в секциях узлов; `detours` —
   корневые `{tag}` на Направление в `override_detour` / `detour` члена →
   снимаются (disable, delete, detour flag-unset); пара `{folder_id, tag}`
   адресует узел и Направлением не бывает; `includes` — вычистка тега из `include[]` остальных

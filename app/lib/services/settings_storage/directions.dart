@@ -20,10 +20,11 @@ part of '../settings_storage.dart';
 /// (только delete, см. [clearChainHopRefs]). Цепочка при этом ОСТАЁТСЯ —
 /// снимается ровно позиция, и потому счётчик обязан быть виден: маршрут 3+
 /// хопов после вычистки эмитится укороченным.
-/// §441 — `dnsServers`: template-серверы DNS, у которых значение переменной
-/// типа `outbound` (`vars.outbound`) называло Направление, → vpn-1, как цель
-/// правила (disable/delete). Без лечения такой сервер выпадает на сборке
-/// (Н10), а его DNS-правила становятся отказом.
+/// §441 — `dnsServers`: DNS-серверы, которые называли Направление, → vpn-1,
+/// как цель правила (disable/delete): у template — переменная типа
+/// `outbound` (`vars.outbound`), у пользовательского — `body.detour`, в
+/// корневом списке и в секциях узлов. Без лечения такой сервер выпадает на
+/// сборке (Н10), а его DNS-правила становятся отказом.
 typedef DirectionHealResult = ({
   int rules,
   int detours,
@@ -207,8 +208,9 @@ Future<void> _healPingOptionsGroupRefs(String deletedTag) async {
 /// по объявлению шаблона, `outbound` — всегда) и у template-сервера DNS
 /// (`vars.outbound`; сервер вне шаблона — ключ `outbound` по имени). Лечится
 /// так же → vpn-1, затем Н4: vpn-1, равное умолчанию объявления, снимает ключ
-/// (сервер снова следует шаблону). `rules` — правила (одно на правило),
-/// `dnsServers` — template-серверы DNS.
+/// (сервер снова следует шаблону). Detour DNS (D-114) — `body.detour`
+/// пользовательского сервера, корневого и в секциях узлов, — туда же.
+/// `rules` — правила (одно на правило), `dnsServers` — DNS-серверы.
 Future<({int rules, int dnsServers})> _healDirectionRefs(
     String deletedTag) async {
   final autoTag = '$deletedTag-auto';
@@ -246,25 +248,47 @@ Future<({int rules, int dnsServers})> _healDirectionRefs(
   if (changed) {
     await SettingsStorage.saveCustomRules(healed, flush: false);
   }
-  return (rules: count, dnsServers: await _healDnsServerVarRefs(retarget, decls));
+  return (
+    rules: count,
+    dnsServers: await _healDnsServerDirectionRefs(retarget, decls),
+  );
 }
 
-/// §441 — переменные типа `outbound` template-серверов DNS по [retarget]
-/// ([retargetDnsServerOutboundVars]). Возвращает число вылеченных серверов.
-/// flush:false — атомарный `_save()` на вызывающем.
-Future<int> _healDnsServerVarRefs(
+/// §441 — ссылки DNS-серверов на Направление по [retarget]: корневой список
+/// ([retargetDnsServerDirectionRefs]: переменные типа `outbound` template,
+/// `body.detour` user) и секции узлов ([retargetSectionsDnsDetours]).
+/// Возвращает число вылеченных серверов. flush:false — атомарный `_save()` на
+/// вызывающем; зеркало секций в контроллере — `DirectionMutations`.
+Future<int> _healDnsServerDirectionRefs(
   Map<String, String> retarget,
   RecordVarDecls decls,
 ) async {
-  final servers = await SettingsStorage.getDnsServers();
   var count = 0;
-  final healed = <DnsServerRef>[];
+  final servers = await SettingsStorage.getDnsServers();
+  var rootCount = 0;
+  final healedServers = <DnsServerRef>[];
   for (final s in servers) {
-    final next = retargetDnsServerOutboundVars(s, decls, retarget);
-    if (!identical(next, s)) count++;
-    healed.add(next);
+    final next = retargetDnsServerDirectionRefs(s, decls, retarget);
+    if (!identical(next, s)) rootCount++;
+    healedServers.add(next);
   }
-  if (count > 0) await SettingsStorage.saveDnsServers(healed, flush: false);
+  if (rootCount > 0) {
+    await SettingsStorage.saveDnsServers(healedServers, flush: false);
+  }
+  count += rootCount;
+
+  final lists = await _getServerLists();
+  var listsChanged = false;
+  final healedLists = <ServerList>[];
+  for (final l in lists) {
+    final r = retargetSectionsDnsDetours(l, retarget);
+    if (r.healed != null) {
+      listsChanged = true;
+      count += r.count;
+    }
+    healedLists.add(r.healed ?? l);
+  }
+  if (listsChanged) await _saveServerLists(healedLists, flush: false);
   return count;
 }
 

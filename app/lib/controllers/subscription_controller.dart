@@ -20,6 +20,7 @@ import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
+import '../services/record_vars.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
 import '../services/node_hash.dart';
@@ -2728,6 +2729,23 @@ class SubscriptionController extends ChangeNotifier {
     var changed = false;
     for (final e in _entries) {
       final r = clearDetourDirectionRefs(e.list, tag);
+      if (r.healed != null) {
+        e._replaceList(r.healed!);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  /// §441 — ресинк `_entries` после storage-heal `body.detour` DNS-серверов
+  /// секций узлов на выключенное или удалённое Направление [tag] (→ vpn-1),
+  /// по той же причине, что [syncDetourDirectionRefsCleared]. Ядро общее —
+  /// [retargetSectionsDnsDetours].
+  void syncSectionsDnsDetourRefsHealed(String tag) {
+    final retarget = directionRefRetarget(tag, 'vpn-1');
+    var changed = false;
+    for (final e in _entries) {
+      final r = retargetSectionsDnsDetours(e.list, retarget);
       if (r.healed != null) {
         e._replaceList(r.healed!);
         changed = true;

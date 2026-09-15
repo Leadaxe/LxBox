@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
+import 'dns_ref.dart';
 import 'import_rule.dart';
 import 'node_link.dart';
 import 'node_sections.dart';
@@ -606,6 +607,55 @@ final class FolderServers extends ServerList {
     if (membersChanged) next = next.copyWith(members: ms);
   }
   return (healed: count > 0 ? next : null, count: count);
+}
+
+/// §441 (SPEC 128 §6, D-114) — `body.detour` DNS-серверов в секциях узлов
+/// списка [l] (одиночный сервер, члены папки) по [retarget]
+/// ([retargetDnsServerDetour]). Возвращает копию (null — нечего лечить) и
+/// число переписанных серверов.
+///
+/// Общее ядро: storage-heal (`_healDnsServerDirectionRefs`) и in-memory
+/// ресинк `SubscriptionController.syncSectionsDnsDetourRefsHealed` обязаны
+/// переписывать одинаково, иначе следующий `_persist()` воскресит ссылку.
+({ServerList? healed, int count}) retargetSectionsDnsDetours(
+  ServerList l,
+  Map<String, String> retarget,
+) {
+  var count = 0;
+  NodeSections? heal(NodeSections? sections) {
+    if (sections == null || sections.dnsServers.isEmpty) return null;
+    var changed = false;
+    final servers = <DnsServerInline>[];
+    for (final d in sections.dnsServers) {
+      final next = retargetDnsServerDetour(d, retarget);
+      if (!identical(next, d)) {
+        changed = true;
+        count++;
+      }
+      servers.add(next);
+    }
+    return changed ? sections.copyWith(dnsServers: servers) : null;
+  }
+
+  switch (l) {
+    case UserServer u:
+      final s = heal(u.sections);
+      return (healed: s == null ? null : u.copyWith(sections: s), count: count);
+    case FolderServers f:
+      var changed = false;
+      final members = <FolderMember>[];
+      for (final m in f.members) {
+        final s = heal(m.sections);
+        if (s != null) changed = true;
+        members.add(s == null ? m : m.copyWith(sections: s));
+      }
+      return (
+        healed: changed ? f.copyWith(members: members) : null,
+        count: count,
+      );
+    case SubscriptionServers():
+      return (healed: null, count: 0);
+  }
 }
 
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).

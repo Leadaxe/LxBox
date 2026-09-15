@@ -402,6 +402,22 @@ DnsServerRef retargetDnsServerOutboundVars(
   return next == null ? server : server.copyWith(varValues: next);
 }
 
+/// Цели по имени в записи DNS-сервера по [retarget]: у template — переменные
+/// типа `outbound` ([retargetDnsServerOutboundVars]), у пользовательского —
+/// `body.detour` ([retargetDnsServerDetour]). Не совпало или preset — тот же
+/// экземпляр.
+DnsServerRef retargetDnsServerDirectionRefs(
+  DnsServerRef server,
+  RecordVarDecls decls,
+  Map<String, String> retarget,
+) =>
+    switch (server) {
+      DnsServerTemplate() =>
+        retargetDnsServerOutboundVars(server, decls, retarget),
+      DnsServerInline() => retargetDnsServerDetour(server, retarget),
+      DnsServerPreset() => server,
+    };
+
 /// То же у правила-пресета ([presetOutboundVarNames]). Правило другого вида —
 /// тот же экземпляр.
 CustomRule retargetPresetOutboundVars(
