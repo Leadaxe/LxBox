@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done. Device-verify не проводился: изменения — сборка конфига, импорт и валидатор шаблона; форма конфига проверена `sing-box check` |
+| Статус | **Released в v2.24.0** (15.09.2026, ядро `v1.14.0-lx.39`). Done. Device-verify не проводился: изменения — сборка конфига, импорт и валидатор шаблона; форма конфига проверена `sing-box check` |
 | Дата | 2026-09-15 |
 | Коммиты | `chore(contract)` d3675240 — синк 1.0.2; `test(443)` 3f76b3f0 — L7 и раннер корпуса; `fix(443)` 47bff15a, 11c400a7 — вторая линия; `docs(443)` ef25d900 — SPEC 128 → 129 в ссылках §441; `fix(443)` 0bd7c98b — Н11; `fix(443)` 60d206d1 — порядок импорта; `docs(443)` — эта таска, GUARDS, CHANGELOG |
 | Норма | SPEC 129 лаунчера — [`129-F-N-DNS_TEMPLATE_VARS/SPEC.md`](../../../../singbox-launcher/SPECS/129-F-N-DNS_TEMPLATE_VARS/SPEC.md) (Н10, Н11, §5.5, §9); решение D-118 (`SPECS/103-F-O-LX_SHARED_CONTRACT/DECISIONS.md`, заменяет D-117 п. 2); контракт 1.0.2, `contract/TASKS_LXBOX.md` `## 18`; README корпуса `contract/corpus/backup/README.md`, раздел «Фикстура объявлений шаблона». Лаунчер develop `8971d62c` |
