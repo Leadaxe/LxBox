@@ -101,7 +101,7 @@ auth), а не факт, что за границей всё открыто.
 | `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
-| `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
+| `GET /state/storage` | весь `SettingsStorage._cache` в форме хранения 1.0 (§439: `storage_version`, `sources[]`, `rules[]`, `dns{}`) со scrubber'ом: `vars.debug_token` → `***`, `url` подписки — маской, `origin.raw` сервера → `origin.raw_bytes`, `nodes[]` папки → `nodes_count`. Ключей `server_lists` / `custom_rules` / `dns_options` / `chains` больше нет — [STORAGE.md](../STORAGE.md#storage-form-and-migration-439) |
 | `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,current_session_allow_bypass,background_mode,is_ignoring_battery_optimizations}`. **§069** — `current_session_allow_bypass` это **runtime applied** значение (snapshot из последнего `VpnService.Builder.allowBypass()` в `establish()`); может отличаться от persisted `allow_bypass` если юзер поменял toggle без VPN reload. `false` пока VPN never started или после `stop`. |
 | `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
 | `GET /device` | Android version, model, ABI, app version + build, core version (libbox / sing-box-lx), VPN permission, network type, uptime |
@@ -110,6 +110,9 @@ auth), а не факт, что за границей всё открыто.
 curl -s -H "$HDR" "$BASE/state" | jq '{tunnel,active_in_group,nodes_count,groups}'
 curl -s -H "$HDR" "$BASE/state/subs" | jq 'map({id,title,enabled,nodes_count})'
 curl -s -H "$HDR" "$BASE/state/storage?reveal=true" | jq '.vars | keys'
+# Форма хранения и источники (§439): цепочки — хвостом sources[]
+curl -s -H "$HDR" "$BASE/state/storage" | \
+  jq '{v: .storage_version, sources: [.sources[] | {kind, id, name, tag}], rules: (.rules | length)}'
 ```
 
 ---
@@ -353,7 +356,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
 | `/subs/{id}` | GET | — |
-| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity |
+| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity. **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
 | `/subs/reorder` | POST | `{"order":[id1,...]}` |
@@ -408,6 +411,44 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 ```
 
 **Reorder:** то же что у rules.
+
+### §439 — `override_detour` ссылкой на узел (NodeLink)
+
+С 2.23.3 detour источника — не финальный тег конфига, а ссылка
+`{folder_id?, tag}` (D-112, `contract/docs/NODE_LINK.md`). Та же форма в ответах
+`/subs` и `/state/subs` (`override_detour` и `detour_policy.override_detour`,
+`null` — detour нет).
+
+| Цель | Ссылка |
+|---|---|
+| член папки | `{"folder_id":"<id папки>","tag":"<сырой тег, до префикса>"}` |
+| узел или группа подписки | `{"folder_id":"<id подписки>","tag":"<сырой тег>"}` |
+| одиночный сервер | `{"tag":"<его финальный тег>"}` |
+| Направление, `direct-out`, цепочка | `{"tag":"vpn-2"}` |
+
+- Строка читается терпимо: как `{tag}`, а у папки — как сырой тег её члена,
+  если такой член есть.
+- Резолв — только на сборке. Не разрешившаяся ссылка **выпадает вместе с
+  носителем** (узел не уходит напрямую), предупреждение — в сборке.
+- `tag_prefix` одиночного сервера входит в его корневой адрес: смена префикса
+  через этот PATCH переписывает ссылки на сервер. `DELETE /subs/{id}` гасит
+  ссылки на узлы источника (detour снимается, позиция уходит из цепочек).
+
+```bash
+# detour подписки через член папки Jump (сырой тег члена, без префикса папки)
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"override_detour":{"folder_id":"<folder id>","tag":"Jump"}}' \
+  "$BASE/subs/<id>?rebuild=true"
+# → {..., "override_detour":{"folder_id":"<folder id>","tag":"Jump"}, ...}
+
+# Через Направление
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"override_detour":{"tag":"vpn-2"}}' "$BASE/subs/<id>"
+
+# Снять detour
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"override_detour":null}' "$BASE/subs/<id>"
+```
 
 ### §346 — identity подписки (§289)
 
@@ -512,7 +553,8 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 deleteDirection` — семантика идентична UI: `vpn-1` неудаляем и всегда enabled,
 удаление/выключение Направления деградирует rules-ссылки (route_final /
 custom-rule outbound) на `vpn-1` (§202, необратимо), detour-ссылки
-(`override_detour` / `members[].detour`) — в `''` (None, §248). Shape ресурса —
+(корневые `{tag}` на Направление в `override_detour` источника и `detour` члена
+папки) снимаются (None, §248). Shape ресурса —
 storage-JSON Направления (`Direction.toJson()`, snake_case), включая поле
 `detour` (§248 — Направление как detour-прослойка).
 
@@ -604,8 +646,9 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   UI-SnackBar'а): `rules` — route_final / custom-rule outbound → `vpn-1`
   (disable, delete; §274: detour flag-set НЕ heal-триггер — Направление
   остаётся целью правил, `rules` при `{"detour":true}` всегда 0); `detours` —
-  `override_detour` / `members[].detour` → `''` (disable, delete, detour
-  flag-unset); `includes` — вычистка тега из `include[]` остальных
+  корневые `{tag}` на Направление в `override_detour` / `detour` члена →
+  снимаются (disable, delete, detour flag-unset); пара `{folder_id, tag}`
+  адресует узел и Направлением не бывает; `includes` — вычистка тега из `include[]` остальных
   Направлений. Ссылкой «на Направление» считается его tag И tag
   urltest-двойника `<tag>-auto`.
 - **Удаление** вычищает тег из `include[]` всех остальных Направлений,
@@ -626,7 +669,8 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 ## Chains CRUD — `/chains/*`
 
 §393 C / SPEC 110 — **цепочки хопов**, третий вид источника рядом с
-подписками и серверами (`chains[]` в storage). Цепочка — это явный маршрут
+подписками и серверами (§439: записи `kind: chain` хвостом `sources[]` в
+storage, отдельного ключа и поля `order` нет). Цепочка — это явный маршрут
 `вы → хоп 1 → хоп 2 → цель`, который эмитится одним outbound'ом
 `type: "chain"`. Не путать с detour: **цепочка — это источник (маршрут)**, а
 detour — свойство отдельного узла. Позиция цепочки — узел, группа или
@@ -635,6 +679,17 @@ detour — свойство отдельного узла. Позиция цеп
 **Порядок списка нормативен**: цепочка может ссылаться только на цепочки,
 объявленные **выше** неё, — так исключаются циклы. `hops` — позиции в
 **порядке пакета**: `hops[0]` — первый хоп от клиента.
+
+**§439 — позиция — ссылка `{folder_id?, tag}`**, как `override_detour` у `/subs`:
+член папки, узел или группа подписки — `{folder_id: <id папки или подписки>,
+tag: <сырой тег, до префикса>}`; одиночный сервер, Направление, `direct-out`,
+другая цепочка — `{tag}`. Строка читается как `{tag}`. Сборка резолвит ссылки в
+финальные теги; не разрешившаяся позиция роняет цепочку целиком.
+
+Ответ `GET /chains`, `GET /chains/{tag}` и мутаций: `tag`, `label`, `enabled` +
+канон `source_chain.schema.json` (`idle_timeout`, `strip_evasion`, `strip`,
+`rewrite`, `hops` ссылками). Поля `order` нет: место цепочки — её индекс в
+списке.
 
 | Endpoint | Метод | Body |
 |---|---|---|
@@ -671,15 +726,16 @@ Write'ы проходят **тот же гейт, что и форма реда�
 # Список (порядок нормативен)
 curl -s -H "$HDR" "$BASE/chains" | jq 'map({tag,label,enabled,hops})'
 
-# Создать цепочку из двух хопов (порядок = порядок пакета)
+# Создать цепочку из двух хопов (порядок = порядок пакета):
+# одиночный сервер de-frankfurt-01 и узел подписки nl-ams-02 (сырой тег)
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
-  -d '{"label":"DE → NL","hops":["de-frankfurt-01","nl-ams-02"]}' \
+  -d '{"label":"DE → NL","hops":[{"tag":"de-frankfurt-01"},{"folder_id":"<subscription id>","tag":"nl-ams-02"}]}' \
   "$BASE/chains?rebuild=true"
-# → 201 {"tag":"chain-1",...}
+# → 201 {"tag":"chain-1",...,"hops":[{"tag":"de-frankfurt-01"},{"folder_id":"<subscription id>","tag":"nl-ams-02"}]}
 
-# Переставить позиции / добавить третий хоп
+# Переставить позиции / добавить третий хоп (Направление)
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
-  -d '{"hops":["de-frankfurt-01","vpn-2","nl-ams-02"]}' \
+  -d '{"hops":[{"tag":"de-frankfurt-01"},{"tag":"vpn-2"},{"folder_id":"<subscription id>","tag":"nl-ams-02"}]}' \
   "$BASE/chains/chain-1?rebuild=true"
 
 # Послойная проба (нужен живой VPN)
@@ -715,6 +771,9 @@ curl -s -H "$HDR" "$BASE/chains/chain-1/probe" | jq '.layers'
 - **DELETE не чистит чужие позиции**: позиции других цепочек, указывающие на
   удалённый тег, остаются, и такая цепочка деградирует целиком
   (`chain_hop_missing`); ответ перечисляет их в `"dangling_refs"`.
+- Удаление узла или источника (`DELETE /subs/{id}`, `DELETE
+  /folders/{id}/members/{idx}`) снимает позиции-ссылки на его узлы из всех
+  цепочек; переименование узла правкой тела и перенос переписывают их (§439).
 - Требование к ядру: `type: chain` есть с **sing-box-lx v1.14.0-lx.27**
   (в v2.21.0 пин — `v1.14.0-lx.28-rc.1`). На более старом ядре цепочки не
   собираются.
@@ -728,11 +787,19 @@ curl -s -H "$HDR" "$BASE/chains/chain-1/probe" | jq '.layers'
 
 ## Folders CRUD — `/folders/*`
 
-§238 — папки серверов §234 (`FolderServers` в `server_lists`) поверх публичных
-методов `SubscriptionController`. Папка — это entry общего списка `/subs`
-(kind=`FolderServers`): **meta папки (name/enabled/tag_prefix/detour_policy)
+§238 — папки серверов §234 (§439: запись `kind: folder` в `sources[]`, члены —
+`nodes[]`) поверх публичных методов `SubscriptionController`. Папка — это entry
+общего списка `/subs` (kind=`FolderServers`): **meta папки
+(name/enabled/tag_prefix/detour_policy, общий detour — `override_detour`)
 правится через `PATCH /subs/{id}`**, `/folders/*` добавляет только
 папко-специфичные операции.
+
+**§439 — `detour` члена — ссылка `{folder_id?, tag}`** (форма та же, что у
+`override_detour`, см. `/subs`): сосед по папке — `{"folder_id":"<id этой
+папки>","tag":"<сырой тег соседа>"}`, Направление или одиночный сервер —
+`{"tag":"..."}`, `null` снимает. Строка читается как сырой тег соседа, если такой
+член есть, иначе как `{tag}`. В GET `detour` — ссылка или `null`. Не разрешившийся
+на сборке detour выбрасывает узел из конфига (напрямую он не уходит).
 
 **Члены адресуются позиционным индексом** (у `FolderMember` нет id): после
 remove/ungroup/reorder индексы съезжают — каждый write-ответ возвращает свежий
@@ -766,9 +833,12 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   "$BASE/folders/$FID/members?rebuild=true"
 # → 201 {"ok":true,"action":"folder-members-add","added":2,"folder":{...}}
 
-# Выключить члена 0, повесить личный detour на члена 1 (§237)
-curl -X PATCH -H "$HDR" -d '{"enabled":false}' "$BASE/folders/$FID/members/0"
-curl -X PATCH -H "$HDR" -d '{"detour":"jump-de"}' "$BASE/folders/$FID/members/1"
+# Личный detour члена 1 (Beta) через члена 0 (Alpha), §237 — ссылка парой (§439)
+curl -X PATCH -H "$HDR" -d "{\"detour\":{\"folder_id\":\"$FID\",\"tag\":\"Alpha\"}}" "$BASE/folders/$FID/members/1"
+# → {..., "folder":{..., "members":[..., {"index":1,"detour":{"folder_id":"<FID>","tag":"Alpha"},...}]}}
+# Снять личный detour, выключить члена 1
+curl -X PATCH -H "$HDR" -d '{"detour":null}' "$BASE/folders/$FID/members/1"
+curl -X PATCH -H "$HDR" -d '{"enabled":false}' "$BASE/folders/$FID/members/1"
 
 # Прогнать Test servers (§236) — результаты сразу в ответе
 curl -s -X POST -H "$HDR" -d '{"timeout_ms":2000}' "$BASE/folders/$FID/probe" | \
@@ -874,8 +944,8 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. **Валидация (§292):** `proxy_listen` — IPv4, `proxy_port` — 1024..65535, `proxy_protocol` — `mixed`\|`http`\|`socks`; невалидное → 400. **§293:** запись идёт через `VpnSettingsFacade` (единый путь с UI) — на смену режима зеркалит native `has_tun` (гейтит `VpnService.prepare`), при auth+пустом пароле генерит его. **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
 | `/settings/vars/{key}` | PUT | `{"value":"<str>"}`. Для ключей с side-effect-hook (§279: `app_language`) запись идёт через владеющий сервис, не через голый `setVar` — см. «Side-effect vars» ниже. |
 | `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку). Для hook-ключей = сброс к дефолту через тот же сервис. |
-| `/settings/dns_options/servers` | PUT | §043 + §044: kind-refs `[{enabled, kind: 'inline'\|'preset'\|'template', tag, description?, body?}]`. Для `kind: inline` обязателен `body` (partial sing-box shape **без** `tag`/`description`/`enabled` — они на ref-level). **§294:** kind-ref'ы валидируются по типизированной модели `DnsServerRef` (битый `kind` / отсутствующий `tag` / inline без `body` → 400) — симметрия с типизированным `/rules` роутинга. Legacy full-body snapshot (без `kind`) принимается verbatim — auto-migrate на ближайший resolver. |
-| `/settings/dns_options/rules` | PUT | **§294:** `{"rules":[{kind: 'inline'\|'srs'\|'preset'\|'template', ...}]}` — массив kind-ref'ов, валидируется по `DnsRuleRef` (битая форма → 400), пишется в живой `dns_options.rules` (билдер читает именно его). Legacy `{"rules":"<JSON string>"}` (§061 — пишет `dns_options.rules_json`, билдер игнорирует, no-op) остаётся для обратной совместимости. |
+| `/settings/dns_options/servers` | PUT | **§439:** `{"servers":[<запись dns.servers[]>]}` — только записи формы 1.0, как их отдаёт `GET /state/storage` → `dns.servers`: `{kind:"user", tag, enabled, body, description?}` (`body` — partial sing-box без `tag`), `{kind:"preset", ref:"<preset_id>:<tag>", enabled}`, `{kind:"template", tag, enabled, vars?}`. Список заменяется целиком. Форма 2.23.2 (`kind: inline`, `varValues`, снимок без `kind`) → 400 с образцом записи, хранение не трогается. → `{ok, action:"settings-dns-servers", count}`. Путь URL прежний: это адрес API, не ключ файла. |
+| `/settings/dns_options/rules` | PUT | **§439:** `{"rules":[<запись dns.rules[]>]}` — только записи формы 1.0: `{kind:"user", name, enabled, body}` (`body` — правило sing-box с `server`), `{kind:"preset", ref:"<preset_id>", enabled}`, `{kind:"srs", name, id, …}`, `{kind:"template", name, enabled}`. Форма 2.23.2 (`kind: inline` с `rule`, `presetId`) и строка JSON (`rules_json`) → 400 с образцом записи. → `{ok, action:"settings-dns-rules", count}`. |
 | `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
 | `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |
 | `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует полного рестарта процесса** (`am force-stop` + relaunch, либо UI Quit & reopen) — `Libbox.setup` one-shot per process, stop/start VPN **не** перечитывает флаг. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
@@ -956,28 +1026,30 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" -d '{"value":"evil"}' 
 # → 409 {"error":{"code":"conflict","message":"var \"debug_token\" is managed via App Settings UI only"}}
 ```
 
-**DNS servers:**
+**DNS servers** (§439 — записи `dns.servers[]`; PUT заменяет список целиком, поэтому
+удобнее взять текущий из `/state/storage` и дописать):
 ```bash
+curl -s -H "$HDR" "$BASE/state/storage" | \
+  jq '{servers: (.dns.servers + [
+        {"kind":"user","tag":"dns-local","enabled":true,"body":{"type":"udp","server":"192.168.1.1"}}
+      ])}' | \
+  curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+    --data-binary @- "$BASE/settings/dns_options/servers?rebuild=true"
+# → {"ok":true,"action":"settings-dns-servers","count":N,...}
+
+# Форма 2.23.2 отвергается
 curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
-  -d '{
-    "servers":[
-      {"tag":"dns-google","type":"udp","server":"8.8.8.8"},
-      {"tag":"dns-local","type":"udp","server":"192.168.1.1"}
-    ]
-  }' \
-  "$BASE/settings/dns_options/servers?rebuild=true"
+  -d '{"servers":[{"kind":"inline","tag":"dns-local","enabled":true,"body":{"type":"udp","server":"192.168.1.1"}}]}' \
+  "$BASE/settings/dns_options/servers"
+# → 400 {"error":{"code":"bad_request","message":"dns server \"dns-local\": unknown kind \"inline\"; expected a record like {\"kind\":\"user\",...} (kind user|preset|template)"}}
 ```
 
-**DNS rules** (legacy — string-encoded JSON):
+**DNS rules** (§439 — записи `dns.rules[]`):
 ```bash
-RULES=$(jq -c . <<'EOF'
-[
-  {"domain_suffix":[".local"],"server":"dns-local"},
-  {"outbound":"any","server":"dns-google"}
-]
-EOF
-)
-jq -n --arg rules "$RULES" '{rules: $rules}' | \
+curl -s -H "$HDR" "$BASE/state/storage" | \
+  jq '{rules: (.dns.rules + [
+        {"kind":"user","name":"local","enabled":true,"body":{"domain_suffix":[".local"],"server":"dns-local"}}
+      ])}' | \
   curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
     --data-binary @- "$BASE/settings/dns_options/rules?rebuild=true"
 ```
@@ -1105,12 +1177,12 @@ curl -s -H "$HDR" "$BASE/files/oom?name=<snapshot>&file=heap.pb" > /tmp/heap.pb
 
 ## Backup — `/backup/*`
 
-Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup%20restore%20ui/spec.md)). Wire-format — single, без `version` поля; legacy `{vars, server_lists}` на корне больше не поддерживается.
+Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup%20restore%20ui/spec.md)). Wire-format — single, без `version` поля в конверте; форму блока `storage` задаёт его `storage_version` (§439). Legacy `{vars, server_lists}` на корне конверта не поддерживается. Это внутренний бэкап LxBox, не LX Backup 1.0 для лаунчера.
 
 | Endpoint | Что отдаёт / принимает |
 |---|---|
-| `GET /backup/export?include=storage,vpn_settings` | Snapshot. `include` опц., default — обе части |
-| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}` |
+| `GET /backup/export?include=storage,vpn_settings[&from=v0_bak]` | Snapshot. `include` опц., default — обе части. **§439** `from=v0_bak` — блок `storage` из `lxbox_settings.json.v0.bak` (форма 2.23.2 на момент миграции) вместо живого хранения; копии нет → 404; другое значение `from` → 400 |
+| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}`. **§439** блок `storage` без `storage_version` (форма 2.23.2) сначала мигрирует; ответ `applied.migrated` + `applied.migration` |
 
 **Format**:
 ```json
@@ -1118,9 +1190,9 @@ Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup
   "app": "lxbox",
   "kind": "backup",
   "created_at": "2026-05-10T...",
-  "source_app_version": "1.7.3+32",
-  "storage": { ...lxbox_settings.json целиком: vars, server_lists,
-               custom_rules, tun_apps, enabled_groups, route_final, ... },
+  "source_app_version": "2.23.3+22303502",
+  "storage": { ...lxbox_settings.json целиком: storage_version, vars, sources,
+               rules, dns, tun_apps, directions, route_final, ... },
   "vpn_settings": {
     "auto_start": false,
     "keep_on_exit": false,
@@ -1131,7 +1203,7 @@ Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup
 }
 ```
 
-- **`storage`** — глубокая копия `lxbox_settings.json` (все top-level keys плюс nested `vars` map). Включает custom_rules, tun_apps, dns_options, wifi_history и любые будущие top-level keys без правок API.
+- **`storage`** — глубокая копия `lxbox_settings.json` (все top-level keys плюс nested `vars` map), без скраббера. Включает `storage_version`, `sources`, `rules`, `dns`, `tun_apps`, `vars.wifi_history` и любые будущие top-level keys без правок API. Форма — [STORAGE.md](../STORAGE.md#storage-form-and-migration-439).
 - **`vpn_settings`** — native-side `boxvpn_boot` SharedPreferences (BootReceiver читает at boot-time из Kotlin, не вынесено в Flutter storage).
 
 ```bash
@@ -1150,6 +1222,30 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?merge=true"
+```
+
+**§439 — форма 2.23.2 и откат.** Блок `storage` без `storage_version` (снятый на
+2.23.2 и раньше) принимается и мигрирует до allowlist'а:
+
+```bash
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  --data-binary @/tmp/lxbox-backup-2.23.2.json \
+  "$BASE/backup/import?rebuild=true" | jq '.applied | {migrated, migration}'
+# → {"migrated": true,
+#    "migration": {"migrated": true,
+#                  "info": ["sources: 3 subscriptions, …", "rules: 12 rules → 13 records", "dns: 5 servers, 4 rules", …],
+#                  "warnings": [ … ]}}
+# Блок формы 1.0 → "migrated": false, ключа migration нет (если нет предупреждений)
+```
+
+Копия исходника первой миграции — для стендов, где нужно вернуться на 2.23.2.
+2.23.2 читает этот конверт своим `POST /backup/import`; бэкап формы 1.0 версия
+2.23.2 не читает (allowlist отбросит `sources`, `rules`, `dns`,
+`storage_version`).
+
+```bash
+curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox-v0.json
+# 404 — устройство не мигрировало с формы 2.23.2 (чистая установка 2.23.3)
 ```
 
 `merge=false` (default) — replace; `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
