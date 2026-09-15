@@ -487,7 +487,7 @@ void main() {
     test('ссылка из подписки с extra.mode="" → mode packet-up в конфиге (§410)',
         () {
       const uri =
-          'vless://423b1d79-08c4-403f-9d5e-c541f791b55f@178.176.128.128:443'
+          'vless://423b1d79-08c4-403f-9d5e-c541f791b55f@178.176.182.128:443'
           '?alpn=h2%2Chttp%2F1.1&encryption=none'
           '&extra=%7B%22host%22%3A%22%22%2C%22path%22%3A%22%2F%22%2C%22mode%22'
           '%3A%22%22%2C%22headers%22%3Anull%2C%22xPaddingBytes%22%3A%220%22%2C'
@@ -508,14 +508,14 @@ void main() {
           '%22%3A%220%22%2C%22hMaxRequestTimes%22%3A%220%22%2C'
           '%22hMaxReusableSecs%22%3A%220%22%2C%22hKeepAlivePeriod%22%3A0%7D%2C'
           '%22downloadSettings%22%3Anull%2C%22extra%22%3Anull%7D'
-          '&fp=qq&host=media.morphai.cc&mode=packet-up'
+          '&fp=qq&host=media.morphei.cc&mode=packet-up'
           '&path=%2Fhls%2Fv2%2Ftrack%2F8e31c750%2F&security=tls'
-          '&sni=media.morphai.cc&type=xhttp#t';
+          '&sni=media.morphei.cc&type=xhttp#t';
       final node = parseUri(uri);
       expect(node, isA<VlessSpec>());
       final t = (node! as VlessSpec).transport as XhttpTransport;
       expect(t.mode, 'packet-up');
-      expect(t.host, 'media.morphai.cc');
+      expect(t.host, 'media.morphei.cc');
       // path: в extra лежит "/", плоско — "/hls/…". Xray (SplitHTTPConfig
       // .Build) host/path/mode берёт только из внешнего объекта; с "/"
       // сервер отвечал 404 на uplink (device-verified на эмуляторе).
@@ -708,7 +708,7 @@ void main() {
     test('placement=header без mode → дописан mode: packet-up + warning', () {
       final (m, w) = const XhttpTransport(
         path: '/hls/v2/track/8e31c750/',
-        host: 'media.morphai.cc',
+        host: 'media.morphei.cc',
         uplinkDataPlacement: 'header',
       ).toSingbox(TemplateVars.empty);
       expect(m['mode'], 'packet-up');
@@ -776,7 +776,7 @@ void main() {
     test('ссылка из жалобы: header без mode через URI-ветку', () {
       final t = parseTransport({
         'type': 'xhttp',
-        'host': 'media.morphai.cc',
+        'host': 'media.morphei.cc',
         'path': '/hls/v2/track/8e31c750/',
         'uplinkDataPlacement': 'header',
         'uplinkHTTPMethod': 'GET',

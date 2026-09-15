@@ -23,7 +23,7 @@ uplink_data_placement can be header only in packet-up mode
 Ссылка узла (cumirum #1755, сокращено) несёт **оба** слоя Xray-формы:
 
 ```
-vless://…?type=xhttp&mode=packet-up&host=media.morphai.cc&path=/hls/…
+vless://…?type=xhttp&mode=packet-up&host=media.morphei.cc&path=/hls/…
   &extra={"host":"","path":"/","mode":"","uplinkDataPlacement":"header",
           "uplinkHTTPMethod":"GET","sessionIDPlacement":"cookie",…}
 ```
