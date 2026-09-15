@@ -8,8 +8,10 @@ import 'golden_harness.dart';
 // «экспорт → импорт в пустое хранение → сборка конфига».
 //
 // Эталоны:
-//   • `golden/<name>.backup.json` — файл экспорта; `exported_at` и
-//     `exported_by.version` нормализованы;
+//   • `golden/<name>.backup.json` — файл экспорта; `exported_at`,
+//     `exported_by.version` и `id` частей разделённого json-массива
+//     (`<имя> #N`, миграция выдаёт им новый `id` при каждом прогоне, §439
+//     §4.2) нормализованы;
 //   • `golden/<name>.backup_roundtrip.json` — что круг теряет УЖЕ сегодня:
 //     предупреждения экспорта и импорта и разница `config.json` после
 //     импорта против `golden/<name>.config.json` (строки `путь: было →
@@ -27,7 +29,7 @@ void main() {
       addTearDown(source.dispose);
       await source.seed(name);
       final exported = await exportGoldenLxBackup();
-      expectGolden('$name.backup.json', exported.json);
+      expectGolden('$name.backup.json', _withSplitIdsMasked(exported.json));
 
       final target = await StorageSandbox.create();
       addTearDown(target.dispose);
@@ -50,4 +52,27 @@ void main() {
       expectGolden('$name.backup_roundtrip.json', prettyJson(roundtrip));
     });
   }
+}
+
+/// Плейсхолдер `id` части разделённого json-массива в эталоне.
+const _kSplitPartId = '<split-part-id>';
+
+/// Экспорт с `id` записей `rules[]`, заведённых делением json-массива
+/// (`<имя> #N`), заменённым на [_kSplitPartId]: ключ в файле есть, значение
+/// от прогона к прогону разное.
+String _withSplitIdsMasked(String json) {
+  final doc = jsonDecode(json) as Map<String, dynamic>;
+  final rules = doc['rules'];
+  if (rules is List) {
+    final split = RegExp(r' #\d+$');
+    for (final r in rules) {
+      if (r is Map &&
+          r['id'] is String &&
+          r['name'] is String &&
+          split.hasMatch(r['name'] as String)) {
+        r['id'] = _kSplitPartId;
+      }
+    }
+  }
+  return prettyJson(doc);
 }

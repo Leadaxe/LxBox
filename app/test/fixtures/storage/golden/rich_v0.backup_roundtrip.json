@@ -1,18 +1,23 @@
 {
   "export_warnings": [
-    "backup_local_only_dropped | dns: my-doh: description, google_udp: varValues, google_dot: description, google_doh: varValues, ru-direct:yandex_udp: description, ds-geo: srs, ds-model: srs",
-    "backup_local_only_dropped | Provider: import_rules, on_update_action, detour_policy",
-    "backup_local_only_dropped | Second: import_rules, import_rules_enabled, on_update_action, detour_policy",
-    "backup_local_only_dropped | Hy2 Obfs: tag_prefix, detour_policy",
-    "backup_local_only_dropped | EU: ping_url, ping_timeout_ms",
+    "backup_local_only_dropped | dns: my-doh: description",
+    "backup_local_only_dropped | dns: google_udp: vars",
+    "backup_local_only_dropped | dns: google_dot: description",
+    "backup_local_only_dropped | dns: google_doh: vars",
+    "backup_local_only_dropped | dns: ru-direct:yandex_udp: description",
+    "backup_local_only_dropped | dns: ds-geo: srs",
+    "backup_local_only_dropped | dns: ds-model: srs",
+    "backup_local_only_dropped | Provider: detour_policy, import_rules, on_update_action",
+    "backup_local_only_dropped | Second: detour_policy, import_rules, import_rules_enabled, on_update_action",
+    "backup_local_only_dropped | Hy2 Obfs: detour_policy, tag_policy",
+    "backup_local_only_dropped | EU: ping_url, ping_timeout_ms, nodes[de-1].sections.dns.servers[@{self}-dns].description",
     "backup_local_only_dropped | My folder: detour_policy",
     "backup_local_only_dropped | chain-1: label",
     "backup_local_only_dropped | chain-off: label",
+    "backup_local_only_dropped | Geo sets: update_interval_hours",
     "backup_local_only_dropped | Json broken: json"
   ],
-  "import_warnings": [
-    "backup_unknown_field | sources[#11].nodes[de-1].sections.dns.servers[@{self}-dns].description"
-  ],
+  "import_warnings": [],
   "config_diff": [
     "$.dns.servers[tag=google_doh].server: \"8.8.4.4\" → \"8.8.8.8\"",
     "$.dns.servers[tag=google_doh].detour: \"vpn-1\" → <absent>",
@@ -23,9 +28,6 @@
     "$.outbounds[tag=PR FI-1].server_port: 8443 → 443",
     "$.outbounds[tag=S2 Fastest].passive_check: <absent> → true",
     "$.outbounds[tag=HY Hy2 Obfs]: {\"type\":\"hysteria2\",\"tag\":\"HY Hy2 Obfs\",\"server\":\"example-2.com\",\"server_port\":443,\"password\":\"testpass123\",\"obfs\":{\"type\":\"salamander\",\"password\":\"obfspass\"... → <absent>",
-    "$.outbounds[tag=My F Trojan WS].tls.fragment: <absent> → true",
-    "$.outbounds[tag=My F Trojan WS].tls.fragment_fallback_delay: <absent> → \"500ms\"",
-    "$.outbounds[tag=My F Trojan WS].detour: \"EU de-1\" → <absent>",
     "$.outbounds[tag=vpn-1-auto].outbounds[5→]: \"S2 jump\" → <absent>",
     "$.outbounds[tag=vpn-1-auto].outbounds[9→8]: \"HY Hy2 Obfs\" → \"Hy2 Obfs\"",
     "$.outbounds[tag=vpn-1-auto].passive_check: <absent> → true",

@@ -9,33 +9,34 @@
   "sources": [
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "bcee70db-fd24-45f4-8caf-495c638d7870",
       "name": "🏳️ БЕЛЫЕ СПИСКИ 🏳️ WHITE LISTS | CIDR | Mobile-150-(1)",
+      "enabled": false,
+      "url": "https://example.com/sub/1",
       "tag_policy": {
         "prefix": "W: "
       },
-      "url": "https://example.com/sub/1",
       "update": {
         "interval_hours": 1
       }
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "41c7ba10-7fe1-4f8e-998d-b4e247ac0f28",
       "name": "trojan подписки",
+      "enabled": false,
+      "url": "https://example.com/sub/2",
       "tag_policy": {
         "prefix": "t: "
       },
-      "url": "https://example.com/sub/2",
       "update": {
         "interval_hours": 24
       }
     },
     {
       "kind": "server",
-      "tag": "§275 persist probe",
+      "id": "fc4e11ac-b64e-4d00-92c8-44a5068fd53c",
+      "tag": "🔁 ByeByeDpi",
       "enabled": false,
       "origin": {
         "kind": "json",
@@ -46,21 +47,21 @@
         "server": "127.0.0.1",
         "server_port": 1081,
         "version": "5"
-      },
-      "id": "fc4e11ac-b64e-4d00-92c8-44a5068fd53c"
+      }
     },
     {
       "kind": "server",
+      "id": "44a0adc7-674d-49aa-8445-f9eb13d994c0",
       "tag": "🏠wg-parnas",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "wireguard://aDHCHnkcdMjnq0bF%2BV4fARkbJBW8cWjuYoVjKfUwsXo%3D@203.0.113.11:51820?address=10.10.10.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&keepalive=25&mtu=1420&publickey=UfAV7%2BOp3Xc%2FC2yHPcg3L4ihn1V0QFpNCjr%2Bq1oCrAE%3D#%F0%9F%8F%A0wg-parnas"
-      },
-      "id": "44a0adc7-674d-49aa-8445-f9eb13d994c0"
+      }
     },
     {
       "kind": "server",
+      "id": "c8246df7-3573-4b10-afe8-fe0028c388fd",
       "tag": "🏠 home",
       "enabled": false,
       "origin": {
@@ -89,24 +90,23 @@
       },
       "detour": {
         "tag": "🇫🇮⚪Финляндия (БС-4) ☁️ proxy-wl-176-109-88-214"
-      },
-      "id": "c8246df7-3573-4b10-afe8-fe0028c388fd"
+      }
     },
     {
       "kind": "server",
+      "id": "bdc39f77-3695-468f-b96f-3afea7ba78f4",
       "tag": "🏠 awg2-home",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "awg://WKl%2FddvFB2iJ7f0T%2F2RyueU11xOl7iD6XaqQTH1U%2B2g%3D@203.0.113.10:51821?publickey=scnrZACthG43hPCOoRL94PoU72OOEWY7IdqG99A7HCk%3D&address=10.99.1.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1380&keepalive=25&presharedkey=g9501vtR4Lt%2B%2BT5HpTg%2FUp%2FFwUMrNo3K0GNrD2Xno08%3D&jc=10&jmin=50&jmax=100&s1=20&s2=20&s3=60&s4=60&h1=3249068104&h2=3201022457&h3=2058299335&h4=3393249950&i1=%3Cb+0x000100002112a442%3E%3Cr+12%3E&i2=%3Cb+0x010100002112a442%3E%3Cr+12%3E&i3=%3Cr+24%3E&dns=192.168.10.1#%F0%9F%8F%A0%20awg2-home"
-      },
-      "id": "bdc39f77-3695-468f-b96f-3afea7ba78f4"
+      }
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "53b63e93-9079-41b1-9e90-ec3b2665db45",
       "name": "",
+      "enabled": false,
       "url": "https://example.com/sub/3",
       "update": {
         "interval_hours": 24
@@ -114,9 +114,9 @@
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "37428c42-e770-49f1-bf16-147a0b950e01",
       "name": "",
+      "enabled": false,
       "url": "https://example.com/sub/4",
       "update": {
         "interval_hours": -1
@@ -124,9 +124,9 @@
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "1d2ccc62-912d-4003-8a48-eac246632b07",
       "name": "🏴 ЧЕРНЫЕ СПИСКИ 🏴 BLACK LISTS | Mobile-150",
+      "enabled": false,
       "url": "https://example.com/sub/5",
       "update": {
         "interval_hours": 1
@@ -134,9 +134,9 @@
     },
     {
       "kind": "folder",
-      "enabled": false,
       "id": "cf8f4649-de71-4dae-9cc7-1ba3b09f06fa",
       "name": "IN",
+      "enabled": false,
       "tag_policy": {
         "prefix": "IN: "
       },
@@ -230,9 +230,9 @@
     },
     {
       "kind": "folder",
-      "enabled": false,
       "id": "6ac4b1b0-c658-4ca2-a0a3-cc93283e5de0",
       "name": "OUT",
+      "enabled": false,
       "tag_policy": {
         "prefix": "OUT: "
       },
@@ -344,6 +344,7 @@
     },
     {
       "kind": "server",
+      "id": "5b8fff47-dcae-4343-90f5-f845d96a588f",
       "tag": "🔥⛈️ WARP (AWG 1.5)",
       "enabled": true,
       "origin": {
@@ -386,11 +387,11 @@
         "id": "telemost.yandex.ru",
         "ip": "quic",
         "ib": "chrome"
-      },
-      "id": "5b8fff47-dcae-4343-90f5-f845d96a588f"
+      }
     },
     {
       "kind": "server",
+      "id": "359f9dac-a21c-4742-a8e9-b8a4ae597691",
       "tag": "🔥⛈️ WARP (AWG 1.5) 2",
       "enabled": false,
       "origin": {
@@ -399,11 +400,11 @@
       },
       "detour": {
         "tag": "🏠 awg2-home"
-      },
-      "id": "359f9dac-a21c-4742-a8e9-b8a4ae597691"
+      }
     },
     {
       "kind": "server",
+      "id": "c1522f0f-4767-4d44-9daa-3e99d8d132d4",
       "tag": "🔥🎭 WARP (MASQUE) h3",
       "enabled": false,
       "origin": {
@@ -422,11 +423,11 @@
         "ipv6": "2606:4700:110:8000:0:0:0:3/128",
         "sni": "www.bing.com",
         "mtu": 1280
-      },
-      "id": "c1522f0f-4767-4d44-9daa-3e99d8d132d4"
+      }
     },
     {
       "kind": "server",
+      "id": "6619d702-12d3-4f0b-aa8b-174064254914",
       "tag": "🔥🎭 WARP (MASQUE) h2",
       "enabled": false,
       "origin": {
@@ -444,21 +445,21 @@
         "ip": "172.16.0.2/32",
         "ipv6": "2606:4700:110:8000:0:0:0:3/128",
         "mtu": 1280
-      },
-      "id": "6619d702-12d3-4f0b-aa8b-174064254914"
+      }
     },
     {
       "kind": "server",
+      "id": "8378a725-5f66-4110-9ab2-64481436c97c",
       "tag": "⚡ naive-26646",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "naive+https://testnaive:testpass01@getall.servebeer.com:26646#%E2%9A%A1%20naive-26646"
-      },
-      "id": "8378a725-5f66-4110-9ab2-64481436c97c"
+      }
     },
     {
       "kind": "server",
+      "id": "616feb80-e08b-4ec3-8da3-5cdc8f49c352",
       "tag": "🇫🇮 FI Hysteria stable",
       "enabled": false,
       "origin": {
@@ -474,14 +475,13 @@
           "enabled": true,
           "server_name": "77.91.84.209"
         }
-      },
-      "id": "616feb80-e08b-4ec3-8da3-5cdc8f49c352"
+      }
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "faebfb54-e1e2-4f4c-bb67-ab3cf0723d41",
       "name": "Infomir",
+      "enabled": false,
       "url": "https://example.com/sub/6",
       "identity": {
         "send_hwid": true,
@@ -496,6 +496,7 @@
     },
     {
       "kind": "server",
+      "id": "4169f193-3ac7-4284-b231-9d3d10da640a",
       "tag": "🇷🇺 Россия (мёртвая, тест)",
       "enabled": true,
       "origin": {
@@ -511,11 +512,11 @@
           "enabled": true,
           "server_name": "dead.test"
         }
-      },
-      "id": "4169f193-3ac7-4284-b231-9d3d10da640a"
+      }
     },
     {
       "kind": "server",
+      "id": "b4798cfd-1712-4c9c-9bc0-cc16c458a69e",
       "tag": "🔥🎭 WARP (MASQUE) demo",
       "enabled": false,
       "origin": {
@@ -537,21 +538,21 @@
       },
       "detour": {
         "tag": "vpn-4"
-      },
-      "id": "b4798cfd-1712-4c9c-9bc0-cc16c458a69e"
+      }
     },
     {
       "kind": "server",
+      "id": "c2e15b6e-c1f1-4992-a0a1-17e3247205fe",
       "tag": "⚡ xhttp for CDN VK",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "vless://00000000-0000-4000-8000-000000000007@vk.b7u.ru:443/?type=xhttp&encryption=none&flow=&host=vk.b7u.ru&path=%2Fupload%2F&mode=packet-up&extra=%7B%0A%20%20%22xPaddingBytes%22%3A%20%22100-1000%22%2C%0A%20%20%22scMaxEachPostBytes%22%3A%20%22200000%22%2C%0A%20%20%22scMinPostsIntervalMs%22%3A%20%2230%22%2C%0A%20%20%22scStreamUpServerSecs%22%3A%20%2210-30%22%2C%0A%20%20%22uplinkHTTPMethod%22%3A%20%22GET%22%2C%0A%20%20%22seqPlacement%22%3A%20%22query%22%2C%0A%20%20%22seqKey%22%3A%20%22chunk_id%22%2C%0A%20%20%22xPaddingObfsMode%22%3A%20true%2C%0A%20%20%22xPaddingKey%22%3A%20%22hash%22%2C%0A%20%20%22xPaddingHeader%22%3A%20%22X-Client-Version%22%2C%0A%20%20%22xPaddingPlacement%22%3A%20%22queryInHeader%22%2C%0A%20%20%22xPaddingMethod%22%3A%20%22tokenish%22%2C%0A%20%20%22sessionPlacement%22%3A%20%22header%22%2C%0A%20%20%22sessionKey%22%3A%20%22X-Upload-Token%22%2C%0A%20%20%22xmux%22%3A%20%7B%0A%20%20%20%20%22maxConcurrency%22%3A%20%2216-32%22%2C%0A%20%20%20%20%22maxConnections%22%3A%20%220%22%2C%0A%20%20%20%20%22cMaxReuseTimes%22%3A%20%221000%22%2C%0A%20%20%20%20%22hMaxRequestTimes%22%3A%20%22600-900%22%2C%0A%20%20%20%20%22hMaxReusableSecs%22%3A%20%221800-3000%22%2C%0A%20%20%20%20%22hKeepAlivePeriod%22%3A%2020000%0A%20%20%7D%0A%7D&security=tls&sni=vk.b7u.ru&alpn=h2%2Chttp%2F1.1&fp=firefox&packetEncoding=none#%E2%9A%A1%20xhttp%20for%20CDN%20VK"
-      },
-      "id": "c2e15b6e-c1f1-4992-a0a1-17e3247205fe"
+      }
     },
     {
       "kind": "server",
+      "id": "34670890-c7bf-4550-a383-1c5e037c4807",
       "tag": "🔥🎭 WARP (MASQUE) 2",
       "enabled": true,
       "origin": {
@@ -572,14 +573,16 @@
           "server_name": "www.wikipedia.org"
         },
         "mtu": 1280
-      },
-      "id": "34670890-c7bf-4550-a383-1c5e037c4807"
+      }
     },
     {
       "kind": "folder",
-      "enabled": false,
       "id": "509ef175-ab34-409a-87fe-250a2af68402",
       "name": "Proton",
+      "enabled": false,
+      "detour": {
+        "tag": "🔥🎭 WARP (MASQUE) h2"
+      },
       "nodes": [
         {
           "kind": "server",
@@ -1503,22 +1506,22 @@
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "bb14763b-a239-4629-a52e-8c2b28c361a2",
       "name": "Liberty VPN 🗽",
+      "enabled": false,
+      "url": "https://example.com/sub/7",
       "tag_policy": {
         "prefix": "AL: "
       },
-      "url": "https://example.com/sub/7",
       "update": {
         "interval_hours": 1
       }
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "02ef1408-353c-4f67-8c10-917b12356fb5",
       "name": "ShadowVPN | Free",
+      "enabled": false,
       "url": "https://example.com/web/8",
       "identity": {
         "user_agent": "Happy/3.3.6",
@@ -1533,39 +1536,40 @@
     },
     {
       "kind": "server",
+      "id": "0873859f-0501-43c2-90e5-960fbf16625e",
       "tag": "⚡ xhttp-410-test",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "vless://00000000-0000-4000-8000-000000000008@178.176.128.128:443?alpn=h2%2Chttp%2F1.1&encryption=none&extra=%7B%22host%22%3A%22%22%2C%22path%22%3A%22%2F%22%2C%22mode%22%3A%22%22%2C%22headers%22%3Anull%2C%22xPaddingBytes%22%3A%220%22%2C%22xPaddingObfsMode%22%3Atrue%2C%22xPaddingKey%22%3A%22%22%2C%22xPaddingHeader%22%3A%22%22%2C%22xPaddingPlacement%22%3A%22%22%2C%22xPaddingMethod%22%3A%22%22%2C%22uplinkHTTPMethod%22%3A%22GET%22%2C%22sessionIDPlacement%22%3A%22cookie%22%2C%22sessionIDKey%22%3A%22media_sid%22%2C%22sessionIDTable%22%3A%22%22%2C%22sessionIDLength%22%3A%220%22%2C%22seqPlacement%22%3A%22query%22%2C%22seqKey%22%3A%22offset%22%2C%22uplinkDataPlacement%22%3A%22header%22%2C%22uplinkDataKey%22%3A%22X-Playback-Token%22%2C%22uplinkChunkSize%22%3A%220%22%2C%22noGRPCHeader%22%3Afalse%2C%22noSSEHeader%22%3Atrue%2C%22scMaxEachPostBytes%22%3A%22131072-262144%22%2C%22scMinPostsIntervalMs%22%3A%225-10%22%2C%22scMaxBufferedPosts%22%3A12%2C%22scStreamUpServerSecs%22%3A%221-2%22%2C%22serverMaxHeaderBytes%22%3A0%2C%22xmux%22%3A%7B%22maxConcurrency%22%3A%220%22%2C%22maxConnections%22%3A%220%22%2C%22cMaxReuseTimes%22%3A%220%22%2C%22hMaxRequestTimes%22%3A%220%22%2C%22hMaxReusableSecs%22%3A%220%22%2C%22hKeepAlivePeriod%22%3A0%7D%2C%22downloadSettings%22%3Anull%2C%22extra%22%3Anull%7D&fp=qq&host=media.morphai.cc&mode=packet-up&path=%2Fhls%2Fv2%2Ftrack%2F8e31c750%2F&security=tls&sni=media.morphai.cc&type=xhttp#%E2%9A%A1%20xhttp-410-test"
-      },
-      "id": "0873859f-0501-43c2-90e5-960fbf16625e"
+      }
     },
     {
       "kind": "server",
+      "id": "e05efdf7-e1e4-48f8-b1f2-999c2798bbcf",
       "tag": "🎭 masque-402-test",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "masque://MHcCAQEEIP74LxOOSvBTVjb3RmEHQflkpCPqadGTQu69fxUv6D0DoAoGCCqGSM49AwEHoUQDQgAE0duI6Lpiv%2FaKmiKiUXBEfzfo84uciy0c%2BU%2F%2BelVnH9b%2B%2BC8TjkrwU1Y290ZhB0H5ZKQj6mnRk0LuvX8VL%2Bg9Aw%3D%3D@162.159.198.2:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIaU7MToJm9NKp8YfGxR6r%2B%2Fh4mcG7SxI8tsW8OR1A5tv%2FzCzVbCRRh2t87%2FkxnP6lAy0lkr7qYwu%2Box%2Bk3dr6w%3D%3D&address=172.16.0.2%2F32&address=2606%3A4700%3A110%3A8000%3A0%3A0%3A0%3A2%2F128&vhttp=auto&sni=www.wikipedia.org#%F0%9F%8E%AD%20masque-402-test"
-      },
-      "id": "e05efdf7-e1e4-48f8-b1f2-999c2798bbcf"
+      }
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "9d92654e-76b1-494a-b4da-c6fa6715ec84",
       "name": "Renamed By File",
+      "enabled": false,
+      "url": "https://example.com/sub/9",
       "tag_policy": {
         "prefix": "ff: "
       },
-      "url": "https://example.com/sub/9",
       "update": {
         "interval_hours": 24
       }
     },
     {
       "kind": "server",
+      "id": "0ce2ec3f-5969-4c16-811c-38fb0b26dff7",
       "tag": "⚡ LocalReordered",
       "enabled": false,
       "origin": {
@@ -1581,44 +1585,43 @@
           "enabled": true,
           "server_name": "r.example.com"
         }
-      },
-      "id": "0ce2ec3f-5969-4c16-811c-38fb0b26dff7"
+      }
     },
     {
       "kind": "server",
+      "id": "b4e989d6-b9ff-4da1-82f9-373ff2b7678f",
       "tag": "C-Single-New",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "vless://33333333-3333-3333-3333-333333333333@198.51.100.31:443?type=tcp&security=tls&sni=s1.example.com#C-Single-New"
-      },
-      "id": "b4e989d6-b9ff-4da1-82f9-373ff2b7678f"
+      }
     },
     {
       "kind": "server",
+      "id": "3321ec89-0acf-46c7-b013-88dafb5872d4",
       "tag": "WireGuard",
       "enabled": true,
       "origin": {
         "kind": "uri",
         "raw": "vpn://AAAKOnjanVZbU-pIEP4rVOq8KUhuglb5gKACCoQE1hVzihrCgJGQZJMgoOV_3-6eCRrX8-CWlnb3193T18m8KV4UZswPeZIq56XHN4Vtl0C8KU2Q8zCz2Hzuh8sG_M38KARIUatltVpVjktKy0_ZLODNKFr5HO0V0AB5WyU9IjUkNSJ1JHUiDSQNIjmb88RKoox7eMIt3yN2tq9vE-7Yhj4xdpf7MLDs_tFJmpxePrHwYftqPdQ7V-zmrnk9vEA3HTqSKO1A6QfKOFBmTnW9QwzdNdshY1YF58s8kbvlPGaB_8JH_ppHm4z0yqqJWI_t2iycp09sxRtZxtdxRlVQzbJGxjag0XqUMD8QBZYFsvkzZNtYZDxBt8IGyloXVnzF90WwCqD2AX6KRS_XUOxQ_iaF5VAFDCq6QzUwyNShKqgkD1iaTaH3Cx_brby5f2i4C6grW-6Coful6QJHPcTaqtSXrCZYTbK6YHXJGoI1JPvfQRD4T0ZBuOp6Bc_YXiEwq7nEP2QmJF_bLPWh0QL_rtXSAzZbKBXbXSzNl5bnttT0XONz2_PwqPGfFArxQfMF5MjCmzJcR1bekKV3ZOkN6cqRtVclzoIg2vL51I8p7EdXqVbo50QanJ8j9RtJL_BhTjpzmd_yfnU79OP54LpVa98YXXO3as02zsy-m-t3p-P4krNgYjwPrjqyO8IejspTrNQraqVWAOPEf5mu8gnIbsaBvbad59tqazDh9ugp8OP9aTecJP2h119oQc2-_8vqrZ6HxTPizezDy_-IlPZDWD92YD2SBfP4b9cNe6Nx6aIEnakCA7uS8DRFgczlRNdA3uo7IPtl2Z1ew36YAntc-uVcNQf9luRByYJMWcZh2kH3R4m6YdcDGwMJmGc6nmi2A9pE2lGRMpHSUBWjcnSkCDUoB6DaqKcigWokQS0dCUOe8c1-AvKj5XTD7y8ZCp1uGDcsbgEhYgUkJOcfo4PhR2Fhr9BALpUbfl1qLAZuNPTvm3Um07I4qbDIAMAWQz8LN18uhd9Hi_MEx8LazALfE5Vp1AfLQDXZ67B9u9a7Wnzf3u2fdtvLuB3Xj-zlk-qMvaPeQ08bX9AccIgm4XNhfbO861qTu-HibKMvYz1b_x1e1rqvZ-prv9-OVc02J81tMPrnuk91bYj97VgY1mF1j0u0tm54Fc7jyA-xAFpVB1BV9YqqnetV8xTLYUGWfoqdOZQMVc2yjqhYhqcozfosv5g-uxH4Otvkd0r-qYgPbmELeTwlx9KefAutKKHrjIIhQbr62NofFYL8pTx54Ulx93_UDOUdv5AYFn1gMSwSwOhHXhRMXzAt8RaC9BFKN7OQZ1MmLgLxxaabgL67WcLCFN1NyQXCm3mMCNRMfJLhPfUO_OExhlK2Dvmrz8rwItOUd7h6lTlfsE2QNf-oRTqpl_hx_lgbq-2BMyrDQXQIKoSpeJ7VtIp2VqF_piERejmoND-UWN50esR9arny_i_33wQj"
-      },
-      "id": "3321ec89-0acf-46c7-b013-88dafb5872d4"
+      }
     },
     {
       "kind": "server",
+      "id": "bdcecc1c-db47-4b65-b757-8f0034c8a1f9",
       "tag": "⚡ Москва — узел 1",
       "enabled": true,
       "origin": {
         "kind": "uri",
         "raw": "vless://11111111-2222-3333-4444-555555555555@example-4.com:443?type=ws&security=tls&path=%2Fws&host=example-4.com&sni=example-4.com#%E2%9A%A1%20%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0%20%E2%80%94%20%D1%83%D0%B7%D0%B5%D0%BB%201"
-      },
-      "id": "bdcecc1c-db47-4b65-b757-8f0034c8a1f9"
+      }
     },
     {
       "kind": "folder",
-      "enabled": true,
       "id": "323f4626-6ce5-4dd6-83a7-2722cbece3e1",
       "name": "F431",
+      "enabled": true,
       "nodes": [
         {
           "kind": "server",
@@ -1642,13 +1645,13 @@
     },
     {
       "kind": "server",
+      "id": "1d2497ad-a074-4679-8422-9b4777e51d7a",
       "tag": "⚡ test",
       "enabled": true,
       "origin": {
         "kind": "uri",
         "raw": "socks5://user03:testpass03@139.59.102.20:1080#%E2%9A%A1%20test%20"
-      },
-      "id": "1d2497ad-a074-4679-8422-9b4777e51d7a"
+      }
     },
     {
       "kind": "chain",

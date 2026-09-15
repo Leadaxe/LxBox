@@ -1,13 +1,16 @@
 {
   "export_warnings": [
-    "backup_local_only_dropped | dns: google_udp: varValues, cloudflare_udp: varValues, google_doh: varValues, dns_home: description, dns_drop: description, xbox-dns: description",
-    "backup_local_only_dropped | IN: detour_policy",
-    "backup_local_only_dropped | Proton: detour_policy"
+    "backup_local_only_dropped | dns: google_udp: vars",
+    "backup_local_only_dropped | dns: cloudflare_udp: vars",
+    "backup_local_only_dropped | dns: google_doh: vars",
+    "backup_local_only_dropped | dns: dns_home: description",
+    "backup_local_only_dropped | dns: dns_drop: description",
+    "backup_local_only_dropped | dns: xbox-dns: description",
+    "backup_local_only_dropped | IN: detour_policy"
   ],
   "import_warnings": [],
   "config_diff": [
     "$.dns.servers[tag=google_doh].detour: \"vpn-1\" → <absent>",
-    "$.dns.rules[1→]: {\"domain_suffix\":\"ntc.party\",\"query_type\":\"A\",\"action\":\"predefined\",\"answer\":[\"ntc.party. IN A 130.255.77.28\"]} → <absent>",
     "$.inbounds[tag=tun-in].exclude_package: [\"bypass.whitelist\",\"com.notcvnt.rknhardering\",\"io.github.romanvht.byedpi\"] → <absent>"
   ]
 }

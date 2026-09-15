@@ -9,13 +9,13 @@
   "sources": [
     {
       "kind": "subscription",
-      "enabled": true,
       "id": "sub-1",
       "name": "Provider",
+      "enabled": true,
+      "url": "https://example.com/sub/1",
       "tag_policy": {
         "prefix": "PR "
       },
-      "url": "https://example.com/sub/1",
       "identity": {
         "user_agent": "lx-test/1.0",
         "send_hwid": true,
@@ -33,22 +33,22 @@
     },
     {
       "kind": "subscription",
-      "enabled": true,
       "id": "sub-2",
       "name": "Second",
+      "enabled": true,
+      "url": "https://example.com/sub/2",
       "tag_policy": {
         "prefix": "S2 "
       },
-      "url": "https://example.com/sub/2",
       "update": {
         "interval_hours": -1
       }
     },
     {
       "kind": "subscription",
-      "enabled": false,
       "id": "sub-3",
       "name": "Off sub",
+      "enabled": false,
       "url": "https://example.com/sub/3",
       "update": {
         "interval_hours": 24
@@ -56,6 +56,7 @@
     },
     {
       "kind": "server",
+      "id": "srv-reality",
       "tag": "VLESS Reality",
       "enabled": true,
       "origin": {
@@ -64,41 +65,41 @@
       },
       "detour": {
         "tag": "vpn-3"
-      },
-      "id": "srv-reality"
+      }
     },
     {
       "kind": "server",
+      "id": "srv-wg-ini",
       "tag": "WireGuard",
       "enabled": true,
       "origin": {
         "kind": "wg_ini",
         "raw": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nEndpoint = example-3.com:51820\nPresharedKey = eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=\nPersistentKeepalive = 25\n"
-      },
-      "id": "srv-wg-ini"
+      }
     },
     {
       "kind": "server",
+      "id": "srv-hy2",
       "tag": "Hy2 Obfs",
       "enabled": true,
       "origin": {
         "kind": "uri",
         "raw": "hysteria2://testpass123@example-2.com:443?obfs=salamander&obfs-password=obfspass&sni=example-2.com#Hy2%20Obfs"
-      },
-      "id": "srv-hy2"
+      }
     },
     {
       "kind": "server",
+      "id": "srv-socks",
       "tag": "SOCKS Auth",
       "enabled": false,
       "origin": {
         "kind": "uri",
         "raw": "socks5://testuser:testpass123@example-1.com:1080#SOCKS%20Auth"
-      },
-      "id": "srv-socks"
+      }
     },
     {
       "kind": "server",
+      "id": "srv-ts",
       "tag": "home-ts",
       "enabled": true,
       "origin": {
@@ -165,21 +166,21 @@
             }
           ]
         }
-      },
-      "id": "srv-ts"
+      }
     },
     {
       "kind": "server",
-      "tag": "legacy multi",
+      "id": "srv-multi",
+      "tag": "VMess WS",
       "enabled": true,
       "origin": {
         "kind": "uri",
         "raw": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgV1MiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUtMS5jb20iLCJwYXRoIjoiL3ZtIiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS0xLmNvbSJ9\ntuic://11111111-2222-3333-4444-555555555555:testpass123@example-1.com:443?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=example-1.com#TUIC%20Basic\n"
-      },
-      "id": "srv-multi"
+      }
     },
     {
       "kind": "server",
+      "id": "srv-json-wg",
       "tag": "singbox-wg-1",
       "enabled": true,
       "origin": {
@@ -204,14 +205,13 @@
           }
         ],
         "mtu": 1420
-      },
-      "id": "srv-json-wg"
+      }
     },
     {
       "kind": "folder",
-      "enabled": true,
       "id": "fold-eu",
       "name": "EU",
+      "enabled": true,
       "tag_policy": {
         "prefix": "EU "
       },
@@ -260,8 +260,7 @@
                     "type": "udp",
                     "server": "10.8.0.1",
                     "detour": "@self"
-                  },
-                  "description": "office dns"
+                  }
                 }
               ],
               "rules": [
@@ -289,8 +288,7 @@
             "raw": "trojan://testpass123@example-42.com:443?security=tls&sni=example-42.com#nl-1"
           },
           "detour": {
-            "folder_id": "fold-eu",
-            "tag": "de-1"
+            "tag": "EU de-1"
           }
         },
         {
@@ -327,11 +325,14 @@
     },
     {
       "kind": "folder",
-      "enabled": true,
       "id": "fold-my",
       "name": "My folder",
+      "enabled": true,
       "tag_policy": {
         "prefix": "My F "
+      },
+      "detour": {
+        "tag": "EU de-1"
       },
       "nodes": [
         {
@@ -347,9 +348,9 @@
     },
     {
       "kind": "folder",
-      "enabled": false,
       "id": "fold-off",
       "name": "Off folder",
+      "enabled": false,
       "nodes": [
         {
           "kind": "server",
@@ -382,12 +383,10 @@
       },
       "hops": [
         {
-          "folder_id": "fold-eu",
-          "tag": "nl-1"
+          "tag": "EU nl-1"
         },
         {
-          "folder_id": "sub-1",
-          "tag": "DE-1"
+          "tag": "PR DE-1"
         }
       ]
     },
@@ -416,8 +415,7 @@
       },
       "hops": [
         {
-          "folder_id": "sub-2",
-          "tag": "US-1"
+          "tag": "S2 US-1"
         },
         {
           "tag": "vpn-1"
@@ -658,6 +656,7 @@
     },
     {
       "kind": "inline",
+      "id": "<split-part-id>",
       "name": "Json array #2",
       "enabled": true,
       "num": 1021,
