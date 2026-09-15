@@ -273,7 +273,9 @@ class NodeListPresenter {
     if (key == _cachedSortKey && _cachedSorted != null) {
       // sanity: все cached tags ещё в pool (защита от ноды удалённой из
       // подписки между bump'ами).
-      if (_cachedSorted!.every(s.nodes.contains)) return _cachedSorted!;
+      // §446 — через `s.nodeSet`: у `s.nodes` (List) `contains` линейный, и
+      // проверка кэша обходилась дороже сортировки, которую она экономит.
+      if (_cachedSorted!.every(s.nodeSet.contains)) return _cachedSorted!;
     }
     _cachedSortKey = key;
     _cachedSorted = List<String>.unmodifiable(s.sortedNodes);

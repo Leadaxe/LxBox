@@ -271,13 +271,21 @@ class HomeState {
   // Чистые методы на нативных CommandClient-моделях (заменили статические
   // хелперы `ClashApiClient.selectorGroupTags`/`urltestNow`/`proxyEntry`).
 
-  /// Группа по тегу (`null` если нет). Группа-аутбаунд = selector/urltest.
-  CcGroup? groupOf(String tag) {
+  /// §446 — индекс `тег → группа`. `groupOf` зовётся дважды на строку списка
+  /// в `itemBuilder` плюс трижды в `computeListData`: линейный скан по группам
+  /// превращал это в O(строк × групп) на каждый кадр скролла.
+  /// `putIfAbsent`, не литерал-компрехеншен: при совпадающих тегах прежний
+  /// линейный поиск отдавал ПЕРВУЮ группу, а `{for ...}` оставил бы последнюю.
+  late final Map<String, CcGroup> _groupByTag = () {
+    final m = <String, CcGroup>{};
     for (final g in ccGroups) {
-      if (g.tag == tag) return g;
+      m.putIfAbsent(g.tag, () => g);
     }
-    return null;
-  }
+    return m;
+  }();
+
+  /// Группа по тегу (`null` если нет). Группа-аутбаунд = selector/urltest.
+  CcGroup? groupOf(String tag) => _groupByTag[tag];
 
   bool _isUrltest(String type) => type.toLowerCase().contains('urltest');
   bool _isSelector(String type) => type.toLowerCase().contains('selector');
@@ -344,10 +352,20 @@ class HomeState {
   /// `sortedNodes` и `pinnedNodeCount` (node_list — для drag-handle gating).
   late final List<String> _pinnedTags = _computePinned();
 
+  /// §446 — `nodes` в виде множества для проверок принадлежности. `nodes` это
+  /// `List`, и его `contains` линейный: на 500 узлах это заметно и в
+  /// `_computePinned`, и в sanity-check кэша сортировки у презентера.
+  late final Set<String> nodeSet = nodes.toSet();
+
   /// Кол-во pinned-нод в начале [sortedNodes]. node_list: первые N
   /// non-draggable (§071). Источник истины — [_computePinned], не пересчёт по
   /// тегам (auto-двойники теперь vpn-N-auto, §125).
   int get pinnedNodeCount => _pinnedTags.length;
+
+  /// §446 — те же теги множеством, для проверки «строка из pinned-секции».
+  /// `node_list` строил его заново (`sortedNodes.take(n).toSet()`) на каждый
+  /// build списка; `_pinnedTags` — тот же префикс `sortedNodes` по построению.
+  late final Set<String> pinnedTagSet = _pinnedTags.toSet();
 
   /// §070/§125/§196/§201 — наполнение pinned section. pinDirect/pinAuto —
   /// тоглы (§070); block и активная нода пинятся ВСЕГДА (при любой сортировке).
@@ -382,7 +400,7 @@ class HomeState {
     final active = activeInGroup;
     if (active != null &&
         active.isNotEmpty &&
-        nodes.contains(active) &&
+        nodeSet.contains(active) && // §446 — nodes это List, contains линейный
         !pinnedSet.contains(active)) {
       pinned.add(active);
     }
@@ -405,9 +423,13 @@ class HomeState {
         // §071: manualOrder filtered к present nodes + новые ноды
         // (subscription update / add server) в конец.
         final restSet = rest.toSet();
+        // §446 — `manualOrder` это List: `contains` в цикле по rest давал
+        // N×N сравнений строк (при 500 узлах — четверть миллиона на каждый
+        // новый HomeState, то есть раз в секунду по тику трафика).
+        final orderSet = manualOrder.toSet();
         final ordered = <String>[
           ...manualOrder.where(restSet.contains),
-          ...rest.where((n) => !manualOrder.contains(n)),
+          ...rest.where((n) => !orderSet.contains(n)),
         ];
         return [...pinned, ...ordered];
     }

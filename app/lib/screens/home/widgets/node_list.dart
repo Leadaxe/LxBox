@@ -246,7 +246,8 @@ class HomeNodeList extends StatelessWidget {
     // state.pinnedNodeCount). Считаем сколько из них реально в начале
     // displayList: если фильтр §048 затолкал pinned в nonMatching → префикс
     // короче → pinnedCount меньше (drag-handle покажется на не-pinned, корректно).
-    final pinnedTags = state.sortedNodes.take(state.pinnedNodeCount).toSet();
+    // §446 — готовое множество из HomeState вместо пересборки на каждый build.
+    final pinnedTags = state.pinnedTagSet;
     int pinnedCount = 0;
     while (pinnedCount < displayList.length &&
         pinnedTags.contains(displayList[pinnedCount])) {
