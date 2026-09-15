@@ -296,12 +296,20 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
 
   // §393 B9 + §441 — DNS: слияние §5.2, Н2/Н4 против шаблона приёмника, Н9
   // по тому же единому списку целей, что у правил.
+  //
+  // §443 (SPEC 129 §5.5) — СНАЧАЛА своё хранение приёмника к нормам записи
+  // (Н2/Н3/Н4 над `vars` template-серверов, молча), ПОТОМ наложение файла:
+  // слияние работает с записями в той форме, в которой их запишет
+  // репозиторий, и план (превью, раннер корпуса) показывает нормализованными
+  // и записи, которых файл не коснулся. `rules[]` приёмника в план не входят:
+  // секция замещается правилами файла, их `vars` нормализуются выше.
   final incomingDns = file.dns;
   final dns = incomingDns == null || incomingDns.isEmpty
       ? null
       : applyDnsBackup(
           incoming: incomingDns,
-          servers: receiver.dns.servers,
+          servers: normalizeDnsServersVars(
+              receiver.dns.servers, receiver.recordVars),
           rules: receiver.dns.rules,
           dnsFinal: receiver.dns.finalServer,
           strategy: receiver.dns.strategy,

@@ -489,4 +489,57 @@ void main() {
       expect(plan.dns!.servers.single.enabled, isTrue);
     });
   });
+  // §443 (SPEC 129 §5.5) — порядок импорта: сперва своё хранение приёмника к
+  // нормам записи, потом наложение файла. Значение, которое файл не называл
+  // (`dns_ip`), переживает импорт; своё необъявленное имя и умолчание
+  // снимаются молча, в том числе у записи, которой файл не коснулся.
+  group('§5.5 порядок: хранение приёмника к нормам, потом файл', () {
+    test('dns_ip приёмника, не названный файлом, цел; своё — молча к нормам',
+        () {
+      final plan = planLxBackupImport(
+        _file({
+          'directions': [
+            {'tag': 'vpn-2'},
+          ],
+          'dns': {
+            'servers': [
+              {
+                'kind': 'template',
+                'tag': 'google_dot',
+                'enabled': true,
+                'vars': {'outbound': 'vpn-2'},
+              },
+            ],
+          },
+        }),
+        _receiver(
+          decls: _decls,
+          servers: const [
+            // Хранение, не переписанное после обновления шаблона: умолчание
+            // `outbound`, сирота `legacy_x`, неподрезанный `dns_ip`.
+            DnsServerTemplate(enabled: false, tag: 'google_dot', varValues: {
+              'outbound': 'proxy-out',
+              'dns_ip': ' 8.8.4.4 ',
+              'legacy_x': '1',
+            }),
+            // Запись, которой файл не касается.
+            DnsServerTemplate(enabled: true, tag: 'cloudflare_dot', varValues: {
+              'outbound': 'proxy-out',
+            }),
+          ],
+        ),
+      );
+      final byTag = _byTag(plan.dns!.servers);
+      expect(_varsOf(byTag['google_dot']),
+          {'dns_ip': '8.8.4.4', 'outbound': 'vpn-2'},
+          reason: 'dns_ip приёмника файл не называл — он обязан уцелеть');
+      expect(byTag['google_dot']!.enabled, isFalse, reason: 'enabled локальный');
+      expect(_varsOf(byTag['cloudflare_dot']), isEmpty,
+          reason: 'нетронутая запись приёмника тоже приведена к нормам (Н4)');
+      expect(plan.file.warnings.where((w) => w.code == kWarnVarSkipped), isEmpty,
+          reason: 'своё хранение нормализуется молча (Н2)');
+      expect(plan.file.warnings.where((w) => w.code == kWarnUnknownOutbound),
+          isEmpty);
+    });
+  });
 }
