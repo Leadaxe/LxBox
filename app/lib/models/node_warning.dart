@@ -182,8 +182,11 @@ final class UnknownFingerprintWarning extends NodeWarning {
 /// REALITY-сервер Xray ≥ v26.9.8 требует в ClientHello key_share
 /// `X25519MLKEM768` перед X25519 и без него молча проксирует соединение на
 /// камуфляжный сайт. Из словаря ядра гибрид несут только chrome-имена; нода
-/// с firefox/safari/ios/… против такого сервера мертва без ошибки. Значение
-/// в ноде сохранено (контракт), в конфиг уходит `chrome` (post-step).
+/// с firefox/safari/ios/… против такого сервера мертва без ошибки.
+///
+/// §444 — только предупреждение: отпечаток узла из подписки уходит в конфиг
+/// как есть, приложение не переписывает выбор источника. Текст не обещает
+/// `chrome`, а советует его.
 final class RealityFingerprintWarning extends NodeWarning {
   final String value;
   const RealityFingerprintWarning(this.value);
@@ -192,7 +195,7 @@ final class RealityFingerprintWarning extends NodeWarning {
   List<Object?> get props => [value];
 
   @override
-  String messageWith(GetLocalText t) => t.s("REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 accept only a Chrome-like ClientHello, so \"chrome\" is used when connecting.", value);
+  String messageWith(GetLocalText t) => t.s("REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".", value);
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;

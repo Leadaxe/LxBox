@@ -101,12 +101,12 @@ TlsSpec normalizeTlsFingerprint(TlsSpec tls, List<NodeWarning>? warnings) {
   if (value.isEmpty && tls.reality != null) value = 'chrome';
   if (n.junk) warnings?.add(UnknownFingerprintWarning(fp));
   // SPEC 083 — REALITY + отпечаток не из chrome-семейства: Xray ≥ v26.9.8
-  // такое приветствие отвергает молча. Значение ноды НЕ меняем (контракт с
-  // лаунчером: `entry` нормативен, CANON §7) — подмена на `chrome` делается
-  // на выходе, в post-step `healUnknownUtlsFingerprints`; здесь только
-  // предупреждение на ноде. `random` — дефолт URI-парсера при пустом `fp`
-  // (transport.dart), от явного `fp=random` неотличим → без предупреждения,
-  // подмена на выходе всё равно сработает.
+  // такое приветствие отвергает молча. §444 — только предупреждение: значение
+  // не меняется ни в ноде, ни в конфиге (отпечаток задаёт подписка,
+  // приложение её выбор не переписывает). `random` — дефолт
+  // URI-парсера при пустом `fp` (transport.dart), от явного `fp=random`
+  // неотличим → без предупреждения; post-step `healUnknownUtlsFingerprints`
+  // пишет вместо него `chrome` (наш дефолт).
   if (tls.reality != null &&
       value != 'random' &&
       !isChromeFamilyFingerprint(value)) {
