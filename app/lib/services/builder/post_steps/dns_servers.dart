@@ -178,8 +178,9 @@ Future<List<DnsServerRef>> resolveDnsServersList({
 ///   обратном включении «встаёт на место» (решение юзера §312 №3). §443
 ///   (SPEC 129 Н10) — группа, опустевшая от членов, выпавших второй линией,
 ///   выпадает сама и идёт в [detourDroppedOut].
-/// - §443 — `tailscale` с висячим `endpoint` второй линией не считается:
-///   его снимает [_sanitizeTailscaleDnsServers] (NODE_SECTIONS §6).
+/// - `tailscale` второй линией не выпадает никогда: `detour` у типа нет
+///   ([normalizeDnsDetour] снимает ключ), висячий `endpoint` снимает
+///   [_sanitizeTailscaleDnsServers] прежним механизмом (NODE_SECTIONS §6).
 List<Map<String, dynamic>> resolveDnsServersBodies({
   required List<DnsServerRef> resolved,
   required Map<String, Map<String, dynamic>> templateByTag,
@@ -202,16 +203,6 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   final detourDropped = <String>{};
   // §441 (Н10) — висячий detour после подстановки: сервер не эмитится.
   bool dropForDetour(Map<String, dynamic> body, String tag) {
-    // §443 — висячий `endpoint` у `tailscale` проверяется ПЕРВЫМ, как у
-    // лаунчера (`dns_detour_sanitize.go`): такой сервер выпадает прежним
-    // механизмом NODE_SECTIONS §6 ([_sanitizeTailscaleDnsServers]), а не
-    // второй линией.
-    if (tailscaleEndpointTags != null && body['type'] == 'tailscale') {
-      final ep = body['endpoint'];
-      if (ep is! String || ep.isEmpty || !tailscaleEndpointTags.contains(ep)) {
-        return false;
-      }
-    }
     final dangling = normalizeDnsDetour(body, knownOutbounds: knownOutboundTags);
     if (dangling == null) return false;
     warningsOut?.add(
