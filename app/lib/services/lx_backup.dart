@@ -29,6 +29,7 @@ import 'node_hash.dart' show deepSortKeys;
 import 'parser/body_decoder.dart';
 import 'parser/parse_all.dart';
 import 'parser/uri_utils.dart' show newUuidV4;
+import 'record_vars.dart';
 import 'storage_migration/legacy_autogroup.dart';
 import 'tag_resolver.dart';
 
@@ -87,6 +88,19 @@ const String kWarnUnknownOutbound = 'backup_unknown_outbound';
 const String kWarnFinalDropped = 'backup_final_dropped';
 const String kWarnUnknownPreset = 'backup_unknown_preset';
 const String kWarnVarSkipped = 'backup_var_skipped';
+
+/// §441 (SPEC 128 §5.6) — причины [kWarnVarSkipped] ([LxBackupWarning.reason]).
+///
+/// [kVarSkippedNotPortable] — корневая переменная вне реестра переносимых;
+/// [kVarSkippedUndeclared] — имя в `vars` записи (`dns:<tag>` |
+/// `preset:<ref>`), которого шаблон приёмника у носителя не объявил (Н2);
+/// [kVarSkippedSuperseded] — корневое `dns_<tag>_<var>` при записи сервера со
+/// своими `vars` (Н8); [kVarSkippedNoRecord] — корневое `dns_<tag>_<var>`,
+/// а записи сервера с этим тегом в файле нет (Н8).
+const String kVarSkippedNotPortable = 'not_portable';
+const String kVarSkippedUndeclared = 'undeclared';
+const String kVarSkippedSuperseded = 'superseded';
+const String kVarSkippedNoRecord = 'no_record';
 
 /// Ключ вне схемы: в состояние не попадает (П3). Detail называет ПОЛНЫЙ путь
 /// (`subscriptions[https://…].outbounds[vpn-1].key`), иначе предупреждение не
@@ -662,6 +676,32 @@ class LxBackupFile {
   final String? routeFinal;
 
   final List<LxBackupWarning> warnings;
+
+  /// §441 — тот же файл с другими правилами и/или отчётом (план импорта
+  /// дописывает предупреждения слияния DNS и нормализации пресетов).
+  LxBackupFile copyWith({
+    List<CustomRule>? rules,
+    List<LxBackupWarning>? warnings,
+  }) =>
+      LxBackupFile(
+        version: version,
+        exportedByApp: exportedByApp,
+        exportedByVersion: exportedByVersion,
+        exportedAt: exportedAt,
+        directions: directions,
+        directionPing: directionPing,
+        rules: rules ?? this.rules,
+        chains: chains,
+        chainHops: chainHops,
+        subscriptions: subscriptions,
+        servers: servers,
+        folders: folders,
+        dns: dns,
+        warp: warp,
+        vars: vars,
+        routeFinal: routeFinal,
+        warnings: warnings ?? this.warnings,
+      );
 }
 
 /// Результат экспорта: сам файл + что в него НЕ поехало.
@@ -701,6 +741,10 @@ class LxBackupExport {
 ///
 /// Предупреждения: срезанные настройки LxBox — [kWarnLocalOnlyDropped], одно
 /// на сущность (П6).
+///
+/// [recordVars] — §441, объявления шаблона этой стороны: `vars`
+/// правил-пресетов нормализуются молча (SPEC 128 Н2–Н4). Секцию [dns]
+/// нормализует `dnsToBackup` тем же набором.
 Future<LxBackupExport> buildLxBackup({
   required List<ServerList> lists,
   required List<CustomRule> rules,
@@ -711,6 +755,7 @@ Future<LxBackupExport> buildLxBackup({
   String? routeFinal,
   Map<String, dynamic>? dns,
   List<Map<String, dynamic>> warp = const [],
+  RecordVarDecls recordVars = RecordVarDecls.none,
 }) async {
   var appVersion = '';
   try {
@@ -733,7 +778,7 @@ Future<LxBackupExport> buildLxBackup({
   };
 
   final ruleRecords = <Map<String, dynamic>>[];
-  for (final r in rules) {
+  for (final r in normalizePresetRulesVars(rules, recordVars)) {
     final stored = ruleToRecord(r);
     // Правило вида json, чей текст объектом не разбирается: тела у записи
     // нет, и в 1.0 ей дома нет (массивы хранение уже разложило, §439 В2).
@@ -913,12 +958,14 @@ LxBackupFile parseLxBackup(
   Set<String> knownOutbounds = const {},
   Set<String> knownPresets = const {},
   Set<String> knownChains = const {},
+  RecordVarDecls recordVars = RecordVarDecls.none,
 }) {
   final file = decodeLxBackup(
     raw,
     takenTags: knownOutbounds,
     knownPresets: knownPresets,
     knownChains: knownChains,
+    recordVars: recordVars,
   );
   return gateLxBackupTargets(
     file,
@@ -937,11 +984,18 @@ LxBackupFile parseLxBackup(
 ///
 /// [takenTags] — теги, занятые у приёмника: Направление файла под таким тегом
 /// не применяется (`backup_direction_exists`).
+///
+/// [recordVars] — §441, объявления переменных записей шаблона приёмника:
+/// корневые `dns_<tag>_<var>` переносятся в записи серверов файла (Н8),
+/// template-сервер DNS с тегом, которого шаблон не объявил, не ввозится
+/// ([kWarnDnsEntrySkipped]). [RecordVarDecls.none] — шаблона нет: корневые
+/// имена идут общим правилом `vars`, теги серверов не сверяются.
 LxBackupFile decodeLxBackup(
   String raw, {
   Set<String> takenTags = const {},
   Set<String> knownPresets = const {},
   Set<String> knownChains = const {},
+  RecordVarDecls recordVars = RecordVarDecls.none,
 }) {
   final dynamic decoded = jsonDecode(raw);
   if (decoded is! Map<String, dynamic>) {
@@ -965,6 +1019,7 @@ LxBackupFile decodeLxBackup(
       takenTags: takenTags,
       knownPresets: knownPresets,
       knownChains: knownChains,
+      recordVars: recordVars,
     );
   }
   return _parse0x(
@@ -973,6 +1028,7 @@ LxBackupFile decodeLxBackup(
     takenTags: takenTags,
     knownPresets: knownPresets,
     knownChains: knownChains,
+    recordVars: recordVars,
   );
 }
 
@@ -983,6 +1039,7 @@ LxBackupFile _parse0x(
   required Set<String> takenTags,
   required Set<String> knownPresets,
   required Set<String> knownChains,
+  required RecordVarDecls recordVars,
 }) {
   // §401 — default-deny на ВСЮ глубину файла, а не только на корень:
   // вложенный уровень — самое удобное место спрятать чужое поле. Упразднённый
@@ -1031,11 +1088,31 @@ LxBackupFile _parse0x(
   ];
 
   // Порядок разбора секций = порядок предупреждений в превью: переменные,
-  // `warp[]`, затем записи источников; цели правил и `route.final` дописывает
-  // в конец [gateLxBackupTargets].
-  final vars = _parseVars(decoded, warnings);
+  // `warp[]`, затем записи источников и DNS; цели правил и `route.final`
+  // дописывает в конец [gateLxBackupTargets].
+  //
+  // §441 — DNS читается раньше переменных (Н8 переносит корневые
+  // `dns_<tag>_<var>` в записи серверов файла), но его предупреждения встают
+  // на прежнее место — после записей источников.
+  final dnsWarnings = <LxBackupWarning>[];
+  final dnsRaw = _dnsFromJson(
+    (decoded['dns'] as Map?)?.cast<String, dynamic>(),
+    dnsWarnings,
+    recordVars,
+  );
+  final parsedVars =
+      _parseVars(decoded, warnings, dns: dnsRaw, recordVars: recordVars);
   final routeFinal = _parseRouteFinal(decoded);
   final warp = _parseWarp(decoded, warnings);
+  final subscriptions = [
+    for (final s in (decoded['subscriptions'] as List? ?? const []))
+      if (s is Map) _subscriptionFromJson(s.cast<String, dynamic>(), warnings),
+  ];
+  final servers = _legacyAutogroups0x([
+    for (final s in (decoded['servers'] as List? ?? const []))
+      if (s is Map) _serverFromJson(s.cast<String, dynamic>(), warnings),
+  ], warnings);
+  warnings.addAll(dnsWarnings);
 
   final by = (decoded['exported_by'] as Map?)?.cast<String, dynamic>() ?? {};
   return LxBackupFile(
@@ -1047,21 +1124,11 @@ LxBackupFile _parse0x(
     directionPing: directions.ping,
     rules: sortRulesByAxis(rules),
     chains: chains,
-    subscriptions: [
-      for (final s in (decoded['subscriptions'] as List? ?? const []))
-        if (s is Map)
-          _subscriptionFromJson(s.cast<String, dynamic>(), warnings),
-    ],
-    servers: _legacyAutogroups0x([
-      for (final s in (decoded['servers'] as List? ?? const []))
-        if (s is Map) _serverFromJson(s.cast<String, dynamic>(), warnings),
-    ], warnings),
-    dns: _dnsFromJson(
-      (decoded['dns'] as Map?)?.cast<String, dynamic>(),
-      warnings,
-    ),
+    subscriptions: subscriptions,
+    servers: servers,
+    dns: parsedVars.dns,
     warp: warp,
-    vars: vars,
+    vars: parsedVars.vars,
     routeFinal: routeFinal,
     warnings: warnings,
   );
@@ -1122,21 +1189,83 @@ _ParsedDirections _parseDirections(
 }
 
 /// `vars` — только переносимые имена (обе формы одинаковы).
-Map<String, String> _parseVars(
+///
+/// §441 (SPEC 128 Н8) — корневое имя вне реестра разрешается против
+/// объявлений шаблона приёмника ([rootDnsVarTarget]: объявленные пары
+/// `(tag, var)`, выигрывает самый длинный тег) и переносится в запись
+/// template-сервера ФАЙЛА до слияния:
+///
+///  * кандидата нет — [kVarSkippedNotPortable], как раньше;
+///  * у записи в файле свои непустые `vars` — побеждает запись,
+///    [kVarSkippedSuperseded];
+///  * запись есть, `vars` пуст — значение уходит в `vars` записи (Н2–Н4 —
+///    на слиянии, против шаблона приёмника);
+///  * записи с этим тегом в файле нет — [kVarSkippedNoRecord].
+///
+/// Правило одно на файлы 1.0 и 0.x. «Пуст» — `vars` записи, как прочитан
+/// файл: два корневых имени одного сервера переносятся оба. Пустое значение
+/// переносить нечего (Н3).
+({Map<String, String> vars, LxDns? dns}) _parseVars(
   Map<String, dynamic> decoded,
-  List<LxBackupWarning> warnings,
-) {
+  List<LxBackupWarning> warnings, {
+  LxDns? dns,
+  RecordVarDecls recordVars = RecordVarDecls.none,
+}) {
   final vars = <String, String>{};
   final raw = decoded['vars'];
   final rawVars = raw is Map ? raw.cast<String, dynamic>() : const {};
+  final servers = dns?.servers.toList();
+  // Теги template-записей файла со своими `vars` — как прочитан файл.
+  final ownVars = <String>{
+    for (final s in servers ?? const <DnsServerRef>[])
+      if (s is DnsServerTemplate && s.varValues.isNotEmpty) s.tag,
+  };
+  var lifted = false;
   for (final key in rawVars.keys.toList()..sort()) {
-    if (!kLxPortableVars.contains(key)) {
-      warnings.add(LxBackupWarning(kWarnVarSkipped, key));
+    if (kLxPortableVars.contains(key)) {
+      vars[key] = '${rawVars[key]}';
       continue;
     }
-    vars[key] = '${rawVars[key]}';
+    final target = rootDnsVarTarget(key, recordVars);
+    if (target == null) {
+      warnings.add(LxBackupWarning(kWarnVarSkipped, key,
+          reason: kVarSkippedNotPortable));
+      continue;
+    }
+    final at = servers == null
+        ? -1
+        : servers.indexWhere(
+            (s) => s is DnsServerTemplate && s.tag == target.tag);
+    if (at < 0) {
+      warnings.add(LxBackupWarning(kWarnVarSkipped, key,
+          reason: kVarSkippedNoRecord));
+      continue;
+    }
+    if (ownVars.contains(target.tag)) {
+      warnings.add(LxBackupWarning(kWarnVarSkipped, key,
+          reason: kVarSkippedSuperseded));
+      continue;
+    }
+    final value = rawVars[key];
+    final text = value == null ? '' : '$value'.trim();
+    if (text.isEmpty) continue;
+    final record = servers![at] as DnsServerTemplate;
+    servers[at] = record.copyWith(
+        varValues: {...record.varValues, target.varName: text});
+    lifted = true;
   }
-  return vars;
+  return (
+    vars: vars,
+    dns: !lifted || dns == null
+        ? dns
+        : LxDns(
+            servers: servers!,
+            rules: dns.rules,
+            finalServer: dns.finalServer,
+            strategy: dns.strategy,
+            defaultDomainResolver: dns.defaultDomainResolver,
+          ),
+  );
 }
 
 /// `route.final` файла как есть. Применяется только при известной цели
@@ -1820,7 +1949,11 @@ String _body0x(LxServer s) => s.uri.isNotEmpty
 /// состояние-призрак, которого пользователь не видит. Ссылка без адреса и
 /// пользовательская запись без тела применить нечем — пропуск молча, как
 /// всегда делало слияние 0.x.
-LxDns? _dnsFromJson(Map<String, dynamic>? j, List<LxBackupWarning> warnings) {
+LxDns? _dnsFromJson(
+  Map<String, dynamic>? j,
+  List<LxBackupWarning> warnings,
+  RecordVarDecls recordVars,
+) {
   if (j == null) return null;
 
   final servers = <DnsServerRef>[];
@@ -1834,7 +1967,14 @@ LxDns? _dnsFromJson(Map<String, dynamic>? j, List<LxBackupWarning> warnings) {
       );
       continue;
     }
-    if (_dnsServer0x(e, kind) case final server?) servers.add(server);
+    final server = _dnsServer0x(e, kind);
+    if (server == null) continue;
+    if (!_templateServerDeclared(server, recordVars)) {
+      warnings.add(LxBackupWarning(
+          kWarnDnsEntrySkipped, 'dns.servers: template:${server.tag}'));
+      continue;
+    }
+    servers.add(server);
   }
 
   final rules = <DnsRuleRef>[];
@@ -1889,9 +2029,29 @@ DnsServerRef? _dnsServer0x(Map<String, dynamic> e, String kind) {
       );
     default:
       if (name.isEmpty) return null;
-      return DnsServerTemplate(enabled: enabled, tag: name);
+      // §441 — `vars` ссылки 0.12 (`DNSRef.Vars`): значения переменных
+      // template-сервера, как у записи 1.0.
+      final vars = e['vars'];
+      return DnsServerTemplate(
+        enabled: enabled,
+        tag: name,
+        varValues: vars is Map
+            ? {
+                for (final v in vars.entries)
+                  if (v.value != null) v.key.toString(): v.value.toString(),
+              }
+            : const {},
+      );
   }
 }
+
+/// §441 (SPEC 128 §5.2) — template-сервер DNS, которого шаблон приёмника не
+/// объявил, не ввозится: собрать его тело не из чего. Шаблона нет
+/// ([RecordVarDecls.none]) — сверять не с чем, запись идёт как есть.
+bool _templateServerDeclared(DnsServerRef server, RecordVarDecls recordVars) =>
+    server is! DnsServerTemplate ||
+    recordVars.dnsServers.isEmpty ||
+    recordVars.dnsServers.containsKey(server.tag);
 
 /// Запись `dns.rules[]` 0.12 → модель: `user` — тело `value`, `preset` —
 /// `ref`, `template` — имя.
@@ -2152,6 +2312,12 @@ bool _isKnownOutbound(String tag, Set<String> known) {
   final t = tag.trim();
   return _reservedOutbounds.contains(t) || known.contains(t);
 }
+
+/// §441 (SPEC 128 Н9) — известна ли цель [tag] списку [known]
+/// ([lxImportKnownTargets]) с зарезервированными литералами: та же проверка,
+/// что у целей правил, для маршрута DNS-серверов.
+bool lxIsKnownImportTarget(String tag, Set<String> known) =>
+    _isKnownOutbound(tag, known);
 
 /// D-117 — корневые имена результата импорта (BACKUP.md §3, NODE_LINK §8):
 /// служебные теги шаблона приёмника ([systemTags]; без шаблона —
@@ -2535,6 +2701,7 @@ LxBackupFile _parse10(
   required Set<String> takenTags,
   required Set<String> knownPresets,
   required Set<String> knownChains,
+  required RecordVarDecls recordVars,
 }) {
   final warnings = _scanUnknown10(decoded);
 
@@ -2600,10 +2767,17 @@ LxBackupFile _parse10(
       if (_obj(item) case final j?) ..._rule10(j, knownPresets, warnings),
   ];
 
-  final vars = _parseVars(decoded, warnings);
+  // §441 — DNS раньше переменных (Н8), предупреждения — на прежнем месте.
+  final dnsWarnings = <LxBackupWarning>[];
+  final dnsRaw =
+      _dns10(decoded['dns'], knownPresets, dnsWarnings, recordVars);
+  final parsedVars =
+      _parseVars(decoded, warnings, dns: dnsRaw, recordVars: recordVars);
+  final vars = parsedVars.vars;
   final routeFinal = _parseRouteFinal(decoded);
   final warp = _parseWarp(decoded, warnings);
-  final dns = _dns10(decoded['dns'], knownPresets, warnings);
+  warnings.addAll(dnsWarnings);
+  final dns = parsedVars.dns;
 
   final by = _obj(decoded['exported_by']) ?? const <String, dynamic>{};
   return LxBackupFile(
@@ -3014,12 +3188,15 @@ CustomRule? _ruleRecord10(
 ///
 /// Серверы: `user` (тело без `tag`), `template` (ссылка тегом), `preset`
 /// (ссылка `ref`, тега нет). Правила: `user` (тело с `server`) и `preset`.
-/// Прочее — [kWarnDnsEntrySkipped], как у 0.x. Поля LxBox, которых контракт не
-/// объявил (`description`, `vars` сервера), сняты до кодека.
+/// Прочее — [kWarnDnsEntrySkipped], как у 0.x. Ключи, которых таблица среза
+/// не знает, сняты до кодека; `vars` и `description` сервера объявлены
+/// контрактом и читаются. §441 — template-сервер с тегом, которого шаблон
+/// приёмника не объявил, — тоже [kWarnDnsEntrySkipped].
 LxDns? _dns10(
   Object? raw,
   Set<String> knownPresets,
   List<LxBackupWarning> warnings,
+  RecordVarDecls recordVars,
 ) {
   final j = _obj(raw);
   if (j == null) return null;
@@ -3048,6 +3225,11 @@ LxDns? _dns10(
         !knownPresets.contains(server.presetId)) {
       warnings.add(LxBackupWarning(
           kWarnDnsEntrySkipped, 'dns.servers: ${_trimmed(e['ref'])}'));
+      continue;
+    }
+    if (!_templateServerDeclared(server, recordVars)) {
+      warnings.add(LxBackupWarning(
+          kWarnDnsEntrySkipped, 'dns.servers: template:${server.tag}'));
       continue;
     }
     servers.add(server);

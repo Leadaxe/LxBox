@@ -11,6 +11,7 @@ import '../services/backup_service.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
 import '../services/lx_backup_import.dart';
+import '../services/record_vars.dart';
 import '../services/warp/warp_backup.dart';
 import '../services/settings_storage.dart';
 import '../services/error_format.dart';
@@ -323,6 +324,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // нет дома, в файл не едут, и пользователь узнаёт об этом ДО того, как
       // унесёт файл на другую машину (П6).
       final exportWarnings = <LxBackupWarning>[];
+      // §441 — объявления переменных записей шаблона: `vars` template-серверов
+      // и пресетов едут без умолчаний и необъявленных имён (SPEC 128 Н2–Н4).
+      final recordVars = await loadRecordVarDecls();
       // §393 B9 — секция DNS: записи хранения + final/strategy. §439 —
       // preset-сервер несёт `preset_id` в записи, шаблон не нужен.
       final dns = dnsToBackup(
@@ -332,6 +336,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         strategy: vars['dns_strategy'] ?? '',
         defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
         warnings: exportWarnings,
+        recordVars: recordVars,
       );
       // §393 B8 — регистрации WARP в каноне схемы (`type: wg|masque`).
       final warpAccount = await SettingsStorage.getWarpAccount();
@@ -356,6 +361,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         routeFinal: routeFinal,
         dns: dns,
         warp: warp,
+        recordVars: recordVars,
       );
       final json = built.json;
       exportWarnings.addAll(built.warnings);

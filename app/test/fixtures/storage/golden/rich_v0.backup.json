@@ -793,9 +793,7 @@
       "num": 1120,
       "ref": "ru-direct",
       "vars": {
-        "outbound": "direct-out",
-        "dns_ip": "77.88.8.1",
-        "force_ipv4": "true"
+        "dns_ip": "77.88.8.1"
       }
     },
     {
@@ -896,10 +894,7 @@
       {
         "kind": "template",
         "tag": "google_udp",
-        "enabled": true,
-        "vars": {
-          "outbound": "direct-out"
-        }
+        "enabled": true
       },
       {
         "kind": "template",

@@ -1792,18 +1792,12 @@
       {
         "kind": "template",
         "tag": "google_udp",
-        "enabled": true,
-        "vars": {
-          "outbound": "direct-out"
-        }
+        "enabled": true
       },
       {
         "kind": "template",
         "tag": "cloudflare_udp",
-        "enabled": true,
-        "vars": {
-          "dns_ip": "1.1.1.1"
-        }
+        "enabled": true
       },
       {
         "kind": "template",

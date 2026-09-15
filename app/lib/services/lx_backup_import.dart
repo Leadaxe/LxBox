@@ -10,6 +10,14 @@
 /// D-117 (BACKUP.md §3) — известные цели импорта считает ПЛАН, одним списком
 /// после слияния ([lxImportKnownTargets]): экран и прочие потребители его не
 /// собирают.
+///
+/// §441 (SPEC 128 контракта) — план знает объявления переменных записей
+/// шаблона приёмника ([LxImportReceiver.recordVars]): корневые
+/// `dns_<tag>_<var>` переносит в записи серверов декодер (Н8), слияние DNS
+/// накладывает `vars` по именам (§5.2), нормализует их и `vars` пресетов
+/// (Н2–Н4) и выключает DNS-сервер с неизвестной целью маршрута (Н9). Всё это
+/// считается в плане: превью показывает те же предупреждения, что запишет
+/// импорт.
 library;
 
 import '../models/custom_rule.dart';
@@ -21,6 +29,7 @@ import 'builder/rule_order.dart' show pinRequiredRuleNums;
 import 'direction_mutations.dart';
 import 'dns/dns_backup.dart';
 import 'lx_backup.dart';
+import 'record_vars.dart';
 import 'settings_storage.dart';
 import 'template_loader.dart';
 import 'warp/warp_backup.dart';
@@ -34,6 +43,8 @@ class LxImportReceiver {
     this.systemTags = const {},
     this.selectableRules = const [],
     this.receiverTargets = const {},
+    this.dns = const LxDns(),
+    this.recordVars = RecordVarDecls.none,
   });
 
   /// Источники приёмника в порядке списка.
@@ -58,6 +69,14 @@ class LxImportReceiver {
   /// Направлений. У приложения пусто — всё названо полями выше; раннер
   /// корпуса передаёт сюда цели своей сцены.
   final Set<String> receiverTargets;
+
+  /// §441 — DNS приёмника до импорта: записи серверов и правил и три
+  /// скаляра (`dns_final`, `dns_strategy`, `dns_default_domain_resolver`).
+  final LxDns dns;
+
+  /// §441 — объявления переменных записей шаблона приёмника (SPEC 128 Н2,
+  /// Н4, Н8). [RecordVarDecls.none] — шаблона нет, нормализации нет.
+  final RecordVarDecls recordVars;
 }
 
 /// План импорта: разобранный файл и всё, что импорт запишет.
@@ -76,6 +95,7 @@ class LxImportPlan {
     required this.chains,
     required this.appliedChains,
     required this.rules,
+    this.dns,
   });
 
   /// Текст файла: запись пересчитывает план по свежему приёмнику.
@@ -117,6 +137,9 @@ class LxImportPlan {
 
   /// Корневые правила на оси порядка (полная замена, BACKUP.md §9 п. 7).
   final List<CustomRule> rules;
+
+  /// §393 B9 + §441 — DNS после слияния; `null` — секции DNS в файле нет.
+  final DnsBackupApply? dns;
 }
 
 /// Итог записи плана: для строки результата на экране.
@@ -166,6 +189,7 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
       ...chainTagsBefore,
     }..removeWhere((t) => t.isEmpty),
     knownPresets: {for (final p in receiver.selectableRules) p.presetId},
+    recordVars: receiver.recordVars,
     // Merge цепочек идёт по СВОЕМУ пространству имён: `backup_chain_exists`
     // отвечает на вопрос «своя цепочка под этим тегом уже есть», а не «тег
     // вообще занят» (тёзку-Направление отсеет гейт ниже).
@@ -234,7 +258,7 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
     systemTags: receiver.systemTags,
     receiverTargets: receiver.receiverTargets,
   );
-  final file = gateLxBackupTargets(decoded, known);
+  var file = gateLxBackupTargets(decoded, known);
 
   final incomingChains = resolveBackupChainHops(
     file,
@@ -257,6 +281,39 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
     rules = sortRulesByAxis(rules);
   }
 
+  // §441 (SPEC 128 §5.4) — `vars` правил-пресетов против шаблона приёмника:
+  // необъявленное имя снимается с предупреждением (Н2), умолчание — молча
+  // (Н4). Пресет, которого в шаблоне нет, — прежнее `backup_unknown_preset`,
+  // его `vars` не трогаются.
+  final extraWarnings = <LxBackupWarning>[];
+  rules = normalizePresetRulesVars(
+    rules,
+    receiver.recordVars,
+    onUndeclared: (presetId, name) => extraWarnings.add(LxBackupWarning(
+        kWarnVarSkipped, 'preset:$presetId.vars.$name',
+        reason: kVarSkippedUndeclared)),
+  );
+
+  // §393 B9 + §441 — DNS: слияние §5.2, Н2/Н4 против шаблона приёмника, Н9
+  // по тому же единому списку целей, что у правил.
+  final incomingDns = file.dns;
+  final dns = incomingDns == null || incomingDns.isEmpty
+      ? null
+      : applyDnsBackup(
+          incoming: incomingDns,
+          servers: receiver.dns.servers,
+          rules: receiver.dns.rules,
+          dnsFinal: receiver.dns.finalServer,
+          strategy: receiver.dns.strategy,
+          defaultDomainResolver: receiver.dns.defaultDomainResolver,
+          recordVars: receiver.recordVars,
+          knownTargets: known,
+          warnings: extraWarnings,
+        );
+  if (extraWarnings.isNotEmpty) {
+    file = file.copyWith(warnings: [...file.warnings, ...extraWarnings]);
+  }
+
   return LxImportPlan(
     raw: raw,
     file: file,
@@ -273,6 +330,7 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
         .where((c) => acceptedChainTags.contains(c.tag))
         .length,
     rules: rules,
+    dns: dns,
   );
 }
 
@@ -287,12 +345,21 @@ class LxBackupImportService {
   /// Снимок приёмника из хранения и шаблона.
   Future<LxImportReceiver> loadReceiver() async {
     final template = await TemplateLoader.load();
+    final vars = await SettingsStorage.getAllVars();
     return LxImportReceiver(
       lists: await SettingsStorage.getServerLists(),
       directions: await SettingsStorage.getDirections(),
       chains: await SettingsStorage.getChains(),
       systemTags: templateSystemTags(template),
       selectableRules: template.selectableRules,
+      dns: LxDns(
+        servers: await SettingsStorage.getDnsServers(),
+        rules: await SettingsStorage.getDnsRulesList(),
+        finalServer: vars['dns_final'] ?? '',
+        strategy: vars['dns_strategy'] ?? '',
+        defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
+      ),
+      recordVars: RecordVarDecls.fromTemplate(template),
     );
   }
 
@@ -366,18 +433,11 @@ class LxBackupImportService {
         ].isNotEmpty;
     if (listsChanged) await SettingsStorage.saveServerLists(merged);
 
-    // §393 B9 — DNS. Merge: своя запись под тем же адресом сильнее.
-    final dns = file.dns;
-    if (dns != null && !dns.isEmpty) {
-      final vars = await SettingsStorage.getAllVars();
-      final result = applyDnsBackup(
-        incoming: dns,
-        servers: await SettingsStorage.getDnsServers(),
-        rules: await SettingsStorage.getDnsRulesList(),
-        dnsFinal: vars['dns_final'] ?? '',
-        strategy: vars['dns_strategy'] ?? '',
-        defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
-      );
+    // §393 B9 — DNS. Merge (своя запись под тем же адресом сильнее, §441 —
+    // наложение `vars` template-серверов) посчитан планом по свежему
+    // приёмнику.
+    final result = plan.dns;
+    if (result != null) {
       await SettingsStorage.saveDnsServers(result.servers, flush: false);
       await SettingsStorage.saveDnsRulesList(result.rules, flush: false);
       await SettingsStorage.setVar('dns_final', result.dnsFinal, flush: false);

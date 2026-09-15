@@ -12,10 +12,10 @@ import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
-import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
+import 'package:lxbox/services/record_vars.dart';
 
 // Конформанс-раннер корпуса LX Backup (SPEC 103, фаза 4), сторона LxBox.
 // Тот же набор гоняет Go (core/backup/corpus_test.go).
@@ -88,7 +88,19 @@ void main() {
         //
         // Предупреждения предсостояния в сверку НЕ идут: оно декорация сцены,
         // а не предмет кейса.
-        final state = _State();
+        // §441 (SPEC 128 §9.1) — фикстура объявлений шаблона приёмника
+        // (`<case>.template.json`: `dns_options.servers` и `presets`). Нормы
+        // Н2/Н4/Н8 зависят от умолчаний шаблона, а у сторон они разные
+        // (у LxBox `google_dot.outbound` = `vpn-1`), поэтому раннер
+        // нормализует по фикстуре кейса, а не по своему шаблону. Нет
+        // фикстуры — объявлений нет, нормализации нет.
+        final templateFile = File('$base.template.json');
+        final recordVars = templateFile.existsSync()
+            ? RecordVarDecls.fromJson(
+                jsonDecode(templateFile.readAsStringSync())
+                    as Map<String, dynamic>)
+            : RecordVarDecls.none;
+        final state = _State(recordVars);
         final preFile = File('$base.pre.backup.json');
         if (preFile.existsSync()) {
           state.import(preFile.readAsStringSync());
@@ -152,7 +164,7 @@ void main() {
           ], wantRootServers, reason: 'корневые одиночные узлы: состав и порядок');
         }
 
-        _checkDns(state, expected);
+        _checkDns(state, expected, strictVars: templateFile.existsSync());
         _checkSections(state, expected);
 
         // `replace_tags` не сверяется: свёртки источника в группу у LxBox нет
@@ -181,7 +193,13 @@ void main() {
 /// зелёный корпус ничего не гарантирует. Раннер отличается только тем, что
 /// держит состояние в памяти, а не в storage, и шаблона у его приёмника нет:
 /// служебные теги — умолчания LxBox, пресеты не проверяются.
+///
+/// §441 — объявления переменных записей приёмника — фикстура кейса
+/// ([recordVars]); DNS сливает тот же план импорта.
 class _State {
+  _State(this.recordVars);
+
+  final RecordVarDecls recordVars;
   List<ServerList> lists = [];
   List<Direction> directions = [];
   List<SourceChain> chains = [];
@@ -202,6 +220,14 @@ class _State {
         directions: directions,
         chains: chains,
         receiverTargets: const {'proxy', 'direct'},
+        dns: LxDns(
+          servers: dnsServers,
+          rules: dnsRules,
+          finalServer: dnsFinal,
+          strategy: dnsStrategy,
+          defaultDomainResolver: dnsResolver,
+        ),
+        recordVars: recordVars,
       ),
     );
     lists = plan.lists;
@@ -210,16 +236,8 @@ class _State {
     // `rules[]` — единственная секция полной замены (BACKUP.md §9 п. 7).
     rules = plan.rules;
     final file = plan.file;
-    final dns = file.dns;
-    if (dns != null && !dns.isEmpty) {
-      final applied = applyDnsBackup(
-        incoming: dns,
-        servers: dnsServers,
-        rules: dnsRules,
-        dnsFinal: dnsFinal,
-        strategy: dnsStrategy,
-        defaultDomainResolver: dnsResolver,
-      );
+    final applied = plan.dns;
+    if (applied != null) {
       dnsServers = applied.servers;
       dnsRules = applied.rules;
       dnsFinal = applied.dnsFinal;
@@ -624,7 +642,17 @@ void _checkSubscriptions(_State state, Map<String, dynamic> expected) {
 /// ссылка, включённость, тело deep-equal), число правил и все три скаляра.
 /// «Тело едет байт в байт» — свойство одного кодека; у LxBox оно идёт через
 /// свой декодер и хранилище, и видно только здесь.
-void _checkDns(_State state, Map<String, dynamic> expected) {
+///
+/// §441 (SPEC 128 §9.1) — `vars` записи сервера deep-equal. У кейса с
+/// фикстурой объявлений ([strictVars]) отсутствие ключа `vars` в ожидании
+/// значит «ожидаем пусто»: иначе сторона, не снявшая умолчание, прошла бы
+/// зелёной. У прочих кейсов шаблона приёмника нет — сверяется только
+/// заданный ключ.
+void _checkDns(
+  _State state,
+  Map<String, dynamic> expected, {
+  bool strictVars = false,
+}) {
   final want = (expected['dns'] as Map?)?.cast<String, dynamic>();
   if (want == null) return;
   final wantServers =
@@ -645,6 +673,11 @@ void _checkDns(_State state, Map<String, dynamic> expected) {
     if (w['body'] != null) {
       expect(got['body'], _deepEqualsJson(w['body']),
           reason: 'DNS-сервер #$i: тело');
+    }
+    if (w.containsKey('vars') || strictVars) {
+      expect(got['vars'] ?? const <String, dynamic>{},
+          _deepEqualsJson(w['vars'] ?? const <String, dynamic>{}),
+          reason: 'DNS-сервер #$i: vars записи');
     }
   }
   if (want['rules'] is num) {

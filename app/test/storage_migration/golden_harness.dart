@@ -10,6 +10,7 @@ import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
+import 'package:lxbox/services/record_vars.dart';
 import 'package:lxbox/services/rule_set_downloader.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/subscription/http_cache.dart';
@@ -248,6 +249,7 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
   final chains = await SettingsStorage.getChains();
   final routeFinal = await SettingsStorage.getRouteFinal();
   final exportWarnings = <LxBackupWarning>[];
+  final recordVars = await loadRecordVarDecls();
   final dns = dnsToBackup(
     servers: await SettingsStorage.getDnsServers(),
     rules: await SettingsStorage.getDnsRulesList(),
@@ -255,6 +257,7 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
     strategy: vars['dns_strategy'] ?? '',
     defaultDomainResolver: vars['dns_default_domain_resolver'] ?? '',
     warnings: exportWarnings,
+    recordVars: recordVars,
   );
   final warpAccount = await SettingsStorage.getWarpAccount();
   final masqueAccount = await SettingsStorage.getMasqueAccount();
@@ -275,6 +278,7 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
     routeFinal: routeFinal,
     dns: dns,
     warp: warp,
+    recordVars: recordVars,
   );
   exportWarnings.addAll(built.warnings);
 
