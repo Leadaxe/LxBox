@@ -230,7 +230,7 @@ class _UpdateSnackContent extends StatelessWidget {
 /// be shown — the user has no visual indicator that VPN is active.
 /// We show an explainer once on first launch (or after revocation),
 /// then trigger the system permission dialog.
-const _notifPromptKey = 'notif_perm_prompted_v1';
+const _notifPromptKey = SettingsStorage.notificationPromptVar;
 
 Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
   final granted = await ul.UrlLauncher.checkNotificationPermission();
@@ -270,7 +270,7 @@ Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
 /// First-run-only: показываем один раз (persist-флаг). Повторно зайти можно
 /// через кнопку в App Settings. [skipPersist]=true — для прямого вызова из
 /// App Settings, где persist не нужен (всегда показываем по тапу).
-const _batteryPromptKey = 'wizard_battery_v1';
+const _batteryPromptKey = SettingsStorage.batteryPromptVar;
 
 Future<void> maybeShowBatteryOptimizationDialog(
   BuildContext context,
@@ -354,7 +354,7 @@ Future<void> showOemBatteryFollowupDialog(
 /// версиях системного промпта нет — шаг помечается показанным и пропускается
 /// молча (кнопка «Add tile» в App Settings остаётся для ручного добавления).
 /// Один раз (persist-флаг).
-const _addTilePromptKey = 'wizard_addtile_v1';
+const _addTilePromptKey = SettingsStorage.addTilePromptVar;
 
 Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) async {
   final asked = await SettingsStorage.getVar(_addTilePromptKey, '0');
@@ -377,7 +377,7 @@ Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) asyn
 /// Канал установки остаётся, но только как **подсказка для дефолта**: из
 /// каталога первой стоит «Skip», у sideload — «Enable». Ошибка в определении
 /// канала теперь безобидна, последнее слово за пользователем.
-const _updatePromptKey = 'wizard_update_check_v1';
+const _updatePromptKey = SettingsStorage.updateCheckPromptVar;
 
 Future<void> maybeShowUpdateCheckPrompt(BuildContext context) async {
   final asked = await SettingsStorage.getVar(_updatePromptKey, '0');

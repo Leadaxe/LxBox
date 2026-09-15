@@ -940,6 +940,23 @@ class SettingsStorage {
     'debug_port',
   };
 
+  /// §447 — одноразовые флаги стартовых промптов («уже спрашивали»): свойство
+  /// устройства, а не настройка. Полная замена ([replaceRaw], `merge=false`)
+  /// переносит их из текущего стораджа, как [debugApiVarKeys], если во
+  /// входящем снимке их нет: иначе после restore на холодном старте заново
+  /// всплывали «Add tile» и «Check for updates?». `wizard_*` в allowlist
+  /// импорта нет — из файла они не приходят вовсе.
+  static const String batteryPromptVar = 'wizard_battery_v1';
+  static const String addTilePromptVar = 'wizard_addtile_v1';
+  static const String updateCheckPromptVar = 'wizard_update_check_v1';
+  static const String notificationPromptVar = 'notif_perm_prompted_v1';
+  static const Set<String> startupPromptVarKeys = {
+    batteryPromptVar,
+    addTilePromptVar,
+    updateCheckPromptVar,
+    notificationPromptVar,
+  };
+
   /// Backup: применить snapshot. `merge=false` (default) — replace (overwrite
   /// cache + flush на disk), `merge=true` — top-level merge: присутствующие в
   /// [snapshot] ключи overwrite, отсутствующие — keep. `vars` мерджится

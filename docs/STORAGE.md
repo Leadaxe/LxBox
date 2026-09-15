@@ -438,6 +438,8 @@ A flat `Map<String, String>` (values are stringified on read). It serves both **
 
 > The authoritative list of app flags in code is `SettingsStorage._appFeatureFlagVars`; keep this table in sync with it.
 
+A full replace (`replaceRaw` with `merge=false`: backup restore in Replace mode, `POST /backup/import`) keeps some device keys from the current storage when the incoming `vars` lack them: `debug_enabled` / `debug_token` / `debug_port` (§413, `SettingsStorage.debugApiVarKeys`) and the one-shot startup prompt flags `wizard_battery_v1`, `wizard_addtile_v1`, `wizard_update_check_v1`, `notif_perm_prompted_v1` (§447, `SettingsStorage.startupPromptVarKeys`). The `wizard_*` keys are not in the import allowlist, so a file never brings them.
+
 `removeVar(k)` is not the same as `setVar(k, '')` — an empty string can be a legitimate value, while an absent key falls back to the default.
 
 ---
