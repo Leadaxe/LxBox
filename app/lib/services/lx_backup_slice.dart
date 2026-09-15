@@ -129,6 +129,11 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'detour', _c),
   BackupField(BackupRecord.folderNode, 'reason', _c),
   BackupField(BackupRecord.folderNode, 'sections', _c),
+  // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`;
+  // членство правилом и значки строки — настройки LxBox.
+  BackupField(BackupRecord.folderNode, 'group', _c),
+  BackupField(BackupRecord.folderNode, 'members_rule', _s),
+  BackupField(BackupRecord.folderNode, 'pool_badge', _s),
 
   // ── цепочка ──────────────────────────────────────────────────────────────
   BackupField(BackupRecord.chain, 'kind', _c),

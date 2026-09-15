@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../config/consts.dart';
+import '../models/auto_select.dart';
+import '../models/codec/auto_group_record.dart';
 import '../models/codec/chain_record.dart';
 import '../models/codec/node_link_record.dart';
 import '../models/codec/source_record.dart';
@@ -15,6 +17,7 @@ import '../models/direction.dart';
 import '../models/dns_ref.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
+import '../models/node_spec.dart' show AutoSelectSpec;
 import '../models/parser_config.dart' show kDefaultRuleNum;
 import '../models/record_codec.dart';
 import '../models/server_list.dart';
@@ -178,8 +181,8 @@ const String kWarnSectionRecordDropped = 'backup_section_record_dropped';
 
 /// §438 — запись `sources[]` вида, которому на этой стороне нет места:
 /// корневые `auto`/`unsupported` (union 1.0 их не выражает, BACKUP.md §2),
-/// незнакомый `kind`, а у LxBox ещё члены папки `chain`/`auto` — цепочка
-/// здесь только корневой источник, провайдерской группы в модели нет.
+/// незнакомый `kind`, а у LxBox ещё члены папки `chain` — цепочка здесь
+/// только корневой источник. Член папки `auto` — узел автовыбора (§439 N2).
 /// [LxBackupWarning.kind] — вид записи. Запись не применяется.
 const String kWarnSourceKindUnsupported = 'backup_source_kind_unsupported';
 
@@ -320,7 +323,13 @@ class LxServer {
     this.sectionsPresent = false,
     this.detour,
     this.position = 0,
+    this.autoGroup,
   });
+
+  /// §439 N2 — член папки 1.0 `kind: auto`: узел автовыбора со ссылками файла
+  /// как есть (член `{tag}` уже поднят до пары с [folderRef]). Адрес здесь
+  /// составу даёт слияние ([mergeBackupServers]). Текста у такого члена нет.
+  final AutoSelectSpec? autoGroup;
 
   /// §438 — место корневой записи в `sources[]` файла 1.0 (см.
   /// [LxSubscription.position]); член папки идёт местом своей папки.
@@ -754,7 +763,9 @@ Map<String, dynamic>? _exportSource(
                   for (final n in e.value as List)
                     // Член без текста — пустая строка папки: переносить
                     // нечего (хранение держит его `unsupported` без исходника).
-                    if (n is Map && _hasSourceText(n))
+                    // Член-группа текста не имеет и едет записью (§439 N2).
+                    if (n is Map &&
+                        (n['kind'] == kNodeKindAuto || _hasSourceText(n)))
                       _withJsonBody(n.cast<String, dynamic>()),
                 ]
               : e.value,
@@ -2436,7 +2447,9 @@ LxServer? _server10(
 
 /// Член папки 1.0. `server` — узел; `unsupported` с исходником — у LxBox
 /// есть дом: нечитаемый член папки хранит текст и виден в списке (§234);
-/// `chain`/`auto` папка LxBox не держит — [kWarnSourceKindUnsupported].
+/// `auto` — узел автовыбора кодеком хранения (§439 N2, `selector` читается
+/// urltest'ом с [kWarnFieldTypeMismatch]); `chain` папка LxBox не держит —
+/// [kWarnSourceKindUnsupported].
 LxServer? _folderMember10(
   Map<String, dynamic> node,
   LxFolder folder,
@@ -2447,6 +2460,27 @@ LxServer? _folderMember10(
   switch (kind) {
     case 'server':
       return _server10(node, warnings, folder: folder);
+    case kNodeKindAuto:
+      _dropForeignSections(node, kind, warnings);
+      final read = autoGroupMemberFromRecord(
+        stripUndeclaredBackupFields(BackupRecord.folderNode, node),
+        folderId: folder.key,
+        where: '${folder.name}: $tag',
+      );
+      final group = read.member.node! as AutoSelectSpec;
+      if (read.fromSelector) {
+        warnings.add(LxBackupWarning(
+          kWarnFieldTypeMismatch,
+          'sources[${folder.name}].nodes[${group.tag}].group.group_type',
+        ));
+      }
+      return LxServer(
+        autoGroup: group,
+        name: group.tag,
+        enabled: read.member.enabled,
+        folder: folder.name,
+        folderRef: folder.key,
+      );
     case 'unsupported':
       final raw = _str(_obj(node['origin'])?['raw']);
       if (raw.trim().isNotEmpty) {
@@ -2934,6 +2968,7 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
       sc.object('$where.group', group, _group10Keys);
       sc.array(
           group, '$where.group.members', 'members', _link10Keys, 'tag', null);
+      sc.nestedAt(group, '$where.group', 'strategy', _directionAutoKeys);
     }
     final fold = _obj(item['fold']);
     if (fold != null) {
@@ -3329,6 +3364,10 @@ BackupServerMerge mergeBackupServers(
     });
 
   final folderAtKey = <String, int>{};
+  // §439 N2 — куда легли члены папок файла (тег в файле → тег здесь) и
+  // группы, чей состав переводится в адреса здесь после всех членов.
+  final landings = <(int, String), String>{};
+  final autoGroups = <_BackupAutoGroup>[];
   for (final (position, _, _, item) in events) {
     if (item is LxFolder) {
       final at = matchedAt[item.key];
@@ -3367,6 +3406,12 @@ BackupServerMerge mergeBackupServers(
     }
 
     final srv = item as LxServer;
+    if (srv.autoGroup != null) {
+      final at = folderAtKey[srv.folderRef];
+      if (at == null) continue;
+      applied += _mergeFolderAutoGroup(merged, at, srv, autoGroups);
+      continue;
+    }
     final body = srv.uri.isNotEmpty
         ? srv.uri
         : (srv.configJson == null ? '' : jsonEncode(srv.configJson));
@@ -3376,8 +3421,9 @@ BackupServerMerge mergeBackupServers(
       // Член папки 1.0: папка обработана раньше своих членов.
       final at = folderAtKey[srv.folderRef];
       if (at == null) continue;
-      applied +=
-          _mergeFolderMember(merged, at, srv, body, detourOf(srv), touched);
+      applied += _mergeFolderMember(
+          merged, at, srv, body, detourOf(srv), touched,
+          landings: landings);
       continue;
     }
 
@@ -3432,6 +3478,8 @@ BackupServerMerge mergeBackupServers(
     applied += _mergeFolderMember(merged, at, srv, body, '', touched);
   }
 
+  applied += _bindBackupAutoGroups(merged, autoGroups, linkIds, landings);
+
   // Новые источники стоят в хвосте списка (подписки — первыми, их завело
   // слияние подписок); хвост упорядочивается по месту в файле, стабильно.
   final firstNew = merged.indexWhere((l) => added.containsKey(l.id));
@@ -3468,12 +3516,17 @@ int _mergeFolderMember(
   LxServer srv,
   String body,
   String detour,
-  List<BackupNodeRef> touched,
-) {
+  List<BackupNodeRef> touched, {
+  Map<(int, String), String>? landings,
+}) {
   final folder = merged[folderAt] as FolderServers;
   final canon = canonicalNodeBody(body);
   final hit = folder.members.indexWhere((m) => canonicalNodeBody(m.raw) == canon);
   if (hit >= 0) {
+    final here = folder.members[hit].node?.tag ?? '';
+    if (srv.name.isNotEmpty && here.isNotEmpty) {
+      landings?[(folderAt, srv.name)] = here;
+    }
     touched.add((list: folderAt, member: hit));
     if (!srv.sectionsPresent) return 0;
     final members = folder.members.toList();
@@ -3484,17 +3537,98 @@ int _mergeFolderMember(
     merged[folderAt] = folder.copyWith(members: members);
     return 1;
   }
-  merged[folderAt] = folder.copyWith(members: [
-    ...folder.members,
-    FolderMember(
-      raw: body,
-      enabled: srv.enabled,
-      detour: detour,
-      sections: srv.sections,
-    ),
-  ]);
+  final member = FolderMember(
+    raw: body,
+    enabled: srv.enabled,
+    detour: detour,
+    sections: srv.sections,
+  );
+  final here = member.node?.tag ?? '';
+  if (srv.name.isNotEmpty && here.isNotEmpty) {
+    landings?[(folderAt, srv.name)] = here;
+  }
+  merged[folderAt] = folder.copyWith(members: [...folder.members, member]);
   touched.add((list: folderAt, member: folder.members.length));
   return 1;
+}
+
+/// §439 N2 — член-группа файла, ждущий перевода состава в адреса здесь.
+typedef _BackupAutoGroup = ({
+  int folderAt,
+  int member,
+  LxServer srv,
+  bool fresh,
+});
+
+/// Член-группа папки [folderAt]. Ссылочный член без тела ключуется тегом
+/// (BACKUP.md §9 п. 3): группа с тем же тегом в папке — та же группа, её
+/// значение берётся из файла; иначе новая встаёт в конец. Состав переводит
+/// [_bindBackupAutoGroups]. Возвращает, сколько применилось сейчас.
+int _mergeFolderAutoGroup(
+  List<ServerList> merged,
+  int folderAt,
+  LxServer srv,
+  List<_BackupAutoGroup> pending,
+) {
+  final folder = merged[folderAt] as FolderServers;
+  final group = srv.autoGroup!;
+  final hit = folder.members.indexWhere(
+      (m) => m.node is AutoSelectSpec && m.node!.tag == group.tag);
+  if (hit >= 0) {
+    pending.add((folderAt: folderAt, member: hit, srv: srv, fresh: false));
+    return 0;
+  }
+  merged[folderAt] = folder.copyWith(members: [
+    ...folder.members,
+    FolderMember.auto(group, enabled: srv.enabled),
+  ]);
+  pending.add((
+    folderAt: folderAt,
+    member: folder.members.length,
+    srv: srv,
+    fresh: true,
+  ));
+  return 1;
+}
+
+/// §439 N2, NODE_LINK §7.2 — состав групп файла → адреса здесь: член своей
+/// папки файла получает `id` папки здесь и тег, под которым член лёг
+/// ([landings]); член чужого контейнера — `id` по карте [ids] (нет в карте —
+/// как есть, разбирает сборка). Совпавшая группа, чьё значение не
+/// изменилось, не считается применённой.
+int _bindBackupAutoGroups(
+  List<ServerList> merged,
+  List<_BackupAutoGroup> pending,
+  Map<String, String> ids,
+  Map<(int, String), String> landings,
+) {
+  var applied = 0;
+  for (final p in pending) {
+    final folder = merged[p.folderAt] as FolderServers;
+    var group = p.srv.autoGroup!;
+    final membership = group.membership;
+    if (membership is ExplicitMembers) {
+      group = group.copyWith(
+        membership: ExplicitMembers([
+          for (final l in membership.members)
+            if (l.isRoot || l.folderId == p.srv.folderRef)
+              NodeLink(
+                folderId: folder.id,
+                tag: landings[(p.folderAt, l.tag)] ?? l.tag,
+              )
+            else
+              NodeLink(folderId: ids[l.folderId] ?? l.folderId, tag: l.tag),
+        ]),
+      );
+    }
+    final member = FolderMember.auto(group, enabled: p.srv.enabled);
+    if (folder.members[p.member] == member) continue;
+    merged[p.folderAt] = folder.copyWith(
+      members: folder.members.toList()..[p.member] = member,
+    );
+    if (!p.fresh) applied++;
+  }
+  return applied;
 }
 
 /// §438 — позиции цепочек формата 1.0 → теги конфига LxBox.
