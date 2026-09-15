@@ -344,22 +344,23 @@ with a warning rather than hand the core a file it will reject"
 
 | Check | Sanitiser | User sees | Code | Why | Task |
 |---|---|---|---|---|---|
-| `detour` to a non-existent tag (a detour that came inside a node body; storage links are resolved earlier, fail-closed — §4.4a) | `detour` key removed, node goes direct | `emitWarnings`, aggregated per target (first 5 names + count) | `:293-303`, render `:781` | any dangling reference is fatal for the config **as a whole**, and sing-box names not the culprit but the first outbound referencing it (`dependency[X] not found for outbound[Y]`) | §393 A4 |
-| Same, but the target was removed by the sanitiser itself | separate bucket, different text | `emitWarnings` ("was left with no members and removed during sanitation") | `:299-301`, `:792-795` | "referenced missing X" would be a lie sending the user to hunt a broken subscription instead of what happened | §393 A4 |
-| Ghost members of a `selector`/`urltest` | excluded from the roster | `emitWarnings` | `:371-391` | the core rejects the config on a dangling member | §393 A4 |
-| Group emptied **and** it is a Direction | not dropped: roster becomes `[block, direct-out]`, `default = block` | `emitWarnings` | `:406-419` | removing it would dangle `route.rules[].outbound`; blocking is safer than releasing traffic outside the VPN | §393 A4 |
-| Group emptied, not a Direction | entry dropped whole | `emitWarnings` | `:421`, `:143-147` | cascade cleanup | §393 A4 |
-| Group `default` not among its members | replaced with `kept.first` | `emitWarnings` | `:429-435` | otherwise the core rejects the config ("default outbound not found") | §393 A4 |
-| Node whose detour leads into a group it belongs to | node removed from the roster, **detour kept** (fail-open) | `emitWarnings`, aggregated per node | `:379-399`, render `:772` | the detour was set deliberately; sending the traffic direct would break exactly what the user asked for. Otherwise the kernel would not start (dependency cycle) | §393 A4 |
-| Composite: a node keeps a detour into a Direction that has gone to block | nothing changed — composite warning only | `emitWarnings` | `:206-217`, render `:754` | the node's policy silently inverted while the config stays valid and the core starts; no other warning names the consequence | §393 A4 |
-| `type: chain` hop pointing at a non-existent tag | **chain dropped whole** | `emitWarnings` | `:321-332` | the core will not start on a dangling reference, and "just drop the hop" would make it a different route | §393 C4 |
-| `type: chain` nested chain at position ≥ 1 | chain dropped whole | `emitWarnings` | `:333-341` | core invariant `protocol/chain/chain.go:279` | §393 C4 |
-| Group used as a hop contains chains among its leaves | chains excluded from that group's roster | `emitWarnings` | `:487-535` | the core walks group leaves at start and rejects a nested chain; `check` does not catch it, only `run` does | §393 C4 |
-| Cycle over any edge (detour / member / chainHop) | Tarjan SCC + scoring, **one** edge cut per pass: detour key removed, member excluded, or chain dropped | `emitWarnings`, 3 texts | `:560-657` | which edge to cut is the §254 question — taking the first would cut innocent nodes (the §254 case would have stripped detours from two clean nodes instead of the one at fault) | §393 A4/§254 |
-| No edge unties the cycle (`bestScore <= 0`) | sanitiser gives up | nothing here → fatal `DetourCycle` later | `:633` | hand it to the validator | §393 A4 |
-| A tag counts as "alive" only with an actual entry (`dns-out`/`block-out`/`direct`/`reject`/`drop` are ghosts) | affects all rules above | — | `:125-141` | treating a tag as alive without an entry would leave a reference the validator then kills fatally — fail-open here equals fatal there | §393 A4 |
-| `chain` deliberately excluded from `_isGroup` | trap guard | — | `:249, 256, 68-74` | giving it group semantics would exclude a ghost hop from the "roster" instead of dropping the chain, and the user would travel a route they never asked for | §393 C4 |
-| Fixpoint iteration limit (`len*4 + 8`) exhausted | loop exits | **silent** | `:149-192` | the comment argues it is unreachable (each pass removes an edge or node); there is **no handling and no warning** if it is reached — purpose of the unhandled branch unclear | §393 A4 |
+| `detour` to a non-existent tag (a detour that came inside a node body; storage links are resolved earlier, fail-closed — §4.4a) | `detour` key removed, node goes direct | `emitWarnings`, aggregated per target (first 5 names + count) | `:304-314`, render `:792` | any dangling reference is fatal for the config **as a whole**, and sing-box names not the culprit but the first outbound referencing it (`dependency[X] not found for outbound[Y]`) | §393 A4 |
+| Same, but the target was removed by the sanitiser itself | separate bucket, different text | `emitWarnings` ("was left with no members and removed during sanitation") | `:310-312`, `:803-806` | "referenced missing X" would be a lie sending the user to hunt a broken subscription instead of what happened | §393 A4 |
+| Ghost members of a `selector`/`urltest` | excluded from the roster | `emitWarnings` | `:382-402` | the core rejects the config on a dangling member | §393 A4 |
+| Group emptied **and** it is a Direction | not dropped: roster becomes `[block, direct-out]`, `default = block` | `emitWarnings` | `:417-430` | removing it would dangle `route.rules[].outbound`; blocking is safer than releasing traffic outside the VPN | §393 A4 |
+| Group emptied, not a Direction | entry dropped whole | `emitWarnings` | `:432`, `:148-152` | cascade cleanup | §393 A4 |
+| Group `default` not among its members | replaced with `kept.first` | `emitWarnings` | `:440-446` | otherwise the core rejects the config ("default outbound not found") | §393 A4 |
+| Node whose detour leads into a group it belongs to | node removed from the roster, **detour kept** (fail-open) | `emitWarnings`, aggregated per node | `:390-410`, render `:783` | the detour was set deliberately; sending the traffic direct would break exactly what the user asked for. Otherwise the kernel would not start (dependency cycle) | §393 A4 |
+| Composite: a node keeps a detour into a Direction that has gone to block | nothing changed — composite warning only | `emitWarnings` | `:211-222`, render `:765` | the node's policy silently inverted while the config stays valid and the core starts; no other warning names the consequence | §393 A4 |
+| `type: chain` hop pointing at a non-existent tag | **chain dropped whole** | `emitWarnings` | `:332-343` | the core will not start on a dangling reference, and "just drop the hop" would make it a different route | §393 C4 |
+| `type: chain` nested chain at position ≥ 1 | chain dropped whole | `emitWarnings` | `:344-352` | core invariant `protocol/chain/chain.go:279` | §393 C4 |
+| Group used as a hop contains chains among its leaves | chains excluded from that group's roster | `emitWarnings` | `:498-546` | the core walks group leaves at start and rejects a nested chain; `check` does not catch it, only `run` does | §393 C4 |
+| Cycle over any edge (detour / member / chainHop) | Tarjan SCC + scoring, **one** edge cut per pass: detour key removed, member excluded, or chain dropped | `emitWarnings`, 3 texts | `:571-668` | which edge to cut is the §254 question — taking the first would cut innocent nodes (the §254 case would have stripped detours from two clean nodes instead of the one at fault) | §393 A4/§254 |
+| No edge unties the cycle (`bestScore <= 0`) | sanitiser gives up | nothing here → fatal `DetourCycle` later | `:644` | hand it to the validator | §393 A4 |
+| `urltest` whose `interval` is greater than `idle_timeout` (a missing key or `0` means the core default: 3m / 30m) | `idle_timeout` set to the `interval` string; `interval` is never changed. Values the core would reject, negative values and `selector` are left alone | `emitWarnings` with both values and the reason | `sanitize_urltest_timings.dart:39-65`, call `:234-238`; durations parsed by `core_duration.dart` | the core fills in its defaults and rejects `interval > idle_timeout` in the group constructor (`NewURLTestGroup`, both `least_test` and `round_robin`), so `check` passes and only `run` fails. Shortening `interval` would multiply probes against the provider; a longer `idle_timeout` costs at most one extra probe of an idle group. The core's duration parser knows `d`, `time.ParseDuration` does not | §442 |
+| A tag counts as "alive" only with an actual entry (`dns-out`/`block-out`/`direct`/`reject`/`drop` are ghosts) | affects all rules above | — | `:130-146` | treating a tag as alive without an entry would leave a reference the validator then kills fatally — fail-open here equals fatal there | §393 A4 |
+| `chain` deliberately excluded from `_isGroup` | trap guard | — | `:260, 267, 73-79` | giving it group semantics would exclude a ghost hop from the "roster" instead of dropping the chain, and the user would travel a route they never asked for | §393 C4 |
+| Fixpoint iteration limit (`len*4 + 8`) exhausted | loop exits | **silent** | `:154-197` | the comment argues it is unreachable (each pass removes an edge or node); there is **no handling and no warning** if it is reached — purpose of the unhandled branch unclear | §393 A4 |
 
 ### 4.2 Heal steps (`post_steps/heal_*.dart`)
 
@@ -538,13 +539,13 @@ the "canon = Go behaviour" decision.
 comment at all. Neither purpose could be established from the code.
 
 **4. Unhandled exhaustion branches.** The graph sanitiser's fixpoint limit
-(`sanitize_outbound_graph.dart:149-192`) and the tag allocator's counter
+(`sanitize_outbound_graph.dart:154-197`) and the tag allocator's counter
 (`build_config.dart:658-665`) both exit without a warning if reached. The
 sanitiser's comment argues its branch is unreachable; the allocator has no
 comment, and returning an already-taken tag is a silent fatal in the core.
 
 **5. Depth limits are inconsistent.** `_detourReaches` and
-`_pruneChainLeavesUnderGroups` (`sanitize_outbound_graph.dart:456, 503, 521`)
+`_pruneChainLeavesUnderGroups` (`sanitize_outbound_graph.dart:467, 514, 532`)
 rely on a `seen` set with no depth cap, unlike `kMaxDetourCulprits` in the
 validator and `kMaxDetourDepth` in the parsers. Whether that is a deliberate
 choice is not stated.
