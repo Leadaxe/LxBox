@@ -33,7 +33,7 @@ Map<String, Map<String, dynamic>> templateDnsServersByTag(
 /// выпадают, семантика §033). Обёртка без `vars` (local_dns_resolver) —
 /// чистая копия `server`.
 ///
-/// §441 (SPEC 128 §4.1) — `@name`, которого сервер не объявил, из записи не
+/// §441 (SPEC 129 §4.1) — `@name`, которого сервер не объявил, из записи не
 /// подставляется: глобальный проход сборки `dns_options` не видит, и литерал
 /// `@name` ушёл бы в конфиг. Ключ с таким плейсхолдером выпадает, имя — в
 /// [unknownVarsOut] (сборка называет его warning'ом).
@@ -166,7 +166,7 @@ Future<List<DnsServerRef>> resolveDnsServersList({
 ///   DNS-опцией (tag в [ruleReferencedTags], задача 3), — **force-include**
 ///   независимо от `enabled` — иначе DNS-правило ссылается в пустоту.
 /// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` → ключ не
-///   пишется (§117 решение №2). §441 (SPEC 128 Н10, вторая линия
+///   пишется (§117 решение №2). §441 (SPEC 129 Н10, вторая линия
 ///   fail-closed) — `detour` на тег, которого нет в [knownOutboundTags],
 ///   сервер НЕ эмитит: снятый ключ пустил бы его запросы мимо выбранного
 ///   маршрута. Тег — в [detourDroppedOut], warning — в [warningsOut]; ссылки
@@ -175,7 +175,11 @@ Future<List<DnsServerRef>> resolveDnsServersList({
 /// - §312: члены DNS-групп (`type: group`) фильтруются пост-проходом по
 ///   реально эмитированным тегам ([_filterDnsGroupMembers]); каждый дроп —
 ///   warning в [warningsOut]. Storage НЕ трогается: выключенный член при
-///   обратном включении «встаёт на место» (решение юзера §312 №3).
+///   обратном включении «встаёт на место» (решение юзера §312 №3). §443
+///   (SPEC 129 Н10) — группа, опустевшая от членов, выпавших второй линией,
+///   выпадает сама и идёт в [detourDroppedOut].
+/// - §443 — `tailscale` с висячим `endpoint` второй линией не считается:
+///   его снимает [_sanitizeTailscaleDnsServers] (NODE_SECTIONS §6).
 List<Map<String, dynamic>> resolveDnsServersBodies({
   required List<DnsServerRef> resolved,
   required Map<String, Map<String, dynamic>> templateByTag,
@@ -198,6 +202,16 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   final detourDropped = <String>{};
   // §441 (Н10) — висячий detour после подстановки: сервер не эмитится.
   bool dropForDetour(Map<String, dynamic> body, String tag) {
+    // §443 — висячий `endpoint` у `tailscale` проверяется ПЕРВЫМ, как у
+    // лаунчера (`dns_detour_sanitize.go`): такой сервер выпадает прежним
+    // механизмом NODE_SECTIONS §6 ([_sanitizeTailscaleDnsServers]), а не
+    // второй линией.
+    if (tailscaleEndpointTags != null && body['type'] == 'tailscale') {
+      final ep = body['endpoint'];
+      if (ep is! String || ep.isEmpty || !tailscaleEndpointTags.contains(ep)) {
+        return false;
+      }
+    }
     final dangling = normalizeDnsDetour(body, knownOutbounds: knownOutboundTags);
     if (dangling == null) return false;
     warningsOut?.add(
@@ -275,6 +289,7 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
           s['tag'] as String,
     },
     detourDropped: detourDropped,
+    detourDroppedOut: detourDroppedOut,
     warningsOut: warningsOut,
   );
   return out;
@@ -327,16 +342,60 @@ void _sanitizeTailscaleDnsServers(
 /// Пустая группа после фильтра НЕ чинится и не выкидывается молча — эмитится
 /// пустой, validator помечает `EmptyDnsGroup` (fatal): сборка блокируется до
 /// решения юзера, а не деградирует втихую (анти-паттерн §277/§278).
+///
+/// §443 (SPEC 129 Н10) — исключение: группа, опустевшая оттого, что её члены
+/// выпали второй линией (`dangling detour`, в том числе вложенные группы,
+/// опустевшие так же), выпадает сама и лечится как сервер — тег уходит в
+/// [detourDropped] (и [detourDroppedOut]), ссылки на неё закрывает
+/// [healDetourDroppedDnsRefs].
 void _filterDnsGroupMembers(
   List<Map<String, dynamic>> out, {
   required Set<String> allRefTags,
   Set<String> detourDropped = const {},
+  Set<String>? detourDroppedOut,
   List<String>? warningsOut,
 }) {
   final emittedTags = <String>{
     for (final b in out)
       if (b['tag'] is String) b['tag'] as String,
   };
+  // Неподвижная точка: группа, чьи члены все недоступны и хотя бы один выпал
+  // второй линией, выпадает; её выпадение может опустошить объемлющую группу.
+  final dropped = {...detourDropped};
+  for (var changed = true; changed;) {
+    changed = false;
+    for (final body in out) {
+      final tag = body['tag'];
+      if (body['type'] != 'group' || tag is! String) continue;
+      if (dropped.contains(tag)) continue;
+      final members = [
+        for (final raw in (body['servers'] as List<dynamic>? ?? const []))
+          raw?.toString() ?? '',
+      ];
+      final alive = members.any((m) =>
+          m != tag &&
+          allRefTags.contains(m) &&
+          !dropped.contains(m) &&
+          emittedTags.contains(m));
+      if (!alive && members.any(dropped.contains)) {
+        dropped.add(tag);
+        changed = true;
+      }
+    }
+  }
+  out.removeWhere((body) {
+    final tag = body['tag'];
+    if (body['type'] != 'group' ||
+        tag is! String ||
+        !dropped.contains(tag) ||
+        detourDropped.contains(tag)) {
+      return false;
+    }
+    warningsOut?.add("DNS group '$tag' dropped: its members were dropped "
+        '(dangling detour)');
+    detourDroppedOut?.add(tag);
+    return true;
+  });
   for (final body in out) {
     if (body['type'] != 'group') continue;
     final selfTag = body['tag'] as String;
@@ -351,7 +410,7 @@ void _filterDnsGroupMembers(
       } else if (m.isEmpty || !allRefTags.contains(m)) {
         // Тега нет ни в одном ref'е — опечатка/удалён: надо чинить группу.
         dropReason = 'unknown';
-      } else if (detourDropped.contains(m)) {
+      } else if (dropped.contains(m)) {
         dropReason = 'dangling detour';
       } else if (!emittedTags.contains(m)) {
         // Ref есть, но не эмитится — выключен: включение вернёт члена.

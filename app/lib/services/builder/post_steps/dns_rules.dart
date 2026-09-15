@@ -51,9 +51,10 @@ Future<void> applyCustomDns(
   // в конец `dns.rules`. `enabled: false` отсеян вызывающим.
   List<Map<String, dynamic>> nodeServers = const [],
   List<Map<String, dynamic>> nodeRules = const [],
-  // §441 (SPEC 128 Н10) — умолчания шаблона `dns_final` /
-  // `dns_default_domain_resolver`: замены ссылок на сервер, выпавший из-за
-  // висячего detour ([healDetourDroppedDnsRefs]).
+  // §441/§443 (SPEC 129 Н10) — умолчания шаблона; вторая линия читает
+  // `dns_default_domain_resolver` — замену резолверов на сервер, выпавший из-за
+  // висячего detour ([healDetourDroppedDnsRefs]). `dns.final` на такой сервер
+  // не заменяется, а снимается с заглушкой `reject`.
   Map<String, String> resolverDefaults = const {},
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
@@ -273,8 +274,8 @@ Future<void> applyCustomDns(
   }
   if (outRules.isNotEmpty) dns['rules'] = outRules;
   config['dns'] = dns;
-  // §441 (SPEC 128 Н10) — правила и резолверы на серверы, выпавшие из-за
-  // висячего detour: одно место политики.
+  // §441/§443 (SPEC 129 Н10) — правила, `dns.final` и резолверы на серверы,
+  // выпавшие из-за висячего detour: одно место политики.
   warningsOut?.addAll(healDetourDroppedDnsRefs(
     config,
     detourDropped: detourDropped,

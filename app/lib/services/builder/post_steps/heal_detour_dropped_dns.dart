@@ -1,31 +1,40 @@
 part of '../post_steps.dart';
 
-/// §441 (SPEC 128 Н10) — ссылки на DNS-серверы, выпавшие второй линией
-/// fail-closed: `detour` после подстановки указывает на тег, которого нет в
-/// конфиге ([resolveDnsServersBodies], [detourDropped]).
+/// §441/§443 (SPEC 129 Н10, D-118) — ссылки на DNS-серверы, выпавшие второй
+/// линией fail-closed: `detour` после подстановки указывает на тег, которого
+/// нет в конфиге ([resolveDnsServersBodies], [detourDropped]), и DNS-группы,
+/// опустевшие от этого.
 ///
-/// ЕДИНСТВЕННОЕ место политики этого случая: лаунчер доопределяет, что
-/// делать с `dns.final` и `route.default_domain_resolver` на выпавший сервер
-/// («до прямого сервера не должно дойти ничего», SPEC 128), и форма меняется
-/// здесь одной правкой.
+/// ЕДИНСТВЕННОЕ место политики этого случая, форма — таблица Н10 SPEC 129
+/// лаунчера (`core/build/dns_detour_sanitize.go`):
 ///
-/// - `dns.rules[]` с `server` из [detourDropped] → `action: reject` (решение
-///   15.09.2026, SPEC 128 §13 п. 4). Снятое правило отдало бы свои домены
-///   `dns.final`, а при прямом `final` это утечка по доменам правила.
-///   Сопоставители остаются, поля маршрута снимаются: у `reject` ядро
-///   принимает только `method`/`no_drop`, лишний ключ роняет конфиг.
-/// - `dns.final`, `route.default_domain_resolver` → замена политикой §419
-///   (`heal_dangling_dns_resolvers.dart`): умолчание шаблона из [defaults],
-///   иначе первый пригодный эмитированный сервер. Пока — как у сервера
-///   выключенного пресета. Замены нет — ссылка остаётся, валидатор ставит
-///   fatal `DanglingDnsServerRef`.
-/// - `dns.servers[].domain_resolver` → та же замена (умолчание
-///   `dns_default_domain_resolver`), кроме самого сервера; замены нет — ключ
-///   снимается (ядро не стартует на резолвере, которого нет).
+/// - `dns.rules[]` с `server` из [detourDropped] → `action: reject` (SPEC 129
+///   §13 п. 4). Снятое правило отдало бы свои домены `dns.final`, а при
+///   прямом `final` это утечка по доменам правила. Сопоставители остаются,
+///   поля маршрута снимаются: у `reject` ядро принимает только
+///   `method`/`no_drop`, лишний ключ роняет конфиг.
+/// - `dns.final` на выпавший сервер → ключ снимается, последним DNS-правилом
+///   встаёт `{"action": "reject"}` без условий. Без `final` ядро берёт первый
+///   сервер списка — у шаблона это системный резолвер; заглушка не пускает к
+///   нему ни один запрос (ядро lx.39: `check` принимает, живое отвечает
+///   REFUSED).
+/// - `route.default_domain_resolver`, `domain_resolver` узлов
+///   (`outbounds[]`, `endpoints[]`) и DNS-серверов → замена: умолчание шаблона
+///   (`dns_default_domain_resolver` из [defaults]), если он эмитирован и
+///   пригоден, иначе первый эмитированный сервер не `fakeip`/`hosts`
+///   ([_DnsResolverPool]). Резолвер адреса сервера работает ДО туннеля:
+///   пользовательских доменов там нет, а без резолвера ядро не стартует.
+///   Заменить нечем — ключ снимается. У DNS-сервера, чей адрес — IP (или
+///   адреса нет), `domain_resolver` просто снимается: резолвер ему не нужен.
+///   Значение-объект (`{server, strategy, …}`) сохраняет форму.
+///
+/// Сервер, выпавший из-за висячего `endpoint` (Tailscale, NODE_SECTIONS §6),
+/// сюда не попадает и лечится прежним механизмом: правило снимается,
+/// `dns.final` — политика §419 ([healDanglingDnsResolvers]).
 ///
 /// Замены НЕ персистятся (в отличие от §419): сервер выпал, а выбор
 /// пользователя цел — вернётся Направление, вернётся и сервер со всеми
-/// ссылками.
+/// ссылками. [detourDropped] пуст — конфиг не меняется ни в одном байте.
 ///
 /// Мутирует [config]. Возвращает warnings сборки.
 List<String> healDetourDroppedDnsRefs(
@@ -39,10 +48,10 @@ List<String> healDetourDroppedDnsRefs(
   final warnings = <String>[];
 
   final rules = dns['rules'];
+  // Копии, а не правка на месте: тело правила может быть картой модели.
+  final out = <dynamic>[];
+  var rulesChanged = false;
   if (rules is List) {
-    // Копии, а не правка на месте: тело правила может быть картой модели.
-    var changed = false;
-    final out = <dynamic>[];
     for (var i = 0; i < rules.length; i++) {
       final r = rules[i];
       if (r is! Map<String, dynamic>) {
@@ -58,63 +67,95 @@ List<String> healDetourDroppedDnsRefs(
         continue;
       }
       out.add(dnsRuleAsReject(r));
-      changed = true;
+      rulesChanged = true;
       warnings.add('DNS rule #$i now rejects: its server "$server" was dropped '
           '(detour is not in the config).');
     }
-    if (changed) dns['rules'] = out;
-  }
-
-  final pool = _DnsResolverPool.of(config);
-
-  /// Замена ссылки [current] на выпавший сервер; `''` — заменить нечем.
-  /// `null` — ссылка не на выпавший сервер.
-  String? heal(String field, String current, String varName,
-      {String except = ''}) {
-    if (!detourDropped.contains(current)) return null;
-    final to = pool?.replacement(defaults[varName] ?? '', except: except);
-    warnings.add(to == null
-        ? '$field: DNS server "$current" was dropped (detour is not in the '
-            'config), and no DNS server can replace it.'
-        : '$field switched to "$to": DNS server "$current" was dropped '
-            '(detour is not in the config).');
-    return to ?? '';
   }
 
   final dnsFinal = dns['final'];
-  if (dnsFinal is String) {
-    final to = heal('dns.final', dnsFinal, 'dns_final');
-    if (to != null && to.isNotEmpty) dns['final'] = to;
+  if (dnsFinal is String && detourDropped.contains(dnsFinal)) {
+    dns.remove('final');
+    out.add(<String, dynamic>{'action': 'reject'});
+    rulesChanged = true;
+    warnings.add('dns.final removed: DNS server "$dnsFinal" was dropped '
+        '(detour is not in the config), remaining queries are rejected.');
+  }
+  if (rulesChanged) dns['rules'] = out;
+
+  final pool = _DnsResolverPool.of(config);
+  final preferred = defaults['dns_default_domain_resolver'] ?? '';
+
+  /// Ключ-резолвер [key] объекта [owner] на выпавший сервер: замена
+  /// ([except] — сам носитель), заменить нечем или [dropOnly] — ключ
+  /// снимается. Строка или объект `{server, …}` — форма значения сохраняется.
+  void heal(Map<String, dynamic> owner, String key, String where,
+      {String except = '', bool dropOnly = false}) {
+    final value = owner[key];
+    final target = switch (value) {
+      String s => s,
+      Map m when m['server'] is String => m['server'] as String,
+      _ => null,
+    };
+    if (target == null || !detourDropped.contains(target)) return;
+    final to =
+        dropOnly ? null : pool?.replacement(preferred, except: except);
+    if (to == null) {
+      owner.remove(key);
+      warnings.add(dropOnly
+          ? '$where: $key removed, DNS server "$target" was dropped (detour '
+              'is not in the config).'
+          : '$where: $key removed, DNS server "$target" was dropped (detour '
+              'is not in the config) and no DNS server can replace it.');
+      return;
+    }
+    if (value is Map) {
+      owner[key] = <String, dynamic>{...value.cast<String, dynamic>(), 'server': to};
+    } else {
+      owner[key] = to;
+    }
+    warnings.add('$where: $key switched to "$to", DNS server "$target" was '
+        'dropped (detour is not in the config).');
   }
 
   final route = config['route'];
   if (route is Map<String, dynamic>) {
-    final resolver = route['default_domain_resolver'];
-    if (resolver is String) {
-      final to = heal('route.default_domain_resolver', resolver,
-          'dns_default_domain_resolver');
-      if (to != null && to.isNotEmpty) {
-        route['default_domain_resolver'] = to;
-      }
+    heal(route, 'default_domain_resolver', 'route');
+  }
+  for (final section in const ['outbounds', 'endpoints']) {
+    for (final o in (config[section] as List<dynamic>? ?? const [])) {
+      if (o is! Map<String, dynamic>) continue;
+      heal(o, 'domain_resolver', '$section "${o['tag'] ?? ''}"');
     }
   }
-
   for (final s in (dns['servers'] as List<dynamic>? ?? const [])) {
     if (s is! Map<String, dynamic>) continue;
-    final resolver = s['domain_resolver'];
-    if (resolver is! String) continue;
     final tag = s['tag'] as String? ?? '';
-    final to = heal('DNS server "$tag" domain_resolver', resolver,
-        'dns_default_domain_resolver',
-        except: tag);
-    if (to == null) continue;
-    if (to.isEmpty) {
-      s.remove('domain_resolver');
-    } else {
-      s['domain_resolver'] = to;
-    }
+    heal(s, 'domain_resolver', 'DNS server "$tag"',
+        except: tag, dropOnly: !_dnsAddressIsDomain(s['server']));
   }
   return warnings;
+}
+
+/// Адрес DNS-сервера — имя, а не IP-литерал (`[v6]` тоже IP). Пусто или не
+/// строка — не имя: резолвер такому серверу не нужен.
+bool _dnsAddressIsDomain(Object? address) {
+  if (address is! String) return false;
+  var a = address.trim();
+  if (a.isEmpty) return false;
+  if (a.startsWith('[') && a.endsWith(']')) a = a.substring(1, a.length - 1);
+  try {
+    Uri.parseIPv4Address(a);
+    return false;
+  } on FormatException {
+    // не IPv4
+  }
+  try {
+    Uri.parseIPv6Address(a);
+    return false;
+  } on FormatException {
+    return true;
+  }
 }
 
 /// DNS-правило [rule] с отказом вместо маршрута: сопоставители те же, поля

@@ -28,7 +28,7 @@ import 'rule_set_registry.dart';
 //   - dns_servers.dart    — resolveDnsServersList / resolveDnsServersBodies
 //                           (§043+§044)
 //   - heal_detour_dropped_dns.dart — ссылки на DNS-серверы, выпавшие из-за
-//                           висячего detour (§441, SPEC 128 Н10)
+//                           висячего detour (§441/§443, SPEC 129 Н10)
 part 'post_steps/tls_transforms.dart';
 part 'post_steps/tun_packages.dart';
 part 'post_steps/dns_rules.dart';
