@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
@@ -16,6 +15,7 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
+import 'package:lxbox/services/lx_backup_import.dart';
 
 import 'json_schema_lite.dart';
 
@@ -72,37 +72,22 @@ Future<LxBackupExport> _export(_State s) => buildLxBackup(
       ),
     );
 
-/// Импорт теми же чистыми функциями, что экран бэкапа (`_onLxImport`):
-/// корень результата для подъёма `{tag}` и перевод ссылок файла `linkOf`.
+/// Импорт тем же планом, что приложение (`LxBackupImportService`): корень
+/// результата для подъёма `{tag}`, перевод ссылок файла и один список
+/// известных целей после слияния.
 LxBackupFile _import(_State s, String raw) {
-  final file = parseLxBackup(
+  final plan = planLxBackupImport(
     raw,
-    knownOutbounds: {for (final d in s.directions) d.tag},
-    knownChains: {for (final c in s.chains) c.tag},
+    LxImportReceiver(
+      lists: s.lists,
+      directions: s.directions,
+      chains: s.chains,
+    ),
   );
-  final subs = mergeBackupSubscriptions(s.lists, file.subscriptions);
-  final servers = mergeBackupServers(
-    subs.lists,
-    file.servers,
-    folders: file.folders,
-    sourceIds: subs.ids,
-    addedSources: subs.added,
-    sourceDetours: subs.detours,
-    rootNames: {
-      kDirectOutboundTag,
-      kBlockOutboundTag,
-      for (final d in [...s.directions, ...file.directions]) ...[d.tag, d.autoTag],
-      for (final c in s.chains) c.tag,
-      for (final c in file.chains) c.tag,
-    },
-  );
-  s.lists = servers.lists;
-  s.chains = [
-    ...s.chains,
-    ...resolveBackupChainHops(file, servers.lists, servers.folderIds,
-        linkOf: servers.linkOf),
-  ];
-  s.rules = renumberBackupAxis(file.rules, servers.lists, servers.touched);
+  final file = plan.file;
+  s.lists = plan.lists;
+  s.chains = plan.chains;
+  s.rules = plan.rules;
   final dns = applyDnsBackup(
     incoming: file.dns!,
     servers: s.dnsServers,
@@ -116,8 +101,8 @@ LxBackupFile _import(_State s, String raw) {
   s.dnsFinal = dns.dnsFinal;
   s.dnsStrategy = dns.strategy;
   s.dnsResolver = dns.defaultDomainResolver;
-  s.directions = [...s.directions, ...file.directions];
-  s.directionPing = {...s.directionPing, ...file.directionPing};
+  s.directions = plan.directions;
+  s.directionPing = {...s.directionPing, ...plan.directionPing};
   s.vars = {...s.vars, ...file.vars};
   s.routeFinal = file.routeFinal ?? s.routeFinal;
   return file;

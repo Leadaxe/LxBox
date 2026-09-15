@@ -14,6 +14,7 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
+import 'package:lxbox/services/lx_backup_import.dart';
 import 'package:lxbox/services/lx_backup_slice.dart';
 
 /// §439 §1.3 — LX Backup 1.0 = срез записи хранения одной таблицей полей
@@ -149,24 +150,14 @@ Map<String, dynamic> _source(String json, String kind) =>
 List<String> _lines(List<LxBackupWarning> warnings) =>
     [for (final w in warnings) '${w.code} ${w.detail}'];
 
-/// Импорт теми же чистыми функциями, что экран бэкапа.
+/// Импорт тем же планом, что приложение (`LxBackupImportService`).
 ({LxBackupFile file, List<ServerList> lists, List<SourceChain> chains})
     _import(List<ServerList> lists, String raw) {
-  final file = parseLxBackup(raw, knownOutbounds: const {'vpn-1'});
-  final subs = mergeBackupSubscriptions(lists, file.subscriptions);
-  final servers = mergeBackupServers(
-    subs.lists,
-    file.servers,
-    folders: file.folders,
-    sourceIds: subs.ids,
-    addedSources: subs.added,
-    sourceDetours: subs.detours,
+  final plan = planLxBackupImport(
+    raw,
+    LxImportReceiver(lists: lists, receiverTargets: const {'vpn-1'}),
   );
-  return (
-    file: file,
-    lists: servers.lists,
-    chains: resolveBackupChainHops(file, servers.lists, servers.folderIds),
-  );
+  return (file: plan.file, lists: plan.lists, chains: plan.chains);
 }
 
 /// Таблица, в которой настройки LxBox контрактом НЕ объявлены (форма до 1.0.1):

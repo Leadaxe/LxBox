@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
@@ -15,6 +15,7 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
+import 'package:lxbox/services/lx_backup_import.dart';
 
 // Конформанс-раннер корпуса LX Backup (SPEC 103, фаза 4), сторона LxBox.
 // Тот же набор гоняет Go (core/backup/corpus_test.go).
@@ -32,19 +33,7 @@ const _contractRoot = 'contract';
 /// Кейсы, которые сторона пока не проходит по известной причине: имя кейса →
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
 /// с работой, которая его закрывает.
-const Map<String, String> _pendingCases = {
-  // Контракт 1.0.1: базовое ожидание без `.expected.lxbox.json` требует
-  // selector-группу с `default` и импорт без предупреждений. У LxBox по
-  // согласованному ответу 6 (TASKS_LXBOX.md §17.8) selector читается
-  // urltest'ом без `default` с `backup_group_degraded` — как в
-  // `v10_group_degraded.expected.lxbox.json`. Ожидание не подгоняется:
-  // нужен side-specific файл от лаунчера. Перепись членов и позиций этих
-  // кейсов закреплена в lx_backup_group_links_test.dart.
-  'v10_group_links': 'расхождение с ответом 6: selector → urltest + '
-      'backup_group_degraded, нет v10_group_links.expected.lxbox.json',
-  'v10_dev_forms': 'расхождение с ответом 6: selector → urltest + '
-      'backup_group_degraded, нет v10_dev_forms.expected.lxbox.json',
-};
+const Map<String, String> _pendingCases = {};
 
 
 void main() {
@@ -185,14 +174,16 @@ void main() {
   });
 }
 
-/// Состояние раннера — то же, что у приложения: списки источников, цепочки,
-/// правила и DNS. Собирается оно ТЕМИ ЖЕ чистыми функциями, которыми его
-/// собирает импорт (`_onLxImport` в `screens/backup_screen.dart`):
-/// расхождение раннера и приложения означало бы, что зелёный корпус ничего
-/// не гарантирует. Раннер отличается только тем, что держит состояние в
-/// памяти, а не в storage.
+/// Состояние раннера — то же, что у приложения: списки источников,
+/// Направления, цепочки, правила и DNS. Собирается оно ТЕМ ЖЕ планом импорта,
+/// которым его собирает приложение (`planLxBackupImport`,
+/// `LxBackupImportService`): расхождение раннера и приложения означало бы, что
+/// зелёный корпус ничего не гарантирует. Раннер отличается только тем, что
+/// держит состояние в памяти, а не в storage, и шаблона у его приёмника нет:
+/// служебные теги — умолчания LxBox, пресеты не проверяются.
 class _State {
   List<ServerList> lists = [];
+  List<Direction> directions = [];
   List<SourceChain> chains = [];
   List<CustomRule> rules = [];
   List<DnsServerRef> dnsServers = [];
@@ -202,37 +193,23 @@ class _State {
   String dnsResolver = '';
 
   LxBackupFile import(String raw) {
-    final file = parseLxBackup(
+    // Цели сцены корпуса — те же, что у Go-раннера (`KnownOutbounds: proxy,
+    // direct`).
+    final plan = planLxBackupImport(
       raw,
-      knownOutbounds: {'proxy', 'direct'},
-      knownChains: {for (final c in chains) c.tag},
+      LxImportReceiver(
+        lists: lists,
+        directions: directions,
+        chains: chains,
+        receiverTargets: const {'proxy', 'direct'},
+      ),
     );
-    final subs = mergeBackupSubscriptions(lists, file.subscriptions);
-    // Корень результата для подъёма `{tag}` (NODE_LINK §7.3) и перевод
-    // ссылок файла — как у `_onLxImport`.
-    final servers = mergeBackupServers(
-      subs.lists,
-      file.servers,
-      folders: file.folders,
-      sourceIds: subs.ids,
-      addedSources: subs.added,
-      sourceDetours: subs.detours,
-      rootNames: {
-        kDirectOutboundTag,
-        kBlockOutboundTag,
-        for (final d in file.directions) ...[d.tag, d.autoTag],
-        for (final c in chains) c.tag,
-        for (final c in file.chains) c.tag,
-      },
-    );
-    lists = servers.lists;
-    chains = [
-      ...chains,
-      ...resolveBackupChainHops(file, servers.lists, servers.folderIds,
-          linkOf: servers.linkOf),
-    ];
+    lists = plan.lists;
+    directions = plan.directions;
+    chains = plan.chains;
     // `rules[]` — единственная секция полной замены (BACKUP.md §9 п. 7).
-    rules = renumberBackupAxis(file.rules, servers.lists, servers.touched);
+    rules = plan.rules;
+    final file = plan.file;
     final dns = file.dns;
     if (dns != null && !dns.isEmpty) {
       final applied = applyDnsBackup(

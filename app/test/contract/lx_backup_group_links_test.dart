@@ -1,26 +1,25 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
-import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
+import 'package:lxbox/services/lx_backup_import.dart';
 
 // Контракт 1.0.1 — импорт групп `kind: auto` и полей стороны LxBox по норме
 // LxBox на файлах корпуса. Кейсы `v10_group_links` и `v10_dev_forms` раннер
-// корпуса пропускает: их базовое ожидание требует selector с `default` без
-// предупреждений, а у LxBox по ответу 6 (TASKS_LXBOX.md §17.8) selector
-// читается urltest'ом с `backup_group_degraded`. Перепись членов, позиций и
-// dev-форм у этих кейсов от стороны не зависит — она закреплена здесь.
-// `v10_lxbox_fields` раннер проходит, но поля стороны LxBox его ожидание не
-// несёт: «раннер LxBox сверяет их по своей модели» (README корпуса) — здесь.
+// корпуса сверяет по `.expected.lxbox.json` (selector читается urltest'ом с
+// `backup_group_degraded`, ответ 6, TASKS_LXBOX.md §17.8); здесь закреплена
+// перепись членов, позиций и dev-форм по модели. `v10_lxbox_fields` раннер
+// проходит, но поля стороны LxBox его ожидание не несёт: «раннер LxBox сверяет
+// их по своей модели» (README корпуса) — здесь.
 
 const _corpus = 'contract/corpus/backup';
 
@@ -32,31 +31,16 @@ typedef _Imported = ({
   List<DnsServerRef> dnsServers,
 });
 
-/// Импорт теми же чистыми функциями и в том же порядке, что `_onLxImport`.
+/// Импорт тем же планом, что приложение (`LxBackupImportService`).
 _Imported _import(String raw, {List<ServerList> lists = const []}) {
-  final file = parseLxBackup(raw);
-  final subs = mergeBackupSubscriptions(lists, file.subscriptions);
-  final servers = mergeBackupServers(
-    subs.lists,
-    file.servers,
-    folders: file.folders,
-    sourceIds: subs.ids,
-    addedSources: subs.added,
-    sourceDetours: subs.detours,
-    rootNames: {
-      kDirectOutboundTag,
-      kBlockOutboundTag,
-      for (final Direction d in file.directions) ...[d.tag, d.autoTag],
-      for (final c in file.chains) c.tag,
-    },
-  );
+  final plan = planLxBackupImport(raw, LxImportReceiver(lists: lists));
+  final file = plan.file;
   final dns = file.dns;
   return (
     file: file,
-    lists: servers.lists,
-    chains: resolveBackupChainHops(file, servers.lists, servers.folderIds,
-        linkOf: servers.linkOf),
-    rules: renumberBackupAxis(file.rules, servers.lists, servers.touched),
+    lists: plan.lists,
+    chains: plan.chains,
+    rules: plan.rules,
     dnsServers: dns == null
         ? const []
         : applyDnsBackup(
@@ -157,8 +141,30 @@ void main() {
           useDetourServers: false,
           replaceDetourChain: true,
         ));
-    // Элемент import_rules корпуса ({match, set}) — не форма ImportRule LxBox
-    // ({conditions, action, …}); его разбор здесь не сверяется.
+    // Контракт 1.0.1: `import_rules` — anyOf [форма LxBox {conditions,
+    // action, …}, старая плоская форма {pattern, is_regex, action}]. Кейс
+    // несёт по правилу каждой формы, и применяются оба: старое переносится в
+    // условие по `tag` (миграция §302 v1).
+    expect(sub.importRules, hasLength(2));
+    final byConditions = sub.importRules[0];
+    expect(byConditions.conditions, hasLength(2));
+    expect(byConditions.conditions[0].path, 'tag');
+    expect(byConditions.conditions[0].op, ImportRuleOperator.contains);
+    expect(byConditions.conditions[0].pattern, 'PROMO');
+    expect(byConditions.conditions[0].caseSensitive, isTrue);
+    expect(byConditions.conditions[1].path, 'type');
+    expect(byConditions.conditions[1].op, ImportRuleOperator.equals);
+    expect(byConditions.conditions[1].negate, isTrue);
+    expect(byConditions.action, ImportRuleAction.replace);
+    expect(byConditions.targetPath, 'tag');
+    expect(byConditions.replaceMode, ImportRuleReplaceMode.substitute);
+    expect(byConditions.substitutePattern, ' PROMO');
+    final legacy = sub.importRules[1];
+    expect(legacy.conditions, hasLength(1));
+    expect(legacy.conditions.single.path, 'tag');
+    expect(legacy.conditions.single.op, ImportRuleOperator.matches);
+    expect(legacy.conditions.single.pattern, '^trial');
+    expect(legacy.action, ImportRuleAction.disable);
     expect(sub.importRulesEnabled, isFalse);
     expect(sub.onUpdateAction, SubscriptionOnUpdateAction.reload);
 
