@@ -81,7 +81,10 @@ void main() async {
     // сцена первым же сохранением легла бы поверх доведённого слота.
     // Без справочника — один exists(). Порядок держит
     // test/contract/startup_order_contract_test.dart.
-    await WorkspaceStore.I.recover();
+    final workspaceRecovered = await WorkspaceStore.I.recover();
+    // §447 — доведённая загрузка слота: конфиг от прежнего слота. Флаг явно,
+    // mtime-признак первые же записи бутстрапа ниже выровняли бы.
+    if (workspaceRecovered) SettingsStorage.markConfigDirty();
     // §118 — идентичность фетча подписок (UA override + HWID + device-meta).
     // После VersionInfo (UA дефолт зависит от версии) и recover (читает
     // SettingsStorage), до runApp — `_fetch` читает значения синхронно.

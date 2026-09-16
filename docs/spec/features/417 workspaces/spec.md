@@ -124,9 +124,13 @@ files/
 5. **Save current**: копия позиций 1–3 в `workspaces/<current>/` (§2.5).
 6. **Load X**: копия позиций 1–3 из `workspaces/<X>/` на сцену (§2.5).
 7. `current = X`, `pending = null` → записать `workspaces.json`.
-8. `File(lxbox_settings.json).setLastModified(now)` — настройки заведомо
-   новее `singbox_config.json` → bootstrap-проверка §076 честно скажет
-   «грязно» (после §414 она работает).
+8. `File(lxbox_settings.json).setLastModified(now)` — страховка на убийство
+   процесса до пересборки: холодный старт сравнит mtime (§076). Внутри
+   процесса признак явный: `SettingsStorage.markConfigDirty()` после шага 7
+   (§447). Одного mtime мало — flush шага 3 выравнивает mtime конфига в ту
+   же секунду, а любой `_save()` при снятом флаге выравнивает его снова.
+   `SubscriptionController.init` поднятый флаг не опускает; доведённая
+   `recover()` в `main()` тоже ставит флаг.
 9. **Перечитать** (§2.6).
 10. Новый `HomeScreen` в `_initSubsAndAutoUpdate` видит `configDirty` →
     `_rebuildAndClearDirty(silent: true)` — та же воронка, что у холодного

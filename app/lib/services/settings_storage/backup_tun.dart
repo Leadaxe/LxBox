@@ -29,7 +29,9 @@ Future<Map<String, dynamic>> _dumpCache() async {
 /// их по умолчанию не включает (категория «Debug config» выключена, токен —
 /// секрет), и полная замена молча гасила Debug API устройства: порт и токен
 /// уходили вместе со всем `vars`. «Ключа нет в файле» = «не трогать», а не
-/// «сбросить». Ключ, который в файле есть, по-прежнему побеждает.
+/// «сбросить». Ключ, который в файле есть, по-прежнему побеждает. §447 — так
+/// же переносятся флаги стартовых промптов
+/// ([SettingsStorage.startupPromptVarKeys]).
 Future<List<String>> _replaceRaw(
   Map<String, dynamic> snapshot, {
   bool merge = false,
@@ -96,7 +98,10 @@ Future<List<String>> _replaceRaw(
     if (currentVars is Map) {
       final outVars = (filtered['vars'] as Map<String, dynamic>?) ??
           <String, dynamic>{};
-      for (final k in SettingsStorage.debugApiVarKeys) {
+      for (final k in const {
+        ...SettingsStorage.debugApiVarKeys,
+        ...SettingsStorage.startupPromptVarKeys, // §447
+      }) {
         if (!outVars.containsKey(k) && currentVars.containsKey(k)) {
           outVars[k] = currentVars[k];
         }

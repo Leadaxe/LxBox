@@ -244,8 +244,8 @@ class ParamsTab extends StatelessWidget {
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
           label: Text(getLocalText.s("Save")),
-          // §225 — json-режим: блокируем Save на невалидном/пустом теле.
-          onPressed: c.jsonError == null ? actions.onSave : null,
+          // §225/§447 — блокировка по той же проверке, что у Save в AppBar.
+          onPressed: c.saveBlockReason == null ? actions.onSave : null,
         ),
       ],
     );

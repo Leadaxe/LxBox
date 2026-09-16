@@ -1124,14 +1124,8 @@ class _RoutingScreenState extends State<RoutingScreen>
         ? _presetOut(rule, preset)
         : rule.outbound;
     final pickerDisabled = rule.kind == CustomRuleKind.preset && preset == null;
-    // DNS-only пресеты (FakeIP: только dns_rule, без routing rule и без
-    // var:outbound) роутить нечего — outbound-picker был бы мёртвым.
-    // Для user-rule и пресета «not found» picker оставляем (последний
-    // рисует warning через pickerDisabled).
-    final showOutbound =
-        rule.kind != CustomRuleKind.preset ||
-        preset == null ||
-        preset.hasOutboundAffordance;
+    // json-правило и DNS-only пресет — без пикера (см. хелпер).
+    final showOutbound = RoutingHelpers.showsOutboundPicker(rule, preset);
     // §231 — трогает ли правило DNS (для чипа «DNS»). Пресет → touchesDns
     // (dns_rule/dns_servers); inline/srs → dnsMirrorActive ИЛИ forceIpv4Active
     // (§256 — оба гейтятся так же, как билдер; не над-репортят при

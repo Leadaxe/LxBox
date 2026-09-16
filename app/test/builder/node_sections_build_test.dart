@@ -10,6 +10,7 @@ import 'package:lxbox/models/tailscale_bundle.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/builder/core_chain_capability.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'package:lxbox/services/tailscale_state/state_keys.dart';
 
 /// §435 / контракт ## 13 — инъекция секций узла при сборке
 /// (NODE_SECTIONS.md §3), Tailscale (§6), гейт ядра.

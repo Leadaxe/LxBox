@@ -68,36 +68,68 @@ void main() {
     });
   });
 
-  group('SPEC 083 — REALITY + отпечаток не из chrome-семейства', () {
-    test('kChromeFamilyFingerprints ⊂ словаря ядра', () {
-      expect(kUtlsFingerprints.containsAll(kChromeFamilyFingerprints), isTrue);
-      expect(isChromeFamilyFingerprint(''), isTrue, reason: 'дефолт ядра');
-      expect(isChromeFamilyFingerprint('chrome_pq'), isTrue);
-      expect(isChromeFamilyFingerprint('firefox'), isFalse);
-      expect(isChromeFamilyFingerprint('random'), isFalse);
-      expect(isChromeFamilyFingerprint('randomized'), isFalse);
+  group('SPEC 083/086/087 — REALITY + отпечаток без гибридного key share', () {
+    test('kRealityHybridFingerprints ⊂ словаря ядра', () {
+      expect(kUtlsFingerprints.containsAll(kRealityHybridFingerprints), isTrue);
+      expect(isRealityHybridFingerprint(''), isTrue, reason: 'дефолт ядра');
+      expect(isRealityHybridFingerprint('chrome_pq'), isTrue);
+      expect(isRealityHybridFingerprint('random'), isFalse);
+      expect(isRealityHybridFingerprint('randomized'), isFalse);
     });
 
-    test('REALITY + fp=firefox → RealityFingerprintWarning, значение сохранено',
+    // §451 / ядро SPEC 086+087 (libbox ≥ v1.14.1-lx.3) — форк utls добавил
+    // Firefox 148 и Safari 26.3 с гибридным key share.
+    test('firefox и safari несут гибрид, остальные не-chrome — нет', () {
+      for (final fp in ['firefox', 'safari']) {
+        expect(isRealityHybridFingerprint(fp), isTrue, reason: fp);
+      }
+      for (final fp in ['edge', 'ios', 'android', '360', 'qq']) {
+        expect(isRealityHybridFingerprint(fp), isFalse, reason: fp);
+      }
+    });
+
+    test('REALITY + fp=firefox/safari → без предупреждения, значение сохранено',
+        () {
+      for (final fp in ['firefox', 'safari']) {
+        final spec = parseVless(
+            'vless://u@h:443?type=tcp&security=reality&encryption=none'
+            '&fp=$fp&pbk=$_validPbk#L')!;
+        expect(spec.tls.fingerprint, fp,
+            reason: '§444: отпечаток источника не подменяется');
+        expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty,
+            reason: fp);
+        expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
+      }
+    });
+
+    test('REALITY + fp=edge → RealityFingerprintWarning, значение сохранено',
         () {
       final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
-          '&fp=firefox&pbk=$_validPbk#L')!;
-      expect(spec.tls.fingerprint, 'firefox',
+          '&fp=edge&pbk=$_validPbk#L')!;
+      expect(spec.tls.fingerprint, 'edge',
           reason: '§444: отпечаток источника не подменяется ни в entry, ни в конфиге');
       expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
-          'firefox');
+          'edge');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
-    test('REALITY + xray-псевдоним hellofirefox_auto → firefox + предупреждение',
+    test('REALITY + xray-псевдоним hellofirefox_auto → firefox, без предупреждения',
         () {
       final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
           '&fp=hellofirefox_auto&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'firefox');
+      expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty);
+    });
+
+    test('REALITY + xray-псевдоним helloqq_auto → qq + предупреждение', () {
+      final spec = parseVless(
+          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          '&fp=helloqq_auto&pbk=$_validPbk#L')!;
+      expect(spec.tls.fingerprint, 'qq');
       expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
-          'firefox');
+          'qq');
     });
 
     test('REALITY + chrome-семейство и дефолтный random → без предупреждения',

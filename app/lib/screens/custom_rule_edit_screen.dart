@@ -86,6 +86,16 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   // ─── Save / delete / back ────────────────────────────────────────────
 
   Future<void> _save() async {
+    // §447 — одна проверка для всех путей сохранения: Save в AppBar и Save
+    // из диалога несохранённых правок раньше обходили гейт кнопки формы, и
+    // массив или невалидный JSON уходили в правила.
+    final blocked = _ctrl.saveBlockReason;
+    if (blocked != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(blocked)),
+      );
+      return;
+    }
     // §279 — у preset-правила `name` — снапшот label'а (fallback, display
     // резолвит live); поле read-only, дедуп/переименование НЕ применяем —
     // иначе display-резолвнутый existingNames переписал бы снапшот.
@@ -387,11 +397,15 @@ class _SaveIconButton extends StatelessWidget {
       animation: controller,
       builder: (ctx, _) {
         final dirty = controller.isDirty();
+        // §447 — та же блокировка, что у Save формы; причина — в подсказке.
+        final blocked = controller.saveBlockReason;
         return IconButton(
-          tooltip: getLocalText.s("Save"),
+          tooltip: blocked ?? getLocalText.s("Save"),
           icon: Icon(Icons.save,
-              color: dirty ? Theme.of(ctx).colorScheme.primary : null),
-          onPressed: onPressed,
+              color: dirty && blocked == null
+                  ? Theme.of(ctx).colorScheme.primary
+                  : null),
+          onPressed: blocked == null ? onPressed : null,
         );
       },
     );

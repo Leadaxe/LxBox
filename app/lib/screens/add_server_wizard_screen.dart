@@ -15,6 +15,7 @@ import '../services/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/subscription/subscription_identity.dart';
 import '../widgets/safe_bottom.dart';
 import '../models/tailscale_bundle.dart';
 
@@ -112,6 +113,10 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     super.initState();
     _tab = TabController(length: 5, vsync: this);
     _tab.addListener(() => setState(() {})); // обновить Add button enabled
+    // §449 — hostname узла Tailscale: дефолт видно до создания узла, юзер его
+    // правит или стирает (пусто = имя выбирает tsnet, как было).
+    _tsHostname.text =
+        defaultTailscaleHostname(SubscriptionIdentity.effectiveDeviceModel);
   }
 
   @override

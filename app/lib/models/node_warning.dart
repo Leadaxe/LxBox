@@ -178,11 +178,15 @@ final class UnknownFingerprintWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
-/// §281 / ядро SPEC 083 — REALITY с uTLS-отпечатком не из chrome-семейства.
+/// §281 / ядро SPEC 083 — REALITY с uTLS-отпечатком без гибридного key share.
 /// REALITY-сервер Xray ≥ v26.9.8 требует в ClientHello key_share
 /// `X25519MLKEM768` перед X25519 и без него молча проксирует соединение на
-/// камуфляжный сайт. Из словаря ядра гибрид несут только chrome-имена; нода
-/// с firefox/safari/ios/… против такого сервера мертва без ошибки.
+/// камуфляжный сайт: нода мертва без ошибки.
+///
+/// §451 / ядро SPEC 086+087 — с libbox v1.14.1-lx.3 гибрид несут также
+/// `firefox` (Firefox 148) и `safari` (Safari 26.3): под предупреждение
+/// остаются только `edge`, `ios`, `android`, `360`, `qq` (см.
+/// `kRealityHybridFingerprints`).
 ///
 /// §444 — только предупреждение: отпечаток узла из подписки уходит в конфиг
 /// как есть, приложение не переписывает выбор источника. Текст не обещает
