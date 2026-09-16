@@ -22,9 +22,10 @@ dart run tool/l10n/kotlin_check.dart [--strict]
     с индексом N (warn, strict→fail);
   - **usage-conflict** — один ключ зовут и `.s`, и `.plural` (fail всегда);
   - **shape** — `.s`-ключ с plural-объектом-значением, или `.plural`-ключ без
-    полного набора форм resolver'а (`RuPluralResolver.forms` = one/few/many/
-    other), или использованный индекс формы N отсутствует в словаре
-    (fail всегда);
+    полного набора форм resolver'а языка (набор берётся per-язык из
+    `formsForTag` — зеркало `LocaleController._buildGetLocalText`:
+    ru = one/few/many/other, zh = other), или использованный индекс формы N
+    отсутствует в словаре (fail всегда);
   - **arity** — набор printf-плейсхолдеров (`%s`/`%d`/`%K$s`; `%%` литерал) в
     ключе ≠ набору в переводе/каждой plural-форме (fail всегда).
 
@@ -54,7 +55,8 @@ dart run tool/l10n/kotlin_check.dart [--strict]
 - **kotlin_check**: grep-tier гвард нативных строк Android (CI — безусловный
   `--strict`): литералы в notification/toast/shortcut/tile/stopAndAlert-вызовах
   и `android:label` без `@string` — находка (wire-префикс `alert:` исключён);
-  + parity `values/strings.xml` ↔ `values-ru/strings.xml` (перевод каждого
+  + parity `values/strings.xml` ↔ каждый `values-<tag>/strings.xml`,
+  найденный по каталогам `res/values-*` (§452; перевод каждого
   translatable-ключа, orphan-ключи, наборы `%n$s`-placeholder'ов).
 - **hardcoded_check — rendering-locality (§285, fail-режим)**: `renderEn(` —
   только в модельных иерархиях `lib/models/*` (где он определён) и в

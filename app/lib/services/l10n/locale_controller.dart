@@ -26,10 +26,14 @@ GetLocalText get getLocalText => LocaleController.I.text;
 class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
   static final LocaleController I = LocaleController();
 
-  static const supportedTags = ['en', 'ru'];
-  static const supportedLocales = [Locale('en'), Locale('ru')];
+  static const supportedTags = ['en', 'ru', 'zh'];
+  static const supportedLocales = [
+    Locale('en'),
+    Locale('ru'),
+    Locale('zh'),
+  ];
 
-  /// 'system' | 'en' | 'ru' (зеркало var `app_language`).
+  /// 'system' | 'en' | 'ru' | 'zh' (зеркало var `app_language`).
   String setting = 'system';
 
   Locale? _lastApplied;
@@ -140,8 +144,11 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
   /// Бросить может (нет ассета / битый JSON) — вызывается под общим try
   /// _applyLocale, где сбой не блокирует переключение языка.
   static Future<GetLocalText> _buildGetLocalText(String tag) async {
-    final resolver =
-        tag == 'ru' ? const RuPluralResolver() : const EnPluralResolver();
+    final resolver = switch (tag) {
+      'ru' => const RuPluralResolver(),
+      'zh' => const ZhPluralResolver(),
+      _ => const EnPluralResolver(),
+    };
     if (tag == 'en') return GetLocalText(null, resolver);
     try {
       final raw = await rootBundle.loadString('assets/l10n/$tag/ui.json');

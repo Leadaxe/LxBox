@@ -23,7 +23,7 @@ object L10n {
     private const val TAG = "L10n"
 
     /// Валидные значения настройки (зеркало `SettingsStorage.appLanguageValues`).
-    private val KNOWN = setOf("system", "en", "ru")
+    private val KNOWN = setOf("system", "en", "ru", "zh")
 
     const val SETTING_SYSTEM = "system"
 
