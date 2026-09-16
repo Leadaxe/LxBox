@@ -1,0 +1,617 @@
+{
+ "0.0.0.0 — all interfaces (LAN)": {
+  "value": "0.0.0.0 — 所有接口（局域网）"
+ },
+ "1.0.0.1 · Secondary v4": {
+  "value": "1.0.0.1 · 备用 v4"
+ },
+ "1.1.1.1 · Primary v4": {
+  "value": "1.1.1.1 · 主用 v4"
+ },
+ "127.0.0.1 — this device only": {
+  "value": "127.0.0.1 — 仅本机"
+ },
+ "1492 recommended for mobile/WiFi": {
+  "value": "移动网络/WiFi 推荐 1492"
+ },
+ "2001:4860:4860::8844 · Secondary v6": {
+  "value": "2001:4860:4860::8844 · 备用 v6"
+ },
+ "2001:4860:4860::8888 · Primary v6": {
+  "value": "2001:4860:4860::8888 · 主用 v6"
+ },
+ "2606:4700:4700::1001 · Secondary v6": {
+  "value": "2606:4700:4700::1001 · 备用 v6"
+ },
+ "2606:4700:4700::1111 · Primary v6": {
+  "value": "2606:4700:4700::1111 · 主用 v6"
+ },
+ "2a02:6b8:0:1::feed:bad · Safe v6 alt": {
+  "value": "2a02:6b8:0:1::feed:bad · 安全版 v6 备选"
+ },
+ "2a02:6b8::feed:0ff · Base v6": {
+  "value": "2a02:6b8::feed:0ff · 基础版 v6"
+ },
+ "2a02:6b8::feed:a11 · Family v6": {
+  "value": "2a02:6b8::feed:a11 · 家庭版 v6"
+ },
+ "2a02:6b8::feed:bad · Safe v6": {
+  "value": "2a02:6b8::feed:bad · 安全版 v6"
+ },
+ "77.88.8.1 · Base alt": {
+  "value": "77.88.8.1 · 基础版备选"
+ },
+ "77.88.8.2 · Safe alt": {
+  "value": "77.88.8.2 · 安全版备选"
+ },
+ "77.88.8.3 · Family alt": {
+  "value": "77.88.8.3 · 家庭版备选"
+ },
+ "77.88.8.7 · Family": {
+  "value": "77.88.8.7 · 家庭版"
+ },
+ "77.88.8.8 · Base": {
+  "value": "77.88.8.8 · 基础版"
+ },
+ "77.88.8.88 · Safe": {
+  "value": "77.88.8.88 · 安全版"
+ },
+ "8.8.4.4 · Secondary v4": {
+  "value": "8.8.4.4 · 备用 v4"
+ },
+ "8.8.8.8 · Primary v4": {
+  "value": "8.8.8.8 · 主用 v4"
+ },
+ "AdGuard Family · ad + adult": {
+  "value": "AdGuard Family · 广告 + 成人内容"
+ },
+ "AdGuard · ad block": {
+  "value": "AdGuard · 广告拦截"
+ },
+ "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.": {
+  "value": "为隧道添加 IPv6 地址。默认关闭——只有当你的网络 IPv6 可用时才开启。开启会把解析改为「优先 IPv4」，关闭则强制仅 IPv4；策略可在 DNS 设置中更改。"
+ },
+ "Apple": {
+  "value": "Apple"
+ },
+ "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.": {
+  "value": "仅对 UDP 生效。DoH 与 DoT 固定使用 77.88.8.88，SNI 为 safe.dot.dns.yandex.net。"
+ },
+ "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.": {
+  "value": "应用该预设的 FakeIP DNS 处理。关闭可在不移除预设的前提下停用 FakeIP。"
+ },
+ "Auto": {
+  "value": "自动"
+ },
+ "Auto Proxy": {
+  "value": "自动代理"
+ },
+ "Auto route": {
+  "value": "自动路由"
+ },
+ "Auto-detect interface": {
+  "value": "自动检测接口"
+ },
+ "Automatically detect the default network interface": {
+  "value": "自动检测默认网络接口"
+ },
+ "BitTorrent": {
+  "value": "BitTorrent"
+ },
+ "Block": {
+  "value": "拦截"
+ },
+ "Block Ads": {
+  "value": "广告拦截"
+ },
+ "Block HTTPS records": {
+  "value": "拦截 HTTPS 记录"
+ },
+ "Cloudflare": {
+  "value": "Cloudflare"
+ },
+ "Cloudflare DoT": {
+  "value": "Cloudflare DoT"
+ },
+ "Cloudflare Public DNS address for DNS-over-TLS (port 853).": {
+  "value": "Cloudflare Public DNS 的 DNS-over-TLS 地址（端口 853）。"
+ },
+ "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.": {
+  "value": "Cloudflare Public DNS 地址。IPv4 —— 通用；IPv6 —— 需网络支持。"
+ },
+ "Cloudflare UDP": {
+  "value": "Cloudflare UDP"
+ },
+ "Connection and routing behavior": {
+  "value": "连接与路由行为"
+ },
+ "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.": {
+  "value": "内核数据包处理：嗅探域名、把 DNS 劫持进隧道、为路由解析目标地址。最先应用，早于所有其它规则。"
+ },
+ "Custom tunnel routes": {
+  "value": "自定义隧道路由"
+ },
+ "DNS": {
+  "value": "DNS"
+ },
+ "DNS final": {
+  "value": "最终 DNS"
+ },
+ "DNS resolution strategy": {
+  "value": "DNS 解析策略"
+ },
+ "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address).": {
+  "value": "用于解析安全 DNS 域名本身的 DNS 服务器（AdGuard 配置使用域名地址）。"
+ },
+ "DNS-over-TLS with built-in blocking: malware (Quad9), ads (AdGuard), or ads + adult (AdGuard Family).": {
+  "value": "内置拦截的 DNS-over-TLS：恶意软件（Quad9）、广告（AdGuard）、广告 + 成人内容（AdGuard Family）。"
+ },
+ "Default domain resolver": {
+  "value": "默认域名解析器"
+ },
+ "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here.": {
+  "value": "默认兜底 DNS 服务器。当应用的 DNS 查询没有匹配任何 DNS 规则时使用。\n\n  • dns_shield —— 默认；同时向 9 家服务商查询，谁先应答用谁\n  • google_doh、cloudflare_dot —— 加密，单一服务商\n  • cloudflare_udp、google_udp —— 快速明文 UDP\n\nlocal_dns_resolver（系统 DNS）在这里是安全的。"
+ },
+ "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on.": {
+  "value": "从数据包中识别协议与域名，以实现精确路由。\n⚠️ 警告：关闭后将无法按协议匹配（例如 BitTorrent、TLS、QUIC）；若 FakeIP 未开启，域名匹配也会失效。"
+ },
+ "Direct": {
+  "value": "直连"
+ },
+ "DoH server IP": {
+  "value": "DoH 服务器 IP"
+ },
+ "DoT server IP": {
+  "value": "DoT 服务器 IP"
+ },
+ "Domain name resolution": {
+  "value": "域名解析"
+ },
+ "Domain resolver": {
+  "value": "域名解析器"
+ },
+ "Enable IPv6": {
+  "value": "启用 IPv6"
+ },
+ "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best.": {
+  "value": "用于测量代理延迟的地址。可选预设或输入任意 URL——204 / 小体积响应最佳。"
+ },
+ "FakeIP": {
+  "value": "FakeIP"
+ },
+ "FakeIP allocator": {
+  "value": "FakeIP 分配器"
+ },
+ "FakeIP server": {
+  "value": "FakeIP 服务器"
+ },
+ "Fallback delay": {
+  "value": "兜底延迟"
+ },
+ "Firefox": {
+  "value": "Firefox"
+ },
+ "Force IPv4": {
+  "value": "强制 IPv4"
+ },
+ "General": {
+  "value": "通用"
+ },
+ "GeoIP IP-range fallback": {
+  "value": "GeoIP IP 段兜底"
+ },
+ "Google 204": {
+  "value": "Google 204"
+ },
+ "Google DNS (direct)": {
+  "value": "Google DNS（直连）"
+ },
+ "Google DoH": {
+  "value": "Google DoH"
+ },
+ "Google DoT": {
+  "value": "Google DoT"
+ },
+ "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.": {
+  "value": "用于基于 IP 的 DoH 的 Google Public DNS 地址。TLS SNI 固定为 dns.google。"
+ },
+ "Google Public DNS address for DNS-over-TLS (port 853).": {
+  "value": "Google Public DNS 的 DNS-over-TLS 地址（端口 853）。"
+ },
+ "Google Public DNS address. IPv4 — universal; IPv6 — if your network supports it.": {
+  "value": "Google Public DNS 地址。IPv4 —— 通用；IPv6 —— 需网络支持。"
+ },
+ "HTTP only": {
+  "value": "仅 HTTP"
+ },
+ "Hijack DNS": {
+  "value": "劫持 DNS"
+ },
+ "Hostkey (Amsterdam)": {
+  "value": "Hostkey（阿姆斯特丹）"
+ },
+ "Hostkey (Frankfurt)": {
+  "value": "Hostkey（法兰克福）"
+ },
+ "Hostkey (Helsinki)": {
+  "value": "Hostkey（赫尔辛基）"
+ },
+ "Hostkey (Moscow)": {
+  "value": "Hostkey（莫斯科）"
+ },
+ "Hostkey (New York)": {
+  "value": "Hostkey（纽约）"
+ },
+ "How long to wait for the domain to appear in the packet before giving up.": {
+  "value": "在放弃前，等待域名出现在数据包中的最长时间。"
+ },
+ "How often sing-box re-tests and re-picks. Lower → faster switching, but more background traffic and battery: each cycle dials the servers (waking suspended tunnels). 15m is the battery-friendly default.": {
+  "value": "sing-box 重新测试并重新选择的频率。越低 → 切换越快，但后台流量和耗电更多：每个周期都会去连服务器（唤醒被挂起的隧道）。15 分钟是对电池更友好的默认值。"
+ },
+ "How the core captures traffic. Set from VPN Settings → Mode.": {
+  "value": "内核如何捕获流量。在 VPN 设置 → 模式 中设置。"
+ },
+ "IP version preference for DNS resolution": {
+  "value": "DNS 解析的 IP 版本偏好"
+ },
+ "IPv4 address": {
+  "value": "IPv4 地址"
+ },
+ "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on.": {
+  "value": "本地代理绑定的 IPv4。上方为建议值；任何合法 IPv4 均可（例如某个局域网地址）。除 127.x 外都可从网络访问，并会强制开启认证。"
+ },
+ "IPv6 address": {
+  "value": "IPv6 地址"
+ },
+ "Inbound type for the local proxy port.": {
+  "value": "本地代理端口的入站类型。"
+ },
+ "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.": {
+  "value": "通过占位 IP 实现即时 DNS；真实域名在隧道内解析。可加速 DNS 并避免进入隧道前的 DNS 泄漏。它不是 DPI 绕过手段。请在特殊域名下方启用，以便 GeoIP 直连路由仍然生效。"
+ },
+ "Internal": {
+  "value": "内部"
+ },
+ "Internal globals referenced by presets — not shown as VPN settings.": {
+  "value": "预设置引用的内部全局变量——不作为 VPN 设置显示。"
+ },
+ "Let sing-box manage routing table": {
+  "value": "由 sing-box 管理路由表"
+ },
+ "Listen address": {
+  "value": "监听地址"
+ },
+ "Listen port": {
+  "value": "监听端口"
+ },
+ "Local proxy inbound vars (hidden — values come from VpnModeConfig)": {
+  "value": "本地代理入站变量（隐藏——取值来自 VpnModeConfig）"
+ },
+ "Local proxy port (1024..65535).": {
+  "value": "本地代理端口（1024..65535）。"
+ },
+ "Local proxy protocol": {
+  "value": "本地代理协议"
+ },
+ "Log level": {
+  "value": "日志级别"
+ },
+ "Certificate store": {
+  "value": "证书存储"
+ },
+ "Root certificates used to verify TLS servers. On Android 7.x and older the system store is outdated — Let's Encrypt and other modern authorities are missing, so TLS nodes fail to connect. Switch to Mozilla or Chrome to use an up-to-date bundle shipped inside the app.": {
+  "value": "用于校验 TLS 服务器的根证书。在 Android 7.x 及更早版本上，系统存储已过时——缺少 Let's Encrypt 等现代 CA，导致 TLS 节点连不上。切换到 Mozilla 或 Chrome 可使用应用内置的最新证书集。"
+ },
+ "Logging and core settings": {
+  "value": "日志与内核设置"
+ },
+ "MTU": {
+  "value": "MTU"
+ },
+ "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use.": {
+  "value": "除域名外也匹配俄罗斯 AS 的 IP——可捕获域名识别失败的 CDN/QUIC/ECH 场景。首次使用时自动下载 geoip-ru.srs（约 150 KB）。"
+ },
+ "May break connectivity on some devices": {
+  "value": "在部分设备上可能导致网络不通"
+ },
+ "Mixed — HTTP + SOCKS5 on one port": {
+  "value": "混合 —— 同一端口上 HTTP + SOCKS5"
+ },
+ "Mixed-case SNI": {
+  "value": "SNI 大小写混合"
+ },
+ "Network": {
+  "value": "网络"
+ },
+ "OVH (France)": {
+  "value": "OVH（法国）"
+ },
+ "Only switch proxy if latency difference exceeds this": {
+  "value": "仅当延迟差超过该值时才切换代理"
+ },
+ "Outbound": {
+  "value": "出站"
+ },
+ "Packet sniffing": {
+  "value": "数据包嗅探"
+ },
+ "Password for proxy auth. Auto-generated when auth turns on.": {
+  "value": "代理认证用的密码。开启认证时自动生成。"
+ },
+ "Preferred IP version": {
+  "value": "首选 IP 版本"
+ },
+ "Private IPs": {
+  "value": "私有 IP"
+ },
+ "Proxy password": {
+  "value": "代理密码"
+ },
+ "Proxy username": {
+  "value": "代理用户名"
+ },
+ "Proxy — local port only, no TUN": {
+  "value": "代理 —— 仅本地端口，不使用 TUN"
+ },
+ "Quad9 · anti-malware": {
+  "value": "Quad9 · 防恶意软件"
+ },
+ "RU DNS group (UDP via direction + DoT via vpn-1 + direct DoH)": {
+  "value": "俄罗斯 DNS 分组（UDP 经方向 + DoT 经 vpn-1 + 直连 DoH）"
+ },
+ "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact": {
+  "value": "随机化 server_name 的字母大小写（WwW.gOoGle.CoM）。按 RFC 6066，该字段不区分大小写，服务器两种写法都接受；只能骗过朴素的精确匹配。REALITY 节点会跳过——它们的 SNI 必须逐字节一致"
+ },
+ "Reject = drop. Or pick Direct to send it outside the VPN.": {
+  "value": "拦截 = 丢弃。也可选择「直连」，把它送出 VPN 之外。"
+ },
+ "Reject ad-related connections. Downloads rule set (~1 MB).": {
+  "value": "拦截与广告相关的连接。会下载规则集（约 1 MB）。"
+ },
+ "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.": {
+  "value": "拦截隧道内无法归属到任何已安装应用的流量（后台/外来进程）。也可改为直连以绕过 VPN。"
+ },
+ "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS.": {
+  "value": "对 HTTPS/SVCB DNS 记录（RFC 9460）回复空应答，让应用回退到普通 A/AAAA。可避免这些查询泄漏到兜底 DNS。"
+ },
+ "Require auth": {
+  "value": "要求认证"
+ },
+ "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6.": {
+  "value": "把俄罗斯域名只解析为 IPv4。可避免在没有可用全球 IPv6 的网络中产生失效的 IPv6 连接。通过该预设的 DNS 规则生效——请保持 DNS 开关开启。若你的网络 IPv6 可用则关闭。"
+ },
+ "Resolve destination IP": {
+  "value": "解析目标 IP"
+ },
+ "Resolve strategy": {
+  "value": "解析策略"
+ },
+ "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver.": {
+  "value": "路由前先把嗅探到的域名解析成 IP，以便 GeoIP 和 IP 规则能匹配。使用 FakeIP 时请关闭——假 IP 已携带域名，此处再做真实解析会绕过 FakeIP，且解析器异常时会失败。"
+ },
+ "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6.": {
+  "value": "把这些域名只解析为 IPv4。可避免在没有可用全球 IPv6 的网络中产生失效的 IPv6 连接。若你的网络 IPv6 可用则关闭。"
+ },
+ "Route BitTorrent traffic. Direct by default, or send it to a separate direction.": {
+  "value": "路由 BitTorrent 流量。默认直连，也可送往单独的方向。"
+ },
+ "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.": {
+  "value": "把俄罗斯顶级域名（.ru/.su/IDN）、各服务 CDN（Yandex/VK/Avito/2GIS/银行等）以及俄罗斯 IP 段直连。"
+ },
+ "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why.": {
+  "value": "让所有 DNS 查询都经隧道的 DNS 引擎。\n⚠️ 警告：关闭后会停用 FakeIP 和所有 DNS 规则——应用将自行直接查询 DNS，完全不受控。除非你非常清楚原因，否则请保持开启。"
+ },
+ "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves.": {
+  "value": "用显式的半段地址把全部 IPv4 和 IPv6 送进隧道，而不依赖 sing-box 默认值。默认关闭——只有默认路由表现异常时才开启。"
+ },
+ "Route private IP ranges (LAN). Direct by default, or send to a direction to reach routers/devices over a local VPN.": {
+  "value": "路由私有 IP 段（局域网）。默认直连，也可送往某个方向，以便通过本地 VPN 访问路由器/设备。"
+ },
+ "Russia-only services": {
+  "value": "仅限俄罗斯的服务"
+ },
+ "Russian domains & IPs": {
+  "value": "俄罗斯域名与 IP"
+ },
+ "SOCKS5 only": {
+  "value": "仅 SOCKS5"
+ },
+ "Safe DNS (DoT)": {
+  "value": "安全 DNS（DoT）"
+ },
+ "Safe profile": {
+  "value": "安全配置"
+ },
+ "Selectel (RU)": {
+  "value": "Selectel（俄罗斯）"
+ },
+ "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes.": {
+  "value": "把匹配的域名发往该预设的 DNS 服务器，并应用「强制 IPv4」等 DNS 层选项。关闭则只做路由、不改动 DNS。"
+ },
+ "Services available only inside Russia. Direct by default, or route via a direction to reach them from abroad.": {
+  "value": "仅限俄罗斯境内可用的服务。默认直连，也可经某个方向转发，以便从境外访问。"
+ },
+ "Sniff timeout": {
+  "value": "嗅探超时"
+ },
+ "Split TLS ClientHello into small TCP segments": {
+  "value": "把 TLS ClientHello 拆成多个小 TCP 分段"
+ },
+ "Split handshake into multiple TLS records (try this first)": {
+  "value": "把握手拆成多个 TLS 记录（建议先试这个）"
+ },
+ "Splits the TLS handshake so it carries no single-packet signature": {
+  "value": "拆分 TLS 握手，使其不再具有单包特征"
+ },
+ "Stack": {
+  "value": "协议栈"
+ },
+ "Strict route": {
+  "value": "严格路由"
+ },
+ "System DNS": {
+  "value": "系统 DNS"
+ },
+ "TLS Fragment": {
+  "value": "TLS 分片"
+ },
+ "TLS Fragmentation": {
+  "value": "TLS 分片"
+ },
+ "TLS Record Fragment": {
+  "value": "TLS 记录分片"
+ },
+ "TUN": {
+  "value": "TUN"
+ },
+ "TUN interface": {
+  "value": "TUN 接口"
+ },
+ "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on.": {
+  "value": "TUN 接口的 IPv6 地址（CIDR）。仅在启用 IPv6 时生效。"
+ },
+ "TUN interface address (CIDR)": {
+  "value": "TUN 接口地址（CIDR）"
+ },
+ "Tele2 (EU)": {
+  "value": "Tele2（欧盟）"
+ },
+ "Test URL": {
+  "value": "测试链接"
+ },
+ "Test interval": {
+  "value": "测试间隔"
+ },
+ "The FakeIP allocator. Internal — bound to the fakeip DNS server.": {
+  "value": "FakeIP 分配器。内部使用——绑定到 fakeip DNS 服务器。"
+ },
+ "ThinkBroadband (UK)": {
+  "value": "ThinkBroadband（英国）"
+ },
+ "Tolerance (ms)": {
+  "value": "容差（ms）"
+ },
+ "Traffic Processing": {
+  "value": "流量处理"
+ },
+ "UDP server IP": {
+  "value": "UDP 服务器 IP"
+ },
+ "URLTest tuning for the ✨auto group": {
+  "value": "✨auto 分组的 URLTest 调优"
+ },
+ "Unknown traffic": {
+  "value": "未知流量"
+ },
+ "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+  "value": "供路由引擎在内部解析主机名使用（出站地址、路由规则）。不是应用使用的解析器。\n\n  • dns_shield —— 默认；同时向 9 家服务商查询，谁先应答用谁\n  • cloudflare_udp、google_udp —— 快速明文 UDP\n  • google_doh —— 加密\n\n⚠ 这里的 local_dns_resolver 会把查询泄露给运营商——系统 DNS 会绕过 VPN。"
+ },
+ "Username for proxy auth (when auth is on).": {
+  "value": "代理认证用的用户名（认证开启时）。"
+ },
+ "VPN + Proxy — both": {
+  "value": "VPN + 代理 —— 两者同时"
+ },
+ "VPN Mode": {
+  "value": "VPN 模式"
+ },
+ "VPN mode": {
+  "value": "VPN 模式"
+ },
+ "VPN — system-wide tunnel": {
+  "value": "VPN —— 全系统隧道"
+ },
+ "VPN ①": {
+  "value": "VPN ①"
+ },
+ "VPN ②": {
+  "value": "VPN ②"
+ },
+ "Verbosity of sing-box logs": {
+  "value": "sing-box 日志详细程度"
+ },
+ "Virtual network interface": {
+  "value": "虚拟网络接口"
+ },
+ "Wait time when automatic detection fails": {
+  "value": "自动检测失败时的等待时间"
+ },
+ "Where to route BitTorrent. Direct to keep it off the VPN, or pick a direction to tunnel it.": {
+  "value": "BitTorrent 走哪里：直连可让它不经过 VPN，或选一个方向让它走隧道。"
+ },
+ "Where to route Russia-only services. Direct on a Russian network; pick a Russian direction to reach them from abroad.": {
+  "value": "仅限俄罗斯的服务走哪里：在俄罗斯网络里直连；从境外访问时选一个俄罗斯方向。"
+ },
+ "Where to route private/LAN IPs. Direct for local access, or a direction to reach a remote LAN over VPN.": {
+  "value": "私有/局域网 IP 走哪里：本地访问用直连，或用某个方向经 VPN 访问远端局域网。"
+ },
+ "Where to route traffic for Russian domains and IPs": {
+  "value": "俄罗斯域名与 IP 的流量走哪里"
+ },
+ "Whether the local proxy requires username/password. Forced on for non-loopback listen.": {
+  "value": "本地代理是否需要用户名/密码。监听非回环地址时强制开启。"
+ },
+ "Which direction carries DNS queries to this server": {
+  "value": "由哪个方向把 DNS 查询送到该服务器"
+ },
+ "Yandex": {
+  "value": "Yandex"
+ },
+ "Yandex Safe DoH (direct)": {
+  "value": "Yandex 安全 DoH（直连）"
+ },
+ "Yandex Safe DoT (via vpn-1)": {
+  "value": "Yandex 安全 DoT（经 vpn-1）"
+ },
+ "Yandex UDP (IP from above)": {
+  "value": "Yandex UDP（IP 取上方设置）"
+ },
+ "outbound": {
+  "value": "出站"
+ },
+ "system (default), gvisor (userspace), mixed": {
+  "value": "system（默认）、gvisor（用户态）、mixed"
+ },
+ "system name": {
+  "value": "系统名称"
+ },
+ "Shield DNS (multi-provider group)": {
+  "value": "Shield DNS（多服务商分组）"
+ },
+ "OpenDNS UDP (direct)": {
+  "value": "OpenDNS UDP（直连）"
+ },
+ "Quad9 DoH (via VPN, anti-malware)": {
+  "value": "Quad9 DoH（经 VPN，防恶意软件）"
+ },
+ "Google push (FCM)": {
+  "value": "Google 推送（FCM）"
+ },
+ "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset.": {
+  "value": "推送流量走哪里。直连可让它不经过 VPN——这正是该预设的目的。"
+ },
+ "Limit to Google Play Services": {
+  "value": "仅限 Google Play 服务"
+ },
+ "Match only traffic from com.google.android.gms instead of any app. Narrower, but app matching works in VPN mode only — leave off if you use proxy mode.": {
+  "value": "只匹配来自 com.google.android.gms 的流量，而非所有应用。更精确，但按应用匹配仅在 VPN 模式下有效——如果你用代理模式，请保持关闭。"
+ },
+ "Send only Google push traffic (FCM ports 5228-5230 and FCM hosts) outside the VPN, so notifications arrive on time with the screen off. Does not touch the rest of Google Play, so your Play region stays intact. If your DNS goes through the tunnel, add a matching direct rule in DNS settings — otherwise the hosts resolve to the wrong region and push stays silent.": {
+  "value": "只把 Google 推送流量（FCM 端口 5228-5230 与 FCM 主机）送出 VPN 之外，使熄屏时通知也能及时到达。不影响 Google Play 的其它流量，Play 区域保持不变。如果你的 DNS 走隧道，请在 DNS 设置里补一条对应的直连规则——否则这些主机会被解析到错误区域，推送会一直静默。"
+ },
+ "VoWiFi (carrier calling)": {
+  "value": "VoWiFi（运营商通话）"
+ },
+ "Keep Wi-Fi Calling off the VPN. Phones reach the carrier's IMS gateway (ePDG) under the 3GPP service domain, and an IKEv2/IPsec tunnel carries the calls. Routed through a VPN the voice picks up delay and jitter, and the carrier sees the IMS registration coming from a foreign address. Direct keeps calls on the home network.": {
+  "value": "让 Wi-Fi 通话不经过 VPN。手机会按 3GPP 服务域名找到运营商的 IMS 网关（ePDG），并建立 IKEv2/IPsec 隧道承载通话。若经 VPN，语音会多出延迟和抖动，且运营商会看到 IMS 注册来自境外地址。直连则通话保持在归属网络内。"
+ },
+ "Where to send VoWiFi traffic. Direct keeps it off the VPN — that is the point of this preset.": {
+  "value": "VoWiFi 流量走哪里。直连可让它不经过 VPN——这正是该预设的目的。"
+ },
+ "Match IKE ports (500/4500)": {
+  "value": "匹配 IKE 端口（500/4500）"
+ },
+ "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange.": {
+  "value": "同时把 UDP 500/4500 直连。部分基带从运营商网络获取网关地址，从不发 DNS 查询，仅靠域名规则会漏掉它们。这两个端口上除了 IPsec 密钥交换没有别的内容。"
+ }
+}

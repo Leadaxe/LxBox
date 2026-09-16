@@ -442,3 +442,12 @@ void _checkArity(
 
 /// Экспорт для отладки/тестов: набор форм активного ru-resolver'а.
 Set<String> ruForms() => const RuPluralResolver().forms;
+
+/// Набор plural-форм языка — зеркало выбора resolver'а в
+/// `LocaleController._buildGetLocalText`. Новый язык с собственным
+/// resolver'ом дописывается в обе ветки одновременно.
+Set<String> formsForTag(String tag) => switch (tag) {
+      'ru' => const RuPluralResolver().forms,
+      'zh' => const ZhPluralResolver().forms,
+      _ => const EnPluralResolver().forms,
+    };
