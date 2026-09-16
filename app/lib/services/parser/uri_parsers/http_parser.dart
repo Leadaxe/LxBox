@@ -2,6 +2,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
 import '../transport.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
 import 'naive_parser.dart';
@@ -65,5 +66,7 @@ HttpSpec? parseHttpProxy(String uri) {
     headers: headers,
     tls: tls,
     warnings: warnings,
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }

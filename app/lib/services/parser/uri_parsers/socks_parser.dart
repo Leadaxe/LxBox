@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -17,6 +18,10 @@ SocksSpec? parseSocks(String uri) {
       ? Uri.decodeComponent(userParts.sublist(1).join(':'))
       : '';
 
+  // §453 — socks-URI раньше query не читал вовсе; dial-поля приходят только
+  // отсюда, прочих параметров у схемы нет.
+  final q = Map<String, String>.from(p.queryParameters);
+
   final server = p.host;
   final port = p.hasPort ? p.port : 1080;
   final label = decodeFragment(p.fragment);
@@ -31,5 +36,7 @@ SocksSpec? parseSocks(String uri) {
     rawUri: uri,
     username: username,
     password: password,
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }
