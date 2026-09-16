@@ -1,0 +1,4975 @@
+{
+ "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.": {
+  "value": "「selector」已作为自动选择分组导入：由延迟测速挑出最快节点，而非手动选择。"
+ },
+ "%1$d +%2$d⚙ nodes": {
+  "value": {
+   "other": "%1$d 个节点 +%2$d⚙"
+  }
+ },
+ "%1$d active / %2$d total": {
+  "value": "已启用 %1$d / 共 %2$d"
+ },
+ "%1$d of %2$d nodes match": {
+  "value": "%2$d 个节点中匹配 %1$d 个"
+ },
+ "%1$d selected · %2$d shown": {
+  "value": "已选 %1$d · 显示 %2$d"
+ },
+ "%1$d servers · %2$d off": {
+  "value": {
+   "other": "%1$d 个服务器 · %2$d 个已关闭"
+  }
+ },
+ "%1$d snapshots · %2$s. Tap to inspect, share to get the pprof profiles.": {
+  "value": {
+   "other": "%1$d 个快照 · %2$s。点击查看，分享以获取 pprof 性能文件。"
+  }
+ },
+ "%1$d · %2$d invalid": {
+  "value": "%1$d · %2$d 个无效"
+ },
+ "%1$d/%2$d conns": {
+  "value": "%1$d/%2$d 连接"
+ },
+ "%1$dh (%2$s)": {
+  "value": "%1$d 小时（%2$s）"
+ },
+ "%1$dh (auto-refresh every %2$s)": {
+  "value": "%1$d 小时（每 %2$s 自动刷新）"
+ },
+ "%1$s (+%2$d more)": {
+  "value": "%1$s（另有 %2$d 个）"
+ },
+ "%1$s / %2$s used": {
+  "value": "已用 %1$s / %2$s"
+ },
+ "%1$s cannot use \"%2$s\": a \"%3$s\" server is not allowed as a resolver.": {
+  "value": "%1$s 无法使用「%2$s」：「%3$s」类型的服务器不能作为解析器。"
+ },
+ "%1$s references missing DNS server \"%2$s\".": {
+  "value": "%1$s 引用了不存在的 DNS 服务器「%2$s」。"
+ },
+ "%1$s · %2$d events": {
+  "value": "%1$s · %2$d 个事件"
+ },
+ "%d MB": {
+  "value": "%d MB"
+ },
+ "%d OOM reports deleted": {
+  "value": {
+   "other": "已删除 %d 个 OOM 报告"
+  }
+ },
+ "%d active connections will be closed.": {
+  "value": {
+   "other": "将关闭 %d 个活动连接。"
+  }
+ },
+ "%d apps": {
+  "value": {
+   "other": "%d 个应用"
+  }
+ },
+ "%d broken": {
+  "value": {
+   "other": "%d 个损坏"
+  }
+ },
+ "%d cidrs": {
+  "value": {
+   "other": "%d 个 CIDR"
+  }
+ },
+ "%d connections": {
+  "value": {
+   "other": "%d 个连接"
+  }
+ },
+ "%d conns": {
+  "value": "%d 连接"
+ },
+ "%d days": {
+  "value": {
+   "other": "%d 天"
+  }
+ },
+ "%d days left": {
+  "value": {
+   "other": "剩余 %d 天"
+  }
+ },
+ "%d directions matched no nodes — check their node filters.": {
+  "value": {
+   "other": "%d 个方向未匹配到任何节点——请检查各自的节点筛选条件。"
+  }
+ },
+ "%d domains": {
+  "value": {
+   "other": "%d 个域名"
+  }
+ },
+ "%d entries copied": {
+  "value": {
+   "other": "已复制 %d 条记录"
+  }
+ },
+ "%d err": {
+  "value": {
+   "other": "%d 个错误"
+  }
+ },
+ "%d group members could not be imported and were left out.": {
+  "value": {
+   "other": "%d 个分组成员导入失败，未加入。"
+  }
+ },
+ "%d hops": {
+  "value": {
+   "other": "%d 跳"
+  }
+ },
+ "%d hours": {
+  "value": {
+   "other": "%d 小时"
+  }
+ },
+ "%d hours left": {
+  "value": {
+   "other": "剩余 %d 小时"
+  }
+ },
+ "%d in": {
+  "value": "%d 入站"
+ },
+ "%d in pool": {
+  "value": {
+   "other": "池中 %d 个"
+  }
+ },
+ "%d keywords": {
+  "value": {
+   "other": "%d 个关键词"
+  }
+ },
+ "%d min ago": {
+  "value": {
+   "other": "%d 分钟前"
+  }
+ },
+ "%d minutes": {
+  "value": {
+   "other": "%d 分钟"
+  }
+ },
+ "%d net": {
+  "value": {
+   "other": "%d 个网络"
+  }
+ },
+ "%d nodes": {
+  "value": {
+   "other": "%d 个节点"
+  }
+ },
+ "%d nodes (update failed)": {
+  "value": {
+   "other": "%d 个节点（更新失败）"
+  }
+ },
+ "%d nodes (update failed: 0 parsed)": {
+  "value": {
+   "other": "%d 个节点（更新失败：解析到 0 个）"
+  }
+ },
+ "%d nodes in pool": {
+  "value": {
+   "other": "池中 %d 个节点"
+  }
+ },
+ "%d nodes route traffic back into their own chain. Tap a node to open its source, change or remove its detour, then start again.": {
+  "value": {
+   "other": "%d 个节点的流量回环到自身链路。点击节点打开其来源，修改或删除它的 detour，然后重新启动。"
+  }
+ },
+ "%d nodes with warnings (XHTTP fallback etc.)": {
+  "value": {
+   "other": "%d 个节点有警告（XHTTP 回退等）"
+  }
+ },
+ "%d off": {
+  "value": "%d 已关闭"
+ },
+ "%d ok": {
+  "value": "%d 正常"
+ },
+ "%d packages copied": {
+  "value": {
+   "other": "已复制 %d 个应用"
+  }
+ },
+ "%d packages imported": {
+  "value": {
+   "other": "已导入 %d 个应用"
+  }
+ },
+ "%d ports": {
+  "value": {
+   "other": "%d 个端口"
+  }
+ },
+ "%d proto": {
+  "value": {
+   "other": "%d 个协议"
+  }
+ },
+ "%d seconds": {
+  "value": {
+   "other": "%d 秒"
+  }
+ },
+ "%d servers": {
+  "value": {
+   "other": "%d 个服务器"
+  }
+ },
+ "%d src": {
+  "value": {
+   "other": "%d 个来源"
+  }
+ },
+ "%d suffixes": {
+  "value": {
+   "other": "%d 个后缀"
+  }
+ },
+ "%d unattributed events / 30s — sing-box could not detect the owner package for some DNS/TCP traffic": {
+  "value": {
+   "other": "30 秒内 %d 个无归属事件——sing-box 无法判定部分 DNS/TCP 流量的归属应用"
+  }
+ },
+ "%d wifi": {
+  "value": "%d 个 Wi-Fi"
+ },
+ "%d% of DNS queries failing while the connection is alive — tap to fix": {
+  "value": "连接正常时仍有 %d% 的 DNS 查询失败——点击修复"
+ },
+ "%dd ago": {
+  "value": {
+   "other": "%d 天前"
+  }
+ },
+ "%dh ago": {
+  "value": {
+   "other": "%d 小时前"
+  }
+ },
+ "%dmo ago": {
+  "value": {
+   "other": "%d 个月前"
+  }
+ },
+ "%dw ago": {
+  "value": {
+   "other": "%d 周前"
+  }
+ },
+ "%dy ago": {
+  "value": {
+   "other": "%d 年前"
+  }
+ },
+ "%s (cached)": {
+  "value": "%s（缓存）"
+ },
+ "%s (missing)": {
+  "value": "%s（缺失）"
+ },
+ "%s available": {
+  "value": "可用 %s",
+  "special": {
+   "1": {
+    "value": "有新版本 %s"
+   }
+  }
+ },
+ "%s chain position(s) removed": {
+  "value": "已移除 %s 个链路位置"
+ },
+ "%s copied": {
+  "value": "已复制 %s"
+ },
+ "%s detour reference(s) reset to None": {
+  "value": "%s 个 detour 引用已重置为 None"
+ },
+ "%s direction option(s) removed": {
+  "value": "已从组合中移除 %s 个方向选项"
+ },
+ "%s of %s servers": {
+  "value": "%s / %s 个服务器"
+ },
+ "%s rule reference(s) switched to vpn-1": {
+  "value": "%s 条规则引用已切换为 vpn-1"
+ },
+ "%s server": {
+  "value": "服务器 %s"
+ },
+ "%s · current session": {
+  "value": "%s · 当前会话"
+ },
+ "%s · disabled — will be skipped": {
+  "value": "%s · 已关闭 —— 将被跳过"
+ },
+ "%s — tap to edit": {
+  "value": "%s — 点击编辑"
+ },
+ "%s — uninstalled, auto-skipped": {
+  "value": "%s — 已卸载，自动跳过"
+ },
+ "%s: empty file": {
+  "value": "%s：空文件"
+ },
+ "(%d fails)": {
+  "value": {
+   "other": "（%d 次失败）"
+  }
+ },
+ "(auto — route DNS)": {
+  "value": "（自动 — 随路由 DNS）"
+ },
+ "(cached info)": {
+  "value": "（缓存信息）"
+ },
+ "(connection)": {
+  "value": "（连接）"
+ },
+ "(content unavailable)": {
+  "value": "（内容不可用）"
+ },
+ "(empty response)": {
+  "value": "（空响应）"
+ },
+ "(empty)": {
+  "value": "（空）"
+ },
+ "(event)": {
+  "value": "（事件）"
+ },
+ "(inherit DNS strategy)": {
+  "value": "（继承 DNS 策略）"
+ },
+ "(no conditions)": {
+  "value": "（无条件）"
+ },
+ "(no owner)": {
+  "value": "（无归属）"
+ },
+ "(recommended)": {
+  "value": "（推荐）"
+ },
+ "(remove)": {
+  "value": "（移除）"
+ },
+ "(tap to choose)": {
+  "value": "（点击选择）"
+ },
+ "(unnamed rule)": {
+  "value": "（未命名规则）"
+ },
+ "(unsupported var type: %s)": {
+  "value": "（不支持的变量类型：%s）"
+ },
+ "0 = keep pool full": {
+  "value": "0 = 保持连接池满载"
+ },
+ "0 nodes": {
+  "value": "0 个节点"
+ },
+ "0 nodes — %s": {
+  "value": "0 个节点 — %s"
+ },
+ "1. Get a subscription URL from your VPN provider, or a direct proxy link (vless://, trojan://, vmess://, ss://…).": {
+  "value": "1. 从你的 VPN 服务商获取订阅链接，或一条直连代理链接（vless://、trojan://、vmess://、ss://…）。"
+ },
+ "192.168.1.1 / dns.example.com": {
+  "value": "192.168.1.1 / dns.example.com"
+ },
+ "192.168.1.1 / dns.example.com / https://… URL": {
+  "value": "192.168.1.1 / dns.example.com / https://… URL"
+ },
+ "1–200": {
+  "value": "1–200"
+ },
+ "2. Paste it into the field above, or tap ⋮ → «Paste from clipboard», «Scan QR code».": {
+  "value": "2. 把它粘贴到上方输入框，或点 ⋮ →「从剪贴板粘贴」「扫描二维码」。"
+ },
+ "3. Hit «+». L×Box will fetch, parse and configure — and you can connect from the Home tab.": {
+  "value": "3. 点「+」。L×Box 会自动抓取、解析并配置好——然后在首页即可连接。"
+ },
+ "A chain is a route through several hops in a row. It joins the pool as a node, so directions can pick it like any server.": {
+  "value": "链路是依次经过多跳的路由。它会作为一个节点加入连接池，因此「方向」可以像普通服务器一样选中它。"
+ },
+ "A chain needs a name — it becomes its tag in the config.": {
+  "value": "链路需要一个名称——它会成为配置里的标签。"
+ },
+ "A direction with this tag already exists": {
+  "value": "已存在使用该标签的方向"
+ },
+ "A disabled chain is not built and cannot be used as a position": {
+  "value": "已关闭的链路不会被构建，也不能作为位置使用"
+ },
+ "A nested chain (%s) is only allowed at the first position — move it to the top or remove it.": {
+  "value": "嵌套链路（%s）只能放在第一个位置——请把它移到最前或移除。"
+ },
+ "A routing loop was found between groups. Review the loop below and break it, then start again.": {
+  "value": "检测到分组之间存在路由回环。请查看下方回环并解除，然后重新启动。"
+ },
+ "A server cannot detour through itself": {
+  "value": "服务器不能把 detour 指向自身"
+ },
+ "ACTIVE": {
+  "value": "在用"
+ },
+ "AND": {
+  "value": "AND"
+ },
+ "AND with match. Transport (L4) and L7 sniff.": {
+  "value": "与 match 同时满足。传输层（L4）与 L7 嗅探。"
+ },
+ "AND. Which interface the packet came in on.": {
+  "value": "AND。数据包从哪个接口进入。"
+ },
+ "About": {
+  "value": "关于"
+ },
+ "Accept automation commands": {
+  "value": "接受自动化指令"
+ },
+ "Access denied (%d) — check subscription token": {
+  "value": "访问被拒绝（%d）——请检查订阅令牌"
+ },
+ "Action": {
+  "value": "动作"
+ },
+ "Action & Resolve": {
+  "value": "动作与解析"
+ },
+ "Active": {
+  "value": "已启用"
+ },
+ "Add": {
+  "value": "添加"
+ },
+ "Add %d": {
+  "value": "添加 %d"
+ },
+ "Add Amnezia obfuscation": {
+  "value": "添加 Amnezia 混淆"
+ },
+ "Add DNS Rule": {
+  "value": "添加 DNS 规则"
+ },
+ "Add DNS Server": {
+  "value": "添加 DNS 服务器"
+ },
+ "Add Wi-Fi network": {
+  "value": "添加 Wi-Fi 网络"
+ },
+ "Add a server": {
+  "value": "添加服务器"
+ },
+ "Add app": {
+  "value": "添加应用"
+ },
+ "Add app from full list": {
+  "value": "从完整列表添加应用"
+ },
+ "Add app to filter": {
+  "value": "将应用加入筛选"
+ },
+ "Add at least one condition": {
+  "value": "请至少添加一个条件"
+ },
+ "Add auto node…": {
+  "value": "添加自动节点…"
+ },
+ "Add by URL…": {
+  "value": "按链接添加…"
+ },
+ "Add condition": {
+  "value": "添加条件"
+ },
+ "Add detour": {
+  "value": "添加 detour"
+ },
+ "Add detour servers to proxy groups (visible in node list)": {
+  "value": "将 detour 服务器加入代理分组（在节点列表中可见）"
+ },
+ "Add direction  (%d)": {
+  "value": "添加方向  （%d）"
+ },
+ "Add from clipboard": {
+  "value": "从剪贴板添加"
+ },
+ "Add hop chain…": {
+  "value": "添加跳转链路…"
+ },
+ "Add position": {
+  "value": "添加位置"
+ },
+ "Add rule": {
+  "value": "添加规则"
+ },
+ "Add server": {
+  "value": "添加服务器"
+ },
+ "Add servers": {
+  "value": "添加服务器"
+ },
+ "Add servers by URL": {
+  "value": "按链接添加服务器"
+ },
+ "Add servers with the + button above, or long-press a standalone server on the Servers screen and choose \"Move to folder…\".": {
+  "value": "用上方的 + 按钮添加服务器，或在「服务器」页长按某个独立服务器并选择「移动到文件夹…」。"
+ },
+ "Add server…": {
+  "value": "添加服务器…"
+ },
+ "Add to Rules": {
+  "value": "加入规则"
+ },
+ "Add to status-bar shade for one-tap toggle. Android 13+ shows a system prompt; on older versions edit the shade manually.": {
+  "value": "添加到状态栏下拉栏，一键开关。Android 13+ 会弹出系统提示；更早的版本需手动编辑下拉栏。"
+ },
+ "Add user rule": {
+  "value": "添加自定义规则"
+ },
+ "Added": {
+  "value": "已添加"
+ },
+ "Added \"%s\" to Rules": {
+  "value": "已将「%s」加入规则"
+ },
+ "Added \"%s\" — tap ☁ to download, then enable": {
+  "value": "已添加「%s」——点 ☁ 下载后启用"
+ },
+ "Added MASQUE node": {
+  "value": "已添加 MASQUE 节点"
+ },
+ "Added WARP node": {
+  "value": "已添加 WARP 节点"
+ },
+ "Added WARP+ node": {
+  "value": "已添加 WARP+ 节点"
+ },
+ "Added: %s": {
+  "value": "已添加：%s"
+ },
+ "Adds new items, keeps existing.": {
+  "value": "新增条目，保留原有内容。"
+ },
+ "Adds padding traffic so the WireGuard handshake carries no fixed size signature. Enable if the plain tunnel does not connect.": {
+  "value": "添加填充流量，使 WireGuard 握手中不含固定长度特征。若普通隧道连不上可启用。"
+ },
+ "Advanced": {
+  "value": "高级"
+ },
+ "Advanced DNS options": {
+  "value": "高级 DNS 选项"
+ },
+ "Advanced: this rule resolves but does not route. If no later rule matches, traffic goes to Final.": {
+  "value": "高级：此规则只解析不路由。若后续规则都不匹配，流量将走 Final。"
+ },
+ "Aggressive battery saving": {
+  "value": "激进省电"
+ },
+ "All": {
+  "value": "全部"
+ },
+ "All directions": {
+  "value": "所有方向"
+ },
+ "All ways to support": {
+  "value": "所有支持方式"
+ },
+ "Allocated in total": {
+  "value": "累计分配"
+ },
+ "Allow": {
+  "value": "允许"
+ },
+ "Allow VPN bypass": {
+  "value": "允许绕过 VPN"
+ },
+ "Allow Wi-Fi info": {
+  "value": "允许读取 Wi-Fi 信息"
+ },
+ "Allow background activity": {
+  "value": "允许后台活动"
+ },
+ "Allow notifications": {
+  "value": "允许通知"
+ },
+ "Allow rotation": {
+  "value": "允许旋转屏幕"
+ },
+ "Allow-list": {
+  "value": "白名单"
+ },
+ "Allowed — foreground service shows VPN status": {
+  "value": "已允许——前台服务会显示 VPN 状态"
+ },
+ "Already on this device": {
+  "value": "本机已有"
+ },
+ "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
+  "value": "也可让当前路由上的隧道（连接池成员、已选节点）在长时间空闲后休眠——例如夜间。休眠后首次连接会多约一个往返。请把该值设为不低于方向的空闲超时（默认 30 分钟）。需要先开启「挂起空闲隧道」。"
+ },
+ "AmneziaWG header \"%1$s=%2$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.": {
+  "value": "AmneziaWG 头部「%1$s=%2$s」既不是数字也不是「低-高」区间，已丢弃。内核将回退为普通 WireGuard 头部，握手可能与服务器不匹配。"
+ },
+ "AmneziaWG 3 field \"%1$s=%2$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.": {
+  "value": "AmneziaWG 3 字段「%1$s=%2$s」既不是数字、不是有序的「低-高」区间，也不是开关值，已丢弃。内核将使用其默认值。"
+ },
+ "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.": {
+  "value": "AmneziaWG 3 的头部保护密钥不是 32 字节的 base64 密钥，已跳过该节点：握手无法成功，且内核会拒绝整份配置。"
+ },
+ "AmneziaWG 3 padding \"%1$s\" is below %2$d, the minimum required by the header protection key, so the node was skipped: the core would reject the whole config.": {
+  "value": "AmneziaWG 3 的填充「%1$s」小于 %2$d（头部保护密钥要求的最小值），已跳过该节点：内核会拒绝整份配置。"
+ },
+ "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.": {
+  "value": "AmneziaWG 3 的随机尾部与较宽的 magic 头部区间（65536 及以上）同时使用时，服务器可能把部分上行包误判为握手而丢弃。"
+ },
+ "Android 13+ requires this for SSID. Tap to grant.": {
+  "value": "Android 13+ 需要此权限才能获取 SSID。点击授予。"
+ },
+ "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
+  "value": "Android 为省电会限制后台活动。若未加入例外，熄屏后 VPN 隧道可能被终止——在重新打开 L×Box 之前连接会中断。\n\n请打开系统设置并选择「无限制」/「不优化」。"
+ },
+ "Another VPN app is currently running. Switch to L×Box?\n\nTo see which app it is, open VPN settings — the active VPN is marked as connected.": {
+  "value": "另一个 VPN 应用正在运行。是否切换到 L×Box？\n\n想查看是哪个应用，请打开 VPN 设置——处于连接状态的即为当前 VPN。"
+ },
+ "Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.": {
+  "value": "另一个 VPN 应用占用了系统 VPN 通道（例如常驻 VPN）。请重新启动以连接。"
+ },
+ "Another VPN is active": {
+  "value": "有其他 VPN 正在运行"
+ },
+ "Answer AAAA (IPv6) queries locally so matched traffic uses IPv4. No DNS server required.": {
+  "value": "本地应答 AAAA（IPv6）查询，使匹配的流量走 IPv4。无需 DNS 服务器。"
+ },
+ "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
+  "value": "开启后，本机任意应用都能通过广播指令控制 VPN。仅当你使用 Tasker / MacroDroid 并了解其影响时才开启。"
+ },
+ "Any — tap Edit to filter by network / L7 protocol": {
+  "value": "任意 — 点「编辑」可按网络 / L7 协议筛选"
+ },
+ "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.": {
+  "value": "AnyTLS 的「min_idle_session=%s」不是非负整数——该设置已丢弃，改用内核默认值。"
+ },
+ "Anything above is red.": {
+  "value": "高于该值即标红。"
+ },
+ "App": {
+  "value": "应用"
+ },
+ "App Settings": {
+  "value": "应用设置"
+ },
+ "App connections": {
+  "value": "应用连接"
+ },
+ "App info (OEM power settings)": {
+  "value": "应用信息（厂商省电设置）"
+ },
+ "App settings": {
+  "value": "应用设置"
+ },
+ "App version: %s": {
+  "value": "应用版本：%s"
+ },
+ "Appearance": {
+  "value": "外观"
+ },
+ "Append an outbound to the end of the chain": {
+  "value": "在链路末尾追加一个出站"
+ },
+ "Applied — %1$d nodes, %2$d disabled": {
+  "value": "已应用 — %1$d 个节点，%2$d 个已禁用"
+ },
+ "Applied — %d nodes": {
+  "value": "已应用 — %d 个节点"
+ },
+ "Applied.": {
+  "value": "已应用。"
+ },
+ "Applies immediately. Very chatty on live traffic — enable, reproduce, grab the log, disable.": {
+  "value": "立即生效。实时流量下日志非常密集——开启、复现、抓日志、关闭。"
+ },
+ "Applies on next connect.": {
+  "value": "下次连接时生效。"
+ },
+ "Apply": {
+  "value": "应用"
+ },
+ "Apply every config change to the running tunnel by itself, so no banner is left to tap. Each apply drops the tunnel for about 3 seconds and kills open connections.": {
+  "value": "自动把每次配置改动应用到正在运行的隧道，不再留下待点击的横幅。每次应用会断开隧道约 3 秒并中断已建立的连接。"
+ },
+ "Apply rules": {
+  "value": "应用规则"
+ },
+ "Apply to %s": {
+  "value": "应用到 %s"
+ },
+ "Applying…": {
+  "value": "正在应用…"
+ },
+ "Apps in this list (%d)": {
+  "value": "列表中的应用（%d）"
+ },
+ "Apps may use ConnectivityManager to bypass tun.": {
+  "value": "应用可通过 ConnectivityManager 绕过 tun。"
+ },
+ "At least two positions are needed: the core rejects a single-hop chain.": {
+  "value": "至少需要两个位置：内核不接受单跳链路。"
+ },
+ "Auto": {
+  "value": "自动"
+ },
+ "Auto (recommended)": {
+  "value": "自动（推荐）"
+ },
+ "Auto-ping after connect": {
+  "value": "连接后自动测速"
+ },
+ "Auto-record is off": {
+  "value": "自动记录已关闭"
+ },
+ "Auto-record off. Existing history kept.": {
+  "value": "自动记录已关闭。已有历史保留。"
+ },
+ "Auto-record on. Networks added after 5 min of stay.": {
+  "value": "自动记录已开启。停留 5 分钟后记录网络。"
+ },
+ "Auto-record visited Wi-Fi networks": {
+  "value": "自动记录连接过的 Wi-Fi 网络"
+ },
+ "Auto-restart VPN on settings change": {
+  "value": "设置变更时自动重启 VPN"
+ },
+ "Auto-start on boot": {
+  "value": "开机自启"
+ },
+ "Auto-update": {
+  "value": "自动更新"
+ },
+ "Auto-update subscriptions": {
+  "value": "自动更新订阅"
+ },
+ "Automation": {
+  "value": "自动化"
+ },
+ "Automation API": {
+  "value": "自动化 API"
+ },
+ "Available memory": {
+  "value": "可用内存"
+ },
+ "A–Z": {
+  "value": "A–Z"
+ },
+ "BSSID (optional)": {
+  "value": "BSSID（可选）"
+ },
+ "Backup & restore": {
+  "value": "备份与恢复"
+ },
+ "Backup exported (%d bytes)": {
+  "value": "备份已导出（%d 字节）"
+ },
+ "Badge in list (regex)": {
+  "value": "列表中的标记（正则）"
+ },
+ "Based on preset": {
+  "value": "基于预设"
+ },
+ "Battery optimization": {
+  "value": "电池优化"
+ },
+ "Becomes a standalone server": {
+  "value": "将变为独立服务器"
+ },
+ "Behavior": {
+  "value": "行为"
+ },
+ "Binary profiles (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb": {
+  "value": "二进制性能文件（.pb）：go tool pprof file.pb\n堆 inuse_space：go tool pprof -inuse_space heap-*.pb"
+ },
+ "Bind to this device (reserved)": {
+  "value": "绑定到本机（保留）"
+ },
+ "Blocked — Android may throttle the VPN service. Tap to allow.": {
+  "value": "已阻止——Android 可能限制 VPN 服务。点击允许。"
+ },
+ "Building config...": {
+  "value": "正在构建配置…"
+ },
+ "By routing rule": {
+  "value": "按路由规则"
+ },
+ "CONNECTIONS (%d)": {
+  "value": "连接（%d）"
+ },
+ "Camera access denied": {
+  "value": "相机权限被拒绝"
+ },
+ "Camera error: %s": {
+  "value": "相机错误：%s"
+ },
+ "Can't parse response (invalid format)": {
+  "value": "无法解析响应（格式无效）"
+ },
+ "Cancel": {
+  "value": "取消"
+ },
+ "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.": {
+  "value": "无法读取 Wi-Fi 信息——请尝试关闭再打开 Wi-Fi。"
+ },
+ "Cannot read the selected file": {
+  "value": "无法读取所选文件"
+ },
+ "Caps the VPN core's memory. A cap that is too low keeps the processor busy with garbage collection and heats the phone. Auto sizes the cap to this device's RAM; Off removes the cap but keeps low-memory monitoring. Applies immediately.": {
+  "value": "限制 VPN 内核的内存占用。上限过低会让处理器忙于垃圾回收并导致手机发热。「自动」按本机内存自动设定；「关闭」取消上限但保留低内存监控。立即生效。"
+ },
+ "Capture %s": {
+  "value": "抓取 %s"
+ },
+ "Capture a diagnostic snapshot of the running core and share it. Requires the VPN to be connected.": {
+  "value": "抓取运行中内核的诊断快照并分享。需要 VPN 已连接。"
+ },
+ "Capture failed: %s": {
+  "value": "抓取失败：%s"
+ },
+ "Capture groups are available as $1, $2 in Replace": {
+  "value": "捕获组在「替换」中可用作 $1、$2"
+ },
+ "Case-sensitive": {
+  "value": "区分大小写"
+ },
+ "Chain is longer than %d hops and was truncated.": {
+  "value": "链路超过 %d 跳，多余部分已截断。"
+ },
+ "Chain positions (%d)": {
+  "value": {
+   "other": "链路位置（%d）"
+  }
+ },
+ "Chain target \"%s\" is a group, which cannot be used as a chain hop. The node connects directly.": {
+  "value": "链路目标「%s」是分组，不能作为链路的一跳。该节点将直连。"
+ },
+ "Chain target \"%s\" was not found in the config. The node connects directly.": {
+  "value": "配置中找不到链路目标「%s」。该节点将直连。"
+ },
+ "Chain to \"%s\" would loop back on itself, so it was dropped. The node connects directly.": {
+  "value": "指向「%s」的链路会自身成环，已丢弃。该节点将直连。"
+ },
+ "Chains %s are declared below this one — a chain may only reference chains above it. Move them up, or this chain will not build.": {
+  "value": "链路 %s 声明在本链路之下——只能引用列表更靠前的链路。请把它们上移，否则本链路无法构建。"
+ },
+ "Chains inside the folder get the folder detour appended": {
+  "value": "文件夹内的链路会自动追加该文件夹的 detour"
+ },
+ "Chains: %d": {
+  "value": "链路：%d"
+ },
+ "Check": {
+  "value": "检查"
+ },
+ "Check failed: %s": {
+  "value": "检查失败：%s"
+ },
+ "Check for updates": {
+  "value": "检查更新"
+ },
+ "Check for updates on launch": {
+  "value": "启动时检查更新"
+ },
+ "Check for updates?": {
+  "value": "检查更新？"
+ },
+ "Check now": {
+  "value": "立即检查"
+ },
+ "Check the filter of: %s — the old prefix is part of a regex construct there and was left as is.": {
+  "value": "请检查该筛选：%s —— 那里的旧前缀属于正则结构的一部分，已保持原样。"
+ },
+ "Choose a file first": {
+  "value": "请先选择文件"
+ },
+ "Choose…": {
+  "value": "选择…"
+ },
+ "Clear": {
+  "value": "清除"
+ },
+ "Clear DNS cache": {
+  "value": "清除 DNS 缓存"
+ },
+ "Clear DNS cache?": {
+  "value": "清除 DNS 缓存？"
+ },
+ "Clear all": {
+  "value": "全部清除"
+ },
+ "Clear all apps?": {
+  "value": "清空应用列表？"
+ },
+ "Clear cached file": {
+  "value": "删除缓存文件"
+ },
+ "Clear cached files": {
+  "value": "删除缓存文件"
+ },
+ "Client subnet": {
+  "value": "客户端子网"
+ },
+ "ClientHello fingerprint is stripped, but these positions are reality nodes that need it: %s. The core will not start — untick tls.utls.": {
+  "value": "ClientHello 指纹已去除，但以下位置是需要它的 reality 节点：%s。内核无法启动——请取消勾选 tls.utls。"
+ },
+ "ClientHello fingerprint — must not be stripped on reality nodes": {
+  "value": "ClientHello 指纹 —— 在 reality 节点上不可去除"
+ },
+ "ClientHello fragmentation": {
+  "value": "ClientHello 分片"
+ },
+ "Clipboard is empty": {
+  "value": "剪贴板为空"
+ },
+ "Close": {
+  "value": "关闭"
+ },
+ "Close all": {
+  "value": "全部关闭"
+ },
+ "Close filters": {
+  "value": "关闭筛选"
+ },
+ "Closed %d connections": {
+  "value": {
+   "other": "已关闭 %d 个连接"
+  }
+ },
+ "Closed kept 30s (tap to keep all)": {
+  "value": "已关闭项保留 30 秒（点此全部保留）"
+ },
+ "Command": {
+  "value": "指令"
+ },
+ "Command receiver": {
+  "value": "指令接收"
+ },
+ "Commands (intent actions)": {
+  "value": "指令（intent actions）"
+ },
+ "Compact": {
+  "value": "紧凑"
+ },
+ "Complete": {
+  "value": "完成"
+ },
+ "Condition needs a value": {
+  "value": "条件需要一个值"
+ },
+ "Conditions": {
+  "value": "条件"
+ },
+ "Config": {
+  "value": "配置"
+ },
+ "Config Editor": {
+  "value": "配置编辑"
+ },
+ "Config changed — restart VPN to apply": {
+  "value": "配置已更改——重启 VPN 后生效"
+ },
+ "Config copied": {
+  "value": "配置已复制"
+ },
+ "Config generated: %d nodes": {
+  "value": {
+   "other": "配置已生成：%d 个节点"
+  }
+ },
+ "Config invalid (%1$d issues): %2$s": {
+  "value": {
+   "other": "配置无效（%1$d 个问题）：%2$s"
+  }
+ },
+ "Config invalid: %s": {
+  "value": "配置无效：%s"
+ },
+ "Config is empty": {
+  "value": "配置为空"
+ },
+ "Config loading error": {
+  "value": "配置加载错误"
+ },
+ "Config locked. UI actions will not rebuild config.": {
+  "value": "配置已锁定。界面操作不会重建配置。"
+ },
+ "Config rebuilt: %d nodes": {
+  "value": {
+   "other": "配置已重建：%d 个节点"
+  }
+ },
+ "Config rebuilt: %d nodes — reloading VPN": {
+  "value": {
+   "other": "配置已重建：%d 个节点——正在重载 VPN"
+  }
+ },
+ "Config rebuilt: %d nodes — restart VPN to apply": {
+  "value": {
+   "other": "配置已重建：%d 个节点——重启 VPN 后生效"
+  }
+ },
+ "Config regenerated & applied: %d nodes": {
+  "value": {
+   "other": "配置已重新生成并应用：%d 个节点"
+  }
+ },
+ "Config regenerated: %d nodes": {
+  "value": {
+   "other": "配置已重新生成：%d 个节点"
+  }
+ },
+ "Config saved": {
+  "value": "配置已保存"
+ },
+ "Config unlocked. Next UI action will rebuild from settings.": {
+  "value": "配置已解锁。下一次界面操作将依据设置重建。"
+ },
+ "Config variables": {
+  "value": "配置变量"
+ },
+ "Config wizard and parser reference": {
+  "value": "配置向导与解析器参考"
+ },
+ "Connect a subscription or add a node manually to get started.": {
+  "value": "添加订阅或手动添加节点即可开始。"
+ },
+ "Connect to the proxy over TLS. Advanced TLS options (SNI, ALPN) can be edited later via node JSON.": {
+  "value": "通过 TLS 连接代理。之后可在节点 JSON 里调整高级 TLS 选项（SNI、ALPN）。"
+ },
+ "Connected": {
+  "value": "已连接"
+ },
+ "Connected to %s from inside the tunnel": {
+  "value": "已在隧道内连接到 %s"
+ },
+ "Connecting…": {
+  "value": "正在连接…"
+ },
+ "Connection lost — VPN tunnel is not responding": {
+  "value": "连接中断——VPN 隧道无响应"
+ },
+ "Connection timed out": {
+  "value": "连接超时"
+ },
+ "Conns": {
+  "value": "连接"
+ },
+ "Continue": {
+  "value": "继续"
+ },
+ "Control L×Box from Tasker / Macrodroid / Llama and other automation apps via Android broadcast intents.": {
+  "value": "通过 Android 广播 intent，用 Tasker / MacroDroid / Llama 等自动化应用控制 L×Box。"
+ },
+ "Copied": {
+  "value": "已复制"
+ },
+ "Copied to clipboard": {
+  "value": "已复制到剪贴板"
+ },
+ "Copied: %s": {
+  "value": "已复制：%s"
+ },
+ "Copy": {
+  "value": "复制"
+ },
+ "Copy JSON": {
+  "value": "复制 JSON"
+ },
+ "Copy JSON to clipboard": {
+  "value": "复制 JSON 到剪贴板"
+ },
+ "Copy URI": {
+  "value": "复制 URI"
+ },
+ "Copy URL": {
+  "value": "复制 URL"
+ },
+ "Copy detour": {
+  "value": "复制 detour"
+ },
+ "Copy headers": {
+  "value": "复制请求头"
+ },
+ "Copy log": {
+  "value": "复制日志"
+ },
+ "Copy node info": {
+  "value": "复制节点信息"
+ },
+ "Copy server JSON": {
+  "value": "复制服务器 JSON"
+ },
+ "Copy source": {
+  "value": "复制来源"
+ },
+ "Copy tag": {
+  "value": "复制标签"
+ },
+ "Copy to clipboard": {
+  "value": "复制到剪贴板"
+ },
+ "Core": {
+  "value": "内核"
+ },
+ "Core log at snapshot time": {
+  "value": "快照时的内核日志"
+ },
+ "Core version": {
+  "value": "内核版本"
+ },
+ "Could not clear DNS cache": {
+  "value": "无法清除 DNS 缓存"
+ },
+ "Could not parse direct link": {
+  "value": "无法解析直连链接"
+ },
+ "Could not parse server config — keeping current": {
+  "value": "无法解析服务器配置——保留当前配置"
+ },
+ "Could not read current Wi-Fi (%s).": {
+  "value": "无法获取当前 Wi-Fi（%s）。"
+ },
+ "Could not read file.": {
+  "value": "无法读取文件。"
+ },
+ "Couldn't load new source — keeping current subscription": {
+  "value": "无法加载新来源——保留当前订阅"
+ },
+ "Couldn't stop the VPN — try again.": {
+  "value": "无法停止 VPN——请重试。"
+ },
+ "Crashes": {
+  "value": "崩溃"
+ },
+ "Create": {
+  "value": "创建"
+ },
+ "Created: %s": {
+  "value": "已创建：%s"
+ },
+ "Credits": {
+  "value": "致谢"
+ },
+ "Cumulative delay to each hop; (+X) is what that hop added.": {
+  "value": "到每一跳的累计延迟；(＋X) 是该跳新增的部分。"
+ },
+ "Custom": {
+  "value": "自定义"
+ },
+ "Custom User-Agent": {
+  "value": "自定义 User-Agent"
+ },
+ "Custom identity": {
+  "value": "自定义身份"
+ },
+ "Custom rules, tun apps, DNS options, final outbound": {
+  "value": "自定义规则、tun 应用、DNS 选项、最终出站"
+ },
+ "Cut": {
+  "value": "剪切"
+ },
+ "DNS / router events off": {
+  "value": "DNS 与路由事件已关闭"
+ },
+ "DNS Final": {
+  "value": "最终 DNS"
+ },
+ "DNS Rules": {
+  "value": "DNS 规则"
+ },
+ "DNS Servers": {
+  "value": "DNS 服务器"
+ },
+ "DNS Settings": {
+  "value": "DNS 设置"
+ },
+ "DNS cache cleared": {
+  "value": "DNS 缓存已清除"
+ },
+ "DNS cache cleared — reloading": {
+  "value": "DNS 缓存已清除——正在重载"
+ },
+ "DNS entries: %d": {
+  "value": "DNS 记录：%d"
+ },
+ "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": {
+  "value": "DNS 分组「%1$s」：类型为「%3$s」的成员「%2$s」不允许加入分组。"
+ },
+ "DNS group \"%s\" has no usable members — enable or add at least one server.": {
+  "value": "DNS 分组「%s」没有可用成员——请启用或至少添加一个服务器。"
+ },
+ "DNS group loop: %s — fix group membership to start the VPN.": {
+  "value": "DNS 分组回环：%s —— 请修正分组组成后再启动 VPN。"
+ },
+ "DNS queries are failing": {
+  "value": "DNS 查询失败"
+ },
+ "DNS server": {
+  "value": "DNS 服务器"
+ },
+ "DNS server \"%1$s\" routes through dead node \"%2$s\" (selected in \"%3$s\").": {
+  "value": "DNS 服务器「%1$s」经由已失效节点「%2$s」（在「%3$s」中选择）。"
+ },
+ "DNS server \"%1$s\" routes through dead node \"%2$s\".": {
+  "value": "DNS 服务器「%1$s」经由已失效节点「%2$s」。"
+ },
+ "DNS server \"%s\" not found — DNS option disabled": {
+  "value": "找不到 DNS 服务器「%s」——DNS 选项已停用"
+ },
+ "DNS server \"%s\" not found — resolver set to auto": {
+  "value": "找不到 DNS 服务器「%s」——解析器已设为自动"
+ },
+ "DNS server — direct detour": {
+  "value": "DNS 服务器 —— 直连 detour"
+ },
+ "DNS server — via \"%1$s\"": {
+  "value": "DNS 服务器 —— 经「%1$s」"
+ },
+ "DNS servers and rules": {
+  "value": "DNS 服务器与规则"
+ },
+ "DNS-over-HTTP/3 · port 443": {
+  "value": "DNS-over-HTTP/3 · 端口 443"
+ },
+ "DNS-over-HTTPS · port 443": {
+  "value": "DNS-over-HTTPS · 端口 443"
+ },
+ "DNS-over-QUIC · port 853": {
+  "value": "DNS-over-QUIC · 端口 853"
+ },
+ "DNS-over-TLS · port 853": {
+  "value": "DNS-over-TLS · 端口 853"
+ },
+ "Debug": {
+  "value": "调试"
+ },
+ "Debug API": {
+  "value": "Debug API"
+ },
+ "Debug API config": {
+  "value": "Debug API 配置"
+ },
+ "Decode base64": {
+  "value": "解码 base64"
+ },
+ "Default": {
+  "value": "默认"
+ },
+ "Default (regex)": {
+  "value": "默认节点（正则）"
+ },
+ "Default Domain Resolver": {
+  "value": "默认域名解析器"
+ },
+ "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
+  "value": "默认兜底 DNS 服务器。当应用的 DNS 查询没有匹配上方任何 DNS 规则时使用。所有未被规则定向的应用 DNS 查询都会走到这里。\n\n推荐：\n  • dns_shield —— 默认；同时向 9 家服务商发起查询，谁先应答用谁\n  • google_doh —— 加密（DoH）\n  • cloudflare_dot / google_dot —— 加密（DoT）\n  • cloudflare_udp / google_udp —— 快速明文 UDP\n\nlocal_dns_resolver 也能用，但会把查询内容暴露给你的运营商。加密选项可保护隐私。"
+ },
+ "Default traffic": {
+  "value": "默认流量"
+ },
+ "Default · %s": {
+  "value": "默认 · %s"
+ },
+ "Delete": {
+  "value": "删除"
+ },
+ "Delete DNS server?": {
+  "value": "删除 DNS 服务器？"
+ },
+ "Delete all": {
+  "value": "全部删除"
+ },
+ "Delete all OOM reports": {
+  "value": "删除所有 OOM 报告"
+ },
+ "Delete all OOM reports?": {
+  "value": "删除所有 OOM 报告？"
+ },
+ "Delete auto node?": {
+  "value": "删除自动节点？"
+ },
+ "Delete direction": {
+  "value": "删除方向"
+ },
+ "Delete direction?": {
+  "value": "删除方向？"
+ },
+ "Delete folder": {
+  "value": "删除文件夹"
+ },
+ "Delete folder & servers": {
+  "value": "删除文件夹及其中服务器"
+ },
+ "Delete folder?": {
+  "value": "删除文件夹？"
+ },
+ "Delete hop chain": {
+  "value": "删除跳转链路"
+ },
+ "Delete hop chain?": {
+  "value": "删除跳转链路？"
+ },
+ "Delete rule": {
+  "value": "删除规则"
+ },
+ "Delete rule?": {
+  "value": "删除规则？"
+ },
+ "Delete server": {
+  "value": "删除服务器"
+ },
+ "Delete server?": {
+  "value": "删除服务器？"
+ },
+ "Delete subscription?": {
+  "value": "删除订阅？"
+ },
+ "Delete unreachable": {
+  "value": "删除不可达节点"
+ },
+ "Delete unreachable?": {
+  "value": "删除不可达节点？"
+ },
+ "Delete…": {
+  "value": "删除…"
+ },
+ "Deny-list": {
+  "value": "黑名单"
+ },
+ "Dependents": {
+  "value": "依赖项"
+ },
+ "Description": {
+  "value": "描述"
+ },
+ "Deselect all": {
+  "value": "取消全选"
+ },
+ "Detected: %s": {
+  "value": "已检测：%s"
+ },
+ "Detour": {
+  "value": "Detour"
+ },
+ "Detour hidden": {
+  "value": "Detour 已隐藏"
+ },
+ "Detour only": {
+  "value": "仅 detour"
+ },
+ "Detour server": {
+  "value": "Detour 服务器"
+ },
+ "Detour servers": {
+  "value": "Detour 服务器"
+ },
+ "Developer": {
+  "value": "开发者"
+ },
+ "Diagnostics": {
+  "value": "诊断"
+ },
+ "Diagnostics settings": {
+  "value": "诊断设置"
+ },
+ "Direct (no VPN)": {
+  "value": "直连（不走 VPN）"
+ },
+ "Direction": {
+  "value": "方向"
+ },
+ "Direction \"%1$s\" %2$s": {
+  "value": "方向「%1$s」%2$s"
+ },
+ "Direction \"%s\" is no longer a detour target": {
+  "value": "方向「%s」不再是 detour 目标"
+ },
+ "Direction \"%s\" matched no nodes — check its node filter.": {
+  "value": "方向「%s」未匹配到任何节点——请检查其节点筛选。"
+ },
+ "Direction \"%s\" not found — set to %s, rule disabled": {
+  "value": "找不到方向「%s」——已改为 %s，规则已停用"
+ },
+ "Direction filters updated to the new prefix: %s": {
+  "value": "方向的筛选已更新为新前缀：%s"
+ },
+ "Directions": {
+  "value": "方向"
+ },
+ "Directions and routing rules": {
+  "value": "方向与路由规则"
+ },
+ "Directions: %d": {
+  "value": "方向：%d"
+ },
+ "Disable": {
+  "value": "停用"
+ },
+ "Disable %d servers that failed the test?": {
+  "value": {
+   "other": "要停用 %d 个测试失败的服务器吗？"
+  }
+ },
+ "Disable battery restrictions": {
+  "value": "关闭电池限制"
+ },
+ "Disable cache": {
+  "value": "关闭缓存"
+ },
+ "Disable optimistic cache": {
+  "value": "关闭乐观缓存"
+ },
+ "Disable slow servers": {
+  "value": "停用慢速服务器"
+ },
+ "Disable slower than…": {
+  "value": "停用慢于此值的…"
+ },
+ "Disable unreachable": {
+  "value": "停用不可达节点"
+ },
+ "Disabled %1$d servers > %2$d ms": {
+  "value": {
+   "other": "已停用 %1$d 个延迟 > %2$d ms 的服务器"
+  }
+ },
+ "Discard": {
+  "value": "不保存"
+ },
+ "Discard input?": {
+  "value": "放弃输入？"
+ },
+ "Discard the override and restore the %1$s definition of \"%2$s\"?": {
+  "value": "要取消覆盖并恢复「%2$s」的 %1$s 定义吗？"
+ },
+ "Disconnected": {
+  "value": "未连接"
+ },
+ "Dismiss": {
+  "value": "忽略"
+ },
+ "Display name": {
+  "value": "显示名称"
+ },
+ "Display name in node list": {
+  "value": "节点列表中的显示名称"
+ },
+ "Do nothing": {
+  "value": "不处理"
+ },
+ "Do nothing — apply on next rebuild": {
+  "value": "不处理——下次重建时应用"
+ },
+ "Documentation and Tasker recipes": {
+  "value": "文档与 Tasker 用法示例"
+ },
+ "Domain": {
+  "value": "域名"
+ },
+ "Domain (below) is visible on the wire as the %s.": {
+  "value": "域名（下方）在传输中显示为 %s。"
+ },
+ "Domain resolver": {
+  "value": "域名解析器"
+ },
+ "Don't auto-update": {
+  "value": "不自动更新"
+ },
+ "Don't auto-update (manual only)": {
+  "value": "不自动更新（仅手动）"
+ },
+ "Don't use detour servers": {
+  "value": "不使用 detour 服务器"
+ },
+ "Done": {
+  "value": "完成"
+ },
+ "Download": {
+  "value": "下载"
+ },
+ "Downloaded \"%2$s\" (%1$d rule-sets)": {
+  "value": {
+   "other": "已下载「%2$s」（%1$d 个规则集）"
+  }
+ },
+ "Downloaded \"%s\"": {
+  "value": "已下载「%s」"
+ },
+ "Drop active connections when you switch nodes, so traffic moves to the new node immediately": {
+  "value": "切换节点时断开活动连接，使流量立即转到新节点"
+ },
+ "Drop existing detours — every member connects through this outbound": {
+  "value": "清除已有 detour —— 所有成员都经此出站连接"
+ },
+ "Drop existing detours — every node connects through this outbound": {
+  "value": "清除已有 detour —— 所有节点都经此出站连接"
+ },
+ "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
+  "value": "每个来源用自己的密钥签名，所以不同来源的安装包无法互相覆盖安装。切换方法：先备份设置，卸载 L×Box，从新来源安装后再恢复备份。"
+ },
+ "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.": {
+  "value": "未应用 ECH：链接中的「%s」指向公共 ECH 探测服务，而非本服务器——启用会导致 TLS 握手失败。"
+ },
+ "Edit": {
+  "value": "编辑"
+ },
+ "Edit DNS Rule": {
+  "value": "编辑 DNS 规则"
+ },
+ "Edit DNS Server": {
+  "value": "编辑 DNS 服务器"
+ },
+ "Edit auto node": {
+  "value": "编辑自动节点"
+ },
+ "Edit direction · %s": {
+  "value": "编辑方向 · %s"
+ },
+ "Edit rule": {
+  "value": "编辑规则"
+ },
+ "Edit server": {
+  "value": "编辑服务器"
+ },
+ "Edit source": {
+  "value": "编辑来源"
+ },
+ "Edit source…": {
+  "value": "编辑来源…"
+ },
+ "Edit tag, detour, and all server parameters": {
+  "value": "编辑标签、detour 及所有服务器参数"
+ },
+ "Edit…": {
+  "value": "编辑…"
+ },
+ "Emitting events outward": {
+  "value": "向外发送事件"
+ },
+ "Empty folder": {
+  "value": "空文件夹"
+ },
+ "Empty reuses the condition pattern": {
+  "value": "留空则复用条件中的表达式"
+ },
+ "Enable": {
+  "value": "启用"
+ },
+ "Enable FakeIP": {
+  "value": "启用 FakeIP"
+ },
+ "Enable command receiver?": {
+  "value": "启用指令接收？"
+ },
+ "Enable import rules": {
+  "value": "启用导入规则"
+ },
+ "Enable it in Settings → Diagnostics to grow this list as you stay on Wi-Fi networks.": {
+  "value": "在「设置 → 诊断」中开启后，只要你停留在 Wi-Fi 网络中，这个列表就会自动增长。"
+ },
+ "Enable rules in Filters will turn these nodes back on at the next update.": {
+  "value": "下次更新时，「筛选」中的启用规则会让这些节点重新启用。"
+ },
+ "Enabled": {
+  "value": "已启用"
+ },
+ "Enabled directions appear in the selector on the home screen. Tap a direction to edit its nodes, filter and auto twin.": {
+  "value": "已启用的方向会出现在首页选择器中。点击方向可编辑其节点、筛选与 auto 副本。"
+ },
+ "Enabling this category lets other apps receive L×Box events.\n\nEvents do NOT contain subscription / config secrets — only labels (node tags, group names, status).": {
+  "value": "开启此分类后，其他应用可以接收 L×Box 事件。\n\n事件不包含订阅/配置机密——只有标签（节点标签、分组名、状态）。"
+ },
+ "Endpoint": {
+  "value": "地址"
+ },
+ "Endpoint IP": {
+  "value": "Endpoint IP"
+ },
+ "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
+  "value": "Endpoint 池（JSON）—— 生成器取用的 IP 段、端口与 SNI。可编辑以测试自己的范围。"
+ },
+ "Enter a valid http(s):// URL": {
+  "value": "请输入有效的 http(s):// 链接"
+ },
+ "Error": {
+  "value": "错误"
+ },
+ "Error TTL": {
+  "value": "错误 TTL"
+ },
+ "Error: %s": {
+  "value": "错误：%s"
+ },
+ "Events with no owning app": {
+  "value": "无归属应用的事件"
+ },
+ "Every %d h": {
+  "value": "每 %d 小时"
+ },
+ "Every 2 weeks": {
+  "value": "每两周"
+ },
+ "Every 6 months": {
+  "value": "每 6 个月"
+ },
+ "Every day": {
+  "value": "每天"
+ },
+ "Every month": {
+  "value": "每月"
+ },
+ "Every week": {
+  "value": "每周"
+ },
+ "Every year": {
+  "value": "每年"
+ },
+ "Exclude (regex)": {
+  "value": "排除（正则）"
+ },
+ "Exclude matching (invert)": {
+  "value": "排除匹配项（反选）"
+ },
+ "Expired": {
+  "value": "已过期"
+ },
+ "Expires: %s": {
+  "value": "到期：%s"
+ },
+ "Export": {
+  "value": "导出"
+ },
+ "Export (+%d DNS)": {
+  "value": "导出（+%d 项 DNS）"
+ },
+ "Export JSON copied": {
+  "value": "导出用 JSON 已复制"
+ },
+ "Export events": {
+  "value": "导出事件"
+ },
+ "Export failed: %s": {
+  "value": "导出失败：%s"
+ },
+ "Export rules": {
+  "value": "导出规则"
+ },
+ "Export rules...": {
+  "value": "导出规则…"
+ },
+ "Export subscriptions, routing setup and preferences as JSON.": {
+  "value": "将订阅、路由设置与偏好导出为 JSON。"
+ },
+ "Export to clipboard": {
+  "value": "导出到剪贴板"
+ },
+ "Export without DNS": {
+  "value": "导出（不含 DNS）"
+ },
+ "Export...": {
+  "value": "导出…"
+ },
+ "Exposed on http://127.0.0.1:%d (adb forward only)": {
+  "value": "已监听 http://127.0.0.1:%d（仅限 adb forward）"
+ },
+ "Extended": {
+  "value": "完整"
+ },
+ "Fail count reset, retrying…": {
+  "value": "失败计数已重置，正在重试…"
+ },
+ "Failed": {
+  "value": "失败",
+  "special": {
+   "1": {
+    "value": "错误"
+   }
+  }
+ },
+ "Failed (%d in a row)": {
+  "value": {
+   "other": "失败（连续 %d 次）"
+  }
+ },
+ "Failed to close connections (tunnel down?)": {
+  "value": "无法关闭连接（隧道已断开？）"
+ },
+ "Failed to download \"%s\" — check URL/network": {
+  "value": "无法下载「%s」——请检查链接与网络"
+ },
+ "Failed to download SRS for \"%s\". Check internet and try again.": {
+  "value": "无法下载「%s」的 SRS。请检查网络后重试。"
+ },
+ "Failed to parse config": {
+  "value": "配置解析失败"
+ },
+ "Failed to parse config: %s": {
+  "value": "配置解析失败：%s"
+ },
+ "Failed to read file": {
+  "value": "文件读取失败"
+ },
+ "Failed to read file: %s": {
+  "value": "文件读取失败：%s"
+ },
+ "Failed to save config": {
+  "value": "配置保存失败"
+ },
+ "Failed to start VPN": {
+  "value": "VPN 启动失败"
+ },
+ "Fallback for unmatched traffic (route.final)": {
+  "value": "未匹配流量的兜底出口（route.final）"
+ },
+ "Fastest": {
+  "value": "最快"
+ },
+ "Fastest — race, then stick to the winner": {
+  "value": "最快 — 先并发测速，然后固定用胜出的节点"
+ },
+ "Feedback": {
+  "value": "反馈"
+ },
+ "Fetch": {
+  "value": "获取"
+ },
+ "Fetch failed: %s": {
+  "value": "获取失败：%s"
+ },
+ "Fetch identity": {
+  "value": "请求身份标识"
+ },
+ "Fetched once — servers are added as a snapshot and won't auto-update. For live updates add a subscription instead.": {
+  "value": "只抓取一次——服务器以快照形式加入，不会自动更新。需要实时更新请改用订阅。"
+ },
+ "Fetching...": {
+  "value": "正在获取…"
+ },
+ "Fetching…": {
+  "value": "正在获取…"
+ },
+ "File error: %s": {
+  "value": "文件错误：%s"
+ },
+ "File is empty": {
+  "value": "文件为空"
+ },
+ "File is too large to edit on device. Share it, edit externally, then load it back.": {
+  "value": "文件太大，无法在本机编辑。请分享出去，用外部编辑器改好后再载入。"
+ },
+ "Fill missing": {
+  "value": "补全缺失项"
+ },
+ "Fill missing → %s": {
+  "value": "补全缺失项 → %s"
+ },
+ "Filter": {
+  "value": "筛选"
+ },
+ "Filter (%d)": {
+  "value": "筛选（%d）"
+ },
+ "Filter by text…": {
+  "value": "按文本筛选…"
+ },
+ "Filter events": {
+  "value": "筛选事件"
+ },
+ "Filters": {
+  "value": "筛选"
+ },
+ "Find inside the value": {
+  "value": "在值内查找"
+ },
+ "Find these toggles": {
+  "value": "在哪里找这些开关"
+ },
+ "Finish the rule to see what it matches.": {
+  "value": "补完规则即可看到匹配结果。"
+ },
+ "Fix body JSON first: %s": {
+  "value": "请先修正 body JSON：%s"
+ },
+ "Flow \"%s\" is deprecated.": {
+  "value": "Flow「%s」已废弃。"
+ },
+ "Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.": {
+  "value": "Flow「xtls-rprx-vision」与「%s」传输不兼容——flow 已移除。"
+ },
+ "Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.": {
+  "value": "清空 FakeIP 分配与已缓存的 DNS 响应。若 VPN 正在运行会重新加载。"
+ },
+ "Folder \"%2$s\" contains %1$d servers.": {
+  "value": {
+   "other": "文件夹「%2$s」中有 %1$d 个服务器。"
+  }
+ },
+ "Folder has no servers yet": {
+  "value": "文件夹里还没有服务器"
+ },
+ "Folder is empty": {
+  "value": "文件夹为空"
+ },
+ "Folder name": {
+  "value": "文件夹名称"
+ },
+ "Folder not found": {
+  "value": "找不到文件夹"
+ },
+ "For apps · default fallback when no DNS rule matches": {
+  "value": "用于应用 · 没有 DNS 规则匹配时的默认兜底"
+ },
+ "For command confirmations, enable both Lifecycle and State: success arrives in State, failures as VPN_ERROR in Lifecycle.": {
+  "value": "若要接收指令结果，请同时开启 Lifecycle 与 State：成功在 State，失败以 VPN_ERROR 出现在 Lifecycle。"
+ },
+ "For routing · resolves hostnames inside sing-box (outbound endpoints, routing rules)": {
+  "value": "用于路由 · 在 sing-box 内解析主机名（出站地址、路由规则）"
+ },
+ "Force IPv4 (drop AAAA)": {
+  "value": "强制 IPv4（丢弃 AAAA）"
+ },
+ "Forward sing-box logs": {
+  "value": "转发 sing-box 日志"
+ },
+ "From %s %s": {
+  "value": "来自 %s %s"
+ },
+ "From routing rules · ordered as in Routing": {
+  "value": "来自路由规则 · 顺序同「路由」"
+ },
+ "GC cycles": {
+  "value": "GC 次数"
+ },
+ "GET requires packet-up mode": {
+  "value": "GET 需要 packet-up 模式"
+ },
+ "General": {
+  "value": "通用"
+ },
+ "Generate random": {
+  "value": "随机生成"
+ },
+ "Generates random WARP nodes (WireGuard/AWG/MASQUE h2/h3) into the «WARP GENERATOR» folder. Test them there and keep what works.": {
+  "value": "随机生成 WARP 节点（WireGuard/AWG/MASQUE h2/h3）到「WARP GENERATOR」文件夹。在那里测试并保留可用的。"
+ },
+ "Generation failed — no WARP account.": {
+  "value": "生成失败——没有 WARP 账号。"
+ },
+ "Get Public Test Servers": {
+  "value": "获取公共测试服务器"
+ },
+ "Get WARP": {
+  "value": "获取 WARP"
+ },
+ "Getting started": {
+  "value": "开始使用"
+ },
+ "Go panics of the sing-box core. Survives SIGABRT — tap a report to share it.": {
+  "value": "sing-box 内核的 Go panic。可跨 SIGABRT 保留——点击报告即可分享。"
+ },
+ "Go version": {
+  "value": "Go 版本"
+ },
+ "Gone (410) — subscription deleted by provider": {
+  "value": "已删除（410）——订阅被服务商删除"
+ },
+ "Goroutines": {
+  "value": "Goroutine 数"
+ },
+ "Got it": {
+  "value": "知道了"
+ },
+ "Got it (%d)": {
+  "value": "知道了（%d）"
+ },
+ "Granted — real SSID/BSSID accessible": {
+  "value": "已授权——可读取真实 SSID/BSSID"
+ },
+ "Granted — sing-box can read Wi-Fi state for routing rules": {
+  "value": "已授权——sing-box 可读取 Wi-Fi 状态用于路由规则"
+ },
+ "Green up to, ms": {
+  "value": "绿色上限，ms"
+ },
+ "Group": {
+  "value": "分组"
+ },
+ "Grouping": {
+  "value": "分组方式"
+ },
+ "HTTP": {
+  "value": "HTTP"
+ },
+ "HTTP %d": {
+  "value": "HTTP %d"
+ },
+ "HTTP/2 over TCP — use where QUIC/UDP is blocked.": {
+  "value": "基于 TCP 的 HTTP/2 —— 在 QUIC/UDP 被封锁时使用。"
+ },
+ "HTTP/3 over QUIC — the default, fastest path.": {
+  "value": "基于 QUIC 的 HTTP/3 —— 默认，最快路径。"
+ },
+ "HTTPS (TLS to proxy)": {
+  "value": "HTTPS（与代理之间为 TLS）"
+ },
+ "Haptic feedback": {
+  "value": "震动反馈"
+ },
+ "Headers copied": {
+  "value": "请求头已复制"
+ },
+ "Health": {
+  "value": "健康状态"
+ },
+ "Heap allocated": {
+  "value": "堆分配量"
+ },
+ "Heap from OS": {
+  "value": "从系统获取的堆"
+ },
+ "Heap idle": {
+  "value": "空闲堆"
+ },
+ "Heap in use": {
+  "value": "使用中的堆"
+ },
+ "Heap objects": {
+  "value": "堆对象数"
+ },
+ "Heap released": {
+  "value": "已归还系统的堆"
+ },
+ "Help": {
+  "value": "帮助"
+ },
+ "Hide": {
+  "value": "隐藏"
+ },
+ "Hide detour (on) / detour only (off)": {
+  "value": "隐藏 detour（开）/ 仅显示 detour（关）"
+ },
+ "Hide detour servers": {
+  "value": "隐藏 detour 服务器"
+ },
+ "Hide filters": {
+  "value": "隐藏筛选"
+ },
+ "Hide others": {
+  "value": "隐藏其他"
+ },
+ "Hide system apps": {
+  "value": "隐藏系统应用"
+ },
+ "Hides matching nodes from routing. They stay visible, struck through.": {
+  "value": "让匹配的节点不参与路由。它们仍然可见，但会加删除线。"
+ },
+ "Home-screen shortcut": {
+  "value": "主屏快捷方式"
+ },
+ "Hop chain · %s": {
+  "value": "跳转链路 · %s"
+ },
+ "Host": {
+  "value": "主机"
+ },
+ "Host required": {
+  "value": "必须填写主机"
+ },
+ "Hostnames sing-box resolves internally (your VPN server addresses, custom outbound endpoints) will go through your ISP's DNS, bypassing the VPN tunnel. Pick a regular DNS server for full privacy.": {
+  "value": "sing-box 自行解析的主机名（你的 VPN 服务器地址、自定义出站地址）会经运营商 DNS 走，绕过 VPN 隧道。要完全保护隐私请选择普通 DNS 服务器。"
+ },
+ "How it works: directions, rules, DNS, detour, recipes": {
+  "value": "工作原理：方向、规则、DNS、detour、示例"
+ },
+ "How this rule directs and resolves matched traffic.": {
+  "value": "此规则如何定向并解析匹配的流量。"
+ },
+ "INBOUND": {
+  "value": "INBOUND"
+ },
+ "IP": {
+  "value": "IP"
+ },
+ "Idle timeout": {
+  "value": "空闲超时"
+ },
+ "Idle timeout (min)": {
+  "value": "空闲超时（分钟）"
+ },
+ "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
+  "value": "空闲超时会在无活动后挂起隧道以省电（默认 5 分钟）。Keep-alive 会为 QUIC 连接保活（默认 30 秒，仅 HTTP/3）。留空则使用默认值。"
+ },
+ "Ignore": {
+  "value": "不再提醒"
+ },
+ "Ignore the cached account and register a fresh one.": {
+  "value": "忽略已缓存的账号，重新注册一个。"
+ },
+ "Import": {
+  "value": "导入",
+  "special": {
+   "1": {
+    "value": "导入项"
+   }
+  }
+ },
+ "Import %d files into folder": {
+  "value": {
+   "other": "导入 %d 个文件到文件夹"
+  }
+ },
+ "Import (%d)": {
+  "value": "导入（%d）"
+ },
+ "Import backup": {
+  "value": "导入备份"
+ },
+ "Import failed: %s": {
+  "value": "导入失败：%s"
+ },
+ "Import from clipboard": {
+  "value": "从剪贴板导入"
+ },
+ "Import from files…": {
+  "value": "从文件导入…"
+ },
+ "Import from file…": {
+  "value": "从文件导入…"
+ },
+ "Import rules": {
+  "value": "导入规则"
+ },
+ "Import rules changed this node. The JSON tab shows the result.": {
+  "value": "导入规则修改了此节点。结果见 JSON 标签页。"
+ },
+ "Import rules...": {
+  "value": "导入规则…"
+ },
+ "Imported %1$d rules and %2$d DNS entries": {
+  "value": "已导入 %1$d 条规则和 %2$d 条 DNS 记录"
+ },
+ "Imported %1$d rules and %2$d directions": {
+  "value": "已导入 %1$d 条规则和 %2$d 个方向"
+ },
+ "Imported %1$d rules and %2$d settings": {
+  "value": "已导入 %1$d 条规则和 %2$d 项设置"
+ },
+ "Imported %1$d rules, %2$d directions and %3$d settings": {
+  "value": "已导入 %1$d 条规则、%2$d 个方向和 %3$d 项设置"
+ },
+ "Imported %d DNS entries": {
+  "value": "已导入 %d 条 DNS 记录"
+ },
+ "Imported %d rule(s), %d items not applied": {
+  "value": "已导入 %d 条规则，%d 项未应用"
+ },
+ "Imported %d rules": {
+  "value": {
+   "other": "已导入 %d 条规则"
+  }
+ },
+ "Imported %d rules — tap ☁ to download rule-sets, then enable": {
+  "value": {
+   "other": "已导入 %d 条规则——点 ☁ 下载规则集后启用"
+  }
+ },
+ "Importing replaces the current rules.": {
+  "value": "导入会替换当前规则。"
+ },
+ "In Rules": {
+  "value": "已在规则中"
+ },
+ "In packet order: the first position is the hop closest to you, the last one is what the destination sees.": {
+  "value": "按数据包顺序：第一个位置是离你最近的一跳，最后一个才是目标端看到的。"
+ },
+ "In the next screen (system App info) look for:\n\n• Autostart / Startup manager — allow\n• Background activity / Allow in background — allow\n• Battery / Power usage → \"Don't optimize\" or \"No restrictions\"\n• Battery saver exceptions — add L×Box\n\nLocation of these toggles varies by OEM (Xiaomi/MIUI, Samsung/One UI, Oppo/ColorOS, Huawei, Google Pixel). Some are under Battery, others under App permissions.": {
+  "value": "在接下来的界面（系统「应用信息」）里找：\n\n• 自启动 / Startup manager —— 允许\n• 后台活动 / 允许后台运行 —— 允许\n• 电池 / 耗电管理 →「不优化」或「无限制」\n• 省电例外 —— 把 L×Box 加进去\n\n这些开关的位置因厂商而异（小米/MIUI、三星/One UI、OPPO/ColorOS、华为、Google Pixel）：有的在「电池」里，有的在「应用权限」里。"
+ },
+ "Include (regex)": {
+  "value": "包含（正则）"
+ },
+ "Include DNS": {
+  "value": "包含 DNS"
+ },
+ "Include auto (urltest)": {
+  "value": "包含 auto（urltest）"
+ },
+ "Include block": {
+  "value": "包含 block"
+ },
+ "Include detour servers in auto-proxy-out urltest": {
+  "value": "将 detour 服务器纳入 auto-proxy-out 的 urltest"
+ },
+ "Include direct-out": {
+  "value": "包含 direct-out"
+ },
+ "Includes the access token. Sensitive — leave OFF unless you know why.": {
+  "value": "会包含访问令牌。属敏感信息——除非你清楚原因，否则保持关闭。"
+ },
+ "Includes:": {
+  "value": "包含："
+ },
+ "Info": {
+  "value": "信息"
+ },
+ "Inline": {
+  "value": "内联"
+ },
+ "Input is empty": {
+  "value": "输入为空"
+ },
+ "Input is not a subscription URL, proxy link, or outbound JSON": {
+  "value": "输入内容不是订阅链接、代理链接或 outbound JSON"
+ },
+ "Insert emoji": {
+  "value": "插入表情"
+ },
+ "Inspect node": {
+  "value": "解析节点"
+ },
+ "Installed from %s": {
+  "value": "安装来源：%s"
+ },
+ "Installed from here": {
+  "value": "从此处安装"
+ },
+ "Interrupt connections on switch": {
+  "value": "切换时中断连接"
+ },
+ "Interval": {
+  "value": "间隔"
+ },
+ "Invalid JSON: %s": {
+  "value": "JSON 无效：%s"
+ },
+ "Invalid MASQUE config": {
+  "value": "MASQUE 配置无效"
+ },
+ "Invalid WARP config": {
+  "value": "WARP 配置无效"
+ },
+ "Invalid WARP config (obfuscated)": {
+  "value": "WARP 配置无效（混淆）"
+ },
+ "Invalid WireGuard config": {
+  "value": "WireGuard 配置无效"
+ },
+ "Invalid backup": {
+  "value": "备份无效"
+ },
+ "Invalid duration (e.g. 2m, 90s)": {
+  "value": "时长格式无效（例如 2m、90s）"
+ },
+ "Invalid pool JSON — check the structure.": {
+  "value": "池 JSON 无效——请检查结构。"
+ },
+ "Invalid port": {
+  "value": "端口无效"
+ },
+ "Invalid regular expression": {
+  "value": "正则表达式无效"
+ },
+ "Invalid subscription": {
+  "value": "订阅无效"
+ },
+ "Invert": {
+  "value": "反转"
+ },
+ "It will be rebuilt clean on the next connect.": {
+  "value": "下次连接时会重新干净构建。"
+ },
+ "JSON": {
+  "value": "JSON"
+ },
+ "JSON copied": {
+  "value": "JSON 已复制"
+ },
+ "JSON or JSON5 (// and /* */ comments)": {
+  "value": "JSON 或 JSON5（支持 // 与 /* */ 注释）"
+ },
+ "JSON outbound": {
+  "value": "JSON outbound"
+ },
+ "JSON, source and replacements": {
+  "value": "JSON、来源与替换"
+ },
+ "Junk traffic masquerades as a real protocol. Pick protocol/domain in Advanced.": {
+  "value": "垃圾流量会伪装成真实协议。协议/域名在「高级」里选择。"
+ },
+ "Just the outbound this node was built from": {
+  "value": "仅显示构成该节点的 outbound"
+ },
+ "Keep": {
+  "value": "保留"
+ },
+ "Keep %s": {
+  "value": "保留 %s"
+ },
+ "Keep VPN on exit": {
+  "value": "退出时保持 VPN"
+ },
+ "Keep servers": {
+  "value": "保留服务器"
+ },
+ "Keep the node list of switched-off subscriptions fresh, so it is not stale when you switch one back on. Their nodes stay out of the config either way.": {
+  "value": "让已关闭订阅的节点列表保持更新，避免重新开启时数据过期。无论如何，这些节点都不会进入配置。"
+ },
+ "Keep-alive (sec)": {
+  "value": "Keep-alive（秒）"
+ },
+ "Keeping all closed (tap for 30s window)": {
+  "value": "永久保留已关闭连接（点此改为 30 秒窗口）"
+ },
+ "Keeps the tunnel alive while idle so it doesn't rot to timeouts (default 25). 0 = off.": {
+  "value": "空闲时保持隧道存活，避免因超时而失效（默认 25）。0 = 关闭。"
+ },
+ "Language": {
+  "value": "语言"
+ },
+ "Larger values save battery": {
+  "value": "数值越大越省电"
+ },
+ "Last 100 events": {
+  "value": "最近 100 条事件"
+ },
+ "Last GC": {
+  "value": "上次 GC"
+ },
+ "Last attempt: %s": {
+  "value": "上次尝试：%s"
+ },
+ "Last check: %s": {
+  "value": "上次检查：%s"
+ },
+ "Last check: never": {
+  "value": "上次检查：从未"
+ },
+ "Last success: %s": {
+  "value": "上次成功：%s"
+ },
+ "Later": {
+  "value": "稍后"
+ },
+ "Lazy sleep": {
+  "value": "惰性休眠"
+ },
+ "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
+  "value": "IP 留空则使用注册时返回的服务器。HTTP/3 只在少数 Cloudflare 地址上可用，HTTP/2 在整个网段都可用。"
+ },
+ "Leave empty for the default SNI": {
+  "value": "留空则使用默认 SNI"
+ },
+ "Leave empty to substitute across the whole node": {
+  "value": "留空则在整段节点内容中替换"
+ },
+ "Lifecycle": {
+  "value": "生命周期"
+ },
+ "List %d": {
+  "value": "列表 %d"
+ },
+ "Live path in packet order. Tap a hop to open its source.": {
+  "value": "按数据包顺序显示的实时路径。点击某一跳可打开其来源。"
+ },
+ "Live retention window": {
+  "value": "实时日志保留时长"
+ },
+ "Load balance": {
+  "value": "负载均衡"
+ },
+ "Load from file": {
+  "value": "从文件载入"
+ },
+ "Loaded from file": {
+  "value": "已从文件载入"
+ },
+ "Loading apps...": {
+  "value": "正在加载应用…"
+ },
+ "Loading installed apps…": {
+  "value": "正在加载已安装应用…"
+ },
+ "Local file": {
+  "value": "本地文件"
+ },
+ "Local proxy": {
+  "value": "本地代理"
+ },
+ "Location (background)": {
+  "value": "位置信息（后台）"
+ },
+ "Lock config (debug)": {
+  "value": "锁定配置（调试）"
+ },
+ "Log": {
+  "value": "日志"
+ },
+ "Long-press the L×Box icon on your home screen → choose \"Toggle VPN\".": {
+  "value": "长按桌面上的 L×Box 图标 → 选择「Toggle VPN」。"
+ },
+ "L×Box %1$s available (you have v%2$s)": {
+  "value": "有 L×Box %1$s 可用（当前 v%2$s）"
+ },
+ "L×Box can ping github.com once a day to see whether a new version is out. Nothing installs by itself — you get a link to the release page.\n\nIf you installed from an app store, its client already handles updates and you can skip this.": {
+  "value": "L×Box 每天可访问一次 github.com，检查是否发布了新版本。不会自动安装——只给你一个发布页链接。\n\n如果你是从应用商店安装的，商店客户端本身就会处理更新，可以跳过此项。"
+ },
+ "L×Box runs as a foreground service while VPN is active. A persistent notification is required by Android — it lets you see at a glance that VPN is on, and prevents the system from killing the tunnel in the background.\n\nNo promotional or alert notifications will be sent.": {
+  "value": "VPN 开启期间 L×Box 以前台服务运行。Android 要求显示常驻通知——它能让你一眼看到 VPN 已开启，也能避免系统在后台杀掉隧道。\n\n不会发送任何推广或提示通知。"
+ },
+ "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.": {
+  "value": "MASQUE 的 HTTP 版本「%s」不是 h3、h2 或 auto——已改用 h3。"
+ },
+ "MASQUE registration failed": {
+  "value": "MASQUE 注册失败"
+ },
+ "MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — standard HTTPS transport, and the exit IP is often in another country.": {
+  "value": "MASQUE 把 IP 流量经 HTTP/3（QUIC）隧道送往 Cloudflare——属于标准 HTTPS 传输，出口 IP 往往在别的国家。"
+ },
+ "Make experiment": {
+  "value": "做实验"
+ },
+ "Managed by presets automatically": {
+  "value": "由预设自动管理"
+ },
+ "Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local": {
+  "value": "匹配 RFC1918（10/8、172.16/12、192.168/16）+ 回环 + 链路本地"
+ },
+ "Match when the packet SOURCE is a private address": {
+  "value": "当数据包来源为私有地址时匹配"
+ },
+ "Matches": {
+  "value": "匹配项"
+ },
+ "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
+  "value": "当流量位于所选网络且匹配所选 L7 协议时命中。"
+ },
+ "Measuring…": {
+  "value": "正在测量…"
+ },
+ "Members": {
+  "value": "成员"
+ },
+ "Members connect through their personal detours": {
+  "value": "成员通过各自单独的 detour 连接"
+ },
+ "Members with their own detour keep it; this outbound is set only where none is defined": {
+  "value": "有自己 detour 的成员保持不变；此出站只在未定义 detour 处设置"
+ },
+ "Memory": {
+  "value": "内存"
+ },
+ "Memory limit": {
+  "value": "内存上限"
+ },
+ "Memory snapshots taken by the core when it approached its memory limit.": {
+  "value": "内核接近内存上限时抓取的快照。"
+ },
+ "Merge with existing (recommended)": {
+  "value": "与现有内容合并（推荐）"
+ },
+ "Metadata is missing or unreadable.": {
+  "value": "元数据缺失或无法读取。"
+ },
+ "Mode": {
+  "value": "模式"
+ },
+ "Mode:": {
+  "value": "模式："
+ },
+ "Modified by import rules": {
+  "value": "已被导入规则修改"
+ },
+ "More": {
+  "value": "更多"
+ },
+ "More loops may remain — fix these and try again.": {
+  "value": "可能还有其它回环——修好这些后重试。"
+ },
+ "Move out of folder": {
+  "value": "移出文件夹"
+ },
+ "Move subscriptions, servers, rules and settings between this app and the desktop launcher. Anything the other side has no place for is dropped, and the app tells you exactly what did not make it.": {
+  "value": "在本应用与桌面启动器之间迁移订阅、服务器、规则与设置。对方没有对应位置的项会被丢弃，应用会明确告诉你哪些没能迁移过来。"
+ },
+ "Move to folder": {
+  "value": "移动到文件夹"
+ },
+ "Move to folder…": {
+  "value": "移动到文件夹…"
+ },
+ "Moved out of folder": {
+  "value": "已移出文件夹"
+ },
+ "My DNS": {
+  "value": "我的 DNS"
+ },
+ "NETWORK & PROTOCOL": {
+  "value": "网络与协议"
+ },
+ "Name": {
+  "value": "名称"
+ },
+ "Name in use — renamed to \"%s\"": {
+  "value": "名称已被占用——已重命名为「%s」"
+ },
+ "Name is required": {
+  "value": "必须填写名称"
+ },
+ "Names are not resolving while the connection is alive — the DNS path looks blocked. In DNS settings you can:\n  • route your DNS servers through the VPN — set their outbound to a direction so queries go inside the tunnel;\n  • switch the final resolver to your operator's DNS — works everywhere, but your operator sees every domain.\nFakeIP resolves names inside the tunnel with placeholder IPs — no pre-tunnel DNS leaks.": {
+  "value": "连接正常但域名无法解析——DNS 通路疑似被阻断。在 DNS 设置里可以：\n  • 让 DNS 服务器走 VPN —— 把它们的出站设为某个方向，使查询在隧道内进行；\n  • 把最终解析器切换为运营商 DNS —— 哪里都能用，但运营商会看到你访问的每个域名。\nFakeIP 在隧道内用占位 IP 解析域名——不会在进入隧道前泄漏 DNS。"
+ },
+ "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
+  "value": "此 libbox 构建未包含 NaïveProxy（需用 -tags with_naive_outbound 重新编译）。"
+ },
+ "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.": {
+  "value": "NaïveProxy 参数「padding=%s」在内核中无对应项，已忽略。节点仍可正常使用。"
+ },
+ "Nearby Wi-Fi devices": {
+  "value": "附近的 Wi-Fi 设备"
+ },
+ "Needs Location + Nearby Wi-Fi permissions. Tap to manage.": {
+  "value": "需要「位置信息」和「附近的 Wi-Fi 设备」权限。点击去设置。"
+ },
+ "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
+  "value": "停留 ≥ 5 分钟的网络会出现在路由规则编辑器的「Pick saved」中。"
+ },
+ "Never": {
+  "value": "从不"
+ },
+ "Never (respect server)": {
+  "value": "从不（按服务器设置）"
+ },
+ "Never (respect server) — manual only unless server sets one": {
+  "value": "从不（按服务器设置）——除非服务器指定，否则只手动"
+ },
+ "Never sleep (recommended)": {
+  "value": "从不休眠（推荐）"
+ },
+ "Never updated": {
+  "value": "从未更新"
+ },
+ "New auto node": {
+  "value": "新建自动节点"
+ },
+ "New direction": {
+  "value": "新建方向"
+ },
+ "New folder": {
+  "value": "新建文件夹"
+ },
+ "New folder…": {
+  "value": "新建文件夹…"
+ },
+ "New hop chain": {
+  "value": "新建跳转链路"
+ },
+ "New nodes apply at once; the connection drops for a few seconds": {
+  "value": "新节点立即生效；连接会中断几秒"
+ },
+ "New nodes go into the config; apply the change yourself": {
+  "value": "新节点会写入配置；需你手动应用更改"
+ },
+ "New value": {
+  "value": "新值"
+ },
+ "Next GC at": {
+  "value": "下次 GC 时间"
+ },
+ "No DNS rules. Add user rules manually, or enable presets / template defaults.": {
+  "value": "没有 DNS 规则。可手动添加自定义规则，或启用预设/模板默认规则。"
+ },
+ "No OOM reports": {
+  "value": "没有 OOM 报告"
+ },
+ "No Wi-Fi conditions — rule is active on every network.": {
+  "value": "没有 Wi-Fi 条件——规则在所有网络都生效。"
+ },
+ "No WireGuard/AmneziaWG config in vpn:// link": {
+  "value": "vpn:// 链接里没有 WireGuard/AmneziaWG 配置"
+ },
+ "No active connections": {
+  "value": "没有活动连接"
+ },
+ "No active connections to close": {
+  "value": "没有可关闭的活动连接"
+ },
+ "No apps match": {
+  "value": "没有匹配的应用"
+ },
+ "No apps seen yet — traffic will populate this list.": {
+  "value": "暂无应用——有流量后列表会自动填充。"
+ },
+ "No apps yet. Tap \"Add app\" to pick.": {
+  "value": "列表为空。点「添加应用」选择。"
+ },
+ "No cached source data": {
+  "value": "没有缓存的来源数据"
+ },
+ "No configurable variables": {
+  "value": "没有可配置的变量"
+ },
+ "No connection to %s — check network or URL": {
+  "value": "无法连接 %s——请检查网络或链接"
+ },
+ "No connection — check network or URL": {
+  "value": "无法连接——请检查网络或链接"
+ },
+ "No connections.": {
+  "value": "没有连接。"
+ },
+ "No crash reports": {
+  "value": "没有崩溃报告"
+ },
+ "No data — tap refresh above": {
+  "value": "没有数据——请点击上方刷新"
+ },
+ "No detour for this node": {
+  "value": "此节点没有 detour"
+ },
+ "No events yet": {
+  "value": "暂无事件"
+ },
+ "No file chosen": {
+  "value": "未选择文件"
+ },
+ "No file manager on this device. Paste from the clipboard or add by URL instead.": {
+  "value": "本机没有文件管理器。请改为从剪贴板粘贴或按链接添加。"
+ },
+ "No matches for \"%s\"": {
+  "value": "「%s」没有匹配项"
+ },
+ "No nodes found": {
+  "value": "未找到节点"
+ },
+ "No nodes in this direction.\nTry another one.": {
+  "value": "该方向下没有节点。\n换一个试试。"
+ },
+ "No nodes loaded yet. Apply rules to load them.": {
+  "value": "还没加载节点。点「应用规则」加载。"
+ },
+ "No nodes match. Check the path against a node's JSON.": {
+  "value": "没有匹配的节点。请对照节点 JSON 检查路径。"
+ },
+ "No other DNS servers to add — create them first": {
+  "value": "没有其它可添加的 DNS 服务器——请先创建"
+ },
+ "No other servers in this folder": {
+  "value": "此文件夹中没有其它服务器"
+ },
+ "No outbounds seen yet — traffic will populate this list.": {
+  "value": "暂无出站——有流量后列表会自动填充。"
+ },
+ "No positions yet — add at least two.": {
+  "value": "还没有位置——请至少添加两个。"
+ },
+ "No provider yet?": {
+  "value": "还没有服务商？"
+ },
+ "No rule data": {
+  "value": "没有规则数据"
+ },
+ "No rules seen yet — traffic will populate this list.": {
+  "value": "暂无规则——有流量后列表会自动填充。"
+ },
+ "No rules to export — presets stay with the app. You can still bundle DNS on the next step.": {
+  "value": "没有可导出的规则——预设保留在应用内。下一步仍可打包 DNS。"
+ },
+ "No rules yet. Add one to fix broken params or hide nodes.": {
+  "value": "还没有规则。可添加规则来修正错误参数或隐藏节点。"
+ },
+ "No servers found at this URL": {
+  "value": "此链接下未找到服务器"
+ },
+ "No servers found in input": {
+  "value": "输入内容中未找到服务器"
+ },
+ "No servers found in selected files": {
+  "value": "所选文件中未找到服务器"
+ },
+ "No source URI for this node": {
+  "value": "此节点没有来源 URI"
+ },
+ "No source provided": {
+  "value": "未提供来源"
+ },
+ "No standalone servers available": {
+  "value": "没有可用的独立服务器"
+ },
+ "No tested servers slower than %d ms": {
+  "value": "没有测得慢于 %d ms 的服务器"
+ },
+ "No unreachable or broken servers in last test": {
+  "value": "上次测试中没有不可达或损坏的服务器"
+ },
+ "No updates pending": {
+  "value": "没有待更新项"
+ },
+ "No valid outbounds in JSON": {
+  "value": "JSON 中没有有效的 outbound"
+ },
+ "Node Settings": {
+  "value": "节点设置"
+ },
+ "Node filter (regex)": {
+  "value": "节点筛选（正则）"
+ },
+ "Node info copied": {
+  "value": "节点信息已复制"
+ },
+ "Node — direct detour": {
+  "value": "节点 —— 直连 detour"
+ },
+ "Node — via \"%1$s\"": {
+  "value": "节点 —— 经「%1$s」"
+ },
+ "Nodes": {
+  "value": "节点"
+ },
+ "Nodes connect directly, detour skipped": {
+  "value": "节点直连，跳过 detour"
+ },
+ "Nodes connect through detour servers": {
+  "value": "节点经 detour 服务器连接"
+ },
+ "Nodes update in the list only; the config waits for the next rebuild": {
+  "value": "节点只在列表中更新；配置要等下次重建"
+ },
+ "Nodes with their own detour keep it; this outbound is set only where none is defined": {
+  "value": "有自己 detour 的节点保持不变；此出站只在未定义 detour 处设置"
+ },
+ "Non-matching hidden": {
+  "value": "不匹配项已隐藏"
+ },
+ "None (direct)": {
+  "value": "无（直连）"
+ },
+ "None — nodes connect directly": {
+  "value": "无 —— 节点直连"
+ },
+ "Not": {
+  "value": "非"
+ },
+ "Not a folder": {
+  "value": "不是文件夹"
+ },
+ "Not a subscription": {
+  "value": "不是订阅"
+ },
+ "Not applied as-is:": {
+  "value": "未按原样应用："
+ },
+ "Not available in this app version": {
+  "value": "此应用版本不支持"
+ },
+ "Not connected to Wi-Fi.": {
+  "value": "未连接 Wi-Fi。"
+ },
+ "Not found (404) — subscription URL may be removed": {
+  "value": "未找到（404）——订阅链接可能已被删除"
+ },
+ "Not found: %s": {
+  "value": "未找到：%s"
+ },
+ "Not imported: %s": {
+  "value": "未导入：%s"
+ },
+ "Not recording": {
+  "value": "未在记录"
+ },
+ "Nothing left to add: every available target is already in the chain.": {
+  "value": "没有可添加的了：所有可用目标都已在链路中。"
+ },
+ "Nothing saved yet. Use \"Add current\" / \"Manual\" or stay on a Wi-Fi network for 5 minutes.": {
+  "value": "还没有保存内容。可用「Add current」/「Manual」，或在某个 Wi-Fi 网络中停留 5 分钟。"
+ },
+ "Nothing to export — pick at least one category.": {
+  "value": "没有可导出的内容——请至少选择一个类别。"
+ },
+ "Nothing to show": {
+  "value": "没有可显示的内容"
+ },
+ "Notifications": {
+  "value": "通知"
+ },
+ "Number of nodes": {
+  "value": "节点数量"
+ },
+ "OEM-specific toggles to keep VPN alive in background.": {
+  "value": "厂商特有的开关，用于让 VPN 在后台保持运行。"
+ },
+ "OK": {
+  "value": "确定",
+  "special": {
+   "1": {
+    "value": "OK"
+   }
+  }
+ },
+ "OOM": {
+  "value": "OOM"
+ },
+ "OR": {
+  "value": "或"
+ },
+ "Obfuscation \"%s\" has no password, so it was dropped (the core requires one and would otherwise break the whole config). The node connects without obfuscation.": {
+  "value": "混淆「%s」没有密码，已丢弃（内核要求必须有密码，否则整份配置都会出错）。该节点将在无混淆的情况下连接。"
+ },
+ "Off": {
+  "value": "关闭"
+ },
+ "Off — UI actions rebuild config from settings as usual.": {
+  "value": "关闭 —— 界面操作照常按设置重建配置。"
+ },
+ "Off.": {
+  "value": "关闭。"
+ },
+ "Off. Pick saved is populated only by Add current / Manual.": {
+  "value": "关闭。「Pick saved」只由 Add current / Manual 填充。"
+ },
+ "On update": {
+  "value": "更新时"
+ },
+ "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
+  "value": "有一个节点的流量回环到自身链路。点击它打开来源，修改或删除其 detour，然后重新启动。"
+ },
+ "One-way": {
+  "value": "单向"
+ },
+ "One-way DPI tricks make no sense on a link that dials through the previous hop.": {
+  "value": "对经由上一跳拨号的链路，单向 DPI 绕过手段没有意义。"
+ },
+ "One-way traffic": {
+  "value": "单向流量"
+ },
+ "Online URL": {
+  "value": "在线链接"
+ },
+ "Only single servers can be moved": {
+  "value": "只能移动单个服务器"
+ },
+ "Open": {
+  "value": "打开"
+ },
+ "Open DNS settings": {
+  "value": "打开 DNS 设置"
+ },
+ "Open Settings": {
+  "value": "打开设置"
+ },
+ "Open in %s": {
+  "value": "在 %s 中打开"
+ },
+ "Open settings": {
+  "value": "打开设置"
+ },
+ "Optionally bundle DNS servers and DNS rules the recipient may be missing. Servers referenced by the selected rules are pre-checked.": {
+  "value": "可选：把接收方可能缺少的 DNS 服务器和 DNS 规则一起打包。被所选规则引用的服务器已预先勾选。"
+ },
+ "Orange up to, ms": {
+  "value": "橙色上限，ms"
+ },
+ "Other directions": {
+  "value": "其它方向"
+ },
+ "Outbound": {
+  "value": "出站"
+ },
+ "Outbound \"%1$s\" detour references missing outbound \"%2$s\".": {
+  "value": "出站「%1$s」的 detour 引用了不存在的出站「%2$s」。"
+ },
+ "Outbound (detour)": {
+  "value": "出站（detour）"
+ },
+ "Outbound JSON": {
+  "value": "出站 JSON"
+ },
+ "Outbound connections to servers": {
+  "value": "到服务器的出站连接"
+ },
+ "Outbound events (emit)": {
+  "value": "出站事件（emit）"
+ },
+ "Overridden": {
+  "value": "已覆盖"
+ },
+ "Override global fetch identity for this subscription.": {
+  "value": "为此订阅单独设置请求身份（覆盖全局设置）。"
+ },
+ "Overview": {
+  "value": "概览"
+ },
+ "PARAMETERS": {
+  "value": "参数"
+ },
+ "Packet encoding \"%s\" is not one the core knows (xudp, packetaddr), so it was dropped — keeping it would crash the core.": {
+  "value": "数据包编码「%s」不是内核支持的取值（xudp、packetaddr），已丢弃——保留会导致内核崩溃。"
+ },
+ "Parallel — race every query": {
+  "value": "并行 —— 每个查询都并发竞速"
+ },
+ "Params": {
+  "value": "参数"
+ },
+ "Partial: %1$d ok, %2$d failed for \"%3$s\"": {
+  "value": "部分成功：%1$d 成功，%2$d 失败（「%3$s」）"
+ },
+ "Passive health check": {
+  "value": "被动健康检查"
+ },
+ "Password (optional)": {
+  "value": "密码（可选）"
+ },
+ "Paste": {
+  "value": "粘贴"
+ },
+ "Paste JSON": {
+  "value": "粘贴 JSON"
+ },
+ "Paste URI": {
+  "value": "粘贴 URI"
+ },
+ "Paste a proxy URL": {
+  "value": "粘贴代理链接"
+ },
+ "Paste a sing-box outbound JSON": {
+  "value": "粘贴 sing-box 出站 JSON"
+ },
+ "Paste from clipboard": {
+  "value": "从剪贴板粘贴"
+ },
+ "Paste into the \"Send Intent\" of your automation app. Target: Broadcast Receiver.": {
+  "value": "粘贴到自动化应用的「Send Intent」中。目标类型：Broadcast Receiver。"
+ },
+ "Pasted from clipboard": {
+  "value": "已从剪贴板粘贴"
+ },
+ "Path": {
+  "value": "路径"
+ },
+ "Paths point into the node JSON: tag, server, tls.utls.fingerprint. Leave a path empty to search the whole node.": {
+  "value": "路径指向节点 JSON 内部：tag、server、tls.utls.fingerprint。路径留空则搜索整个节点。"
+ },
+ "Pause": {
+  "value": "暂停"
+ },
+ "Pause only in deep Doze (screen off for a long time + no motion). Balanced.": {
+  "value": "仅在深度 Doze 时暂停（长时间熄屏且设备静止）。均衡方案。"
+ },
+ "Pause tunnel whenever screen turns off. Max battery savings, but pushes, incoming calls and background sync stop until unlock.": {
+  "value": "每次熄屏都暂停隧道。最省电，但熄屏期间推送、来电和后台同步都会停止，直到解锁。"
+ },
+ "Pay": {
+  "value": "支付"
+ },
+ "Per-key overrides": {
+  "value": "逐项覆盖"
+ },
+ "Phone → %1$s → %2$s → Internet": {
+  "value": "手机 → %1$s → %2$s → 互联网"
+ },
+ "Phone → %s → Nodes → Internet": {
+  "value": "手机 → %s → 节点 → 互联网"
+ },
+ "Pick": {
+  "value": "选择"
+ },
+ "Pick a folder on this device": {
+  "value": "选择本机上的文件夹"
+ },
+ "Pick another random IP:port": {
+  "value": "换一个随机 IP:port"
+ },
+ "Pick another random domain": {
+  "value": "换一个随机域名"
+ },
+ "Pick file...": {
+  "value": "选择文件…"
+ },
+ "Pin AUTO to top": {
+  "value": "将 AUTO 置顶"
+ },
+ "Pin DIRECT to top": {
+  "value": "将 DIRECT 置顶"
+ },
+ "Ping": {
+  "value": "测速"
+ },
+ "Ping Settings": {
+  "value": "测速设置"
+ },
+ "Ping URL & timeout…": {
+  "value": "测速 URL 与超时…"
+ },
+ "Ping color thresholds": {
+  "value": "延迟配色阈值"
+ },
+ "Ping color thresholds…": {
+  "value": "延迟配色阈值…"
+ },
+ "Ping nodes of active group 5s after VPN starts (once per connect)": {
+  "value": "VPN 启动 5 秒后对当前分组的节点测速（每次连接一次）"
+ },
+ "Ping target": {
+  "value": "测速目标"
+ },
+ "Pings github.com once a day to check for new releases. \"View\" opens the release page in browser; install is manual.": {
+  "value": "每天访问一次 github.com 检查新版本。「查看」会在浏览器中打开发布页；安装需手动。"
+ },
+ "Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.": {
+  "value": "已固定。界面操作会跳过配置重建——在测试 PUT /config 覆盖时很有用。"
+ },
+ "Plain UDP · port 53 · fast, unencrypted": {
+  "value": "明文 UDP · 端口 53 · 快速，未加密"
+ },
+ "Point the camera at a QR code": {
+  "value": "将摄像头对准二维码"
+ },
+ "Pool": {
+  "value": "连接池"
+ },
+ "Pool is empty (not a load-balance group)": {
+  "value": "池为空（非负载均衡分组）"
+ },
+ "Pool size": {
+  "value": "池大小"
+ },
+ "Pool tolerance (ms)": {
+  "value": "池容差（ms）"
+ },
+ "Pool unavailable — tunnel not connected": {
+  "value": "连接池不可用——隧道未连接"
+ },
+ "Pool · %s": {
+  "value": "池 · %s"
+ },
+ "Port": {
+  "value": "端口"
+ },
+ "Port 1..65535": {
+  "value": "端口 1..65535"
+ },
+ "Position %s is MASQUE with fixed h3: QUIC through the previous hop may hang. Set vhttp: auto (or h2) on the node.": {
+  "value": "位置 %s 是固定 h3 的 MASQUE：经上一跳的 QUIC 可能卡住。请把该节点的 vhttp 设为 auto（或 h2）。"
+ },
+ "Position %s is WireGuard behind a TCP hop: the previous server must actually proxy UDP, otherwise the handshake goes nowhere.": {
+  "value": "位置 %s 是位于 TCP 跳之后的 WireGuard：上一跳服务器必须能真正转发 UDP，否则握手无处可去。"
+ },
+ "Position %s is used more than once — the core rejects a chain with repeats.": {
+  "value": "位置 %s 被重复使用——内核不接受含重复项的链路。"
+ },
+ "Position %s references this chain itself — the core rejects that.": {
+  "value": "位置 %s 引用了本链路自身——内核不接受。"
+ },
+ "Positions": {
+  "value": "位置"
+ },
+ "Positions %s are empty — remove them: the core rejects a chain with a blank position.": {
+  "value": "位置 %s 为空——请移除：内核不接受含空位置的链路。"
+ },
+ "Positions %s have their own detour — it does not apply inside a chain: a link always dials through the previous position. The path is exactly as shown.": {
+  "value": "位置 %s 自带 detour——它在链路内部不生效：每一环始终经上一位置拨号。路径就如所示。"
+ },
+ "Preferences, ping options, auto-update, wifi history": {
+  "value": "偏好设置、测速选项、自动更新、Wi-Fi 历史"
+ },
+ "Prefix": {
+  "value": "前缀"
+ },
+ "Prefix applied to every server tag in this folder (e.g. \"BL:\" → \"BL: Frankfurt\"). Lets a routing direction match the whole folder by regex.": {
+  "value": "前缀会加到本文件夹中每个服务器的标签前（例如「BL:」→「BL: Frankfurt」）。便于用一条正则让方向匹配整个文件夹。"
+ },
+ "Prefix applied to every tag from this subscription (e.g. \"BL:\" → \"BL: Frankfurt\"). Used to distinguish servers from different subscriptions and resolve name collisions.": {
+  "value": "前缀会加到本订阅每个标签前（例如「BL:」→「BL: Frankfurt」）。用于区分不同订阅的服务器并解决重名。"
+ },
+ "Preset": {
+  "value": "预设"
+ },
+ "Preset \"%s\" no longer exists in this version of the app. The rule will be skipped when the config is generated. Delete it or update to a newer version that still has this preset.": {
+  "value": "此版本应用中已不存在预设「%s」。生成配置时会跳过该规则。请删除它，或升级到仍有该预设的版本。"
+ },
+ "Preset \"%s\" not found": {
+  "value": "找不到预设「%s」"
+ },
+ "Preset not found": {
+  "value": "找不到预设"
+ },
+ "Preset not found — tap to fix": {
+  "value": "找不到预设——点击修复"
+ },
+ "Presets": {
+  "value": "预设"
+ },
+ "Presets are not transferable — this app has its own": {
+  "value": "预设无法迁移——本应用自带"
+ },
+ "Preview (route.rules)": {
+  "value": "预览（route.rules）"
+ },
+ "Private IP": {
+  "value": "私有 IP"
+ },
+ "Private source IP": {
+  "value": "私有源 IP"
+ },
+ "Probe again": {
+  "value": "重新测量"
+ },
+ "Probe by position": {
+  "value": "按位置测量"
+ },
+ "Process memory (RSS)": {
+  "value": "进程内存（RSS）"
+ },
+ "Profile was empty (timeout?).": {
+  "value": "性能文件为空（超时？）。"
+ },
+ "Profiler": {
+  "value": "性能分析"
+ },
+ "Profiling": {
+  "value": "性能分析中"
+ },
+ "Profiling for %ds…": {
+  "value": "性能分析：%d 秒…"
+ },
+ "Protocol": {
+  "value": "协议"
+ },
+ "Protocol \"%s\" is not supported.": {
+  "value": "不支持协议「%s」。"
+ },
+ "Protocol and server details": {
+  "value": "协议与服务器信息"
+ },
+ "Protocol filter": {
+  "value": "协议筛选"
+ },
+ "Proxy link, WireGuard config or outbound JSON": {
+  "value": "代理链接、WireGuard 配置或出站 JSON"
+ },
+ "Put unreachable WireGuard tunnels to sleep after they sit idle, freeing memory and saving battery. They wake instantly on use. Only affects tunnels not on the active route.": {
+  "value": "让不可达的 WireGuard 隧道在空闲后休眠，释放内存并省电。使用时立即唤醒。只影响不在当前路由上的隧道。"
+ },
+ "QUIC/STUN decoy carries no hostname — the domain below is cosmetic for this protocol.": {
+  "value": "QUIC/STUN 伪装不携带主机名——对该协议来说，下方的域名只是摆设。"
+ },
+ "Query timeout": {
+  "value": "查询超时"
+ },
+ "Quick Settings tile": {
+  "value": "快捷设置磁贴"
+ },
+ "Quick connect": {
+  "value": "快速连接"
+ },
+ "Quit": {
+  "value": "退出"
+ },
+ "Quit & reopen app": {
+  "value": "退出并重新打开应用"
+ },
+ "Quit & reopen app?": {
+  "value": "退出并重新打开应用？"
+ },
+ "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.": {
+  "value": "REALITY 短 ID「%s」不是合法的十六进制，已丢弃（保留会导致整份配置出错）。该节点将在没有短 ID 的情况下连接。"
+ },
+ "Range %1$d..%2$d": {
+  "value": "范围 %1$d..%2$d"
+ },
+ "Range 1024..65535": {
+  "value": "范围 1024..65535"
+ },
+ "Rate limited (429) — try again later": {
+  "value": "请求过于频繁（429）——请稍后重试"
+ },
+ "Raw JSON": {
+  "value": "原始 JSON"
+ },
+ "Raw response": {
+  "value": "原始响应"
+ },
+ "Re-enables matching nodes, clearing disable marks from rules and manual toggles. Later rules can still disable them.": {
+  "value": "重新启用匹配的节点，并清除规则和手动开关留下的禁用标记。后续规则仍可再次禁用它们。"
+ },
+ "Re-fetch live": {
+  "value": "重新联网获取"
+ },
+ "Re-register (force new account)": {
+  "value": "重新注册（强制新账号）"
+ },
+ "Re-sort on manual ping": {
+  "value": "手动测速后重新排序"
+ },
+ "Reachable from other devices on the network — auth required.": {
+  "value": "同网络下的其它设备可访问——需要认证。"
+ },
+ "Reachable only from this device.": {
+  "value": "仅本机可访问。"
+ },
+ "Ready-made rules you can copy into Rules, then edit freely.": {
+  "value": "现成规则，可复制到「规则」后自由修改。"
+ },
+ "Rebuild and reload core": {
+  "value": "重建并重载内核"
+ },
+ "Rebuild and reload core — brief connection drop": {
+  "value": "重建并重载内核——连接会短暂中断"
+ },
+ "Rebuild config": {
+  "value": "重建配置"
+ },
+ "Rebuild config only": {
+  "value": "仅重建配置"
+ },
+ "Rebuild config — apply manually": {
+  "value": "重建配置——手动应用"
+ },
+ "Recommended. Protects the local proxy port.": {
+  "value": "推荐。可保护本地代理端口。"
+ },
+ "Recorded at": {
+  "value": "记录时间"
+ },
+ "Recording system-wide events": {
+  "value": "正在记录系统级事件"
+ },
+ "Refresh": {
+  "value": "刷新"
+ },
+ "Refresh SRS": {
+  "value": "刷新 SRS"
+ },
+ "Refresh now": {
+  "value": "立即刷新"
+ },
+ "Refresh on app start, after VPN connects, and periodically. Manual ⟳ works regardless.": {
+  "value": "在应用启动、VPN 连接后以及定期刷新。手动 ⟳ 始终可用。"
+ },
+ "Refresh rule-sets": {
+  "value": "刷新规则集"
+ },
+ "Refreshing…": {
+  "value": "正在刷新…"
+ },
+ "Regenerate": {
+  "value": "重新生成"
+ },
+ "Register": {
+  "value": "注册"
+ },
+ "Register detour in auto group": {
+  "value": "在 auto 分组中注册 detour"
+ },
+ "Register detour servers": {
+  "value": "注册 detour 服务器"
+ },
+ "Registered by preset \"%s\". Parameters are edited in the preset rule (Routing → Rules).": {
+  "value": "由预设「%s」注册。参数在该预设规则中编辑（路由 → 规则）。"
+ },
+ "Registered: WARP": {
+  "value": "已注册：WARP"
+ },
+ "Registered: WARP+": {
+  "value": "已注册：WARP+"
+ },
+ "Registering…": {
+  "value": "正在注册…"
+ },
+ "Registers a free WireGuard tunnel on Cloudflare. The private key is generated on this device and never leaves it.": {
+  "value": "在 Cloudflare 注册免费 WireGuard 隧道。私钥在本机生成，绝不会离开设备。"
+ },
+ "Reject": {
+  "value": "拒绝"
+ },
+ "Released %s": {
+  "value": "发布于 %s"
+ },
+ "Reload": {
+  "value": "重新加载"
+ },
+ "Reload failed: %s": {
+  "value": "重新加载失败：%s"
+ },
+ "Remote (.srs)": {
+  "value": "远程（.srs）"
+ },
+ "Remove": {
+  "value": "移除"
+ },
+ "Remove \"%1$s\" (%2$s)? References to it fall back to vpn-1.": {
+  "value": "移除「%1$s」（%2$s）？对它的引用将回退到 vpn-1。"
+ },
+ "Remove \"%s\" from this folder?": {
+  "value": "从该文件夹移除「%s」？"
+ },
+ "Remove \"%s\" permanently?": {
+  "value": "永久移除「%s」？"
+ },
+ "Remove \"%s\"?": {
+  "value": "移除「%s」？"
+ },
+ "Remove \"%s\"? Other chains using it as a position will stop building until you fix them.": {
+  "value": "移除「%s」？其它把它作为位置的链路在你修好之前将无法构建。"
+ },
+ "Remove %d servers that failed the test (unreachable or broken)?": {
+  "value": {
+   "other": "要删除 %d 个测试失败的服务器（不可达或已损坏）吗？"
+  }
+ },
+ "Remove all %1$d apps from the list. Mode (%2$s) is kept.": {
+  "value": {
+   "other": "从列表移除全部 %1$d 个应用。模式（%2$s）保留。"
+  }
+ },
+ "Remove from history": {
+  "value": "从历史中移除"
+ },
+ "Remove position": {
+  "value": "移除位置"
+ },
+ "Rename": {
+  "value": "重命名"
+ },
+ "Rename folder": {
+  "value": "重命名文件夹"
+ },
+ "Rename…": {
+  "value": "重命名…"
+ },
+ "Renaming updates all references automatically": {
+  "value": "重命名会自动更新所有引用"
+ },
+ "Replace": {
+  "value": "替换"
+ },
+ "Replace all": {
+  "value": "全部替换"
+ },
+ "Replace all (destructive)": {
+  "value": "全部替换（不可撤销）"
+ },
+ "Replace all data?": {
+  "value": "替换全部数据？"
+ },
+ "Replace all → %s": {
+  "value": "全部替换 → %s"
+ },
+ "Replace the existing server with this one?": {
+  "value": "用这个服务器替换现有服务器？"
+ },
+ "Replacements": {
+  "value": "替换内容"
+ },
+ "Request is sent through this node": {
+  "value": "请求经此节点发出"
+ },
+ "Request rejected (%d)": {
+  "value": "请求被拒绝（%d）"
+ },
+ "Request timed out — server slow or unreachable": {
+  "value": "请求超时——服务器缓慢或不可达"
+ },
+ "Required field \"%s\" is missing.": {
+  "value": "缺少必填字段「%s」。"
+ },
+ "Required for LAN-exposed proxy (cannot be disabled).": {
+  "value": "局域网内暴露代理时必需（无法关闭）。"
+ },
+ "Required for Wi-Fi-based routing rules. Tap to grant.": {
+  "value": "基于 Wi-Fi 的路由规则需要此权限。点击授予。"
+ },
+ "Reserved from OS": {
+  "value": "已向系统预留"
+ },
+ "Reset": {
+  "value": "重置"
+ },
+ "Reset all": {
+  "value": "全部重置"
+ },
+ "Reset fail count & retry": {
+  "value": "重置失败计数并重试"
+ },
+ "Reset to default": {
+  "value": "恢复默认"
+ },
+ "Reset to default?": {
+  "value": "恢复默认？"
+ },
+ "Reset to global": {
+  "value": "恢复为全局设置"
+ },
+ "Resolve first": {
+  "value": "先解析"
+ },
+ "Resolve only": {
+  "value": "仅解析"
+ },
+ "Resolve options": {
+  "value": "解析选项"
+ },
+ "Resolve the domain before routing — force an address family (e.g. IPv4 only).": {
+  "value": "路由前先解析域名——可强制地址族（例如仅 IPv4）。"
+ },
+ "Resolve, then fall through to the next rule.": {
+  "value": "解析后继续交给下一条规则。"
+ },
+ "Resolves the server hostname itself": {
+  "value": "自行解析该服务器的主机名"
+ },
+ "Response": {
+  "value": "响应"
+ },
+ "Response headers": {
+  "value": "响应头"
+ },
+ "Response was longer and got cut off.": {
+  "value": "响应更长，已被截断。"
+ },
+ "Restart VPN to apply changes": {
+  "value": "重启 VPN 以应用更改"
+ },
+ "Restart now": {
+  "value": "立即重启"
+ },
+ "Restore failed: %s": {
+  "value": "恢复失败：%s"
+ },
+ "Restore from a backup JSON file. Preview shown before applying.": {
+  "value": "从备份 JSON 文件恢复。应用前会显示预览。"
+ },
+ "Restore from backup": {
+  "value": "从备份恢复"
+ },
+ "Restricted — Android may pause VPN in idle. Tap to grant.": {
+  "value": "受限——Android 可能在空闲时暂停 VPN。点击授予。"
+ },
+ "Resume": {
+  "value": "继续"
+ },
+ "Resumed — syncing tunnel…": {
+  "value": "已恢复——正在同步隧道…"
+ },
+ "Rewrite TTL": {
+  "value": "重写 TTL"
+ },
+ "Rewrite or disable nodes when the subscription is imported": {
+  "value": "导入订阅时改写或停用节点"
+ },
+ "Rotate to landscape when the device turns — handy on tablets. Follows the system auto-rotate setting.": {
+  "value": "设备转向时切换横屏——平板上很方便。跟随系统的自动旋转设置。"
+ },
+ "Route or block by app / domain / IP / port / protocol, or remote .srs rule-set.": {
+  "value": "按应用 / 域名 / IP / 端口 / 协议，或远程 .srs 规则集进行路由或拦截。"
+ },
+ "Route through another server first": {
+  "value": "先经另一台服务器转发"
+ },
+ "Route to outbound": {
+  "value": "路由到出站"
+ },
+ "Routing": {
+  "value": "路由"
+ },
+ "Routing and DNS are configured in the app.": {
+  "value": "路由与 DNS 在应用内配置。"
+ },
+ "Routing loop between groups: %s — fix group membership to start the VPN.": {
+  "value": "分组之间存在路由回环：%s —— 请修正分组组成后再启动 VPN。"
+ },
+ "Routing loop — VPN not started": {
+  "value": "路由回环——VPN 未启动"
+ },
+ "Routing loop: \"%1$s\" points back into \"%2$s\" — change or remove its detour to start the VPN.": {
+  "value": "路由回环：「%1$s」指回「%2$s」——请修改或删除其 detour 后再启动 VPN。"
+ },
+ "Routing loop: %1$d nodes point back into their own chain — change or remove their detours to start the VPN: %2$s.": {
+  "value": {
+   "other": "路由回环：%1$d 个节点的流量回环到自身链路——请修改或删除它们的 detour 后再启动 VPN：%2$s。"
+  }
+ },
+ "Rule": {
+  "value": "规则"
+ },
+ "Rule \"%1$s\" references missing outbound \"%2$s\".": {
+  "value": "规则「%1$s」引用了不存在的出站「%2$s」。"
+ },
+ "Rule body (JSON)": {
+  "value": "规则体（JSON）"
+ },
+ "Rules": {
+  "value": "规则"
+ },
+ "Rules changed. Refresh the subscription to apply them.": {
+  "value": "规则已更改。刷新订阅即可应用。"
+ },
+ "Rules exported": {
+  "value": "规则已导出"
+ },
+ "Rules menu": {
+  "value": "规则菜单"
+ },
+ "Rules run when the subscription body is loaded. Tap Apply rules to reload it now.": {
+  "value": "规则在订阅内容加载时执行。点「应用规则」可立即重新加载。"
+ },
+ "Rules: %d": {
+  "value": "规则：%d"
+ },
+ "Run": {
+  "value": "运行"
+ },
+ "Run URLTest": {
+  "value": "运行 URLTest"
+ },
+ "Running…": {
+  "value": "运行中…"
+ },
+ "Runtime HTTP server for adb-forwarded debugging.": {
+  "value": "用于 adb forward 调试的运行时 HTTP 服务器。"
+ },
+ "SOCKS5": {
+  "value": "SOCKS5"
+ },
+ "SRS URL is empty": {
+  "value": "SRS 链接为空"
+ },
+ "SRS: %s": {
+  "value": "SRS：%s"
+ },
+ "SSID": {
+  "value": "SSID"
+ },
+ "START": {
+  "value": "启动"
+ },
+ "STOP": {
+  "value": "停止"
+ },
+ "Save": {
+  "value": "保存"
+ },
+ "Save to Downloads": {
+  "value": "保存到「下载」"
+ },
+ "Save to file": {
+  "value": "保存到文件"
+ },
+ "Save your subscriptions, routing setup and preferences as a JSON file.": {
+  "value": "将订阅、路由设置与偏好保存为 JSON 文件。"
+ },
+ "Saved": {
+  "value": "已保存"
+ },
+ "Saved as %s (%d bytes)": {
+  "value": "已保存为 %s（%d 字节）"
+ },
+ "Saved direction \"%1$s\" — %2$s": {
+  "value": "已保存方向「%1$s」——%2$s"
+ },
+ "Saved direction \"%s\"": {
+  "value": "已保存方向「%s」"
+ },
+ "Saved networks": {
+  "value": "已保存的网络"
+ },
+ "Saved to Downloads: %s (%d bytes)": {
+  "value": "已保存到「下载」：%s（%d 字节）"
+ },
+ "Saved. Force-stop & reopen app to apply.": {
+  "value": "已保存。需强制停止并重新打开应用才会生效。"
+ },
+ "Scan QR code": {
+  "value": "扫描二维码"
+ },
+ "Search apps...": {
+  "value": "搜索应用…"
+ },
+ "Search by name or package": {
+  "value": "按名称或包名搜索"
+ },
+ "Search domain / IP / app": {
+  "value": "搜索域名 / IP / 应用"
+ },
+ "Select a %s file": {
+  "value": "选择 %s 文件"
+ },
+ "Select all": {
+  "value": "全选"
+ },
+ "Select apps": {
+  "value": "选择应用"
+ },
+ "Select direction": {
+  "value": "选择方向"
+ },
+ "Select server": {
+  "value": "显示选中的服务器"
+ },
+ "Selection mode": {
+  "value": "选择方式"
+ },
+ "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
+  "value": "选择器「%1$s」的默认值「%2$s」不在选项列表中。"
+ },
+ "Send DNS to dedicated server": {
+  "value": "把 DNS 发送到专用服务器"
+ },
+ "Send HWID": {
+  "value": "发送 HWID"
+ },
+ "Send matched traffic to a direction.": {
+  "value": "将匹配的流量送往某个方向。"
+ },
+ "Send to another app": {
+  "value": "发送到其它应用"
+ },
+ "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). Off by default.": {
+  "value": "每次获取订阅时发送 x-hwid 与设备请求头——用于按 HWID 限制设备的面板（Remnawave）。默认关闭。"
+ },
+ "Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).": {
+  "value": "会发送 Cloudflare 的 client_id。使用混淆时关闭（设备绑定容易被封）。"
+ },
+ "Server": {
+  "value": "服务器"
+ },
+ "Server %d": {
+  "value": "服务器 %d"
+ },
+ "Server address": {
+  "value": "服务器地址"
+ },
+ "Server address is required": {
+  "value": "必须填写服务器地址"
+ },
+ "Server error (%d) — provider is down, try later": {
+  "value": "服务器错误（%d）——服务商故障，请稍后再试"
+ },
+ "Server lists": {
+  "value": "服务器列表"
+ },
+ "Server not found": {
+  "value": "找不到服务器"
+ },
+ "Server type": {
+  "value": "服务器类型"
+ },
+ "Servers": {
+  "value": "服务器"
+ },
+ "Servers can't be tested while the VPN is on — the test needs its own core session, which can't run alongside the active tunnel. Stop the VPN to test the servers.": {
+  "value": "VPN 开启时无法测试服务器——测试需要独立的内核会话，不能与正在运行的隧道共存。请先停止 VPN 再测试。"
+ },
+ "Servers in the pool": {
+  "value": "池中的服务器"
+ },
+ "Servers in this folder have no detours yet. You can still route all of them through one of your servers, or set personal detours per server (tap a server on the Servers tab).": {
+  "value": "此文件夹中的服务器还没有 detour。你仍可以让它们全部经由某台服务器，或为每台服务器单独设置 detour（在「服务器」页点击服务器）。"
+ },
+ "Session History": {
+  "value": "会话历史"
+ },
+ "Set whole value": {
+  "value": "整体替换值"
+ },
+ "Set whole value needs a target path": {
+  "value": "「整体替换值」需要目标路径"
+ },
+ "Setting is saved immediately, but `Libbox.setup` reads the `debug` flag once per process. Stop/start VPN does NOT re-apply — force-stop the app (or use the button below) and reopen.": {
+  "value": "设置会立即保存，但 `Libbox.setup` 每个进程只读取一次 `debug` 标志。停止/启动 VPN 不会重新应用——请强制停止应用（或使用下方按钮）后重新打开。"
+ },
+ "Settings": {
+  "value": "设置"
+ },
+ "Settings changed — tap to rebuild config": {
+  "value": "设置已更改——点击重建配置"
+ },
+ "Several servers behind one tag — survives a member failure": {
+  "value": "一个标签下多台服务器——某台故障也不中断"
+ },
+ "Share": {
+  "value": "分享"
+ },
+ "Share %d events (JSON)": {
+  "value": {
+   "other": "分享 %d 条事件（JSON）"
+  }
+ },
+ "Share URL…": {
+  "value": "分享链接…"
+ },
+ "Share dump (config + vars + subs + log)": {
+  "value": "分享转储（配置 + 变量 + 订阅 + 日志）"
+ },
+ "Share failed: %s": {
+  "value": "分享失败：%s"
+ },
+ "Share the OOM report": {
+  "value": "分享 OOM 报告"
+ },
+ "Share the crash report": {
+  "value": "分享崩溃报告"
+ },
+ "Shared with the home screen ping": {
+  "value": "与首页测速共用"
+ },
+ "Show": {
+  "value": "显示"
+ },
+ "Show NON-matching": {
+  "value": "显示不匹配项"
+ },
+ "Show NON-selected": {
+  "value": "显示未选项"
+ },
+ "Show all (%d)": {
+  "value": "显示全部（%d）"
+ },
+ "Show filters": {
+  "value": "显示筛选"
+ },
+ "Show loop": {
+  "value": "显示回环"
+ },
+ "Show only detour servers": {
+  "value": "仅显示 detour 服务器"
+ },
+ "Show system apps": {
+  "value": "显示系统应用",
+  "special": {
+   "1": {
+    "value": "始终显示系统应用"
+   }
+  }
+ },
+ "Show the decoded body — what import rules see": {
+  "value": "显示解码后的内容——即导入规则看到的内容"
+ },
+ "Shown as the server title in the Servers list. If empty, \"%s\" is used.": {
+  "value": "作为「服务器」列表中服务器的标题显示。留空则使用「%s」。"
+ },
+ "Single object or array of outbounds. WireGuard routes to endpoints[] automatically.": {
+  "value": "单个对象或出站数组。WireGuard 会自动路由到 endpoints[]。"
+ },
+ "Skip": {
+  "value": "跳过"
+ },
+ "Skip periodic server probes while your own traffic already proves the connection works. Fewer wakeups and less battery; ping numbers refresh less often.": {
+  "value": "当你的实际流量已证明连接可用时，跳过周期性服务器探测。唤醒更少、更省电；延迟数值刷新频率更低。"
+ },
+ "Slower than, ms": {
+  "value": "慢于此值，ms"
+ },
+ "Some panels return the config by a substring in the User-Agent — a custom UA without the \"LxBox\" token may yield an unsupported format and break the update. Change only if you know why.": {
+  "value": "部分面板依据 User-Agent 中的子串决定返回的配置格式——自定义 UA 若缺少「LxBox」标识，可能返回不支持的格式并导致更新失败。除非你清楚原因，否则不要修改。"
+ },
+ "Something went wrong in this section.\nCheck Debug → Logs.": {
+  "value": "此部分出错了。\n请查看 调试 → 日志。"
+ },
+ "Sort by ping": {
+  "value": "按延迟排序"
+ },
+ "Sort options": {
+  "value": "排序选项"
+ },
+ "Source": {
+  "value": "来源"
+ },
+ "Source Code": {
+  "value": "源代码"
+ },
+ "Source copied": {
+  "value": "来源已复制"
+ },
+ "Source not found in your lists": {
+  "value": "在你的列表中找不到该来源"
+ },
+ "Source: local file": {
+  "value": "来源：本地文件"
+ },
+ "Speed Test": {
+  "value": "测速"
+ },
+ "Stable — stick to one until it fails": {
+  "value": "稳定 —— 固定用一个，直到它失效"
+ },
+ "Stack in use": {
+  "value": "使用中的栈"
+ },
+ "Standalone servers": {
+  "value": "独立服务器"
+ },
+ "Start": {
+  "value": "启动"
+ },
+ "Start / Stop / Toggle / Switch / Refresh / … (default OFF)": {
+  "value": "Start / Stop / Toggle / Switch / Refresh / …（默认关闭）"
+ },
+ "Start Test": {
+  "value": "开始测试"
+ },
+ "Start VPN when device turns on": {
+  "value": "设备开机时启动 VPN"
+ },
+ "Start the VPN to check this node from here, or open it from its subscription to check it with the VPN off.": {
+  "value": "启动 VPN 后可在此检查该节点；或从它的订阅中打开，这样在 VPN 关闭时也能检查。"
+ },
+ "Start the VPN to probe this chain — its hops exist only in the running core.": {
+  "value": "启动 VPN 才能测量该链路——它的各跳只存在于运行中的内核里。"
+ },
+ "State": {
+  "value": "状态"
+ },
+ "Statistics": {
+  "value": "统计"
+ },
+ "Stats": {
+  "value": "概览"
+ },
+ "Stay": {
+  "value": "保留"
+ },
+ "Sticky session by": {
+  "value": "会话保持依据"
+ },
+ "Stop": {
+  "value": "停止"
+ },
+ "Stop VPN": {
+  "value": "停止 VPN"
+ },
+ "Stop VPN?": {
+  "value": "停止 VPN？"
+ },
+ "Stop timed out": {
+  "value": "停止超时"
+ },
+ "Stop timed out — reconnect aborted": {
+  "value": "停止超时——已取消重连"
+ },
+ "Stopped: %s": {
+  "value": "已停止：%s"
+ },
+ "Stopping…": {
+  "value": "正在停止…"
+ },
+ "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
+  "value": "仅保存在本机。关闭后已有记录仍会保留——可在「Pick saved」中逐个移除（长按标签 → Remove）。"
+ },
+ "Straight to the Downloads folder": {
+  "value": "直接存入「下载」文件夹"
+ },
+ "Strategy": {
+  "value": "策略"
+ },
+ "Streams": {
+  "value": "流"
+ },
+ "Strict tunnel — all traffic goes through tun.": {
+  "value": "严格隧道——所有流量都经 tun。"
+ },
+ "Strip evasion tricks from links": {
+  "value": "去除链接中的规避手段"
+ },
+ "Subscription": {
+  "value": "订阅",
+  "special": {
+   "1": {
+    "value": "订阅"
+   }
+  }
+ },
+ "Subscription URL": {
+  "value": "订阅链接"
+ },
+ "Subscription URL or proxy link": {
+  "value": "订阅链接或代理链接"
+ },
+ "Subscription settings…": {
+  "value": "订阅设置…"
+ },
+ "Subscriptions": {
+  "value": "订阅"
+ },
+ "Subscriptions & proxy": {
+  "value": "订阅与代理"
+ },
+ "Subscriptions and custom servers": {
+  "value": "订阅与自定义服务器"
+ },
+ "Subscriptions: %d": {
+  "value": "订阅：%d"
+ },
+ "Substitute part": {
+  "value": "替换部分"
+ },
+ "Support": {
+  "value": "支持"
+ },
+ "Support L×Box": {
+  "value": "支持 L×Box"
+ },
+ "Support the project": {
+  "value": "支持本项目"
+ },
+ "Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs": {
+  "value": "支持：vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard 链接"
+ },
+ "Suspend active-route tunnels": {
+  "value": "挂起当前路由上的隧道"
+ },
+ "Suspend idle tunnels": {
+  "value": "挂起空闲隧道"
+ },
+ "Switch": {
+  "value": "切换"
+ },
+ "Switch failed: %s": {
+  "value": "切换失败：%s"
+ },
+ "Switch to cloudflare_udp": {
+  "value": "切换到 cloudflare_udp"
+ },
+ "Switch tolerance (ms)": {
+  "value": "切换阈值（ms）"
+ },
+ "Switchable detour direction": {
+  "value": "可切换的 detour 方向"
+ },
+ "System": {
+  "value": "系统"
+ },
+ "System DNS leaks lookups to your ISP": {
+  "value": "系统 DNS 会把查询暴露给运营商"
+ },
+ "System default": {
+  "value": "跟随系统"
+ },
+ "System id, cannot be changed later": {
+  "value": "系统 id，之后无法修改"
+ },
+ "System setup": {
+  "value": "系统设置"
+ },
+ "System-wide events (no owner detected) — %d": {
+  "value": "系统级事件（未识别归属）——%d"
+ },
+ "TLS certificate verification is disabled.": {
+  "value": "TLS 证书校验已关闭。"
+ },
+ "TLS server name (SNI) — optional": {
+  "value": "TLS 服务器名（SNI）——可选"
+ },
+ "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.": {
+  "value": "TUIC 拥塞控制「%s」不属于 cubic、new_reno、bbr 之一——该设置已丢弃，改用内核默认值。"
+ },
+ "Tag": {
+  "value": "标签"
+ },
+ "Tag \"%s\" exists": {
+  "value": "标签「%s」已存在"
+ },
+ "Tag \"%s\" is already in use": {
+  "value": "标签「%s」已被占用"
+ },
+ "Tag (optional)": {
+  "value": "标签（可选）"
+ },
+ "Tag cannot be empty": {
+  "value": "标签不能为空"
+ },
+ "Tag copied": {
+  "value": "标签已复制"
+ },
+ "Tag is required": {
+  "value": "必须填写标签"
+ },
+ "Tag prefix": {
+  "value": "标签前缀"
+ },
+ "Taken by another VPN": {
+  "value": "已被其它 VPN 占用"
+ },
+ "Tap START to begin capture. Recording continues when you leave this tab.": {
+  "value": "点 START 开始抓取。离开本页后录制仍会继续。"
+ },
+ "Tap Start to begin": {
+  "value": "点「开始测试」即可开始"
+ },
+ "Tap to add match fields": {
+  "value": "点击添加匹配字段"
+ },
+ "Tap to connect": {
+  "value": "点击连接"
+ },
+ "Tap to edit": {
+  "value": "点击编辑"
+ },
+ "Tap to edit or delete": {
+  "value": "点击编辑或删除"
+ },
+ "Target path": {
+  "value": "目标路径"
+ },
+ "Tech Stack": {
+  "value": "技术栈"
+ },
+ "Template": {
+  "value": "模板"
+ },
+ "Test URL": {
+  "value": "测试链接"
+ },
+ "Test actions": {
+  "value": "测试动作"
+ },
+ "Test download/upload speed": {
+  "value": "测试下载/上传速度"
+ },
+ "Test servers": {
+  "value": "测试服务器"
+ },
+ "Test servers list unavailable": {
+  "value": "测试服务器列表不可用"
+ },
+ "Test ≤": {
+  "value": "测试 ≤"
+ },
+ "Testing download...": {
+  "value": "正在测试下载…"
+ },
+ "Testing ping...": {
+  "value": "正在测试延迟…"
+ },
+ "Testing upload...": {
+  "value": "正在测试上传…"
+ },
+ "Testing...": {
+  "value": "正在测试…"
+ },
+ "Testing… %d done": {
+  "value": "正在测试…已完成 %d 个"
+ },
+ "The VPN will briefly reload to apply.": {
+  "value": "VPN 会短暂重载以应用。"
+ },
+ "The core crashed last session — tap to share the report": {
+  "value": "上次会话内核崩溃——点此分享报告"
+ },
+ "The core has not hit its memory limit. Snapshots appear here only when the OOM killer fires.": {
+  "value": "内核没有触及内存上限。只有 OOM killer 触发时这里才会出现快照。"
+ },
+ "The core has not panicked. Note that this channel only covers Go panics — native crashes and kills by the system are not recorded here.": {
+  "value": "内核没有发生 panic。注意这里只记录 Go panic——原生崩溃和被系统杀掉不会记在这里。"
+ },
+ "The first position (%s) dials through its own detour — the real path is longer than shown: one more hop precedes it that is not in this list.": {
+  "value": "第一个位置（%s）经自己的 detour 拨号——实际路径比显示的更长：它前面还有一跳，未列入此表。"
+ },
+ "The name \"%s\" is already taken by another node, direction or chain — two outbounds with one tag cannot coexist.": {
+  "value": "名称「%s」已被其它节点、方向或链路占用——同一标签下不能有两个出站共存。"
+ },
+ "The servers it selects from stay in the folder.": {
+  "value": "它挑选的服务器仍留在文件夹里。"
+ },
+ "The whole element as the provider sent it": {
+  "value": "服务商下发的完整原始元素"
+ },
+ "Theme, appearance": {
+  "value": "主题、外观"
+ },
+ "These depend on dead node \"%1$s\" and are not working:": {
+  "value": "以下项依赖已失效的节点「%1$s」，当前不可用："
+ },
+ "These headers identify your device to the panel. Defaults come from the device — override any of them (empty = device default).": {
+  "value": "这些请求头用于向面板标识你的设备。默认取设备值——可逐项覆盖（留空 = 使用设备默认值）。"
+ },
+ "These positions are no longer among the available targets: %s. A chain with such a reference will not reach the config.": {
+  "value": "这些位置已不在可用目标中：%s。含此类引用的链路不会进入配置。"
+ },
+ "These route through this node:": {
+  "value": "以下项经由本节点："
+ },
+ "This chain has no positions to probe.": {
+  "value": "该链路没有可测量的位置。"
+ },
+ "This deletes the DNS cache (FakeIP allocations and cached responses).\n\n%s": {
+  "value": "这将删除 DNS 缓存（FakeIP 分配与已缓存的响应）。\n\n%s"
+ },
+ "This folder (%d)": {
+  "value": "本文件夹（%d）"
+ },
+ "This frees %s. Memory profiles cannot be recovered afterwards.": {
+  "value": "将释放 %s。内存性能文件删除后无法恢复。"
+ },
+ "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).": {
+  "value": "这是系统级的分应用分流。它决定哪些应用能看到 VPN 隧道——被排除应用的流量会直接走移动网络或 Wi-Fi，不进入 sing-box。\n\n• 关闭 —— 所有应用都走 VPN（默认）\n• 白名单 —— 只有列表内的应用走 VPN，其它走直连\n• 黑名单 —— 列表内的应用绕过 VPN，其它走隧道\n\n注意：白名单里的应用仍会经过你正常的路由规则。绕过隧道的应用对 sing-box 完全不可见——带 package_name 的自定义规则匹配不到它们。\n\n修改需要完整重启 VPN 才能生效（Android 只在启动时创建 tun 接口）。"
+ },
+ "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
+  "value": "这是一个自动选择节点——它没有自己的连接。请打开其中的成员节点来诊断。"
+ },
+ "This rule changes DNS settings — it adds a DNS server and/or a DNS rule. See DNS Settings.": {
+  "value": "此规则会修改 DNS 设置——它会添加 DNS 服务器和/或 DNS 规则。详见「DNS 设置」。"
+ },
+ "This subscription has no detour servers of its own. You can still route all its nodes through one of your servers.": {
+  "value": "该订阅没有自己的 detour 服务器。你仍可以让它的所有节点经由你的某台服务器。"
+ },
+ "This tag collides with an auto twin (<tag>-auto)": {
+  "value": "该标签与 auto 副本（<tag>-auto）冲突"
+ },
+ "This tag is already taken by another chain or direction": {
+  "value": "该标签已被其它链路或方向占用"
+ },
+ "This tag is reserved by the config": {
+  "value": "该标签是配置保留标签"
+ },
+ "This will fully close the app process so the new \"Forward sing-box logs\" value is picked up at next launch (Libbox.setup is one-shot per process). VPN service will stop. Tap the app icon to reopen.": {
+  "value": "这将完全结束应用进程，以便下次启动时采用新的「转发 sing-box 日志」设置（Libbox.setup 每个进程只执行一次）。VPN 服务会停止。点击应用图标重新打开。"
+ },
+ "This will overwrite your current data in the selected categories. This cannot be undone.": {
+  "value": "这将覆盖你在所选类别中的现有数据。此操作无法撤销。"
+ },
+ "This would create a detour loop inside the folder": {
+  "value": "这会在文件夹内造成 detour 回环"
+ },
+ "Through this node in a temporary core session": {
+  "value": "在临时内核会话中经此节点"
+ },
+ "Through this node in the running core — not through your current route": {
+  "value": "在运行中的内核里经此节点——而非你当前的路由"
+ },
+ "Timed out after %ds — server slow or unreachable": {
+  "value": "%ds 后超时——服务器缓慢或不可达"
+ },
+ "Timeout (ms)": {
+  "value": "超时（ms）"
+ },
+ "Timeout, ms": {
+  "value": "超时，ms"
+ },
+ "Tip: pull down to refresh, or tap ⟳ in the top bar after adding.": {
+  "value": "提示：下拉可刷新，或添加后点顶部的 ⟳。"
+ },
+ "Title": {
+  "value": "标题"
+ },
+ "To keep the VPN running in background, also disable battery restrictions for L×Box. The settings screen will open — find and toggle:\n\n• \"Battery usage\" → \"Don't optimize\" or \"Allow background activity\"\n\n• On OnePlus / OPPO / Realme also:\n  \"Stop activity when idle\" → OFF": {
+  "value": "若要 VPN 在后台持续运行，还需为 L×Box 关闭电池限制。会打开设置界面——找到并切换：\n\n•「电池用量」→「不优化」或「允许后台活动」\n\n• 在 OnePlus / OPPO / Realme 上还要：\n  「空闲时停止活动」→ 关闭"
+ },
+ "Token": {
+  "value": "令牌"
+ },
+ "Token copied": {
+  "value": "令牌已复制"
+ },
+ "Token is shown only here. It is NOT written to any file — use Copy to save. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`.": {
+  "value": "令牌只在此处显示，不会写入任何文件——请用「复制」保存。服务只监听 127.0.0.1；请使用 `adb forward tcp:9269 tcp:9269`。"
+ },
+ "Tolerance (ms)": {
+  "value": "容差（ms）"
+ },
+ "Traffic by Rule": {
+  "value": "按规则统计流量"
+ },
+ "Traffic by outbound": {
+  "value": "按出站统计流量"
+ },
+ "Traffic goes directly to this server.": {
+  "value": "流量直接发往该服务器。"
+ },
+ "Transfer to desktop": {
+  "value": "迁移到桌面端"
+ },
+ "Transport \"%1$s\" is not supported by sing-box; using \"%2$s\" fallback (node may fail to connect).": {
+  "value": "sing-box 不支持传输「%1$s」；已改用「%2$s」回退（节点可能无法连接）。"
+ },
+ "Tries HTTP/3 first, falls back to HTTP/2 where QUIC/UDP is blocked — best for hop chains.": {
+  "value": "优先尝试 HTTP/3，QUIC/UDP 被封锁时回退 HTTP/2——最适合多跳链路。"
+ },
+ "Try a public test server — free, limited, good for first-time check:": {
+  "value": "试试公共测试服务器——免费、有额度限制，适合初次验证："
+ },
+ "Tunnel apps": {
+  "value": "隧道应用"
+ },
+ "Tunnel apps — OS-level split": {
+  "value": "隧道应用 —— 系统级分流"
+ },
+ "Tunnel is always active. Best reliability — pushes and long-lived sockets survive. Higher battery use.": {
+  "value": "隧道始终处于活动状态。最可靠——推送和长连接都能保持。耗电更高。"
+ },
+ "Tunnel options": {
+  "value": "隧道选项"
+ },
+ "Tunnel sleep mode": {
+  "value": "隧道休眠模式"
+ },
+ "URI copied": {
+  "value": "URI 已复制"
+ },
+ "URL": {
+  "value": "URL"
+ },
+ "URL copied": {
+  "value": "URL 已复制"
+ },
+ "URL-test group \"%s\" has no outbounds.": {
+  "value": "URL-test 分组「%s」没有出站。"
+ },
+ "Unattributed (no owner)": {
+  "value": "无归属（未识别应用）"
+ },
+ "Unavailable with port/protocol filters — they are unknown at DNS-query time.": {
+  "value": "使用端口/协议筛选时不可用——DNS 查询时这些信息还未知。"
+ },
+ "Unique id — referenced by DNS rules / resolvers": {
+  "value": "唯一标识——DNS 规则/解析器通过它引用"
+ },
+ "Unknown": {
+  "value": "未知"
+ },
+ "Unknown format": {
+  "value": "未知格式"
+ },
+ "Unknown obfuscation type \"%s\" was dropped (the core supports salamander and gecko only, and would otherwise break the whole config). The node connects without obfuscation.": {
+  "value": "未知的混淆类型「%s」已丢弃（内核只支持 salamander 和 gecko，否则整份配置都会出错）。该节点将在无混淆的情况下连接。"
+ },
+ "Unknown preset (newer app version?)": {
+  "value": "未知预设（来自更新的应用版本？）"
+ },
+ "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).": {
+  "value": "未知的 uTLS fingerprint「%s」已替换为「chrome」（否则整份配置都会出错）。"
+ },
+ "Unlimited": {
+  "value": "无限制"
+ },
+ "Unreadable entry": {
+  "value": "无法读取的条目"
+ },
+ "Unsaved changes": {
+  "value": "有未保存的更改"
+ },
+ "Unsupported entry": {
+  "value": "不支持的条目"
+ },
+ "Unsupported entry — skipped": {
+  "value": "不支持的条目——已跳过"
+ },
+ "Update": {
+  "value": "更新"
+ },
+ "Update all & generate": {
+  "value": "全部更新并生成"
+ },
+ "Update disabled subscriptions": {
+  "value": "更新已关闭的订阅"
+ },
+ "Update failed — using cached copy": {
+  "value": "更新失败——使用已缓存的副本"
+ },
+ "Update interval": {
+  "value": "更新间隔"
+ },
+ "Update now": {
+  "value": "立即更新"
+ },
+ "Update subscription to see nodes": {
+  "value": "更新订阅以查看节点"
+ },
+ "Updated %s": {
+  "value": "已更新 %s"
+ },
+ "Updates": {
+  "value": "更新"
+ },
+ "Upload": {
+  "value": "上传"
+ },
+ "Use \"%s\" as…": {
+  "value": "将「%s」用作…"
+ },
+ "Use $1, $2 for regex capture groups": {
+  "value": "用 $1、$2 表示正则捕获组"
+ },
+ "Use as detour": {
+  "value": "用作 detour"
+ },
+ "Use node": {
+  "value": "使用节点"
+ },
+ "Use servers' own detours": {
+  "value": "使用服务器自带的 detour"
+ },
+ "Use subscription detour servers": {
+  "value": "使用订阅的 detour 服务器"
+ },
+ "Use this node": {
+  "value": "使用此节点"
+ },
+ "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+  "value": "供路由引擎在内部解析主机名使用（出站地址、路由规则）。不是应用使用的解析器。\n\n推荐：\n  • dns_shield —— 默认；同时向 9 家服务商查询，谁先应答用谁\n  • cloudflare_udp —— UDP 到 1.1.1.1（快）\n  • google_udp —— UDP 到 8.8.8.8（快）\n  • google_doh —— 加密\n\n⚠ 这里的 local_dns_resolver 会把查询泄露给运营商——系统 DNS 会绕过 VPN。"
+ },
+ "User": {
+  "value": "自定义"
+ },
+ "User guide": {
+  "value": "用户指南"
+ },
+ "Username (optional)": {
+  "value": "用户名（可选）"
+ },
+ "VPN Settings": {
+  "value": "VPN 设置"
+ },
+ "VPN core": {
+  "value": "VPN 内核"
+ },
+ "VPN is running": {
+  "value": "VPN 正在运行"
+ },
+ "VPN must be running to capture a profile.": {
+  "value": "抓取性能文件需要 VPN 处于运行状态。"
+ },
+ "VPN settings": {
+  "value": "VPN 设置"
+ },
+ "VPN settings (System)": {
+  "value": "VPN 设置（系统）"
+ },
+ "VPN stays active when app is closed": {
+  "value": "应用关闭后 VPN 保持运行"
+ },
+ "VPN system toggles": {
+  "value": "VPN 系统开关"
+ },
+ "Value": {
+  "value": "值"
+ },
+ "Variables: %d": {
+  "value": "变量：%d"
+ },
+ "Verbose (TRACE/DEBUG)": {
+  "value": "详细（TRACE/DEBUG）"
+ },
+ "Via: %s": {
+  "value": "经由：%s"
+ },
+ "Vibrate on connect, disconnect and errors. Respects system \"Touch feedback\" setting": {
+  "value": "连接、断开和出错时震动。会遵循系统的「触摸反馈」设置"
+ },
+ "View": {
+  "value": "打开",
+  "special": {
+   "1": {
+    "value": "查看"
+   }
+  }
+ },
+ "View details": {
+  "value": "查看详情"
+ },
+ "View on GitHub": {
+  "value": "在 GitHub 上查看"
+ },
+ "View pool": {
+  "value": "查看连接池"
+ },
+ "View release": {
+  "value": "查看发布"
+ },
+ "View, edit, import JSON": {
+  "value": "查看、编辑、导入 JSON"
+ },
+ "Visible in Debug → Core.": {
+  "value": "可在 调试 → 内核 中查看。"
+ },
+ "WARP accounts: %d": {
+  "value": "WARP 账号：%d"
+ },
+ "WARP registration failed": {
+  "value": "WARP 注册失败"
+ },
+ "WARP+ adds Argo Smart Routing (lower latency). Privacy is the same as free. Leave empty for free WARP.": {
+  "value": "WARP+ 会启用 Argo 智能路由（延迟更低）。隐私性与免费版相同。留空则使用免费 WARP。"
+ },
+ "Web page": {
+  "value": "网站"
+ },
+ "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
+  "value": "按内核要求，WebSocket early data「?ed=%d」已从路径移到独立字段。节点可正常工作，但配置中的路径与链接里的字面值不同。"
+ },
+ "Where to get L×Box": {
+  "value": "在哪里获取 L×Box"
+ },
+ "What goes into this direction": {
+  "value": "该方向包含什么"
+ },
+ "When to pause the tunnel to save battery. Takes effect on next VPN connect.": {
+  "value": "何时暂停隧道以省电。下次 VPN 连接时生效。"
+ },
+ "Which direction carries DNS queries to this server. Direct — no detour key in the config.": {
+  "value": "由哪个方向把 DNS 查询送到该服务器。「直连」——配置中不写 detour 键。"
+ },
+ "While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back.": {
+  "value": "开启期间，各订阅的「更新时」设置会被隐藏——一切立即应用。关闭后各订阅恢复自己的选择。"
+ },
+ "Whitelisted — VPN can run in background": {
+  "value": "已在白名单——VPN 可在后台运行"
+ },
+ "Whole-node replace needs a pattern to find": {
+  "value": "整节点替换需要一个用于查找的表达式"
+ },
+ "Wi-Fi rules need permissions": {
+  "value": "Wi-Fi 规则需要权限"
+ },
+ "Will be disabled": {
+  "value": "将被停用"
+ },
+ "Will be enabled": {
+  "value": "将被启用"
+ },
+ "Win TTL": {
+  "value": "胜出 TTL"
+ },
+ "Wipes existing data in selected categories.": {
+  "value": "会清除所选类别中的现有数据。"
+ },
+ "Works only if the rule-set contains domains — IP-only lists never match DNS queries.": {
+  "value": "仅在规则集包含域名时有效——纯 IP 列表不会匹配 DNS 查询。"
+ },
+ "Writes a new value into the matching nodes.": {
+  "value": "将新值写入匹配的节点。"
+ },
+ "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
+  "value": "XHTTP 模式已设为「packet-up」：链接要求把上行数据放在请求头中，而内核只在该模式下接受（否则配置无法加载）。"
+ },
+ "XHTTP \"%1$s\" reset to default — %2$s (would otherwise break the whole config).": {
+  "value": "XHTTP 参数「%1$s」已重置为默认值 —— %2$s（否则整份配置都会出错）。"
+ },
+ "XHTTP padding": {
+  "value": "XHTTP 填充"
+ },
+ "Yellow up to, ms": {
+  "value": "黄色上限，ms"
+ },
+ "You have unsaved changes. Save before leaving?": {
+  "value": "你有未保存的更改。离开前保存吗？"
+ },
+ "You have unsaved text in the input field. Leave and discard it?": {
+  "value": "输入框里还有未保存的文本。要离开并放弃吗？"
+ },
+ "You're up to date": {
+  "value": "已是最新版本"
+ },
+ "applied after include": {
+  "value": "在「包含」之后应用"
+ },
+ "auto": {
+  "value": "自动"
+ },
+ "auto-start, keep on exit, background mode, allow bypass": {
+  "value": "自启动、退出保持、后台模式、允许绕过"
+ },
+ "broken": {
+  "value": "已损坏"
+ },
+ "built-in": {
+  "value": "内置"
+ },
+ "cached": {
+  "value": "缓存"
+ },
+ "can be picked as a detour target for servers and folders": {
+  "value": "可被选为服务器和文件夹的 detour 目标"
+ },
+ "chain": {
+  "value": "链路"
+ },
+ "chains: %d": {
+  "value": "链路：%d"
+ },
+ "closed": {
+  "value": "已关闭"
+ },
+ "connect to see the full path": {
+  "value": "连接后可查看完整路径"
+ },
+ "connect to see the live pool": {
+  "value": "连接后可查看实时连接池"
+ },
+ "connections with the same key keep one server": {
+  "value": "相同键的连接会固定用同一台服务器"
+ },
+ "contains": {
+  "value": "包含"
+ },
+ "deleted": {
+  "value": "已删除"
+ },
+ "detour → %s": {
+  "value": "detour → %s"
+ },
+ "direct connection option in the selector": {
+  "value": "选择器中的直连选项"
+ },
+ "direction": {
+  "value": "方向"
+ },
+ "disabled": {
+  "value": "已停用"
+ },
+ "dns.example.com — needed when address is an IP": {
+  "value": "dns.example.com —— 地址填 IP 时需要"
+ },
+ "drop traffic option in the selector": {
+  "value": "选择器中的丢弃流量选项"
+ },
+ "e.g. 1.2.3.0/24, empty = off": {
+  "value": "例如 1.2.3.0/24，留空 = 关闭"
+ },
+ "e.g. 15m": {
+  "value": "例如 15m"
+ },
+ "e.g. 30m": {
+  "value": "例如 30m"
+ },
+ "e.g. 5s, empty = default": {
+  "value": "例如 5s，留空 = 默认"
+ },
+ "e.g. 🇩🇪|🇳🇱 — empty = all nodes": {
+  "value": "例如 🇩🇪|🇳🇱 —— 留空 = 所有节点"
+ },
+ "empty = all servers": {
+  "value": "留空 = 全部服务器"
+ },
+ "empty = core default": {
+  "value": "留空 = 内核默认值"
+ },
+ "empty = core default (5m); 0s = keep until stop": {
+  "value": "留空 = 内核默认（5m）；0s = 保持到停止"
+ },
+ "empty = no prefix": {
+  "value": "留空 = 不加前缀"
+ },
+ "equals": {
+  "value": "等于"
+ },
+ "err": {
+  "value": "错误"
+ },
+ "error": {
+  "value": "错误"
+ },
+ "file": {
+  "value": "文件"
+ },
+ "final": {
+  "value": "final"
+ },
+ "first matching node becomes default": {
+  "value": "第一个匹配的节点成为默认节点"
+ },
+ "group": {
+  "value": "分组"
+ },
+ "header/cookie placement requires packet-up mode": {
+  "value": "header/cookie 放置需要 packet-up 模式"
+ },
+ "host:port of the Cloudflare peer. With obfuscation a random working IP:port is filled in — tap the dice to reroll, or type your own to pin a specific one.": {
+  "value": "Cloudflare 对端的 host:port。启用混淆时会自动填入一个可用的随机 IP:port——点骰子可重掷，或自己填写以固定某一台。"
+ },
+ "how much faster a rival must be to win": {
+  "value": "竞争者要快多少才能胜出"
+ },
+ "how this direction acts when used": {
+  "value": "该方向在被使用时的行为"
+ },
+ "invalid": {
+  "value": "无效"
+ },
+ "invalid pattern — skipped": {
+  "value": "表达式无效——已跳过"
+ },
+ "just now": {
+  "value": "刚刚"
+ },
+ "kept": {
+  "value": "保留"
+ },
+ "latency-tested twin of this direction": {
+  "value": "该方向的延迟测速副本"
+ },
+ "loading…": {
+  "value": "加载中…"
+ },
+ "matches": {
+  "value": "匹配正则"
+ },
+ "matches only domains in the rule-set": {
+  "value": "只匹配规则集中的域名"
+ },
+ "multiplex padding": {
+  "value": "多路复用填充"
+ },
+ "never": {
+  "value": "从不"
+ },
+ "no stickiness — every connection re-picks": {
+  "value": "无粘性——每个连接都重新选择"
+ },
+ "node": {
+  "value": "节点"
+ },
+ "not found": {
+  "value": "未找到"
+ },
+ "not reached": {
+  "value": "未到达"
+ },
+ "of %d nodes": {
+  "value": {
+   "other": "共 %d 个节点"
+  }
+ },
+ "off: open connections finish on the old server": {
+  "value": "关闭：已建立的连接在原服务器上跑完"
+ },
+ "only directions listed above this one": {
+  "value": "仅限列表上方的方向"
+ },
+ "optional — defaults to the tag": {
+  "value": "可选——默认为标签"
+ },
+ "options offered in the selector": {
+  "value": "选择器中提供的选项"
+ },
+ "platform error: %s": {
+  "value": "平台错误：%s"
+ },
+ "ports %1$s · %2$d/%3$d conns · ↑%4$s ↓%5$s%6$s": {
+  "value": "端口 %1$s · %2$d/%3$d 连接 · ↑%4$s ↓%5$s%6$s"
+ },
+ "preset": {
+  "value": "预设"
+ },
+ "private ip": {
+  "value": "私有 IP"
+ },
+ "private src": {
+  "value": "私有来源"
+ },
+ "regex pattern": {
+  "value": "正则表达式"
+ },
+ "routing rule": {
+  "value": "路由规则"
+ },
+ "seconds, empty = keep": {
+  "value": "秒，留空 = 保持不变"
+ },
+ "select": {
+  "value": "选择"
+ },
+ "server missing": {
+  "value": "服务器缺失"
+ },
+ "sing-box config preview": {
+  "value": "sing-box 配置预览"
+ },
+ "sing-box server JSON — tag editable here or in Params; description/enabled live on the list entry": {
+  "value": "sing-box 服务器 JSON —— 标签可在此处或「参数」中编辑；描述与开关状态保存在列表条目中"
+ },
+ "sing-box server JSON — tag locked while editing; description/enabled live on the list entry": {
+  "value": "sing-box 服务器 JSON —— 编辑时标签锁定；描述与开关状态保存在列表条目中"
+ },
+ "sing-box server preview (read-only)": {
+  "value": "sing-box 服务器预览（只读）"
+ },
+ "single best server by latency": {
+  "value": "按延迟选出的最优单台服务器"
+ },
+ "slot %d": {
+  "value": "通道 %d"
+ },
+ "spread connections across a pool of servers": {
+  "value": "把连接分散到服务器池"
+ },
+ "srs": {
+  "value": "srs"
+ },
+ "storage shape (lxbox_settings.json)": {
+  "value": "存储格式（lxbox_settings.json）"
+ },
+ "stripped": {
+  "value": "已去除"
+ },
+ "taken from member names; empty = no badges. Display only — not sent to the core": {
+  "value": "取自成员名称；留空 = 不显示标记。仅供显示——不会发送给内核"
+ },
+ "template": {
+  "value": "模板"
+ },
+ "timeout %ss": {
+  "value": "超时 %ss"
+ },
+ "traffic is spread across slots": {
+  "value": "流量分散到各通道"
+ },
+ "unknown": {
+  "value": "未知"
+ },
+ "unknown server — will be skipped": {
+  "value": "未知服务器——将被跳过"
+ },
+ "used by %s": {
+  "value": "被 %s 使用"
+ },
+ "used in Fastest mode": {
+  "value": "用于「最快」模式"
+ },
+ "user rule": {
+  "value": "自定义规则"
+ },
+ "value \"%1$s\" is not a valid %2$s": {
+  "value": "值「%1$s」不是有效的 %2$s"
+ },
+ "value \"%s\" is not valid": {
+  "value": "值「%s」无效"
+ },
+ "whole node": {
+  "value": "整个节点"
+ },
+ "yesterday": {
+  "value": "昨天"
+ },
+ "— (default DNS)": {
+  "value": "—（默认 DNS）"
+ },
+ "— (none)": {
+  "value": "—（无）"
+ },
+ "— turn on 'Forward sing-box logs'": {
+  "value": "— 请开启「转发 sing-box 日志」"
+ },
+ "→ in: %s": {
+  "value": "→ 入：%s"
+ },
+ "↳ via %s": {
+  "value": "↳ 经由 %s"
+ },
+ "≤%dms": {
+  "value": "≤%dms"
+ },
+ "✳ Resolve first%s": {
+  "value": "✳ 先解析%s"
+ },
+ "✳ Resolve only%s": {
+  "value": "✳ 仅解析%s"
+ },
+ "Servers: %d": {
+  "value": "服务器：%d"
+ },
+ "These settings have no place in the shared format:": {
+  "value": "这些设置无法放入共享格式："
+ },
+ "Not included in the file": {
+  "value": "未包含在文件中"
+ },
+ "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
+  "value": "节点「%1$s」已丢弃：它的 relay「%2$s」缺失、不可用或成环。直连会绕过 relay。"
+ },
+ "Workspaces": {
+  "value": "工作区"
+ },
+ "Load": {
+  "value": "加载"
+ },
+ "Save as…": {
+  "value": "另存为…"
+ },
+ "Workspace name": {
+  "value": "工作区名称"
+ },
+ "Overwrite “%s”?": {
+  "value": "覆盖「%s」？"
+ },
+ "A workspace with this name already exists. Its saved state will be replaced.": {
+  "value": "已存在同名工作区。其已保存状态将被替换。"
+ },
+ "Overwrite": {
+  "value": "覆盖"
+ },
+ "Loading workspace…": {
+  "value": "正在加载工作区…"
+ },
+ "Workspace “%s” loaded": {
+  "value": "工作区「%s」已加载"
+ },
+ "Saved as “%s”": {
+  "value": "已保存为「%s」"
+ },
+ "Failed to load workspace: %s": {
+  "value": "加载工作区失败：%s"
+ },
+ "Name is empty": {
+  "value": "名称为空"
+ },
+ "Name is too long": {
+  "value": "名称过长"
+ },
+ "Name must not contain / or \\": {
+  "value": "名称不能包含 / 或 \\"
+ },
+ "Name must not start with a dot": {
+  "value": "名称不能以点号开头"
+ },
+ "Workspace not found": {
+  "value": "找不到工作区"
+ },
+ "A workspace with this name already exists": {
+  "value": "已存在同名工作区"
+ },
+ "The current workspace cannot be deleted": {
+  "value": "当前工作区无法删除"
+ },
+ "Delete workspace “%s”?": {
+  "value": "删除工作区「%s」？"
+ },
+ "Its saved state will be removed. This cannot be undone.": {
+  "value": "其已保存状态将被删除。此操作无法撤销。"
+ },
+ "Config rebuild failed: %s": {
+  "value": "配置重建失败：%s"
+ },
+ "Auto · %s": {
+  "value": "自动 · %s"
+ },
+ "Usage region": {
+  "value": "使用地区"
+ },
+ "The country you use the app in. Drives region-specific defaults: today the WARP SNI pool, later routing rule presets. Auto = country of the mobile network, then of the device locale.": {
+  "value": "你使用本应用所在的国家。决定区域相关的默认值：目前是 WARP SNI 池，之后会用于路由规则预设。Auto = 优先取移动网络的国家，其次取设备语言区域。"
+ },
+ "Not set": {
+  "value": "未设置"
+ },
+ "Auto · country not detected": {
+  "value": "自动 · 未识别出国家"
+ },
+ "Other country code…": {
+  "value": "其它国家代码…"
+ },
+ "Country code (2 letters)": {
+  "value": "国家代码（2 个字母）"
+ },
+ "Region": {
+  "value": "地区"
+ },
+ "%d DNS rules": {
+  "value": {
+   "other": "%d 条 DNS 规则"
+  }
+ },
+ "%d DNS servers": {
+  "value": {
+   "other": "%d 个 DNS 服务器"
+  }
+ },
+ "%d rules": {
+  "value": {
+   "other": "%d 条规则"
+  }
+ },
+ "%d servers deleted": {
+  "value": {
+   "other": "已删除 %d 个服务器"
+  }
+ },
+ "Saved · %d section records dropped": {
+  "value": {
+   "other": "已保存 · 丢弃了 %d 条区块记录"
+  }
+ },
+ "%s DNS server(s) switched to vpn-1": {
+  "value": "已将 %s 个 DNS 服务器切换到 vpn-1"
+ },
+ "%s group member(s) removed": {
+  "value": "已移除 %s 个分组成员"
+ },
+ "A one-time key is consumed on the first login; the device identity then lives in the state directory. Clearing the app data registers a new device.": {
+  "value": "一次性密钥在首次登录时消耗；此后设备身份保存在状态目录中。清除应用数据会注册为一台新设备。"
+ },
+ "Accept default resolvers": {
+  "value": "接受默认解析器"
+ },
+ "Accept routes": {
+  "value": "接受路由"
+ },
+ "Auth key": {
+  "value": "认证密钥"
+ },
+ "Auth key required": {
+  "value": "必须填写认证密钥"
+ },
+ "Auto nodes are deleted with the folder: %s": {
+  "value": "自动节点会随文件夹一并删除：%s"
+ },
+ "Clear sections": {
+  "value": "清除区块"
+ },
+ "Clear sections?": {
+  "value": "清除区块？"
+ },
+ "Control URL (optional)": {
+  "value": "Control URL（可选）"
+ },
+ "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
+  "value": "自定义服务器类型「%s」——请在 JSON 标签页编辑。表单支持 UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale。"
+ },
+ "Ephemeral": {
+  "value": "临时设备"
+ },
+ "Exit node (optional)": {
+  "value": "出口节点（可选）"
+ },
+ "Folder \"%s\" deleted": {
+  "value": "已删除文件夹「%s」"
+ },
+ "From nodes · read-only, edited in the node": {
+  "value": "来自节点 · 只读，需在节点中编辑"
+ },
+ "Has node sections": {
+  "value": "带有节点区块"
+ },
+ "Hostname (optional)": {
+  "value": "主机名（可选）"
+ },
+ "Idle timeout will be raised to %s when the config is built": {
+  "value": "构建配置时空闲超时会提高到 %s"
+ },
+ "Invalid JSON: empty array": {
+  "value": "JSON 无效：空数组"
+ },
+ "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
+  "value": "JSON 必须是带「type」的出站对象，或包含「endpoints」/「outbounds」的文档"
+ },
+ "MagicDNS of the tailnet via a Tailscale node · no address": {
+  "value": "经 Tailscale 节点使用 tailnet 的 MagicDNS · 无需地址"
+ },
+ "Names outside the tailnet go to the default DNS servers; off — NXDOMAIN": {
+  "value": "tailnet 以外的域名交给默认 DNS 服务器；关闭则返回 NXDOMAIN"
+ },
+ "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.": {
+  "value": "NaïveProxy 的 extra-headers 条目「%s」不是合法的头部，已丢弃。其余头部保留，但服务器不会看到这一条。"
+ },
+ "No Tailscale nodes yet — add one on the Servers screen first": {
+  "value": "还没有 Tailscale 节点——请先在「服务器」页添加一个"
+ },
+ "No address": {
+  "value": "无需地址"
+ },
+ "No address (Tailscale)": {
+  "value": "无需地址（Tailscale）"
+ },
+ "Node": {
+  "value": "节点"
+ },
+ "Node section record dropped: %s": {
+  "value": "已丢弃节点区块记录：%s"
+ },
+ "One URL per line — several rule sets in one rule.": {
+  "value": "每行一个 URL——一条规则可含多个规则集。"
+ },
+ "One rule holds one JSON object. Add each object of the array as a separate rule.": {
+  "value": "一条规则对应一个 JSON 对象。请把数组中的每个对象分别添加为独立规则。"
+ },
+ "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
+  "value": "要为节点附加规则，请在 JSON 标签页粘贴含 dns/route 的 sing-box 配置，或含「sections」的文档。"
+ },
+ "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".": {
+  "value": "REALITY 使用 uTLS fingerprint「%s」：v26.9.8 起的 Xray 服务器会拒绝这样的 ClientHello。若连接不上，请改用「chrome」。"
+ },
+ "Rules and DNS records this node carries": {
+  "value": "该节点自带的规则与 DNS 记录"
+ },
+ "SRS: %s (+%d)": {
+  "value": "SRS：%s（+%d）"
+ },
+ "Sections": {
+  "value": "区块"
+ },
+ "Sections cleared": {
+  "value": "区块已清除"
+ },
+ "Server \"%s\" deleted": {
+  "value": "已删除服务器「%s」"
+ },
+ "Shown in Routing and DNS with the node's tag": {
+  "value": "在「路由」与 DNS 中以该节点的标签显示"
+ },
+ "Stored JSON": {
+  "value": "存储中的 JSON"
+ },
+ "Subscription \"%s\" deleted": {
+  "value": "已删除订阅「%s」"
+ },
+ "Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions": {
+  "value": "对端的 Tailscale IP 或机器名，该对端需已公告出口节点；在首页把此节点选为方向，即可让上网流量经它出去。留空则仅访问 tailnet——该节点不会出现在「方向」中"
+ },
+ "Tailscale node": {
+  "value": "Tailscale 节点"
+ },
+ "Tailscale node is required": {
+  "value": "必须选择 Tailscale 节点"
+ },
+ "The device is removed from the tailnet when it goes offline": {
+  "value": "设备离线后会从 tailnet 中移除"
+ },
+ "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
+  "value": "文档同时含有「sections」和「dns」/「route」——请只保留其中一种"
+ },
+ "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
+  "value": "文档同时含有「sections」和「dns」/「route」：已采用「sections」，其余忽略。"
+ },
+ "The node's rules and DNS records will be removed. The node itself stays.": {
+  "value": "该节点的规则与 DNS 记录将被删除。节点本身保留。"
+ },
+ "Use subnet routes advertised by other tailnet devices": {
+  "value": "使用其它 tailnet 设备公告的子网路由"
+ },
+ "Which node's tailnet answers the queries": {
+  "value": "由哪个节点的 tailnet 应答查询"
+ },
+ "detour removed from %s source(s)": {
+  "value": "已从 %s 个来源移除 detour"
+ },
+ "from node %s": {
+  "value": "来自节点 %s"
+ },
+ "node is disabled": {
+  "value": "节点已停用"
+ }
+}

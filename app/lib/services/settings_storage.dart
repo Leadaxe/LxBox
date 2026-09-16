@@ -724,7 +724,7 @@ class SettingsStorage {
 
   /// §279 — допустимые значения `app_language`. Неизвестное (hand-edited
   /// бэкап, будущие языки) → 'system'.
-  static const appLanguageValues = {'system', 'en', 'ru'};
+  static const appLanguageValues = {'system', 'en', 'ru', 'zh'};
 
   /// §279 — язык приложения. Default 'system' — следовать языку устройства.
   /// Запись из кода приложения — только через LocaleController.set()

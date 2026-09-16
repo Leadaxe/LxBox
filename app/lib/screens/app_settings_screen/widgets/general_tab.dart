@@ -118,6 +118,10 @@ class GeneralTab extends StatelessWidget {
                 value: 'ru',
                 title: Text('Русский'), // l10n-exempt: endonym
               ),
+              const RadioListTile<String>(
+                value: 'zh',
+                title: Text('中文（简体）'), // l10n-exempt: endonym
+              ),
             ],
           ),
         ),
