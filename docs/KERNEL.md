@@ -25,7 +25,25 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.0-lx.39`** (see `app/android/libbox.version`) —
+**The current pin: `v1.14.1-lx.3`** (see `app/android/libbox.version`) — the
+base moves to sing-box `v1.14.1`, and a **fourth fork submodule** appears:
+`submodules/utls` = `Leadaxe/utls-lx` (`metacubex/utls` v1.8.7 plus three
+cherry-picks from `refraction-networking/utls`). It carries the `HelloFirefox_148`
+and `HelloSafari_26_3` presets, which send the hybrid `X25519MLKEM768` key share
+before X25519 — the thing an XTLS/REALITY server on Xray ≥ v26.9.8 demands.
+Until now only the Chrome presets carried it, so nodes with `fp=firefox` (and
+`fp=safari`) were silently forwarded to the camouflage site. On the fork's stand
+against Xray v26.9.9 both now pass with 204; Xray v26.7.x and `fp=chrome` show no
+regression (core SPEC 086 for firefox, lx.2; SPEC 087 for safari, lx.3). lx.3 also
+stops a VLESS `encryption` handshake from hanging forever against a node that
+accepts the connection and then goes silent (core SPEC 050 §2). Configuration,
+the wire format and the tag sets are unchanged; the Java surface is identical to
+lx.39 (javap diff of `PlatformInterface`, `CommandClient`, `Libbox` — empty).
+**LxBox depends on this pin for §451**: `firefox` and `safari` no longer raise
+`reality_fp_not_chrome` (`kRealityHybridFingerprints`), which holds only on lx.3
+and newer — rolling the core back means narrowing that set again.
+
+**`v1.14.0-lx.39`** —
 lx.38 plus the SPEC 085 hotfix: UDP through a SOCKS5 proxy whose UDP ASSOCIATE
 reply carries `BND.ADDR` `0.0.0.0`/`::` was dialed at the local system, so UDP
 died silently while TCP worked; the relay address is now replaced by the proxy

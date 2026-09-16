@@ -226,10 +226,13 @@ git push origin vX.Y.Z
 ```
 
 > ⚠️ The tag now sits on a merge commit in `main` that is **not an ancestor** of
-> `develop`. §2.6 is mandatory, otherwise the next release starts from a history
-> that has fallen behind.
+> `develop`. Do §2.6 **right now, before waiting for CI** (maintainer's decision,
+> 15.09.2026): bringing `main` back into `develop` does not depend on the build,
+> and a merge postponed "until CI is green" is exactly the step that got skipped.
 
 ### 2.5. Wait for CI
+
+Start §2.6 first — it does not wait for this step.
 
 ```bash
 RUN_ID="$(gh run list --workflow=ci.yml --limit 1 --json databaseId -q '.[0].databaseId')"
@@ -242,14 +245,21 @@ At the finish line, expect:
 - The release body is the content of `RELEASE_NOTES.md` as of the tag.
 - `docs/latest.json` has been updated by the bot commit in `main` (`[skip ci]`).
 
-### 2.6. Post-flight: bring main back into develop
+### 2.6. Post-flight: bring main back into develop — immediately after the tag
 
-After a release there are two commits in `main` that are not ancestors of
-`develop`:
-1. The merge commit from §2.4.
-2. The bot commit `chore(release): update docs/latest.json → vX.Y.Z [skip ci]`.
+Run this **straight after `git push origin vX.Y.Z`**, in parallel with CI, not
+after it. The only commit that matters for `git describe` on `develop` is the
+release merge commit from §2.4 — it carries the tag, and it exists the moment the
+tag is pushed.
 
-Merge them back:
+The bot commit `chore(release): update docs/latest.json → vX.Y.Z [skip ci]`
+lands in `main` later, when CI finishes. It touches only `docs/latest.json` and
+does not need a separate merge: the next release merges `develop` into `main`
+(§2.4) and then `main` back into `develop` (this step), which brings it along. If
+you want it in `develop` sooner, repeat the commands below after CI — the merge
+will contain only `docs/latest.json`.
+
+Merge back:
 
 ```bash
 git checkout develop
@@ -263,7 +273,7 @@ git merge --no-ff --no-commit origin/main
 # development branch again (exactly what v2.11.x moved away from). Revert it
 # BEFORE committing:
 git checkout HEAD -- app/pubspec.yaml
-git status --short   # expect only docs/latest.json
+git status --short   # expect nothing (or only docs/latest.json if CI already finished)
 
 git commit -m "chore: merge main (vX.Y.Z tag) back into develop"
 git push origin develop

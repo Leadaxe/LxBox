@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- §279 Phase 6 — 简体中文（原生界面：通知 / QS 磁贴 / 快捷方式 / 自动化插件）。
+     术语与 assets/l10n/zh/ui.json 保持一致（已连接 / 未连接 / 节点 / 分组）。
+     Payload 参数（%1$s）不翻译。app_name 不可翻译，按约定不在此声明。 -->
+<resources>
+    <!-- Quick Connect (tile / shortcuts consent flow) -->
+    <string name="qc_first_open">正在打开 L×Box 以授予 VPN 权限（仅一次）</string>
+    <string name="qc_consent_denied">VPN 权限被拒绝。打开 L×Box 重试。</string>
+    <string name="qc_connect_label">连接</string>
+    <string name="qc_disconnect_label">断开</string>
+
+    <!-- Foreground-service notification (§182 actions, §223 labels) -->
+    <string name="notification_channel_name">VPN 服务</string>
+    <string name="notification_channel_description">VPN 运行时显示</string>
+    <string name="notification_status_starting">正在启动…</string>
+    <string name="status_connected">已连接</string>
+    <string name="notification_action_stop">停止</string>
+    <string name="notification_action_reconnect">重新连接</string>
+    <string name="notification_error_title">错误</string>
+    <!-- §036 core notification channel fallback name (typeName blank) -->
+    <string name="core_channel_fallback_name">内核通知</string>
+
+    <!-- stopAndAlert frames. Payload (%1$s) is OS/kernel text, verbatim. -->
+    <string name="stop_alert_unknown_error">未知错误</string>
+    <string name="stop_alert_libbox_init_failed">Libbox 初始化失败：%1$s</string>
+    <string name="stop_alert_empty_config">配置为空</string>
+    <string name="stop_alert_no_command_server">CommandServer 未初始化</string>
+    <string name="stop_alert_start_failed">启动服务失败：%1$s</string>
+    <!-- Sticky-restart storm guard -->
+    <string name="sticky_restart_storm_title">VPN 已停止</string>
+    <string name="sticky_restart_storm_text">应用被结束后 VPN 重启次数过多，请手动启动。</string>
+
+    <!-- QS tile subtitles -->
+    <string name="tile_status_connecting">正在连接…</string>
+    <string name="tile_status_stopping">正在停止…</string>
+    <string name="tile_status_disconnected">未连接</string>
+
+    <!-- §047 Locale/Tasker plugin surfaces -->
+    <string name="label_plugin_custom">L×Box：自定义…</string>
+    <string name="label_plugin_start">L×Box：启动 VPN</string>
+    <string name="label_plugin_stop">L×Box：停止 VPN</string>
+    <string name="label_plugin_toggle">L×Box：切换 VPN</string>
+    <string name="automation_blurb_start">启动 VPN</string>
+    <string name="automation_blurb_stop">停止 VPN</string>
+    <string name="automation_blurb_toggle">切换 VPN</string>
+    <string name="automation_command_prompt">L×Box 指令：</string>
+    <string name="automation_condition_prompt">L×Box 条件：</string>
+    <string name="automation_cmd_switch_node">切换节点</string>
+    <string name="automation_cmd_set_group">设置分组</string>
+    <string name="automation_cmd_urltest_group">延迟测试分组</string>
+    <string name="automation_cmd_refresh_subs">刷新订阅</string>
+    <string name="automation_cmd_rebuild_config">重建配置</string>
+    <string name="automation_cmd_reset_network">重置网络</string>
+    <string name="automation_check_vpn_up">VPN 已启动</string>
+    <string name="automation_check_active_node">当前节点 =</string>
+    <string name="automation_check_active_group">当前分组 =</string>
+    <string name="automation_value_label">值（%1$s）：</string>
+    <string name="automation_value_plain">值：</string>
+    <string name="automation_save">保存</string>
+</resources>

@@ -41,7 +41,7 @@ class ReconcileNoop extends AppLanguageReconcileDecision {
 }
 
 /// Юзер менял язык в системных Settings → записать [newSetting]
-/// ('system'|'en'|'ru') в сторадж (через SettingsStorage.setAppLanguage —
+/// ('system'|'en'|'ru'|'zh') в сторадж (через SettingsStorage.setAppLanguage —
 /// native-зеркало и last_pushed обновятся тем же путём).
 class ReconcileSystemWins extends AppLanguageReconcileDecision {
   const ReconcileSystemWins(this.newSetting);
@@ -54,7 +54,7 @@ class ReconcileStorageWins extends AppLanguageReconcileDecision {
   const ReconcileStorageWins();
 }
 
-const _supported = {'en', 'ru'};
+const _supported = {'en', 'ru', 'zh'};
 
 /// Нормализация language-tags из LocaleManager к нашему ключу:
 /// '' → '' (пусто); 'ru-RU,en' → 'ru'; регистронезависимо.
@@ -73,7 +73,7 @@ String _settingToTag(String setting) => setting == 'system' ? '' : setting;
 String _tagToSetting(String tag) => tag.isEmpty ? 'system' : tag;
 
 /// Чистая функция решения (см. шапку файла). [stored] — валидированное
-/// значение var `app_language` ('system'|'en'|'ru').
+/// значение var `app_language` ('system'|'en'|'ru'|'zh').
 AppLanguageReconcileDecision reconcileAppLanguage({
   required String stored,
   required AppLanguageNativeState state,

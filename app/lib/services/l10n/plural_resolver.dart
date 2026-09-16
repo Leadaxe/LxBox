@@ -3,7 +3,8 @@
 // value-объект обязан содержать (CI-гейт ui_check сверяет по нему).
 
 /// Стратегия выбора plural-формы по числу. Регистрируется per-язык в
-/// LocaleController._applyLocale (ru → RuPluralResolver, иначе En).
+/// LocaleController._buildGetLocalText (ru → RuPluralResolver,
+/// zh → ZhPluralResolver, иначе En).
 abstract class PluralResolver {
   /// Ключи plural-форм, которые resolver ждёт в value-объекте.
   Set<String> get forms;
@@ -60,4 +61,19 @@ class RuPluralResolver implements PluralResolver {
     // CI, но resolver никогда не бросает).
     return forms[pick] ?? forms['other'] ?? forms['many'] ?? '';
   }
+}
+
+/// Китайский по CLDR: одна форма `other` — в китайском число не согласуется.
+///
+/// Словарь zh/ поэтому хранит единственную форму `other`; select всегда берёт
+/// её (с безопасной деградацией на любую присутствующую форму).
+class ZhPluralResolver implements PluralResolver {
+  const ZhPluralResolver();
+
+  @override
+  Set<String> get forms => const {'other'};
+
+  @override
+  String select(Map<String, String> forms, num n) =>
+      forms['other'] ?? forms['many'] ?? forms['one'] ?? forms['few'] ?? '';
 }

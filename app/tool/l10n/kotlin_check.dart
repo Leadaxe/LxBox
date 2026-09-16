@@ -19,9 +19,10 @@ import 'src/check_common.dart';
 // Phase 6 (§279) выполнена: экстракция в strings.xml закончена, CI зовёт
 // checker с --strict — любая новая находка фатальна.
 //
-// + parity-гвард values/strings.xml ↔ values-ru/strings.xml: каждый
-// translatable en-ключ обязан иметь ru-перевод, ru без en-ключа (orphan) —
-// находка, translatable="false" в ru — находка, наборы %-placeholder'ов
+// + parity-гвард values/strings.xml ↔ каждый values-<tag>/strings.xml (§452:
+// языки берутся из каталогов res/values-*, не из списка в коде): каждый
+// translatable en-ключ обязан иметь перевод, перевод без en-ключа (orphan) —
+// находка, translatable="false" в переводе — находка, наборы %-placeholder'ов
 // (%1$s и т.п.) у пары ключей обязаны совпадать.
 
 const String _root = 'android/app/src/main';
@@ -87,45 +88,65 @@ Map<String, _Res> _parseStrings(String content) {
   return map;
 }
 
-/// §279 — parity values/strings.xml ↔ values-ru/strings.xml (см. шапку).
+/// §279/§452 — parity values/strings.xml ↔ каждый `values-<tag>/strings.xml`
+/// (см. шапку). Языки берутся из самих каталогов res/values-*: новый язык
+/// попадает под гейт, как только у него появляется strings.xml.
 void _checkResourceParity(CheckReporter r) {
   final enFile = File('$_root/res/values/strings.xml');
-  final ruFile = File('$_root/res/values-ru/strings.xml');
   if (!enFile.existsSync()) {
     r.fail('${enFile.path} not found');
     return;
   }
-  if (!ruFile.existsSync()) {
-    r.fail('${ruFile.path} not found');
+  final en = _parseStrings(enFile.readAsStringSync());
+
+  final resDir = Directory('$_root/res');
+  final tagged = resDir
+      .listSync(followLinks: false)
+      .whereType<Directory>()
+      .map((d) => d.uri.pathSegments.where((s) => s.isNotEmpty).last)
+      .where((n) => n.startsWith('values-'))
+      .where((n) => File('$_root/res/$n/strings.xml').existsSync())
+      .toList()
+    ..sort();
+  if (tagged.isEmpty) {
+    r.fail('$_root/res: no values-<tag>/strings.xml found');
     return;
   }
-  final en = _parseStrings(enFile.readAsStringSync());
-  final ru = _parseStrings(ruFile.readAsStringSync());
+
+  for (final qualifier in tagged) {
+    _checkOneLocale(r, en, qualifier);
+  }
+}
+
+void _checkOneLocale(
+    CheckReporter r, Map<String, _Res> en, String qualifier) {
+  final loc = _parseStrings(
+      File('$_root/res/$qualifier/strings.xml').readAsStringSync());
   for (final e in en.entries) {
-    final ruRes = ru[e.key];
+    final res = loc[e.key];
     if (!e.value.translatable) {
-      if (ruRes != null) {
-        r.warn('values-ru/strings.xml: "${e.key}" duplicates a '
+      if (res != null) {
+        r.warn('$qualifier/strings.xml: "${e.key}" duplicates a '
             'translatable="false" string — remove it');
       }
       continue;
     }
-    if (ruRes == null) {
-      r.warn('values-ru/strings.xml: missing translation for "${e.key}"');
+    if (res == null) {
+      r.warn('$qualifier/strings.xml: missing translation for "${e.key}"');
       continue;
     }
     final enSet =
         _placeholder.allMatches(e.value.value).map((m) => m.group(0)!).toSet();
-    final ruSet =
-        _placeholder.allMatches(ruRes.value).map((m) => m.group(0)!).toSet();
-    if (enSet.length != ruSet.length || !enSet.containsAll(ruSet)) {
+    final locSet =
+        _placeholder.allMatches(res.value).map((m) => m.group(0)!).toSet();
+    if (enSet.length != locSet.length || !enSet.containsAll(locSet)) {
       r.warn('strings.xml: placeholder mismatch for "${e.key}" '
-          '(en: $enSet, ru: $ruSet)');
+          '(en: $enSet, $qualifier: $locSet)');
     }
   }
-  for (final k in ru.keys) {
+  for (final k in loc.keys) {
     if (!en.containsKey(k)) {
-      r.warn('values-ru/strings.xml: orphan key "$k" (not in values/)');
+      r.warn('$qualifier/strings.xml: orphan key "$k" (not in values/)');
     }
   }
 }

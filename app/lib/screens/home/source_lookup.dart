@@ -35,6 +35,20 @@ Set<String> sourcesOfTag(
   List<SubscriptionEntry> entries,
 ) {
   final result = <String>{};
+  for (final (prefix, id) in sourcePrefixIndex(entries)) {
+    if (tag.startsWith(prefix)) result.add(id);
+  }
+  return result;
+}
+
+/// §446 — пригодные источники как пары `(искомый префикс, id источника)`.
+///
+/// От тега не зависит, а фильтр по источникам спрашивает принадлежность на
+/// КАЖДЫЙ тег списка: при большой сборной подписке отбор (тип, enabled,
+/// непустой префикс) повторялся сотни раз за проход. Порядок сохранён —
+/// результат `sourcesOfTag` тот же, что у прежнего единого цикла.
+List<(String, String)> sourcePrefixIndex(List<SubscriptionEntry> entries) {
+  final out = <(String, String)>[];
   for (final e in entries) {
     final list = e.list;
     // §235 — источник = подписка ИЛИ папка (§234).
@@ -42,9 +56,9 @@ Set<String> sourcesOfTag(
     if (!e.enabled) continue; // disabled источники не эмитят node'ы в config
     final prefix = list.tagPrefix;
     if (prefix.isEmpty) continue; // §091: нет префикса → нет фильтра
-    if (tag.startsWith('$prefix ')) result.add(e.id);
+    out.add(('$prefix ', e.id));
   }
-  return result;
+  return out;
 }
 
 /// §255 — владелец config-тэга: entry + (для папки) индекс члена. Для
