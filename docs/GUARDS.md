@@ -240,6 +240,7 @@ something more than reject or default.
 | Unknown scheme, or any exception inside a protocol parser | `null`, line skipped | silent | `uri_parsers.dart:89-94` | structural errors return null rather than throw | — |
 | Base64 body: over 20% control bytes, under 16 chars, or no `://`/`{`/`[` after decoding | decode refused or rolled back | silent | `body_decoder.dart:96, 144-169` | probably binary | — |
 | Lines starting with `#`, `//`, `;` | skipped (counted in `skippedComments`) | silent | `body_decoder.dart:131-135` | — | §219 |
+| TCP keep-alive duration in the query that is not a Go-duration | field dropped, the other two survive | silent (deliberate) | `tcp_keep_alive.dart:18-22` | a bare integer is read as seconds first (D-024); anything still unparseable would make the core's `badoption.Duration` reject the whole config. A new warning type would drag in strings and the l10n gates of three languages for a power-user path (as with hysteria2 obfs, §358) | §453 |
 
 ## Layer 2 — JSON branches
 
@@ -278,6 +279,7 @@ something more than reject or default.
 | ws/httpupgrade `path` key absent | path `''`, no `/` default | silent | `json_parsers.dart:1412-1416` | canonical sing-box JSON does not write the default either | §103 D-016 |
 | Glued Xray path `/x?ed=N` in ws JSON | tail cut | silent (no warnings channel here) | `json_parsers.dart:1413-1415` | glued Xray paths reach the editor too | §303 |
 | JSON flavour unrecognised, or `clashYaml` | 0 nodes | silent | `body_decoder.dart:181-209`, `parse_all.dart:191-193` | the `xrayArray` branch works, and its classification must not shift on ambiguous input | §368 §7.1 |
+| `tcp_keep_alive` / `tcp_keep_alive_interval` not a Go-duration | field dropped, the other two survive | silent (deliberate) | `tcp_keep_alive.dart:18-22`, `json_parsers.dart:1006` | same guard as the URI branch — the value is read with `toString()`, not a cast, because a hand-edited JSON writes the duration as a number | §453 |
 
 ### 2.2 Xray import (`parseXrayElement`)
 

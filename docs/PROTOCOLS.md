@@ -54,6 +54,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 16. [MASQUE (Cloudflare WARP)](#96-masque-cloudflare-warp)
 16a. [Tailscale (endpoint)](#97-tailscale-endpoint)
 17. [JSON Outbound / config (raw sing-box)](#10-json-outbound)
+17a. [TCP keep-alive (dial fields)](#105-tcp-keep-alive-dial-fields)
 18. [Xray JSON Array](#11-xray-json-array)
 19. [XHTTP transport](#xhttp-transport)
 
@@ -1378,6 +1379,105 @@ Membership uses **explicit identity keys**, not a tag regex as in §322 — insi
 - Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. hysteria2 port hopping, ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
 - The `tag` field is used for display; an absent tag falls back to `<type>-<server>-<port>`.
 - This is for advanced users who want to specify the exact sing-box configuration, and for migrating from sing-box itself.
+
+---
+
+## 10.5 TCP keep-alive (dial fields)
+
+sing-box dial options (core ≥ 1.13.0) that tune the TCP keep-alive probes of an
+outbound's socket. They are **not** protocol settings: in the core they live in
+`DialerOptions`, shared by every outbound that dials over TCP. Added in §453.
+
+Without them the core applies its own defaults — first probe after 5 minutes,
+then one every 75 seconds (`constant/timeout.go`).
+
+### Keys
+
+| Key | Type | Meaning | Default |
+|-----|------|---------|---------|
+| `disable_tcp_keep_alive` | bool | Turn keep-alive off on the socket entirely | `false` |
+| `tcp_keep_alive` | Go-duration (`"30s"`) | Idle time before the first probe | core default (5m) |
+| `tcp_keep_alive_interval` | Go-duration (`"15s"`) | Interval between probes | core default (75s) |
+
+### Carriers
+
+`vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `naive`, `ssh`, `socks`,
+`http` — nine types that dial over TCP.
+
+QUIC/UDP types (`hysteria2`, `tuic`, `wireguard`, `masque`), `tailscale` and
+group nodes do **not** carry the fields: there is no TCP socket to apply them
+to. The keys are ignored on input and never emitted.
+
+### URI Names
+
+The query parameter names are identical to the sing-box keys:
+
+```
+vless://uuid@h.example:443?tcp_keep_alive=30s&tcp_keep_alive_interval=15s#KA
+socks5://user:pass@h.example:1080?disable_tcp_keep_alive=1#NoKA
+```
+
+`disable_tcp_keep_alive` accepts `1` or `true`.
+
+There is no share-URI standard for these fields — this is an L×Box extension,
+following the AnyTLS precedent (5.6, §269). Other clients ignore unknown query
+parameters. The URI form is required, not cosmetic: a node is stored as text
+(URI or JSON), so without it the fields would be dropped on every re-save that
+goes through `toUri()`.
+
+VMess carries them as keys of the base64-encoded v2rayN JSON object, under the
+same sing-box names; the cleartext VMess form uses the query tail.
+
+Shadowsocks and SOCKS URIs gain a query string **only** when a field is set —
+a node without them serializes exactly as before.
+
+### Xray Mapping
+
+Xray stores keep-alive in `streamSettings.sockopt` as whole **seconds**, not
+duration strings:
+
+| Xray `sockopt` | Value | L×Box |
+|----------------|-------|-------|
+| `tcpKeepAliveIdle` | `> 0` | `tcp_keep_alive: "<n>s"` |
+| `tcpKeepAliveInterval` | `> 0` | `tcp_keep_alive_interval: "<n>s"` |
+| either | `< 0` | `disable_tcp_keep_alive: true` (Xray sets `SO_KEEPALIVE=0`, `sockopt_linux.go:143`) |
+| either | `0` | not set |
+
+### Generated sing-box Outbound
+
+```json
+{
+  "type": "vless",
+  "tag": "KA",
+  "server": "h.example",
+  "server_port": 443,
+  "uuid": "…",
+  "tcp_keep_alive": "30s",
+  "tcp_keep_alive_interval": "15s"
+}
+```
+
+The fields are appended after the protocol keys, next to `detour` — both are
+dial fields written from the same place in the emitter.
+
+### Behaviour Notes
+
+- Only non-empty values are written. `disable_tcp_keep_alive: false` and empty
+  durations produce no keys at all, so a node without keep-alive settings emits
+  byte-for-byte what it did before §453.
+- A duration that is not a valid Go-duration is **dropped silently**, and the
+  other two fields survive. Bare integers are read as seconds first (`30` →
+  `"30s"`, D-024); anything still unparseable would make the core's
+  `badoption.Duration` reject the **whole** config, so it never reaches it.
+  No warning is raised — this is a power-user path, same as hysteria2 obfs
+  (§358).
+- There is no UI form field: the fields are entered through the Outbound JSON
+  tab or arrive from an import.
+
+### Reference
+
+- sing-box dial fields: https://sing-box.sagernet.org/configuration/shared/dial/
+- LxBox spec: [`docs/spec/tasks/453-tcp-keep-alive-dial-fields.md`](spec/tasks/453-tcp-keep-alive-dial-fields.md)
 
 ---
 

@@ -2,8 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Реализовано, тесты зелёные |
 | Дата старта | 2026-09-16 |
+| Коммиты | `5263b56f` (модель, разбор, эмит), `71ffe0ba` (тесты) |
 | Ядро | `disable_tcp_keep_alive` / `tcp_keep_alive` / `tcp_keep_alive_interval` — dial-поля sing-box с 1.13.0 (`option/outbound.go:97-99` в форке, применение `common/dialer/default.go:160-178`); в пине `v1.14.1-lx.3` есть |
 | Связанные | §269 (AnyTLS — прецедент sing-box-only полей в URI), §302 (правила над emit-JSON), §283 (identity-хеш), §404 (Xray `sockopt`) |
 
