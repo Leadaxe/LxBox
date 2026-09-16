@@ -1457,8 +1457,10 @@ On a `connected` event `HomeController` subscribes to the `status` and `groups` 
 
 ## Localization (l10n, §279 / §285)
 
-en (the base) plus ru; a new language is one natural-key dictionary plus one
-template overlay plus one `values-<lang>/`, with no structural changes.
+en (the base) plus ru and zh (§452); a new language is one natural-key
+dictionary plus one template overlay plus one `values-<lang>/`, with no
+structural changes. The checkers find languages by their directories, so a new
+one is under the CI gates as soon as its files exist.
 Switching at runtime needs no app restart, including the native surfaces on a
 live VPN service. Since §285 the UI strings are localized through **natural keys**
 (the English call-site text IS the key; ARB and gen_l10n are gone). The full
@@ -1469,8 +1471,8 @@ translator-guide — [`l10n.md`](l10n.md).
 | Component | Role |
 |---|---|
 | `lib/services/l10n/get_local_text.dart` | `GetLocalText` — the natural-key engine: `.s("en text", args)` |
-| `lib/services/l10n/plural_resolver.dart` | `PluralResolver` plus `En`/`RuPluralResolver` (the CLDR forms) |
-| `assets/l10n/ru/ui.json` | The natural-key dictionary: `englishKey → { value: String\|pluralObj, special: … }` |
+| `lib/services/l10n/plural_resolver.dart` | `PluralResolver` plus `En`/`Ru`/`ZhPluralResolver` (the CLDR forms; zh has the single `other`) |
+| `assets/l10n/<tag>/ui.json` | The natural-key dictionary, one per language: `englishKey → { value: String\|pluralObj, special: … }` |
 | `lib/services/l10n/locale_controller.dart` | `LocaleController` — the **sole owner** of the locale-switch pipeline |
 | `lib/services/l10n/template_overlay.dart` | The pre-parse overlay of `wizard_template.json`'s display text (see [TEMPLATE.md](TEMPLATE.md#localizing-the-display-text--the-l10n-overlay-279)) |
 | `lib/services/l10n/template_aware_state.dart` | A mixin: it refetches template-derived state in `didChangeDependencies` |
@@ -1706,7 +1708,7 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **234** | **Server folders** (folders of manual servers: FolderMember plus a per-member toggle and tag_prefix) |
 | 236 | Folder server testing (a headless probe of the folder's members) |
 | **248** | **Detour directions** (directions as detour targets; §254 turns cycles into a fatal with the culprit named) |
-| **279** | **Localization** (en plus ru: the dictionary, the template overlay and values-<lang>; §280 phases 0–7) |
+| **279** | **Localization** (en plus ru and zh: the dictionary, the template overlay and values-<lang>; §280 phases 0–7, §452 zh) |
 | **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
 | **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
 | 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
