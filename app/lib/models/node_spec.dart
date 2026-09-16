@@ -5,6 +5,7 @@ import 'node_sections.dart';
 import 'node_spec_emit.dart' as e;
 import 'node_warning.dart';
 import 'singbox_entry.dart';
+import 'tcp_keep_alive_spec.dart';
 import 'template_vars.dart';
 import 'tls_spec.dart';
 import 'transport_spec.dart';
@@ -44,6 +45,13 @@ sealed class NodeSpec {
   final String rawUri;
   final NodeSpec? chained;
   final List<NodeWarning> warnings;
+
+  /// §453 — TCP keep-alive dial-поля sing-box. В ядре это `DialerOptions`,
+  /// общая для всех outbound'ов с TCP-дозвоном, а не свойство протокола —
+  /// потому база, а не копия в каждом `*Spec`. `null` = не задано, эмит
+  /// ничего не пишет. Прокидывают только 9 носителей (у QUIC/UDP-типов
+  /// keep-alive TCP-сокета не к чему применить, см. §1 спеки 453).
+  final TcpKeepAliveSpec? tcpKeepAlive;
 
   /// §302 — исходный фрагмент подписки, из которого собралась нода, в
   /// «компактном» виде: для JSON-тел это САМ outbound-объект (без dns/
@@ -100,6 +108,7 @@ sealed class NodeSpec {
     required this.port,
     required this.rawUri,
     this.chained,
+    this.tcpKeepAlive,
     List<NodeWarning>? warnings,
   }) : warnings = warnings ?? <NodeWarning>[];
 
@@ -216,6 +225,7 @@ final class VlessSpec extends NodeSpec {
     this.packetEncoding = '',
     this.encryption = '',
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -255,6 +265,7 @@ final class VmessSpec extends NodeSpec {
     this.tls = TlsSpec.disabled,
     this.transport,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -288,6 +299,7 @@ final class TrojanSpec extends NodeSpec {
     this.tls = TlsSpec.disabled,
     this.transport,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -328,6 +340,7 @@ final class AnyTlsSpec extends NodeSpec {
     this.idleSessionTimeout = '',
     this.minIdleSession,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -363,6 +376,7 @@ final class ShadowsocksSpec extends NodeSpec {
     this.plugin = '',
     this.pluginOpts = '',
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -471,6 +485,7 @@ final class NaiveSpec extends NodeSpec {
     this.extraHeaders = const {},
     this.quic = false,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -561,6 +576,7 @@ final class SshSpec extends NodeSpec {
     this.hostKey = const [],
     this.hostKeyAlgorithms = const [],
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -594,6 +610,7 @@ final class SocksSpec extends NodeSpec {
     this.username = '',
     this.password = '',
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -631,6 +648,7 @@ final class HttpSpec extends NodeSpec {
     this.headers = const {},
     this.tls = TlsSpec.disabled,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -1354,6 +1372,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           packetEncoding: s.packetEncoding,
           encryption: s.encryption,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       VmessSpec s => VmessSpec(
@@ -1369,6 +1388,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           tls: s.tls,
           transport: s.transport,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       TrojanSpec s => TrojanSpec(
@@ -1382,6 +1402,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           tls: s.tls,
           transport: s.transport,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       AnyTlsSpec s => AnyTlsSpec(
@@ -1397,6 +1418,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           idleSessionTimeout: s.idleSessionTimeout,
           minIdleSession: s.minIdleSession,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       ShadowsocksSpec s => ShadowsocksSpec(
@@ -1411,6 +1433,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           plugin: s.plugin,
           pluginOpts: s.pluginOpts,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       Hysteria2Spec s => Hysteria2Spec(
@@ -1443,6 +1466,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           tls: s.tls,
           extraHeaders: s.extraHeaders,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       TuicSpec s => TuicSpec(
@@ -1476,6 +1500,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           hostKey: s.hostKey,
           hostKeyAlgorithms: s.hostKeyAlgorithms,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       SocksSpec s => SocksSpec(
@@ -1489,6 +1514,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           username: s.username,
           password: s.password,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       HttpSpec s => HttpSpec(
@@ -1504,6 +1530,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           headers: s.headers,
           tls: s.tls,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       WireguardSpec s => WireguardSpec(

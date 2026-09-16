@@ -8,6 +8,7 @@ import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
+import 'tcp_keep_alive.dart';
 import 'transport.dart';
 import '../app_log.dart';
 import 'uri_utils.dart';
@@ -566,6 +567,8 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
     packetEncoding: packetEncoding,
     encryption: encryption,
     warnings: warnings,
+    // §453 — Xray держит keep-alive в sockopt целыми секундами.
+    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
   );
 }
 
@@ -677,6 +680,8 @@ TrojanSpec? _xrayTrojanToSpec(Map<String, dynamic> o, String remarks) {
     tls: tls,
     transport: _xrayTransportFromStream(stream),
     warnings: warnings,
+    // §453 — Xray держит keep-alive в sockopt целыми секундами.
+    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
   );
 }
 
@@ -713,6 +718,8 @@ VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
     tls: tls,
     transport: _xrayTransportFromStream(stream),
     warnings: warnings,
+    // §453 — Xray держит keep-alive в sockopt целыми секундами.
+    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
   );
 }
 
@@ -727,6 +734,9 @@ ShadowsocksSpec? _xraySsToSpec(Map<String, dynamic> o, String remarks) {
   if (server.isEmpty || method.isEmpty || port == 0) return null;
 
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
+  // §453 — у ss-конвертера своего `stream` нет; sockopt достаём отсюда,
+  // `is Map`-проверка живёт внутри tcpKeepAliveFromXraySockopt.
+  final stream = o['streamSettings'];
   return ShadowsocksSpec(
     id: newUuidV4(),
     tag: tagFromLabel(label, 'ss', server, port),
@@ -736,6 +746,8 @@ ShadowsocksSpec? _xraySsToSpec(Map<String, dynamic> o, String remarks) {
     rawUri: 'xray://${o['tag'] ?? 'proxy'}',
     method: method,
     password: password,
+    tcpKeepAlive:
+        tcpKeepAliveFromXraySockopt(stream is Map ? stream['sockopt'] : null),
   );
 }
 
@@ -989,6 +1001,9 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
   final server = entry['server']?.toString() ?? '';
   final port = (entry['server_port'] as num?)?.toInt() ?? 0;
   final label = tag;
+  // §453 — dial-поля общие для всех носителей; читаем один раз до switch'а,
+  // дальше просто прокидываем. У не-носителей ключи не читаются вовсе.
+  final ka = tcpKeepAliveFromSingbox(entry);
 
   switch (type) {
     case 'vless':
@@ -1009,6 +1024,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
           entry['packet_encoding']?.toString() ?? '',
           tag: tag,
         ),
+        tcpKeepAlive: ka,
       );
     case 'vmess':
       if (server.isEmpty || port == 0) return null;
@@ -1024,6 +1040,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         security: entry['security']?.toString() ?? 'auto',
         tls: _tlsFromSingbox(entry['tls'], server),
         transport: _transportFromSingbox(entry['transport']),
+        tcpKeepAlive: ka,
       );
     case 'trojan':
       if (server.isEmpty || port == 0) return null;
@@ -1037,6 +1054,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         password: entry['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
         transport: _transportFromSingbox(entry['transport']),
+        tcpKeepAlive: ka,
       );
     case 'anytls': // §269
       if (server.isEmpty || port == 0) return null;
@@ -1063,6 +1081,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         idleSessionTimeout: normalizeSingboxDuration(
             entry['idle_session_timeout']?.toString() ?? ''),
         minIdleSession: (entry['min_idle_session'] as num?)?.toInt(),
+        tcpKeepAlive: ka,
       );
     case 'shadowsocks':
       if (server.isEmpty || port == 0) return null;
@@ -1075,6 +1094,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         rawUri: '',
         method: entry['method']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
+        tcpKeepAlive: ka,
       );
     case 'hysteria2':
       if (server.isEmpty || port == 0) return null;
@@ -1137,6 +1157,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         // (fatal всего конфига). Зеркало naive_parser: срезаем блок.
         tls: _naiveTlsFromSingbox(entry['tls'], server),
         extraHeaders: extraHeaders,
+        tcpKeepAlive: ka,
       );
     case 'tuic':
       if (server.isEmpty || port == 0) return null;
@@ -1175,6 +1196,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         privateKey: entry['private_key']?.toString() ?? '',
         privateKeyPassphrase: entry['private_key_passphrase']?.toString() ?? '',
         hostKey: hk is List ? hk.map((e) => e.toString()).toList() : const [],
+        tcpKeepAlive: ka,
       );
     case 'socks':
       if (server.isEmpty || port == 0) return null;
@@ -1187,6 +1209,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         rawUri: '',
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
+        tcpKeepAlive: ka,
       );
     case 'http': // §222 — HTTP(S) CONNECT proxy
       if (server.isEmpty || port == 0) return null;
@@ -1216,6 +1239,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         path: entry['path']?.toString() ?? '',
         headers: headers,
         tls: _tlsFromSingbox(entry['tls'], server),
+        tcpKeepAlive: ka,
       );
     case 'wireguard':
       // §106 — bare IP → CIDR (/32 | /128) для address и allowed_ips.

@@ -2,6 +2,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
 import '../../app_log.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -9,7 +10,15 @@ import '../uri_utils.dart';
 // ════════════════════════════════════════════════════════════════════════════
 
 /// Известные query-keys; всё остальное — log warning + ignore.
-const _naiveKnownQueryKeys = <String>{'extra-headers', 'padding'};
+// §453 — dial-поля keep-alive в этом списке, иначе naive-узел с ними
+// получал бы ложное «unknown query param … ignoring» в логе на каждом разборе.
+const _naiveKnownQueryKeys = <String>{
+  'extra-headers',
+  'padding',
+  'disable_tcp_keep_alive',
+  'tcp_keep_alive',
+  'tcp_keep_alive_interval',
+};
 
 /// §103 §9.B1 — `naive+quic://` (в дополнение к `naive+https://`): суффикс
 /// схемы задаёт транспорт (HTTP/2 vs QUIC), Go запоминает его в
@@ -87,6 +96,8 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
     extraHeaders: headers,
     quic: isQuic,
     warnings: warnings,
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }
 

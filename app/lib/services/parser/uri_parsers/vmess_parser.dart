@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
+import '../tcp_keep_alive.dart';
 import '../transport.dart';
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
@@ -98,6 +99,9 @@ VmessSpec? _vmessFromJson(Map<String, dynamic> cfg, String rawUri) {
     tls: tls,
     transport: transport,
     warnings: warnings,
+    // §453 — в base64-JSON dial-поля лежат ключами самого объекта v2rayN,
+    // под именами sing-box, а не в query: читаем как из sing-box-entry.
+    tcpKeepAlive: tcpKeepAliveFromSingbox(cfg),
   );
 }
 
@@ -172,5 +176,8 @@ VmessSpec? _vmessLegacy(String s, String fragment, String rawUri) {
     tls: tls,
     transport: transport,
     warnings: warnings,
+    // §453 — cleartext-форма несёт dial-поля в query-хвосте, как обычный
+    // share-URI.
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }
