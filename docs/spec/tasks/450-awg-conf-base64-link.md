@@ -2,8 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Черновик |
+| Статус | Реализовано, тесты зелёные (analyze чист, 4778 тестов; корпус контракта проходит без override). Device-verify не проводился |
 | Дата | 2026-09-16 |
+| Коммиты | `docs(450)` 42a9c11d — таска; `fix(450)` 193203a9 — распознавание формы, тесты, синк контракта |
 | Норма | контракт §20.1 (`contract/TASKS_LXBOX.md`, singbox-launcher e6aad5a2); эталон Go `parseWGConfBase64Link` (`core/config/subscription/wgconf_text.go`, лаунчер 1.6.2) |
 | Источник | полевой отчёт владельца 16.09.2026 + [issue лаунчера #125](https://github.com/Leadaxe/singbox-launcher/issues/125) |
 | Связанные | [§421](421-awg3-header-protection.md) (AWG 3.0/3.1), [§243](243-name-is-tag.md) (`nameHint` → tag), §103 D-023/D-030 (валидация ключей) |

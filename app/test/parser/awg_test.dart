@@ -600,4 +600,98 @@ void main() {
       expect(spec.mtu, 1280); // AWG3 без MTU — дефолт AmneziaWG 1280
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // §450 — awg://<base64 .conf>: вторая форма share-link
+  // ══════════════════════════════════════════════════════════════════════════
+  group('§450 awg://<base64 .conf>', () {
+    const hk = 'ddddddddddddddddddddddddddddddddddddddddddY=';
+    const conf = '[Interface]\n'
+        'PrivateKey = $_testPriv\n'
+        'Address = 10.101.0.2/32\n'
+        'DNS = 1.1.1.1\n'
+        'Jc = 120\n'
+        'Jmin = 23\n'
+        'Jmax = 911\n'
+        'S1 = 56\n'
+        'S2 = 48\n'
+        'S3 = 32\n'
+        'S4 = 16\n'
+        'H1 = 1\n'
+        'H2 = 2\n'
+        'H3 = 3\n'
+        'H4 = 4\n'
+        'HeaderProtectionKey = $hk\n'
+        'ContentPaddingAddition = 16-64\n'
+        'RekeyAfterTime = 3000-4000\n'
+        'RandomTrailers = on\n'
+        '[Peer]\n'
+        'PublicKey = $_testPub\n'
+        'PresharedKey = $_testPsk\n'
+        'AllowedIPs = 0.0.0.0/0\n'
+        'Endpoint = 91.247.235.94:51821\n'
+        'PersistentKeepalive = 25\n';
+    final payload = base64.encode(utf8.encode(conf));
+
+    test('метка из фрагмента, AWG3-поля и MTU-клэмп доезжают', () {
+      final link = 'awg://$payload#AmneziaWG-3.1';
+      final spec = parseUri(link) as WireguardSpec?;
+      expect(spec, isNotNull, reason: 'форма не распознана — узел потерян');
+      expect(spec!.tag, 'AmneziaWG-3.1');
+      expect(spec.server, '91.247.235.94');
+      expect(spec.port, 51821);
+      expect(spec.privateKey, _testPriv);
+      final peer = spec.peers.single;
+      expect(peer.publicKey, _testPub);
+      expect(peer.preSharedKey, _testPsk);
+      expect(peer.allowedIps, ['0.0.0.0/0']); // без лишнего ::/0 из дефолта
+      final f = spec.awg!.fields;
+      expect(f['jc'], 120);
+      expect(f['h4'], 4);
+      expect(f['header_protection_key'], hk);
+      expect(f['content_padding_addition'], '16-64');
+      expect(f['rekey_after_time'], '3000-4000');
+      expect(f['random_trailers'], true);
+      expect(spec.mtu, 1280); // §421 — кламп AWG3
+      expect(spec.warnings, isEmpty);
+    });
+
+    test('источник узла — исходная ссылка, не синтетический wireguard://', () {
+      final link = 'awg://$payload#AmneziaWG-3.1';
+      expect((parseUri(link) as WireguardSpec).rawUri, link);
+    });
+
+    test('без фрагмента метка = хост Endpoint, а не фолбэк WireGuard', () {
+      final spec = parseUri('awg://$payload') as WireguardSpec?;
+      expect(spec!.tag, '91.247.235.94');
+    });
+
+    test('схемы wg:// и wireguard:// принимают ту же форму', () {
+      for (final scheme in ['wg', 'wireguard']) {
+        final spec = parseUri('$scheme://$payload#n') as WireguardSpec?;
+        expect(spec?.server, '91.247.235.94', reason: scheme);
+      }
+    });
+
+    test('base64 без [Interface] → узел отброшен (parse_error)', () {
+      expect(parseUri('awg://aGVsbG8gd29ybGQsIG5vdCBhIGNvbmY=#junk'), isNull);
+    });
+
+    test('не-base64 payload → узел отброшен', () {
+      expect(parseUri('awg://!!!not base64!!!#junk'), isNull);
+    });
+
+    test('форма key@host:port не перехватывается conf-веткой', () {
+      final spec = parseUri(fullUri) as WireguardSpec?;
+      expect(spec!.server, 'host.example.com');
+      expect(spec.rawUri, fullUri);
+    });
+
+    test('второй [Interface]-блок игнорируется: один link = один узел', () {
+      final two = base64.encode(utf8.encode('$conf\n$conf'));
+      final spec = parseUri('awg://$two#two') as WireguardSpec?;
+      expect(spec!.peers.length, 1);
+      expect(spec.server, '91.247.235.94');
+    });
+  });
 }
