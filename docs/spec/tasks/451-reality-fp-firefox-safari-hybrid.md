@@ -2,8 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Черновик |
+| Статус | Реализовано, тесты зелёные (analyze чист, 4782 теста, пять чекеров pre-flight; корпус контракта без override). Полевая проверка firefox/safari — за владельцем |
 | Дата | 2026-09-16 |
+| Коммиты | `feat(451)` edb00882 — бамп пина, набор имён, тесты, контракт, KERNEL.md |
 | Норма | контракт §20.2–20.3 (`contract/TASKS_LXBOX.md`); реестры `warnings.json` / `tls.json`; эталон Go `realityHybridUTLSFingerprints` (`node_parser_transport.go`) |
 | Ядро | [SPEC 086](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/086-UTLS_FORK_FIREFOX148/SPEC.md) (firefox, lx.2) + SPEC 087 (safari, lx.3) |
 | Решение владельца | «firefox и safari убрать да»; «edge, ios, 360, qq — на них оставь ограничения» (16.09.2026) |

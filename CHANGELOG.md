@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.24.1] — 2026-09-16
+
 ### Changed
 
 - **Ядро обновлено до 1.14.1-lx.3; отпечатки Firefox и Safari снова работают с REALITY ([§451](docs/spec/tasks/451-reality-fp-firefox-safari-hybrid.md)).**
