@@ -67,12 +67,29 @@ void main() {
       '?type=tcp&security=reality$fpQuery&sni=www.example-3.com'
       '&pbk=$_pbk&sid=ab#R';
 
-  test('REALITY + fp=firefox → в конфиге firefox, предупреждение на узле',
+  // §451 / ядро SPEC 086+087 (libbox ≥ v1.14.1-lx.3) — форк utls несёт
+  // Firefox 148 и Safari 26.3 с гибридным key share: узел живой, повода
+  // предупреждать нет.
+  test('REALITY + fp=firefox/safari → в конфиге как есть, без предупреждения',
       () async {
-    final b = await buildUri(reality('&fp=firefox'));
-    expect(b.utls['fingerprint'], 'firefox');
-    expect(b.node.warnings.whereType<RealityFingerprintWarning>().single.value,
-        'firefox');
+    for (final fp in ['firefox', 'safari']) {
+      final b = await buildUri(reality('&fp=$fp'));
+      expect(b.utls['fingerprint'], fp, reason: fp);
+      expect(b.node.warnings.whereType<RealityFingerprintWarning>(), isEmpty,
+          reason: fp);
+    }
+  });
+
+  test('REALITY + fp=edge/ios/android/360/qq → предупреждение на узле',
+      () async {
+    for (final fp in ['edge', 'ios', 'android', '360', 'qq']) {
+      final b = await buildUri(reality('&fp=$fp'));
+      expect(b.utls['fingerprint'], fp, reason: '§444: подмены нет, $fp');
+      expect(
+          b.node.warnings.whereType<RealityFingerprintWarning>().single.value,
+          fp,
+          reason: fp);
+    }
   });
 
   test('REALITY + пустой fp (sing-box JSON) → chrome', () async {
