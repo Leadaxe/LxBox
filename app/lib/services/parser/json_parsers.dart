@@ -1478,8 +1478,13 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
     TlsSpec(
       enabled: true,
       serverName: raw['server_name']?.toString() ?? server,
-      alpn:
-          (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      // §460 — `alpn` у ядра Listable: массив → типизированный список, строка
+      // → сквозной ключ в форме прибытия (корпус outbound_array_tls_fields
+      // `vless-alpn-str`); раньше `as List` на строке ронял узел целиком.
+      alpn: switch (raw['alpn']) {
+        final List l => [for (final e in l) e.toString()],
+        _ => const [],
+      },
       insecure: raw['insecure'] == true,
       fingerprint: utls?['fingerprint']?.toString(),
       // §454 — пин (D-078) из JSON раньше не читался вовсе: только из
@@ -1492,7 +1497,10 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
           ],
         _ => const [],
       },
-      passthrough: tlsPassthroughFromSingbox(raw),
+      passthrough: {
+        ...tlsPassthroughFromSingbox(raw),
+        if (raw['alpn'] case final String a when a.isNotEmpty) 'alpn': a,
+      },
       // §169 — REALITY только при enabled И валидном X25519 public_key. Битый
       // ключ → reality=null (нода остаётся plain TLS), а не отравляет config.
       reality:
