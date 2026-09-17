@@ -27,6 +27,7 @@ import 'if_engine.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
+import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'validator.dart';
@@ -301,10 +302,26 @@ Future<BuildResult> buildConfig({
   final detourReport = resolveDeferredDetours(ctx.deferredDetours, linkTargets);
   ctx.dropEntries(detourReport);
 
+  // §460 — гард реестра контракта: тела всех записей узлов чистятся по схеме
+  // `body` (unknown_key / type_invalid / min_core / platform / forbidden_for).
+  // Идёт ПОСЛЕ материализации источников и ДО пост-шагов: гейты ядра зависят
+  // от запущенной версии, а сами записи дальше только переставляются.
+  // Служебные outbound'ы шаблона и группы Направлений сюда не попадают — в
+  // аккумуляторах ctx лежат только записи из источников узлов.
+  final registryReport = applyRegistryGate(
+    [...ctx.outbounds, ...ctx.endpoints],
+    coreVersion: settings.coreVersion,
+  );
+  ctx.dropRegistryEntries(registryReport.dropped);
+
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
   // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`
   // (гейт ядра `tailscale_core_unsupported`).
-  final emitWarnings = <String>[...ctx.warnings, ...detourReport.warnings];
+  final emitWarnings = <String>[
+    ...ctx.warnings,
+    ...detourReport.warnings,
+    ...registryReport.warnings,
+  ];
   for (final list in lists) {
     if (!list.enabled) continue;
     // §283 — зеркало фильтра ServerListBuild.build: выключенная нода не
@@ -818,6 +835,19 @@ class _BuildCtx implements EmitContext {
     autoEntries.removeWhere(gone);
     emittedTagByNode
         .removeWhere((node, _) => report.droppedNodes.contains(node));
+  }
+
+  /// §460 — убрать записи, снятые гардом реестра (`drop_node`): их тело ядро
+  /// не примет, а конфиг падает целиком, не одним узлом. Из `emittedTagByNode`
+  /// ничего не чистим: карта адресуется узлом, а гард работает уже над
+  /// эмитированными телами и исходный `NodeSpec` не знает.
+  void dropRegistryEntries(List<SingboxEntry> dropped) {
+    if (dropped.isEmpty) return;
+    bool gone(SingboxEntry e) => dropped.contains(e);
+    outbounds.removeWhere(gone);
+    endpoints.removeWhere(gone);
+    selectorEntries.removeWhere(gone);
+    autoEntries.removeWhere(gone);
   }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;

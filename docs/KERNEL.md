@@ -721,6 +721,16 @@ not know, the **entire** config fails to load, not just the one node. The classi
 - §214: rc.15 did not know `sc_max_each_post_bytes` (XHTTP SPEC 002 v2) → bumped to rc.16.
 - Diagnosis: `/device` core_version (§213) — the real core version inside the APK.
 
+**§460 — sync the contract along with the pin.** The set of allowed body fields now lives in the
+contract registry (`registry/protocols/*.json` → `body`, plus `tls`/`transports`/`multiplex`/
+`dialer`), and the registry is refilled from the new core's `option/*.go` **at pin time**, not
+when some garbage shows up (contract §24.1.3). So a bump is two steps: the launcher side adds the
+new fields to the registry, then `bash app/tool/sync_contract.sh` pulls the copy and the bundled
+mirror `app/assets/contract/` across. Skip it and the build-time sanitiser strips the new core's
+fields as `unknown_key` — the node still works, but quietly without them. `min_core` in the
+registry is what keeps a field off an older core, so it is worth checking that a newly described
+field carries it.
+
 ### 3. A gomobile AAR is not byte-reproducible
 
 The sha of a local build ≠ the sha of the release AAR (paths and timestamps inside
