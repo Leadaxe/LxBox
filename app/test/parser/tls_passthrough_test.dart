@@ -200,6 +200,13 @@ void main() {
       expect(keys.indexOf('ech') < keys.indexOf('utls'), isTrue);
     });
 
+    test('alpn строкой (Listable ядра) остаётся строкой, узел жив (§460)', () {
+      final tls = emitOf(vless({'alpn': 'h3', 'disable_sni': true}))['tls'] as Map;
+      expect(tls['alpn'], 'h3');
+      expect(tls['disable_sni'], true);
+      expect(tls.keys.toList(), ['enabled', 'server_name', 'alpn', 'disable_sni']);
+    });
+
     test('без сквозных ключей эмит прежний байт в байт (parity)', () {
       final tls = emitOf(vless({
         'alpn': ['h2'],
