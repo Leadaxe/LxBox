@@ -350,7 +350,9 @@ void main() {
       expect(f['h1'], '43613244-384550127');
       expect(f['i1'], '<b 0x084481800001>');
       // Round-trip через синтетический URI (путь рестарта) — tag и AWG живы.
-      final again = parseWireguardUri(spec.rawSource)!;
+      // §456 — источник — INI; имя при перечитывании — hint (тег записи).
+      final again =
+          parseWireguardIni(spec.rawSource, nameHint: 'awg2 export (home)')!;
       expect(again.tag, 'awg2 export (home)');
       expect(again.awg!.fields['i1'], '<b 0x084481800001>');
     });

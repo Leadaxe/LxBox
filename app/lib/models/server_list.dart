@@ -408,6 +408,10 @@ final class FolderMember {
   final String raw;
   final bool enabled;
 
+  /// §456 — имя члена, хранимое полем записи (`tag`): у INI-источника тега в
+  /// тексте нет, и узел разбирается с этим hint'ом. У ссылки/JSON пусто.
+  final String nameHint;
+
   /// §237 — личный detour члена: ссылка на узел (D-112; [NodeLink.none] —
   /// нет). Аналог `DetourPolicy.overrideDetour` одиночного сервера; политика
   /// папки применяется к нему как подписка к родной цепочке (см.
@@ -425,20 +429,22 @@ final class FolderMember {
     required this.raw,
     this.enabled = true,
     this.detour = NodeLink.none,
+    this.nameHint = '',
     NodeSections? sections,
     NodeSpec? node,
   })  : sections = (sections == null || sections.isEmpty) ? null : sections,
-        node = node ?? _parseFirst(raw);
+        node = node ?? _parseFirst(raw, nameHint);
 
   /// §439 — член-группа (запись `kind: auto`, `codec/auto_group_record.dart`):
   /// текста нет, узел — сама группа. detour и секций у группы не бывает.
   FolderMember.auto(AutoSelectSpec group, {bool enabled = true})
       : this(raw: '', enabled: enabled, node: group);
 
-  static NodeSpec? _parseFirst(String raw) {
+  static NodeSpec? _parseFirst(String raw, String nameHint) {
     if (raw.trim().isEmpty) return null;
     try {
-      final nodes = parseAll(decode(raw));
+      final nodes =
+          parseAll(decode(raw), nameHint: nameHint.isEmpty ? null : nameHint);
       return nodes.isEmpty ? null : nodes.first;
     } catch (_) {
       return null;
@@ -449,6 +455,7 @@ final class FolderMember {
     String? raw,
     bool? enabled,
     NodeLink? detour,
+    String? nameHint,
     NodeSections? sections,
     bool clearSections = false,
   }) =>
@@ -456,9 +463,10 @@ final class FolderMember {
         raw: raw ?? this.raw,
         enabled: enabled ?? this.enabled,
         detour: detour ?? this.detour,
+        nameHint: nameHint ?? this.nameHint,
         sections: clearSections ? null : (sections ?? this.sections),
-        // Смена raw → re-parse в конструкторе (node: null); иначе нода та же.
-        node: raw == null ? node : null,
+        // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
+        node: raw == null && nameHint == null ? node : null,
       );
 
   /// Равенство записи (§439): [node] выводится из [raw]; у члена-группы
@@ -470,6 +478,7 @@ final class FolderMember {
           raw == other.raw &&
           enabled == other.enabled &&
           detour == other.detour &&
+          nameHint == other.nameHint &&
           sections == other.sections &&
           _sameGroup(node, other.node));
 
@@ -478,7 +487,7 @@ final class FolderMember {
       : b is! AutoSelectSpec;
 
   @override
-  int get hashCode => Object.hash(raw, enabled, detour, sections);
+  int get hashCode => Object.hash(raw, enabled, detour, nameHint, sections);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,

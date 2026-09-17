@@ -579,8 +579,11 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
   "id":            "<uuid>",
   "tag":           "Tokyo",                   // the tag of the parsed node (the first one, when the
                                               // text holds several — records before §368). Written for
-                                              // the contract; NOT applied on read: the node is re-parsed
-                                              // from origin.raw and the text wins, a mismatch is a note.
+                                              // the contract. For uri and json it is NOT applied on read:
+                                              // the node is re-parsed from origin.raw and the text wins,
+                                              // a mismatch is a note. For wg_ini it IS applied (§456):
+                                              // an INI carries no tag, so the node is parsed with the
+                                              // record tag as its name.
   "enabled":       true,
   "origin":        { "kind": "uri", "raw": "vless://…#Tokyo" },
                                               // the original input, byte for byte. kind is derived from
@@ -597,6 +600,13 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
 
 `name` (empty since §243), the `origin` of the model (`paste|file|qr|manual`) and
 `created_at` are not written.
+
+**`origin.kind: wg_ini` (§456).** A WireGuard `.conf` is stored as the file
+text byte for byte, comments included — the source is the file, not a link made
+out of it. The INI carries no tag, so the tag lives in the record's `tag` and is
+applied on read (the node is parsed with it as its name). Records made before
+§456 hold the synthetic `wg://…#name` link (kind `uri`) and keep reading as
+such; there is no migration, since the original file was never stored for them.
 
 **`origin.kind: json` is a build mode (§455).** A server (or folder member)
 whose source is a JSON object goes into the config **verbatim**: the source

@@ -104,12 +104,12 @@ void main() {
       expect(spec.peers.single.endpointHost, '203.0.113.10');
     });
 
-    test('DNS-плейсхолдеры подставлены из dns1/dns2 в rawIni', () {
+    test('DNS-плейсхолдеры подставлены из dns1/dns2 в rawSource', () {
       final link = makeLink(_export([_container('awg', _awgIni)]));
       final spec = parseAll(decode(link)).single as WireguardSpec;
-      expect(spec.rawIni, contains('1.1.1.1'));
-      expect(spec.rawIni, contains('1.0.0.1'));
-      expect(spec.rawIni, isNot(contains(r'$PRIMARY_DNS')));
+      expect(spec.rawSource, contains('1.1.1.1'));
+      expect(spec.rawSource, contains('1.0.0.1'));
+      expect(spec.rawSource, isNot(contains(r'$PRIMARY_DNS')));
     });
 
     test('ranged magic headers (§112) доезжают через vpn://', () {
@@ -280,9 +280,9 @@ PersistentKeepalive = 25-35
       expect(f['h1'], 1);
       expect(spec.mtu, 1280);
       expect(spec.peers.single.persistentKeepalive, '25-35');
-      expect(spec.rawIni, contains('MTU = 1376')); // fidelity исходника
-      expect(spec.rawIni, contains('172.29.172.254'));
-      expect(spec.rawIni, isNot(contains(r'$PRIMARY_DNS')));
+      expect(spec.rawSource, contains('MTU = 1376')); // fidelity исходника
+      expect(spec.rawSource, contains('172.29.172.254'));
+      expect(spec.rawSource, isNot(contains(r'$PRIMARY_DNS')));
       final map = spec.emit(TemplateVars.empty).map;
       expect(map['mtu'], 1280);
       expect(map['reject_after_time'], '150-180');
@@ -296,7 +296,7 @@ PersistentKeepalive = 25-35
       c['awg']['last_config'] = jsonEncode(lc);
       final spec = parseAll(decode(makeLink(export3(c)))).single as WireguardSpec;
       expect(spec.mtu, 1200); // ниже 1280 — уважаем, last_config.mtu не трогает
-      expect(spec.rawIni, isNot(contains('MTU = 1376')));
+      expect(spec.rawSource, isNot(contains('MTU = 1376')));
     });
 
     test('без last_config.mtu и без MTU — дефолт AmneziaWG 1280', () {

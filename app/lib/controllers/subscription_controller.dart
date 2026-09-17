@@ -10,6 +10,7 @@ import '../models/import_rule.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart';
+import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
 import '../models/tailscale_bundle.dart';
 import '../models/ui_msg.dart';
@@ -675,7 +676,6 @@ class SubscriptionController extends ChangeNotifier {
       localAddresses: spec.localAddresses,
       peers: spec.peers,
       mtu: spec.mtu,
-      rawIni: spec.rawIni,
       awg: spec.awg,
       warnings: spec.warnings,
     );
@@ -719,7 +719,6 @@ class SubscriptionController extends ChangeNotifier {
       localAddresses: spec.localAddresses,
       peers: spec.peers,
       mtu: spec.mtu,
-      rawIni: spec.rawIni,
       awg: spec.awg,
       warnings: spec.warnings,
     );
@@ -793,12 +792,35 @@ class SubscriptionController extends ChangeNotifier {
         await _persist();
         await _fetchEntry(_entries.length - 1);
       } else if (isWireGuardConfig(trimmed)) {
-        final spec = parseWireguardIni(trimmed, nameHint: nameHint);
+        var spec = parseWireguardIni(trimmed, nameHint: nameHint);
         if (spec == null) {
           _lastError = const ErrMsg(ErrKey.invalidWireguardConfig);
           return;
         }
-        final wgServer = _autoEmoji(UserServer(
+        // §090 G2b × §456 — в INI тега нет, эмодзи некуда дописать (как в
+        // ссылку или JSON), поэтому оно ставится прямо в тег узла. Тег —
+        // поле записи, так что эмодзи переживает рестарт: при чтении узел
+        // разбирается с ним как с nameHint.
+        if (!hasEmoji(spec.tag)) {
+          final emoji = defaultEmojiFor(spec);
+          spec = WireguardSpec(
+            id: spec.id,
+            tag: '$emoji ${spec.tag}',
+            // label — то же имя, что и tag (оба из имени узла); список
+            // серверов показывает label, поэтому эмодзи нужно и здесь.
+            label: spec.label.isEmpty ? '' : '$emoji ${spec.label}',
+            server: spec.server,
+            port: spec.port,
+            rawSource: spec.rawSource,
+            privateKey: spec.privateKey,
+            localAddresses: spec.localAddresses,
+            peers: spec.peers,
+            mtu: spec.mtu,
+            awg: spec.awg,
+            warnings: spec.warnings,
+          );
+        }
+        final wgServer = UserServer(
           id: newUuidV4(),
           name: '',
           enabled: true,
@@ -807,7 +829,7 @@ class SubscriptionController extends ChangeNotifier {
           origin: origin,
           rawBody: spec.rawSource,
           nodes: [spec],
-        ));
+        );
         _entries.add(SubscriptionEntry(
             list: wgServer, nodeCount: wgServer.nodes.length));
         await _persist();
@@ -1223,19 +1245,10 @@ class SubscriptionController extends ChangeNotifier {
 
   // ──────────────────────── §234 — Server folders ────────────────────────
 
-  /// Самодостаточный raw-фрагмент для члена папки: `rawSource` (оригинал), если
-  /// он парсится ровно в одну ноду; иначе канонический `toUri()`. Держит
-  /// инвариант member ↔ нода 1:1 (у нод multi-нодных контейнеров вроде
-  /// `vpn://` одинаковый rawSource на всех — им нужен toUri()).
-  static String memberRawFor(NodeSpec n) {
-    final raw = n.rawSource.trim();
-    if (raw.isNotEmpty) {
-      try {
-        if (parseAll(decode(raw)).length == 1) return raw;
-      } catch (_) {}
-    }
-    return n.toUri();
-  }
+  /// §456 — имя члена папки, хранимое полем записи: у INI-источника тег в
+  /// тексте не лежит, у ссылки и JSON — лежит (пусто).
+  static String memberNameHintFor(NodeSpec n) =>
+      originKindOf(n.rawSource) == 'wg_ini' ? n.tag : '';
 
   /// §439 — члены-группы разобранного входа (sing-box-конфиг с
   /// `urltest`/`selector`) → члены `kind: auto` папки [folderId]. [added]
@@ -1547,23 +1560,29 @@ class SubscriptionController extends ChangeNotifier {
     final usedNames = <String>{};
     final added = <FolderMember>[];
     for (final n in nodes) {
-      var raw = memberRawFor(n);
-      // §439 — у группы текста нет, имя ей не раздаётся (член `kind: auto`).
+      // §456 — источник члена = источник узла как есть (§454); INI несёт имя
+      // через `nameHint`, JSON — в теле. Фолбэк имени файла — только ссылке
+      // без своего фрагмента. §439 — группе имя не раздаётся (`kind: auto`).
+      var raw = n.rawSource;
       if (!n.isGroup &&
           nameFallback != null &&
           nameFallback.isNotEmpty &&
+          originKindOf(raw) == 'uri' &&
           !_rawHasOwnName(raw)) {
         var candidate = nameFallback;
         var i = 2;
         while (!usedNames.add(candidate)) {
           candidate = '$nameFallback ${i++}';
         }
-        raw = rawWithName(n.toUri(), candidate);
+        raw = rawWithName(raw, candidate);
       }
       // §435 — секции из целого конфига / документа с `sections` едут в
       // члена папки вместе с телом; §437 — узел Tailscale без них получает
       // каноническую связку.
-      added.add(FolderMember(raw: raw, sections: sectionsForNewNode(n)));
+      added.add(FolderMember(
+          raw: raw,
+          nameHint: memberNameHintFor(n),
+          sections: sectionsForNewNode(n)));
     }
     added.setAll(0, _bindAutoMembers(added, nodes, folder.id));
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
@@ -1598,7 +1617,9 @@ class SubscriptionController extends ChangeNotifier {
       final added = _bindAutoMembers(
           result.nodes
               .map((n) => FolderMember(
-                  raw: memberRawFor(n), sections: sectionsForNewNode(n)))
+                  raw: n.rawSource,
+                  nameHint: memberNameHintFor(n),
+                  sections: sectionsForNewNode(n)))
               .toList(),
           result.nodes,
           cur.id);
@@ -1723,8 +1744,9 @@ class SubscriptionController extends ChangeNotifier {
 
   /// Правка raw-фрагмента члена. Новый raw обязан парситься ≥1 ноды, иначе
   /// откат (возврат текста ошибки, старый член не трогается).
-  Future<UiMsg?> updateMemberAt(
-      int index, int memberIndex, String newRaw) async {
+  /// §456 — [nameHint]: имя для INI-текста (поле Tag редактора).
+  Future<UiMsg?> updateMemberAt(int index, int memberIndex, String newRaw,
+      {String? nameHint}) async {
     if (index < 0 || index >= _entries.length) {
       return const ErrMsg(ErrKey.folderNotFound);
     }
@@ -1735,7 +1757,8 @@ class SubscriptionController extends ChangeNotifier {
       return const ErrMsg(ErrKey.serverNotFound);
     }
     final trimmed = newRaw.trim();
-    final probe = FolderMember(raw: trimmed);
+    final hint = nameHint ?? folder.members[memberIndex].nameHint;
+    final probe = FolderMember(raw: trimmed, nameHint: hint);
     if (probe.node == null) {
       return const ErrMsg(ErrKey.memberParseKeepCurrent);
     }
@@ -1747,6 +1770,7 @@ class SubscriptionController extends ChangeNotifier {
     final previous = members[memberIndex].node;
     members[memberIndex] = members[memberIndex].copyWith(
       raw: trimmed,
+      nameHint: hint,
       sections: imported,
     );
     final current = members[memberIndex].node;
@@ -2069,7 +2093,8 @@ class SubscriptionController extends ChangeNotifier {
         : _bindAutoMembers([
             for (final n in server.nodes)
               FolderMember(
-                  raw: memberRawFor(n),
+                  raw: n.rawSource,
+                  nameHint: memberNameHintFor(n),
                   enabled: server.enabled,
                   detour: personalDetour,
                   // §435 — секции одиночного едут с его (единственным) узлом.
@@ -2690,7 +2715,10 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Обновляет inline-узлы `UserServer` из нового списка URI/JSON строк.
-  Future<void> updateConnectionAt(int index, List<String> connections) async {
+  /// §456 — [nameHint]: имя для INI-текста (тег из поля Tag редактора);
+  /// ссылка и JSON несут имя сами, им hint не нужен.
+  Future<void> updateConnectionAt(int index, List<String> connections,
+      {String? nameHint}) async {
     if (index < 0 || index >= _entries.length) return;
     final list = _entries[index].list;
     if (list is! UserServer) return;
@@ -2698,7 +2726,7 @@ class SubscriptionController extends ChangeNotifier {
     final nodes = <NodeSpec>[];
     for (final c in connections) {
       final decoded = decode(c);
-      nodes.addAll(parseAll(decoded));
+      nodes.addAll(parseAll(decoded, nameHint: nameHint));
     }
     final before = _lists();
     final next = list.copyWith(

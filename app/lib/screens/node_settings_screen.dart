@@ -315,7 +315,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     } else if (!text.contains('\n') && text.contains('://')) {
       toStore = SubscriptionController.rawWithName(text, _tagCtrl.text.trim());
     } else {
-      toStore = text;
+      // §456 — INI: текст как есть, имя — полем записи (`nameHint`).
+      await _store(text,
+          nameHint: _tagCtrl.text.trim(), savedMessage: _savedMessage);
+      return;
     }
     await _store(toStore, savedMessage: _savedMessage);
   }
@@ -323,20 +326,21 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// Записать [raw] источником узла (одиночный — `updateConnectionAt`, член
   /// папки — `updateMemberAt`) и перечитать экран.
   Future<void> _store(String raw,
-      {required String Function() savedMessage}) async {
+      {String? nameHint, required String Function() savedMessage}) async {
     try {
       final mi = widget.memberIndex;
       if (mi != null) {
         // §237 — член папки: транзакционная правка raw (битый → откат).
-        final err =
-            await widget.subController.updateMemberAt(widget.index, mi, raw);
+        final err = await widget.subController
+            .updateMemberAt(widget.index, mi, raw, nameHint: nameHint);
         if (!mounted) return;
         if (err != null) {
           _snack(err.render());
           return;
         }
       } else {
-        await widget.subController.updateConnectionAt(widget.index, [raw]);
+        await widget.subController
+            .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
         if (!mounted) return;
       }
       // Перечитать узел: Source показывает записанный текст, JSON — тело,
@@ -642,7 +646,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final kindNote = switch (_originKind) {
       'json' => getLocalText.s(
           "sing-box JSON: sent to the core as is. The core checks it on save."),
-      'wg_ini' => getLocalText.s("WireGuard config: saved as is."),
+      'wg_ini' => getLocalText.s(
+          "WireGuard config: saved as is. The tag is stored separately."),
       _ => getLocalText.s("Link: the tag goes into its fragment on save."),
     };
     return ListView(

@@ -1053,6 +1053,14 @@ Auto-detected when input contains both `[Interface]` and `[Peer]` sections.
 
 ### Conversion
 
+The INI text **is** the node's source (§456): it is stored as is, byte for byte,
+comments included (`origin.kind: wg_ini`), and the Source tab of the node editor
+shows that same text. The tag is not part of the text — it is a field of the
+storage record. The initial name comes, in this order, from the first comment
+right under `[Peer]` that has no `=` (Proton writes the server name there:
+`# CH-FREE#11`), else from the file name on import, else `WireGuard`. The
+`wireguard://` URI below is an internal step of the parser and never leaves it.
+
 The INI config is converted to a `wireguard://` URI internally using `wireGuardConfigToUri()`:
 
 1. Parse `[Interface]`: `PrivateKey`, `Address`, `MTU` plus the AWG fields `Jc`/`Jmin`/`Jmax`/`S1`–`S4`/`H1`–`H4`/`I1`–`I5` (§097, see [8.5](#85-amneziawg-awg-awg2); keys are case-insensitive, the case of the value is preserved, and `i*` are URL-escaped in the query) and the AWG 3.x keys `HeaderProtectionKey`, `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts`, `RandomTrailers`, `DisableCookies` (§421; passed through under the same lower-cased names)

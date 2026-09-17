@@ -1387,6 +1387,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
         tag: tag.isEmpty ? 'tailscale' : tag,
         label: label,
         body: entry,
+        rawSource: src,
       );
     default:
       return null;

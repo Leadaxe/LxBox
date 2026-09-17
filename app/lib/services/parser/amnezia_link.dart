@@ -216,7 +216,7 @@ String _withLastConfigMtu(String ini, Object? mtuRaw) {
 
 /// `$PRIMARY_DNS`/`$SECONDARY_DNS` ← корневые `dns1`/`dns2`. Парсу не
 /// мешают и без подстановки (INI-парсер DNS игнорирует) — это fidelity
-/// сохраняемого rawIni.
+/// сохраняемого источника узла (`rawSource`).
 String _substituteDns(String ini, Map<String, dynamic> root) {
   var out = ini;
   final dns1 = root['dns1'];

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
-import 'package:lxbox/services/parser/uri_parsers.dart';
 
 // SPEC 103 D-023/D-030 — normalizeWGKey (wireguard_parser.dart) требует
 // РОВНО 32 байта base64; короткие плейсхолдеры вроде "pk"/"pubk" больше не
@@ -27,7 +26,7 @@ void main() {
       expect(spec.peers.first.preSharedKey, contains('eeeeeee'));
       expect(spec.peers.first.persistentKeepalive, 25);
       expect(spec.mtu, 1420);
-      expect(spec.rawIni, contains('[Interface]'));
+      expect(spec.rawSource, contains('[Interface]'));
     });
 
     test('missing PrivateKey → null', () {
@@ -70,11 +69,10 @@ void main() {
       const name = 'Мой сервер (NL) 2';
       final spec = parseWireguardIni(ini, nameHint: name)!;
       expect(spec.tag, name); // не %-энкоженная каша
-      // rawSource — валидный URI: фрагмент закодирован, сырых пробелов нет.
-      expect(spec.rawSource, isNot(contains(' ')));
-      // Симметрия: синтетический URI парсится обратно в тот же tag
-      // (это же путь UserServer.fromJson после рестарта).
-      final again = parseWireguardUri(spec.rawSource);
+      // §456 — источник — сам INI байт в байт; тег хранится полем записи и
+      // при перечитывании приходит nameHint'ом (путь чтения хранения).
+      expect(spec.rawSource, ini);
+      final again = parseWireguardIni(spec.rawSource, nameHint: name);
       expect(again, isNotNull);
       expect(again!.tag, name);
     });
@@ -97,6 +95,45 @@ void main() {
       expect(nodes, hasLength(2));
       expect(nodes[0].tag, 'multi');
       expect(nodes[1].tag, 'multi 2');
+    });
+  });
+
+  group('§456 — имя из комментария [Peer]', () {
+    const proton = """[Interface]
+# Key for wg-test
+# Bouncing = 0
+PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
+Address = 10.2.0.2/32
+DNS = 10.2.0.1
+
+[Peer]
+# CH-FREE#11
+PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 1.2.3.4:51820
+""";
+
+    test('комментарий под [Peer] сильнее имени файла', () {
+      expect(peerCommentName(proton), 'CH-FREE#11');
+      expect(parseWireguardIni(proton, nameHint: 'file')!.tag, 'CH-FREE#11');
+      expect(parseWireguardIni(proton)!.rawSource, proton);
+    });
+
+    test('строка с = под [Peer] и комментарии [Interface] именем не считаются',
+        () {
+      const noName = """[Interface]
+# Key for wg-test
+PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
+Address = 10.2.0.2/32
+
+[Peer]
+# Bouncing = 0
+PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
+Endpoint = 1.2.3.4:51820
+""";
+      expect(peerCommentName(noName), isNull);
+      expect(parseWireguardIni(noName, nameHint: 'file')!.tag, 'file');
+      expect(parseWireguardIni(noName)!.tag, 'WireGuard');
     });
   });
 }

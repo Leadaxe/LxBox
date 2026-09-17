@@ -4987,8 +4987,8 @@
  "sing-box JSON: sent to the core as is. The core checks it on save.": {
   "value": "sing-box JSON：原样发送给内核。内核在保存时进行检查。"
  },
- "WireGuard config: saved as is.": {
-  "value": "WireGuard 配置：原样保存。"
+ "WireGuard config: saved as is. The tag is stored separately.": {
+  "value": "WireGuard 配置：原样保存。标签单独存储。"
  },
  "Link: the tag goes into its fragment on save.": {
   "value": "链接：保存时标签会写入其片段。"

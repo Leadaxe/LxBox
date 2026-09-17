@@ -44,10 +44,10 @@ sealed class NodeSpec {
   final int port;
 
   /// §454 — источник узла: из чего он разобран. URI-строка байт в байт,
-  /// объект outbound'а (sing-box / Xray) в pretty-JSON; у WG из INI —
-  /// синтетический wg:// с тегом во фрагменте (§243, INI-текст в `rawIni`).
+  /// объект outbound'а (sing-box / Xray) в pretty-JSON, INI-текст у WG из
+  /// `.conf` (§456; тег — поле записи, не текста).
   /// Им узел предъявляет себя, когда нужен собственный текст: переезд в
-  /// папку (`memberRawFor`), вкладка Source. Пусто только у узлов, собранных
+  /// папку (`raw` члена), вкладка Source. Пусто только у узлов, собранных
   /// приложением без текста (группы §208).
   /// Не сериализуется: хранение держит текст контейнера (`origin.raw`).
   final String rawSource;
@@ -1055,7 +1055,6 @@ final class WireguardSpec extends NodeSpec {
   final List<String> localAddresses; // CIDR список
   final List<WireguardPeer> peers;
   final int? mtu;
-  final String? rawIni; // если парсили из INI, сохраняем оригинал
 
   /// §097 Phase 1 — AmneziaWG2 obfuscation params (null = обычный WG).
   final Awg? awg;
@@ -1071,7 +1070,6 @@ final class WireguardSpec extends NodeSpec {
     required this.localAddresses,
     required this.peers,
     this.mtu,
-    this.rawIni,
     this.awg,
     super.chained,
     super.warnings,
@@ -1295,10 +1293,11 @@ final class TailscaleSpec extends NodeSpec {
     required super.tag,
     required super.label,
     Map<String, dynamic> body = const {},
+    super.rawSource = '',
     super.chained,
     super.warnings,
   })  : body = _stripMeta(body),
-        super(server: '', port: 0, rawSource: '');
+        super(server: '', port: 0);
 
   static Map<String, dynamic> _stripMeta(Map<String, dynamic> raw) {
     final copy = deepCopyJson(raw) as Map<String, dynamic>;
@@ -1344,6 +1343,7 @@ final class TailscaleSpec extends NodeSpec {
         tag: tag ?? this.tag,
         label: label ?? this.label,
         body: body ?? this.body,
+        rawSource: rawSource,
         chained: chained ?? this.chained,
         warnings: warnings,
       );
@@ -1547,7 +1547,6 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           localAddresses: s.localAddresses,
           peers: s.peers,
           mtu: s.mtu,
-          rawIni: s.rawIni,
           awg: s.awg,
           chained: chained,
           warnings: s.warnings,

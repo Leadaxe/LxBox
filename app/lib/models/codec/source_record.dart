@@ -175,13 +175,22 @@ String _firstNodeTag(List<NodeSpec> nodes, String raw) {
   return parsed.isEmpty ? '' : parsed.first.tag;
 }
 
-List<NodeSpec> _parseNodes(String raw) {
+List<NodeSpec> _parseNodes(String raw, {String? nameHint}) {
   if (raw.trim().isEmpty) return const [];
   try {
-    return parseAll(decode(raw));
+    return parseAll(decode(raw), nameHint: nameHint);
   } catch (_) {
     return const [];
   }
+}
+
+/// §456 — у `origin.kind: wg_ini` тег записи ПРИМЕНЯЕТСЯ: INI тега не
+/// несёт, узел разбирается с ним как с `nameHint`. У ссылки и JSON тег лежит
+/// в тексте, и текст побеждает (`_checkTag`). `null` — не INI или тега нет.
+String? _iniTagHint(Map<String, dynamic> j, String raw) {
+  final tag = j['tag'];
+  if (tag is! String || tag.isEmpty) return null;
+  return originKindOf(raw) == 'wg_ini' ? tag : null;
 }
 
 // ─── чтение ─────────────────────────────────────────────────────────────────
@@ -306,8 +315,11 @@ UserServer _serverFromRecord(
   final where = 'server "$id"';
   _collectUnknown(j, _serverKeys, '', unknown);
   final raw = _rawOf(j, '', unknown);
-  final nodes = _parseNodes(raw);
-  _checkTag(j, nodes.isEmpty ? null : nodes.first.tag, where, notes);
+  final hint = _iniTagHint(j, raw);
+  final nodes = _parseNodes(raw, nameHint: hint);
+  if (hint == null) {
+    _checkTag(j, nodes.isEmpty ? null : nodes.first.tag, where, notes);
+  }
   return UserServer(
     id: id,
     name: '',
@@ -393,13 +405,16 @@ FolderMember? _memberFromRecord(
     return null;
   }
   _collectUnknown(j, _memberKeys, path, unknown);
+  final text = _rawOf(j, path, unknown);
+  final hint = _iniTagHint(j, text);
   final member = FolderMember(
-    raw: _rawOf(j, path, unknown),
+    raw: text,
     enabled: _bool(j['enabled'], true),
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
+    nameHint: hint ?? '',
     sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
   );
-  _checkTag(j, member.node?.tag, where, notes);
+  if (hint == null) _checkTag(j, member.node?.tag, where, notes);
   return member;
 }
 

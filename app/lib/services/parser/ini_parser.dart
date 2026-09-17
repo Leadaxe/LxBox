@@ -6,11 +6,15 @@ import 'uri_parsers.dart';
 /// Обязательные поля: `[Interface].PrivateKey`, `[Peer].PublicKey`,
 /// `[Peer].Endpoint`. Остальные — опциональные с дефолтами.
 ///
-/// §243 — [nameHint] (имя файла при импорте `.conf`) становится фрагментом
-/// синтетического URI ⇒ tag узла. Пустой/null → прежний фолбэк `WireGuard`
-/// (вставка INI-текста из буфера).
+/// §456 — источник узла (`rawSource`) — сам INI-текст, байт в байт;
+/// синтетический URI — внутренний шаг. Имя узла (INI тега не несёт), по
+/// убыванию силы: первый комментарий под `[Peer]` без `=` (Proton пишет туда
+/// имя сервера: `# CH-FREE#11`), затем [nameHint] (имя файла при импорте
+/// §243, тег записи при чтении хранения, поле Tag редактора), затем
+/// `WireGuard`. Тег хранится полем записи, не в тексте.
 WireguardSpec? parseWireguardIni(String config, {String? nameHint}) {
-  final uri = _iniToUri(config, nameHint);
+  final peerName = peerCommentName(config);
+  final uri = _iniToUri(config, peerName ?? nameHint);
   if (uri == null) return null;
   final spec = parseWireguardUri(uri);
   if (spec == null) return null;
@@ -20,18 +24,34 @@ WireguardSpec? parseWireguardIni(String config, {String? nameHint}) {
     label: spec.label,
     server: spec.server,
     port: spec.port,
-    // §243/§454 — источник INI-узла — синтетический wg:// URI с тегом во
-    // фрагменте: им узел хранится (`rawBody`) и переживает рестарт с именем
-    // файла. Сам INI-текст — в `rawIni`, для показа и AWG-полей.
-    rawSource: spec.rawSource,
+    rawSource: config,
     privateKey: spec.privateKey,
     localAddresses: spec.localAddresses,
     peers: spec.peers,
     mtu: spec.mtu,
-    rawIni: config,
-    awg: spec.awg, // §097 — не теряем AWG при rebuild для rawIni
+    awg: spec.awg, // §097 — не теряем AWG при rebuild
     warnings: spec.warnings,
   );
+}
+
+/// §456 — имя сервера из комментария под `[Peer]`: первая строка секции,
+/// начинающаяся с `#`, без `=` (иначе это опция вроде `# Bouncing = 0`).
+/// `null` — комментария нет.
+String? peerCommentName(String config) {
+  var inPeer = false;
+  for (final line in config.split(RegExp(r'\r?\n'))) {
+    final t = line.trim();
+    if (t.startsWith('[')) {
+      inPeer = t.toLowerCase() == '[peer]';
+      continue;
+    }
+    if (!inPeer || t.isEmpty) continue;
+    if (!t.startsWith('#')) break; // первая настоящая строка секции — имени нет
+    final name = t.substring(1).trim();
+    if (name.isEmpty || name.contains('=')) continue;
+    return name;
+  }
+  return null;
 }
 
 String? _iniToUri(String config, String? nameHint) {

@@ -48,12 +48,9 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
   String get _json => const JsonEncoder.withIndent('  ')
       .convert(_node.emit(TemplateVars.empty).map);
 
-  /// Исходный фрагмент узла. У WG-узла из INI источник хранения —
-  /// синтетический wg:// (§243); человеку показываем сам INI (`rawIni`).
+  /// Исходный фрагмент узла (§454/§456: у WG из INI — сам INI).
   String get _source {
-    final n = _node;
-    final compact =
-        n is WireguardSpec && (n.rawIni ?? '').isNotEmpty ? n.rawIni! : n.rawSource;
+    final compact = _node.rawSource;
     if (!_extended) return compact;
     return _node.sourceExtended ?? compact;
   }
