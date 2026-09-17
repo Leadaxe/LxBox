@@ -25,7 +25,23 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.1-lx.4`** (see `app/android/libbox.version`) — two
+**The current pin: `v1.14.1-lx.5`** (see `app/android/libbox.version`) — a single
+hotfix on top of lx.4. **SPEC 090**: a REALITY `short_id` longer than 16 hex
+characters is now rejected with `invalid short_id` before decoding, on the client
+(`common/tls/reality_client.go`) and on the server (`reality_server.go`) alike.
+Until lx.5 the same input panicked with `index out of range`: `hex.Decode` wrote
+into an `[8]byte` array without checking the input length first, so a node from a
+subscription with an over-long `short_id` took the process down instead of
+failing the config. Found by the contract's DRIFT inventory (TASKS_LXBOX §24.4 г)
+and handed to the core agent on 18.09. The wire format, the config schema, the
+AAR tag sets, the Go toolchain and the submodules are all unchanged, and the
+libbox API did not move: the Java surface is identical to lx.4 (javap over all
+253 classes of `classes.jar` — diff empty).
+LxBox's own guard from §343 (drop a `short_id` over 16 hex characters instead of
+trimming it) stays where it is — it is UX protection at the edge, and with lx.5
+the core behind it answers with an error rather than a panic.
+
+**`v1.14.1-lx.4`** — two
 REALITY changes on top of lx.3. **SPEC 088**: `tls.fragment` and
 `tls.record_fragment` now apply to REALITY too. Until lx.4 the REALITY client
 built its handshake on the bare socket and silently skipped both, including the
@@ -769,7 +785,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.1-lx.4** (current pin) | **REALITY: fragmentation and `key_share`.** Fork SPEC 088 — `tls.fragment` / `tls.record_fragment` now apply to REALITY as well: until lx.4 the REALITY client built its handshake on the bare socket and skipped them silently, including the automatic `record_fragment` under a `detour`. Fork SPEC 089 — a per-node `tls.reality.key_share` (`hybrid` \| `classical`), an unknown value rejects the whole config; LxBox emits it from §457. Wire format, tag sets and toolchain unchanged; Java surface identical to lx.3 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.5** (current pin) | **REALITY `short_id` hotfix** (fork SPEC 090): a `short_id` longer than 16 hex characters is rejected with `invalid short_id` before decoding, on the client and on the server; until lx.5 it panicked with `index out of range` inside `hex.Decode` writing into an `[8]byte`. Found by the contract's DRIFT inventory (§461). Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.4 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.4** | **REALITY: fragmentation and `key_share`.** Fork SPEC 088 — `tls.fragment` / `tls.record_fragment` now apply to REALITY as well: until lx.4 the REALITY client built its handshake on the bare socket and skipped them silently, including the automatic `record_fragment` under a `detour`. Fork SPEC 089 — a per-node `tls.reality.key_share` (`hybrid` \| `classical`), an unknown value rejects the whole config; LxBox emits it from §457. Wire format, tag sets and toolchain unchanged; Java surface identical to lx.3 (javap diff over all 253 classes — empty). |
 | **v1.14.0-lx.39** | **SOCKS5 UDP hotfix** (fork SPEC 085): a UDP ASSOCIATE reply with `BND.ADDR` `0.0.0.0`/`::` no longer makes the client dial the relay at the local system — the proxy server address is used instead. Java surface identical to lx.38. |
 | **v1.14.0-lx.38** | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
 | **v1.14.0-lx.37** | Upstream sync: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules wireguard-go v0.0.6 / sing-tun v0.9.3. No config changes. AAR still without Tailscale. |
