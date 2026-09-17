@@ -1407,11 +1407,53 @@ List<int>? _reservedFromJson(dynamic raw) {
   return out;
 }
 
-/// §281 — TLS для naive-entry: только enabled/server_name (см. naive_parser).
+/// §281/§454 — TLS для naive-entry: `enabled`/`server_name` плюс то, что
+/// naive реально принимает из allowlist'а ([kNaiveTlsPassthroughKeys] —
+/// `certificate`/`certificate_path`, issue #140). Остальное — `disable_sni`,
+/// `insecure`, `alpn`, версии, `client_*`, `fragment*`, `kernel_*`, `utls`,
+/// `reality` — ядро отвергает фаталом (`protocol/naive/outbound.go:45-86`).
+/// Пин `certificate_public_key_sha256` naive молча не читает — тоже
+/// срезаем, чтобы не обещать пиннинг, которого нет.
 TlsSpec _naiveTlsFromSingbox(dynamic raw, String server) {
   final full = _tlsFromSingbox(raw, server);
   if (!full.enabled) return full;
-  return TlsSpec(enabled: true, serverName: full.serverName);
+  return TlsSpec(
+    enabled: true,
+    serverName: full.serverName,
+    passthrough: {
+      for (final e in full.passthrough.entries)
+        if (kNaiveTlsPassthroughKeys.contains(e.key)) e.key: e.value,
+    },
+  );
+}
+
+/// §454 — сквозные ключи allowlist'а ядра ([kTlsPassthroughKeys]) в форме
+/// прибытия. Guard «деградируй поле, не конфиг»: значение не того типа
+/// (число вместо PEM, объект вместо строки, `false`) — ключ отброшен молча,
+/// соседи и узел живут; `Listable[string]` с мусором ронял бы разбор всего
+/// конфига в ядре. `false` у булевых = omitempty ядра, не хранится.
+Map<String, Object> tlsPassthroughFromSingbox(Map raw) {
+  final out = <String, Object>{};
+  for (final k in kTlsPassthroughKeys) {
+    if (!raw.containsKey(k)) continue;
+    final v = raw[k];
+    if (kTlsBoolKeys.contains(k)) {
+      if (v == true) out[k] = true;
+    } else if (kTlsListableKeys.contains(k)) {
+      if (v is String) {
+        if (v.isNotEmpty) out[k] = v;
+      } else if (v is List) {
+        final list = [
+          for (final e in v)
+            if (e is String && e.isNotEmpty) e,
+        ];
+        if (list.isNotEmpty) out[k] = list;
+      }
+    } else if (v is String && v.isNotEmpty) {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 TlsSpec _tlsFromSingbox(dynamic raw, String server) {
@@ -1430,6 +1472,17 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
           (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       insecure: raw['insecure'] == true,
       fingerprint: utls?['fingerprint']?.toString(),
+      // §454 — пин (D-078) из JSON раньше не читался вовсе: только из
+      // `pinSHA256=` hysteria2-URI. Listable ядра: строка или массив.
+      certificatePublicKeySha256: switch (raw['certificate_public_key_sha256']) {
+        final String v when v.isNotEmpty => [v],
+        final List v => [
+            for (final e in v)
+              if (e is String && e.isNotEmpty) e,
+          ],
+        _ => const [],
+      },
+      passthrough: tlsPassthroughFromSingbox(raw),
       // §169 — REALITY только при enabled И валидном X25519 public_key. Битый
       // ключ → reality=null (нода остаётся plain TLS), а не отравляет config.
       reality:

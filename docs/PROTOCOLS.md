@@ -582,7 +582,7 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 ### Behaviour Notes
 
 - TLS is **always** enabled — `tls.enabled = true`, `tls.server_name = host`. NaïveProxy without TLS is meaningless.
-- The naive outbound in sing-box rejects `alpn`, `insecure`, `utls`, `reality`, `min_version`, `cipher_suites`, `fragment`. The parser deliberately leaves them unset; users wanting custom TLS edit the JSON directly via the config editor (spec 007).
+- The naive outbound in sing-box rejects `alpn`, `insecure`, `disable_sni`, `utls`, `reality`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment`, `kernel_*`. The parser deliberately leaves them unset. What naive **does** accept on top of `enabled`/`server_name` is `certificate` (PEM, string or array — its own trusted root, fed to cronet) and `certificate_path`; both survive the JSON round-trip since §454 (issue #140). The pin `certificate_public_key_sha256` is silently ignored by naive and therefore dropped.
 - `network`/`udp_over_tcp`/`quic` fields are **not** emitted in v1 — the URI standard does not carry them and naive QUIC mode is deferred (see spec 037 §10).
 - `extra_headers` keys are sorted lexicographically when emitted to JSON or back to URI form, for deterministic round-trip.
 - `padding` is silently dropped because sing-box has no corresponding option.
@@ -1376,7 +1376,8 @@ Membership uses **explicit identity keys**, not a tag regex as in §322 — insi
 ### Notes
 
 - Entries are **re-parsed** into typed `NodeSpec`s via `parseSingboxEntry` — nothing is passed through verbatim. Supported `type` values: `vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `hysteria2`, `naive`, `tuic`, `ssh`, `socks`, `http`, `wireguard`, `masque`.
-- Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. hysteria2 port hopping, ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
+- Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
+- **TLS block (§454, contract TASKS_LXBOX §22):** the model carries every key of the core's `OutboundTLSOptions` (`option/tls.go`). Typed and gated: `server_name`, `alpn`, `insecure`, `utls`, `reality`, `certificate_public_key_sha256`. Passed through in the form they arrived (a string stays a string, an array stays an array; booleans only when `true`): `disable_sni`, `min_version`, `max_version`, `cipher_suites`, `curve_preferences`, `certificate`, `certificate_path`, `client_certificate`, `client_certificate_path`, `client_key`, `client_key_path`, `fragment`, `fragment_fallback_delay`, `record_fragment`, `kernel_tx`, `kernel_rx`. Not emitted: `ech` (core built without `with_ech`) and unknown keys (the core rejects them on the whole config). Emit order follows the core struct, except that `alpn` stays before `insecure` for byte-parity with earlier releases (the identity hash sorts keys, so it does not care). Naive keeps only `certificate`/`certificate_path` of the passthrough set; QUIC types (hysteria2/tuic) keep it whole and drop `utls`/`reality` as before.
 - The `tag` field is used for display; an absent tag falls back to `<type>-<server>-<port>`.
 - This is for advanced users who want to specify the exact sing-box configuration, and for migrating from sing-box itself.
 
