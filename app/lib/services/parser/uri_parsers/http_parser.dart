@@ -59,7 +59,7 @@ HttpSpec? parseHttpProxy(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     username: username,
     password: password,
     path: q['path'] ?? '',

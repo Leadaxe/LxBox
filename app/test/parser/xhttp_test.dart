@@ -576,7 +576,7 @@ void main() {
         label: 'n',
         server: '1.2.3.4',
         port: 443,
-        rawUri: '',
+        rawSource: '',
         uuid: 'u-1',
         transport: golden,
       );

@@ -62,7 +62,7 @@ void main() {
         label: 'WARP',
         server: 'engage.cloudflareclient.com',
         port: 2408,
-        rawUri: '',
+        rawSource: '',
         privateKey: 'PRIV=',
         localAddresses: ['172.16.0.2/32'],
         peers: [
@@ -86,7 +86,7 @@ void main() {
         label: 'wg',
         server: 'h.example',
         port: 51820,
-        rawUri: '',
+        rawSource: '',
         privateKey: 'PRIV=',
         localAddresses: ['10.0.0.2/32'],
         peers: const [

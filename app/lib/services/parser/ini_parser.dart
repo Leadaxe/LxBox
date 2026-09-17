@@ -20,7 +20,7 @@ WireguardSpec? parseWireguardIni(String config, {String? nameHint}) {
     label: spec.label,
     server: spec.server,
     port: spec.port,
-    rawUri: spec.rawUri,
+    rawSource: spec.rawSource,
     privateKey: spec.privateKey,
     localAddresses: spec.localAddresses,
     peers: spec.peers,

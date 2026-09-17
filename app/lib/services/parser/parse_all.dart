@@ -31,7 +31,7 @@ List<NodeSpec> parseAll(
   return switch (decoded) {
     // §302 — источник ноды для UI (вкладка Source на экране ноды): для
     // URI-тел это сама строка. У JSON-веток источник проставляет парсер
-    // (там rawUri — синтетическая заглушка, см. json_parsers).
+    // (там rawSource — синтетическая заглушка, см. json_parsers).
     UriLines(lines: final ls) => [
         for (final l in ls)
           if (parseUri(l) case final NodeSpec n) n..sourceCompact = l,

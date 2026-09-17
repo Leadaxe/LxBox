@@ -37,7 +37,7 @@ TrojanSpec? parseTrojan(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     password: password,
     tls: tls,
     transport: transport,

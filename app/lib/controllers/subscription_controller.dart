@@ -594,7 +594,7 @@ class SubscriptionController extends ChangeNotifier {
       label: tag,
       server: spec.server,
       port: spec.port,
-      rawUri: spec.rawUri,
+      rawSource: spec.rawSource,
       privateKeyDer: spec.privateKeyDer,
       publicKeyDer: spec.publicKeyDer,
       localAddresses: spec.localAddresses,
@@ -670,7 +670,7 @@ class SubscriptionController extends ChangeNotifier {
       label: tag,
       server: spec.server,
       port: spec.port,
-      rawUri: spec.rawUri,
+      rawSource: spec.rawSource,
       privateKey: spec.privateKey,
       localAddresses: spec.localAddresses,
       peers: spec.peers,
@@ -714,7 +714,7 @@ class SubscriptionController extends ChangeNotifier {
       label: tag,
       server: spec.server,
       port: spec.port,
-      rawUri: spec.rawUri,
+      rawSource: spec.rawSource,
       privateKey: spec.privateKey,
       localAddresses: spec.localAddresses,
       peers: spec.peers,
@@ -805,7 +805,7 @@ class SubscriptionController extends ChangeNotifier {
           tagPrefix: '',
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
-          rawBody: spec.rawUri,
+          rawBody: spec.rawSource,
           nodes: [spec],
         ));
         _entries.add(SubscriptionEntry(
@@ -1223,12 +1223,12 @@ class SubscriptionController extends ChangeNotifier {
 
   // ──────────────────────── §234 — Server folders ────────────────────────
 
-  /// Самодостаточный raw-фрагмент для члена папки: `rawUri` (оригинал), если
+  /// Самодостаточный raw-фрагмент для члена папки: `rawSource` (оригинал), если
   /// он парсится ровно в одну ноду; иначе канонический `toUri()`. Держит
   /// инвариант member ↔ нода 1:1 (у нод multi-нодных контейнеров вроде
-  /// `vpn://` одинаковый rawUri на всех — им нужен toUri()).
+  /// `vpn://` одинаковый rawSource на всех — им нужен toUri()).
   static String memberRawFor(NodeSpec n) {
-    final raw = n.rawUri.trim();
+    final raw = n.rawSource.trim();
     if (raw.isNotEmpty) {
       try {
         if (parseAll(decode(raw)).length == 1) return raw;
@@ -1536,7 +1536,7 @@ class SubscriptionController extends ChangeNotifier {
     List<NodeSpec> nodes;
     try {
       // §243 — INI-ноды получают имя файла прямо во фрагмент синтетического
-      // URI (rawUri) — фолбэк-цикл ниже до них не дойдёт (_rawHasOwnName).
+      // URI (rawSource) — фолбэк-цикл ниже до них не дойдёт (_rawHasOwnName).
       nodes = parseAll(decode(input.trim()), nameHint: nameFallback);
     } catch (e) {
       return humanizeError(e);

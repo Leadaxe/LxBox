@@ -54,7 +54,7 @@ AnyTlsSpec? parseAnyTls(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     password: password,
     tls: tls,
     // SPEC 103 D-024 — голое число (секунды) → duration-строка с суффиксом

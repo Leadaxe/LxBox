@@ -65,7 +65,7 @@ VlessSpec? parseVless(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     uuid: uuid,
     flow: flow,
     tls: tls,

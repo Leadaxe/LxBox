@@ -42,7 +42,7 @@ sealed class NodeSpec {
   final String label;
   final String server;
   final int port;
-  final String rawUri;
+  final String rawSource;
   final NodeSpec? chained;
   final List<NodeWarning> warnings;
 
@@ -57,7 +57,7 @@ sealed class NodeSpec {
   /// «компактном» виде: для JSON-тел это САМ outbound-объект (без dns/
   /// inbounds/routing соседей), для URI-строк — сама строка.
   ///
-  /// Нужен, потому что `rawUri` у JSON-нод — синтетическая заглушка
+  /// Нужен, потому что `rawSource` у JSON-нод — синтетическая заглушка
   /// (`xray://<tag>`), а не источник: показать пользователю «как устроено
   /// после парсинга» по ней нельзя. Mutable, не сериализуется, на
   /// `emit` и на идентичность узла не влияет — как `originLine`.
@@ -106,7 +106,7 @@ sealed class NodeSpec {
     required this.label,
     required this.server,
     required this.port,
-    required this.rawUri,
+    required this.rawSource,
     this.chained,
     this.tcpKeepAlive,
     List<NodeWarning>? warnings,
@@ -217,7 +217,7 @@ final class VlessSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.uuid,
     this.flow = '',
     this.tls = TlsSpec.disabled,
@@ -258,7 +258,7 @@ final class VmessSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.uuid,
     this.alterId = 0,
     this.security = 'auto',
@@ -294,7 +294,7 @@ final class TrojanSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.password,
     this.tls = TlsSpec.disabled,
     this.transport,
@@ -333,7 +333,7 @@ final class AnyTlsSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.password,
     this.tls = TlsSpec.disabled,
     this.idleSessionCheckInterval = '',
@@ -370,7 +370,7 @@ final class ShadowsocksSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.method,
     required this.password,
     this.plugin = '',
@@ -425,7 +425,7 @@ final class Hysteria2Spec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.password,
     this.obfs = '',
     this.obfsPassword = '',
@@ -478,7 +478,7 @@ final class NaiveSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     this.username = '',
     this.password = '',
     this.tls = TlsSpec.disabled,
@@ -528,7 +528,7 @@ final class TuicSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.uuid,
     required this.password,
     this.congestionControl,
@@ -568,7 +568,7 @@ final class SshSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.user,
     this.password = '',
     this.privateKey = '',
@@ -605,7 +605,7 @@ final class SocksSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     this.version = '5',
     this.username = '',
     this.password = '',
@@ -641,7 +641,7 @@ final class HttpSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     this.username = '',
     this.password = '',
     this.path = '',
@@ -1067,7 +1067,7 @@ final class WireguardSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.privateKey,
     required this.localAddresses,
     required this.peers,
@@ -1143,7 +1143,7 @@ final class MasqueSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.privateKeyDer,
     required this.publicKeyDer,
     required this.localAddresses,
@@ -1210,7 +1210,7 @@ final class AutoSelectSpec extends NodeSpec {
     this.tagSynonyms = const {},
     this.poolBadge = kDefaultPoolBadge,
     super.warnings,
-  }) : super(server: '', port: 0, rawUri: '');
+  }) : super(server: '', port: 0, rawSource: '');
 
   @override
   String get protocol => 'urltest';
@@ -1295,7 +1295,7 @@ final class TailscaleSpec extends NodeSpec {
     super.chained,
     super.warnings,
   })  : body = _stripMeta(body),
-        super(server: '', port: 0, rawUri: '');
+        super(server: '', port: 0, rawSource: '');
 
   static Map<String, dynamic> _stripMeta(Map<String, dynamic> raw) {
     final copy = deepCopyJson(raw) as Map<String, dynamic>;
@@ -1364,7 +1364,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           uuid: s.uuid,
           flow: s.flow,
           tls: s.tls,
@@ -1381,7 +1381,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           uuid: s.uuid,
           alterId: s.alterId,
           security: s.security,
@@ -1397,7 +1397,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           password: s.password,
           tls: s.tls,
           transport: s.transport,
@@ -1411,7 +1411,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           password: s.password,
           tls: s.tls,
           idleSessionCheckInterval: s.idleSessionCheckInterval,
@@ -1427,7 +1427,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           method: s.method,
           password: s.password,
           plugin: s.plugin,
@@ -1442,7 +1442,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           password: s.password,
           obfs: s.obfs,
           obfsPassword: s.obfsPassword,
@@ -1460,7 +1460,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           username: s.username,
           password: s.password,
           tls: s.tls,
@@ -1475,7 +1475,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           uuid: s.uuid,
           password: s.password,
           congestionControl: s.congestionControl,
@@ -1492,7 +1492,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           user: s.user,
           password: s.password,
           privateKey: s.privateKey,
@@ -1509,7 +1509,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           version: s.version,
           username: s.username,
           password: s.password,
@@ -1523,7 +1523,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           username: s.username,
           password: s.password,
           path: s.path,
@@ -1539,7 +1539,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           privateKey: s.privateKey,
           localAddresses: s.localAddresses,
           peers: s.peers,
@@ -1555,7 +1555,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           privateKeyDer: s.privateKeyDer,
           publicKeyDer: s.publicKeyDer,
           localAddresses: s.localAddresses,

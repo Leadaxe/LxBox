@@ -33,7 +33,7 @@ SocksSpec? parseSocks(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     username: username,
     password: password,
     // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).

@@ -22,7 +22,7 @@ NodeSpec _node(String tag, {String server = 'h.example', int port = 443}) =>
       label: tag,
       server: server,
       port: port,
-      rawUri: '',
+      rawSource: '',
       uuid: '11111111-1111-1111-1111-111111111111',
     );
 
@@ -471,7 +471,7 @@ void main() {
         label: 'Anything',
         server: 'example-1.com',
         port: 443,
-        rawUri: '',
+        rawSource: '',
         uuid: '11111111-1111-1111-1111-111111111111',
       );
       final hash = legacyNodeIdentityHash(node);
@@ -485,7 +485,7 @@ void main() {
         label: 'Other name',
         server: 'example-1.com',
         port: 443,
-        rawUri: '',
+        rawSource: '',
         uuid: '11111111-1111-1111-1111-111111111111',
       );
       expect(legacyNodeIdentityHash(renamed), hash);

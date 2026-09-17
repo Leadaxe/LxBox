@@ -70,11 +70,11 @@ void main() {
       const name = 'Мой сервер (NL) 2';
       final spec = parseWireguardIni(ini, nameHint: name)!;
       expect(spec.tag, name); // не %-энкоженная каша
-      // rawUri — валидный URI: фрагмент закодирован, сырых пробелов нет.
-      expect(spec.rawUri, isNot(contains(' ')));
+      // rawSource — валидный URI: фрагмент закодирован, сырых пробелов нет.
+      expect(spec.rawSource, isNot(contains(' ')));
       // Симметрия: синтетический URI парсится обратно в тот же tag
       // (это же путь UserServer.fromJson после рестарта).
-      final again = parseWireguardUri(spec.rawUri);
+      final again = parseWireguardUri(spec.rawSource);
       expect(again, isNotNull);
       expect(again!.tag, name);
     });

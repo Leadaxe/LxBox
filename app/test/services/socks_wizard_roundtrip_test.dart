@@ -29,7 +29,7 @@ void main() {
       label: userTag, // §074: label = tag для lossless round-trip
       server: '127.0.0.1',
       port: 1080,
-      rawUri: '',
+      rawSource: '',
       username: '',
       password: '',
     );
@@ -70,7 +70,7 @@ void main() {
       label: 'proxy-with-auth',
       server: '10.0.0.1',
       port: 2080,
-      rawUri: '',
+      rawSource: '',
       username: 'alice',
       password: 's3cret',
     );

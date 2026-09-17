@@ -67,7 +67,7 @@ void main() {
         label: 's',
         server: 'h.example',
         port: 1080,
-        rawUri: '',
+        rawSource: '',
       );
       expect(detourNodeSubline(n), 'SOCKS · h.example:1080');
     });

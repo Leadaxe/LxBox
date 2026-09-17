@@ -61,5 +61,5 @@ Get WARP добавляет НОВЫЙ узел. Юзер сам удаляет 
 | Раздельные add-пути с тегом | `_addWarpObfuscated(account, tag)` + новый `_addWarpPlain(account, tag)`; `rawBody = tagged.toUri()` (тег во фрагменте → переживает reload) |
 | Тесты | `warp_client_test.dart` — `§137 nodeTag` + обновлён URI-тег тест |
 
-**NB:** `rawBody` теперь `toUri()` (не `rawUri`) — `toUriWireguard` кладёт `s.label`
+**NB:** `rawBody` теперь `toUri()` (не `rawSource`) — `toUriWireguard` кладёт `s.label`
 во фрагмент, так тег с эмодзи переживает re-parse при перезагрузке.

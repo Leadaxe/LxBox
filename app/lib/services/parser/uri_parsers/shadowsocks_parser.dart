@@ -81,7 +81,7 @@ ShadowsocksSpec? parseShadowsocks(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     method: method,
     password: password,
     plugin: _ssPluginName(q['plugin']),

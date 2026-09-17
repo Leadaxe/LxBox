@@ -128,7 +128,7 @@ class DetourPolicy {
 
 ```dart
 sealed class NodeSpec {
-  final String id, tag, label, server, rawUri;
+  final String id, tag, label, server, rawSource;
   final int port;
   final NodeSpec? chained;                 // опциональный детур-сервер
   final List<NodeWarning> warnings;        // mutable-bag
@@ -366,11 +366,11 @@ URI ─parseUri─▶ NodeSpec ─emit(vars)─▶ SingboxEntry(Map)
 ```
 
 Инварианты (тесты `test/parser/round_trip_test.dart`):
-- `parseUri(spec.toUri()) ≈ spec` — сравнение без `id`, `rawUri`, `warnings`.
+- `parseUri(spec.toUri()) ≈ spec` — сравнение без `id`, `rawSource`, `warnings`.
 - `parseSingboxEntry(spec.emit(vars).map) ≈ spec`.
 
 **Ограничения:**
-- XHTTP после `emit` → `httpupgrade`. Обратный `parseSingboxEntry` вернёт `HttpUpgradeTransport` — инфа о `xhttp` потеряна (есть `spec.rawUri`).
+- XHTTP после `emit` → `httpupgrade`. Обратный `parseSingboxEntry` вернёт `HttpUpgradeTransport` — инфа о `xhttp` потеряна (есть `spec.rawSource`).
 - Legacy VMess (v2rayN base64 JSON) → эмитим в модерный `vmess://`. Обратно не конвертируем.
 
 ---

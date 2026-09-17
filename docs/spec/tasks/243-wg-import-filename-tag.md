@@ -26,7 +26,7 @@
    не трогает) в списке больше не видна.
 3. **B5**: `addMembersToFolder` применяет `nameFallback` (имя файла)
    только при `!_rawHasOwnName(raw)`, а `memberRawFor` для INI-ноды
-   возвращает `rawUri` = синтетический URI с `#WireGuard` ⇒ raw «имеет
+   возвращает `rawSource` = синтетический URI с `#WireGuard` ⇒ raw «имеет
    имя», фолбэк никогда не срабатывает.
 
 ## Решение (согласовано с владельцем)
@@ -42,7 +42,7 @@ URI = имя файла (без расширения). Тогда tag узла =
 |---|---|---|
 | `ini_parser.dart` | `parseWireguardIni(String config, {String? nameHint})` | `_iniToUri` кладёт `#${Uri.encodeComponent(hint)}`; пустой/`null` hint → `#WireGuard` (как раньше). Кодирование симметрично разбору: `parseWireguardUri` → `decodeFragment` → `Uri.decodeComponent` ⇒ пробелы/скобки/кириллица переживают round-trip без %-каши. |
 | `parse_all.dart` | `parseAll(DecodedBody decoded, {String? nameHint})` | `IniConfig` → `parseWireguardIni(t, nameHint:)`. `AmneziaConfig` (несколько INI-контейнеров из одного `vpn://`) → индексный суффикс: первый контейнер = `hint`, дальше `hint 2`, `hint 3`… (иначе все члены получили бы одинаковый tag, минуя суффикс-логику `addMembersToFolder` — raw теперь «имеет имя»). `UriLines`/`JsonConfig` hint игнорируют. |
-| `subscription_controller.dart` | `addFromInput(String input, {String? nameHint})` | Используется ТОЛЬКО в ветке `isWireGuardConfig` → `parseWireguardIni(trimmed, nameHint:)`. `rawBody` одиночного WG-сервера = `spec.rawUri` (синтетический URI с фрагментом) ⇒ имя переживает рестарт (`UserServer.fromJson` ре-парсит rawBody). Ветка `vpn://` hint НЕ получает: там `rawBody` = оригинальная ссылка, имя потерялось бы при рестарте — не создаём иллюзию. |
+| `subscription_controller.dart` | `addFromInput(String input, {String? nameHint})` | Используется ТОЛЬКО в ветке `isWireGuardConfig` → `parseWireguardIni(trimmed, nameHint:)`. `rawBody` одиночного WG-сервера = `spec.rawSource` (синтетический URI с фрагментом) ⇒ имя переживает рестарт (`UserServer.fromJson` ре-парсит rawBody). Ветка `vpn://` hint НЕ получает: там `rawBody` = оригинальная ссылка, имя потерялось бы при рестарте — не создаём иллюзию. |
 | `addMembersToFolder` | без изменения сигнатуры | `parseAll(decode(input), nameHint: nameFallback)` — INI-ноды получают имя прямо во фрагменте; прежний фолбэк-цикл (`_rawHasOwnName`/`_rawWithName`) остаётся для безымянных URI-строк. |
 | `subscriptions_screen.dart` | `_importFromFile` | Одиночный файл: `addFromInput(text, nameHint: fileBaseName(file.name))`; **блок `renameAt` по имени файла удалён** — `entry.name` одиночного сервера больше никем не заполняется. |
 | `folder_detail_screen.dart` | без изменений | «Import from files…» уже передаёт `nameFallback` — работает через `addMembersToFolder`. |
@@ -111,7 +111,7 @@ URI = имя файла (без расширения). Тогда tag узла =
 ## Тесты
 
 - `test/parser/ini_parser_test.dart` — nameHint → tag/label = имя файла
-  (включая пробел + кириллицу + скобки, round-trip через `rawUri`);
+  (включая пробел + кириллицу + скобки, round-trip через `rawSource`);
   без hint → `WireGuard`; `parseAll` IniConfig/UriLines-гейтинг.
 - `test/parser/awg_test.dart` — awg2-экспорт INI с nameHint: tag = имя
   файла, AWG-поля не теряются.

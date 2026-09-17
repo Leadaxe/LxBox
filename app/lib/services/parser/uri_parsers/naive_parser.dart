@@ -89,7 +89,7 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     username: username,
     password: password,
     tls: tls,

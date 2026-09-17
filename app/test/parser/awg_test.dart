@@ -350,7 +350,7 @@ void main() {
       expect(f['h1'], '43613244-384550127');
       expect(f['i1'], '<b 0x084481800001>');
       // Round-trip через синтетический URI (путь рестарта) — tag и AWG живы.
-      final again = parseWireguardUri(spec.rawUri)!;
+      final again = parseWireguardUri(spec.rawSource)!;
       expect(again.tag, 'awg2 export (home)');
       expect(again.awg!.fields['i1'], '<b 0x084481800001>');
     });
@@ -658,7 +658,7 @@ void main() {
 
     test('источник узла — исходная ссылка, не синтетический wireguard://', () {
       final link = 'awg://$payload#AmneziaWG-3.1';
-      expect((parseUri(link) as WireguardSpec).rawUri, link);
+      expect((parseUri(link) as WireguardSpec).rawSource, link);
     });
 
     test('без фрагмента метка = хост Endpoint, а не фолбэк WireGuard', () {
@@ -684,7 +684,7 @@ void main() {
     test('форма key@host:port не перехватывается conf-веткой', () {
       final spec = parseUri(fullUri) as WireguardSpec?;
       expect(spec!.server, 'host.example.com');
-      expect(spec.rawUri, fullUri);
+      expect(spec.rawSource, fullUri);
     });
 
     test('второй [Interface]-блок игнорируется: один link = один узел', () {

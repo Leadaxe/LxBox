@@ -44,7 +44,7 @@ SshSpec? parseSsh(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     user: user,
     password: password,
     privateKey: q['private_key'] ?? '',
