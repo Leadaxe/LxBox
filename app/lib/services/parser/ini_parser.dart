@@ -20,6 +20,9 @@ WireguardSpec? parseWireguardIni(String config, {String? nameHint}) {
     label: spec.label,
     server: spec.server,
     port: spec.port,
+    // §243/§454 — источник INI-узла — синтетический wg:// URI с тегом во
+    // фрагменте: им узел хранится (`rawBody`) и переживает рестарт с именем
+    // файла. Сам INI-текст — в `rawIni`, для показа и AWG-полей.
     rawSource: spec.rawSource,
     privateKey: spec.privateKey,
     localAddresses: spec.localAddresses,

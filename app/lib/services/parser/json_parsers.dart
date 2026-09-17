@@ -213,10 +213,9 @@ List<NodeSpec> parseXrayElement(
         continue;
       }
 
-      // §302 — исходник узла для UI («Source» на экране узла) и для правил по
-      // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
-      // от провайдера (dns/inbounds/routing соседи). rawSource для таких узлов —
-      // синтетическая заглушка `xray://<tag>`, источником служить не может.
+      // §302/§454 — исходник узла: compact = сам outbound (он же `rawSource`
+      // узла), extended = весь элемент как пришёл от провайдера (dns/inbounds/
+      // routing соседи) — хранится только когда отличается.
       final compact = _prettyJson(ob);
 
       // §321/§368/§404 — цепочка релеев. `dialerProxy` в Xray живёт в
@@ -257,11 +256,7 @@ List<NodeSpec> parseXrayElement(
         seen.add(signature);
       }
 
-      result.add(
-        node
-          ..sourceCompact = compact
-          ..sourceExtended = extended == compact ? null : extended,
-      );
+      result.add(node..sourceExtended = extended == compact ? null : extended);
     } catch (_) {
       // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
       // мусорный тип поля (`streamSettings: "none"`, `settings: []`) бросает
@@ -559,7 +554,7 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port2,
-    rawSource: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     uuid: uuid,
     flow: flow,
     tls: tls,
@@ -675,7 +670,7 @@ TrojanSpec? _xrayTrojanToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port,
-    rawSource: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     password: password,
     tls: tls,
     transport: _xrayTransportFromStream(stream),
@@ -711,7 +706,7 @@ VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port,
-    rawSource: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     uuid: uuid,
     alterId: (user['alterId'] as num?)?.toInt() ?? 0,
     security: security.isEmpty ? 'auto' : security,
@@ -743,7 +738,7 @@ ShadowsocksSpec? _xraySsToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port,
-    rawSource: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     method: method,
     password: password,
     tcpKeepAlive:
@@ -781,7 +776,7 @@ Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port,
-    rawSource: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     password: auth,
     tls: tls.enabled ? tls : const TlsSpec(enabled: true),
     warnings: warnings,
@@ -884,7 +879,7 @@ SocksSpec? _xraySocksToSpec(Map<String, dynamic> o, String label) {
     label: label,
     server: server,
     port: port,
-    rawSource: 'xray-jump://socks',
+    rawSource: _prettyJson(o),
     username: user['user']?.toString() ?? '',
     password: user['pass']?.toString() ?? '',
   );
@@ -995,7 +990,11 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
 
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).
 /// Используется для JSON-редактора и Smart-Paste одиночного sing-box entry.
-NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
+NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
+  // §454 — источник узла из JSON: его собственный объект outbound'а. Вызов из
+  // целого конфига передаёт оригинал (до подмены тега лейблом), одиночный
+  // entry — сам себе источник.
+  final src = rawSource ?? _prettyJson(entry);
   final type = entry['type']?.toString() ?? '';
   final tag = entry['tag']?.toString() ?? '';
   final server = entry['server']?.toString() ?? '';
@@ -1015,7 +1014,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         flow: entry['flow']?.toString() ?? '',
         tls: tls,
@@ -1034,7 +1033,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         alterId: (entry['alter_id'] as num?)?.toInt() ?? 0,
         security: entry['security']?.toString() ?? 'auto',
@@ -1050,7 +1049,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         password: entry['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
         transport: _transportFromSingbox(entry['transport']),
@@ -1070,7 +1069,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         password: entry['password']?.toString() ?? '',
         tls: anyTls,
         // SPEC 103 D-024 — на всякий случай нормализуем и здесь: ручные
@@ -1091,7 +1090,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         method: entry['method']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         tcpKeepAlive: ka,
@@ -1114,7 +1113,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         password: entry['password']?.toString() ?? '',
         obfs: obfsNorm.type,
         obfsPassword: obfsNorm.password,
@@ -1149,7 +1148,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         // §281 (ревью) — naive принимает ТОЛЬКО enabled/server_name в TLS:
@@ -1167,7 +1166,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         // §103 D-016(в) — ключ отсутствует в исходном JSON ⇒ не задан явно;
@@ -1190,7 +1189,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         user: entry['user']?.toString() ?? 'root',
         password: entry['password']?.toString() ?? '',
         privateKey: entry['private_key']?.toString() ?? '',
@@ -1206,7 +1205,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         tcpKeepAlive: ka,
@@ -1233,7 +1232,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         path: entry['path']?.toString() ?? '',
@@ -1306,7 +1305,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: peerServer,
         port: peerPort,
-        rawSource: '',
+        rawSource: src,
         privateKey: wgPriv,
         localAddresses: addr,
         peers: [
@@ -1365,7 +1364,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawSource: '',
+        rawSource: src,
         privateKeyDer: priv,
         publicKeyDer: pub,
         localAddresses: addrs,

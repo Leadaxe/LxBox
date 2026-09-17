@@ -42,6 +42,14 @@ sealed class NodeSpec {
   final String label;
   final String server;
   final int port;
+
+  /// §454 — источник узла: из чего он разобран. URI-строка байт в байт,
+  /// объект outbound'а (sing-box / Xray) в pretty-JSON; у WG из INI —
+  /// синтетический wg:// с тегом во фрагменте (§243, INI-текст в `rawIni`).
+  /// Им узел предъявляет себя, когда нужен собственный текст: переезд в
+  /// папку (`memberRawFor`), вкладка Source. Пусто только у узлов, собранных
+  /// приложением без текста (группы §208).
+  /// Не сериализуется: хранение держит текст контейнера (`origin.raw`).
   final String rawSource;
   final NodeSpec? chained;
   final List<NodeWarning> warnings;
@@ -53,19 +61,10 @@ sealed class NodeSpec {
   /// keep-alive TCP-сокета не к чему применить, см. §1 спеки 453).
   final TcpKeepAliveSpec? tcpKeepAlive;
 
-  /// §302 — исходный фрагмент подписки, из которого собралась нода, в
-  /// «компактном» виде: для JSON-тел это САМ outbound-объект (без dns/
-  /// inbounds/routing соседей), для URI-строк — сама строка.
-  ///
-  /// Нужен, потому что `rawSource` у JSON-нод — синтетическая заглушка
-  /// (`xray://<tag>`), а не источник: показать пользователю «как устроено
-  /// после парсинга» по ней нельзя. Mutable, не сериализуется, на
-  /// `emit` и на идентичность узла не влияет — как `originLine`.
-  String? sourceCompact;
-
-  /// §302 — тот же фрагмент в «расширенном» виде: элемент как пришёл от
-  /// провайдера целиком (для Xray-массива — весь элемент с dns/inbounds/
-  /// routing). `null`, если расширенный вид не отличается от компактного.
+  /// §302 — источник узла в «расширенном» виде: элемент как пришёл от
+  /// провайдера целиком (для Xray-массива / sing-box-конфига — с dns/inbounds/
+  /// routing соседями). `null`, если не отличается от [rawSource]. Mutable,
+  /// не сериализуется, на `emit` и идентичность не влияет.
   String? sourceExtended;
 
   /// §302 — JSON узла после применения import-rules (REPLACE). `null` —
@@ -79,7 +78,7 @@ sealed class NodeSpec {
   /// на каждом старте VPN. Патч — сохранённое состояние узла; писать в него
   /// может только применение правил.
   ///
-  /// Mutable и не сериализуется — как `sourceCompact`: правила переприменяются
+  /// Mutable и не сериализуется — как `sourceExtended`: правила переприменяются
   /// на каждом импорте/регидрации, храниться этому незачем.
   Map<String, dynamic>? patchedJson;
 
@@ -90,7 +89,7 @@ sealed class NodeSpec {
 
   /// §435 — связка узла, извлечённая парсером из целого sing-box-конфига с
   /// одним узлом (NODE_SECTIONS.md §6) или прочитанная из документа с
-  /// `sections`. Mutable и не сериализуется, как `sourceCompact`: хозяин
+  /// `sections`. Mutable и не сериализуется, как `sourceExtended`: хозяин
   /// секций — контейнер (`UserServer.sections` / `FolderMember.sections`),
   /// контроллер переносит её туда при добавлении узла и только тогда.
   NodeSections? importedSections;
@@ -1198,7 +1197,7 @@ final class AutoSelectSpec extends NodeSpec {
 
   /// §321 P6 — теги провайдера → идентичности. Нужна, чтобы `include` из
   /// `selector` (написанный на ЧУЖИХ тегах) находил наши узлы после дедупа.
-  /// Производное от тела подписки, как `sourceCompact` (§302).
+  /// Производное от тела подписки, как `sourceExtended` (§302).
   final Map<String, String> tagSynonyms;
 
   AutoSelectSpec({
@@ -1210,7 +1209,10 @@ final class AutoSelectSpec extends NodeSpec {
     this.tagSynonyms = const {},
     this.poolBadge = kDefaultPoolBadge,
     super.warnings,
-  }) : super(server: '', port: 0, rawSource: '');
+    // §454 — у группы из sing-box-конфига источник — её объект; у групп,
+    // собранных приложением (§208, папки), источника нет.
+    super.rawSource = '',
+  }) : super(server: '', port: 0);
 
   @override
   String get protocol => 'urltest';
@@ -1266,6 +1268,7 @@ final class AutoSelectSpec extends NodeSpec {
         tagSynonyms: tagSynonyms ?? this.tagSynonyms,
         poolBadge: poolBadge ?? this.poolBadge,
         warnings: warnings,
+        rawSource: rawSource,
       );
 }
 

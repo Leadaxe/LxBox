@@ -29,16 +29,16 @@ List<NodeSpec> parseAll(
   List<NodeWarning>? dropped,
 }) {
   return switch (decoded) {
-    // §302 — источник ноды для UI (вкладка Source на экране ноды): для
-    // URI-тел это сама строка. У JSON-веток источник проставляет парсер
-    // (там rawSource — синтетическая заглушка, см. json_parsers).
+    // §302/§454 — источник узла (`rawSource`) проставляют сами парсеры: для
+    // URI-строк это строка, для INI — синтетический wg:// с тегом (§243; сам
+    // INI-текст — `WireguardSpec.rawIni`), для JSON — объект outbound'а.
     UriLines(lines: final ls) => [
         for (final l in ls)
-          if (parseUri(l) case final NodeSpec n) n..sourceCompact = l,
+          if (parseUri(l) case final NodeSpec n) n,
       ],
     IniConfig(text: final t) => [
         parseWireguardIni(t, nameHint: nameHint),
-      ].whereType<NodeSpec>().map((n) => n..sourceCompact = t).toList(),
+      ].whereType<NodeSpec>().toList(),
     // §110 — Amnezia vpn://: каждый контейнер → INI → нода (null-skip).
     // §243 — hint с индексным суффиксом (`hint`, `hint 2`, …): фрагмент
     // теперь «собственное имя» raw, суффикс-логика addMembersToFolder до
