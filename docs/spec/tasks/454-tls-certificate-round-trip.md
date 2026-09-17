@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано, тесты зелёные; DEVICE-PENDING (naive с самоподписанным CA) |
+| Статус | Выпущено v2.24.3; Реализовано, тесты зелёные; DEVICE-PENDING (naive с самоподписанным CA) |
 | Дата старта | 2026-09-17 |
 | Коммиты | `386f1985` (rawUri → rawSource), `28b2d19c` (источник узла из JSON), `76af5cc8` (TLS-allowlist) — ветка `feat/454-tls-allowlist-raw-source`; продолжение — §455 (`4b776f04`) |
 | Источник | [issue #140](https://github.com/Leadaxe/LxBox/issues/140) (zolg); контракт лаунчера `TASKS_LXBOX.md` §22 — норма allowlist TLS-полей, ответ LxBox «А» 17.09.2026; лаунчер закрыл свою сторону в develop `189bdd4f`, `7f2feafe` |

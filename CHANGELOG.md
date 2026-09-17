@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.24.3] — 2026-09-17
+
 ### Fixed
 
 - **Узел Tailscale терял тело при переезде в папку ([§456](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
