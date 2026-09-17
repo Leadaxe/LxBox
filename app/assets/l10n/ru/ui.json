@@ -1741,9 +1741,6 @@
   "Edit source…": {
     "value": "Изменить источник…"
   },
-  "Edit tag, detour, and all server parameters": {
-    "value": "Правка тега, detour и всех параметров сервера"
-  },
   "Edit…": {
     "value": "Изменить…"
   },
@@ -5153,5 +5150,38 @@
   },
   "One rule holds one JSON object. Add each object of the array as a separate rule.": {
     "value": "Одно правило — один JSON-объект. Добавьте каждый объект массива отдельным правилом."
+  },
+  "Source is empty": {
+    "value": "Источник пуст"
+  },
+  "The core rejected the node: %s": {
+    "value": "Ядро отвергло узел: %s"
+  },
+  "Edit JSON?": {
+    "value": "Править JSON?"
+  },
+  "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
+    "value": "Источник заменится этим JSON, и узел будет уходить в ядро как есть. Приложение перестанет проверять такой узел: его проверяет только ядро при сохранении, и ошибка может оставить узел без соединения. Обратно в ссылку узел не превратится. Если можете, правьте источник."
+  },
+  "Source replaced with JSON": {
+    "value": "Источник заменён на JSON"
+  },
+  "sing-box JSON: sent to the core as is. The core checks it on save.": {
+    "value": "sing-box JSON: уходит в ядро как есть. Ядро проверяет его при сохранении."
+  },
+  "WireGuard config: saved as is.": {
+    "value": "Конфиг WireGuard: сохраняется как есть."
+  },
+  "Link: the tag goes into its fragment on save.": {
+    "value": "Ссылка: тег при сохранении попадает в её фрагмент."
+  },
+  "The node's original text. Save writes it as is.": {
+    "value": "Исходный текст узла. Save записывает его как есть."
+  },
+  "What the core receives. Read-only: edit the source instead.": {
+    "value": "То, что получит ядро. Только чтение: правьте источник."
+  },
+  "Edit JSON": {
+    "value": "Править JSON"
   }
 }

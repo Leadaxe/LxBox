@@ -518,6 +518,14 @@ final class FolderServers extends ServerList {
   String get type => 'folder';
 
   /// Сколько членов выключено (для строки «N servers · M off»).
+  /// §455 — raw-тексты членов, выровненные с [nodes] (тот же фильтр
+  /// enabled+parsed, тот же порядок): сборка решает по ним, идёт ли член в
+  /// конфиг дословно (`origin.kind: json`).
+  List<String> get memberRaws => [
+        for (final m in members)
+          if (m.enabled && m.node != null) m.raw,
+      ];
+
   int get disabledCount => members.where((m) => !m.enabled).length;
 
   /// §237 — личные detour'ы, выровненные с [nodes] (тот же фильтр

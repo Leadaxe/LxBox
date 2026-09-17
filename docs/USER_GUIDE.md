@@ -546,6 +546,18 @@ to go through" picker. The entry point depends on who you're assigning it to:
 | **A whole folder** | Folder → **Settings** tab | all folder members |
 | **One folder member** | inside the folder, on the member | that member only |
 
+**Node Settings tabs (§455).** *Settings* — protocol, server, tag, detour,
+sections. *Source* — the node's original text exactly as stored: a link, a
+WireGuard config or a sing-box JSON object; this is the only place you edit,
+and **Save** writes it as is (the tag from the Tag field goes into the link's
+fragment or the JSON body). *JSON* — read-only: what the core will receive.
+For a link the app builds it; for a JSON source it is the source itself, sent
+to the core **verbatim** and checked by the core on Save — a rejected body is
+not saved and the core's message is shown. **Edit JSON** on that tab replaces
+the source with the shown JSON (after a warning: the app stops checking such a
+node, there is no way back to a link) and takes you to Source. *Diagnostics* —
+the probe.
+
 The picker shows sections: **None (direct)**, **Directions** (if detour directions
 exist), **This folder** (members of the same folder, when configuring a member)
 and **Standalone servers**. Pick one, save.

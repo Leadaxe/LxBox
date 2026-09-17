@@ -917,6 +917,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     }
                 }
             }
+            // §455 — проверка тела узла ядром: `Libbox.checkConfig()` = parse +
+            // box.New со стабом платформы (experimental/libbox/config.go). Ворота
+            // Save для узла с JSON-источником, который уходит в конфиг дословно
+            // и гейты модели не проходит. Статический Go-метод, живой сервис не
+            // нужен; на Dispatchers.IO — box.New на main = ANR (§122).
+            //
+            // КОНТРАКТ: {"ok": true} — ядро приняло; {"ok": false, "error": текст
+            // ядра} — отвергло. Throw без сообщения — тоже отказ (текст класса).
+            "checkConfig" -> {
+                val text = call.argument<String>("config") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        try {
+                            io.nekohasekai.libbox.Libbox.checkConfig(text)
+                            mapOf("ok" to true)
+                        } catch (t: Throwable) {
+                            Log.d(TAG, "checkConfig rejected: ${t.message}")
+                            mapOf("ok" to false, "error" to (t.message ?: t.toString()))
+                        }
+                    }
+                    result.success(r)
+                }
+            }
             // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
             // (RPC может блокировать). КОНТРАКТ: null = клиент недоступен (сервис
             // down / pingClient не поднялся) → Dart рендерит «Pool unavailable» /

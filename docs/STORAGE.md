@@ -598,6 +598,18 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
 `name` (empty since §243), the `origin` of the model (`paste|file|qr|manual`) and
 `created_at` are not written.
 
+**`origin.kind: json` is a build mode (§455).** A server (or folder member)
+whose source is a JSON object goes into the config **verbatim**: the source
+object itself, not the model's re-emission — the same rule the launcher applies
+to a manual object. The model still parses it for the form, the list, the
+identity and the warnings, but its gates do not run; the gate is the core
+(`Libbox.checkConfig`) at Save in the node editor. `body` is a cache derived
+from `origin.raw` and is **not written** for servers; a `body` found in an
+imported backup is ignored and the node is re-parsed from `origin.raw`
+(BACKUP §9 p.2). No flag: the kind is derived from the text, so replacing the
+source with a JSON object (the editor's "Edit JSON" button) is what switches
+the mode, and pasting a link back switches it off.
+
 #### Node sections (§435, contract ## 13)
 
 A free node (a `kind: server` record or a folder member) may carry the config fragment it

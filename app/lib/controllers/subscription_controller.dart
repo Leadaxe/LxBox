@@ -1311,8 +1311,9 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Проставить имя в raw-фрагмент: URI → `#fragment`, JSON → `tag`.
-  /// Многострочные формы (INI) сюда не приходят — caller передаёт `toUri()`.
-  static String _rawWithName(String raw, String name) {
+  /// Многострочные формы (INI) остаются как есть — caller передаёт `toUri()`.
+  /// §455 — публичный: экран узла ставит тег ссылке при Save вкладки Source.
+  static String rawWithName(String raw, String name) {
     final t = raw.trim();
     if (t.startsWith('{')) {
       try {
@@ -1557,7 +1558,7 @@ class SubscriptionController extends ChangeNotifier {
         while (!usedNames.add(candidate)) {
           candidate = '$nameFallback ${i++}';
         }
-        raw = _rawWithName(n.toUri(), candidate);
+        raw = rawWithName(n.toUri(), candidate);
       }
       // §435 — секции из целого конфига / документа с `sections` едут в
       // члена папки вместе с телом; §437 — узел Tailscale без них получает

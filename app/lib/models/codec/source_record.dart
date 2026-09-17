@@ -154,9 +154,11 @@ Map<String, dynamic> _detourPolicyToRecord(DetourPolicy p) => {
 /// JSON-объект → `json`, WG-INI → `wg_ini`, прочее → `uri`), `raw` — байт в
 /// байт.
 Map<String, dynamic> _originToRecord(String raw) =>
-    {'kind': _originKind(raw), 'raw': raw};
+    {'kind': originKindOf(raw), 'raw': raw};
 
-String _originKind(String raw) {
+/// §455 — вид источника по тексту. Единственное, от чего зависит режим
+/// сборки узла: `json` уходит в ядро дословно (`verbatim_body.dart`).
+String originKindOf(String raw) {
   final t = raw.trim();
   if (t.startsWith('{')) {
     try {

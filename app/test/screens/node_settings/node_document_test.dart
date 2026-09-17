@@ -140,4 +140,63 @@ void main() {
           isA<NodeDocumentRejected>());
     });
   });
+
+
+  group('§455 checkPayloadFor', () {
+    test('голое тело → outbounds без detour', () {
+      final payload = checkPayloadFor(
+          '{"type":"socks","tag":"a","server":"h","server_port":1080,'
+          '"detour":"x","foo":1}');
+      final m = jsonDecode(payload!) as Map<String, dynamic>;
+      final body = (m['outbounds'] as List).single as Map;
+      expect(body['tag'], 'a');
+      expect(body.containsKey('detour'), isFalse);
+      expect(body['foo'], 1); // ключ вне модели — ядро проверит его само
+      expect(m.containsKey('endpoints'), isFalse);
+    });
+
+    test('wireguard → endpoints', () {
+      final payload = checkPayloadFor(jsonEncode({
+        'type': 'wireguard',
+        'tag': 'wg',
+        'address': ['10.0.0.2/32'],
+        'private_key': 'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=',
+        'peers': [
+          {
+            'address': '1.2.3.4',
+            'port': 51820,
+            'public_key': 'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=',
+            'allowed_ips': ['0.0.0.0/0'],
+          }
+        ],
+      }));
+      final m = jsonDecode(payload!) as Map<String, dynamic>;
+      expect((m['endpoints'] as List).single['tag'], 'wg');
+    });
+
+    test('документ с sections → тело узла', () {
+      final payload = checkPayloadFor(jsonEncode({
+        'outbounds': [
+          {'type': 'socks', 'tag': 'a', 'server': 'h', 'server_port': 1080}
+        ],
+        'sections': {'rules': []},
+      }));
+      final m = jsonDecode(payload!) as Map<String, dynamic>;
+      expect((m['outbounds'] as List).single['type'], 'socks');
+    });
+
+    test('не JSON и не узел → null', () {
+      expect(checkPayloadFor('garbage'), isNull);
+    });
+  });
+
+  group('§455 текст источника сохраняется как набран', () {
+    test('тег не менялся → исходный текст байт в байт', () {
+      const text = '{ "type": "socks",\n  "tag": "keep", "server": "h", "server_port": 1 }';
+      final p = prepareNodeDocumentForSave(text, 'keep') as NodeDocumentReady;
+      expect(p.text, text);
+      final q = prepareNodeDocumentForSave(text, '') as NodeDocumentReady;
+      expect(q.text, text);
+    });
+  });
 }
