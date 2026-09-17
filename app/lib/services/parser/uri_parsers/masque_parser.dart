@@ -80,7 +80,7 @@ MasqueSpec? parseMasqueUri(String uri) {
     label: label,
     server: p.host,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     privateKeyDer: privateKeyDer,
     publicKeyDer: publicKeyDer,
     localAddresses: localAddresses,

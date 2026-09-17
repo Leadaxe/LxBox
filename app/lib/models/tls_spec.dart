@@ -1,3 +1,89 @@
+import 'package:collection/collection.dart';
+
+/// §454 — ключи `OutboundTLSOptions` ядра (sing-box `option/tls.go`), о
+/// которых LxBox не рассуждает гейтами: хранятся в [TlsSpec.passthrough] в
+/// форме прибытия и эмитятся как есть. Порядок списка = порядок полей
+/// структуры ядра = порядок эмита. Всё, чего тут нет и что не типизировано
+/// в [TlsSpec], парсер отбрасывает: ядро отвергает unknown field на ВСЁМ
+/// конфиге, а карта tls приходит и из чужого JSON.
+///
+/// Не в списке намеренно: `ech` (ядро без `with_ech`, D-006/§320 — вычистка
+/// с кодом `ech_ignored`). `kernel_tx`/`kernel_rx` ядро принимает только на
+/// Linux — Android им и является.
+const kTlsPassthroughKeys = <String>[
+  'disable_sni',
+  'min_version',
+  'max_version',
+  'cipher_suites',
+  'curve_preferences',
+  'certificate',
+  'certificate_path',
+  'client_certificate',
+  'client_certificate_path',
+  'client_key',
+  'client_key_path',
+  'fragment',
+  'fragment_fallback_delay',
+  'record_fragment',
+  'kernel_tx',
+  'kernel_rx',
+];
+
+/// §454 — `Listable[string]` ядра: строка ИЛИ массив строк.
+const kTlsListableKeys = <String>{
+  'cipher_suites',
+  'curve_preferences',
+  'certificate',
+  'client_certificate',
+  'client_key',
+};
+
+/// §454 — булевы поля: хранятся только при `true` (omitempty ядра).
+const kTlsBoolKeys = <String>{
+  'disable_sni',
+  'fragment',
+  'record_fragment',
+  'kernel_tx',
+  'kernel_rx',
+};
+
+/// §454 — что из allowlist'а принимает naive (`protocol/naive/outbound.go`):
+/// остальное ядро отвергает фаталом при создании outbound'а.
+const kNaiveTlsPassthroughKeys = <String>{'certificate', 'certificate_path'};
+
+/// §454 — эмит: типизированные поля и сквозные ключи в одном порядке.
+/// Для узлов без сквозных ключей совпадает с прежним байт в байт (parity):
+/// среди типизированных `alpn` стоит перед `insecure`, как и раньше (в
+/// структуре ядра наоборот; identity-хеш §283 сортирует ключи, ему всё
+/// равно). Сквозные — на местах структуры ядра относительно соседей.
+const _kTlsEmitOrder = <String>[
+  'enabled',
+  'server_name',
+  'alpn',
+  'insecure',
+  'disable_sni',
+  'min_version',
+  'max_version',
+  'cipher_suites',
+  'curve_preferences',
+  'certificate',
+  'certificate_path',
+  'certificate_public_key_sha256',
+  'client_certificate',
+  'client_certificate_path',
+  'client_key',
+  'client_key_path',
+  'fragment',
+  'fragment_fallback_delay',
+  'record_fragment',
+  'kernel_tx',
+  'kernel_rx',
+  'utls',
+  'reality',
+];
+
+const _deepEq = DeepCollectionEquality();
+
 /// TLS-параметры узла. Singleton для «TLS выключен» — `TlsSpec.disabled`.
 ///
 /// `reality != null` — взаимоисключающе с uTLS fingerprint'ом в sing-box
@@ -18,6 +104,14 @@ class TlsSpec {
   /// В отличие от utls/reality, на QUIC валиден — не срезается.
   final List<String> certificatePublicKeySha256;
 
+  /// §454 — сквозные ключи allowlist'а ядра ([kTlsPassthroughKeys]) в форме
+  /// прибытия: `String`, `List<String>` (Listable) или `true`. Появилось из
+  /// issue #140: `tls.certificate` (свой корневой CA) терялся на Save —
+  /// модель его не знала, а узел на самоподписанном сертификате без него не
+  /// поднимается (`insecure` naive отвергает). Ключи только из allowlist'а —
+  /// инвариант парсера, конструктор не проверяет.
+  final Map<String, Object> passthrough;
+
   const TlsSpec({
     required this.enabled,
     this.serverName,
@@ -26,6 +120,7 @@ class TlsSpec {
     this.fingerprint,
     this.reality,
     this.certificatePublicKeySha256 = const [],
+    this.passthrough = const {},
   });
 
   static const disabled = TlsSpec(enabled: false);
@@ -42,21 +137,30 @@ class TlsSpec {
 
   Map<String, dynamic> _toSingbox({required bool quic}) {
     if (!enabled) return const {};
-    final m = <String, dynamic>{'enabled': true};
+    final typed = <String, dynamic>{'enabled': true};
     if (serverName != null && serverName!.isNotEmpty) {
-      m['server_name'] = serverName;
+      typed['server_name'] = serverName;
     }
-    if (alpn.isNotEmpty) m['alpn'] = List<String>.from(alpn);
-    if (insecure) m['insecure'] = true;
+    if (alpn.isNotEmpty) typed['alpn'] = List<String>.from(alpn);
+    if (insecure) typed['insecure'] = true;
     if (certificatePublicKeySha256.isNotEmpty) {
-      m['certificate_public_key_sha256'] =
+      typed['certificate_public_key_sha256'] =
           List<String>.from(certificatePublicKeySha256);
     }
     if (!quic && fingerprint != null && fingerprint!.isNotEmpty) {
-      m['utls'] = {'enabled': true, 'fingerprint': fingerprint};
+      typed['utls'] = {'enabled': true, 'fingerprint': fingerprint};
     }
     if (!quic && reality != null) {
-      m['reality'] = reality!.toSingbox();
+      typed['reality'] = reality!.toSingbox();
+    }
+    // §454 — сквозные ключи на QUIC валидны (сертификаты, версии) — в
+    // отличие от utls/reality не срезаются. Форма прибытия сохраняется:
+    // человек, набравший certificate строкой, увидит после Save строку.
+    final m = <String, dynamic>{};
+    for (final k in _kTlsEmitOrder) {
+      final v = typed[k] ?? passthrough[k];
+      if (v == null) continue;
+      m[k] = v is List ? List<Object>.from(v) : v;
     }
     return m;
   }
@@ -69,6 +173,7 @@ class TlsSpec {
     String? fingerprint,
     RealitySpec? reality,
     List<String>? certificatePublicKeySha256,
+    Map<String, Object>? passthrough,
   }) =>
       TlsSpec(
         enabled: enabled ?? this.enabled,
@@ -79,6 +184,7 @@ class TlsSpec {
         reality: reality ?? this.reality,
         certificatePublicKeySha256:
             certificatePublicKeySha256 ?? this.certificatePublicKeySha256,
+        passthrough: passthrough ?? this.passthrough,
       );
 
   @override
@@ -90,23 +196,54 @@ class TlsSpec {
           _listEq(alpn, other.alpn) &&
           insecure == other.insecure &&
           fingerprint == other.fingerprint &&
-          reality == other.reality);
+          reality == other.reality &&
+          // §454 — пин (D-078) и сквозные ключи входят в равенство: два узла
+          // с разными сертификатами — разные узлы.
+          _listEq(certificatePublicKeySha256,
+              other.certificatePublicKeySha256) &&
+          _deepEq.equals(passthrough, other.passthrough));
 
   @override
-  int get hashCode => Object.hash(enabled, serverName, Object.hashAll(alpn),
-      insecure, fingerprint, reality);
+  int get hashCode => Object.hash(
+      enabled,
+      serverName,
+      Object.hashAll(alpn),
+      insecure,
+      fingerprint,
+      reality,
+      Object.hashAll(certificatePublicKeySha256),
+      _deepEq.hash(passthrough));
 }
+
+/// §457 — допустимые значения `tls.reality.key_share` ядра (`option/tls.go`,
+/// `common/tls/reality_client.go`). `hybrid` — требовать `X25519MLKEM768`
+/// (ClientHello ~1,5–1,9 КБ, два TCP-сегмента), `classical` — вырезать гибрид
+/// из `key_share`/`supported_groups` (~0,5 КБ, один сегмент). Любое другое
+/// значение ядро не понимает и отвергает outbound целиком = отказ всего
+/// конфига, поэтому парсеры отбрасывают поле молча, а не подгоняют.
+/// Нормативно для пина ядра lx.4+.
+const kRealityKeyShares = <String>{'hybrid', 'classical'};
 
 class RealitySpec {
   final String publicKey;
   final String shortId;
 
-  const RealitySpec({required this.publicKey, required this.shortId});
+  /// §457 — `null` = не задано: ключ не эмитится, ядро берёт как несёт
+  /// отпечаток. Значение — только из [kRealityKeyShares].
+  final String? keyShare;
+
+  const RealitySpec({
+    required this.publicKey,
+    required this.shortId,
+    this.keyShare,
+  });
 
   Map<String, dynamic> toSingbox() => {
         'enabled': true,
         'public_key': publicKey,
         'short_id': shortId,
+        // §457 — порядок полей структуры ядра; omitempty: пусто = нет ключа.
+        if (keyShare != null && keyShare!.isNotEmpty) 'key_share': keyShare,
       };
 
   @override
@@ -114,10 +251,11 @@ class RealitySpec {
       identical(this, other) ||
       (other is RealitySpec &&
           publicKey == other.publicKey &&
-          shortId == other.shortId);
+          shortId == other.shortId &&
+          keyShare == other.keyShare);
 
   @override
-  int get hashCode => Object.hash(publicKey, shortId);
+  int get hashCode => Object.hash(publicKey, shortId, keyShare);
 }
 
 bool _listEq(List<String> a, List<String> b) {

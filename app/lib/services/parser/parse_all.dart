@@ -11,9 +11,10 @@ import 'uri_parsers.dart';
 /// Ошибки отдельных строк — null-skip, не throw. Верхнеуровневый exhaustive
 /// switch гарантирует, что новый тип DecodedBody сломает компиляцию.
 ///
-/// §243 — [nameHint] (имя файла при импорте) прокидывается только в
-/// INI-ветки: у INI нет собственного имени, tag берётся из фрагмента
-/// синтетического URI. URI-строки и JSON несут имена сами — hint игнорируют.
+/// §243/§456 — [nameHint] (имя файла при импорте, тег записи при чтении
+/// хранения, поле Tag редактора) прокидывается только в INI-ветки: у INI нет
+/// собственного имени (кроме комментария под `[Peer]`, который сильнее).
+/// URI-строки и JSON несут имена сами — hint игнорируют.
 ///
 /// §404 / D-088 — [dropped] (необязательный) собирает причины ОТБРАКОВКИ
 /// целых записей тела: узел был узнан и осознанно отвергнут (недостижимый
@@ -29,16 +30,16 @@ List<NodeSpec> parseAll(
   List<NodeWarning>? dropped,
 }) {
   return switch (decoded) {
-    // §302 — источник ноды для UI (вкладка Source на экране ноды): для
-    // URI-тел это сама строка. У JSON-веток источник проставляет парсер
-    // (там rawUri — синтетическая заглушка, см. json_parsers).
+    // §302/§454/§456 — источник узла (`rawSource`) проставляют сами парсеры:
+    // для URI-строк это строка, для INI — сам INI-текст (тег — поле записи),
+    // для JSON — объект outbound'а.
     UriLines(lines: final ls) => [
         for (final l in ls)
-          if (parseUri(l) case final NodeSpec n) n..sourceCompact = l,
+          if (parseUri(l) case final NodeSpec n) n,
       ],
     IniConfig(text: final t) => [
         parseWireguardIni(t, nameHint: nameHint),
-      ].whereType<NodeSpec>().map((n) => n..sourceCompact = t).toList(),
+      ].whereType<NodeSpec>().toList(),
     // §110 — Amnezia vpn://: каждый контейнер → INI → нода (null-skip).
     // §243 — hint с индексным суффиксом (`hint`, `hint 2`, …): фрагмент
     // теперь «собственное имя» raw, суффикс-логика addMembersToFolder до

@@ -240,7 +240,7 @@ String toUriNaive(NaiveSpec s) { /* §5 */ }
 
 - В диспетчер `parseUri` — добавить `case 'naive+https': return parseNaive(t);`. Регистр scheme мы уже lower-case'им (строка 15).
 - Новая функция `parseNaive(String uri)`:
-  - `Uri.tryParse` после `replaceFirst('naive+https://', 'https://')` — стандартный трюк, чтобы `Uri` корректно распарсил host/port/userinfo. В rawUri сохраняем оригинал (`uri`).
+  - `Uri.tryParse` после `replaceFirst('naive+https://', 'https://')` — стандартный трюк, чтобы `Uri` корректно распарсил host/port/userinfo. В rawSource сохраняем оригинал (`uri`).
   - Извлекаем username/password по логике §3.1.
   - Парсим `extra-headers` через утилиту `_parseNaiveExtraHeaders` в том же файле (≈ 30 LOC).
   - `padding`-параметр — log warning через `app_log` и игнор.

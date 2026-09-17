@@ -811,6 +811,32 @@ class BoxVpnClient {
   /// `null` = ответить нельзя: невалидный конфиг, метод отсутствует в старом
   /// .aar, timeout, native не готов. Вызывающий обязан деградировать
   /// консервативно («изменилось»), а не считать конфиги равными.
+  /// §455 — проверка конфига ядром (`Libbox.checkConfig()`): ворота Save у
+  /// узла с JSON-источником, который уходит в конфиг дословно (гейты модели
+  /// на нём выключены). `null` — мост недоступен (юнит-тест, старый native,
+  /// таймаут): вызывающий не блокирует сохранение, проверять нечем.
+  Future<CoreCheck?> checkConfig(String config) async {
+    if (config.trim().isEmpty) return null;
+    try {
+      final r = await _invoke<Map<Object?, Object?>>(
+        _Methods.checkConfig,
+        args: {'config': config},
+        timeout: _Timeouts.checkConfig,
+        onTimeoutValue: null,
+      );
+      if (r == null) return null;
+      return CoreCheck(
+        ok: r['ok'] == true,
+        error: r['error']?.toString() ?? '',
+      );
+    } on PlatformException catch (e) {
+      AppLog.I.debug('checkConfig failed: ${e.message}');
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   Future<String?> formatConfig(String config) async {
     if (config.trim().isEmpty) return null;
     try {
@@ -1037,4 +1063,13 @@ class MemoryInfo {
         nativeHeapAllocated: _int(m['nativeHeapAllocated']),
         nativeHeapSize: _int(m['nativeHeapSize']),
       );
+}
+
+
+/// §455 — вердикт `Libbox.checkConfig()`: [ok] — ядро приняло; иначе [error]
+/// — отказ словами ядра (unknown field, отвергнутая опция, битый ключ).
+final class CoreCheck {
+  const CoreCheck({required this.ok, this.error = ''});
+  final bool ok;
+  final String error;
 }

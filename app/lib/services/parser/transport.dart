@@ -446,6 +446,14 @@ void warnEchIgnored(Map<String, String> q, List<NodeWarning> warnings) {
   warnings.add(EchIgnoredWarning(raw.split('+').first.trim()));
 }
 
+/// §457 — `key_share=` из share-URI: только значение из [kRealityKeyShares],
+/// регистр не нормализуем. Иное — `null` (поле отброшено молча): ядро на
+/// неизвестном значении отвергает весь конфиг, а не один узел.
+String? realityKeyShareFromQuery(String? raw) {
+  final v = (raw ?? '').trim();
+  return kRealityKeyShares.contains(v) ? v : null;
+}
+
 /// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).
 TlsSpec parseVlessTls(
   Map<String, String> q,
@@ -483,6 +491,9 @@ TlsSpec parseVlessTls(
       reality: RealitySpec(
         publicKey: pbk,
         shortId: normalizeRealityShortId(rawSid),
+        // §457 — имя параметра = ключ sing-box (прецедент §453). Читается
+        // только вместе с валидным REALITY; вне enum — молча отброшено.
+        keyShare: realityKeyShareFromQuery(q['key_share']),
       ),
       insecure: isTlsInsecure(q),
       alpn: alpnFromQuery(q),

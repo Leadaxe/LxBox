@@ -230,8 +230,8 @@ class SubscriptionNodeList extends StatelessWidget {
   }
 
   void _showNodeMenu(BuildContext context, NodeSpec node) {
-    final info = node.rawUri.isNotEmpty
-        ? node.rawUri
+    final info = node.rawSource.isNotEmpty
+        ? node.rawSource
         : '${node.protocol}://${node.server}:${node.port}';
     showAppBottomSheet(
       context: context,

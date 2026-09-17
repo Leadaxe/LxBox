@@ -31,8 +31,8 @@ FolderServers _folder({
       tagPrefix: 'F',
       detourPolicy: DetourPolicy.defaults,
       members: [
-        FolderMember(raw: _node('A', 1).rawUri, detour: aDetour),
-        FolderMember(raw: _node('B', 2).rawUri, detour: bDetour, enabled: bEnabled),
+        FolderMember(raw: _node('A', 1).rawSource, detour: aDetour),
+        FolderMember(raw: _node('B', 2).rawSource, detour: bDetour, enabled: bEnabled),
       ],
     );
 

@@ -100,6 +100,10 @@ class _Methods {
   /// (kernel SPEC 037 §3). Статический метод, живой сервис не нужен.
   static const formatConfig = 'formatConfig';
 
+  /// §455 — проверка тела узла ядром (`Libbox.checkConfig()`): ворота Save у
+  /// узла с JSON-источником, уходящего в конфиг дословно.
+  static const checkConfig = 'checkConfig';
+
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';
   static const resetNetwork = 'resetNetwork';

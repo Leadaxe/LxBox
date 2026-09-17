@@ -20,7 +20,7 @@ void main() {
       label: userTag,
       server: '127.0.0.1',
       port: 8080,
-      rawUri: '',
+      rawSource: '',
     );
     final us = UserServer(
       id: newUuidV4(),
@@ -58,7 +58,7 @@ void main() {
       label: 'corp-https-out',
       server: 'proxy.corp.example',
       port: 8443,
-      rawUri: '',
+      rawSource: '',
       username: 'alice',
       password: 's3cret',
       tls: const TlsSpec(enabled: true, serverName: 'proxy.corp.example'),

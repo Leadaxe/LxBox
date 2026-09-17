@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -80,11 +81,13 @@ ShadowsocksSpec? parseShadowsocks(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     method: method,
     password: password,
     plugin: _ssPluginName(q['plugin']),
     pluginOpts: _ssPluginOpts(q['plugin']) ?? (q['plugin_opts'] ?? ''),
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }
 

@@ -44,7 +44,7 @@ endpoint `91.247.235.94:51821`, MTU-клэмп 1280, весь AWG3-набор, �
 5. Метка = фрагмент (percent-unescape через `decodeFragment`). Без фрагмента —
    хост Endpoint, как у `.conf` в Go (`ConvertWGConfText`), а не общий фолбэк
    `WireGuard`.
-6. `rawUri` узла — исходная `awg://`-ссылка, не синтетический `wireguard://`
+6. `rawSource` узла — исходная `awg://`-ссылка, не синтетический `wireguard://`
    из INI-конвертера: иначе поплывут identity-хеш и экспорт источника.
 
 Многоблочные payload'ы (несколько `[Interface]`) не поддерживаются намеренно:
@@ -62,4 +62,4 @@ endpoint `91.247.235.94:51821`, MTU-клэмп 1280, весь AWG3-набор, �
 | `awg_conf_base64_not_conf` | base64 без `[Interface]` → `dropped`, `parse_error` |
 
 Плюс локальные тесты в `test/parser/awg_test.dart`: форма распознаётся,
-`key@host:port` не перехватывается, `rawUri` остаётся исходной ссылкой.
+`key@host:port` не перехватывается, `rawSource` остаётся исходной ссылкой.

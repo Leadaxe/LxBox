@@ -25,7 +25,27 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.1-lx.3`** (see `app/android/libbox.version`) — the
+**The current pin: `v1.14.1-lx.4`** (see `app/android/libbox.version`) — two
+REALITY changes on top of lx.3. **SPEC 088**: `tls.fragment` and
+`tls.record_fragment` now apply to REALITY too. Until lx.4 the REALITY client
+built its handshake on the bare socket and silently skipped both, including the
+automatic `record_fragment` the core turns on under a `detour` — so the global
+fragmentation toggle looked enabled and did nothing on exactly the nodes that
+need it most. Nothing changed on the app side: the `applyTlsFragment` post-step
+(`post_steps/tls_transforms.dart`) never excluded REALITY nodes, so the toggle
+simply started taking effect on them. **SPEC 089**: a per-node
+`tls.reality.key_share` — `hybrid` demands the `X25519MLKEM768` key share,
+`classical` strips it out of `key_share` and `supported_groups`, absent means
+whatever the fingerprint carries. The wire format, the AAR tag sets and the Go
+toolchain are unchanged; the Java surface is identical to lx.3 (javap over all
+253 classes of `classes.jar` — diff empty).
+**LxBox depends on this pin for §457**: the app emits `tls.reality.key_share`
+without a core-version gate (LxBox has one core, pinned here). Rolling the core
+back below lx.4 means the core rejects `key_share` as an unknown field and takes
+the whole config down — the emit would have to be closed again, exactly like
+§451's fingerprint set below.
+
+**`v1.14.1-lx.3`** — the
 base moves to sing-box `v1.14.1`, and a **fourth fork submodule** appears:
 `submodules/utls` = `Leadaxe/utls-lx` (`metacubex/utls` v1.8.7 plus three
 cherry-picks from `refraction-networking/utls`). It carries the `HelloFirefox_148`
@@ -749,7 +769,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.0-lx.39** (current pin) | **SOCKS5 UDP hotfix** (fork SPEC 085): a UDP ASSOCIATE reply with `BND.ADDR` `0.0.0.0`/`::` no longer makes the client dial the relay at the local system — the proxy server address is used instead. Java surface identical to lx.38. |
+| **v1.14.1-lx.4** (current pin) | **REALITY: fragmentation and `key_share`.** Fork SPEC 088 — `tls.fragment` / `tls.record_fragment` now apply to REALITY as well: until lx.4 the REALITY client built its handshake on the bare socket and skipped them silently, including the automatic `record_fragment` under a `detour`. Fork SPEC 089 — a per-node `tls.reality.key_share` (`hybrid` \| `classical`), an unknown value rejects the whole config; LxBox emits it from §457. Wire format, tag sets and toolchain unchanged; Java surface identical to lx.3 (javap diff over all 253 classes — empty). |
+| **v1.14.0-lx.39** | **SOCKS5 UDP hotfix** (fork SPEC 085): a UDP ASSOCIATE reply with `BND.ADDR` `0.0.0.0`/`::` no longer makes the client dial the relay at the local system — the proxy server address is used instead. Java surface identical to lx.38. |
 | **v1.14.0-lx.38** | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
 | **v1.14.0-lx.37** | Upstream sync: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules wireguard-go v0.0.6 / sing-tun v0.9.3. No config changes. AAR still without Tailscale. |
 | **v1.14.0-lx.36** | Hotfix: REALITY nodes on Xray-core ≥ v26.9.8 work again — the core no longer strips the `X25519MLKEM768` key share the server now requires, and derives the auth key the way the server does (core SPEC 083); servers before v26.9.8 unaffected. Only `chrome` fingerprints carry the key share — LxBox 2.23.2 emitted `chrome` for any REALITY node (§281); since 2.24.0 an explicit fingerprint goes into the config as is, with a warning on the node (§444). Same upstream base as lx.34. |

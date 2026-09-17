@@ -5,6 +5,7 @@ import 'node_sections.dart';
 import 'node_spec_emit.dart' as e;
 import 'node_warning.dart';
 import 'singbox_entry.dart';
+import 'tcp_keep_alive_spec.dart';
 import 'template_vars.dart';
 import 'tls_spec.dart';
 import 'transport_spec.dart';
@@ -41,23 +42,29 @@ sealed class NodeSpec {
   final String label;
   final String server;
   final int port;
-  final String rawUri;
+
+  /// §454 — источник узла: из чего он разобран. URI-строка байт в байт,
+  /// объект outbound'а (sing-box / Xray) в pretty-JSON, INI-текст у WG из
+  /// `.conf` (§456; тег — поле записи, не текста).
+  /// Им узел предъявляет себя, когда нужен собственный текст: переезд в
+  /// папку (`raw` члена), вкладка Source. Пусто только у узлов, собранных
+  /// приложением без текста (группы §208).
+  /// Не сериализуется: хранение держит текст контейнера (`origin.raw`).
+  final String rawSource;
   final NodeSpec? chained;
   final List<NodeWarning> warnings;
 
-  /// §302 — исходный фрагмент подписки, из которого собралась нода, в
-  /// «компактном» виде: для JSON-тел это САМ outbound-объект (без dns/
-  /// inbounds/routing соседей), для URI-строк — сама строка.
-  ///
-  /// Нужен, потому что `rawUri` у JSON-нод — синтетическая заглушка
-  /// (`xray://<tag>`), а не источник: показать пользователю «как устроено
-  /// после парсинга» по ней нельзя. Mutable, не сериализуется, на
-  /// `emit` и на идентичность узла не влияет — как `originLine`.
-  String? sourceCompact;
+  /// §453 — TCP keep-alive dial-поля sing-box. В ядре это `DialerOptions`,
+  /// общая для всех outbound'ов с TCP-дозвоном, а не свойство протокола —
+  /// потому база, а не копия в каждом `*Spec`. `null` = не задано, эмит
+  /// ничего не пишет. Прокидывают только 9 носителей (у QUIC/UDP-типов
+  /// keep-alive TCP-сокета не к чему применить, см. §1 спеки 453).
+  final TcpKeepAliveSpec? tcpKeepAlive;
 
-  /// §302 — тот же фрагмент в «расширенном» виде: элемент как пришёл от
-  /// провайдера целиком (для Xray-массива — весь элемент с dns/inbounds/
-  /// routing). `null`, если расширенный вид не отличается от компактного.
+  /// §302 — источник узла в «расширенном» виде: элемент как пришёл от
+  /// провайдера целиком (для Xray-массива / sing-box-конфига — с dns/inbounds/
+  /// routing соседями). `null`, если не отличается от [rawSource]. Mutable,
+  /// не сериализуется, на `emit` и идентичность не влияет.
   String? sourceExtended;
 
   /// §302 — JSON узла после применения import-rules (REPLACE). `null` —
@@ -71,7 +78,7 @@ sealed class NodeSpec {
   /// на каждом старте VPN. Патч — сохранённое состояние узла; писать в него
   /// может только применение правил.
   ///
-  /// Mutable и не сериализуется — как `sourceCompact`: правила переприменяются
+  /// Mutable и не сериализуется — как `sourceExtended`: правила переприменяются
   /// на каждом импорте/регидрации, храниться этому незачем.
   Map<String, dynamic>? patchedJson;
 
@@ -82,7 +89,7 @@ sealed class NodeSpec {
 
   /// §435 — связка узла, извлечённая парсером из целого sing-box-конфига с
   /// одним узлом (NODE_SECTIONS.md §6) или прочитанная из документа с
-  /// `sections`. Mutable и не сериализуется, как `sourceCompact`: хозяин
+  /// `sections`. Mutable и не сериализуется, как `sourceExtended`: хозяин
   /// секций — контейнер (`UserServer.sections` / `FolderMember.sections`),
   /// контроллер переносит её туда при добавлении узла и только тогда.
   NodeSections? importedSections;
@@ -98,8 +105,9 @@ sealed class NodeSpec {
     required this.label,
     required this.server,
     required this.port,
-    required this.rawUri,
+    required this.rawSource,
     this.chained,
+    this.tcpKeepAlive,
     List<NodeWarning>? warnings,
   }) : warnings = warnings ?? <NodeWarning>[];
 
@@ -208,7 +216,7 @@ final class VlessSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.uuid,
     this.flow = '',
     this.tls = TlsSpec.disabled,
@@ -216,6 +224,7 @@ final class VlessSpec extends NodeSpec {
     this.packetEncoding = '',
     this.encryption = '',
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -248,13 +257,14 @@ final class VmessSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.uuid,
     this.alterId = 0,
     this.security = 'auto',
     this.tls = TlsSpec.disabled,
     this.transport,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -283,11 +293,12 @@ final class TrojanSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.password,
     this.tls = TlsSpec.disabled,
     this.transport,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -321,13 +332,14 @@ final class AnyTlsSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.password,
     this.tls = TlsSpec.disabled,
     this.idleSessionCheckInterval = '',
     this.idleSessionTimeout = '',
     this.minIdleSession,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -357,12 +369,13 @@ final class ShadowsocksSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.method,
     required this.password,
     this.plugin = '',
     this.pluginOpts = '',
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -411,7 +424,7 @@ final class Hysteria2Spec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.password,
     this.obfs = '',
     this.obfsPassword = '',
@@ -464,13 +477,14 @@ final class NaiveSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     this.username = '',
     this.password = '',
     this.tls = TlsSpec.disabled,
     this.extraHeaders = const {},
     this.quic = false,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -513,7 +527,7 @@ final class TuicSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.uuid,
     required this.password,
     this.congestionControl,
@@ -553,7 +567,7 @@ final class SshSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.user,
     this.password = '',
     this.privateKey = '',
@@ -561,6 +575,7 @@ final class SshSpec extends NodeSpec {
     this.hostKey = const [],
     this.hostKeyAlgorithms = const [],
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -589,11 +604,12 @@ final class SocksSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     this.version = '5',
     this.username = '',
     this.password = '',
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -624,13 +640,14 @@ final class HttpSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     this.username = '',
     this.password = '',
     this.path = '',
     this.headers = const {},
     this.tls = TlsSpec.disabled,
     super.chained,
+    super.tcpKeepAlive,
     super.warnings,
   });
 
@@ -1038,7 +1055,6 @@ final class WireguardSpec extends NodeSpec {
   final List<String> localAddresses; // CIDR список
   final List<WireguardPeer> peers;
   final int? mtu;
-  final String? rawIni; // если парсили из INI, сохраняем оригинал
 
   /// §097 Phase 1 — AmneziaWG2 obfuscation params (null = обычный WG).
   final Awg? awg;
@@ -1049,12 +1065,11 @@ final class WireguardSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.privateKey,
     required this.localAddresses,
     required this.peers,
     this.mtu,
-    this.rawIni,
     this.awg,
     super.chained,
     super.warnings,
@@ -1125,7 +1140,7 @@ final class MasqueSpec extends NodeSpec {
     required super.label,
     required super.server,
     required super.port,
-    required super.rawUri,
+    required super.rawSource,
     required this.privateKeyDer,
     required this.publicKeyDer,
     required this.localAddresses,
@@ -1180,7 +1195,7 @@ final class AutoSelectSpec extends NodeSpec {
 
   /// §321 P6 — теги провайдера → идентичности. Нужна, чтобы `include` из
   /// `selector` (написанный на ЧУЖИХ тегах) находил наши узлы после дедупа.
-  /// Производное от тела подписки, как `sourceCompact` (§302).
+  /// Производное от тела подписки, как `sourceExtended` (§302).
   final Map<String, String> tagSynonyms;
 
   AutoSelectSpec({
@@ -1192,7 +1207,10 @@ final class AutoSelectSpec extends NodeSpec {
     this.tagSynonyms = const {},
     this.poolBadge = kDefaultPoolBadge,
     super.warnings,
-  }) : super(server: '', port: 0, rawUri: '');
+    // §454 — у группы из sing-box-конфига источник — её объект; у групп,
+    // собранных приложением (§208, папки), источника нет.
+    super.rawSource = '',
+  }) : super(server: '', port: 0);
 
   @override
   String get protocol => 'urltest';
@@ -1248,6 +1266,7 @@ final class AutoSelectSpec extends NodeSpec {
         tagSynonyms: tagSynonyms ?? this.tagSynonyms,
         poolBadge: poolBadge ?? this.poolBadge,
         warnings: warnings,
+        rawSource: rawSource,
       );
 }
 
@@ -1274,10 +1293,11 @@ final class TailscaleSpec extends NodeSpec {
     required super.tag,
     required super.label,
     Map<String, dynamic> body = const {},
+    super.rawSource = '',
     super.chained,
     super.warnings,
   })  : body = _stripMeta(body),
-        super(server: '', port: 0, rawUri: '');
+        super(server: '', port: 0);
 
   static Map<String, dynamic> _stripMeta(Map<String, dynamic> raw) {
     final copy = deepCopyJson(raw) as Map<String, dynamic>;
@@ -1323,6 +1343,7 @@ final class TailscaleSpec extends NodeSpec {
         tag: tag ?? this.tag,
         label: label ?? this.label,
         body: body ?? this.body,
+        rawSource: rawSource,
         chained: chained ?? this.chained,
         warnings: warnings,
       );
@@ -1346,7 +1367,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           uuid: s.uuid,
           flow: s.flow,
           tls: s.tls,
@@ -1354,6 +1375,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           packetEncoding: s.packetEncoding,
           encryption: s.encryption,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       VmessSpec s => VmessSpec(
@@ -1362,13 +1384,14 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           uuid: s.uuid,
           alterId: s.alterId,
           security: s.security,
           tls: s.tls,
           transport: s.transport,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       TrojanSpec s => TrojanSpec(
@@ -1377,11 +1400,12 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           password: s.password,
           tls: s.tls,
           transport: s.transport,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       AnyTlsSpec s => AnyTlsSpec(
@@ -1390,13 +1414,14 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           password: s.password,
           tls: s.tls,
           idleSessionCheckInterval: s.idleSessionCheckInterval,
           idleSessionTimeout: s.idleSessionTimeout,
           minIdleSession: s.minIdleSession,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       ShadowsocksSpec s => ShadowsocksSpec(
@@ -1405,12 +1430,13 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           method: s.method,
           password: s.password,
           plugin: s.plugin,
           pluginOpts: s.pluginOpts,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       Hysteria2Spec s => Hysteria2Spec(
@@ -1419,7 +1445,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           password: s.password,
           obfs: s.obfs,
           obfsPassword: s.obfsPassword,
@@ -1437,12 +1463,13 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           username: s.username,
           password: s.password,
           tls: s.tls,
           extraHeaders: s.extraHeaders,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       TuicSpec s => TuicSpec(
@@ -1451,7 +1478,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           uuid: s.uuid,
           password: s.password,
           congestionControl: s.congestionControl,
@@ -1468,7 +1495,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           user: s.user,
           password: s.password,
           privateKey: s.privateKey,
@@ -1476,6 +1503,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           hostKey: s.hostKey,
           hostKeyAlgorithms: s.hostKeyAlgorithms,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       SocksSpec s => SocksSpec(
@@ -1484,11 +1512,12 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           version: s.version,
           username: s.username,
           password: s.password,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       HttpSpec s => HttpSpec(
@@ -1497,13 +1526,14 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           username: s.username,
           password: s.password,
           path: s.path,
           headers: s.headers,
           tls: s.tls,
           chained: chained,
+          tcpKeepAlive: s.tcpKeepAlive,
           warnings: s.warnings,
         ),
       WireguardSpec s => WireguardSpec(
@@ -1512,12 +1542,11 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           privateKey: s.privateKey,
           localAddresses: s.localAddresses,
           peers: s.peers,
           mtu: s.mtu,
-          rawIni: s.rawIni,
           awg: s.awg,
           chained: chained,
           warnings: s.warnings,
@@ -1528,7 +1557,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           label: s.label,
           server: s.server,
           port: s.port,
-          rawUri: s.rawUri,
+          rawSource: s.rawSource,
           privateKeyDer: s.privateKeyDer,
           publicKeyDer: s.publicKeyDer,
           localAddresses: s.localAddresses,

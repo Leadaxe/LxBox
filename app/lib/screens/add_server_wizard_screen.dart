@@ -233,7 +233,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       label: tag,
       server: host,
       port: port,
-      rawUri: '',
+      rawSource: '',
       username: user,
       password: pass,
     );
@@ -277,7 +277,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       label: tag,
       server: host,
       port: port,
-      rawUri: '',
+      rawSource: '',
       username: _httpUser.text,
       password: _httpPass.text,
       // Тонкая настройка TLS (sni/insecure/alpn) — через JSON-редактор ноды.

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../services/parser/tcp_keep_alive.dart';
 import '../services/parser/transport.dart';
 import '../services/parser/uri_utils.dart';
 import 'node_spec.dart';
@@ -26,8 +27,13 @@ Map<String, dynamic> _baseOutbound(String type, NodeSpec s) => <String, dynamic>
 
 /// §219 — присвоение `detour` при наличии chained-ноды. Было продублировано
 /// 9 раз (`if (s.chained != null) out['detour'] = s.chained!.tag;`).
-void _addDetour(Map<String, dynamic> out, NodeSpec s) {
+///
+/// §453 — сюда же TCP keep-alive: это тоже dial-поле, общее для всех
+/// outbound'ов, и точка у него ровно одна на все 13 вызовов. У не-носителей
+/// `tcpKeepAlive == null` — не пишется ничего, emit прежний байт-в-байт.
+void _addDialFields(Map<String, dynamic> out, NodeSpec s) {
   if (s.chained != null) out['detour'] = s.chained!.tag;
+  tcpKeepAliveToSingbox(out, s.tcpKeepAlive);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -43,7 +49,7 @@ Endpoint emitTailscale(TailscaleSpec s, TemplateVars vars) {
     'tag': s.tag,
     ...deepCopyJson(s.body) as Map<String, dynamic>,
   };
-  _addDetour(map, s);
+  _addDialFields(map, s);
   return Endpoint(map);
 }
 
@@ -92,7 +98,7 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
 
-  _addDetour(out, s);
+  _addDialFields(out, s);
 
   return Outbound(out);
 }
@@ -121,6 +127,11 @@ String toUriVless(VlessSpec s) {
       if (s.tls.reality!.shortId.isNotEmpty) {
         q['sid'] = s.tls.reality!.shortId;
       }
+      // §457 — key_share только при заданном значении: узлы без поля дают
+      // прежний URI байт в байт.
+      if (s.tls.reality!.keyShare != null) {
+        q['key_share'] = s.tls.reality!.keyShare!;
+      }
     } else {
       q['security'] = 'tls';
     }
@@ -136,6 +147,9 @@ String toUriVless(VlessSpec s) {
     q['security'] = 'none';
   }
 
+  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
+  // пересохранении узла через toUri() (хранение узла — текст).
+  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
   return _buildUri('vless', s.uuid, s.server, s.port, q, s.label);
 }
 
@@ -160,7 +174,7 @@ Outbound emitVmess(VmessSpec s, TemplateVars vars) {
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
 
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -182,6 +196,13 @@ String toUriVmess(VmessSpec s) {
     if (s.tls.serverName != null) 'sni': s.tls.serverName,
     if (s.tls.fingerprint != null) 'fp': s.tls.fingerprint,
     if (s.tls.alpn.isNotEmpty) 'alpn': s.tls.alpn.join(','),
+    // §453 — dial-поля ключами того же v2rayN-объекта, под именами sing-box;
+    // только непустые, иначе URI старых узлов изменился бы.
+    if (s.tcpKeepAlive?.disabled == true) 'disable_tcp_keep_alive': true,
+    if (s.tcpKeepAlive != null && s.tcpKeepAlive!.idle.isNotEmpty)
+      'tcp_keep_alive': s.tcpKeepAlive!.idle,
+    if (s.tcpKeepAlive != null && s.tcpKeepAlive!.interval.isNotEmpty)
+      'tcp_keep_alive_interval': s.tcpKeepAlive!.interval,
   };
   final cleaned = Map<String, dynamic>.fromEntries(
       json.entries.where((e) => e.value != null));
@@ -234,7 +255,7 @@ Outbound emitTrojan(TrojanSpec s, TemplateVars vars) {
   // ключ `tls` не эмитим вовсе (было: {enabled:false}, чего Go не пишет).
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -250,6 +271,9 @@ String toUriTrojan(TrojanSpec s) {
   } else {
     q['security'] = 'none';
   }
+  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
+  // пересохранении узла через toUri() (хранение узла — текст).
+  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
   return _buildUri('trojan', s.password, s.server, s.port, q, s.label);
 }
 
@@ -271,7 +295,7 @@ Outbound emitAnyTls(AnyTlsSpec s, TemplateVars vars) {
   if (s.minIdleSession != null) {
     out['min_idle_session'] = s.minIdleSession;
   }
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -286,6 +310,10 @@ String toUriAnyTls(AnyTlsSpec s) {
     q['pbk'] = s.tls.reality!.publicKey;
     if (s.tls.reality!.shortId.isNotEmpty) {
       q['sid'] = s.tls.reality!.shortId;
+    }
+    // §457 — как у vless.
+    if (s.tls.reality!.keyShare != null) {
+      q['key_share'] = s.tls.reality!.keyShare!;
     }
   } else {
     q['security'] = 'tls';
@@ -303,6 +331,9 @@ String toUriAnyTls(AnyTlsSpec s) {
   if (s.minIdleSession != null) {
     q['min_idle_session'] = s.minIdleSession.toString();
   }
+  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
+  // пересохранении узла через toUri() (хранение узла — текст).
+  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
   return _buildUri('anytls', s.password, s.server, s.port, q, s.label);
 }
 
@@ -318,7 +349,7 @@ Outbound emitShadowsocks(ShadowsocksSpec s, TemplateVars vars) {
     out['plugin'] = s.plugin;
     if (s.pluginOpts.isNotEmpty) out['plugin_opts'] = s.pluginOpts;
   }
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -328,7 +359,12 @@ String toUriShadowsocks(ShadowsocksSpec s) {
       .replaceAll('=', '');
   final host = _wrapIpv6(s.server);
   final frag = encodeFragment(s.label);
-  return 'ss://$userinfo@$host:${s.port}${frag.isEmpty ? '' : '#$frag'}';
+  // §453 — query у ss-URI появляется ТОЛЬКО когда есть что в неё написать:
+  // SIP002-форма без параметров остаётся прежней байт-в-байт.
+  final qs = buildQuery(tcpKeepAliveToQuery(s.tcpKeepAlive));
+  return 'ss://$userinfo@$host:${s.port}'
+      '${qs.isEmpty ? '' : '?$qs'}'
+      '${frag.isEmpty ? '' : '#$frag'}';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -362,7 +398,7 @@ Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
   if (s.downMbps != null) out['down_mbps'] = s.downMbps;
   // §282 — QUIC не поддерживает uTLS; fp на hysteria2 = мусор подписок.
   out['tls'] = s.tls.toSingboxForQuic();
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -418,7 +454,7 @@ Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
     out['extra_headers'] = sorted;
   }
   out['tls'] = s.tls.toSingbox();
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -439,6 +475,9 @@ String toUriNaive(NaiveSpec s) {
     q['extra-headers'] = serializeNaiveExtraHeaders(s.extraHeaders);
   }
 
+  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
+  // пересохранении узла через toUri() (хранение узла — текст).
+  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
   final host = _wrapIpv6(s.server);
   // port=443 опускаем — соответствует канонической форме DuckSoft.
   final portPart = s.port == 443 ? '' : ':${s.port}';
@@ -480,7 +519,7 @@ Outbound emitTuic(TuicSpec s, TemplateVars vars) {
   if (s.heartbeat != null) out['heartbeat'] = s.heartbeat;
   // §282 — QUIC не поддерживает uTLS; fp на tuic = мусор подписок.
   out['tls'] = s.tls.toSingboxForQuic();
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -516,7 +555,7 @@ Outbound emitSsh(SshSpec s, TemplateVars vars) {
   if (s.hostKeyAlgorithms.isNotEmpty) {
     out['host_key_algorithms'] = s.hostKeyAlgorithms;
   }
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -530,6 +569,9 @@ String toUriSsh(SshSpec s) {
   if (s.hostKeyAlgorithms.isNotEmpty) {
     q['host_key_algorithms'] = s.hostKeyAlgorithms.join(',');
   }
+  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
+  // пересохранении узла через toUri() (хранение узла — текст).
+  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
   final userinfo = s.password.isEmpty
       ? encodeParam(s.user)
       : '${encodeParam(s.user)}:${encodeParam(s.password)}';
@@ -547,7 +589,7 @@ Outbound emitSocks(SocksSpec s, TemplateVars vars) {
   final out = _baseOutbound('socks', s)..['version'] = s.version;
   if (s.username.isNotEmpty) out['username'] = s.username;
   if (s.password.isNotEmpty) out['password'] = s.password;
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -559,7 +601,11 @@ String toUriSocks(SocksSpec s) {
           : '${encodeParam(s.username)}:${encodeParam(s.password)}@');
   final host = _wrapIpv6(s.server);
   final frag = encodeFragment(s.label);
-  return 'socks5://$userinfo$host:${s.port}${frag.isEmpty ? '' : '#$frag'}';
+  // §453 — как у ss: query появляется только при непустых dial-полях.
+  final qs = buildQuery(tcpKeepAliveToQuery(s.tcpKeepAlive));
+  return 'socks5://$userinfo$host:${s.port}'
+      '${qs.isEmpty ? '' : '?$qs'}'
+      '${frag.isEmpty ? '' : '#$frag'}';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -581,7 +627,7 @@ Outbound emitHttp(HttpSpec s, TemplateVars vars) {
   }
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
-  _addDetour(out, s);
+  _addDialFields(out, s);
   return Outbound(out);
 }
 
@@ -611,6 +657,9 @@ String toUriHttp(HttpSpec s) {
     if (s.tls.insecure) q['allowInsecure'] = '1';
   }
 
+  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
+  // пересохранении узла через toUri() (хранение узла — текст).
+  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
   final scheme = s.tls.enabled ? 'proxy-https' : 'proxy-http';
   final host = _wrapIpv6(s.server);
   final qs = buildQuery(q);

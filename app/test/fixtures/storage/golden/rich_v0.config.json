@@ -269,7 +269,6 @@
     {
       "type": "wireguard",
       "tag": "singbox-wg-1",
-      "mtu": 1420,
       "address": [
         "10.0.0.2/32"
       ],
@@ -284,7 +283,8 @@
             "::/0"
           ]
         }
-      ]
+      ],
+      "mtu": 1420
     }
   ],
   "outbounds": [

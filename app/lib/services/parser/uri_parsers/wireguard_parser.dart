@@ -145,7 +145,7 @@ WireguardSpec? parseWireguardUri(String uri) {
     label: label,
     server: p.host,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     privateKey: privateKey,
     localAddresses: localAddresses,
     peers: [peer],
@@ -204,15 +204,14 @@ WireguardSpec? _parseWgConfBase64Link(String uri) {
   final spec = parseWireguardIni(conf, nameHint: hint);
   if (spec == null) return null;
   // Источник узла (вкладка Source, identity-хеш) — исходная ссылка, а не
-  // синтетический `wireguard://` из INI-конвертера. `rawIni` не несём: узел
-  // пришёл ссылкой, а не вставленным файлом.
+  // INI-текст из неё: узел пришёл ссылкой, а не вставленным файлом.
   return WireguardSpec(
     id: spec.id,
     tag: spec.tag,
     label: spec.label,
     server: spec.server,
     port: spec.port,
-    rawUri: uri,
+    rawSource: uri,
     privateKey: spec.privateKey,
     localAddresses: spec.localAddresses,
     peers: spec.peers,

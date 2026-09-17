@@ -8,6 +8,7 @@ import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
+import 'tcp_keep_alive.dart';
 import 'transport.dart';
 import '../app_log.dart';
 import 'uri_utils.dart';
@@ -212,10 +213,9 @@ List<NodeSpec> parseXrayElement(
         continue;
       }
 
-      // §302 — исходник узла для UI («Source» на экране узла) и для правил по
-      // JSON-телам: compact = сам outbound, extended = весь элемент как пришёл
-      // от провайдера (dns/inbounds/routing соседи). rawUri для таких узлов —
-      // синтетическая заглушка `xray://<tag>`, источником служить не может.
+      // §302/§454 — исходник узла: compact = сам outbound (он же `rawSource`
+      // узла), extended = весь элемент как пришёл от провайдера (dns/inbounds/
+      // routing соседи) — хранится только когда отличается.
       final compact = _prettyJson(ob);
 
       // §321/§368/§404 — цепочка релеев. `dialerProxy` в Xray живёт в
@@ -256,11 +256,7 @@ List<NodeSpec> parseXrayElement(
         seen.add(signature);
       }
 
-      result.add(
-        node
-          ..sourceCompact = compact
-          ..sourceExtended = extended == compact ? null : extended,
-      );
+      result.add(node..sourceExtended = extended == compact ? null : extended);
     } catch (_) {
       // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
       // мусорный тип поля (`streamSettings: "none"`, `settings: []`) бросает
@@ -558,7 +554,7 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port2,
-    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     uuid: uuid,
     flow: flow,
     tls: tls,
@@ -566,6 +562,8 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
     packetEncoding: packetEncoding,
     encryption: encryption,
     warnings: warnings,
+    // §453 — Xray держит keep-alive в sockopt целыми секундами.
+    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
   );
 }
 
@@ -672,11 +670,13 @@ TrojanSpec? _xrayTrojanToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port,
-    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     password: password,
     tls: tls,
     transport: _xrayTransportFromStream(stream),
     warnings: warnings,
+    // §453 — Xray держит keep-alive в sockopt целыми секундами.
+    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
   );
 }
 
@@ -706,13 +706,15 @@ VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port,
-    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     uuid: uuid,
     alterId: (user['alterId'] as num?)?.toInt() ?? 0,
     security: security.isEmpty ? 'auto' : security,
     tls: tls,
     transport: _xrayTransportFromStream(stream),
     warnings: warnings,
+    // §453 — Xray держит keep-alive в sockopt целыми секундами.
+    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
   );
 }
 
@@ -727,15 +729,20 @@ ShadowsocksSpec? _xraySsToSpec(Map<String, dynamic> o, String remarks) {
   if (server.isEmpty || method.isEmpty || port == 0) return null;
 
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
+  // §453 — у ss-конвертера своего `stream` нет; sockopt достаём отсюда,
+  // `is Map`-проверка живёт внутри tcpKeepAliveFromXraySockopt.
+  final stream = o['streamSettings'];
   return ShadowsocksSpec(
     id: newUuidV4(),
     tag: tagFromLabel(label, 'ss', server, port),
     label: label,
     server: server,
     port: port,
-    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     method: method,
     password: password,
+    tcpKeepAlive:
+        tcpKeepAliveFromXraySockopt(stream is Map ? stream['sockopt'] : null),
   );
 }
 
@@ -769,7 +776,7 @@ Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
     label: label,
     server: server,
     port: port,
-    rawUri: 'xray://${o['tag'] ?? 'proxy'}',
+    rawSource: _prettyJson(o),
     password: auth,
     tls: tls.enabled ? tls : const TlsSpec(enabled: true),
     warnings: warnings,
@@ -872,7 +879,7 @@ SocksSpec? _xraySocksToSpec(Map<String, dynamic> o, String label) {
     label: label,
     server: server,
     port: port,
-    rawUri: 'xray-jump://socks',
+    rawSource: _prettyJson(o),
     username: user['user']?.toString() ?? '',
     password: user['pass']?.toString() ?? '',
   );
@@ -983,12 +990,19 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
 
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).
 /// Используется для JSON-редактора и Smart-Paste одиночного sing-box entry.
-NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
+NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
+  // §454 — источник узла из JSON: его собственный объект outbound'а. Вызов из
+  // целого конфига передаёт оригинал (до подмены тега лейблом), одиночный
+  // entry — сам себе источник.
+  final src = rawSource ?? _prettyJson(entry);
   final type = entry['type']?.toString() ?? '';
   final tag = entry['tag']?.toString() ?? '';
   final server = entry['server']?.toString() ?? '';
   final port = (entry['server_port'] as num?)?.toInt() ?? 0;
   final label = tag;
+  // §453 — dial-поля общие для всех носителей; читаем один раз до switch'а,
+  // дальше просто прокидываем. У не-носителей ключи не читаются вовсе.
+  final ka = tcpKeepAliveFromSingbox(entry);
 
   switch (type) {
     case 'vless':
@@ -1000,7 +1014,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         flow: entry['flow']?.toString() ?? '',
         tls: tls,
@@ -1009,6 +1023,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
           entry['packet_encoding']?.toString() ?? '',
           tag: tag,
         ),
+        tcpKeepAlive: ka,
       );
     case 'vmess':
       if (server.isEmpty || port == 0) return null;
@@ -1018,12 +1033,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         alterId: (entry['alter_id'] as num?)?.toInt() ?? 0,
         security: entry['security']?.toString() ?? 'auto',
         tls: _tlsFromSingbox(entry['tls'], server),
         transport: _transportFromSingbox(entry['transport']),
+        tcpKeepAlive: ka,
       );
     case 'trojan':
       if (server.isEmpty || port == 0) return null;
@@ -1033,10 +1049,11 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         password: entry['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
         transport: _transportFromSingbox(entry['transport']),
+        tcpKeepAlive: ka,
       );
     case 'anytls': // §269
       if (server.isEmpty || port == 0) return null;
@@ -1052,7 +1069,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         password: entry['password']?.toString() ?? '',
         tls: anyTls,
         // SPEC 103 D-024 — на всякий случай нормализуем и здесь: ручные
@@ -1063,6 +1080,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         idleSessionTimeout: normalizeSingboxDuration(
             entry['idle_session_timeout']?.toString() ?? ''),
         minIdleSession: (entry['min_idle_session'] as num?)?.toInt(),
+        tcpKeepAlive: ka,
       );
     case 'shadowsocks':
       if (server.isEmpty || port == 0) return null;
@@ -1072,9 +1090,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         method: entry['method']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
+        tcpKeepAlive: ka,
       );
     case 'hysteria2':
       if (server.isEmpty || port == 0) return null;
@@ -1094,7 +1113,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         password: entry['password']?.toString() ?? '',
         obfs: obfsNorm.type,
         obfsPassword: obfsNorm.password,
@@ -1129,7 +1148,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         // §281 (ревью) — naive принимает ТОЛЬКО enabled/server_name в TLS:
@@ -1137,6 +1156,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         // (fatal всего конфига). Зеркало naive_parser: срезаем блок.
         tls: _naiveTlsFromSingbox(entry['tls'], server),
         extraHeaders: extraHeaders,
+        tcpKeepAlive: ka,
       );
     case 'tuic':
       if (server.isEmpty || port == 0) return null;
@@ -1146,7 +1166,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         // §103 D-016(в) — ключ отсутствует в исходном JSON ⇒ не задан явно;
@@ -1169,12 +1189,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         user: entry['user']?.toString() ?? 'root',
         password: entry['password']?.toString() ?? '',
         privateKey: entry['private_key']?.toString() ?? '',
         privateKeyPassphrase: entry['private_key_passphrase']?.toString() ?? '',
         hostKey: hk is List ? hk.map((e) => e.toString()).toList() : const [],
+        tcpKeepAlive: ka,
       );
     case 'socks':
       if (server.isEmpty || port == 0) return null;
@@ -1184,9 +1205,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
+        tcpKeepAlive: ka,
       );
     case 'http': // §222 — HTTP(S) CONNECT proxy
       if (server.isEmpty || port == 0) return null;
@@ -1210,12 +1232,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         path: entry['path']?.toString() ?? '',
         headers: headers,
         tls: _tlsFromSingbox(entry['tls'], server),
+        tcpKeepAlive: ka,
       );
     case 'wireguard':
       // §106 — bare IP → CIDR (/32 | /128) для address и allowed_ips.
@@ -1282,7 +1305,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: peerServer,
         port: peerPort,
-        rawUri: '',
+        rawSource: src,
         privateKey: wgPriv,
         localAddresses: addr,
         peers: [
@@ -1341,7 +1364,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         label: label,
         server: server,
         port: port,
-        rawUri: '',
+        rawSource: src,
         privateKeyDer: priv,
         publicKeyDer: pub,
         localAddresses: addrs,
@@ -1364,6 +1387,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         tag: tag.isEmpty ? 'tailscale' : tag,
         label: label,
         body: entry,
+        rawSource: src,
       );
     default:
       return null;
@@ -1384,11 +1408,53 @@ List<int>? _reservedFromJson(dynamic raw) {
   return out;
 }
 
-/// §281 — TLS для naive-entry: только enabled/server_name (см. naive_parser).
+/// §281/§454 — TLS для naive-entry: `enabled`/`server_name` плюс то, что
+/// naive реально принимает из allowlist'а ([kNaiveTlsPassthroughKeys] —
+/// `certificate`/`certificate_path`, issue #140). Остальное — `disable_sni`,
+/// `insecure`, `alpn`, версии, `client_*`, `fragment*`, `kernel_*`, `utls`,
+/// `reality` — ядро отвергает фаталом (`protocol/naive/outbound.go:45-86`).
+/// Пин `certificate_public_key_sha256` naive молча не читает — тоже
+/// срезаем, чтобы не обещать пиннинг, которого нет.
 TlsSpec _naiveTlsFromSingbox(dynamic raw, String server) {
   final full = _tlsFromSingbox(raw, server);
   if (!full.enabled) return full;
-  return TlsSpec(enabled: true, serverName: full.serverName);
+  return TlsSpec(
+    enabled: true,
+    serverName: full.serverName,
+    passthrough: {
+      for (final e in full.passthrough.entries)
+        if (kNaiveTlsPassthroughKeys.contains(e.key)) e.key: e.value,
+    },
+  );
+}
+
+/// §454 — сквозные ключи allowlist'а ядра ([kTlsPassthroughKeys]) в форме
+/// прибытия. Guard «деградируй поле, не конфиг»: значение не того типа
+/// (число вместо PEM, объект вместо строки, `false`) — ключ отброшен молча,
+/// соседи и узел живут; `Listable[string]` с мусором ронял бы разбор всего
+/// конфига в ядре. `false` у булевых = omitempty ядра, не хранится.
+Map<String, Object> tlsPassthroughFromSingbox(Map raw) {
+  final out = <String, Object>{};
+  for (final k in kTlsPassthroughKeys) {
+    if (!raw.containsKey(k)) continue;
+    final v = raw[k];
+    if (kTlsBoolKeys.contains(k)) {
+      if (v == true) out[k] = true;
+    } else if (kTlsListableKeys.contains(k)) {
+      if (v is String) {
+        if (v.isNotEmpty) out[k] = v;
+      } else if (v is List) {
+        final list = [
+          for (final e in v)
+            if (e is String && e.isNotEmpty) e,
+        ];
+        if (list.isNotEmpty) out[k] = list;
+      }
+    } else if (v is String && v.isNotEmpty) {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 TlsSpec _tlsFromSingbox(dynamic raw, String server) {
@@ -1407,6 +1473,17 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
           (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       insecure: raw['insecure'] == true,
       fingerprint: utls?['fingerprint']?.toString(),
+      // §454 — пин (D-078) из JSON раньше не читался вовсе: только из
+      // `pinSHA256=` hysteria2-URI. Listable ядра: строка или массив.
+      certificatePublicKeySha256: switch (raw['certificate_public_key_sha256']) {
+        final String v when v.isNotEmpty => [v],
+        final List v => [
+            for (final e in v)
+              if (e is String && e.isNotEmpty) e,
+          ],
+        _ => const [],
+      },
+      passthrough: tlsPassthroughFromSingbox(raw),
       // §169 — REALITY только при enabled И валидном X25519 public_key. Битый
       // ключ → reality=null (нода остаётся plain TLS), а не отравляет config.
       reality:
@@ -1419,11 +1496,19 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
               shortId: normalizeRealityShortId(
                 reality['short_id']?.toString() ?? '',
               ),
+              keyShare: _realityKeyShare(reality['key_share']),
             ),
     ),
     null,
   );
 }
+
+/// §457 — `tls.reality.key_share`: только строка из [kRealityKeyShares], без
+/// нормализации регистра. Иное (`"Hybrid"`, `"x"`, число, пусто) — поле
+/// отброшено молча, узел жив: ядро на неизвестном значении отвергает
+/// outbound, а с ним и весь конфиг («деградируй поле, не конфиг»).
+String? _realityKeyShare(dynamic raw) =>
+    raw is String && kRealityKeyShares.contains(raw) ? raw : null;
 
 TransportSpec? _transportFromSingbox(dynamic raw) {
   if (raw is! Map) return null;

@@ -105,7 +105,7 @@ void main() {
         label: 'l',
         server: '162.159.198.2',
         port: 443,
-        rawUri: '',
+        rawSource: '',
         privateKeyDer: 'PRIVDER==',
         publicKeyDer: 'PUBDER==',
         localAddresses: ['172.16.0.2/32', '2606:4700:110::2/128'],

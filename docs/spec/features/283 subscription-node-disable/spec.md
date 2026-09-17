@@ -54,7 +54,7 @@ nodeIdentityHash(spec) =
 - **Вырезать `tag` и `detour`** — ровно два контекстных поля в map:
   `tag` = производная от пользовательской ремарки (§243 name=tag),
   `detour` = tag chained-ноды (тоже нестабилен). Всё остальное — свойства
-  самой ноды. `id`/`label`/`rawUri`/`warnings` в map не попадают вовсе.
+  самой ноды. `id`/`label`/`rawSource`/`warnings` в map не попадают вовсе.
 - **`deepSortKeys`** — рекурсивная сортировка ключей Map (вглубь Map/List)
   перед `jsonEncode`. Готового util в проекте НЕТ (`canonicalJsonForSingbox`
   не сортирует; Dart `jsonEncode` сохраняет insertion order) — написать

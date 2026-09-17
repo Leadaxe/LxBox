@@ -14,7 +14,7 @@ void main() {
         label: 'VLESS Reality',
         server: 'example-1.com',
         port: 443,
-        rawUri: 'vless://...',
+        rawSource: 'vless://...',
         uuid: '11111111-2222-3333-4444-555555555555',
         flow: 'xtls-rprx-vision',
         tls: const TlsSpec(
@@ -36,7 +36,7 @@ void main() {
         label: 'l',
         server: 'h',
         port: 443,
-        rawUri: 'u',
+        rawSource: 'u',
         uuid: 'u',
       );
       spec.warnings.add(const InsecureTlsWarning());
@@ -68,7 +68,7 @@ void main() {
         label: 'WG',
         server: 'example.com',
         port: 51820,
-        rawUri: 'wireguard://...',
+        rawSource: 'wireguard://...',
         privateKey: 'pk',
         localAddresses: const ['10.0.0.2/32'],
         peers: const [
@@ -88,37 +88,37 @@ void main() {
     test('exhaustive switch compiles for all NodeSpec variants', () {
       final specs = <NodeSpec>[
         VlessSpec(
-            id: '1', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u', uuid: 'u'),
+            id: '1', tag: 't', label: 'l', server: 's', port: 1, rawSource: 'u', uuid: 'u'),
         VmessSpec(
-            id: '2', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u', uuid: 'u'),
+            id: '2', tag: 't', label: 'l', server: 's', port: 1, rawSource: 'u', uuid: 'u'),
         TrojanSpec(
-            id: '3', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u', password: 'p'),
+            id: '3', tag: 't', label: 'l', server: 's', port: 1, rawSource: 'u', password: 'p'),
         ShadowsocksSpec(
-            id: '4', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u',
+            id: '4', tag: 't', label: 'l', server: 's', port: 1, rawSource: 'u',
             method: 'aes-256-gcm', password: 'p'),
         Hysteria2Spec(
-            id: '5', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u', password: 'p'),
+            id: '5', tag: 't', label: 'l', server: 's', port: 1, rawSource: 'u', password: 'p'),
         TuicSpec(
-            id: '6', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u',
+            id: '6', tag: 't', label: 'l', server: 's', port: 1, rawSource: 'u',
             uuid: 'u', password: 'p'),
         SshSpec(
-            id: '7', tag: 't', label: 'l', server: 's', port: 22, rawUri: 'u', user: 'root'),
+            id: '7', tag: 't', label: 'l', server: 's', port: 22, rawSource: 'u', user: 'root'),
         SocksSpec(
-            id: '8', tag: 't', label: 'l', server: 's', port: 1080, rawUri: 'u'),
+            id: '8', tag: 't', label: 'l', server: 's', port: 1080, rawSource: 'u'),
         HttpSpec(
-            id: '12', tag: 't', label: 'l', server: 's', port: 8080, rawUri: 'u'),
+            id: '12', tag: 't', label: 'l', server: 's', port: 8080, rawSource: 'u'),
         WireguardSpec(
-            id: '9', tag: 't', label: 'l', server: 's', port: 51820, rawUri: 'u',
+            id: '9', tag: 't', label: 'l', server: 's', port: 51820, rawSource: 'u',
             privateKey: 'pk', localAddresses: const [], peers: const []),
         NaiveSpec(
-            id: '10', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
+            id: '10', tag: 't', label: 'l', server: 's', port: 443, rawSource: 'u',
             password: 'p'),
         MasqueSpec(
-            id: '11', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
+            id: '11', tag: 't', label: 'l', server: 's', port: 443, rawSource: 'u',
             privateKeyDer: 'pk', publicKeyDer: 'pub',
             localAddresses: const ['172.16.0.2/32']),
         AnyTlsSpec(
-            id: '13', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
+            id: '13', tag: 't', label: 'l', server: 's', port: 443, rawSource: 'u',
             password: 'p'),
         // §322 — узел-группа: без server/port, отсюда отдельный конструктор.
         AutoSelectSpec(
