@@ -7,9 +7,15 @@ import 'package:collection/collection.dart';
 /// в [TlsSpec], парсер отбрасывает: ядро отвергает unknown field на ВСЁМ
 /// конфиге, а карта tls приходит и из чужого JSON.
 ///
-/// Не в списке намеренно: `ech` (ядро без `with_ech`, D-006/§320 — вычистка
-/// с кодом `ech_ignored`). `kernel_tx`/`kernel_rx` ядро принимает только на
-/// Linux — Android им и является.
+/// §459 (контракт §24.2 п. 7.2) — `ech` в списке ЕСТЬ: посылка D-006 «ядро
+/// собрано без `with_ech`» была ложной. `common/tls/ech_tag_stub.go` объявляет
+/// сам тег устаревшим (ECH переехал в stdlib и компилируется всегда), а
+/// `tls.ech{}` проходит `sing-box check` на пине `v1.14.1-lx.4`. Снимается
+/// только URI-параметр `ech=` Xray-формы (§320, `ech_ignored`): он несёт имя
+/// чужого публичного пробника, а не ключ этого сервера.
+///
+/// `kernel_tx`/`kernel_rx` ядро принимает только на Linux — Android им и
+/// является.
 const kTlsPassthroughKeys = <String>[
   'disable_sni',
   'min_version',
@@ -27,7 +33,15 @@ const kTlsPassthroughKeys = <String>[
   'record_fragment',
   'kernel_tx',
   'kernel_rx',
+  'ech',
 ];
+
+/// §459 — сквозные ключи-ОБЪЕКТЫ: принимается `Map`, хранится и эмитится как
+/// есть, приложение внутрь не смотрит (состав полей задаёт ядро:
+/// `OutboundECHOptions` — `enabled`, `config` (Listable), `config_path`,
+/// `query_server_name`). Не-Map → отброшен молча, как остальные guard'ы
+/// allowlist'а.
+const kTlsObjectKeys = <String>{'ech'};
 
 /// §454 — `Listable[string]` ядра: строка ИЛИ массив строк.
 const kTlsListableKeys = <String>{
@@ -49,7 +63,13 @@ const kTlsBoolKeys = <String>{
 
 /// §454 — что из allowlist'а принимает naive (`protocol/naive/outbound.go`):
 /// остальное ядро отвергает фаталом при создании outbound'а.
-const kNaiveTlsPassthroughKeys = <String>{'certificate', 'certificate_path'};
+/// §459 — `ech` naive читает целиком (`protocol/naive/outbound.go:139-155`:
+/// `enabled`, `config`, `config_path`, `query_server_name`).
+const kNaiveTlsPassthroughKeys = <String>{
+  'certificate',
+  'certificate_path',
+  'ech',
+};
 
 /// §454 — эмит: типизированные поля и сквозные ключи в одном порядке.
 /// Для узлов без сквозных ключей совпадает с прежним байт в байт (parity):
@@ -78,6 +98,9 @@ const _kTlsEmitOrder = <String>[
   'record_fragment',
   'kernel_tx',
   'kernel_rx',
+  // §459 — в `OutboundTLSOptions` ECH стоит между `handshake_timeout` и
+  // `utls`; ближайший сосед из нашего набора — `kernel_rx`.
+  'ech',
   'utls',
   'reality',
 ];

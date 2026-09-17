@@ -226,12 +226,6 @@ final class XhttpTransport extends TransportSpec {
     final m = <String, dynamic>{'type': 'xhttp'};
     if (path.isNotEmpty) m['path'] = path;
     final warnings = <NodeWarning>[];
-    if (host.isNotEmpty) m['host'] = host;
-    if (mode.isNotEmpty) m['mode'] = mode;
-    if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
-    if (noGrpcHeader) m['no_grpc_header'] = true;
-    if (noSseHeader) m['no_sse_header'] = true;
-    if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
     // §217 — нормализация против правил ядра normalizeMeta (transport/v2rayxhttp/
     // meta.go) остаётся для x_padding_placement/x_padding_method/seq_placement
@@ -241,6 +235,8 @@ final class XhttpTransport extends TransportSpec {
     // registry/warnings.json xhttp_param_reset).
 
     // --- placement/method enums: значение вне множества ядро роняет fatal ---
+    // §459 (контракт §24.2 п. 7.14) — регистр НЕ нормализуем: ядро
+    // case-sensitive, `queryInHeader` только camelCase (meta.go:20-35).
     void putEnum(String key, String value, Set<String> allowed) {
       if (value.isEmpty) return;
       if (allowed.contains(value)) {
@@ -250,6 +246,17 @@ final class XhttpTransport extends TransportSpec {
             key, XhttpResetReason.invalidEnumValue, value: value));
       }
     }
+
+    if (host.isNotEmpty) m['host'] = host;
+    // §459 (контракт §24.2 п. 7.14) — `mode` вне enum'а ядра
+    // (transport/v2rayxhttp/client.go:47-51) роняет ВЕСЬ конфиг; эмит —
+    // единственная воронка для URI, sing-box JSON, Xray JSON и редактора.
+    putEnum('mode', mode,
+        const {'auto', 'packet-up', 'stream-up', 'stream-one'});
+    if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
+    if (noGrpcHeader) m['no_grpc_header'] = true;
+    if (noSseHeader) m['no_sse_header'] = true;
+    if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
     // SPEC 103 vless/xhttp_placement_bogus_reset — session_placement, ровно
     // как uplink_data_placement/uplink_http_method ниже, идёт напрямую без

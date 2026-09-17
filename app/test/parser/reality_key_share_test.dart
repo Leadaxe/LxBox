@@ -52,8 +52,18 @@ void main() {
           ['enabled', 'public_key', 'short_id', 'key_share']);
     });
 
+    test('§459 регистр нормализуется — Hybrid/HYBRID/пробелы дают hybrid', () {
+      for (final good in <String>['Hybrid', 'HYBRID', ' hybrid ', ' Classical']) {
+        final spec = parseSingboxEntry(_vlessEntry({'key_share': good}))!
+            as VlessSpec;
+        final want = good.trim().toLowerCase();
+        expect(spec.tls.reality!.keyShare, want, reason: 'good=$good');
+        expect(_emittedReality(spec)['key_share'], want, reason: 'good=$good');
+      }
+    });
+
     test('вне enum — поле отброшено молча, узел жив', () {
-      for (final bad in <dynamic>['Hybrid', 'x', 1, '', 'HYBRID', true]) {
+      for (final bad in <dynamic>['x', 1, '', '  ', true]) {
         final spec = parseSingboxEntry(_vlessEntry({'key_share': bad}))!
             as VlessSpec;
         expect(spec.tls.reality, isNotNull, reason: 'bad=$bad: REALITY цел');
@@ -124,8 +134,20 @@ void main() {
       expect(spec.toUri(), isNot(contains('key_share')));
     });
 
+    test('§459 регистр нормализуется — Classical/HYBRID из ссылки принимаются',
+        () {
+      for (final good in <String>['Classical', 'HYBRID', '%20hybrid%20']) {
+        final spec = parseVless(
+            'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
+            '&key_share=$good#L')!;
+        final want = Uri.decodeComponent(good).trim().toLowerCase();
+        expect(spec.tls.reality!.keyShare, want, reason: 'good=$good');
+        expect(spec.toUri(), contains('key_share=$want'), reason: 'good=$good');
+      }
+    });
+
     test('вне enum — поля нет, узел жив', () {
-      for (final bad in ['Classical', 'x', '1', '']) {
+      for (final bad in ['x', '1', '']) {
         final spec = parseVless(
             'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
             '&key_share=$bad#L')!;

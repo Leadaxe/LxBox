@@ -220,7 +220,7 @@ vless://UUID@host:port?query_params#label
 - If `security=none`: no TLS block.
 - If port is a known plaintext port (80, 8080, 8880, 2052, 2082, 2086, 2095) and no explicit security: no TLS.
 - Otherwise: TLS enabled with UTLS fingerprint (defaults to `random`).
-- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp` (the URI parser does **not** change the port; `server_port: 443` is forced only on the Xray-JSON path, section 11).
+- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp`. **The node's port is not touched** on any path — URI, sing-box JSON or Xray JSON. Until §459 the Xray-JSON branch forced `server_port: 443`, which made a `…:8443` node unreachable; the port is a property of the node, not of the flow (contract §24.2 item 7.4).
 
 ### packet_encoding allow-list
 
@@ -288,7 +288,7 @@ Decoded as `method:uuid@host:port`. The method is normalized to a sing-box VMess
 | Port | `port` | Server port |
 | UUID | `id` | User ID |
 | Name | `ps` | Display name |
-| Security | `scy` or `security` | Encryption method |
+| Security | `scy` or `security` | Encryption method. Enum of the core (`sing-vmess` `client.go:42-54`): `auto`, `none`, `zero`, `aes-128-cfb`, `aes-128-gcm`, `chacha20-poly1305`. Normalised with `trim`+`lower`; `chacha20-ietf-poly1305` is an alias for `chacha20-poly1305`; empty/`null`/`undefined` and anything outside the set (including `aes-128-ctr`) become `auto` — the core answers an unknown method with a fatal on the **whole** config. The same funnel serves the URI, sing-box JSON and Xray JSON (§459) |
 | Alter ID | `aid` | Alter ID (0 for AEAD) |
 | Network | `net` | Transport type |
 | Path | `path` | Transport path |
@@ -1388,7 +1388,7 @@ Membership uses **explicit identity keys**, not a tag regex as in §322 — insi
 
 - Entries are **re-parsed** into typed `NodeSpec`s via `parseSingboxEntry` — nothing is passed through verbatim. Supported `type` values: `vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `hysteria2`, `naive`, `tuic`, `ssh`, `socks`, `http`, `wireguard`, `masque`.
 - Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
-- **TLS block (§454, contract TASKS_LXBOX §22):** the model carries every key of the core's `OutboundTLSOptions` (`option/tls.go`). Typed and gated: `server_name`, `alpn`, `insecure`, `utls`, `reality`, `certificate_public_key_sha256`. Passed through in the form they arrived (a string stays a string, an array stays an array; booleans only when `true`): `disable_sni`, `min_version`, `max_version`, `cipher_suites`, `curve_preferences`, `certificate`, `certificate_path`, `client_certificate`, `client_certificate_path`, `client_key`, `client_key_path`, `fragment`, `fragment_fallback_delay`, `record_fragment`, `kernel_tx`, `kernel_rx`. Not emitted: `ech` (core built without `with_ech`) and unknown keys (the core rejects them on the whole config). Emit order follows the core struct, except that `alpn` stays before `insecure` for byte-parity with earlier releases (the identity hash sorts keys, so it does not care). Naive keeps only `certificate`/`certificate_path` of the passthrough set; QUIC types (hysteria2/tuic) keep it whole and drop `utls`/`reality` as before.
+- **TLS block (§454, contract TASKS_LXBOX §22):** the model carries every key of the core's `OutboundTLSOptions` (`option/tls.go`). Typed and gated: `server_name`, `alpn`, `insecure`, `utls`, `reality`, `certificate_public_key_sha256`. Passed through in the form they arrived (a string stays a string, an array stays an array; booleans only when `true`): `disable_sni`, `min_version`, `max_version`, `cipher_suites`, `curve_preferences`, `certificate`, `certificate_path`, `client_certificate`, `client_certificate_path`, `client_key`, `client_key_path`, `fragment`, `fragment_fallback_delay`, `record_fragment`, `kernel_tx`, `kernel_rx`. `ech` is passed through as an **object**: the map is copied as it arrived and emitted as is, the app never looks inside (the core owns the field set — `enabled`, `config` (Listable), `config_path`, `query_server_name`); a non-object `ech` is dropped like any other bad shape. §454 had excluded `ech` on the premise that the core is built without `with_ech` — that premise was false (`common/tls/ech_tag_stub.go` declares the tag itself deprecated, ECH is always compiled in, and `tls.ech` passes `sing-box check` on the lx.4 pin); §459 revises it. The URI parameter `ech=` of the Xray form is still stripped with `ech_ignored` (§320): it carries the name of a public ECH probe, not this server's key. Not emitted: unknown keys (the core rejects them on the whole config). Emit order follows the core struct, except that `alpn` stays before `insecure` for byte-parity with earlier releases (the identity hash sorts keys, so it does not care). Naive keeps `certificate`/`certificate_path` and `ech` of the passthrough set (`protocol/naive/outbound.go:139-155` reads the ECH block whole); QUIC types (hysteria2/tuic) keep it whole and drop `utls`/`reality` as before.
 - The `tag` field is used for display; an absent tag falls back to `<type>-<server>-<port>`.
 - This is for advanced users who want to specify the exact sing-box configuration, and for migrating from sing-box itself.
 
@@ -1588,7 +1588,7 @@ When `streamSettings.sockopt.dialerProxy` references another outbound tag:
 - `settings.vnext[0].port` -> `server_port`
 - `settings.vnext[0].users[0].id` -> `uuid`
 - `settings.vnext[0].users[0].flow` -> `flow`
-- Special flow `xtls-rprx-vision-udp443` -> `flow: xtls-rprx-vision` + `packet_encoding: xudp` + `server_port: 443`
+- Special flow `xtls-rprx-vision-udp443` -> `flow: xtls-rprx-vision` + `packet_encoding: xudp`. The port stays as the source gave it (§459; before that this branch forced `server_port: 443`)
 
 **TLS (from `streamSettings`):**
 - `security: "reality"` -> `tls.reality.enabled: true` with `realitySettings` mapped to `public_key`, `short_id`. REALITY is only built when the public key is a valid X25519 key (base64/base64url → 32 bytes); an invalid key degrades to plain TLS with a warning (§169).
@@ -1691,7 +1691,7 @@ Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 00
 |------|-----------|--------|
 | `path` | `path` | `/` |
 | `host` | `host` (falls back to `sni`) | empty |
-| `mode` | `mode` | empty — the core decides (auto) |
+| `mode` | `mode` | empty — the core decides (auto). Enum, case-sensitive: `auto`, `packet-up`, `stream-up`, `stream-one`; anything else is dropped with `xhttp_param_reset` (§459) |
 | `x_padding_bytes` | `xPaddingBytes` | empty |
 | `no_grpc_header` | `noGRPCHeader` | false |
 | `headers` | — (JSON only) | empty |
@@ -1706,8 +1706,8 @@ Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 00
 | `x_padding_obfs_mode` | `xPaddingObfsMode` | false |
 | `x_padding_key` | `xPaddingKey` | `x_padding` |
 | `x_padding_header` | `xPaddingHeader` | `X-Padding` |
-| `x_padding_placement` | `xPaddingPlacement` | `queryInHeader` |
-| `x_padding_method` | `xPaddingMethod` | `repeat-x` |
+| `x_padding_placement` | `xPaddingPlacement` | `queryInHeader`. Enum, case-sensitive: `cookie`, `header`, `query`, `queryInHeader` (camelCase only — `queryinheader` is dropped); anything else → `xhttp_param_reset` (§459) |
+| `x_padding_method` | `xPaddingMethod` | `repeat-x`. Enum, case-sensitive: `repeat-x`, `tokenish`; anything else → `xhttp_param_reset` (§459) |
 | `sc_max_each_post_bytes` | `scMaxEachPostBytes` | `1000000` |
 | `sc_min_posts_interval_ms` | `scMinPostsIntervalMs` | `30` |
 

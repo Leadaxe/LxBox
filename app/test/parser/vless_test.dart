@@ -99,6 +99,17 @@ void main() {
       expect(spec.packetEncoding, 'xudp');
     });
 
+    // §459 (контракт §24.2 п. 7.4) — суффикс `-udp443` нормализует flow и
+    // packet_encoding, но порт узла не трогает: порт — свойство узла, узел
+    // `…:8443` от перезаписи на 443 становился недозваниваемым.
+    test('§459 flow=-udp443 не переписывает порт узла', () {
+      final spec =
+          parseVless('vless://u@h:8443?type=tcp&flow=xtls-rprx-vision-udp443')!;
+      expect(spec.port, 8443);
+      expect(spec.flow, 'xtls-rprx-vision');
+      expect(spec.packetEncoding, 'xudp');
+    });
+
     test('plaintext VLESS port keeps TLS disabled', () {
       final spec = parseVless('vless://u@h:8080?type=ws&path=/x');
       expect(spec!.tls.enabled, isFalse);

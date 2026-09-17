@@ -518,13 +518,14 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
   final encryption = user['encryption']?.toString().trim() ?? '';
   if (server.isEmpty || uuid.isEmpty) return null;
 
-  var port2 = port;
   var packetEncoding = '';
   final warnings = <NodeWarning>[];
+  // §459 (контракт §24.2 п. 7.4) — суффикс `-udp443` нормализуется в flow +
+  // `packet_encoding`, но порт узла не трогает: порт — свойство узла, и
+  // прежняя перезапись на 443 делала узел `…:8443` недозваниваемым.
   if (flow == 'xtls-rprx-vision-udp443') {
     flow = 'xtls-rprx-vision';
     packetEncoding = 'xudp';
-    port2 = 443;
   }
 
   final stream = o['streamSettings'] as Map? ?? const {};
@@ -546,14 +547,14 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
   }
 
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  final tag = tagFromLabel(label, 'vless', server, port2);
+  final tag = tagFromLabel(label, 'vless', server, port);
 
   return VlessSpec(
     id: newUuidV4(),
     tag: tag,
     label: label,
     server: server,
-    port: port2,
+    port: port,
     rawSource: _prettyJson(o),
     uuid: uuid,
     flow: flow,
@@ -595,13 +596,9 @@ String? _xrayIdentity(Map<String, dynamic> o) {
       port = (v['port'] as num?)?.toInt() ?? 443;
       final users = (v['users'] as List?)?.cast<Map>() ?? const [];
       cred = users.isEmpty ? '' : (users.first['id']?.toString() ?? '');
-      // Зеркало quirk'а _xrayVlessToSpec: vision-udp443 переписывает порт
-      // узла на 443.
-      if (protocol == 'vless' &&
-          users.isNotEmpty &&
-          users.first['flow']?.toString() == 'xtls-rprx-vision-udp443') {
-        port = 443;
-      }
+      // §459 (контракт §24.2 п. 7.4) — зеркало _xrayVlessToSpec: порт узла
+      // `-udp443` больше не переписывает, значит и ключ identity строится по
+      // исходному порту. Прежний код ставил здесь 443.
     case 'trojan':
     case 'shadowsocks':
       final servers = (s['servers'] as List?)?.cast<Map>();
@@ -698,7 +695,9 @@ VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
     warnings,
   );
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  final security = user['security']?.toString() ?? 'auto';
+  // §459 (контракт §24.2 п. 7.11) — Xray-ветка идёт через ту же воронку, что
+  // URI и sing-box JSON: вне enum'а ядра узел роняет весь конфиг.
+  final security = normalizeVmessSecurity(user['security']?.toString() ?? '');
 
   return VmessSpec(
     id: newUuidV4(),
@@ -709,7 +708,7 @@ VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
     rawSource: _prettyJson(o),
     uuid: uuid,
     alterId: (user['alterId'] as num?)?.toInt() ?? 0,
-    security: security.isEmpty ? 'auto' : security,
+    security: security,
     tls: tls,
     transport: _xrayTransportFromStream(stream),
     warnings: warnings,
@@ -1036,7 +1035,9 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
         rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         alterId: (entry['alter_id'] as num?)?.toInt() ?? 0,
-        security: entry['security']?.toString() ?? 'auto',
+        // §459 (контракт §24.2 п. 7.11) — enum ядра и здесь: JSON-редактор и
+        // Smart-Paste приносят `aes-128-ctr` наравне с подписками.
+        security: normalizeVmessSecurity(entry['security']?.toString() ?? ''),
         tls: _tlsFromSingbox(entry['tls'], server),
         transport: _transportFromSingbox(entry['transport']),
         tcpKeepAlive: ka,
@@ -1440,6 +1441,14 @@ Map<String, Object> tlsPassthroughFromSingbox(Map raw) {
     final v = raw[k];
     if (kTlsBoolKeys.contains(k)) {
       if (v == true) out[k] = true;
+    } else if (kTlsObjectKeys.contains(k)) {
+      // §459 (контракт §24.2 п. 7.2) — объектный сквозной ключ (`tls.ech`):
+      // копируем карту как есть, внутрь не смотрим (состав задаёт ядро).
+      // Не-Map (строка, число) → отброшен молча, как остальные guard'ы.
+      if (v is Map) {
+        final obj = Map<String, dynamic>.from(v.cast<String, dynamic>());
+        if (obj.isNotEmpty) out[k] = obj;
+      }
     } else if (kTlsListableKeys.contains(k)) {
       if (v is String) {
         if (v.isNotEmpty) out[k] = v;
@@ -1503,12 +1512,23 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
   );
 }
 
-/// §457 — `tls.reality.key_share`: только строка из [kRealityKeyShares], без
-/// нормализации регистра. Иное (`"Hybrid"`, `"x"`, число, пусто) — поле
-/// отброшено молча, узел жив: ядро на неизвестном значении отвергает
-/// outbound, а с ним и весь конфиг («деградируй поле, не конфиг»).
-String? _realityKeyShare(dynamic raw) =>
-    raw is String && kRealityKeyShares.contains(raw) ? raw : null;
+/// §457 — `tls.reality.key_share`: только значение из [kRealityKeyShares].
+/// Иное (`"x"`, число, пусто) — поле отброшено, узел жив: ядро на неизвестном
+/// значении отвергает outbound, а с ним и весь конфиг («деградируй поле, не
+/// конфиг»).
+///
+/// §459 (контракт §24.2 п. 7.12) — реестр `tls.json` →
+/// `body.fields.reality.fields.key_share`, `normalize: trim_lower`: ядро
+/// case-sensitive, но `"Hybrid"` из чужого JSON — это явное намерение, а не
+/// мусор; раньше оно терялось молча.
+String? _realityKeyShare(dynamic raw) {
+  if (raw is! String) return null;
+  final v = raw.trim().toLowerCase();
+  if (v.isEmpty) return null;
+  if (kRealityKeyShares.contains(v)) return v;
+  AppLog.I.debug("reality: key_share '$raw' is not a known value, dropping");
+  return null;
+}
 
 TransportSpec? _transportFromSingbox(dynamic raw) {
   if (raw is! Map) return null;

@@ -778,7 +778,10 @@ void main() {
           reason: 'дефолт порта — 443, как в _xrayVlessToSpec');
       expect(auto.tagSynonyms['udp443'],
           nodeIdentityKeyRaw(byServer['b.example']!),
-          reason: 'vision-udp443 переписывает порт узла на 443 — и ключа тоже');
+          reason: '§459 — vision-udp443 порт узла не трогает (8443), '
+              'ключ identity строится по тому же порту');
+      expect(byServer['b.example']!.port, 8443,
+          reason: '§459 (§24.2 п. 7.4) — порт узла остаётся исходным');
     });
   });
 
@@ -799,6 +802,56 @@ void main() {
       expect(spec.tls.enabled, isTrue);
       expect(spec.tls.reality, isNull, reason: 'битый public_key → нет reality');
       expect(spec.tls.serverName, 'w.example');
+    });
+  });
+
+  // §459 (контракт §24.2 п. 7.4) — `-udp443` нормализует flow и
+  // packet_encoding, но порт узла не трогает ни в одной из веток.
+  group('§459 vision-udp443 не переписывает порт', () {
+    test('Xray JSON: порт 8443 остаётся', () {
+      final nodes = parseXrayElement({
+        'remarks': 'V',
+        'outbounds': [
+          {
+            'tag': 'v',
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'b.example',
+                  'port': 8443,
+                  'users': [
+                    {
+                      'id': '11111111-2222-3333-4444-555555555555',
+                      'flow': 'xtls-rprx-vision-udp443',
+                    }
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {'network': 'tcp', 'security': 'tls'},
+          },
+        ],
+      });
+      final spec = nodes.whereType<VlessSpec>().single;
+      expect(spec.port, 8443);
+      expect(spec.flow, 'xtls-rprx-vision');
+      expect(spec.packetEncoding, 'xudp');
+      expect(spec.emit(TemplateVars.empty).map['server_port'], 8443);
+    });
+
+    test('sing-box JSON: порт 8443 остаётся', () {
+      final spec = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 'v',
+        'server': 'b.example',
+        'server_port': 8443,
+        'uuid': '11111111-2222-3333-4444-555555555555',
+        'flow': 'xtls-rprx-vision',
+        'packet_encoding': 'xudp',
+      })! as VlessSpec;
+      expect(spec.port, 8443);
+      expect(spec.emit(TemplateVars.empty).map['server_port'], 8443);
     });
   });
 }

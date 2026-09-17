@@ -447,23 +447,39 @@ String normalizeSingboxDuration(String v) {
   return isAllDigits ? '${v}s' : v;
 }
 
-/// Нормализация VMess security/cipher к sing-box словарю.
+/// §459 (контракт §24.2 п. 7.11) — enum ядра для `vmess.security`.
+/// `sing-vmess@v0.2.8` `client.go:42-54` принимает ровно эти шесть значений,
+/// на любом другом возвращает `ErrUnsupportedSecurityType` — а это фатал на
+/// ВЕСЬ конфиг, не на один узел.
+const kVmessSecurityMethods = <String>{
+  'auto',
+  'none',
+  'zero',
+  'aes-128-cfb',
+  'aes-128-gcm',
+  'chacha20-poly1305',
+};
+
+/// Нормализация VMess security/cipher к словарю ядра
+/// ([kVmessSecurityMethods]).
+///
+/// §459 — единственная воронка для всех трёх входов (URI v2rayN `scy`,
+/// sing-box JSON, Xray JSON `users[].security`). Реестр
+/// `protocols/vmess.json` → `body.fields.security`: `normalize: trim_lower`,
+/// `on_invalid: {action: coerce, value: auto, code: type_invalid}`.
+///
+/// Раньше пропускался `aes-128-ctr` (ядро его не знает — фатал всего
+/// конфига), а рабочий `aes-128-cfb` схлопывался в `auto`.
+/// Класс `NodeWarning` под код `type_invalid` появится с фичей реестра —
+/// пока подмена пишется в лог.
 String normalizeVmessSecurity(String raw) {
-  final s = raw.toLowerCase().trim();
+  final s = raw.trim().toLowerCase();
   if (s.isEmpty || s == 'null' || s == 'undefined') return 'auto';
-  switch (s) {
-    case 'auto':
-    case 'none':
-    case 'zero':
-    case 'aes-128-gcm':
-    case 'chacha20-poly1305':
-    case 'aes-128-ctr':
-      return s;
-    case 'chacha20-ietf-poly1305':
-      return 'chacha20-poly1305';
-    default:
-      return 'auto';
-  }
+  if (kVmessSecurityMethods.contains(s)) return s;
+  if (s == 'chacha20-ietf-poly1305') return 'chacha20-poly1305';
+  AppLog.I.warning(
+      "vmess: security '$raw' is not accepted by the core, using 'auto'");
+  return 'auto';
 }
 
 /// Валидные методы Shadowsocks (sing-box).

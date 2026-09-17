@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §320 — `ech` из подписки НЕ применяется, только предупреждение.
@@ -115,6 +116,39 @@ void main() {
         '&alpn=h2&sni=example.com#node',
       )!;
       expect(tlsOf(n)['alpn'], ['h2']);
+    });
+  });
+
+  // §459 (контракт §24.2 п. 7.2) — посылка D-006 «ядро без with_ech» ложна:
+  // ECH компилируется всегда (common/tls/ech_tag_stub.go), tls.ech{} проходит
+  // sing-box check. Тело из JSON пропускается, URI-параметр `ech=` Xray-формы
+  // по-прежнему снимается — он несёт имя чужого публичного пробника.
+  group('§459 разделение: тело проходит, URI снимается', () {
+    test('sing-box JSON: tls.ech{} доезжает до эмита, URI-ветка — нет', () {
+      final fromJson = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 'v',
+        'server': 'b.example',
+        'server_port': 443,
+        'uuid': '11111111-2222-3333-4444-555555555555',
+        'tls': {
+          'enabled': true,
+          'server_name': 'b.example',
+          'ech': {'enabled': true, 'config': ['pem-block']},
+        },
+      })!;
+      expect(tlsOf(fromJson)['ech'],
+          {'enabled': true, 'config': ['pem-block']});
+      expect(fromJson.warnings.whereType<EchIgnoredWarning>(), isEmpty,
+          reason: 'тело узла — не URI-параметр, предупреждать не о чем');
+
+      final fromUri = parseUri(
+        'vless://11111111-2222-3333-4444-555555555555@b.example:443'
+        '?type=tcp&security=tls&sni=b.example'
+        '&ech=ip.gs%2Budp%3A%2F%2F8.8.8.8#node',
+      )!;
+      expect(tlsOf(fromUri).containsKey('ech'), isFalse);
+      expect(fromUri.warnings.whereType<EchIgnoredWarning>(), hasLength(1));
     });
   });
 

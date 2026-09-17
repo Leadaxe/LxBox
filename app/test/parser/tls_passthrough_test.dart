@@ -42,6 +42,22 @@ void main() {
       expect(tls['certificate_path'], '/sdcard/ca.pem');
     });
 
+    test('§459 naive принимает ech-объект (outbound.go читает блок целиком)',
+        () {
+      final m = emitOf(naive(tls: {
+        'ech': {'enabled': true, 'config': ['pem'], 'query_server_name': 'ip.gs'},
+      }));
+      final tls = m['tls'] as Map;
+      expect(tls['ech'],
+          {'enabled': true, 'config': ['pem'], 'query_server_name': 'ip.gs'});
+      expect(tls.keys.toList(), ['enabled', 'server_name', 'ech']);
+    });
+
+    test('§459 naive: ech не-объект отброшен', () {
+      final tls = emitOf(naive(tls: {'ech': 'x'}))['tls'] as Map;
+      expect(tls.containsKey('ech'), isFalse);
+    });
+
     test('мусорные TLS-поля naive срезаны (ядро отвергает фаталом)', () {
       final m = emitOf(naive(tls: {
         'certificate': pem,
@@ -147,13 +163,41 @@ void main() {
       expect(tls['cipher_suites'], ['TLS_AES_256_GCM_SHA384']);
     });
 
-    test('ech и неизвестные ключи не проходят', () {
+    test('§459 ech-объект проходит как есть, неизвестные ключи — нет', () {
       final tls = emitOf(vless({
-        'ech': {'enabled': true, 'config': ['x']},
+        'ech': {
+          'enabled': true,
+          'config': ['x'],
+          'config_path': '/etc/ech.pem',
+          'query_server_name': 'ip.gs',
+        },
         'foo': 'bar',
       }))['tls'] as Map;
-      expect(tls.containsKey('ech'), isFalse);
+      expect(tls['ech'], {
+        'enabled': true,
+        'config': ['x'],
+        'config_path': '/etc/ech.pem',
+        'query_server_name': 'ip.gs',
+      });
       expect(tls.containsKey('foo'), isFalse);
+    });
+
+    test('§459 ech не-объект отброшен молча', () {
+      for (final bad in <dynamic>['x', 1, true, ['a']]) {
+        final tls = emitOf(vless({'ech': bad}))['tls'] as Map;
+        expect(tls.containsKey('ech'), isFalse, reason: 'bad=$bad');
+      }
+    });
+
+    test('§459 ech стоит между kernel_rx и utls (порядок структуры ядра)', () {
+      final tls = emitOf(vless({
+        'kernel_rx': true,
+        'ech': {'enabled': true},
+        'utls': {'enabled': true, 'fingerprint': 'chrome'},
+      }))['tls'] as Map;
+      final keys = tls.keys.toList();
+      expect(keys.indexOf('kernel_rx') < keys.indexOf('ech'), isTrue);
+      expect(keys.indexOf('ech') < keys.indexOf('utls'), isTrue);
     });
 
     test('без сквозных ключей эмит прежний байт в байт (parity)', () {

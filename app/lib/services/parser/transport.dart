@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
+import '../app_log.dart';
 import 'uri_utils.dart';
 
 /// Разбор query-параметров URI в `TransportSpec?`.
@@ -446,12 +447,19 @@ void warnEchIgnored(Map<String, String> q, List<NodeWarning> warnings) {
   warnings.add(EchIgnoredWarning(raw.split('+').first.trim()));
 }
 
-/// §457 — `key_share=` из share-URI: только значение из [kRealityKeyShares],
-/// регистр не нормализуем. Иное — `null` (поле отброшено молча): ядро на
-/// неизвестном значении отвергает весь конфиг, а не один узел.
+/// §457 — `key_share=` из share-URI: только значение из [kRealityKeyShares].
+/// Иное — `null` (поле отброшено): ядро на неизвестном значении отвергает
+/// весь конфиг, а не один узел.
+///
+/// §459 (контракт §24.2 п. 7.12) — `trim` + `lower` перед enum'ом
+/// (реестр `tls.json`, `normalize: trim_lower`): ядро case-sensitive, но
+/// `key_share=Hybrid` в ссылке — намерение подписки, раньше терялось молча.
 String? realityKeyShareFromQuery(String? raw) {
-  final v = (raw ?? '').trim();
-  return kRealityKeyShares.contains(v) ? v : null;
+  final v = (raw ?? '').trim().toLowerCase();
+  if (v.isEmpty) return null;
+  if (kRealityKeyShares.contains(v)) return v;
+  AppLog.I.debug("reality: key_share '$raw' is not a known value, dropping");
+  return null;
 }
 
 /// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).

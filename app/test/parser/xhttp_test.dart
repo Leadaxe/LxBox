@@ -215,6 +215,83 @@ void main() {
       expect(w4.whereType<XhttpParamResetWarning>(), isEmpty);
     });
 
+    // §459 (контракт §24.2 п. 7.14) — mode/x_padding_placement/
+    // x_padding_method гейтятся enum'ом ядра в эмите: мусор там даёт fatal на
+    // ВЕСЬ конфиг (transport/v2rayxhttp/client.go:47-51, meta.go:151-160).
+    // Регистр НЕ нормализуем — ядро case-sensitive, `queryInHeader` только
+    // camelCase.
+    group('§459 enum-гейт трёх полей', () {
+      (Map<String, dynamic>, List<NodeWarning>) emit(
+              String key, String value) =>
+          parseTransport({'type': 'xhttp', key: value})!
+              .toSingbox(TemplateVars.empty);
+
+      void expectKept(String key, String value) {
+        final (m, w) = emit(key, value);
+        expect(m[key], value, reason: '$key=$value');
+        expect(w.whereType<XhttpParamResetWarning>(), isEmpty,
+            reason: '$key=$value');
+      }
+
+      void expectDropped(String key, String value) {
+        final (m, w) = emit(key, value);
+        expect(m.containsKey(key), isFalse, reason: '$key=$value');
+        final reset = w.whereType<XhttpParamResetWarning>().single;
+        expect(reset, XhttpParamResetWarning(
+            key, XhttpResetReason.invalidEnumValue, value: value));
+      }
+
+      test('mode: валидные значения ядра проходят', () {
+        for (final v in ['auto', 'packet-up', 'stream-up', 'stream-one']) {
+          expectKept('mode', v);
+        }
+      });
+
+      test('mode: мусор снят + xhttp_param_reset', () {
+        for (final v in ['PACKET-UP', 'Auto', 'packet_up', 'bogus']) {
+          expectDropped('mode', v);
+        }
+      });
+
+      test('x_padding_placement: queryInHeader проходит, queryinheader — нет',
+          () {
+        for (final v in ['cookie', 'header', 'query', 'queryInHeader']) {
+          expectKept('x_padding_placement', v);
+        }
+        for (final v in ['queryinheader', 'QueryInHeader', 'body']) {
+          expectDropped('x_padding_placement', v);
+        }
+      });
+
+      test('x_padding_method: repeat-x/tokenish проходят, fixed — нет', () {
+        for (final v in ['repeat-x', 'tokenish']) {
+          expectKept('x_padding_method', v);
+        }
+        for (final v in ['fixed', 'Repeat-X', 'repeat_x']) {
+          expectDropped('x_padding_method', v);
+        }
+      });
+
+      test('пустое значение — ключа нет и предупреждения нет', () {
+        for (final key in ['mode', 'x_padding_placement', 'x_padding_method']) {
+          final (m, w) = emit(key, '');
+          expect(m.containsKey(key), isFalse, reason: key);
+          expect(w, isEmpty, reason: key);
+        }
+      });
+
+      test('mode-гейт не ломает §416 (header-placement без mode)', () {
+        final (m, w) = parseTransport({
+          'type': 'xhttp',
+          'uplink_data_placement': 'header',
+        })!
+            .toSingbox(TemplateVars.empty);
+        expect(m['mode'], 'packet-up');
+        expect(m['uplink_data_placement'], 'header');
+        expect(w.whereType<XhttpModeForcedPacketUpWarning>(), hasLength(1));
+      });
+    });
+
     test('extra (URL-encoded JSON) вливается в transport', () {
       // {"scMaxEachPostBytes":"1000000","scMaxConcurrentPosts":100.0,
       //  "scMinPostsIntervalMs":30.0,"xPaddingBytes":"100-1000","noGRPCHeader":false}
