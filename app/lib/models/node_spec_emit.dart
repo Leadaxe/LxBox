@@ -127,6 +127,11 @@ String toUriVless(VlessSpec s) {
       if (s.tls.reality!.shortId.isNotEmpty) {
         q['sid'] = s.tls.reality!.shortId;
       }
+      // §457 — key_share только при заданном значении: узлы без поля дают
+      // прежний URI байт в байт.
+      if (s.tls.reality!.keyShare != null) {
+        q['key_share'] = s.tls.reality!.keyShare!;
+      }
     } else {
       q['security'] = 'tls';
     }
@@ -305,6 +310,10 @@ String toUriAnyTls(AnyTlsSpec s) {
     q['pbk'] = s.tls.reality!.publicKey;
     if (s.tls.reality!.shortId.isNotEmpty) {
       q['sid'] = s.tls.reality!.shortId;
+    }
+    // §457 — как у vless.
+    if (s.tls.reality!.keyShare != null) {
+      q['key_share'] = s.tls.reality!.keyShare!;
     }
   } else {
     q['security'] = 'tls';

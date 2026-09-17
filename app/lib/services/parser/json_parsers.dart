@@ -1496,11 +1496,19 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
               shortId: normalizeRealityShortId(
                 reality['short_id']?.toString() ?? '',
               ),
+              keyShare: _realityKeyShare(reality['key_share']),
             ),
     ),
     null,
   );
 }
+
+/// §457 — `tls.reality.key_share`: только строка из [kRealityKeyShares], без
+/// нормализации регистра. Иное (`"Hybrid"`, `"x"`, число, пусто) — поле
+/// отброшено молча, узел жив: ядро на неизвестном значении отвергает
+/// outbound, а с ним и весь конфиг («деградируй поле, не конфиг»).
+String? _realityKeyShare(dynamic raw) =>
+    raw is String && kRealityKeyShares.contains(raw) ? raw : null;
 
 TransportSpec? _transportFromSingbox(dynamic raw) {
   if (raw is! Map) return null;

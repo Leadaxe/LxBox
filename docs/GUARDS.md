@@ -187,6 +187,7 @@ Three channels, and they are not interchangeable.
 | httpupgrade / xhttp `host` empty | **no fallback to sni** (unlike ws) | silent | `transport.dart:118-121, 228-231` | the fallback produced different configs and identity hashes for an empty host | §103 D-016 |
 | No `path` key at all (ws/httpupgrade/xhttp) | path stays `''`, `/` **not** substituted | silent | `transport.dart:45-48, 114-117, 224-226` | only an explicit `path=` reaches the config | SPEC 103 CANON §2.4 |
 | VLESS `sec` empty and port in `{80, 8080, 8880, 2052, …}` | TLS disabled by port whitelist | silent | `transport.dart:502`, list `uri_utils.dart:427` | ports that normally carry plain HTTP | — |
+| `key_share=` outside `{hybrid, classical}` (a different case, a number, an empty value) | field dropped, the node lives | silent | `transport.dart` `realityKeyShareFromQuery` | the core answers an unknown value with `unknown reality key_share` and refuses the outbound — and with it the whole config. Read only together with a valid `pbk`: without a REALITY block there is nowhere to put it | §457 |
 
 ### 1.5 Per-protocol URI parsers
 
@@ -278,6 +279,7 @@ something more than reject or default.
 | MASQUE flat legacy `network`/`sni`/`skip_cert_verify` | never read | silent | `json_parsers.dart:1307-1313` | a flat `sni` beside `tls.server_name` made the core fail fast | §393 |
 | `reality.enabled != true` or invalid `public_key` | `reality = null`, node stays plain TLS | silent | `json_parsers.dart:1385-1395` | do not poison config.json | §169 |
 | `reality.short_id` non-hex / odd / over 16 | dropped (`''`) | silent | `json_parsers.dart:1392-1394` | as in the URI branch | §343 |
+| `reality.key_share` outside `{hybrid, classical}` (a different case, a number, an empty string) | field dropped, the node lives | silent | `json_parsers.dart` `_realityKeyShare` | the core answers an unknown value with `unknown reality key_share` and refuses the outbound — and with it the whole config; degrade the field, not the config | §457 |
 | ws/httpupgrade `path` key absent | path `''`, no `/` default | silent | `json_parsers.dart:1412-1416` | canonical sing-box JSON does not write the default either | §103 D-016 |
 | Glued Xray path `/x?ed=N` in ws JSON | tail cut | silent (no warnings channel here) | `json_parsers.dart:1413-1415` | glued Xray paths reach the editor too | §303 |
 | JSON flavour unrecognised, or `clashYaml` | 0 nodes | silent | `body_decoder.dart:181-209`, `parse_all.dart:191-193` | the `xrayArray` branch works, and its classification must not shift on ambiguous input | §368 §7.1 |

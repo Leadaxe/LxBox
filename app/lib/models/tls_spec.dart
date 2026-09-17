@@ -215,16 +215,35 @@ class TlsSpec {
       _deepEq.hash(passthrough));
 }
 
+/// §457 — допустимые значения `tls.reality.key_share` ядра (`option/tls.go`,
+/// `common/tls/reality_client.go`). `hybrid` — требовать `X25519MLKEM768`
+/// (ClientHello ~1,5–1,9 КБ, два TCP-сегмента), `classical` — вырезать гибрид
+/// из `key_share`/`supported_groups` (~0,5 КБ, один сегмент). Любое другое
+/// значение ядро не понимает и отвергает outbound целиком = отказ всего
+/// конфига, поэтому парсеры отбрасывают поле молча, а не подгоняют.
+/// Нормативно для пина ядра lx.4+.
+const kRealityKeyShares = <String>{'hybrid', 'classical'};
+
 class RealitySpec {
   final String publicKey;
   final String shortId;
 
-  const RealitySpec({required this.publicKey, required this.shortId});
+  /// §457 — `null` = не задано: ключ не эмитится, ядро берёт как несёт
+  /// отпечаток. Значение — только из [kRealityKeyShares].
+  final String? keyShare;
+
+  const RealitySpec({
+    required this.publicKey,
+    required this.shortId,
+    this.keyShare,
+  });
 
   Map<String, dynamic> toSingbox() => {
         'enabled': true,
         'public_key': publicKey,
         'short_id': shortId,
+        // §457 — порядок полей структуры ядра; omitempty: пусто = нет ключа.
+        if (keyShare != null && keyShare!.isNotEmpty) 'key_share': keyShare,
       };
 
   @override
@@ -232,10 +251,11 @@ class RealitySpec {
       identical(this, other) ||
       (other is RealitySpec &&
           publicKey == other.publicKey &&
-          shortId == other.shortId);
+          shortId == other.shortId &&
+          keyShare == other.keyShare);
 
   @override
-  int get hashCode => Object.hash(publicKey, shortId);
+  int get hashCode => Object.hash(publicKey, shortId, keyShare);
 }
 
 bool _listEq(List<String> a, List<String> b) {

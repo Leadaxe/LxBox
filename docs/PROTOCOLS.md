@@ -152,6 +152,7 @@ vless://UUID@host:port?query_params#label
 | ALPN | `alpn` | Comma-separated ALPN values |
 | Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → 32 bytes); garbage falls back to plain TLS plus a warning (§169) |
 | Short ID | `sid` | REALITY short ID (hex, max 16 chars) |
+| REALITY key share | `key_share` | `hybrid` \| `classical` (sing-box `tls.reality.key_share`, §457). Read only together with a valid `pbk`; anything outside the enum is dropped silently — the core rejects an unknown value along with the whole config. Requires the core pin `v1.14.1-lx.4` or newer |
 | Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp`, `raw` |
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
@@ -213,6 +214,7 @@ vless://UUID@host:port?query_params#label
 ### TLS Behavior
 
 - If `pbk` is present **and is a valid X25519 public key** (base64/base64url, decodes to exactly 32 bytes): REALITY TLS is enabled. An invalid `pbk` (e.g. `pbk=enabled`/`true` from broken subscriptions) falls back to **plain TLS** with a parse warning instead of emitting a REALITY block the core rejects — before §169 one broken node used to poison the whole `config.json` at startup.
+- **REALITY `key_share` (§457, core `v1.14.1-lx.4`+).** `tls.reality.key_share` picks the key share of the REALITY ClientHello: `hybrid` demands `X25519MLKEM768` (~1.5–1.9 KB, two TCP segments — what Xray ≥ v26.9.8 requires), `classical` strips the hybrid out of `key_share` and `supported_groups` (~0.5 KB, one segment — for older servers and networks that drop the large hello). Absent means whatever the fingerprint carries. It arrives from sing-box JSON (`tls.reality.key_share`) and from the share URI (`key_share=`, the same name as the core key, §453); in the URI it is read only when the REALITY block is actually built, i.e. `pbk` is a valid X25519 key. Any value outside `{hybrid, classical}` — including a different case such as `Hybrid`, a number, or an empty string — is **dropped silently**, and the node stays alive: the core answers an unknown value with `unknown reality key_share` and refuses to create the outbound, which takes the whole config down. This is not `reality_fp_not_chrome` (§451): that warning is about the fingerprint, not about `key_share`, and its logic is untouched.
 - `flow` is **never** auto-derived from REALITY (§115): it is taken verbatim from the link. Historically bare-TCP+REALITY without `flow` got a forced Vision, breaking valid `none` setups.
 - `xtls-rprx-vision` is valid only on bare TLS. If a transport (ws/grpc/xhttp/http/httpupgrade) is present, the explicit `flow` is dropped with a `VisionWithTransportWarning` (the core would not bring up that combination). `emit()` writes `flow` only when it is exactly `xtls-rprx-vision` with no transport.
 - If `security=none`: no TLS block.
@@ -623,6 +625,7 @@ accepts the de-facto Trojan-style form used by Karing / v2rayN mods.
 | Query: `sni` / `peer` / `host` | TLS server name | `host` |
 | Query: `fp` | uTLS fingerprint | `random` |
 | Query: `pbk` / `sid` | REALITY public key / short ID (valid X25519 → REALITY, else plain TLS, §169) | none |
+| Query: `key_share` | REALITY key share `hybrid` \| `classical` (§457, core lx.4+); read only with a valid `pbk`, outside the enum dropped | none |
 | Query: `alpn` | comma-separated ALPN list | none |
 | Query: `allowInsecure` / `insecure` | Skip cert verify (warns) | `false` |
 | Query: `idle_session_check_interval` | Go-duration (`"30s"`) | core default (30s) |
