@@ -1,0 +1,1 @@
+Fixes the JSON tab of a DNS server that comes from a template or a preset: since v2.24.0 it showed "This section failed" instead of the server (#143). Servers you added yourself were not affected. No other changes since v2.24.3.
