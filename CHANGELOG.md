@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.24.4] — 2026-09-17
+
 ### Fixed
 
 - **Вкладка JSON у DNS-сервера из шаблона или пресета показывала ошибку вместо содержимого ([#143](https://github.com/Leadaxe/LxBox/issues/143), [§458](docs/spec/tasks/458-dns-server-json-tab-storage-record.md)).**
