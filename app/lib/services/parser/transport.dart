@@ -462,6 +462,21 @@ String? realityKeyShareFromQuery(String? raw) {
   return null;
 }
 
+/// §460 — обёртка [realityKeyShareFromQuery] с предупреждением реестра: значение
+/// задано, но вне enum → `reality_key_share_invalid` с путём и значением.
+String? _keyShareFromQuery(Map<String, String> q, List<NodeWarning>? warnings) {
+  final raw = (q['key_share'] ?? '').trim();
+  final v = realityKeyShareFromQuery(raw);
+  if (raw.isNotEmpty && v == null) {
+    warnings?.add(RegistryWarning(
+      code: 'reality_key_share_invalid',
+      path: 'tls.reality.key_share',
+      value: raw,
+    ));
+  }
+  return v;
+}
+
 /// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).
 TlsSpec parseVlessTls(
   Map<String, String> q,
@@ -500,8 +515,10 @@ TlsSpec parseVlessTls(
         publicKey: pbk,
         shortId: normalizeRealityShortId(rawSid),
         // §457 — имя параметра = ключ sing-box (прецедент §453). Читается
-        // только вместе с валидным REALITY; вне enum — молча отброшено.
-        keyShare: realityKeyShareFromQuery(q['key_share']),
+        // только вместе с валидным REALITY; вне enum — отброшено с кодом
+        // реестра `reality_key_share_invalid` (§460, корпус
+        // vless/reality_key_share_bad_dropped).
+        keyShare: _keyShareFromQuery(q, warnings),
       ),
       insecure: isTlsInsecure(q),
       alpn: alpnFromQuery(q),

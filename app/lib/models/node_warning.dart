@@ -6,6 +6,7 @@
 /// machine-поверхности (emitWarnings/AppLog) — `renderEn()` (ui_msg.dart).
 library;
 
+import '../services/contract/registry_warning.dart';
 import '../services/l10n/get_local_text.dart';
 import '../services/l10n/locale_controller.dart';
 
@@ -848,4 +849,64 @@ final class PacketEncodingUnknownWarning extends NodeWarning {
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §460 — предупреждение санитайзера реестра контракта.
+///
+/// Тексты кодов живут в `contract/registry/warnings.json` (24.1.5), а не в
+/// словарях приложения: реестр нормативен для обеих сторон, и своя таблица
+/// разошлась бы с ним на первом же пине ядра. Поэтому класс один на все коды
+/// санитайзера — `unknown_key`, `type_invalid`, `field_conflict`,
+/// `field_requires`, `tls_field_unsupported_naive`, `ss_method_legacy` и
+/// прочие, — а различает их поле [code].
+///
+/// Здесь класс потому, что `NodeWarning` объявлена `sealed`: Dart 3
+/// разрешает наследование только внутри её библиотеки. Логика рендера —
+/// `services/contract/registry_warning.dart`.
+final class RegistryWarning extends NodeWarning {
+  const RegistryWarning({
+    required this.code,
+    this.path,
+    this.value,
+    this.params = const {},
+  });
+
+  /// Код из `registry/warnings.json` — он же код конформанса (CANON §6).
+  final String code;
+
+  /// Путь поля в теле узла (`tls.reality.key_share`); `null` у кодов уровня
+  /// записи.
+  final String? path;
+
+  /// Значение, вызвавшее код; у `secret`-полей — `***` (24.1.4).
+  final String? value;
+
+  /// Прочие подстановки текста (`with`, `requires`, `winner`, `method`).
+  final Map<String, String> params;
+
+  @override
+  List<Object?> get props =>
+      [code, path, value, ...params.entries.map((e) => '${e.key}=${e.value}')];
+
+  /// Строка узла — `title_<lang>` реестра. Язык: `ru` при русском UI, иначе
+  /// `en` (`zh` падает в `en`, пока лаунчер не добавит третий набор).
+  /// Пиненный английский [GetLocalText.en] (`renderEn`) всегда даёт `en` —
+  /// иначе machine-поверхности зависели бы от языка UI.
+  @override
+  String messageWith(GetLocalText t) =>
+      registryTitle(code, _langFor(t), path: path, value: value, params: params);
+
+  /// Карточка узла — `text_<lang>` реестра. Пусто = кода в реестре нет.
+  String detailWith(GetLocalText t) =>
+      registryText(code, _langFor(t), path: path, value: value, params: params);
+
+  /// [GetLocalText.en] — const-синглтон пиненного английского, поэтому
+  /// отличить его от локализатора активной локали можно по идентичности:
+  /// тега языка сам `t` не несёт.
+  RegistryLang _langFor(GetLocalText t) => identical(t, GetLocalText.en)
+      ? RegistryLang.en
+      : registryLangForTag(LocaleController.I.effectiveTag);
+
+  @override
+  WarningSeverity get severity => registrySeverity(code);
 }

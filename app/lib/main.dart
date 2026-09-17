@@ -13,6 +13,7 @@ import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
+import 'services/contract/registry.dart';
 import 'services/crash_banner_state.dart';
 import 'services/install_source.dart';
 import 'services/oom_reports.dart';
@@ -64,6 +65,15 @@ void main() async {
     // UpdateChecker (см. §066). Раньше версия дублировалась hardcoded const'ом
     // в AboutScreen — поднимать вручную легко забыть (произошло на v1.8.0).
     await VersionInfo.I.init();
+    // §460 — реестр контракта (схема тела узла + тексты кодов) из assets.
+    // Своим try/catch: сбой загрузки не должен ронять старт — без реестра
+    // санитайзер сборки просто пропускает записи, приложение работает как до
+    // §460. До runApp, потому что первая же сборка конфига идёт с гардом.
+    try {
+      await ContractRegistry.I.load();
+    } catch (e) {
+      AppLog.I.warning('Contract registry not loaded: $e');
+    }
     // §390 — Канал установки (GitHub / Play / F-Droid). До runApp: от него
     // зависит адрес «где взять новую версию», а снек об апдейте показывается
     // на первом кадре. Резолв дешёвый — dart-define, иначе один native-вызов.

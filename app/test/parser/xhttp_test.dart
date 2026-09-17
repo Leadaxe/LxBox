@@ -208,11 +208,12 @@ void main() {
       expect(m3['uplink_data_placement'], 'cookie');
       expect(w3.whereType<XhttpParamResetWarning>(), isEmpty);
 
-      // "невалидный" enum session_placement → тоже pure passthrough.
+      // §460 — session_placement вне enum реестра снимается (xhttp_param_reset),
+      // как seq_placement; см. тест ниже.
       final t4 = parseTransport({'type': 'xhttp', 'session_placement': 'bogus'})!;
       final (m4, w4) = t4.toSingbox(TemplateVars.empty);
-      expect(m4['session_placement'], 'bogus');
-      expect(w4.whereType<XhttpParamResetWarning>(), isEmpty);
+      expect(m4.containsKey('session_placement'), isFalse);
+      expect(w4.whereType<XhttpParamResetWarning>(), isNotEmpty);
     });
 
     // §459 (контракт §24.2 п. 7.14) — mode/x_padding_placement/

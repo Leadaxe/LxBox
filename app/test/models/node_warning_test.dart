@@ -130,6 +130,9 @@ void main() {
         MasqueVhttpInvalidWarning() => 'masque_vhttp_invalid',
         AnyTlsMinIdleInvalidWarning() => 'anytls_min_idle_invalid',
         PacketEncodingUnknownWarning() => 'packet_encoding_unknown',
+        // §460 — санитайзер реестра: класс один на все свои коды, различает
+        // их поле `code` (текст берётся из registry/warnings.json).
+        RegistryWarning() => 'registry',
       };
       expect(label, 'transport');
     });

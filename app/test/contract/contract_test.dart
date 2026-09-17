@@ -171,7 +171,9 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
   // деградации у них общий.
   final codes = <String>[];
   for (final w in spec.warnings) {
-    final code = _warningCodes[w.runtimeType];
+    // §460 — предупреждения реестра несут код полем, а не типом класса.
+    final code =
+        w is RegistryWarning ? w.code : _warningCodes[w.runtimeType];
     if (code != null && !codes.contains(code)) codes.add(code);
   }
   if (codes.isNotEmpty) node['warnings'] = codes;

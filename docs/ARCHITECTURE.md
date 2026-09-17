@@ -540,8 +540,24 @@ parser/                      # Parser v2 (text → NodeSpec)
   transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
   uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding
                              #   an allow-list; awgClampMtu (§097 — the client MTU of AWG nodes is ≤1280)
+contract/                    # §460 the contract registry inside the app (contract 1.1.0, TASKS_LXBOX §24)
+  registry.dart              #   ContractRegistry.I — loads assets/contract/ (rootBundle behind an AssetLoader,
+                             #   loadFromDirectory in tests); BodySchema by singbox_type with the refs expanded
+                             #   (tls / multiplex / dialer inlined flat into the `__dialer` slot; transports by
+                             #   the transport.type discriminator); WarningText per code from warnings.json
+  body_sanitizer.dart        #   RegistrySanitizer.sanitize(body, scheme, coreVersion, platform) → SanitizeResult:
+                             #   unknown_key, type/enum/format/bounds, on_invalid (drop/coerce/drop_node),
+                             #   conflicts/requires, forbidden_for, min_core, platform, advisory, all_or_nothing.
+                             #   Defaults are NOT materialised (CANON §2.4), key order stays as it came in
+                             #   (`order` governs the emitter — that is wave W2), `tag`/`detour`/`type` untouched
+  registry_warning.dart      #   the render side of RegistryWarning (the class itself lives in models/node_warning.dart,
+                             #   because NodeWarning is sealed): title_<lang>/text_<lang> from the registry, ru for a
+                             #   Russian UI and en otherwise, {path}/{value}/{param} substitution, severity by code
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
+  registry_gate.dart         #   §460 applyRegistryGate — the registry sanitiser over every node entry after
+                             #   list.build(ctx) and before the post-steps; warnings → emitWarnings with the
+                             #   registry text, drop_node removes the entry. Registry not loaded → no-op
   server_list_build.dart     #   the per-subscription emit: the detour policy, tag allocation, selector/auto registration
   if_engine.dart             #   the §120 typed template engine: var substitution plus the #if construct
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
@@ -855,6 +871,31 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 └── selectable_rules[]      # §033 — the preset catalog: block-ads, ru-direct, and the rest
                             #   ru-inside, bittorrent-direct, private-ip-direct
 ```
+
+#### Contract registry (bundled in APK, §460)
+
+```
+app/assets/contract/VERSION              # the contract version (1.1.0)
+app/assets/contract/registry/*.json      # tls, transports, multiplex, dialer, warnings, allowlists…
+app/assets/contract/registry/protocols/  # the body schema per protocol (vless, naive, wireguard…)
+```
+
+`assets/contract/` is a **mirror** of the vendored copy `app/contract/`, laid down by
+`tool/sync_contract.sh`. The copy itself is gitignored (its source of truth is the launcher
+repo), but the registry has to reach the APK — CI and the F-Droid buildserver have no launcher
+checkout, and a missing asset directory fails `flutter build` outright. So exactly the files the
+app reads live in git, and `tool/check_contract_lock.dart` refuses a mirror that drifted from the
+copy. Flutter asset directories are not recursive, hence `registry/` and `registry/protocols/`
+are declared separately in `pubspec.yaml`.
+
+**The flow.** `main()` calls `ContractRegistry.I.load()` before `runApp` (its own try/catch — a
+load failure is logged and the app runs without the registry, as it did before §460). Then, in
+every `buildConfig`, `applyRegistryGate` runs the schema sanitiser over each `outbounds[]`/
+`endpoints[]` entry produced from node sources: unknown keys and values the core would reject go
+away before the config reaches libbox, and the warnings carry the registry's own text in the UI
+language. Direction groups and the template's service outbounds are not node bodies and are not
+touched. A valid config comes out byte-identical — the gate removes, it does not rewrite or
+reorder.
 
 #### The user state (on the device)
 

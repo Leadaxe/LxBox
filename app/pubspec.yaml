@@ -58,6 +58,13 @@ flutter:
     - assets/donate.json # §362/§423 — способы поддержки: единственный источник, бандлится и раздаётся с GitHub
     - assets/support.json # §356/§422 — лента сообщений автора: единственный источник, бандлится и раздаётся с GitHub
     - assets/warp_endpoints.json # §136 — WARP endpoint/SNI random pools
+    # §460 — реестр контракта (зеркало app/contract/registry, кладёт
+    # tool/sync_contract.sh). Каталоги Flutter не рекурсивны — protocols/
+    # объявлен отдельно. Читает ContractRegistry: схема тела узла и тексты
+    # кодов предупреждений.
+    - assets/contract/VERSION
+    - assets/contract/registry/
+    - assets/contract/registry/protocols/
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)
 

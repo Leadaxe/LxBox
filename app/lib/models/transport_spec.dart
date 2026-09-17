@@ -264,7 +264,11 @@ final class XhttpTransport extends TransportSpec {
     // "go": null — Go пока не нормализует XHTTP-параметры вовсе
     // (xhttpBuildTransport: "normalization is left to the core", SPEC 102 в
     // работе). Канон = поведение Go (pass-through, core сам роняет мусор).
-    if (sessionPlacement.isNotEmpty) m['session_placement'] = sessionPlacement;
+    // §460 — реестр 1.1.0 (`transports.json` → xhttp.session_placement):
+    // enum path|query|header|cookie, мусор → снять с `xhttp_param_reset`
+    // (корпус vless/xhttp_placement_bogus_reset). Раньше шёл насквозь.
+    putEnum('session_placement', sessionPlacement,
+        const {'path', 'query', 'header', 'cookie'});
     if (sessionKey.isNotEmpty) m['session_key'] = sessionKey;
     putEnum('seq_placement', seqPlacement,
         const {'path', 'query', 'header', 'cookie'});
