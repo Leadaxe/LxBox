@@ -18,9 +18,13 @@ import 'node_warnings_sheet.dart';
 /// ним же. Info туда не попадает — после §468/§469 info-кодов стало столько,
 /// что под каждым вторым узлом висела строка «делать ничего не надо», и
 /// настоящие проблемы в ней тонули. Наличие info отмечается синим значком без
-/// текста в конце строки; у узла с одними только info остаётся один этот
-/// значок. Полный текст info живёт на экране узла — там режим по умолчанию
-/// ([compact] = false), и текстом показываются все уровни.
+/// текста ПЕРЕД значком уровня. Полный текст info живёт на экране узла — там
+/// режим по умолчанию ([compact] = false), и текстом показываются все уровни.
+///
+/// §471 ревизия 1 — у узла с одними только info строки нет вовсе: значок
+/// уезжает к имени узла ([NodeInfoBadge] в `title`). Здесь это выражено тем,
+/// что компактный режим без actionable отдаёт [SizedBox.shrink]; список сам
+/// не вставляет строку в `subtitle` в этом случае.
 class NodeWarningRow extends StatelessWidget {
   const NodeWarningRow(this.warnings, {super.key, this.compact = false});
 
@@ -42,38 +46,38 @@ class NodeWarningRow extends StatelessWidget {
     final infos =
         sorted.where((w) => w.severity == WarningSeverity.info).toList();
 
+    // Ревизия 1: компактный режим без actionable — не строка, а значок у
+    // имени. Рисовать здесь нечего, и пустой `Row` в `subtitle` дал бы узлу
+    // лишнюю высоту.
+    if (spoken.isEmpty) return const SizedBox.shrink();
+
     final children = <Widget>[];
-    if (spoken.isNotEmpty) {
-      final w = spoken.first;
-      final (color, icon) = warningSeverityStyle(context, w.severity);
-      final more = spoken.length - 1;
+    // Ревизия 1: info стоит ПЕРЕД значком уровня — `ⓘ ⚠ текст (+N more)`.
+    if (compact && infos.isNotEmpty) {
+      final (color, icon) = warningSeverityStyle(context, WarningSeverity.info);
       children.addAll([
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            more > 0
-                ? getLocalText.s("%1\$s (+%2\$d more)", w.message(), more)
-                : w.message(),
-            style: TextStyle(fontSize: 10, color: color),
-          ),
-        ),
       ]);
     }
-    if (compact && infos.isNotEmpty) {
-      final (color, icon) = warningSeverityStyle(context, WarningSeverity.info);
-      // Перед значком отступ нужен только если слева есть текст: у узла с
-      // одними info значок стоит первым.
-      if (children.isNotEmpty) children.add(const SizedBox(width: 4));
-      children.add(Icon(icon, size: 12, color: color));
-    }
+    final w = spoken.first;
+    final (color, icon) = warningSeverityStyle(context, w.severity);
+    final more = spoken.length - 1;
+    children.addAll([
+      Icon(icon, size: 12, color: color),
+      const SizedBox(width: 4),
+      Expanded(
+        child: Text(
+          more > 0
+              ? getLocalText.s("%1\$s (+%2\$d more)", w.message(), more)
+              : w.message(),
+          style: TextStyle(fontSize: 10, color: color),
+        ),
+      ),
+    ]);
 
     return Semantics(
       button: true,
-      // Значок info без текста: зрячий видит подсказку, скринридер обязан
-      // услышать то же, что покажет шторка. Когда текст в строке есть, метка
-      // собирается из него самого — дублировать её в Semantics не нужно.
-      label: children.length == 1 ? infos.first.message() : null,
       // GestureDetector, а не InkWell: строка живёт и в `subtitle` ListTile'а
       // списка узлов, у которого свой onTap — рябь на чужой поверхности
       // выглядела бы срабатыванием строки узла. `opaque` нужен, чтобы тап
@@ -84,6 +88,45 @@ class NodeWarningRow extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: children,
+        ),
+      ),
+    );
+  }
+}
+
+/// §471 ревизия 1 — синий `ⓘ` у ИМЕНИ узла в списке подписки: узел, у
+/// которого нет ничего кроме info, строки под собой не получает вовсе.
+/// Решение владельца по ASCII-макету: третья строка под каждым вторым узлом
+/// ломала ритм списка, а значок у имени читается как свойство узла.
+///
+/// Тап открывает ту же шторку, что и строка предупреждения. `opaque` и
+/// подложка 24×24 — чтобы тап не проваливался в `onTap` строки (разбор узла):
+/// сам значок 14 px, попасть в него пальцем иначе нельзя.
+class NodeInfoBadge extends StatelessWidget {
+  const NodeInfoBadge(this.warnings, {super.key});
+
+  /// ВСЕ предупреждения узла — шторка показывает их целиком. Значок
+  /// рисуется, когда среди них есть info (гейт — на вызывающей стороне).
+  final List<NodeWarning> warnings;
+
+  @override
+  Widget build(BuildContext context) {
+    final infos =
+        warnings.where((w) => w.severity == WarningSeverity.info).toList();
+    if (infos.isEmpty) return const SizedBox.shrink();
+    final (color, icon) = warningSeverityStyle(context, WarningSeverity.info);
+    return Semantics(
+      button: true,
+      // Текста рядом нет — метку скринридеру собираем из самого
+      // предупреждения: он слышит то, что зрячий прочитает в шторке.
+      label: infos.first.message(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => showNodeWarningsSheet(context, warnings),
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: Icon(icon, size: 14, color: color),
         ),
       ),
     );

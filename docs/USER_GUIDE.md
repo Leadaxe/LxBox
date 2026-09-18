@@ -268,7 +268,11 @@ Tapping a subscription opens its screen with these tabs:
   only, nothing to do. In the node list only red and yellow get text (the
   topmost one plus a "+N more" counter that counts red and yellow alone), and
   information is shown as a blue icon with no text — otherwise the lines that
-  do need attention drown in the ones that do not. **Tap the line or the icon**
+  do need attention drown in the ones that do not. Where that icon sits depends
+  on the node: if the node has nothing but information, it stands **next to the
+  node's name** and the node gets no extra line at all; if the node also has a
+  warning or an error, it stands in that line, **before** the level icon.
+  **Tap the line or the icon**
   and a sheet opens with all of them, text and all. Each one gets, where the
   contract has it, **Why** it happened and **What to do** about it; **Learn
   more** opens the full page about that warning in a browser. On the node's own

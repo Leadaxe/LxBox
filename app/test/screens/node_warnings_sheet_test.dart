@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/screens/subscription_detail_screen/node_inspect_screen.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warnings_sheet.dart';
+import 'package:lxbox/screens/subscription_detail_screen/widgets/subscription_node_list.dart';
 import 'package:lxbox/services/contract/contract_docs.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/l10n/locale_controller.dart';
@@ -115,21 +118,35 @@ void main() {
         .widgetList<Icon>(find.descendant(
             of: find.byType(NodeWarningRow), matching: find.byType(Icon)));
 
-    testWidgets('только info в компактном режиме — значок без текста, тап '
-        'открывает шторку', (tester) async {
+    testWidgets('только info в компактном режиме — строки нет вовсе '
+        '(ревизия 1: значок уехал к имени)', (tester) async {
       await pumpRow(tester, const [infoW], compact: true);
 
-      // Текста нет вовсе: строка схлопнута до значка.
+      // Ни текста, ни значка: узел с одними info не получает третьей строки.
       expect(find.descendant(
               of: find.byType(NodeWarningRow), matching: find.byType(Text)),
           findsNothing);
-      final ico = icons(tester).toList();
-      expect(ico, hasLength(1));
-      expect(ico.single.icon, Icons.info_outline);
+      expect(icons(tester), isEmpty);
+    });
 
-      await tester.tap(find.byType(NodeWarningRow));
+    testWidgets('значок info у имени читается скринридером и открывает шторку',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: NodeInfoBadge([infoW])),
+      ));
+      expect(
+        tester.getSemantics(find.byType(NodeInfoBadge)),
+        matchesSemantics(
+          isButton: true,
+          hasTapAction: true,
+          label: 'TLS certificate verification is disabled.',
+        ),
+      );
+      handle.dispose();
+
+      await tester.tap(find.byType(NodeInfoBadge));
       await tester.pumpAndSettle();
-      expect(find.text('Warnings'), findsOneWidget);
       expect(
         find.descendant(
           of: find.byType(NodeWarningsSheet),
@@ -139,22 +156,19 @@ void main() {
       );
     });
 
-    testWidgets('значок info без текста читается скринридером', (tester) async {
-      final handle = tester.ensureSemantics();
-      await pumpRow(tester, const [infoW], compact: true);
-      expect(
-        tester.getSemantics(find.byType(NodeWarningRow)),
-        matchesSemantics(
-          isButton: true,
-          hasTapAction: true,
-          label: 'TLS certificate verification is disabled.',
-        ),
-      );
-      handle.dispose();
+    testWidgets('зона тапа значка у имени не меньше 24×24', (tester) async {
+      // Значок 14 px — пальцем в него не попасть; подложка обязана быть
+      // рекомендованного Material размера.
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: Center(child: NodeInfoBadge([infoW]))),
+      ));
+      final size = tester.getSize(find.byType(NodeInfoBadge));
+      expect(size.width, greaterThanOrEqualTo(24));
+      expect(size.height, greaterThanOrEqualTo(24));
     });
 
     testWidgets('warning + info — текст warning, «+N more» без info, синий '
-        'значок в конце', (tester) async {
+        'значок ПЕРЕД значком уровня', (tester) async {
       await pumpRow(tester, const [infoW, warnW], compact: true);
 
       // Текст — warning'а и без счётчика: actionable ровно одно.
@@ -168,10 +182,11 @@ void main() {
                   find.text('TLS certificate verification is disabled.')),
           findsNothing);
 
+      // Ревизия 1: порядок значков — info, потом уровень.
       final ico = icons(tester).toList();
       expect(ico.map((i) => i.icon),
-          [Icons.warning_amber, Icons.info_outline]);
-      expect(ico.last.color,
+          [Icons.info_outline, Icons.warning_amber]);
+      expect(ico.first.color,
           warningSeverityColor(tester.element(find.byType(NodeWarningRow)),
               WarningSeverity.info));
     });
@@ -209,6 +224,82 @@ void main() {
       final ctx = tester.element(find.byType(NodeWarningRow));
       expect(text.style?.color, warningSeverityColor(ctx, WarningSeverity.info));
       expect(icons(tester).single.icon, Icons.info_outline);
+    });
+  });
+
+  group('§471 ревизия 1 — место значка info в списке узлов', () {
+    NodeSpec node(String label, List<NodeWarning> warnings) => VlessSpec(
+          id: label,
+          tag: label,
+          label: label,
+          server: 'example.com',
+          port: 443,
+          rawSource: '',
+          uuid: '00000000-0000-0000-0000-000000000000',
+          warnings: warnings,
+        );
+
+    Future<void> pumpList(WidgetTester tester, List<NodeSpec> nodes) =>
+        tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: SubscriptionNodeList(
+                nodes: nodes, loading: false, error: null),
+          ),
+        ));
+
+    /// Значок в `title` строки — то есть рядом с именем, а не в `subtitle`.
+    Finder badgeAtTitle(String label) => find.descendant(
+          of: find.ancestor(
+              of: find.text(label), matching: find.byType(ListTile)),
+          matching: find.byType(NodeInfoBadge),
+        );
+
+    testWidgets('только info — значок у имени, третьей строки нет',
+        (tester) async {
+      await pumpList(tester, [node('info-only', const [InsecureTlsWarning()])]);
+
+      expect(badgeAtTitle('info-only'), findsOneWidget);
+      // Строки предупреждения под узлом нет вовсе.
+      expect(find.byType(NodeWarningRow), findsNothing);
+      expect(find.text('TLS certificate verification is disabled.'),
+          findsNothing);
+    });
+
+    testWidgets('тап по значку открывает шторку и не проваливается в разбор '
+        'узла', (tester) async {
+      await pumpList(tester, [node('info-only', const [InsecureTlsWarning()])]);
+
+      await tester.tap(find.byType(NodeInfoBadge));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NodeWarningsSheet), findsOneWidget);
+      expect(find.byType(NodeInspectScreen), findsNothing);
+    });
+
+    testWidgets('warning + info — значок info в строке, у имени его нет',
+        (tester) async {
+      await pumpList(tester, [
+        node('mixed', const [
+          InsecureTlsWarning(),
+          UnsupportedTransportWarning('quic', 'ws'),
+        ]),
+      ]);
+
+      expect(badgeAtTitle('mixed'), findsNothing);
+      expect(find.byType(NodeInfoBadge), findsNothing);
+
+      final ico = tester
+          .widgetList<Icon>(find.descendant(
+              of: find.byType(NodeWarningRow), matching: find.byType(Icon)))
+          .toList();
+      expect(ico.map((i) => i.icon), [Icons.info_outline, Icons.warning_amber]);
+    });
+
+    testWidgets('узел без предупреждений — ни значка, ни строки',
+        (tester) async {
+      await pumpList(tester, [node('clean', const [])]);
+      expect(find.byType(NodeInfoBadge), findsNothing);
+      expect(find.byType(NodeWarningRow), findsNothing);
     });
   });
 

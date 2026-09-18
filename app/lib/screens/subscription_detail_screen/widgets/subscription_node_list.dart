@@ -69,6 +69,12 @@ class SubscriptionNodeList extends StatelessWidget {
     return chainHops.contains(node) ? '⚙ $base' : base;
   }
 
+  /// §471 — есть ли у узла то, что требует действия (error/warning). Один
+  /// предикат на три места: счётчик в шапке, строка предупреждения и значок
+  /// info у имени (значок и строка — взаимоисключающие, см. ревизию 1).
+  static bool _hasActionable(NodeSpec node) =>
+      node.warnings.any((w) => w.severity != WarningSeverity.info);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -105,10 +111,7 @@ class SubscriptionNodeList extends StatelessWidget {
 
     // Считаем только actionable (warning/error). Info (TLS-insecure) тут
     // не учитываем — это часто намеренный выбор провайдера, чтобы не пугать.
-    final actionableCount = nodes
-        .where((n) => n.warnings
-            .any((w) => w.severity != WarningSeverity.info))
-        .length;
+    final actionableCount = nodes.where(_hasActionable).length;
     // §471 — цвет полосы берётся из общей палитры уровней (был плоский
     // `Colors.orange`, не считавшийся с темой).
     final warnColor = warningSeverityColor(context, WarningSeverity.warning);
@@ -191,6 +194,14 @@ class SubscriptionNodeList extends StatelessWidget {
                       size: 16, color: theme.colorScheme.primary),
                 ),
               ],
+              // §471 ревизия 1 — синий `ⓘ` у имени: только у узла, которому
+              // нечего сказать кроме info. Когда есть warning/error, значок
+              // стоит в строке предупреждения перед значком уровня, и здесь
+              // его быть не должно — иначе он задваивается.
+              if (node.warnings.isNotEmpty && !_hasActionable(node)) ...[
+                const SizedBox(width: 2),
+                NodeInfoBadge(node.warnings),
+              ],
             ],
           ),
           subtitle: Column(
@@ -201,7 +212,9 @@ class SubscriptionNodeList extends StatelessWidget {
                 style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
               ),
               // §471 — компактный режим: info только значком, без текста.
-              if (node.warnings.isNotEmpty)
+              // Ревизия 1: у узла с одними info строки нет вовсе — его значок
+              // уехал к имени, а пустая строка добавляла узлу высоты.
+              if (_hasActionable(node))
                 NodeWarningRow(node.warnings, compact: true),
             ],
           ),
