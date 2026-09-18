@@ -338,7 +338,7 @@
     },
     "path_encoded_slash_raw_plus": {
       "uri": "trojan://pass123@example-1.com:443?type=ws&path=%2Fa+b&security=tls&sni=example-1.com#path-plus-enc",
-      "identity": "226cc29e6328778459d650a77a55aedbf451ccdaddbbfe53c1d5386465c886fe",
+      "identity": "a590641654cf8f9e849d4d147664a0c37100cb46db94e30a986411a40dbc9d80",
       "tag": "path-plus-enc",
       "body": {
         "type": "trojan",
@@ -348,7 +348,7 @@
         "password": "pass123",
         "transport": {
           "type": "ws",
-          "path": "/a b",
+          "path": "/a+b",
           "headers": {
             "Host": "example-1.com"
           }
@@ -357,11 +357,34 @@
           "enabled": true,
           "server_name": "example-1.com"
         }
+      },
+      "_delta480": "delta480 D133-14: то же — было \"/a b\", стало \"/a+b\".",
+      "_before480": {
+        "identity": "226cc29e6328778459d650a77a55aedbf451ccdaddbbfe53c1d5386465c886fe",
+        "tag": "path-plus-enc",
+        "body": {
+          "type": "trojan",
+          "tag": "path-plus-enc",
+          "server": "example-1.com",
+          "server_port": 443,
+          "password": "pass123",
+          "transport": {
+            "type": "ws",
+            "path": "/a b",
+            "headers": {
+              "Host": "example-1.com"
+            }
+          },
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com"
+          }
+        }
       }
     },
     "path_raw_plus": {
       "uri": "trojan://pass123@example-1.com:443?type=ws&path=/a+b&security=tls&sni=example-1.com#path-plus",
-      "identity": "226cc29e6328778459d650a77a55aedbf451ccdaddbbfe53c1d5386465c886fe",
+      "identity": "a590641654cf8f9e849d4d147664a0c37100cb46db94e30a986411a40dbc9d80",
       "tag": "path-plus",
       "body": {
         "type": "trojan",
@@ -371,7 +394,7 @@
         "password": "pass123",
         "transport": {
           "type": "ws",
-          "path": "/a b",
+          "path": "/a+b",
           "headers": {
             "Host": "example-1.com"
           }
@@ -379,6 +402,29 @@
         "tls": {
           "enabled": true,
           "server_name": "example-1.com"
+        }
+      },
+      "_delta480": "delta480 D133-14: path-семантика на ОБОИХ проходах, «+» в пути литерален. Было: \"/a b\" (сервер отвечал 404). Стало: \"/a+b\". Чинится у обеих сторон.",
+      "_before480": {
+        "identity": "226cc29e6328778459d650a77a55aedbf451ccdaddbbfe53c1d5386465c886fe",
+        "tag": "path-plus",
+        "body": {
+          "type": "trojan",
+          "tag": "path-plus",
+          "server": "example-1.com",
+          "server_port": 443,
+          "password": "pass123",
+          "transport": {
+            "type": "ws",
+            "path": "/a b",
+            "headers": {
+              "Host": "example-1.com"
+            }
+          },
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com"
+          }
         }
       }
     },
@@ -498,7 +544,7 @@
     },
     "upper_alpn": {
       "uri": "trojan://pass123@example-1.com:443?security=tls&ALPN=h2&sni=example-1.com#up-alpn",
-      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "identity": "a9748e6f211687e6b71d3519096027b8e0297ea57e208c9fe59e7ecd06445838",
       "tag": "up-alpn",
       "body": {
         "type": "trojan",
@@ -508,13 +554,32 @@
         "password": "pass123",
         "tls": {
           "enabled": true,
-          "server_name": "example-1.com"
+          "server_name": "example-1.com",
+          "alpn": [
+            "h2"
+          ]
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо. Было: ALPN=h2 не читался. Стало: tls.alpn=[\"h2\"].",
+      "_before480": {
+        "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+        "tag": "up-alpn",
+        "body": {
+          "type": "trojan",
+          "tag": "up-alpn",
+          "server": "example-1.com",
+          "server_port": 443,
+          "password": "pass123",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com"
+          }
         }
       }
     },
     "upper_fp": {
       "uri": "trojan://pass123@example-1.com:443?security=tls&Fp=chrome&sni=example-1.com#up-fp",
-      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "identity": "62d3caa8740799732ad21af36edb4e0c22514ad58e65cca022b0f9b51a7c8a41",
       "tag": "up-fp",
       "body": {
         "type": "trojan",
@@ -524,7 +589,27 @@
         "password": "pass123",
         "tls": {
           "enabled": true,
-          "server_name": "example-1.com"
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо. Было: Fp=chrome не читался. Стало: tls.utls.",
+      "_before480": {
+        "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+        "tag": "up-fp",
+        "body": {
+          "type": "trojan",
+          "tag": "up-fp",
+          "server": "example-1.com",
+          "server_port": 443,
+          "password": "pass123",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com"
+          }
         }
       }
     },
@@ -562,7 +647,7 @@
     },
     "upper_type_ws": {
       "uri": "trojan://pass123@example-1.com:443?Type=ws&security=tls&path=%2Fws&sni=example-1.com#up-type",
-      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "identity": "c05ce68abd1e7d0742975456e9c4a40e8bdda9dd05918e58d50da5c718045fdf",
       "tag": "up-type",
       "body": {
         "type": "trojan",
@@ -570,9 +655,32 @@
         "server": "example-1.com",
         "server_port": 443,
         "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
         "tls": {
           "enabled": true,
           "server_name": "example-1.com"
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо (§0.6 FROZEN). Было: Type=ws не читался — транспорт терялся молча. Стало: transport ws.",
+      "_before480": {
+        "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+        "tag": "up-type",
+        "body": {
+          "type": "trojan",
+          "tag": "up-type",
+          "server": "example-1.com",
+          "server_port": 443,
+          "password": "pass123",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com"
+          }
         }
       }
     },

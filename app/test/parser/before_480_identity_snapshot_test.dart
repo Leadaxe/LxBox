@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §480 — снимок «до переезда»: маппер ссылок станет движком от реестра, и
@@ -77,6 +79,10 @@ void main() {
   setUpAll(() async {
     if (!mirrored) return;
     await ContractRegistry.I.loadFromDirectory(_registryRoot);
+    // §480 W1 — схемы, переехавшие на движок, без секций не разбираются
+    // вовсе: запасного рукописного пути у них не осталось.
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
 
   group('§480 снимок «до переезда» — ссылки', () {

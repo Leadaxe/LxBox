@@ -14,6 +14,8 @@ import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
 import 'services/contract/registry.dart';
+import 'services/parser/engine/section_loader.dart';
+import 'services/parser/mappers/draft_sections.dart';
 import 'services/crash_banner_state.dart';
 import 'services/install_source.dart';
 import 'services/oom_reports.dart';
@@ -73,6 +75,15 @@ void main() async {
       await ContractRegistry.I.load();
     } catch (e) {
       AppLog.I.warning('Contract registry not loaded: $e');
+    }
+    // §480 — ЧЕРНОВЫЕ секции-мапперы. Загружаются ПОСЛЕ реестра: секция
+    // берётся из контракта, если она там исполняемая, и только иначе из
+    // черновика. Своим try/catch по той же причине — сбой не роняет старт;
+    // схема без секции идёт прежним рукописным маппером.
+    try {
+      await MapperSections.I.loadDrafts(files: kDraftFiles);
+    } catch (e) {
+      AppLog.I.warning('Draft mapper sections not loaded: $e');
     }
     // §390 — Канал установки (GitHub / Play / F-Droid). До runApp: от него
     // зависит адрес «где взять новую версию», а снек об апдейте показывается

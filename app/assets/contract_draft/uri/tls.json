@@ -1,0 +1,208 @@
+{
+  "_draft": "Черновая КОПИЯ исполняемой секции реестра лаунчера, sha 8cc6ac69 (контракт 1.1.13). Временная: загрузчик берёт секцию из реестра, как только она приедет синком контракта, и только иначе отсюда. Источник — SPEC 133 лаунчера.",
+  "blocks": {
+    "note": "SPEC 133: ИСПОЛНЯЕМЫЕ записи общего TLS-блока, по диалектам. Секция протокола подключает их через include (\"tls#uri\", \"tls#xray\"). Описательные tls.params выше НЕ отменяются: там словарь и проза для документации, здесь — таблица, которую исполняет движок. Диалектов два, потому что имена ключей у Xray свои (serverName/publicKey/shortId), а у ссылки — свои (sni/pbk/sid).",
+    "uri": {
+      "security": {
+        "source": "query.security",
+        "selector": true,
+        "sets": {
+          "tls": {
+            "tls.enabled": true
+          },
+          "reality": {
+            "tls.enabled": true
+          },
+          "none": {},
+          "": {
+            "tls.enabled": true
+          }
+        },
+        "impl": "security=none → блока tls НЕТ вовсе (не enabled:false): явный блок ронял ядра lx.5..lx.18 в SIGSEGV, SPEC 045. Пустой sets выражает именно это — ключ не появляется. || ОТСТУПЛЕНИЕ LxBox: security=reality у trojan даёт ОБЫЧНЫЙ TLS без блока reality (см. сужение pbk/sid/key_share). Запись общая для всех схем, поэтому сужение стоит у зависимых полей, а не здесь; сам ключ tls.reality.enabled без public_key телу ничего не даёт."
+      },
+      "sni": {
+        "source": [
+          "query.sni",
+          "query.peer"
+        ],
+        "maps_to": "tls.server_name",
+        "default_from": "host"
+      },
+      "alpn": {
+        "source": "query.alpn",
+        "maps_to": "tls.alpn",
+        "list": {
+          "sep": ","
+        },
+        "decode_extra": {
+          "mode": "query",
+          "passes": "until_stable",
+          "max": 16
+        },
+        "impl": "until_stable, а не 2 прохода: фикстура uri/vless/alpn_multiply_encoded несёт ТРИ уровня (http%2525252F1.1 → http/1.1). max=16 — страховка от неограниченного цикла, на корпусе не достигается."
+      },
+      "fp": {
+        "source": [
+          "query.fp",
+          "query.fingerprint"
+        ],
+        "maps_to": "tls.utls.fingerprint",
+        "value_map": {
+          "$ref": "tls.fp_dialect"
+        },
+        "implies": {
+          "tls.utls.enabled": true
+        }
+      },
+      "insecure": {
+        "source": "query.insecure",
+        "type": "bool_spelled",
+        "maps_to": "tls.insecure",
+        "impl": "Написания берутся из aliases (9 имён, tls.params.insecure); истинность — общий bool_spelled (1|true|yes). До этого у masque был свой список из трёх имён, и 'yes' там не работал."
+      },
+      "disable_sni": {
+        "source": "query.disable_sni",
+        "type": "bool_spelled",
+        "maps_to": "tls.disable_sni",
+        "impl": "DELTAS D133-3: объявлен у tuic и masque, но Go не читал его НИ ТАМ НИ ТАМ — поле терялось только на десктопе."
+      },
+      "pbk": {
+        "source": "query.pbk",
+        "maps_to": "tls.reality.public_key",
+        "decode_extra": {
+          "plus_literal": true
+        },
+        "implies": {
+          "tls.enabled": true,
+          "tls.reality.enabled": true
+        },
+        "impl": "REALITY заводится по НАЛИЧИЮ pbk, а не по security=reality. plus_literal — DELTAS D133-7: поле base64, и '+' в нём обязан читаться буквально; сегодня заплаты у pbk НЕТ, поэтому '+' становится пробелом и реестр снимает поле по format. || ОТСТУПЛЕНИЕ LxBox от секции лаунчера 8cc6ac69 (передано ему списком): REALITY из trojan-URI сегодня не разбирает НИ ОДИН проект — так записано в registry/protocols/trojan.json (query.security.impl: «pbk игнорируется; reality приезжает только через sing-box/Xray-импорт»). Общий tls#uri-блок отдал бы его и trojan, то есть ДОБАВИЛ бы блок reality телу рабочего узла — дельты на это нет ни в DELTAS.md, ни в ТЗ волны. До решения запись сужена условием по типу тела; снимать сужение — отдельной дельтой с правкой фикстуры.",
+        "when": {
+          "$type": {
+            "not": "trojan"
+          }
+        }
+      },
+      "sid": {
+        "source": "query.sid",
+        "maps_to": "tls.reality.short_id",
+        "when": {
+          "tls.reality.enabled": true,
+          "$type": {
+            "not": "trojan"
+          }
+        },
+        "impl": "ОТСТУПЛЕНИЕ LxBox от секции лаунчера 8cc6ac69 (передано ему списком): REALITY из trojan-URI сегодня не разбирает НИ ОДИН проект — так записано в registry/protocols/trojan.json (query.security.impl: «pbk игнорируется; reality приезжает только через sing-box/Xray-импорт»). Общий tls#uri-блок отдал бы его и trojan, то есть ДОБАВИЛ бы блок reality телу рабочего узла — дельты на это нет ни в DELTAS.md, ни в ТЗ волны. До решения запись сужена условием по типу тела; снимать сужение — отдельной дельтой с правкой фикстуры."
+      },
+      "key_share": {
+        "source": "query.key_share",
+        "maps_to": "tls.reality.key_share",
+        "when": {
+          "tls.reality.enabled": true,
+          "$type": {
+            "not": "trojan"
+          }
+        },
+        "impl": "ОТСТУПЛЕНИЕ LxBox от секции лаунчера 8cc6ac69 (передано ему списком): REALITY из trojan-URI сегодня не разбирает НИ ОДИН проект — так записано в registry/protocols/trojan.json (query.security.impl: «pbk игнорируется; reality приезжает только через sing-box/Xray-импорт»). Общий tls#uri-блок отдал бы его и trojan, то есть ДОБАВИЛ бы блок reality телу рабочего узла — дельты на это нет ни в DELTAS.md, ни в ТЗ волны. До решения запись сужена условием по типу тела; снимать сужение — отдельной дельтой с правкой фикстуры."
+      }
+    },
+    "xray": {
+      "security": {
+        "source": "json.streamSettings.security",
+        "selector": true,
+        "sets": {
+          "tls": {
+            "tls.enabled": true
+          },
+          "reality": {
+            "tls.enabled": true
+          },
+          "none": {},
+          "": {}
+        },
+        "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода."
+      },
+      "sni": {
+        "source": [
+          "json.streamSettings.realitySettings.serverName",
+          "json.streamSettings.realitySettings.server_name",
+          "json.streamSettings.tlsSettings.serverName",
+          "json.streamSettings.tlsSettings.server_name"
+        ],
+        "maps_to": "tls.server_name",
+        "impl": "Два написания каждого ключа — диалект Xray. xray_hysteria.go:227 читает ТОЛЬКО server_name, расходясь с :270 того же файла; одна запись снимает расхождение."
+      },
+      "alpn": {
+        "source": "json.streamSettings.tlsSettings.alpn",
+        "maps_to": "tls.alpn",
+        "list": {
+          "sep": ",",
+          "coerce_scalar": true
+        },
+        "impl": "DELTAS D133-C9: сегодня читается ТОЛЬКО в hysteria-ветке (xray_hysteria.go:213-225); vless/vmess/trojan из Xray-конфига теряют alpn. Кандидат — поведение не меняется до решения владельца."
+      },
+      "fp": {
+        "source": [
+          "json.streamSettings.realitySettings.fingerprint",
+          "json.streamSettings.tlsSettings.fingerprint"
+        ],
+        "maps_to": "tls.utls.fingerprint",
+        "value_map": {
+          "$ref": "tls.fp_dialect"
+        },
+        "implies": {
+          "tls.utls.enabled": true
+        }
+      },
+      "insecure": {
+        "source": [
+          "json.streamSettings.realitySettings.allowInsecure",
+          "json.streamSettings.tlsSettings.allowInsecure"
+        ],
+        "type": "bool_spelled",
+        "maps_to": "tls.insecure"
+      },
+      "pbk": {
+        "source": [
+          "json.streamSettings.realitySettings.publicKey",
+          "json.streamSettings.realitySettings.public_key"
+        ],
+        "maps_to": "tls.reality.public_key",
+        "implies": {
+          "tls.enabled": true,
+          "tls.reality.enabled": true
+        }
+      },
+      "sid": {
+        "source": [
+          "json.streamSettings.realitySettings.shortId",
+          "json.streamSettings.realitySettings.short_id"
+        ],
+        "maps_to": "tls.reality.short_id",
+        "when": {
+          "tls.reality.enabled": true
+        }
+      }
+    },
+    "fp_dialect": {
+      "note": "Именованная таблица value_map: uTLS-идентификаторы чужого диалекта → канон ядра. Ссылка — {\"$ref\": \"tls.fp_dialect\"}.",
+      "prefix": {
+        "hellochrome": "chrome",
+        "hellofirefox": "firefox",
+        "helloedge": "edge",
+        "hellosafari": "safari",
+        "helloios": "ios",
+        "helloandroid": "android",
+        "hello360": "360",
+        "helloqq": "qq",
+        "hellorandomized": "randomized",
+        "hellorandom": "random"
+      },
+      "strip": [
+        "_",
+        "-",
+        " "
+      ]
+    }
+  }
+}

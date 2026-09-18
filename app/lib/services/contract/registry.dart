@@ -487,6 +487,23 @@ final class ContractRegistry {
   /// Текст кода из `warnings.json`; `null` — кода в реестре нет.
   WarningText? textFor(String code) => _warnings[code];
 
+  /// §480 — СЫРОЙ JSON протокола по `singbox_type`.
+  ///
+  /// Нужен движку маппера: он читает секции (`mappers.<kind>`), которых нет в
+  /// [BodySchema] — та описывает ТЕЛО, а секция-маппер описывает превращение
+  /// источника в тело. Раскрывать её в типизированную форму здесь нечем:
+  /// грамматика секций своя ([MapperSection]), и живёт она в пакете движка.
+  ///
+  /// `null` — протокола нет (реестр не загружен либо тип чужой).
+  Map<String, dynamic>? rawProtocol(String singboxType) =>
+      _protocols[singboxType];
+
+  /// §480 — СЫРОЙ JSON общего файла по имени (`tls.json`, `transports.json`).
+  ///
+  /// Движку маппера нужны `blocks` — исполняемые записи общих блоков по
+  /// диалектам; [sharedSchema] отдаёт только схему ТЕЛА и про них не знает.
+  Map<String, dynamic>? rawShared(String fileName) => _shared[fileName];
+
   /// Разворот секции `body`: `ref` с `inline: true` вливает поля суб-схемы
   /// плоско на место своего слота в `order` (`__dialer`), обычный `ref`
   /// остаётся ссылкой — санитайзер спускается в него по имени.

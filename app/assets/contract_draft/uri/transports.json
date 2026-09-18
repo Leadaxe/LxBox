@@ -1,0 +1,340 @@
+{
+  "_draft": "Черновая КОПИЯ исполняемой секции реестра лаунчера, sha 8cc6ac69 (контракт 1.1.13). Временная: загрузчик берёт секцию из реестра, как только она приедет синком контракта, и только иначе отсюда. Источник — SPEC 133 лаунчера.",
+  "blocks": {
+    "note": "SPEC 133: ИСПОЛНЯЕМЫЕ записи транспортов по диалектам. Подключаются секцией протокола через include (\"transports#uri\", \"transports#xray\"). Описательные transports.<type>.params выше не отменяются — там словарь для документации. Диалектов два, потому что у Xray свои имена секций (wsSettings/grpcSettings/...) и своя форма host.",
+    "uri": {
+      "$selector": {
+        "type": {
+          "source": "query.type",
+          "selector": true,
+          "maps_to": "transport.type",
+          "value_map": {
+            "": null,
+            "tcp": null,
+            "raw": null
+          }
+        },
+        "headerType": {
+          "source": "query.headerType",
+          "selector": true,
+          "maps_to": "transport.type",
+          "when": {
+            "query.type": {
+              "in": [
+                "tcp",
+                "raw",
+                ""
+              ]
+            }
+          },
+          "value_map": {
+            "http": "http",
+            "none": null,
+            "": null
+          },
+          "impl": "Xray-камуфляж HTTP поверх TCP/RAW: headerType читается ТОЛЬКО когда type пуст или tcp/raw."
+        }
+      },
+      "ws": {
+        "path": {
+          "source": "query.path",
+          "decode_extra": {
+            "mode": "path",
+            "passes": 2
+          },
+          "extract": {
+            "re": "^(?P<path>[^?]*)(?:\\?ed=(?P<ed>\\d+))?$",
+            "into": {
+              "path": "transport.path",
+              "ed": {
+                "path": "transport.max_early_data",
+                "type": "int",
+                "implies": {
+                  "transport.early_data_header_name": {
+                    "value": "Sec-WebSocket-Protocol",
+                    "implicit": true
+                  }
+                }
+              }
+            }
+          },
+          "compose": "{transport.path}?ed={transport.max_early_data}",
+          "when": {
+            "transport.type": "ws"
+          },
+          "impl": "Память проекта ws-early-data-ed-param: ?ed=N жил в ЧЕТЫРЁХ слоях (3 парсера + allowlist-эмиттер). Здесь одна запись на оба направления. mode:path — оба прохода path-семантика, '+' литерален (DELTAS D133-14)."
+        },
+        "host": {
+          "source": [
+            "query.host",
+            "query.sni",
+            "query.obfsParam"
+          ],
+          "maps_to": "transport.headers.Host",
+          "when": {
+            "transport.type": "ws"
+          },
+          "impl": "Фолбэк-цепочка host → sni → obfsParam; сегодня живёт прозой в aliases."
+        },
+        "ed": {
+          "source": "query.ed",
+          "maps_to": "transport.max_early_data",
+          "type": "int",
+          "when": {
+            "transport.type": "ws"
+          },
+          "priority": 1,
+          "impl": "РАСШИРЕНИЕ LxBox (в секции лаунчера записи нет): плоская форма ?ed=N параметром ссылки. Сегодня её читают оба наших входа; без записи узел молча терял max_early_data. Слабее хвоста пути (priority 1): тот адресует конкретный путь, а не ссылку целиком, и дефолтного заголовка плоская форма НЕ подразумевает."
+        },
+        "eh": {
+          "source": "query.eh",
+          "maps_to": "transport.early_data_header_name",
+          "when": {
+            "transport.type": "ws",
+            "transport.max_early_data": {
+              "present": true
+            }
+          },
+          "priority": -1,
+          "merge": "overwrite",
+          "impl": "РАСШИРЕНИЕ LxBox: явное имя заголовка early data. 'eh' без 'ed' — ничто: режим включает max_early_data > 0. Явный заголовок побеждает конвенционный (implicit)."
+        }
+      },
+      "httpupgrade": {
+        "path": {
+          "source": "query.path",
+          "decode_extra": {
+            "mode": "path",
+            "passes": 2
+          },
+          "extract": {
+            "re": "^(?P<path>[^?]*)(?:\\?ed=\\d+)?$",
+            "into": {
+              "path": "transport.path"
+            }
+          },
+          "when": {
+            "transport.type": "httpupgrade"
+          },
+          "impl": "Тот же extract, но без группы ed: у httpupgrade хвост срезается, значение отбрасывается."
+        },
+        "host": {
+          "source": [
+            "query.host",
+            "query.sni"
+          ],
+          "maps_to": "transport.host",
+          "when": {
+            "transport.type": "httpupgrade"
+          },
+          "impl": "У httpupgrade host — СКАЛЯР (у ws это headers.Host, у http — список): форма различается по типу транспорта, поэтому три записи, а не одна."
+        }
+      },
+      "http": {
+        "path": {
+          "source": "query.path",
+          "maps_to": "transport.path",
+          "when": {
+            "transport.type": "http"
+          }
+        },
+        "host": {
+          "source": [
+            "query.host",
+            "query.sni"
+          ],
+          "maps_to": "transport.host",
+          "list": {
+            "sep": ",",
+            "coerce_scalar": true
+          },
+          "when": {
+            "transport.type": "http"
+          },
+          "impl": "У http host — СПИСОК."
+        }
+      },
+      "grpc": {
+        "serviceName": {
+          "source": [
+            "query.serviceName",
+            "query.service_name",
+            "query.path"
+          ],
+          "maps_to": "transport.service_name",
+          "when": {
+            "transport.type": "grpc"
+          },
+          "impl": "Фолбэк на path — живая форма подписок. normalize снят целиком контрактом 1.1.3 (TASKS_LXBOX §24.12), поэтому его здесь нет."
+        }
+      },
+      "xhttp": {
+        "mode": {
+          "source": "query.mode",
+          "maps_to": "transport.mode",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "impl": "mode/path/host у xhttp читаются ТОЛЬКО из плоского слоя; extra — вложенный слой чужого диалекта, и одноимённые ключи в нём игнорируются (D-097). Поэтому source из одного элемента."
+        },
+        "path": {
+          "source": "query.path",
+          "maps_to": "transport.path",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        },
+        "host": {
+          "source": "query.host",
+          "maps_to": "transport.host",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        }
+      }
+    },
+    "xray": {
+      "$selector": {
+        "network": {
+          "source": "json.streamSettings.network",
+          "selector": true,
+          "maps_to": "transport.type",
+          "value_map": {
+            "tcp": null,
+            "raw": null,
+            "": null,
+            "h2": "http",
+            "splithttp": "xhttp"
+          },
+          "on_invalid": {
+            "action": "drop",
+            "code": "transport_unsupported"
+          },
+          "impl": "QUIRKS Q133-17: сегодня неизвестный network (kcp/quic/ds) возвращает nil МОЛЧА — узел приезжает чистым TCP. Код transport_unsupported объявлен, но из Xray не ставится."
+        }
+      },
+      "ws": {
+        "path": {
+          "source": "json.wsSettings.path",
+          "extract": {
+            "re": "^(?P<path>[^?]*)(?:\\?ed=(?P<ed>\\d+))?$",
+            "into": {
+              "path": "transport.path",
+              "ed": {
+                "path": "transport.max_early_data",
+                "type": "int",
+                "implies": {
+                  "transport.early_data_header_name": {
+                    "value": "Sec-WebSocket-Protocol",
+                    "implicit": true
+                  }
+                }
+              }
+            }
+          },
+          "when": {
+            "transport.type": "ws"
+          }
+        },
+        "host": {
+          "source": "json.wsSettings.host",
+          "maps_to": "transport.headers.Host",
+          "when": {
+            "transport.type": "ws"
+          }
+        }
+      },
+      "httpupgrade": {
+        "path": {
+          "source": "json.httpupgradeSettings.path",
+          "extract": {
+            "re": "^(?P<path>[^?]*)(?:\\?ed=\\d+)?$",
+            "into": {
+              "path": "transport.path"
+            }
+          },
+          "when": {
+            "transport.type": "httpupgrade"
+          }
+        },
+        "host": {
+          "source": "json.httpupgradeSettings.host",
+          "maps_to": "transport.host",
+          "when": {
+            "transport.type": "httpupgrade"
+          }
+        }
+      },
+      "http": {
+        "path": {
+          "source": "json.httpSettings.path",
+          "maps_to": "transport.path",
+          "when": {
+            "transport.type": "http"
+          }
+        },
+        "host": {
+          "source": "json.httpSettings.host",
+          "maps_to": "transport.host",
+          "list": {
+            "sep": ",",
+            "coerce_scalar": true
+          },
+          "when": {
+            "transport.type": "http"
+          },
+          "impl": "QUIRKS Q133-16: сегодня массив ['a.com','b.com'] уходит через fmt.Sprint и даёт host ['[a.com b.com]'] — типовой реальный конфиг даёт мусор. coerce_scalar принимает ОБЕ формы."
+        }
+      },
+      "grpc": {
+        "serviceName": {
+          "source": [
+            "json.grpcSettings.serviceName",
+            "json.grpcSettings.service_name"
+          ],
+          "maps_to": "transport.service_name",
+          "when": {
+            "transport.type": "grpc"
+          }
+        }
+      },
+      "xhttp": {
+        "$settings": {
+          "source": [
+            "json.xhttpSettings",
+            "json.splithttpSettings"
+          ],
+          "flatten": [
+            "extra",
+            "xmux"
+          ],
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "impl": "xhttpSettings ∥ splithttpSettings — один транспорт под двумя именами. flatten разворачивает вложенные extra и xmux в плоский слой (сегодня это делает xrayFlattenScalars вручную)."
+        },
+        "mode": {
+          "source": "json.xhttpSettings.mode",
+          "maps_to": "transport.mode",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        },
+        "path": {
+          "source": "json.xhttpSettings.path",
+          "maps_to": "transport.path",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        },
+        "host": {
+          "source": "json.xhttpSettings.host",
+          "maps_to": "transport.host",
+          "when": {
+            "transport.type": "xhttp"
+          }
+        }
+      }
+    }
+  }
+}

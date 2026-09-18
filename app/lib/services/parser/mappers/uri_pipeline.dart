@@ -31,6 +31,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../contract/body_sanitizer.dart';
 import '../../contract/registry.dart';
+import '../../../services/parser/engine/engine_mapper.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'anytls_mapper.dart';
@@ -41,7 +42,6 @@ import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'socks_mapper.dart';
 import 'ssh_mapper.dart';
-import 'trojan_mapper.dart';
 import 'tuic_mapper.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
@@ -108,9 +108,18 @@ const kPipelineSchemes = <String>{
   'awg',
 };
 
+/// §480 W1 — схема ссылки → ТИП ТЕЛА для движка секций.
+///
+/// Движок не знает ни одного имени схемы (греп-страж
+/// `engine_no_scheme_names_test.dart`): секция адресуется типом тела, и
+/// перевод написания схемы в тип — работа диспетчера, у которого этот словарь
+/// и так есть ([_kMappers] ниже строится по нему же).
+const Map<String, String> _kSchemeToType = <String, String>{
+  'trojan': 'trojan',
+};
+
 /// Мапперы переехавших схем, по схеме ссылки.
 const Map<String, UriMapper> _kMappers = <String, UriMapper>{
-  'trojan': mapTrojanUri,
   'vless': mapVlessUri,
   'vmess': mapVmessUri,
   'ss': mapShadowsocksUri,
@@ -143,6 +152,18 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
 /// ДО вызова, по имени схемы ([kPipelineSchemes]).
 NodeSpec? parseUriViaPipeline(String uri, String scheme,
     {XrayDropVerdict? dropped}) {
+  // §480 W1 — движок, если для типа тела есть ИСПОЛНЯЕМАЯ секция. Рукописный
+  // маппер схемы к этому моменту уже удалён: запасного пути у переехавшей
+  // схемы не остаётся (критерий 7 спеки — движок без реестра не работает
+  // вовсе, и молчаливый откат на рукописный разбор скрыл бы отсутствие
+  // секции).
+  final singboxType = _kSchemeToType[scheme];
+  if (singboxType != null) {
+    final mapping = mapViaEngine(uri, singboxType);
+    if (mapping == null) return null;
+    return _runPipeline(uri, null, mapping: mapping, dropped: dropped);
+  }
+
   final mapper = _kMappers[scheme];
   if (mapper == null) return null;
   // §472 шаг 4 — маппер получает ИСХОДНЫЙ ТЕКСТ. Общего `Uri.tryParse` здесь
@@ -240,13 +261,15 @@ final class _Prebuilt {
 /// [prebuilt] — карта уже построена снаружи (Xray-вход, шаг 8): маппер там
 /// работает по объекту, а не по тексту, и зовёт его вызывающий. Тогда
 /// [mapper] не нужен, а [source] — только `rawSource` будущего узла.
+/// [mapping] — §480: карту построил ДВИЖОК секций, и звать маппер не нужно.
 NodeSpec? _runPipeline(
   String source,
   UriMapper? mapper, {
   _Prebuilt? prebuilt,
   XrayDropVerdict? dropped,
+  UriMapping? mapping,
 }) {
-  final UriMapping? mapping = prebuilt == null
+  mapping ??= prebuilt == null
       ? mapper!(source)
       : UriMapping(
           body: prebuilt.body,
