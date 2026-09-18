@@ -24,7 +24,7 @@
         "into": [
           "password"
         ],
-        "_desc_ru": "Пароль = ВЕСЬ userinfo, без split: двоеточие — законная часть пароля (кейс корпуса percent_encoded_password нормирует 'p@ss:word'). Go берёт только Username() — расхождение зафиксировано реестром и сохранено как было."
+        "impl": "Пароль = ВЕСЬ userinfo, без split: двоеточие — законная часть пароля (кейс корпуса percent_encoded_password нормирует 'p@ss:word'). Go берёт только Username() — расхождение зафиксировано реестром и сохранено как было."
       },
       "label": {
         "source": "fragment",
@@ -62,19 +62,19 @@
           "source": "userinfo",
           "maps_to": "password",
           "required": true,
-          "desc_ru": "Пустой пароль — записи нет."
+          "impl": "Пустой пароль — записи нет."
         },
         "security": {
           "source": "query.security",
           "maps_to": null,
-          "desc_ru": "ИГНОРИРУЕТСЯ до чтения TLS. AnyTLS живёт только поверх TLS (body.fields.tls → required, ядро отвечает C.ErrTLSRequired), и security=none для него бессмысленен: правило security_none_no_tls унесло бы весь блок вместе с sni, alpn и insecure, которые автор написал. Кейс корпуса security_none_params_kept нормирует именно это."
+          "impl": "ИГНОРИРУЕТСЯ до чтения TLS. AnyTLS живёт только поверх TLS (body.fields.tls → required, ядро отвечает C.ErrTLSRequired), и security=none для него бессмысленен: правило security_none_no_tls унесло бы весь блок вместе с sni, alpn и insecure, которые автор написал. Кейс корпуса security_none_params_kept нормирует именно это."
         },
         "idle_session_check_interval": {
           "source": "query.idle_session_check_interval",
           "maps_to": "idle_session_check_interval",
           "type": "duration",
           "normalize": "duration_bare_seconds",
-          "desc_ru": "Голое число это секунды — та же конвенция, что heartbeat_bare_number у tuic. Форма записи это работа маппера; годность судит реестр."
+          "impl": "Голое число это секунды — та же конвенция, что heartbeat_bare_number у tuic. Форма записи это работа маппера; годность судит реестр."
         },
         "idle_session_timeout": {
           "source": "query.idle_session_timeout",
@@ -90,24 +90,20 @@
             "action": "keep",
             "code": null
           },
-          "desc_ru": "Идёт в карту КАК ПРИШЁЛ — числом если число, иначе строкой: годность («неотрицательное целое») судит реестр, min:0 + on_invalid drop с кодом anytls_min_idle_invalid. Привести здесь к числу значило бы судить."
+          "impl": "Идёт в карту КАК ПРИШЁЛ — числом если число, иначе строкой: годность («неотрицательное целое») судит реестр, min:0 + on_invalid drop с кодом anytls_min_idle_invalid. Привести здесь к числу значило бы судить."
         }
       },
       "include": [
-        "tls#uri.vless_convention",
-        "dialer.keep_alive#uri"
+        "tls#uri",
+        "dialer#uri"
       ],
       "unknown_key": {
-        "action": "drop",
+        "action": "keep",
         "code": "uri_param_unknown"
       },
       "emit": {
         "form": "url",
-        "param_order": [
-          "idle_session_check_interval",
-          "idle_session_timeout",
-          "min_idle_session"
-        ]
+        "param_order": "alphabetical"
       }
     }
   }

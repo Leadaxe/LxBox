@@ -3,16 +3,31 @@
   "mappers": {
     "xray": {
       "body_source": "xray",
-      "detect": { "json": { "value_of": { "protocol": "socks" } } },
+      "detect": {
+        "json": {
+          "value_of": {
+            "protocol": "socks"
+          }
+        }
+      },
       "forms": [
         {
           "id": "servers",
-          "detect": { "json": { "type_of": { "settings.servers": "array" } } },
+          "detect": {
+            "json": {
+              "type_of": {
+                "settings.servers": "array"
+              }
+            }
+          },
           "space": "json",
           "base": "settings.servers.0"
         }
       ],
-      "defaults": { "type": "socks", "server_port": 1080 },
+      "defaults": {
+        "type": "socks",
+        "server_port": 1080
+      },
       "params": {
         "address": {
           "source": "json.$base.address",
@@ -28,7 +43,7 @@
         "user": {
           "source": "json.$base.users.0.user",
           "maps_to": "username",
-          "desc_ru": "Диалект Xray зовёт поля users[].user / users[].pass, а не username/password."
+          "impl": "Диалект Xray зовёт поля users[].user / users[].pass, а не username/password."
         },
         "pass": {
           "source": "json.$base.users.0.pass",
@@ -37,7 +52,7 @@
         "$version": {
           "source": "json.$base.version",
           "maps_to": null,
-          "desc_ru": "ВЕРСИЯ С ЭТОГО ВХОДА НЕ ПИШЕТСЯ ВОВСЕ — в отличие от ссылки, где её несёт схема и она материализуется явно. Прежняя ветка Xray ключ version не ставила; дефолт ядра (5) действует сам."
+          "impl": "ВЕРСИЯ С ЭТОГО ВХОДА НЕ ПИШЕТСЯ ВОВСЕ — в отличие от ссылки, где её несёт схема и она материализуется явно. Прежняя ветка Xray ключ version не ставила; дефолт ядра (5) действует сам."
         },
         "$extra_servers": {
           "source": "json.settings.servers",
@@ -49,7 +64,10 @@
           }
         }
       },
-      "unknown_key": { "action": "drop", "code": "json_field_unknown" },
+      "unknown_key": {
+        "action": "drop",
+        "code": "json_field_unknown"
+      },
       "emit": null
     }
   }

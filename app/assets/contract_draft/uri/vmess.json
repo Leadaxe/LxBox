@@ -23,7 +23,7 @@
             "json"
           ],
           "space": "json",
-          "_desc_ru": "Основная форма. Порядок форм НОРМАТИВЕН: JSON пробуется первым, cleartext — правило legacy_cleartext_fallback, то есть именно откат."
+          "impl": "Основная форма. Порядок форм НОРМАТИВЕН: JSON пробуется первым, cleartext — правило legacy_cleartext_fallback, то есть именно откат."
         },
         {
           "id": "legacy",
@@ -37,7 +37,7 @@
             }
           ],
           "space": "url",
-          "_desc_ru": "legacy cleartext 'method:uuid@host:port?type=ws&tls=1'. IPv6 в скобках снимается лексером движка — delta480: было (ручной lastIndexOf(':')) — '[2001:db8::1]:443' давал server '[2001:db8::1]', стало — '2001:db8::1'."
+          "impl": "legacy cleartext 'method:uuid@host:port?type=ws&tls=1'. IPv6 в скобках снимается лексером движка — delta480: было (ручной lastIndexOf(':')) — '[2001:db8::1]:443' давал server '[2001:db8::1]', стало — '2001:db8::1'."
         }
       ],
       "userinfo": {
@@ -49,7 +49,7 @@
           "security",
           "uuid"
         ],
-        "_desc_ru": "Только у формы legacy: 'method:uuid@'. Двоеточие обязательно; uuid может содержать свои — limit:2."
+        "impl": "Только у формы legacy: 'method:uuid@'. Двоеточие обязательно; uuid может содержать свои — limit:2."
       },
       "label": {
         "source": {
@@ -64,7 +64,7 @@
           "template": "{scheme}-{server}-{server_port}",
           "scheme_source": "singbox_type"
         },
-        "_desc_ru": "У JSON-формы фрагмент НЕ читается вовсе (uri.userinfo.impl — Go не передаёт фрагмент в parseVMessJSON, Dart не передавал в _vmessFromJson); имя берётся из ключа ps."
+        "impl": "У JSON-формы фрагмент НЕ читается вовсе (uri.userinfo.impl — Go не передаёт фрагмент в parseVMessJSON, Dart не передавал в _vmessFromJson); имя берётся из ключа ps."
       },
       "defaults": {
         "type": "vmess",
@@ -78,7 +78,7 @@
           },
           "maps_to": "server",
           "required": true,
-          "desc_ru": "uri.query.add.impl — отсутствие даёт drop ноды."
+          "impl": "uri.query.add.impl — отсутствие даёт drop ноды."
         },
         "server_port": {
           "source": {
@@ -88,7 +88,7 @@
           "maps_to": "server_port",
           "type": "int",
           "materialize_default": true,
-          "desc_ru": "uri.query.port.impl: Go — drop ноды, Dart — fallback 443. Поведение сохранено как было: identity живых узлов не двигается."
+          "impl": "uri.query.port.impl: Go — drop ноды, Dart — fallback 443. Поведение сохранено как было: identity живых узлов не двигается."
         },
         "uuid": {
           "source": {
@@ -117,7 +117,7 @@
             "undefined": "auto"
           },
           "emit_when": "always",
-          "desc_ru": "Ключ security ОБЯЗАН появиться в теле: у ядра поле без omitempty, у схемы required, опущенный ключ уронил бы узел кодом field_missing. Перевод chacha20-ietf-poly1305 → chacha20-poly1305 — имя того же шифра в диалекте Xray; без перевода реальный шифр подписки схлопнулся бы в auto. Пусто/'null'/'undefined' строкой (их шлют реальные панели, корпус json_scy_null_to_auto) → auto. §474: сведение МУСОРА к auto отсюда СНЯТО — судит реестр (enum + on_invalid coerce auto, код vmess_security_unknown)."
+          "impl": "Ключ security ОБЯЗАН появиться в теле: у ядра поле без omitempty, у схемы required, опущенный ключ уронил бы узел кодом field_missing. Перевод chacha20-ietf-poly1305 → chacha20-poly1305 — имя того же шифра в диалекте Xray; без перевода реальный шифр подписки схлопнулся бы в auto. Пусто/'null'/'undefined' строкой (их шлют реальные панели, корпус json_scy_null_to_auto) → auto. §474: сведение МУСОРА к auto отсюда СНЯТО — судит реестр (enum + on_invalid coerce auto, код vmess_security_unknown)."
         },
         "alter_id": {
           "source": {
@@ -127,7 +127,7 @@
           "maps_to": "alter_id",
           "type": "int",
           "omit_default": 0,
-          "desc_ru": "Числом или строкой — оба вида читают обе стороны. Нулевой в тело не пишется."
+          "impl": "Числом или строкой — оба вида читают обе стороны. Нулевой в тело не пишется."
         },
         "net": {
           "source": {
@@ -148,7 +148,7 @@
               "tls.enabled": true
             }
           },
-          "desc_ru": "У cleartext-формы транспорт зовётся 'type', а не 'net' (uri.query.net.aliases). net=h2 включает TLS ПРИНУДИТЕЛЬНО (uri.query.tls.impl, оба проекта) — sets на значении селектора, без отдельной ветки."
+          "impl": "У cleartext-формы транспорт зовётся 'type', а не 'net' (uri.query.net.aliases). net=h2 включает TLS ПРИНУДИТЕЛЬНО (uri.query.tls.impl, оба проекта) — sets на значении селектора, без отдельной ветки."
         },
         "tls": {
           "source": {
@@ -171,7 +171,7 @@
             "": {},
             "none": {}
           },
-          "desc_ru": "ТРИ разных правила истинности сведены к одной таблице. У JSON-формы истина ровно одна — строка 'tls' (cfg['tls']=='tls'); у legacy-формы семейство '1|true|tls' (uri.query.tls.impl). Значения '1'/'true' у JSON-формы истиной сегодня НЕ являются — если корпус это подтвердит, таблица разводится по формам."
+          "impl": "ТРИ разных правила истинности сведены к одной таблице. У JSON-формы истина ровно одна — строка 'tls' (cfg['tls']=='tls'); у legacy-формы семейство '1|true|tls' (uri.query.tls.impl). Значения '1'/'true' у JSON-формы истиной сегодня НЕ являются — если корпус это подтвердит, таблица разводится по формам."
         },
         "mode": {
           "source": {
@@ -182,7 +182,7 @@
           "when": {
             "transport.type": "xhttp"
           },
-          "desc_ru": "SPEC 071/103 vmess/json_net_xhttp — при net=xhttp ключ mode лежит в самом объекте v2rayN, наравне с path/host."
+          "impl": "SPEC 071/103 vmess/json_net_xhttp — при net=xhttp ключ mode лежит в самом объекте v2rayN, наравне с path/host."
         },
         "sni": {
           "source": {
@@ -200,7 +200,7 @@
           "when": {
             "tls.enabled": true
           },
-          "desc_ru": "SNI-цепочка расходится СЕРЕДИНОЙ: у контейнера v2rayN это sni → host → сервер (ключа peer у него нет), у legacy-формы sni → peer → сервер (ключ host там адресует транспорт). Этим формы и отличаются."
+          "impl": "SNI-цепочка расходится СЕРЕДИНОЙ: у контейнера v2rayN это sni → host → сервер (ключа peer у него нет), у legacy-формы sni → peer → сервер (ключ host там адресует транспорт). Этим формы и отличаются."
         },
         "ech": {
           "source": {
@@ -212,21 +212,21 @@
             "action": "drop",
             "code": "ech_param_dropped_with_code"
           },
-          "desc_ru": "§320 — ссылочная форма ECH адреса в теле sing-box не имеет, а чужой ключ рвёт рукопожатие. Без записи потеря была бы молчаливой."
+          "impl": "§320 — ссылочная форма ECH адреса в теле sing-box не имеет, а чужой ключ рвёт рукопожатие. Без записи потеря была бы молчаливой."
         }
       },
       "include": [
         "transports#uri",
-        "tls#uri.vmess_convention",
-        "dialer.keep_alive#uri"
+        "tls#uri",
+        "dialer#uri"
       ],
       "unknown_key": {
-        "action": "drop",
+        "action": "keep",
         "code": "uri_param_unknown"
       },
       "emit": {
         "form": "v2rayn",
-        "param_order": []
+        "param_order": "alphabetical"
       }
     }
   }

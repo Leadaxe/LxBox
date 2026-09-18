@@ -4,26 +4,46 @@
     "xray": {
       "body_source": "xray",
       "detect": {
-        "json": { "value_in": { "protocol": ["shadowsocks", "ss"] } }
+        "json": {
+          "value_in": {
+            "protocol": [
+              "shadowsocks",
+              "ss"
+            ]
+          }
+        }
       },
-      "type_synonyms": { "shadowsocks": "ss" },
+      "type_synonyms": {
+        "shadowsocks": "ss"
+      },
       "forms": [
         {
           "id": "servers",
-          "detect": { "json": { "type_of": { "settings.servers": "array" } } },
+          "detect": {
+            "json": {
+              "type_of": {
+                "settings.servers": "array"
+              }
+            }
+          },
           "space": "json",
           "base": "settings.servers.0"
         }
       ],
-      "defaults": { "type": "shadowsocks" },
+      "defaults": {
+        "type": "shadowsocks"
+      },
       "label": {
         "source": "json.remarks",
-        "normalize": ["strip_control", "trim"],
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
         "fallback": {
           "template": "{scheme}-{server}-{server_port}",
           "scheme_source": "as_written"
         },
-        "_desc_ru": "У Xray-входа имя схемы для фолбэка не равно типу тела: 'ss' при 'shadowsocks' (tagScheme в XrayMapping). Тег И ЕСТЬ identity, поэтому as_written здесь нормативен."
+        "impl": "У Xray-входа имя схемы для фолбэка не равно типу тела: 'ss' при 'shadowsocks' (tagScheme в XrayMapping). Тег И ЕСТЬ identity, поэтому as_written здесь нормативен."
       },
       "params": {
         "address": {
@@ -36,7 +56,7 @@
           "maps_to": "server_port",
           "type": "int",
           "required": true,
-          "desc_ru": "Порт ОБЯЗАТЕЛЕН и ненулевой: port==0 даёт null (записи нет). Дефолта у этого входа нет, в отличие от ссылки."
+          "impl": "Порт ОБЯЗАТЕЛЕН и ненулевой: port==0 даёт null (записи нет). Дефолта у этого входа нет, в отличие от ссылки."
         },
         "method": {
           "source": "json.$base.method",
@@ -47,7 +67,7 @@
           "source": "json.$base.password",
           "maps_to": "password",
           "empty": "significant",
-          "desc_ru": "Пишется даже пустым (прежняя ветка клала ''), в отличие от ссылки, где пустой пароль снимает узел."
+          "impl": "Пишется даже пустым (прежняя ветка клала ''), в отличие от ссылки, где пустой пароль снимает узел."
         },
         "$extra_servers": {
           "source": "json.settings.servers",
@@ -59,8 +79,13 @@
           }
         }
       },
-      "include": ["dialer.keep_alive#xray"],
-      "unknown_key": { "action": "drop", "code": "json_field_unknown" },
+      "include": [
+        "dialer#xray"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "json_field_unknown"
+      },
       "emit": null
     }
   }

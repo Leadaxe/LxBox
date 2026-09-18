@@ -67,37 +67,37 @@
           "source": "host",
           "maps_to": "server",
           "required": true,
-          "desc_ru": "Адрес сервера; без него записи не построить (маппер отвечает null)."
+          "impl": "Адрес сервера; без него записи не построить (маппер отвечает null)."
         },
         "server_port": {
           "source": "port",
           "maps_to": "server_port",
           "type": "int",
           "materialize_default": true,
-          "desc_ru": "Порт; по умолчанию 1080 (uri.userinfo.impl)."
+          "impl": "Порт; по умолчанию 1080 (uri.userinfo.impl)."
         },
         "username": {
           "source": "userinfo.user",
           "maps_to": "username",
-          "desc_ru": "Опционален; пустой в тело не пишется."
+          "impl": "Опционален; пустой в тело не пишется."
         },
         "password": {
           "source": "userinfo.pass",
           "maps_to": "password",
-          "desc_ru": "Опционален. У версии 4 пароля нет вовсе, но написанный переносится как есть — маппер значения не судит."
+          "impl": "Опционален. У версии 4 пароля нет вовсе, но написанный переносится как есть — маппер значения не судит."
         },
         "version": {
           "source": "scheme",
           "maps_to": "version",
           "materialize_default": true,
-          "desc_ru": "§475 socks_scheme_is_version — версию несёт СХЕМА, значение подставляет scheme_sets. Пишется в тело ЯВНО: значение стоит в телах всех живых узлов обеих сторон."
+          "impl": "§475 socks_scheme_is_version — версию несёт СХЕМА, значение подставляет scheme_sets. Пишется в тело ЯВНО: значение стоит в телах всех живых узлов обеих сторон."
         }
       },
       "include": [
-        "dialer.keep_alive#uri"
+        "dialer#uri"
       ],
       "unknown_key": {
-        "action": "drop",
+        "action": "keep",
         "code": "uri_param_unknown"
       },
       "emit": {
@@ -109,7 +109,7 @@
             "*": "socks5"
           }
         },
-        "param_order": []
+        "param_order": "alphabetical"
       }
     }
   }

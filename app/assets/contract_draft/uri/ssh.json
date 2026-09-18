@@ -56,13 +56,13 @@
           "maps_to": "server_port",
           "type": "int",
           "materialize_default": true,
-          "desc_ru": "Канонический порт ssh — 22."
+          "impl": "Канонический порт ssh — 22."
         },
         "user": {
           "source": "userinfo.user",
           "maps_to": "user",
           "required": true,
-          "desc_ru": "Обязателен: без него маппер отвечает null (Dart — null-skip, ssh_parser.dart:17). Дефолт 'root' реестра НЕ материализуется маппером — узла без user просто нет."
+          "impl": "Обязателен: без него маппер отвечает null (Dart — null-skip, ssh_parser.dart:17). Дефолт 'root' реестра НЕ материализуется маппером — узла без user просто нет."
         },
         "password": {
           "source": "userinfo.pass",
@@ -76,7 +76,7 @@
             "passes": 1,
             "plus_literal": true
           },
-          "desc_ru": "Многострочный PEM: %0A раскрывается ОДИН раз, раскрутки до стабильной точки нет — она сломала бы ключ, где '%' законен. plus_literal: поле PEM/base64-формата, '+' внутри ключа буквален (delta480: было — '+' становился пробелом, стало — литерал)."
+          "impl": "Многострочный PEM: %0A раскрывается ОДИН раз, раскрутки до стабильной точки нет — она сломала бы ключ, где '%' законен. plus_literal: поле PEM/base64-формата, '+' внутри ключа буквален (delta480: было — '+' становился пробелом, стало — литерал)."
         },
         "private_key_path": {
           "source": "query.private_key_path",
@@ -86,7 +86,7 @@
               "present": false
             }
           },
-          "desc_ru": "Учитывается только при пустом private_key (ext: desktop)."
+          "impl": "Учитывается только при пустом private_key (ext: desktop)."
         },
         "private_key_passphrase": {
           "source": "query.private_key_passphrase",
@@ -101,7 +101,7 @@
             "item": "string"
           },
           "normalize": "trim",
-          "desc_ru": "Список через запятую; пустые элементы отбрасываются, остальные trim (uri.query.host_key.impl)."
+          "impl": "Список через запятую; пустые элементы отбрасываются, остальные trim (uri.query.host_key.impl)."
         },
         "host_key_algorithms": {
           "source": "query.host_key_algorithms",
@@ -116,26 +116,19 @@
         "client_version": {
           "source": "query.client_version",
           "maps_to": "client_version",
-          "desc_ru": "ext: desktop. Наш маппер его сегодня НЕ читает — запись заведена по реестру; если корпус покажет расхождение, снимается."
+          "impl": "ext: desktop. Наш маппер его сегодня НЕ читает — запись заведена по реестру; если корпус покажет расхождение, снимается."
         }
       },
       "include": [
-        "dialer.keep_alive#uri"
+        "dialer#uri"
       ],
       "unknown_key": {
-        "action": "drop",
+        "action": "keep",
         "code": "uri_param_unknown"
       },
       "emit": {
         "form": "url",
-        "param_order": [
-          "client_version",
-          "host_key",
-          "host_key_algorithms",
-          "private_key",
-          "private_key_passphrase",
-          "private_key_path"
-        ]
+        "param_order": "alphabetical"
       }
     }
   }

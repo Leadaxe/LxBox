@@ -33,7 +33,7 @@
           "password"
         ],
         "single_into": "username",
-        "_desc_ru": "Три формы: 'user' | 'user:pass' | ':pass' — оба компонента опциональны (uri.userinfo.impl). Пароль — всё после ПЕРВОГО двоеточия."
+        "impl": "Три формы: 'user' | 'user:pass' | ':pass' — оба компонента опциональны (uri.userinfo.impl). Пароль — всё после ПЕРВОГО двоеточия."
       },
       "label": {
         "source": "fragment",
@@ -76,7 +76,7 @@
           "maps_to": "server_port",
           "type": "int",
           "materialize_default": true,
-          "desc_ru": "Дефолт задаёт scheme_sets: 443 у https-суффикса, 80 у http-суффикса."
+          "impl": "Дефолт задаёт scheme_sets: 443 у https-суффикса, 80 у http-суффикса."
         },
         "username": {
           "source": "userinfo.user",
@@ -89,7 +89,7 @@
         "path": {
           "source": "query.path",
           "maps_to": "path",
-          "desc_ru": "Читается у ОБОИХ суффиксов — так делал прежний путь."
+          "impl": "Читается у ОБОИХ суффиксов — так делал прежний путь."
         },
         "headers": {
           "source": "query.headers",
@@ -106,15 +106,15 @@
               "v": "$value"
             }
           },
-          "desc_ru": "Та же сериализация, что extra-headers у naive: 'H1: V1\\r\\nH2: V2' → карта тела. sort_keys — порядок ключей входит в тело, то есть в identity. Битая пара пропускается МОЛЧА: код naive_extra_headers_invalid объявлен у naive, и под контракт эти заголовки не попадают (так было и на прежнем пути)."
+          "impl": "Та же сериализация, что extra-headers у naive: 'H1: V1\\r\\nH2: V2' → карта тела. sort_keys — порядок ключей входит в тело, то есть в identity. Битая пара пропускается МОЛЧА: код naive_extra_headers_invalid объявлен у naive, и под контракт эти заголовки не попадают (так было и на прежнем пути). ДЕФЕКТ, ВОСПРОИЗВЕДЁН НАМЕРЕННО: имя параметра тут 'headers', а не 'extra-headers', как у naive и как пишут реальные ссылки — обе фикстуры b480 (extra_headers_https и extra_headers_unsorted) шлют 'extra-headers' и теряют заголовки ЦЕЛИКОМ, на ОБОИХ суффиксах схемы. В DELTAS.md этого случая нет, поэтому поведение оставлено как есть; починка — отдельное решение владельца."
         }
       },
       "include": [
-        "tls#uri.trojan_convention",
-        "dialer.keep_alive#uri"
+        "tls#uri",
+        "dialer#uri"
       ],
       "unknown_key": {
-        "action": "drop",
+        "action": "keep",
         "code": "uri_param_unknown"
       },
       "emit": {
@@ -125,10 +125,7 @@
             "*": "proxy-http"
           }
         },
-        "param_order": [
-          "headers",
-          "path"
-        ]
+        "param_order": "alphabetical"
       }
     }
   }

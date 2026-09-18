@@ -3,16 +3,31 @@
   "mappers": {
     "xray": {
       "body_source": "xray",
-      "detect": { "json": { "value_of": { "protocol": "vmess" } } },
+      "detect": {
+        "json": {
+          "value_of": {
+            "protocol": "vmess"
+          }
+        }
+      },
       "forms": [
         {
           "id": "vnext",
-          "detect": { "json": { "type_of": { "settings.vnext": "array" } } },
+          "detect": {
+            "json": {
+              "type_of": {
+                "settings.vnext": "array"
+              }
+            }
+          },
           "space": "json",
           "base": "settings.vnext.0"
         }
       ],
-      "defaults": { "type": "vmess", "server_port": 443 },
+      "defaults": {
+        "type": "vmess",
+        "server_port": 443
+      },
       "params": {
         "address": {
           "source": "json.$base.address",
@@ -41,14 +56,14 @@
             "null": "auto",
             "undefined": "auto"
           },
-          "desc_ru": "§459 — то же правило написания, что у маппера ссылки. Ключ обязан ПОЯВИТЬСЯ в теле даже при пустом значении: у ядра поле без omitempty, опущенный ключ снял бы узел кодом field_missing. Годность судит реестр (enum + on_invalid coerce auto)."
+          "impl": "§459 — то же правило написания, что у маппера ссылки. Ключ обязан ПОЯВИТЬСЯ в теле даже при пустом значении: у ядра поле без omitempty, опущенный ключ снял бы узел кодом field_missing. Годность судит реестр (enum + on_invalid coerce auto)."
         },
         "alterId": {
           "source": "json.$base.users.0.alterId",
           "maps_to": "alter_id",
           "type": "int",
           "materialize_default": true,
-          "desc_ru": "В отличие от ссылки, здесь alter_id пишется ВСЕГДА, в том числе нулём (прежняя ветка Xray клала его безусловно)."
+          "impl": "В отличие от ссылки, здесь alter_id пишется ВСЕГДА, в том числе нулём (прежняя ветка Xray клала его безусловно)."
         },
         "$extra_vnext": {
           "source": "json.settings.vnext",
@@ -58,7 +73,7 @@
             "action": "note",
             "code": "xray_extra_entries_dropped"
           },
-          "desc_ru": "vnext[1..] отбрасываются; сегодня молча."
+          "impl": "vnext[1..] отбрасываются; сегодня молча."
         },
         "$extra_users": {
           "source": "json.$base.users",
@@ -70,8 +85,15 @@
           }
         }
       },
-      "include": ["transports#xray", "tls#xray", "dialer.keep_alive#xray"],
-      "unknown_key": { "action": "drop", "code": "json_field_unknown" },
+      "include": [
+        "transports#xray",
+        "tls#xray",
+        "dialer#xray"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "json_field_unknown"
+      },
       "emit": null
     }
   }
