@@ -320,13 +320,25 @@ void main() {
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
-    test('hysteria2: мусор → chrome + warning (тот же tls.NewClient ядра)',
-        () {
-      final spec =
-          parseHysteria2('hysteria2://p@h:443?fp=bogus&sni=x.com#L')!;
-      expect(spec.tls.fingerprint, 'chrome');
-      expect(spec.warnings, contains(const UnknownFingerprintWarning('bogus')));
-    });
+    test('hysteria2: отпечаток снимает реестр, кода о «неизвестном» НЕТ', () {
+      // §472 шаг 5 — на конвейере блок `tls.utls` доезжает до санитайзера, и
+      // правило `forbidden_for` снимает его ЦЕЛИКОМ с кодом
+      // `tls_not_applicable_quic`. Отпечаток до модели не доходит вовсе.
+      //
+      // Кода `utls_fp_unknown` здесь нет намеренно, и это записано ещё §469:
+      // отпечаток, который на QUIC в принципе не применяется, ядру
+      // неизвестным быть не может — корпус его у QUIC-схем не ждёт. Прежде
+      // код появлялся побочно, от `normalizeTlsFingerprint` на пути в модель.
+      final spec = parseHysteria2('hysteria2://p@h:443?fp=bogus&sni=x.com#L')!;
+      expect(spec.tls.fingerprint, isNull, reason: 'блок снят санитайзером');
+      expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
+      final w = spec.warnings
+          .whereType<RegistryWarning>()
+          .where((w) => w.code == 'tls_not_applicable_quic');
+      expect(w, hasLength(1));
+      // CANON §6 — `value` называет написанное автором, а не подмену.
+      expect(w.first.value, 'map[enabled:true fingerprint:bogus]');
+    }, skip: skip);
 
     test('proxy-https: псевдоним молча', () {
       final spec = parseHttpProxy(
@@ -342,17 +354,35 @@ void main() {
 
     test('hysteria2 URI с fp → emit-конфиг БЕЗ utls', () {
       final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
-      expect(spec.tls.fingerprint, 'chrome', reason: 'в модели fp живёт');
+      // §472 шаг 5 — блок снят САНИТАЙЗЕРОМ, до модели он не доезжает.
+      // Прежде он доезжал (`spec.tls.fingerprint == 'chrome'`) и срезался
+      // позже, на эмите: `toSingboxForQuic`. Тело узла от переезда не
+      // изменилось — `utls` в нём не было и тогда.
+      expect(spec.tls.fingerprint, isNull);
       final tls = emitTls(spec);
       expect(tls.containsKey('utls'), isFalse,
           reason: 'uTLS поверх QUIC = мёртвая нода');
       expect(tls['server_name'], 'x.com', reason: 'остальной TLS цел');
-    });
+    }, skip: skip);
 
-    test('hysteria2 round-trip URI сохраняет fp (данные не теряются)', () {
+    test('hysteria2 round-trip: fp в ссылку не возвращается, и это верно', () {
+      // ИЗМЕНЕНИЕ ПОВЕДЕНИЯ, названное в спеке 472 (раздел 11.6). Прежде
+      // отпечаток жил в модели только ради обратной записи в ссылку: в тело
+      // он не попадал никогда (`toSingboxForQuic`), на соединение не влиял, а
+      // `toUri()` его возвращал — и ссылка выглядела так, будто параметр
+      // действует. Санитайзер снимает блок вместе со значением, и круг даёт
+      // ссылку без мусора.
+      //
+      // Тот же класс, что `xhttp-mode-invalid` у vless на шаге 3: тело и
+      // identity прежние, расходится только текст пересобранной ссылки — в
+      // сторону очистки.
       final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
-      expect(spec.toUri(), contains('fp=chrome'));
-    });
+      expect(spec.toUri(), isNot(contains('fp=')));
+      // Узел от этого не страдает: он и раньше поднимался без отпечатка.
+      expect(spec.toUri(), contains('sni=x.com'));
+      expect(parseUri(spec.toUri())!.emit(TemplateVars.empty).map,
+          spec.emit(TemplateVars.empty).map);
+    }, skip: skip);
 
     test('tuic из sing-box JSON с fp → emit-конфиг БЕЗ utls', () {
       final spec = parseSingboxEntry({

@@ -201,6 +201,15 @@ final class _Ctx {
   final warnings = <RegistryWarning>[];
   bool dropNode = false;
 
+  /// §472 шаг 5 — снят ВЛОЖЕННЫЙ объект, а не узел: у него не хватило поля,
+  /// объявленного `required` внутри него самого.
+  ///
+  /// Флаг живёт ровно один вызов `_sanitizeObjectField`: тот ставит его в
+  /// `false` перед спуском и читает сразу после. Отдельный от [dropNode] он
+  /// потому, что и отказ другой: узел остаётся, пропадает одна его секция
+  /// (`hysteria2.obfs` без пароля — узел живёт без обфускации).
+  bool dropObject = false;
+
   /// Снимок уже проверенных значений по абсолютному пути от корня тела.
   ///
   /// Связи (`conflicts`/`requires`) адресуются именно так
@@ -240,6 +249,20 @@ final class _Ctx {
           : RegistrySanitizer.renderWarningValue(value, secret: secret),
       params: params,
     ));
+  }
+
+  /// §472 шаг 5 — параметры кода, объявленного у `required`-поля.
+  ///
+  /// Текст такого кода говорит о БЛОКЕ, и назвать блок он может только
+  /// соседним полем: `obfs_password_missing` печатает `{type}` — какую именно
+  /// обфускацию сняли. Значение берётся из ИСХОДНОГО объекта: к этому моменту
+  /// разбор до соседа мог и не дойти, а в теле он уже лежит.
+  ///
+  /// Соседа нет или он не строка — параметра нет вовсе: подстановка `{type}`
+  /// останется видна в тексте, и это честнее выдуманного значения.
+  Map<String, String> _requiredParams(Map<String, dynamic> src) {
+    final type = src['type'];
+    return type is String && type.isNotEmpty ? {'type': type} : const {};
   }
 
   /// Обход объекта по схеме. [prefix] — путь от корня тела (пустой у корня),
@@ -297,9 +320,41 @@ final class _Ctx {
         }
         // `required` без поля — запись уходит целиком (24.1.7): ядро такую
         // не принимает и роняет весь конфиг.
+        //
+        // §472 шаг 5 — но только на КОРНЕ тела. Внутри вложенного объекта
+        // единица отказа — сам объект, а не узел: реестр пишет это прямо у
+        // `hysteria2.obfs.password` («отсутствие пароля снимает блок obfs
+        // целиком, узел живёт без обфускации»), и корпус ждёт того же
+        // (`uri/hysteria2/obfs_no_password_dropped` — узел с телом и одним
+        // кодом `obfs_password_missing`). Прежний код ронял такой узел
+        // ЦЕЛИКОМ; заметить это было нечем, пока obfs собирал рукописный
+        // `normalizeHysteria2Obfs` до санитайзера, а в корпусе тел кейса без
+        // пароля нет вовсе.
+        //
+        // Путь кода при этом не теряется: он стоит в `params.field`, как и
+        // прежде, — форма записи у `field_missing` такая (адреса у
+        // отсутствующего поля нет, есть имя).
+        //
+        // Форма записи у двух кодов разная, и разводит их сам реестр. Общий
+        // `field_missing` — про УЗЕЛ («узел отброшен»), адреса у него нет, имя
+        // поля лежит в `params.field`. Код, объявленный у поля через `code`, —
+        // про БЛОК (`obfs_password_missing`: «весь блок обфускации снят, узел
+        // подключается без обфускации»), и он адресуется полем: ожидание
+        // корпуса называет `path: obfs.password`, а `params` у него свои
+        // (`type` — какую обфускацию сняли).
         if (f.required) {
-          dropNode = true;
-          warn(f.code ?? 'field_missing', params: {'field': _join(prefix, key)});
+          final own = f.code;
+          if (own == null) {
+            warn('field_missing', params: {'field': _join(prefix, key)});
+          } else {
+            warn(own, path: _join(prefix, key), params: _requiredParams(src));
+          }
+          if (prefix.isEmpty) {
+            dropNode = true;
+          } else {
+            dropObject = true;
+            return out;
+          }
         }
         continue;
       }
@@ -441,8 +496,19 @@ final class _Ctx {
       return _sanitizeValue(value, sub, path);
     }
     if (value is! Map) return _invalid(f, path, value);
+    // §472 шаг 5 — та же граница, что у объекта: не хватило `required` внутри
+    // общей суб-схемы — снимается она, а не узел. Сегодня таких полей в
+    // `tls`/`multiplex`/`dialer` нет ни одного на верхнем уровне (все четыре
+    // лежат глубже, во вложенных объектах), но правило должно быть одно на
+    // оба спуска — иначе оно зависело бы от того, описано поле ссылкой или
+    // объектом.
+    dropObject = false;
     final cleaned = sanitizeObject(
         value.cast<String, dynamic>(), shared.order, shared.fields, path);
+    if (dropObject) {
+      dropObject = false;
+      return const _Value.drop();
+    }
     return _Value.keep(cleaned);
   }
 
@@ -454,8 +520,16 @@ final class _Ctx {
     // задаёт не реестр, внутрь санитайзер не смотрит.
     if (fields == null) return _Value.keep(map);
 
+    // §472 шаг 5 — объект, которому не хватило собственного `required`-поля,
+    // снимается целиком, а узел живёт. Флаг гасится ПЕРЕД спуском: он
+    // относится к этому объекту, а не к соседу, разобранному раньше.
+    dropObject = false;
     final cleaned = sanitizeObject(map, f.order ?? const [], fields, path);
     if (dropNode) return const _Value.drop();
+    if (dropObject) {
+      dropObject = false;
+      return const _Value.drop();
+    }
 
     // §467 — `all_or_nothing` НЕ влечёт действия санитайзера.
     //

@@ -189,10 +189,19 @@ void main() {
       expect(_byCode(r, 'field_missing').params['field'], 'uuid');
     }, skip: skip);
 
-    test('required внутри объекта: reality без public_key → drop_node', () {
-      // `required` действует, когда объект-носитель ЕСТЬ: блок reality
-      // необязателен, но без public_key он неработоспособен, и ядро такую
-      // запись не примет.
+    test('required внутри объекта: reality без public_key → снят БЛОК, узел жив',
+        () {
+      // §472 шаг 5 — единица отказа у вложенного `required` это САМ ОБЪЕКТ, а
+      // не узел. Реестр пишет это прямо (`tls.json` → `reality.public_key`,
+      // impl): «public_key здесь required, поэтому мусорный pbk снимает блок
+      // целиком и узел деградирует до plain TLS».
+      //
+      // Прежнее ожидание («drop_node») читало правило корневым и роняло весь
+      // узел. Тем же чтением ронялся hysteria2 без `obfs-password`, хотя и
+      // реестр, и текст кода `obfs_password_missing`, и ожидание корпуса
+      // (`uri/hysteria2/obfs_no_password_dropped`) говорят «узел живёт без
+      // обфускации». На корне правило не изменилось — тест выше
+      // («vless без uuid → drop_node») зелёный.
       final r = _san(_vless({
         'tls': {
           'enabled': true,
@@ -200,7 +209,9 @@ void main() {
           'reality': {'enabled': true},
         }
       }));
-      expect(r.body, isNull);
+      expect(r.body, isNotNull, reason: 'узел деградирует до plain TLS');
+      expect((r.body!['tls'] as Map).containsKey('reality'), isFalse,
+          reason: 'снят весь блок REALITY');
       expect(_byCode(r, 'field_missing').params['field'],
           'tls.reality.public_key');
     }, skip: skip);

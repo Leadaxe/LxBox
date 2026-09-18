@@ -74,6 +74,12 @@ bool insecureFromQuery(Map<String, String> q) {
 /// Значения кладутся КАК ПРИШЛИ: отпечаток в чужом написании
 /// (`HelloChrome_120`), ALPN с остатком percent-кодирования, `short_id` не в
 /// hex. Написание диалекта — работа маппера, годность — работа реестра.
+/// [sniHeuristic] — правило `sni_heuristic_falls_back_to_server`: имя без
+/// точки и двоеточия (либо `🔒` из витрин подписок) адресом быть не может и
+/// уступает серверу. Реестр объявляет его у hysteria2 и anytls; у trojan и
+/// vless его НЕТ ни на одном входе LxBox, и включение там сдвинуло бы тела и
+/// identity живых узлов (расхождение названо в `mapper_rules_coverage_test`).
+/// Поэтому это аргумент, а не общее поведение.
 Map<String, dynamic>? tlsMapFromQuery(
   Map<String, String> q,
   String server,
@@ -83,6 +89,7 @@ Map<String, dynamic>? tlsMapFromQuery(
   List<String> fpAliases = const ['fp'],
   String defaultFingerprint = '',
   bool reality = false,
+  bool sniHeuristic = false,
   List<NodeWarning>? warnings,
 }) {
   // §320 — `ech=` в тело не переносится (правило `ech_param_dropped_with_code`
@@ -111,6 +118,14 @@ Map<String, dynamic>? tlsMapFromQuery(
       sni = v;
       break;
     }
+  }
+  // `sni_heuristic_falls_back_to_server` — выбор ИСТОЧНИКА поля: имя без
+  // точки и двоеточия адресом быть не может, `🔒` это витринный значок
+  // подписки. Оба проекта судят так у hysteria2 и anytls.
+  if (sniHeuristic &&
+      sni.isNotEmpty &&
+      (sni == '🔒' || (!sni.contains('.') && !sni.contains(':')))) {
+    sni = '';
   }
   if (sni.isEmpty) sni = server;
 

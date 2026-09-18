@@ -1170,11 +1170,18 @@ NodeSpec? parseSingboxEntry(
         obfs?['password']?.toString() ?? '',
         hy2Warnings,
       );
-      // §469 — uTLS/REALITY на QUIC: блок снимает эмит (`toSingboxForQuic`),
-      // код ставит разбор. Правило — из реестра, см.
-      // `forbiddenTlsBlockWarnings`.
-      hy2Warnings.addAll(forbiddenTlsBlockWarnings(
-          'hysteria2', tlsBlocksOfBody(entry['tls'])));
+      // §472 шаг 5 — рукописного производителя `tls_not_applicable_quic`
+      // здесь БОЛЬШЕ НЕТ.
+      //
+      // §469 ставил его отсюда потому, что санитайзер разбора смотрел на
+      // `emit()`, где `toSingboxForQuic` блоки уже срезал. С шага 1 у
+      // JSON-узла есть проход по ДОСЛОВНОЙ карте (`annotateFromRawBody`), и
+      // правило реестра `forbidden_for` на `tls.utls`/`tls.reality` он
+      // исполняет сам — по тому же телу, которое читала эта ветка, и с тем же
+      // `value`. Дедуп по `(code, path)` дубль снимал, так что видно ничего не
+      // было; лишним производитель от этого быть не перестал.
+      //
+      // Тело узла не меняется: блоки по-прежнему срезает эмиттер.
       return Hysteria2Spec(
         warnings: hy2Warnings,
         id: newUuidV4(),

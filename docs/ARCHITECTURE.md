@@ -284,17 +284,33 @@ JSON / Xray ───┘                  │
   canonicalised one (`chrome`), and which survived would be decided by call
   order rather than by a rule.
 
-- Fields the registry does **not** describe because the launcher never writes
-  them (`dialer.json` → `skipped`: the three §453 TCP keep-alive keys) travel
-  in `UriMapping.extensionFields` and are merged into the body *after* the
-  sanitizer. Handing them to it would cost the setting: an unlisted key is
-  dropped with `unknown_key`, and these keys are ones the core knows and the
-  user typed. The gap closes when the registry describes them as fields.
+- The three §453 TCP keep-alive keys travel in `UriMapping.extensionFields`,
+  which the pipeline merges into the body **before** the sanitizer. They used
+  to bypass it — the registry filed them under `dialer.json` → `skipped` and an
+  unlisted key is dropped with `unknown_key`, which would have cost the user's
+  own setting. Since contract 1.1.6 (§474) `dialer.json` describes them as
+  fields and they are judged like everything else; the separate map stays only
+  because their *source* is separate (link parameters outside the protocol's
+  schema, collected by a shared helper). QUIC schemes pass no such map at all:
+  TCP keep-alive is meaningless over UDP, and `Hysteria2Spec`/`TuicSpec` have
+  no field for it.
 
-Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**
-(`kPipelineSchemes`). The remaining nine schemes keep their parsers, and
-`transport.dart` still serves them — it was not touched (`parseVlessTls` in
-particular is still what anytls reads).
+Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**,
+**hysteria2** (`kPipelineSchemes`, which also lists the scheme alias `hy2`).
+The remaining schemes keep their parsers, and `transport.dart` still serves
+them — it was not touched (`parseVlessTls` in particular is still what anytls
+reads).
+
+**QUIC brought one structural change** (step 5). `tls.utls` and `tls.reality`
+are forbidden on QUIC schemes, and until this step the *emitter* stripped them
+(`TlsSpec.toSingboxForQuic`) — earlier than the sanitizer, which looked at
+`emit()`. The registry rule therefore never saw the blocks, and a hand-written
+pass (`forbiddenTlsBlockWarnings`, §469) had to report them. On the pipeline
+the blocks reach the sanitizer in the mapper's raw map, `forbidden_for` +
+`forbidden_codes` removes them and reports `tls_not_applicable_quic` itself,
+one code per block. The emitter keeps its strip — a node edited in the Settings
+form can still acquire a fingerprint — but it is no longer the only thing
+standing between the block and the config.
 
 A mapper takes the link's **raw text**, not a `Uri`: for vmess and shadowsocks
 the link is not a URI at all — `vmess://` carries base64 where a URI keeps its

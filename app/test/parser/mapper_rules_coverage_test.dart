@@ -27,15 +27,25 @@ const _contractRoot = 'contract';
 
 /// Правила, которые LxBox сегодня НЕ исполняет, с причиной. Пустая причина
 /// недопустима: молчаливое расхождение и есть то, что страж ловит.
+///
+/// Ключ — `id` правила либо `id@схема`: одно и то же правило реестра у разных
+/// схем может быть и реализовано, и нет. §472 шаг 5 сделал это различие
+/// обязательным: `sni_heuristic_falls_back_to_server` у hysteria2 исполняется
+/// (и всегда исполнялся), а у trojan/vless/vmess — нет.
 const Map<String, String> _knownGaps = {
-  // Не реализовано НИКОГДА (ни старым парсером, ни конвейером): у trojan и
-  // vless `sni` без точки и двоеточия уезжает в `server_name` как есть.
-  // Включение правила изменило бы тела и identity живых узлов, поэтому оно
-  // требует отдельного решения владельца, а не попутной правки. У hysteria2 и
-  // anytls та же эвристика реализована (их парсеры), у trojan и vless — нет.
-  'sni_heuristic_falls_back_to_server':
-      'не реализовано в LxBox ни на одном входе trojan/vless/vmess; включение '
-          'меняет тела и identity — отдельное решение (спека 472, шаг 3+)',
+  // Не реализовано НИКОГДА (ни старым парсером, ни конвейером): у trojan,
+  // vless и vmess `sni` без точки и двоеточия уезжает в `server_name` как
+  // есть. Включение правила изменило бы тела и identity живых узлов, поэтому
+  // оно требует отдельного решения владельца, а не попутной правки.
+  'sni_heuristic_falls_back_to_server@trojan':
+      'не реализовано в LxBox ни на одном входе trojan; включение меняет тела '
+          'и identity — отдельное решение (спека 472, шаг 2)',
+  'sni_heuristic_falls_back_to_server@vless':
+      'не реализовано в LxBox ни на одном входе vless; включение меняет тела '
+          'и identity — отдельное решение (спека 472, шаг 3)',
+  'sni_heuristic_falls_back_to_server@vmess':
+      'не реализовано в LxBox ни на одном входе vmess; включение меняет тела '
+          'и identity — отдельное решение (спека 472, шаг 4)',
 };
 
 /// Правила, покрытые тестами этого файла: id → имя теста.
@@ -56,6 +66,10 @@ const Map<String, String> _covered = {
   // §472 шаг 4 — правило, которое добавил переезд vmess.
   'legacy_cleartext_fallback':
       'не-JSON payload читается как method:uuid@host:port',
+  // §472 шаг 5 — правила, которые добавил переезд hysteria2.
+  'sni_heuristic_falls_back_to_server@hysteria2':
+      'sni без точки/двоеточия и 🔒 уступают адресу сервера',
+  'mport_range_spec': 'mport=1000-2000,3000 → server_ports [low:high]',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -103,7 +117,13 @@ void main() {
     test('у каждой переехавшей схемы каждое mapper-правило названо', () {
       for (final scheme in kPipelineSchemes) {
         for (final id in _mapperRuleIds(scheme)) {
-          final known = _covered.containsKey(id) || _knownGaps.containsKey(id);
+          // Сначала запись ДЛЯ ЭТОЙ СХЕМЫ, потом общая: одно правило реестра
+          // у разных схем бывает и реализовано, и нет (§472 шаг 5).
+          final qualified = '$id@$scheme';
+          final known = _covered.containsKey(qualified) ||
+              _knownGaps.containsKey(qualified) ||
+              _covered.containsKey(id) ||
+              _knownGaps.containsKey(id);
           expect(
             known,
             isTrue,
@@ -245,6 +265,57 @@ void main() {
         spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
         isNot(contains('packet_encoding_unknown')),
       );
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (hysteria2)', () {
+    test('sni без точки/двоеточия и 🔒 уступают адресу сервера', () {
+      // `sni_heuristic_falls_back_to_server` — у hysteria2 правило ЕСТЬ на
+      // обоих проектах, в отличие от trojan/vless/vmess (см. _knownGaps).
+      for (final bad in ['localhost', '🔒']) {
+        final spec = parseUri(
+            'hysteria2://p@h.example:443?sni=${Uri.encodeComponent(bad)}#n')!;
+        expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
+            'h.example',
+            reason: 'sni=$bad');
+      }
+      final ok = parseUri('hysteria2://p@h.example:443?sni=a.b#n')!;
+      expect((ok.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
+          'a.b');
+    }, skip: skip);
+
+    test('mport=1000-2000,3000 → server_ports [low:high]', () {
+      // `mport_range_spec` — форма записи диапазона: дефис ссылки становится
+      // двоеточием ядра, одиночный порт — парой `N:N`.
+      final spec =
+          parseUri('hysteria2://p@h.example:443?mport=1000-2000,3000#n')!;
+      expect(spec.emit(TemplateVars.empty).map['server_ports'],
+          ['1000:2000', '3000:3000']);
+      // Тот же конвейер принимает диапазон прямо из authority, где его не
+      // читает даже `Uri.parse`.
+      final auth = parseUri('hysteria2://p@h.example:20000-30000/#n')!;
+      expect(auth.emit(TemplateVars.empty).map['server_ports'],
+          ['20000:30000']);
+      expect(auth.emit(TemplateVars.empty).map['server_port'], 20000);
+    }, skip: skip);
+
+    test('fp в написании uTLS → имя семейства (и снимается как QUIC-блок)', () {
+      // `utls_xray_hello_names` работает и здесь: перевод написания делает
+      // маппер, а снимает блок правило `forbidden_for` — уже переведённым,
+      // поэтому `value` кода называет семейство.
+      final spec = parseUri(
+          'hysteria2://p@h.example:443?sni=x.com&fp=hellofirefox_auto#n')!;
+      final w = spec.warnings
+          .whereType<RegistryWarning>()
+          .firstWhere((w) => w.code == 'tls_not_applicable_quic');
+      expect(w.value, 'map[enabled:true fingerprint:firefox]');
+    }, skip: skip);
+
+    test('alpn одной строкой → список тела', () {
+      final spec =
+          parseUri('hysteria2://p@h.example:443?sni=x.com&alpn=h3,h3-29#n')!;
+      final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+      expect(tls['alpn'], ['h3', 'h3-29']);
     }, skip: skip);
   });
 

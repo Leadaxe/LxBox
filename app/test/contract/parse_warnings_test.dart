@@ -147,22 +147,27 @@ void main() {
   });
 
   group('§460 W2a — дедуп с рукописными кодами', () {
-    // §472 шаг 3 — прежний пример на vless больше не годится: `flow` вне
-    // набора судит РЕЕСТР, рукописного `DeprecatedFlowWarning` на этом пути
-    // нет. Дедуп проверяется на схеме, которая ещё не переехала (tuic,
-    // шаг 5): он нужен ровно там, где рукописное правило и правило реестра
-    // говорят об одном поле.
+    // Пример живёт на схеме, которая ЕЩЁ НЕ переехала: дедуп нужен ровно там,
+    // где рукописное правило и правило реестра говорят об одном поле, а у
+    // переехавшей схемы источник кода по определению один.
+    //
+    // История переездов: vless (был здесь до шага 3) → tuic (шаги 3–4) →
+    // anytls. Шаг 5 увёл tuic на конвейер, и пример переехал на anytls —
+    // `min_idle_session` там судит рукописный `AnyTlsMinIdleInvalidWarning`, а
+    // реестр объявляет на том же поле тот же код `anytls_min_idle_invalid`
+    // (`protocols/anytls.json` → `on_invalid`). anytls идёт шагом 6; когда
+    // переедет и он, пример придётся снова перенести — на naive, http, socks
+    // или ssh.
     test('рукописный класс перебивает код реестра на том же коде', () {
       final n = _one(
-        'tuic://11111111-1111-1111-1111-111111111111:pw@example.com:443'
-        '?congestion_control=nonsense&sni=a.example#node',
+        'anytls://pw@example.com:443?sni=a.example&min_idle_session=-5#node',
       );
       final hand =
-          n.warnings.whereType<TuicCongestionInvalidWarning>().toList();
+          n.warnings.whereType<AnyTlsMinIdleInvalidWarning>().toList();
       expect(hand, isNotEmpty, reason: 'рукописное предупреждение на месте');
       // Реестр тот же код вторым сообщением не дублирует.
       expect(_registry(n).map((w) => w.code),
-          isNot(contains('tuic_congestion_invalid')));
+          isNot(contains('anytls_min_idle_invalid')));
     }, skip: skip);
 
     // §472 шаг 3 — а у переехавшей схемы источник кода РОВНО один: реестр.

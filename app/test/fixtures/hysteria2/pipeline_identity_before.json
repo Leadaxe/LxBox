@@ -1,0 +1,97 @@
+{
+  "note": "§472 шаг 5 — identity-хеши hysteria2-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет hysteria2_pipeline_invariants_test.dart.",
+  "cases": {
+    "allowinsecure_alias": {
+      "uri": "hysteria2://pass123@203.0.113.1:443?sni=hy.example-1.com&allowInsecure=1#h",
+      "identity": "4e4c59fcc5c01865b636da90f9635fdf4a020fdbcc87e7f0404f9a591ae8aa4f"
+    },
+    "alpn_multiple": {
+      "uri": "hysteria2://pass123@example-1.com:443?alpn=h3,h2#Test",
+      "identity": "15b4ae53c93381ffa96402db41d9bbe49f9b7868c510ebea6bf65b64fc1afd72"
+    },
+    "authority_port_range": {
+      "uri": "hysteria2://pass123@example-1.com:20000-50000/?sni=example-1.com#r",
+      "identity": "7abb5037c27112384943d3e46d1c3fa4140875b2c7258e51f19bfb6e830954bc"
+    },
+    "base64_payload_crlf": {
+      "uri": "hysteria2://MTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExQGh5Mi5leGFtcGxlLTguY29tOjI3MjAwLz9pbnNlY3VyZT0wJnNuaT1oeTIuZXhhbXBsZS04LmNvbSZtcG9ydD0yNzIwMC0yODAwMCMlRTUlODklQTklRTQlQkQlOTklRTYlQjUlODElRTklODclOEYlRUYlQkMlOUE5Mi43MiUyMEdCDQo=",
+      "identity": "a648782e128e8d85f83c3f9ec2fdf187c72cf9fc7bd9a26b547067c29f70c523"
+    },
+    "basic": {
+      "uri": "hysteria2://testpass123@example-1.com:443?sni=example-1.com#Hy2%20Basic",
+      "identity": "fa119e4a5a4bb131536d1fdfab0f2ec5606e325e6268a585e3c14e3ee8c57c54"
+    },
+    "basic_sni": {
+      "uri": "hysteria2://pass123@example-1.com:443?sni=example-1.com#Test Server",
+      "identity": "cb576f61bca9f20207b7347098a10a76eda32921c3d9f9988af28ebe6154095d"
+    },
+    "default_port_443": {
+      "uri": "hysteria2://pass123@example-1.com#Test",
+      "identity": "cb576f61bca9f20207b7347098a10a76eda32921c3d9f9988af28ebe6154095d"
+    },
+    "empty_password_warn": {
+      "uri": "hysteria2://@example-1.com:443#Test",
+      "identity": "3d6c6b8dd6e3d63e0b8dca2e9868770a52052c8eb58b2836631240b00221ed97"
+    },
+    "fp_present_no_utls_quic": {
+      "uri": "hysteria2://pass123@example-1.com:443?fp=chrome&sni=x.example.com#hy2-fp",
+      "identity": "aa68b5a225315546a2869cabdc28c8781d137abe7134cfa88a15f4f51c042ae1"
+    },
+    "hy2_alias": {
+      "uri": "hy2://testpass123@example-3.com:8443?insecure=1&sni=example-3.com#Hy2%20Alias",
+      "identity": "72f2f9f4d24c61c626e4eeba4d1c8654f24d19ccae83f994a8197a4b349cf34a"
+    },
+    "hy2_scheme_alias": {
+      "uri": "hy2://pass123@example-1.com:443?sni=example-1.com#Test Server",
+      "identity": "cb576f61bca9f20207b7347098a10a76eda32921c3d9f9988af28ebe6154095d"
+    },
+    "mport_authority_comma_recovery": {
+      "uri": "hysteria2://pass123@example-1.com:443,20000-30000/?insecure=1#hop",
+      "identity": "d87a3ffff4c2ff829e84df53324a97a5ec97922e7eaa15dd343952d342f27a53"
+    },
+    "mport_comma_list": {
+      "uri": "hysteria2://pass123@example-1.com:443?mport=41000,42000-43000&sni=example-1.com#t",
+      "identity": "d3243a5698a80b03143f40d51da660ebfb5a9f242834db04d58d70d62df8cc07"
+    },
+    "mport_range_alpn": {
+      "uri": "hysteria2://pass123@example-1.com:443?mport=10000-20000&sni=example-1.com&alpn=h3&insecure=0#Test",
+      "identity": "a03b557005d84f870cabb24d195c57bedfbd62210cb1c95649996fc0ac12d663"
+    },
+    "obfs_gecko_packet_sizes": {
+      "uri": "hysteria2://pass123@example-2.com:443?obfs=gecko&obfs-password=obfspass1&obfs-min-packet-size=100&obfs-max-packet-size=1200&sni=example-2.com#hy2-gecko",
+      "identity": "1148f1629369ae51a426a8f69e7cadaa972d29038710ff6eeaeb964317702816"
+    },
+    "obfs_no_password_dropped": {
+      "uri": "hysteria2://pass123@example-2.com:443?obfs=gecko&sni=example-2.com#hy2-nopass",
+      "identity": "143393a83df4479f9ca598a7b947d20f5c91192d89c31f20a4f4627ca6d81b9c"
+    },
+    "obfs_salamander": {
+      "uri": "hysteria2://pass123@example-2.com:443?obfs=salamander&obfs-password=obfspass1&alpn=h3&sni=example-2.com#hy2-sala",
+      "identity": "e748878da51e354460241c1165accff8d1d5d981bb606830889ffb34a2bf5b8b"
+    },
+    "obfs_unknown_dropped": {
+      "uri": "hysteria2://pass123@example-2.com:443?obfs=xyz&obfs-password=obfspass1&sni=example-2.com#hy2-badobfs",
+      "identity": "143393a83df4479f9ca598a7b947d20f5c91192d89c31f20a4f4627ca6d81b9c"
+    },
+    "ports_query_alias": {
+      "uri": "hysteria2://pass123@example-1.com:443?ports=5000-6000&sni=example-1.com#t",
+      "identity": "af057f210259e9ef1cfcbdc37a0800266c1e727e39de1b6ee6f3fdd5e06f2031"
+    },
+    "reality_fp_stripped_quic_pair": {
+      "uri": "hysteria2://pass123@example-1.com:443?sni=x.example.com&fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ab#hy2-quic-pair",
+      "identity": "aa68b5a225315546a2869cabdc28c8781d137abe7134cfa88a15f4f51c042ae1"
+    },
+    "salamander_ignores_gecko_sizes": {
+      "uri": "hysteria2://pass123@example-2.com:443?obfs=salamander&obfs-password=obfspass1&obfs-min-packet-size=100&sni=example-2.com#hy2-mixed",
+      "identity": "bafc253a8d1433453511554d393c5fa743bd2709bd045bd6c2ee6963652a362e"
+    },
+    "up_down_mbps": {
+      "uri": "hysteria2://pass123@example-2.com:443?up_mbps=100&down_mbps=200&sni=example-2.com#hy2-mbps",
+      "identity": "ad59bf87b7384d06f8cb7488995a23391d8929854bc36cdd1d366ab9decf96d2"
+    },
+    "utls_fingerprint_pinsha256": {
+      "uri": "hysteria2://pass123@203.0.113.1:443?sni=hy.example-1.com&fingerprint=firefox&pinSHA256=YWJjZGVmZ2g=#h",
+      "identity": "383abfa4e50658a21b2160192a61e7d0aa7c9440de08a0bd8d28175605083b57"
+    }
+  }
+}
