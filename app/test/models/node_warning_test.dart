@@ -44,8 +44,12 @@ void main() {
           'REALITY with uTLS fingerprint "firefox": Xray servers since '
           'v26.9.8 reject this ClientHello. If the connection fails, try '
           '"chrome".');
+      // §468 — severity читается из реестра (`info` в контракте 1.1.2+).
+      // Здесь реестр не загружен, и проверяется именно запасной путь:
+      // незнакомый код не глушится, а остаётся `warning`.
       expect(const RealityFingerprintWarning('firefox').severity,
-          WarningSeverity.warning);
+          WarningSeverity.warning,
+          reason: 'реестр не загружен — фолбэк registrySeverity');
     });
 
     // §279 — XhttpResetReason: message() обязан воспроизводить дословно

@@ -11,6 +11,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/contract/registry.dart';
 
 const _contractRoot = 'contract';
@@ -24,9 +25,19 @@ void main() {
       await ContractRegistry.I.loadFromDirectory(_contractRoot);
     });
 
-    test('реестр 1.1.1 грузится', () {
+    test('реестр 1.1.3 грузится', () {
       expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, '1.1.1');
+      expect(ContractRegistry.I.version, '1.1.3');
+    }, skip: synced ? null : 'контракт не синхронизирован');
+
+    // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
+    // класс обязан её оттуда читать: владелец понизил `reality_fp_not_chrome`
+    // до `info`, и зашитая в классе копия разошлась бы с нормой.
+    test('severity reality_fp_not_chrome — info из реестра', () {
+      expect(ContractRegistry.I.textFor('reality_fp_not_chrome')?.severity,
+          'info');
+      expect(const RealityFingerprintWarning('edge').severity,
+          WarningSeverity.info);
     }, skip: synced ? null : 'контракт не синхронизирован');
 
     test('схема vless раскрывает tls / transports / dialer', () {
@@ -114,7 +125,7 @@ void main() {
       // санитайзер в APK работал бы по другой схеме, чем тесты.
       final mirror = ContractRegistry.I;
       await mirror.loadFromDirectory('assets/contract');
-      expect(mirror.version, '1.1.1');
+      expect(mirror.version, '1.1.3');
       expect(mirror.schemaFor('vless'), isNotNull);
       // Вернуть загрузку с копии — остальные тесты файла уже отработали, но
       // порядок в группе не нормирован.

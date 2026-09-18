@@ -56,8 +56,8 @@ final class FieldSchema {
 
   bool get allOrNothing => raw['all_or_nothing'] == true;
 
-  /// `trim` | `lower` | `trim_lower` | `hex_only` | `grpc_service_name` —
-  /// нормализация ДО проверки enum/format.
+  /// `trim` | `lower` | `trim_lower` | `hex_only` — нормализация ДО
+  /// проверки enum/format.
   String? get normalize => raw['normalize'] as String?;
 
   /// §464 (W2d) — код, который ставится, если [normalize] ИЗМЕНИЛА значение.

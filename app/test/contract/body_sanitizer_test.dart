@@ -679,26 +679,24 @@ void main() {
       expect(r.body!['down_mbps'], 100);
     }, skip: skip);
 
-    test('normalize grpc_service_name: Xray-форма /<сервис>/Tun сводится', () {
-      final r = _san(_vless({
-        'transport': {'type': 'grpc', 'service_name': '/abcde/Tun'}
-      }));
-      expect((r.body!['transport'] as Map)['service_name'], 'abcde');
-    }, skip: skip);
-
-    test('normalize grpc_service_name: обычное имя не трогается', () {
-      // Ни ведущего «/», ни хвоста «/Tun» — это имя сервиса как есть.
-      for (final pair in const [
-        ('abcde', 'abcde'),
-        ('/abcde', '/abcde'),
-        ('/a/b/Tun', 'a/b'),
-        ('/abcde/Tun|multi', 'abcde'),
+    test('grpc service_name: нормализации нет — значение как есть', () {
+      // §468 (контракт 1.1.3): правило `normalize: grpc_service_name` снято
+      // целиком. Ведущий «/» разбирает ядро v1.14.1-lx.8 само, и любая
+      // правка значения на нашей стороне сломала бы готовый путь.
+      for (final v in const [
+        'abcde',
+        '/abcde',
+        '/abcde/Tun',
+        '/a/b/Tun',
+        '/a/Stream',
+        '/abcde/Tun|multi',
+        'a/b',
       ]) {
         final r = _san(_vless({
-          'transport': {'type': 'grpc', 'service_name': pair.$1}
+          'transport': {'type': 'grpc', 'service_name': v}
         }));
-        expect((r.body!['transport'] as Map)['service_name'], pair.$2,
-            reason: pair.$1);
+        expect((r.body!['transport'] as Map)['service_name'], v, reason: v);
+        expect(r.warnings, isEmpty, reason: v);
       }
     }, skip: skip);
 
@@ -756,7 +754,6 @@ void main() {
     test('неизвестное выражение реестра не роняет и не портит значение', () {
       // Контракт может уехать вперёд кода: выражение, которого санитайзер не
       // знает, обязано остаться незамеченным, а не съесть поле.
-      expect(normalizeGrpcServiceName('/abcde/Tun'), 'abcde');
       final r = _san(_vless({'transport': {'type': 'ws', 'path': '/x'}}));
       expect((r.body!['transport'] as Map)['path'], '/x');
     }, skip: skip);

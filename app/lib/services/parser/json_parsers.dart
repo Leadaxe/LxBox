@@ -6,7 +6,6 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
-import '../contract/body_sanitizer.dart' show normalizeGrpcServiceName;
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
 import 'tcp_keep_alive.dart';
@@ -966,12 +965,10 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       );
     case 'grpc':
       final g = stream['grpcSettings'] as Map? ?? const {};
-      // §464 — то же правило реестра, что и у ссылки: Xray-JSON несёт ту же
-      // форму «/<сервис>/Tun», и разойтись с URI-веткой на одном и том же
-      // узле нельзя (issue #130).
-      return GrpcTransport(
-          serviceName:
-              normalizeGrpcServiceName(g['serviceName']?.toString() ?? ''));
+      // §468 — значение идёт ядру как есть, как и на URI-ветке: ведущий «/»
+      // разбирает ядро v1.14.1-lx.8 само. Перевод §464 снят на обоих входах
+      // сразу — разойтись на одном и том же узле нельзя.
+      return GrpcTransport(serviceName: g['serviceName']?.toString() ?? '');
     case 'http':
     case 'h2':
       final h = stream['httpSettings'] as Map? ?? const {};

@@ -717,42 +717,10 @@ String _normalizeString(String v, String norm) {
         if (_reHexRune.hasMatch(c)) b.write(c.toLowerCase());
       }
       return b.toString();
-    // §464 (W2d) — `grpc_service_name`: Xray-форма «абсолютного пути»
-    // `/service/Tun`, где последний сегмент называет ПОТОК, а не сервис.
-    // Ядро имя потока не настраивает (всегда `Tun`), поэтому ведущий `/` и
-    // хвост `/Tun` снимаются — путь на проводе сохраняется. Всё, что на
-    // `/Tun` не кончается, — обычное имя сервиса и не трогается.
-    case 'grpc_service_name':
-      return normalizeGrpcServiceName(v);
     default:
       _logUnknownExpression('normalize', norm);
       return v;
   }
-}
-
-/// §464 (W2d, правило реестра `normalize: grpc_service_name`, issue #130) —
-/// имя gRPC-сервиса из Xray-формы «абсолютного пути».
-///
-/// `/abcde/Tun` → `abcde`; `/a/b/Tun` → `a/b`; `/abcde/Tun|multi` → `abcde`.
-/// Всё, что не начинается с `/` или не кончается сегментом `Tun`, — обычное
-/// имя сервиса и не трогается.
-///
-/// Публичная: тем же правилом обязаны читать имя парсеры ссылок и Xray-JSON
-/// (§24.7), а два разных «почти одинаковых» алгоритма нормализации — ровно
-/// то, что W2d из парсеров и выносил.
-///
-/// Хвост `|multi` — флаг мультиплекса в диалекте Xray: он висит на сегменте
-/// потока, а не на имени сервиса, и на решение «это Xray-форма» не влияет.
-String normalizeGrpcServiceName(String v) {
-  if (!v.startsWith('/')) return v;
-  final bar = v.indexOf('|');
-  final head = bar < 0 ? v : v.substring(0, bar);
-  final slash = head.lastIndexOf('/');
-  if (slash < 0) return v;
-  // Последний сегмент обязан быть именно `Tun`: иначе это не поток Xray, а
-  // имя сервиса, начинающееся со слэша, и резать его нечего.
-  if (head.substring(slash + 1) != 'Tun') return v;
-  return head.substring(1, slash);
 }
 
 final _reHexRune = RegExp(r'^[0-9a-fA-F]$');

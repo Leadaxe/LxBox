@@ -202,8 +202,12 @@ final class RealityFingerprintWarning extends NodeWarning {
   @override
   String messageWith(GetLocalText t) => t.s("REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".", value);
 
+  /// §468 (контракт 1.1.2) — уровень берётся из реестра, а не из константы:
+  /// владелец понизил код до `info`, и зашитая здесь копия разошлась бы с
+  /// нормативным источником на первом же его изменении. Код узла и его
+  /// severity — данные контракта (24.1.5), а не решение приложения.
   @override
-  WarningSeverity get severity => WarningSeverity.warning;
+  WarningSeverity get severity => registrySeverity('reality_fp_not_chrome');
 }
 
 /// §217 — причина сброса XHTTP-параметра (§279: enum вместо free-text —
