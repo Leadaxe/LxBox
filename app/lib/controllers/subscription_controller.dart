@@ -263,6 +263,10 @@ class SubscriptionController extends ChangeNotifier {
           // ключи, содержимого которых в теле нет.
           final migrated =
               migrateLegacyDisabledKeys(cur.disabledHashes, nodes);
+          // Фича 478 — вердикт ядра пересчётом по телу не воспроизводится:
+          // дописываем его на разобранные узлы, иначе регидрация из кэша
+          // покажет узел выключенным без причины.
+          stampStoredVerdicts(nodes, cur.nodeWarnings);
           final next = cur.copyWith(
             nodes: nodes,
             lastNodeCount: nodes.length,
@@ -2730,6 +2734,8 @@ class SubscriptionController extends ChangeNotifier {
         oldBodies: bodiesByIdentity(current.nodes),
         newBodies: bodiesByIdentity(result.nodes),
       );
+      // Фича 478 — уцелевшие вердикты дописываем на свежеразобранные узлы.
+      stampStoredVerdicts(result.nodes, verdicts.warnings);
 
       final next = current.copyWith(
         name: nextName,

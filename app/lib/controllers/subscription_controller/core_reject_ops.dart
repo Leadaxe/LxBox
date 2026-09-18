@@ -14,6 +14,7 @@ library;
 import 'dart:convert';
 
 import '../../models/core_reject_verdict.dart';
+import '../../models/node_warning.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/template_vars.dart';
@@ -159,11 +160,35 @@ Map<String, String> bodiesByIdentity(List<NodeSpec> nodes) {
   };
 }
 
-/// Вердикт узла подписки → предупреждение для показа (§479). Пусто —
-/// вердикта нет.
-List<RegistryWarningLike> verdictWarningsOf(
-        Map<String, List<StoredWarning>> map, String identity) =>
-    [for (final w in map[identity] ?? const <StoredWarning>[]) w];
+/// Проставить хранимые вердикты на разобранные узлы подписки.
+///
+/// Предупреждения узла в LxBox не хранятся — они вычисляются при разборе
+/// (`parse_all.dart`), и любой пересчёт замещает их целиком. Вердикт ядра
+/// пересчётом по телу НЕ воспроизводится (CANON §9.4: запись авторитетна),
+/// поэтому его дописывает сюда единственное место-правило — иначе каждая
+/// точка пересчёта стирала бы причину молча.
+///
+/// Дедуп по `(code, path)`: вердикт без пути, второго такого на узле не
+/// бывает. Вердикт идёт ПЕРВЫМ — это приговор уровня узла.
+void stampStoredVerdicts(
+  List<NodeSpec> nodes,
+  Map<String, List<StoredWarning>> stored,
+) {
+  if (stored.isEmpty) return;
+  final ids = sourceNodeIdentities(nodes);
+  for (final e in ids.entries) {
+    final ws = stored[e.value];
+    if (ws == null || ws.isEmpty) continue;
+    stampNodeWarnings(e.key, ws);
+  }
+}
 
-/// Псевдоним для читаемости сигнатуры выше.
-typedef RegistryWarningLike = StoredWarning;
+/// То же для одного узла (член папки, ручной сервер).
+void stampNodeWarnings(NodeSpec node, List<StoredWarning> stored) {
+  for (final w in stored) {
+    final made = w.toWarning();
+    node.warnings.removeWhere(
+        (x) => x is RegistryWarning && x.code == made.code && x.path == null);
+    node.warnings.insert(0, made);
+  }
+}

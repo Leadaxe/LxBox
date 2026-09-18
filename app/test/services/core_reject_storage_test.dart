@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller/core_reject_ops.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/core_reject_verdict.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -265,6 +266,43 @@ void main() {
         newBodies: const {id: '{"a":2}'},
       );
       expect(r.warnings[id]!.map((w) => w.code), ['tls_insecure']);
+    });
+  });
+
+  group('вердикт на разобранном узле (§479)', () {
+    test('хранимая запись дописывается в warnings узла первой', () {
+      final nodes = [
+        parseUri('vless://u@h1:443?type=ws&security=tls#A')!,
+        parseUri('vless://u@h2:443?type=ws&security=tls#B')!,
+      ];
+      stampStoredVerdicts(nodes, {
+        'B': [StoredWarning.coreRejected('parse encryption: bad')]
+      });
+      expect(nodes[0].warnings.whereType<RegistryWarning>().where(
+          (w) => w.code == 'core_rejected'), isEmpty);
+      final w = nodes[1].warnings.first as RegistryWarning;
+      expect(w.code, 'core_rejected');
+      expect(w.params['reason'], 'parse encryption: bad');
+    });
+
+    test('повторное проставление не плодит дублей', () {
+      final nodes = [parseUri('vless://u@h:443?type=ws&security=tls#A')!];
+      final stored = {'A': [StoredWarning.coreRejected('bad')]};
+      stampStoredVerdicts(nodes, stored);
+      stampStoredVerdicts(nodes, stored);
+      expect(
+          nodes.single.warnings
+              .whereType<RegistryWarning>()
+              .where((w) => w.code == 'core_rejected')
+              .length,
+          1);
+    });
+
+    test('пустой оверлей узлы не трогает', () {
+      final nodes = [parseUri('vless://u@h:443?type=ws&security=tls#A')!];
+      final before = nodes.single.warnings.length;
+      stampStoredVerdicts(nodes, const {});
+      expect(nodes.single.warnings.length, before);
     });
   });
 
