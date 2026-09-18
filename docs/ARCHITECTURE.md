@@ -250,14 +250,19 @@ HomeController.saveParsedConfig(configJson)  →  native VpnService
 A link used to reach the model through a per-protocol parser that carried its
 own value rules, while JSON input carried a second copy of the same rules. The
 pipeline below replaces both with one route — the same one the launcher uses.
-It is being rolled out one protocol per step; `parseUri` dispatches by scheme,
-and schemes that have not moved yet still use their own parser.
+It was rolled out one protocol per step; every scheme and every input has now
+moved (steps 2–8), and `parseUri` dispatches by scheme. What remains outside is
+the **sing-box body** input, and by construction: its body is already a sing-box
+map, so the step-1 pass judges it verbatim — it needs no mapper, only a route
+from the same map into the model.
 
 ```
-link ──mapper──┐
-               ├─► raw map ─► registry sanitizer ─► clean map ─► parseSingboxEntry ─► NodeSpec
-JSON / Xray ───┘                  │
-                                  └─► warnings (code, path, value) ─► NodeSpec.warnings
+link ─────────┐
+INI (wg-quick)├──mapper──► raw map ─► registry sanitizer ─► clean map ─► parseSingboxEntry ─► NodeSpec
+Xray object ──┘                │
+                               └─► warnings (code, path, value) ─► NodeSpec.warnings
+
+sing-box body ──► (already a sing-box map: the step-1 pass judges it verbatim)
 ```
 
 - **Mapper** (`parser/mappers/`) translates the dialect and **judges nothing**:
@@ -327,8 +332,31 @@ the INI and the parser is gone; `rawSource` stays the INI text byte for byte
 (§456). Amnezia's `vpn://` is not a third input but a **container**: it unpacks
 the profile into ready INI texts and hands each to the same mapper.
 
-Still on its own path: the **Xray-JSON converter** (step 8). `transport.dart`
-still serves it and was not touched.
+Step 8 brought over the **Xray-JSON** input, and with it the last path that
+carried its own value rules. It is the one input whose source dialect is an
+**object**, not text: the mapper takes a `Map` (`mappers/xray_mapper.dart` →
+`mapXrayOutbound`), so it has its own pair of types and its own entry point
+(`parseXrayViaPipeline`) while the pipeline body stays shared. Three things
+differ, all of them from the shape of the input:
+
+1. The mapper runs **outside** the pipeline — parsing a subscription element
+   (node order §321, dedup §404, `dialerProxy` chains, names §310/§322) belongs
+   to `parseXrayElement`, which calls it and hands the pipeline a ready map.
+2. `label` is computed by the caller: an Xray node is named by its **element**
+   (`remarks` plus the §322 rules), not by a URI fragment.
+3. The `drop_node` verdict travels back out (`XrayDropVerdict`): a bare `null`
+   cannot tell "the registry rejected this record" from "there is no body", and
+   `dropped[]` belongs to the caller.
+
+`rawSource` stays the pretty-printed **Xray** object, byte for byte (§454) —
+the sing-box map is the pipeline's working form, not what the provider sent.
+That is also how the step-1 pass over verbatim bodies still recognises that an
+Xray node is not its business: the object has no `type` key.
+
+One consequence is worth naming: the `encryption` form check now removes the
+node **at parse time** on this input too, as it already did for links and
+sing-box bodies (§477). Before step 8 such a node collected the code but stayed
+in the list as a working one, and only the build gate took it out.
 
 **QUIC brought one structural change** (step 5). `tls.utls` and `tls.reality`
 are forbidden on QUIC schemes, and until this step the *emitter* stripped them

@@ -344,6 +344,11 @@ Map<String, dynamic> _httpMap(
 /// Состав полей — тот же, что читает `xhttpFromMap` (§399): расхождение схем
 /// между входами это дефект. Здесь только перевод НАПИСАНИЯ ключа; числовые
 /// формы (`30.0` → `30`) и диапазоны судит реестр.
+/// §472 шаг 8 — тот же перевод нужен Xray-мапперу: у него плоские ключи
+/// приезжают из `xhttpSettings`/`splithttpSettings` через
+/// [xhttpScalarsFromJson], а таблица написаний обязана остаться одна.
+Map<String, dynamic> xhttpMapFromScalars(Map<String, String> m) => _xhttpMap(m);
+
 Map<String, dynamic> _xhttpMap(Map<String, String> m) {
   final out = <String, dynamic>{'type': 'xhttp'};
   final hasPath = m.containsKey('path');

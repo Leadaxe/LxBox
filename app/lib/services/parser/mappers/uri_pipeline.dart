@@ -164,9 +164,95 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
 NodeSpec? parseIniViaPipeline(String source, UriMapper mapper) =>
     _runPipeline(source, mapper);
 
+/// §472 шаг 8 — конвейер для Xray-JSON.
+///
+/// Отличий от [parseIniViaPipeline] три, и все они про то, чем Xray-вход
+/// не похож на текстовый:
+///
+/// 1. **Маппер уже отработал.** Карту строит `mapXrayOutbound` по ОБЪЕКТУ, а
+///    не по тексту, и зовёт его вызывающий (`json_parsers.dart`): ему же
+///    принадлежит разбор элемента подписки — порядок узлов §321, дедуп §404,
+///    цепочки `dialerProxy`. Конвейер получает готовую карту.
+/// 2. **`label` считает вызывающий.** Имя Xray-узла приходит от ЭЛЕМЕНТА
+///    (`remarks` плюс правила §310/§322), а не из фрагмента ссылки.
+/// 3. **`rawSource` — объект Xray** (§454): pretty-print ИСХОДНОГО outbound'а
+///    байт в байт, как и до переезда. Санитайзер при этом идёт по карте
+///    sing-box, которую построил маппер, — дословный Xray-объект ему чужой
+///    диалект (7.2 спеки).
+///
+/// [dropped] — §477: сюда уезжает вердикт `drop_node`, если реестр снял
+/// запись целиком. `null` в ответе тогда означает «узел отбракован», а не
+/// «тела нет», и вызывающий обязан различать их по этому флагу.
+NodeSpec? parseXrayViaPipeline(
+  Map<String, dynamic> body, {
+  required String rawSource,
+  required String label,
+  bool wsEarlyDataHeaderImplicit = false,
+  List<NodeWarning>? warnings,
+  String? tagScheme,
+  XrayDropVerdict? dropped,
+}) =>
+    _runPipeline(
+      rawSource,
+      null,
+      prebuilt: _Prebuilt(
+        body: body,
+        label: label,
+        warnings: warnings ?? const [],
+        wsEarlyDataHeaderImplicit: wsEarlyDataHeaderImplicit,
+        tagScheme: tagScheme,
+      ),
+      dropped: dropped,
+    );
+
+/// §477 — вердикт «запись снята реестром целиком», вынесенный наружу:
+/// `null`-ответ конвейера сам по себе о причине не говорит.
+final class XrayDropVerdict {
+  /// Реестр снял запись явным правилом `on_invalid: { action: drop_node }`.
+  bool explicit = false;
+
+  /// Код и адрес причины — первый `error`-код, который поставил санитайзер.
+  RegistryWarning? reason;
+}
+
+/// Готовая карта от маппера, который отработал снаружи (Xray-вход).
+final class _Prebuilt {
+  const _Prebuilt({
+    required this.body,
+    required this.label,
+    required this.warnings,
+    required this.wsEarlyDataHeaderImplicit,
+    this.tagScheme,
+  });
+
+  final Map<String, dynamic> body;
+  final String label;
+  final List<NodeWarning> warnings;
+  final bool wsEarlyDataHeaderImplicit;
+
+  /// Имя схемы для тег-фолбэка, когда оно не равно типу тела (`ss`, `hy2`).
+  final String? tagScheme;
+}
+
 /// Общее тело конвейера: маппер → санитайзер → `parseSingboxEntry`.
-NodeSpec? _runPipeline(String source, UriMapper mapper) {
-  final mapping = mapper(source);
+///
+/// [prebuilt] — карта уже построена снаружи (Xray-вход, шаг 8): маппер там
+/// работает по объекту, а не по тексту, и зовёт его вызывающий. Тогда
+/// [mapper] не нужен, а [source] — только `rawSource` будущего узла.
+NodeSpec? _runPipeline(
+  String source,
+  UriMapper? mapper, {
+  _Prebuilt? prebuilt,
+  XrayDropVerdict? dropped,
+}) {
+  final UriMapping? mapping = prebuilt == null
+      ? mapper!(source)
+      : UriMapping(
+          body: prebuilt.body,
+          label: prebuilt.label,
+          warnings: prebuilt.warnings,
+          wsEarlyDataHeaderImplicit: prebuilt.wsEarlyDataHeaderImplicit,
+        );
   if (mapping == null) return null;
 
   final warnings = <NodeWarning>[...mapping.warnings];
@@ -194,9 +280,29 @@ NodeSpec? _runPipeline(String source, UriMapper mapper) {
       scheme: body['type'] as String,
       coreVersion: _kParseTimeCore,
       applyCoreGates: false,
+      // §473 — вход конвейера это НЕ `singbox`: исключение потолка `mtu`
+      // (`except_sources`) относится к телу, написанное в форме ядра самим
+      // человеком или подпиской, а карту здесь собрал наш маппер — из
+      // ссылки, INI или Xray-объекта. Словарь `sources` реестра различает их
+      // тоньше, но правило сегодня одно и делит ровно надвое (см. doc
+      // [BodySource]).
+      source: BodySource.other,
     );
     // `drop_node` — запись снята целиком: ядро её не принимает, и узла нет.
-    if (res.body == null) return null;
+    if (res.body == null) {
+      // §477 — вердикт наружу: вызывающему нужно отличить «узел отбракован
+      // правилом» от «тела нет вовсе», чтобы назвать причину в `dropped[]`.
+      if (dropped != null) {
+        dropped.explicit = res.explicitDropNode;
+        for (final w in res.warnings) {
+          if (ContractRegistry.I.textFor(w.code)?.severity == 'error') {
+            dropped.reason = w;
+            break;
+          }
+        }
+      }
+      return null;
+    }
     body = res.body!;
     warnings.addAll(res.warnings);
   }
@@ -262,8 +368,15 @@ NodeSpec? _runPipeline(String source, UriMapper mapper) {
         body['server']?.toString() ?? '',
         (body['server_port'] as num?)?.toInt() ?? 0,
       );
-  body['tag'] =
-      tagFromLabel(mapping.label, body['type'] as String, server, port);
+  // §472 шаг 8 — у Xray-входа имя схемы для фолбэка может не совпадать с
+  // типом тела (`ss` при `shadowsocks`, `hy2` при `hysteria2`): прежние ветки
+  // писали в фолбэк именно его, а тег И ЕСТЬ identity.
+  body['tag'] = tagFromLabel(
+    mapping.label,
+    prebuilt?.tagScheme ?? body['type'] as String,
+    server,
+    port,
+  );
 
   // §454 — `rawSource` узла из ссылки это САМА ССЫЛКА, а не карта.
   // `label` — текст фрагмента, а не тег: ссылка без `#` даёт тег-фолбэк, и

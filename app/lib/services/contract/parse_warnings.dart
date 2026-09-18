@@ -132,6 +132,13 @@ bool annotateFromRawBody(NodeSpec node) {
 
   if (node.isGroup) return false;
 
+  // §472 шаг 8 — узел конвейера санитайзер уже прошёл, по карте, которую
+  // построил маппер. Второй раз идти незачем, и та же отметка избавляет от
+  // разбора `rawSource`: у Xray-узла это ОБЪЕКТ XRAY, и `jsonDecode` на нём
+  // отрабатывал впустую на каждом узле подписки — только чтобы убедиться,
+  // что поля `type` в нём нет.
+  if (isPipelineParsed(node)) return false;
+
   final raw = _rawSingboxBodyOf(node);
   if (raw == null) return false;
   final type = raw['type'];

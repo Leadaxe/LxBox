@@ -9,6 +9,9 @@ import '../../models/transport_spec.dart';
 import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
+import 'mappers/uri_pipeline.dart'
+    show XrayDropVerdict, parseXrayViaPipeline;
+import 'mappers/xray_mapper.dart' show kXrayServiceProtocols, mapXrayOutbound;
 import 'tcp_keep_alive.dart';
 import 'transport.dart';
 import '../app_log.dart';
@@ -66,7 +69,7 @@ List<NodeSpec> parseXrayElement(
       .whereType<Map<String, dynamic>>()
       .where(
         (o) =>
-            !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
+            !kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
       )
       .toList();
   if (payloadAll.isEmpty) return const [];
@@ -203,7 +206,27 @@ List<NodeSpec> parseXrayElement(
         solo: soloNode,
         tagUses: tagUses,
       );
-      final spec = _xrayToSpec(ob, label);
+      // §477 — реестр вправе снять запись ЦЕЛИКОМ (`on_invalid: drop_node`):
+      // негодная форма `vless.encryption` значит, что ядро не примет конфиг и
+      // не стартует НА ВСЁМ наборе (случай #147). Такой узел обязан исчезнуть
+      // при разборе, а не дожить до гарда сборки, стоя в списке рабочим.
+      final verdict = XrayDropVerdict();
+      final spec = _xrayToSpec(ob, label, dropped: verdict);
+      if (spec == null && verdict.explicit) {
+        // Причина — код реестра с тегом записи: `dropped[].ref` контракта
+        // называет именно тег outbound'а (D-088), как и у прочих отбраковок.
+        final r = verdict.reason;
+        final w = RegistryWarning(
+          code: r?.code ?? 'type_invalid',
+          path: r?.path,
+          value: r?.value,
+          params: r?.params ?? const {},
+          ownerTag: obTag,
+        );
+        dropped?.add(w);
+        rejected.add(w);
+        continue;
+      }
       // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
       // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
       // NodeWarning нет носителя без узла); если соседей нет — элемент выпадает
@@ -409,7 +432,7 @@ int _payloadCount(Map<String, dynamic> element) {
       .whereType<Map<String, dynamic>>()
       .where(
         (o) =>
-            !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
+            !kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
       )
       .length;
 }
@@ -504,74 +527,6 @@ List<String>? _stringListOrNull(Object? raw) {
   return out.isEmpty ? null : out;
 }
 
-VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
-  final vnext = (o['settings']?['vnext'] as List?)?.cast<Map>();
-  if (vnext == null || vnext.isEmpty) return null;
-  final v = vnext.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 443;
-  final users = (v['users'] as List?)?.cast<Map>() ?? const [];
-  final user = users.isEmpty ? const {} : users.first;
-  final uuid = user['id']?.toString() ?? '';
-  var flow = user['flow']?.toString() ?? '';
-  // §335 — постквантовый слой VLESS (ядро: SPEC 032). В Xray-JSON лежит внутри
-  // users[0], в конфиге ядра — плоским полем рядом с uuid. Берём как есть.
-  final encryption = user['encryption']?.toString().trim() ?? '';
-  if (server.isEmpty || uuid.isEmpty) return null;
-
-  var packetEncoding = '';
-  final warnings = <NodeWarning>[];
-  // §459 (контракт §24.2 п. 7.4) — суффикс `-udp443` нормализуется в flow +
-  // `packet_encoding`, но порт узла не трогает: порт — свойство узла, и
-  // прежняя перезапись на 443 делала узел `…:8443` недозваниваемым.
-  if (flow == 'xtls-rprx-vision-udp443') {
-    flow = 'xtls-rprx-vision';
-    packetEncoding = 'xudp';
-  }
-
-  final stream = o['streamSettings'] as Map? ?? const {};
-  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
-  final transport = _xrayTransportFromStream(stream);
-
-  // §115 — flow берём из конфига как есть (раньше REALITY+tcp без flow
-  // получал навязанный vision → ломались валидные none-сетапы). vision
-  // несовместим с транспортом → гасим flow + warning.
-  if (flow == 'xtls-rprx-vision' && transport != null) {
-    warnings.add(
-      VisionWithTransportWarning((stream['network'] ?? 'transport').toString()),
-    );
-    flow = '';
-  }
-
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  final tag = tagFromLabel(label, 'vless', server, port);
-
-  return VlessSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    uuid: uuid,
-    flow: flow,
-    tls: tls,
-    transport: transport,
-    packetEncoding: packetEncoding,
-    encryption: encryption,
-    warnings: warnings,
-    // §453 — Xray держит keep-alive в sockopt целыми секундами.
-    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
-  );
-}
-
-/// §321 — служебные outbound'ы Xray: не серверы, узлами не становятся.
-const _kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
-
 /// §321 P4 — идентичность узла: `(protocol, server, port, credential)`.
 /// Транспорт и TLS в ключ НЕ входят (решение юзера 30.07.2026): один сервер с
 /// двумя разными SNI схлопывается в один узел — берётся первый по порядку P2.
@@ -625,161 +580,44 @@ String? _xrayIdentity(Map<String, dynamic> o) {
   return '$protocol|$server|$port|$cred';
 }
 
-/// §321 — диспетчер по `protocol`. Xray-схема ≠ sing-box-схема
-/// (`settings.vnext`/`streamSettings` против плоских полей), поэтому
-/// `parseSingboxEntry` не переиспользуется — на каждый протокол свой конвертер.
-NodeSpec? _xrayToSpec(Map<String, dynamic> o, String remarks) {
-  switch (o['protocol']?.toString()) {
-    case 'vless':
-      return _xrayVlessToSpec(o, remarks);
-    case 'trojan':
-      return _xrayTrojanToSpec(o, remarks);
-    case 'vmess':
-      return _xrayVmessToSpec(o, remarks);
-    case 'shadowsocks':
-      return _xraySsToSpec(o, remarks);
-    case 'hysteria':
-      return _xrayHy2ToSpec(o, remarks);
-    default:
-      return null;
-  }
-}
-
-TrojanSpec? _xrayTrojanToSpec(Map<String, dynamic> o, String remarks) {
-  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
-  if (servers == null || servers.isEmpty) return null;
-  final v = servers.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 443;
-  final password = v['password']?.toString() ?? '';
-  if (server.isEmpty || password.isEmpty) return null;
-
-  final stream = o['streamSettings'] as Map? ?? const {};
-  final warnings = <NodeWarning>[];
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
+/// §472 шаг 8 — Xray-outbound через ЕДИНЫЙ конвейер.
+///
+/// Раньше здесь стоял диспетчер по `protocol` с отдельным конвертером на
+/// каждый протокол (`_xrayVlessToSpec` и соседи), и каждый нёс свою копию
+/// правил значений. Теперь путь общий: маппер переводит диалект Xray в карту
+/// sing-box, санитайзер по реестру судит значения, `parseSingboxEntry`
+/// строит модель. Снятые отсюда рукописные правила перечислены в
+/// `mappers/xray_mapper.dart`.
+///
+/// `rawSource` узла остаётся pretty-print ИСХОДНОГО объекта Xray байт в байт
+/// (§454): карта sing-box — рабочая форма конвейера, а не то, что прислал
+/// провайдер.
+///
+/// [dropped] — §477: реестр вправе снять запись целиком (`drop_node`), и
+/// вызывающему нужно отличить это от «тела нет».
+NodeSpec? _xrayToSpec(
+  Map<String, dynamic> o,
+  String remarks, {
+  XrayDropVerdict? dropped,
+  bool allowSocks = false,
+}) {
+  // §321 — SOCKS самостоятельным узлом подписки не становится: он бывает
+  // только звеном цепочки `dialerProxy`, и зовут его оттуда явным флагом.
+  // Маппер переводит socks наравне с прочими (звену нужна та же карта), так
+  // что отбор остался здесь, где он и был: прежний диспетчер ветки `socks`
+  // просто не имел.
+  if (!allowSocks && o['protocol']?.toString() == 'socks') return null;
+  final mapping = mapXrayOutbound(o);
+  if (mapping == null) return null;
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-
-  return TrojanSpec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'trojan', server, port),
-    label: label,
-    server: server,
-    port: port,
+  return parseXrayViaPipeline(
+    mapping.body,
     rawSource: _prettyJson(o),
-    password: password,
-    tls: tls,
-    transport: _xrayTransportFromStream(stream),
-    warnings: warnings,
-    // §453 — Xray держит keep-alive в sockopt целыми секундами.
-    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
-  );
-}
-
-VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
-  final vnext = (o['settings']?['vnext'] as List?)?.cast<Map>();
-  if (vnext == null || vnext.isEmpty) return null;
-  final v = vnext.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 443;
-  final users = (v['users'] as List?)?.cast<Map>() ?? const [];
-  final user = users.isEmpty ? const {} : users.first;
-  final uuid = user['id']?.toString() ?? '';
-  if (server.isEmpty || uuid.isEmpty) return null;
-
-  final stream = o['streamSettings'] as Map? ?? const {};
-  final warnings = <NodeWarning>[];
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  // §459 (контракт §24.2 п. 7.11) — Xray-ветка идёт через ту же воронку, что
-  // URI и sing-box JSON: вне enum'а ядра узел роняет весь конфиг.
-  final security = normalizeVmessSecurity(user['security']?.toString() ?? '');
-
-  return VmessSpec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'vmess', server, port),
     label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    uuid: uuid,
-    alterId: (user['alterId'] as num?)?.toInt() ?? 0,
-    security: security,
-    tls: tls,
-    transport: _xrayTransportFromStream(stream),
-    warnings: warnings,
-    // §453 — Xray держит keep-alive в sockopt целыми секундами.
-    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
-  );
-}
-
-ShadowsocksSpec? _xraySsToSpec(Map<String, dynamic> o, String remarks) {
-  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
-  if (servers == null || servers.isEmpty) return null;
-  final v = servers.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 0;
-  final method = v['method']?.toString() ?? '';
-  final password = v['password']?.toString() ?? '';
-  if (server.isEmpty || method.isEmpty || port == 0) return null;
-
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  // §453 — у ss-конвертера своего `stream` нет; sockopt достаём отсюда,
-  // `is Map`-проверка живёт внутри tcpKeepAliveFromXraySockopt.
-  final stream = o['streamSettings'];
-  return ShadowsocksSpec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'ss', server, port),
-    label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    method: method,
-    password: password,
-    tcpKeepAlive:
-        tcpKeepAliveFromXraySockopt(stream is Map ? stream['sockopt'] : null),
-  );
-}
-
-/// §321 — `protocol: "hysteria"` с `version: 2` — форма форка Xray (апстрим
-/// hysteria2 не поддерживает вовсе). `finalmask.quicParams` НЕ переносим: у
-/// sing-box нет соответствия, а unknown field валит весь конфиг.
-Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
-  final s = o['settings'] as Map? ?? const {};
-  final stream = o['streamSettings'] as Map? ?? const {};
-  final hy = stream['hysteriaSettings'] as Map? ?? const {};
-
-  final version =
-      (hy['version'] as num?)?.toInt() ?? (s['version'] as num?)?.toInt() ?? 2;
-  if (version != 2) return null; // hysteria v1 — своего Spec у нас нет
-
-  final server = s['address']?.toString() ?? '';
-  final port = (s['port'] as num?)?.toInt() ?? 443;
-  final auth = hy['auth']?.toString() ?? '';
-  if (server.isEmpty) return null;
-
-  final warnings = <NodeWarning>[];
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-
-  return Hysteria2Spec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'hy2', server, port),
-    label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    password: auth,
-    tls: tls.enabled ? tls : const TlsSpec(enabled: true),
-    warnings: warnings,
+    warnings: mapping.warnings,
+    wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
+    tagScheme: mapping.tagScheme,
+    dropped: dropped,
   );
 }
 
@@ -824,7 +662,7 @@ NodeSpec? _xrayBuildChain(
     // `dialerProxy: "direct"` в Xray встречается как «ходи напрямую» — но у
     // нас прямой выход не узел, а подменять релей прямым путём D-085
     // запрещает: владелец отбраковывается.
-    if (_kXrayServiceProtocols.contains(protocol)) return null;
+    if (kXrayServiceProtocols.contains(protocol)) return null;
 
     visited.add(ref);
 
@@ -832,14 +670,11 @@ NodeSpec? _xrayBuildChain(
     // провайдера (`ru-upstream`), без украшений. Прежний `⚙ <tag>` уезжал в
     // конфиг ядра как есть и мешался с §274-маркером Направлений, где `⚙`
     // значит совсем другое. Декорация — дело отображения, не разбора.
-    final NodeSpec? spec;
-    if (protocol == 'socks') {
-      spec = _xraySocksToSpec(target, ref);
-    } else {
-      // Все типы, которые умеет конвертер: релей больше не ограничен
-      // socks/vless — в sing-box `detour` живёт на любом outbound'е.
-      spec = _xrayToSpec(target, ref);
-    }
+    // Все типы, которые умеет маппер: релей не ограничен socks/vless — в
+    // sing-box `detour` живёт на любом outbound'е. SOCKS здесь РАЗРЕШЁН
+    // явно: самостоятельным узлом подписки он не становится (§321), а
+    // звеном бывает, и чаще прочих.
+    final spec = _xrayToSpec(target, ref, allowSocks: true);
     if (spec == null) return null;
     // Группа цепочку не несёт (`withChained` вернул бы её как есть) —
     // конвертер её и не отдаёт, но инвариант проверяем явно.
@@ -860,141 +695,6 @@ NodeSpec? _xrayBuildChain(
   }
 
   return build(firstRef, 0);
-}
-
-/// SOCKS-outbound Xray → узел. Отдельно от `_xrayToSpec`: самостоятельным
-/// узлом подписки socks не становится (§321), он бывает только звеном.
-SocksSpec? _xraySocksToSpec(Map<String, dynamic> o, String label) {
-  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
-  if (servers == null || servers.isEmpty) return null;
-  final s = servers.first;
-  final server = s['address']?.toString() ?? '';
-  final port = (s['port'] as num?)?.toInt() ?? 1080;
-  if (server.isEmpty) return null;
-  final users = (s['users'] as List?)?.cast<Map>() ?? const [];
-  final user = users.isEmpty ? const {} : users.first;
-  return SocksSpec(
-    id: newUuidV4(),
-    tag: label,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    username: user['user']?.toString() ?? '',
-    password: user['pass']?.toString() ?? '',
-  );
-}
-
-TlsSpec _xrayTlsFromStream(Map stream, String server) {
-  final security = stream['security']?.toString() ?? '';
-  if (security == 'none' || security.isEmpty) return TlsSpec.disabled;
-
-  if (security == 'reality') {
-    final r = stream['realitySettings'] as Map? ?? const {};
-    final pbk = r['publicKey']?.toString() ?? '';
-    // §169 — REALITY только при валидном X25519-ключе. Битый publicKey →
-    // деградируем до plain TLS (нода рабочая), а не отравляем config.json.
-    return TlsSpec(
-      enabled: true,
-      serverName: r['serverName']?.toString() ?? server,
-      fingerprint: r['fingerprint']?.toString() ?? 'random',
-      reality: isValidRealityPublicKey(pbk)
-          ? RealitySpec(
-              publicKey: pbk,
-              shortId: normalizeRealityShortId(r['shortId']?.toString() ?? ''),
-            )
-          : null,
-    );
-  }
-
-  if (security == 'tls') {
-    final t = stream['tlsSettings'] as Map? ?? const {};
-    return TlsSpec(
-      enabled: true,
-      serverName: t['serverName']?.toString() ?? server,
-      fingerprint: (t['fingerprint']?.toString() ?? '').toLowerCase().isEmpty
-          ? null
-          : t['fingerprint'].toString().toLowerCase(),
-      insecure: t['allowInsecure'] == true,
-    );
-  }
-  return TlsSpec.disabled;
-}
-
-TransportSpec? _xrayTransportFromStream(Map stream) {
-  final net = (stream['network']?.toString() ?? 'tcp').toLowerCase();
-  switch (net) {
-    case 'ws':
-      final ws = stream['wsSettings'] as Map? ?? const {};
-      final headers = (ws['headers'] as Map?)?.cast<String, dynamic>();
-      final host = headers?['Host']?.toString() ?? '';
-      // §303 — Xray кладёт early data хвостом пути (`/x?ed=2560`); в sing-box
-      // это отдельное поле, а хвост в пути даёт 404.
-      // §103 D-016(в) — ключ `path` отсутствовал в исходном JSON → '' (не
-      // эмитим); присутствовал (даже как "/") → пропускаем через сплиттер.
-      final wsHasPath = ws.containsKey('path');
-      final (splitPath, edFromPath) = splitEarlyDataPath(
-        ws['path']?.toString() ?? '',
-      );
-      final path = wsHasPath ? splitPath : '';
-      // §320 — Xray-конфиги также несут early data отдельными полями
-      // `wsSettings.ed` / `.eh` (хвост пути в приоритете). `eh` без `ed`
-      // игнорируем: режим ядро включает по `max_early_data > 0`.
-      final edField = ws['ed'];
-      final ed =
-          edFromPath ??
-          (edField is int && edField > 0
-              ? edField
-              : int.tryParse(edField?.toString().trim() ?? ''));
-      var eh = ws['eh']?.toString().trim() ?? '';
-      // §103 D-008 — как и в URI-ветке: дефолт применим ТОЛЬКО когда early
-      // data взята из хвоста пути `?ed=N` (Go: applyWSEarlyData), не из
-      // плоских wsSettings.ed/eh (тех Go вообще не читает).
-      var ehImplicit = false;
-      if (eh.isEmpty && edFromPath != null) {
-        eh = 'Sec-WebSocket-Protocol';
-        ehImplicit = true;
-      }
-      return WsTransport(
-        path: path,
-        host: host,
-        earlyDataHeaderImplicit: ehImplicit,
-        maxEarlyData: ed != null && ed > 0 ? ed : null,
-        earlyDataHeaderName: (ed != null && ed > 0 && eh.isNotEmpty)
-            ? eh
-            : null,
-      );
-    case 'grpc':
-      final g = stream['grpcSettings'] as Map? ?? const {};
-      // §468 — значение идёт ядру как есть, как и на URI-ветке: ведущий «/»
-      // разбирает ядро v1.14.1-lx.8 само. Перевод §464 снят на обоих входах
-      // сразу — разойтись на одном и том же узле нельзя.
-      return GrpcTransport(serviceName: g['serviceName']?.toString() ?? '');
-    case 'http':
-    case 'h2':
-      final h = stream['httpSettings'] as Map? ?? const {};
-      final hosts =
-          (h['host'] as List?)?.map((e) => e.toString()).toList() ??
-          const <String>[];
-      return HttpTransport(path: h['path']?.toString() ?? '/', hosts: hosts);
-    // §463 / контракт §24.2 п. 7.13 — `splithttp` = прежнее имя `xhttp` в
-    // Xray; настройки лежат под своим именем секции (`splithttpSettings`),
-    // поэтому читаем обе. Раньше такой узел оставался без транспорта вовсе.
-    case 'splithttp':
-    case 'xhttp': // §097 — Xray xhttpSettings → нативный xhttp
-      final x = (stream['xhttpSettings'] ?? stream['splithttpSettings'])
-              as Map? ??
-          const {};
-      // §399 — состав полей общий с URI-веткой. Xray допускает обе раскладки:
-      // плоско в `xhttpSettings` и вложенным объектом `extra`; при конфликте
-      // выигрывает `extra`. Битый/не-объектный `extra` игнорируется — узел
-      // собирается на плоских полях.
-      return xhttpFromMap(
-        mergeXhttpExtra(xhttpScalarsFromJson(x), raw: x['extra']),
-      );
-    default:
-      return null;
-  }
 }
 
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).
