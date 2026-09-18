@@ -55,12 +55,30 @@ enum BodySource {
 
 /// Результат санитайзинга одной записи.
 final class SanitizeResult {
-  const SanitizeResult(this.body, this.warnings);
+  const SanitizeResult(this.body, this.warnings, {this.explicitDropNode = false});
 
   /// Очищенное тело; `null` — запись снята целиком (`drop_node`).
   final Map<String, dynamic>? body;
 
   final List<RegistryWarning> warnings;
+
+  /// §477 — запись снята ЯВНЫМ правилом `on_invalid: { action: drop_node }`,
+  /// а не как побочное следствие недостающего обязательного поля.
+  ///
+  /// Различать их обязательно, и разница не косметическая. Оба исхода дают
+  /// `body == null`, но означают разное:
+  ///
+  /// - **явный `drop_node`** — реестр сказал «такую запись ядро не примет и не
+  ///   стартует на всём конфиге» (`vless.encryption` вне формы, метод
+  ///   shadowsocks вне набора). Такой узел обязан исчезнуть ещё при разборе:
+  ///   держать его в списке рабочим значило бы обещать пользователю связь,
+  ///   которой не будет;
+  /// - **нет обязательного поля** — запись неполна, но приложение веками
+  ///   показывало такой узел и снимало его только на сборке. Отбраковывать его
+  ///   при разборе — отдельное решение с другой ценой (у узла из подписки
+  ///   пропала бы строка, в которой человек читал причину), и §477 его не
+  ///   принимал.
+  final bool explicitDropNode;
 }
 
 /// Ключи, которые санитайзер не трогает.
@@ -125,7 +143,10 @@ final class RegistrySanitizer {
       root: body,
     );
     final out = ctx.sanitizeObject(body, schema.order, schema.fields, '');
-    if (ctx.dropNode) return SanitizeResult(null, ctx.warnings);
+    if (ctx.dropNode) {
+      return SanitizeResult(null, ctx.warnings,
+          explicitDropNode: ctx.explicitDropNode);
+    }
     return SanitizeResult(out, ctx.warnings);
   }
 
@@ -200,6 +221,10 @@ final class _Ctx {
 
   final warnings = <RegistryWarning>[];
   bool dropNode = false;
+
+  /// §477 — запись сняло ЯВНОЕ правило `on_invalid: { action: drop_node }`,
+  /// а не отсутствие обязательного поля. См. [SanitizeResult.explicitDropNode].
+  bool explicitDropNode = false;
 
   /// §472 шаг 5 — снят ВЛОЖЕННЫЙ объект, а не узел: у него не хватило поля,
   /// объявленного `required` внутри него самого.
@@ -592,6 +617,28 @@ final class _Ctx {
       ];
     }
 
+    // §477 (контракт 1.1.9) — `absent_values`: значения-ВЫКЛЮЧАТЕЛИ.
+    //
+    // Порядок нормативен и одинаков на всех входах: нормализация (у
+    // `encryption` это `trim`) → выключатель → остальные ограничения. Поле
+    // просто не пишется: слоя нет, кода нет, судить нечего.
+    //
+    // Сравнение ТОЧНОЕ, и это изменение против прежнего поведения. Ядро
+    // сличает свой литерал `none` с учётом регистра, поэтому `None` для него
+    // НАСТОЯЩЕЕ значение, на котором падает весь конфиг. Спрячь мы его под
+    // видом «слоя нет» — негодный узел уехал бы в ядро, и упал бы не он один,
+    // а вся конфигурация. Поэтому `None` идёт дальше, к `pattern`, и
+    // отбраковывается — одинаково в ссылке, в теле sing-box и в Xray-JSON.
+    //
+    // Проверка стоит ДО `values`/`format`/`pattern` и после `normalize`
+    // намеренно: выключатель — это отсутствие значения, а не значение, и
+    // судить его набором или выражением значило бы хоронить узел за
+    // выключенную настройку.
+    final absent = f.absentValues;
+    if (absent != null && v is String && absent.contains(v)) {
+      return const _Value.drop();
+    }
+
     // §464 (W2d) — `normalize_code`: нормализация, которая ЗАБРАЛА часть
     // значения, обязана объявить потерю. `0x1a2` → `01a2` — другой short_id,
     // и молчать о нём нельзя ни на одном из входов (DRIFT §2(b)).
@@ -627,6 +674,28 @@ final class _Ctx {
     final violation = _checkConstraints(v, f);
     if (violation != null) {
       return _invalid(f, path, violation, secret: f.secret);
+    }
+
+    // §477 (контракт 1.1.9) — `pattern`: форма строкового значения.
+    //
+    // Проверяется ПОСЛЕ `normalize` и `absent_values`, по значению, которое
+    // ляжет в тело. Якоря — в самом выражении: режим «совпасть целиком»
+    // сторонам не задать одинаково, а `^…$` читается одинаково и Go RE2, и
+    // Dart.
+    //
+    // В код уезжает СЫРОЕ значение, до обрезки ([coerced.value]): человеку
+    // нужно видеть, что он написал, а не то, что от написанного осталось. Это
+    // та же причина, по которой сырое значение носит `normalize_code`.
+    //
+    // Некомпилируемое выражение ПРОПУСКАЕТСЯ (24.1: реестр впереди кода —
+    // рабочее состояние, а не повод отбраковать годный узел). Опечатку в
+    // выражении ловит линтер реестра, а не рантайм.
+    final pattern = f.pattern;
+    if (pattern != null && v is String) {
+      final re = _compilePattern(pattern);
+      if (re != null && !re.hasMatch(v)) {
+        return _invalid(f, path, coerced.value, secret: f.secret);
+      }
     }
 
     // §473 (контракт 1.1.5) — `max_when`: УСЛОВНЫЙ потолок. В отличие от
@@ -824,6 +893,7 @@ final class _Ctx {
         return _Value.keep(rule?['value']);
       case 'drop_node':
         dropNode = true;
+        explicitDropNode = true;
         warn(code,
             path: path,
             value: value,
@@ -1086,6 +1156,28 @@ String _normalizeString(String v, String norm) {
 }
 
 final _reHexRune = RegExp(r'^[0-9a-fA-F]$');
+
+/// §477 — кеш скомпилированных `pattern` реестра.
+///
+/// Выражений в реестре единицы, а санитайзер бегает по каждому полю каждого
+/// узла подписки: без кеша `RegExp` пересобирался бы тысячи раз на разбор.
+/// `null` в значении — выражение НЕ компилируется; такое правило
+/// пропускается, и повторно его никто не разбирает.
+final _patternCache = <String, RegExp?>{};
+
+/// Скомпилировать `pattern` реестра; `null` — выражение негодное.
+///
+/// Санитайзер на негодное выражение реагирует ПРОПУСКОМ, а не отбраковкой:
+/// реестр вправе уехать вперёд кода, и опечатка в выражении не повод хоронить
+/// рабочий узел. Ловит такое линтер (`registry_invariant_test.dart`).
+RegExp? _compilePattern(String pattern) => _patternCache.putIfAbsent(pattern, () {
+      try {
+        return RegExp(pattern);
+      } catch (_) {
+        _logUnknownExpression('pattern', pattern);
+        return null;
+      }
+    });
 
 /// §472 шаг 3 — исходное значение в форме, с которой сверяется `normalize_code`.
 ///

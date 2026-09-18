@@ -873,6 +873,7 @@ final class RegistryWarning extends NodeWarning {
     this.path,
     this.value,
     this.params = const {},
+    this.ownerTag = '',
   });
 
   /// Код из `registry/warnings.json` — он же код конформанса (CANON §6).
@@ -887,6 +888,17 @@ final class RegistryWarning extends NodeWarning {
 
   /// Прочие подстановки текста (`with`, `requires`, `winner`, `method`).
   final Map<String, String> params;
+
+  /// §477 — тег записи, СНЯТОЙ ЦЕЛИКОМ (`on_invalid: drop_node`), для
+  /// `dropped[].ref` контракта (corpus/README «Отбраковки», D-088). Пусто у
+  /// обычного кода поля: он живёт на узле, и адресовать его нечем, кроме
+  /// [path].
+  ///
+  /// Вне [props] намеренно: `props` — это ИДЕНТИЧНОСТЬ предупреждения, по ней
+  /// идёт дедуп (§279). Тег же говорит не «что случилось», а «с какой
+  /// записью», и включение его в идентичность развело бы на два сообщения
+  /// один и тот же код об одном и том же поле у соседних узлов.
+  final String ownerTag;
 
   @override
   List<Object?> get props =>

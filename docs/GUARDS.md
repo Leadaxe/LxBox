@@ -203,6 +203,7 @@ section.
 | `key_share` outside the enum | `tls.json` → `reality.key_share`, enum + `normalize: trim_lower` | `reality_key_share_invalid` |
 | VLESS `flow` outside `{"", vision}` | `protocols/vless.json` → `flow`, enum + `on_invalid: drop` | `flow_deprecated` |
 | VLESS `packetEncoding` outside the core's set | `protocols/vless.json` → `packet_encoding`, enum + `on_invalid: drop` | `packet_encoding_unknown` |
+| VLESS `encryption` outside the shape → **node dropped** | `protocols/vless.json` → `encryption`, `normalize: trim` + `absent_values: ["none"]` + `pattern` + `on_invalid: drop_node` (§477) | `vless_encryption_invalid` |
 | Transport path with broken percent-encoding | `transports.json` → `path`, `format: url_path` | `type_invalid` |
 | XHTTP `mode` / `session_placement` outside the enum | `transports.json` → `xhttp.*`, enum + `on_invalid: drop` | `xhttp_param_reset` |
 | Shadowsocks method outside the core's eighteen → **node dropped** | `protocols/shadowsocks.json` → `method`, enum + `on_invalid: drop_node` | `ss_method_invalid` |
@@ -219,6 +220,26 @@ section.
 Every one of those codes now carries a `path` and the value **as the link's
 author wrote it** — the pipeline's sanitiser sees the raw map, before any
 normalisation.
+
+### Where `on_invalid: drop_node` is actually enforced (§477)
+
+`drop_node` means the core would refuse to start on the **whole** config, so the
+record must never reach it. Three inputs, three enforcers, and the node goes at
+the earliest one that sees it:
+
+| Input | Who drops it | How |
+|---|---|---|
+| Link (any pipeline scheme) | the pipeline itself | `RegistrySanitizer` returns `body == null`, and `_runPipeline` returns `null` — no node is built at all (`mappers/uri_pipeline.dart`) |
+| sing-box body (JSON tab, subscription, pasted object) | `parseAll` | the pass over the **verbatim** map (`annotateFromRawBody`, §455) returns the verdict; `parseAll` removes the node from the list and puts the reason into `dropped[]` with the record's tag as `ref` (D-088) |
+| Xray JSON | the build gate, for now | such a node still gets the code at parse time — the second pass, over `emit()`, puts `vless_encryption_invalid` on it — but it is not dropped there: `drop_node` is carried by the pass over the **verbatim** map, and an Xray node's verbatim map is an *Xray* object the sing-box schema cannot read (spec 472, §7.2). It is stripped by `applyRegistryGate` right before the config goes to the core, and will be dropped at parse time once step 8 builds the sing-box map |
+| Node with `origin.kind: json` (verbatim, §455) | the build gate | such a node bypasses the model entirely, so the gate is the only thing between it and the core — `applyRegistryGate` puts the record into `report.dropped` and `dropRegistryEntries` takes it out of the config |
+
+The parse-time drop is deliberately narrower than "the sanitiser returned
+`null`": only an **explicit** `on_invalid: { action: drop_node }` removes a node
+there. A record can also lose its body by missing a required field, and such a
+node has always been shown in the list and stripped only at build time — pulling
+it at parse time would silently change a whole class of nodes
+(`SanitizeResult.explicitDropNode`).
 
 Three value rules used to stay hand-written, each a request to the launcher.
 **All three are gone** — the launcher answered with contracts 1.1.6 and 1.1.7

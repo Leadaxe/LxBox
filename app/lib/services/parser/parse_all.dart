@@ -1,6 +1,7 @@
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../contract/parse_warnings.dart';
+import '../contract/registry.dart';
 import 'body_decoder.dart';
 import 'ini_parser.dart';
 import 'json_parsers.dart';
@@ -57,9 +58,50 @@ List<NodeSpec> parseAll(
   List<NodeWarning>? dropped,
 }) {
   final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
-  annotateAllFromRawBody(nodes);
+
+  // §477 — проход по дословной карте выносит и ВЕРДИКТ О ЗАПИСИ, а не только
+  // коды полей: `on_invalid: drop_node` значит, что ядро эту запись не примет
+  // и не стартует НА ВСЁМ конфиге (ровно случай #147 — одна негодная строка
+  // `encryption` в одном узле подписки). Такой узел обязан исчезнуть из
+  // списка здесь же, при разборе: до гарда сборки он дожил бы только затем,
+  // чтобы быть снятым там, а до тех пор стоял бы в списке рабочим.
+  //
+  // Где это делается — тут, а не внутри прохода: `dropped[]` принадлежит
+  // `parseAll`, и конверт контракта (D-088) различает «запись отвергли» и
+  // «тело не распознано» именно этим списком.
+  final byRegistry = annotateAllFromRawBody(nodes);
+  if (byRegistry.isNotEmpty) {
+    nodes.removeWhere(byRegistry.contains);
+    // Причина — код реестра, который проход уже поставил на узел, плюс тег
+    // записи: `dropped[].ref` контракта называет именно тег outbound'а
+    // (corpus/README), а не человеческое имя.
+    dropped?.addAll(byRegistry.map(_dropReasonOf));
+  }
+
   annotateAllWithRegistry(nodes);
   return nodes;
+}
+
+/// §477 — причина отбраковки узла реестром: код `error`, который проход по
+/// дословной карте поставил на узел, с приписанным тегом записи.
+///
+/// Кодов `error` на узле может оказаться несколько; берётся ПЕРВЫЙ — порядок
+/// их постановки и есть порядок `body.order` реестра, то есть первый говорит
+/// о самом раннем поле тела. Ни одного не нашлось — вердикт пришёл, а кода
+/// нет, и назвать причину нечем: тогда остаётся сам тег.
+NodeWarning _dropReasonOf(NodeSpec node) {
+  for (final w in node.warnings) {
+    if (w is! RegistryWarning) continue;
+    if (ContractRegistry.I.textFor(w.code)?.severity != 'error') continue;
+    return RegistryWarning(
+      code: w.code,
+      path: w.path,
+      value: w.value,
+      params: w.params,
+      ownerTag: node.tag,
+    );
+  }
+  return RegistryWarning(code: 'type_invalid', ownerTag: node.tag);
 }
 
 List<NodeSpec> _parseAll(

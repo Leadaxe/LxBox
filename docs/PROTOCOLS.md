@@ -159,6 +159,7 @@ vless://UUID@host:port?query_params#label
 | Service name | `serviceName` or `service_name` | gRPC service name, passed to the core **verbatim** (§468, contract 1.1.3, core `v1.14.1-lx.8`+). A leading `/` makes the value a ready-made request path in Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the *stream* name and drops a `\|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` it is a service name — one escaped segment plus the core's own `/Tun` (`a/b` → `/a%2Fb/Tun`). The §464 translation `/<service>/Tun` → `<service>` was removed with the lx.8 pin: it only ever fixed the single-segment form and would now strip a `/` the core expects. Note that the URI parser percent-decodes `serviceName`, so a `%2F` inside a segment becomes a separator after parsing — exactly as in Xray |
 | Header type | `headerType` | When `http` with `type=tcp`/`raw`, creates HTTP transport |
 | Packet encoding | `packetEncoding` (case-insensitive) | An allow-list of `xudp` / `packetaddr`. The xray-style `none`, and any garbage, is dropped silently — sing-box `NewOutbound` accepts only those two values, and anything else panics inside libbox. |
+| Encryption | `encryption` | The post-quantum layer (§335, core SPEC 032). Its **shape** is checked against the registry, and a value that fails **drops the node** (§477, contract 1.1.9) — see the note below. |
 | Insecure | `insecure`, `allowInsecure` | Skip certificate verification |
 
 ### sing-box Outbound Mapping
@@ -234,6 +235,48 @@ sing-box `vless.NewOutbound` accepts exactly three forms (see the [docs](https:/
 | anything else | the field is not emitted, plus a warning in the log | protection against a libbox panic |
 
 Xray-style subscriptions (xray-knife and others) put `packetEncoding=none` there meaning “no encoding”. sing-box does not understand that string and panics inside `format.ToString` while trying to report the error (`E.New` receives a `*string` pointer instead of a dereferenced string — an upstream bug). L×Box filters on input against the allow-list so that no invalid value ever leaves the app.
+
+### encryption — shape and order of processing
+
+The post-quantum layer is a **closed grammar** in the core, not a free string,
+and a value the grammar rejects brings down the start of the **entire config**
+— one bad line in one node of a subscription and the VPN comes up on no node at
+all ([#147](https://github.com/Leadaxe/LxBox/issues/147)).
+
+The app checks the **shape only**, by one rule in the registry
+(`vless.body.fields.encryption`, contract 1.1.9):
+
+`^mlkem768x25519plus(\.[^.]+){3,}$` — case-sensitive.
+
+The grammar itself is deliberately **not** duplicated: a copy would drift from
+the core at the next pin bump and start rejecting *working* nodes, which costs
+more than it catches. Anything finer than the shape is left to the core.
+
+The order is normative and identical on every input — link, sing-box body and
+(after step 8 of spec 472) Xray JSON:
+
+1. the link mapper URL-decodes the parameter;
+2. whitespace is trimmed **from both ends of the whole string**, silently, with
+   no code — the core does the same (`strings.TrimSpace`). The **trimmed** value
+   is what goes into the body;
+3. the result being empty or exactly `none` means the layer is off: the field is
+   not written and there is no code. The comparison is **exact** — the core
+   matches its own literal case-sensitively, so `None` is a real value to it,
+   and hiding it as an off-switch would let a node that kills the whole config
+   through;
+4. otherwise the value must match the pattern. It does not → the **node is
+   dropped**, code `vless_encryption_invalid` (error), with the field path and
+   the **raw** value, before trimming.
+
+Spaces **inside** segments are legal on purpose: the core trims segments from
+the fourth onwards, so `….0rtt. KEY` is a good value and travels as is.
+
+Dropping the node rather than the field is the point: a node with no
+`encryption` will not connect to a server that requires the layer anyway, and
+quietly removing encryption would be a silent downgrade of protection.
+
+The method name is the only thing judged by content, and it is baked into the
+expression — see `docs/KERNEL.md` for the check to run when the core pin moves.
 
 ### Reference
 

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
@@ -298,6 +299,134 @@ void main() {
           'mlkem768x25519plus.native.1rtt.AbCd');
       expect(spec.emit(TemplateVars.empty).map['encryption'],
           'mlkem768x25519plus.native.1rtt.AbCd');
+    }, skip: skip);
+  });
+
+  group('§477 — vless encryption: форма по реестру', () {
+    // Нормативный порядок, одинаковый на всех входах:
+    //   декодировать → обрезать края → пусто / точное `none` → pattern.
+
+    test('годное значение проходит: ключ 32, ключ 1184, padding-блоки', () {
+      const key32 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+      for (final enc in [
+        'mlkem768x25519plus.native.0rtt.$key32',
+        'mlkem768x25519plus.xorpub.1rtt.100-50-50.$key32',
+        'mlkem768x25519plus.random.0rtt.150-40-40.30-20-20.$key32',
+      ]) {
+        final spec = parseUri(
+            'vless://u@h.example:443?security=none&encryption=$enc#n');
+        expect(spec, isNotNull, reason: '$enc отбракован, хотя годен');
+        expect(spec!.emit(TemplateVars.empty).map['encryption'], enc,
+            reason: enc);
+      }
+    }, skip: skip);
+
+    test('края обрезаются тихо, в тело едет обрезанное', () {
+      // Ядро само делает TrimSpace всей строки — кода за это нет.
+      const enc = 'mlkem768x25519plus.native.0rtt.AAAAAAAAAAAAAAAAAAAAAAAA';
+      final spec = parseUri('vless://u@h.example:443?security=none'
+          '&encryption=${Uri.encodeQueryComponent('  $enc  ')}#n')!;
+      expect(spec.emit(TemplateVars.empty).map['encryption'], enc);
+      expect(spec.warnings.map(warningCodeOf),
+          isNot(contains('vless_encryption_invalid')));
+    }, skip: skip);
+
+    test('пробел ВНУТРИ сегмента законен', () {
+      // Ядро тримит сегменты начиная с четвёртого, поэтому `….0rtt. KEY`
+      // годно; запрет пробелов отбраковал бы рабочий узел.
+      const enc = 'mlkem768x25519plus.native.0rtt. AAAAAAAAAAAAAAAAAAAAAAAA';
+      final spec = parseUri('vless://u@h.example:443?security=none'
+          '&encryption=${Uri.encodeQueryComponent(enc)}#n')!;
+      expect(spec.emit(TemplateVars.empty).map['encryption'], enc);
+    }, skip: skip);
+
+    test('пусто и ТОЧНОЕ none — слоя нет, кода нет', () {
+      for (final enc in ['', 'none', '%20none%20']) {
+        final spec = parseUri('vless://u@h.example:443?security=none'
+            '&encryption=$enc#n')!;
+        expect(spec.emit(TemplateVars.empty).map.containsKey('encryption'),
+            isFalse,
+            reason: 'encryption=$enc: поле не должно попадать в тело');
+        expect(spec.warnings.map(warningCodeOf),
+            isNot(contains('vless_encryption_invalid')),
+            reason: 'encryption=$enc: выключатель — не повод для кода');
+      }
+    }, skip: skip);
+
+    test('None другого регистра — НЕ выключатель, узел отбракован', () {
+      // Изменение против прежнего поведения: маппер сравнивал EqualFold.
+      // Ядро сличает литерал точно, и `None` для него настоящее значение, на
+      // котором падает ВЕСЬ конфиг, — прятать его нельзя.
+      for (final enc in ['None', 'NONE']) {
+        expect(
+            parseUri(
+                'vless://u@h.example:443?security=none&encryption=$enc#n'),
+            isNull,
+            reason: '$enc обязан отбраковать узел, а не выключить слой');
+      }
+    }, skip: skip);
+
+    test('негодная форма отбраковывает УЗЕЛ, а не снимает поле', () {
+      // Узел без encryption к серверу, который слой требует, всё равно не
+      // подключится, а молча снять шифрование — тихое понижение защиты.
+      for (final enc in [
+        'mlkem768x25519plus.native.0rtt', // три части
+        'mlkem768x25519plus.native..0rtt.KEY', // пустой сегмент
+        'mlkem1024x25519plus.native.0rtt.KEY', // другой метод
+        'MLKEM768X25519PLUS.native.0rtt.KEY', // метод в другом регистре
+        'garbage',
+        'mlkem768x25519plus.native.0rtt.KEY.', // хвостовая точка
+      ]) {
+        expect(
+            parseUri('vless://u@h.example:443?security=none'
+                '&encryption=${Uri.encodeQueryComponent(enc)}#n'),
+            isNull,
+            reason: '$enc должен был отбраковать узел');
+      }
+    }, skip: skip);
+
+    test('в код уезжает СЫРОЕ значение, до обрезки', () {
+      // Человеку нужно видеть, что он написал, а не что из этого осталось.
+      const raw = '  garbage  ';
+      final res = RegistrySanitizer.sanitize(<String, dynamic>{
+        'type': 'vless',
+        'server': 'h.example',
+        'server_port': 443,
+        'uuid': '11111111-1111-1111-1111-111111111111',
+        'encryption': raw,
+      }, scheme: 'vless', coreVersion: '1.14.1-lx.4', applyCoreGates: false);
+
+      expect(res.body, isNull, reason: 'drop_node: записи нет');
+      final w = res.warnings
+          .singleWhere((w) => w.code == 'vless_encryption_invalid');
+      expect(w.path, 'encryption');
+      expect(w.value, raw, reason: 'значение обязано быть сырым, до trim');
+    }, skip: skip);
+
+    test('тело sing-box судится тем же правилом, что и ссылка', () {
+      // Одна запись реестра закрывает оба входа — её исполняет санитайзер по
+      // ТЕЛУ, а не маппер ссылки.
+      Map<String, dynamic> body(String enc) => <String, dynamic>{
+            'type': 'vless',
+            'server': 'h.example',
+            'server_port': 443,
+            'uuid': '11111111-1111-1111-1111-111111111111',
+            'encryption': enc,
+          };
+      Map<String, dynamic>? clean(String enc) => RegistrySanitizer.sanitize(
+            body(enc),
+            scheme: 'vless',
+            coreVersion: '1.14.1-lx.4',
+            applyCoreGates: false,
+          ).body;
+
+      // точное none — поля нет, запись живёт
+      expect(clean('none')?.containsKey('encryption'), isFalse);
+      // None — запись снята
+      expect(clean('None'), isNull);
+      // края обрезаны, значение в теле обрезанное
+      expect(clean('  mlkem768x25519plus.native.0rtt.KEYKEYKEY  ')?['encryption'],
+          'mlkem768x25519plus.native.0rtt.KEYKEYKEY');
     }, skip: skip);
   });
 

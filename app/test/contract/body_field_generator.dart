@@ -31,6 +31,22 @@ import 'package:lxbox/services/contract/registry.dart';
 
 /// Выражение реестра, которого генератор не знает. Роняет тест с именем
 /// выражения — молчаливый пропуск вернул бы старение фикстур.
+/// §477 — образцы значений для полей с `pattern`, по пути поля.
+///
+/// Регулярка описывает МНОЖЕСТВО годных строк, а генератору нужна одна
+/// конкретная, и вывести её из выражения в общем случае нельзя. Поэтому
+/// образец пишется руками — но не молча: незнакомый путь роняет генерацию
+/// ([UnsupportedExpression]), а образец, переставший подходить под выражение
+/// реестра, роняет её тоже. Обе проверки держат таблицу живой при бампе
+/// контракта.
+///
+/// `vless.encryption` — форма постквантового слоя: имя метода, вид, RTT и ключ
+/// (§477, контракт 1.1.9).
+const _kPatternSamples = <String, String>{
+  'encryption': 'mlkem768x25519plus.native.0rtt.'
+      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+};
+
 final class UnsupportedExpression implements Exception {
   UnsupportedExpression(this.kind, this.name, this.path);
 
@@ -633,6 +649,30 @@ final class _Generator {
 
   Object _string(FieldSchema f, String path) {
     final norm = f.normalize;
+
+    // §477 — поле с `pattern`: образец берётся из таблицы ниже.
+    //
+    // Это единственное выражение реестра, из которого значение НЕ выводится:
+    // по регулярке в общем случае образца не построить, а `sample` заведомо
+    // не подойдёт — такое поле снимет `on_invalid`, и у `vless.encryption`
+    // это `drop_node`, то есть круг не проверил бы ничего вовсе.
+    //
+    // Таблица держится по ПУТИ и роняет генерацию на незнакомом пути, как и
+    // всё остальное здесь: новое поле с `pattern`, приехавшее бампом
+    // контракта, обязано получить образец осознанно, а не пройти молча.
+    final pattern = f.pattern;
+    if (pattern != null) {
+      final sample = _kPatternSamples[path];
+      if (sample == null) throw UnsupportedExpression('pattern', pattern, path);
+      // Образец обязан удовлетворять САМОМУ выражению реестра: разъедься они
+      // при бампе контракта — круг снова проверял бы отсутствие поля.
+      if (!RegExp(pattern).hasMatch(sample)) {
+        throw UnsupportedExpression(
+            'pattern-sample-mismatch', pattern, path);
+      }
+      return sample;
+    }
+
     // Значение обязано ПЕРЕЖИТЬ нормализацию без изменений: иначе круг
     // сравнивал бы не с тем, что положили. `hex_only` поэтому даёт hex,
     // `trim_lower` — нижний регистр без пробелов.

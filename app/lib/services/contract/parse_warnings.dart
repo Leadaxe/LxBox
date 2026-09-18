@@ -121,18 +121,21 @@ void annotateWithRegistry(NodeSpec node) {
 /// Xray-узла нет, пока её не построит маппер — это шаг 8 спеки 472. Здесь
 /// такая карта была бы выдумкой, а `path`/`value` кода обязаны называть то,
 /// что лежало в теле.
-void annotateFromRawBody(NodeSpec node) {
-  if (!ContractRegistry.I.isLoaded) return;
+/// §477 — возвращает `true`, если реестр велел снять ЗАПИСЬ ЦЕЛИКОМ
+/// (`on_invalid: drop_node`). Вызывающий (`parseAll`) убирает такой узел из
+/// списка и кладёт причину в `dropped[]`.
+bool annotateFromRawBody(NodeSpec node) {
+  if (!ContractRegistry.I.isLoaded) return false;
 
   final chained = node.chained;
   if (chained != null) annotateFromRawBody(chained);
 
-  if (node.isGroup) return;
+  if (node.isGroup) return false;
 
   final raw = _rawSingboxBodyOf(node);
-  if (raw == null) return;
+  if (raw == null) return false;
   final type = raw['type'];
-  if (type is! String) return;
+  if (type is! String) return false;
 
   final res = RegistrySanitizer.sanitize(
     // Копия: санитайзер переписывает карту, а `rawSource` узла — текст
@@ -146,6 +149,14 @@ void annotateFromRawBody(NodeSpec node) {
     source: BodySource.singbox,
   );
   _mergeRegistryWarnings(node, res.warnings);
+  // Вердикт уезжает наружу; тело узла и здесь не меняется (границы шага 1 в
+  // силе).
+  //
+  // Именно `explicitDropNode`, а не `body == null`: запись снимает и
+  // недостающее обязательное поле, но такой узел приложение показывает с
+  // самого начала и снимает только на сборке. Снести его при разборе значило
+  // бы тихо поменять поведение целого класса узлов — §477 этого не решал.
+  return res.explicitDropNode;
 }
 
 /// §473 — вход, которым приехало тело узла.
@@ -240,9 +251,16 @@ void annotateAllWithRegistry(List<NodeSpec> nodes) {
 }
 
 /// §472 шаг 1 — [annotateFromRawBody] для списка узлов.
-void annotateAllFromRawBody(List<NodeSpec> nodes) {
-  if (!ContractRegistry.I.isLoaded) return;
+///
+/// §477 — возвращает узлы, которым реестр вынес `drop_node`: их запись ядро не
+/// примет, и оставить их в списке значило бы отдать ядру конфиг, на котором
+/// оно не стартует. Убирает их из списка не этот модуль, а `parseAll`: ему же
+/// принадлежит `dropped[]`, куда уезжает причина.
+List<NodeSpec> annotateAllFromRawBody(List<NodeSpec> nodes) {
+  if (!ContractRegistry.I.isLoaded) return const [];
+  final dropped = <NodeSpec>[];
   for (final n in nodes) {
-    annotateFromRawBody(n);
+    if (annotateFromRawBody(n)) dropped.add(n);
   }
+  return dropped;
 }

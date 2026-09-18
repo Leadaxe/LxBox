@@ -354,6 +354,149 @@ void main() {
               'откатили, либо линтер смотрит не туда');
     }, skip: synced ? null : 'контракт не синхронизирован');
 
+    // §477 (контракт 1.1.9) — линтер атрибута `pattern`.
+    //
+    // Выражение из реестра исполняет РАНТАЙМ, и на некомпилируемое он
+    // реагирует пропуском: реестр вправе уехать вперёд кода, и опечатка в
+    // выражении не повод хоронить рабочий узел. Значит, поймать опечатку
+    // может только линтер — иначе правило молча не работало бы вовсе.
+    //
+    // Диалект — ОБЩЕЕ подмножество Go RE2 и ECMAScript/Dart. Конструкция,
+    // которой нет у одной из сторон, опаснее опечатки: выражение
+    // скомпилируется у обоих, а СМЫСЛ будет разный, и стороны разойдутся на
+    // живых узлах молча.
+    test('pattern: диалект RE2 ∩ Dart, якоря в выражении, компилируется', () {
+      // Запрещённые конструкции. Lookaround и обратные ссылки RE2 не
+      // поддерживает вовсе; inline-флаги (`(?i)`) он понимает, а Dart нет —
+      // и это самый коварный случай: у Go выражение стало бы
+      // регистронезависимым, у нас осталось бы чувствительным.
+      const forbidden = <String, String>{
+        r'(?=': 'lookahead',
+        r'(?!': 'negative lookahead',
+        r'(?<=': 'lookbehind',
+        r'(?<!': 'negative lookbehind',
+        r'(?i)': 'inline-флаг',
+        r'(?m)': 'inline-флаг',
+        r'(?s)': 'inline-флаг',
+        r'(?U)': 'inline-флаг',
+      };
+
+      var checked = 0;
+      for (final file in registryDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.json'))) {
+        final rel = file.path.substring(registryDir.path.length + 1);
+        if (rel == 'warnings.json') continue;
+
+        void walk(Object? node, String path) {
+          if (node is Map) {
+            final p = node['pattern'];
+            if (p != null) {
+              checked++;
+              expect(p, isA<String>(),
+                  reason: '$rel $path: pattern обязан быть строкой');
+              final expr = '$p';
+
+              for (final e in forbidden.entries) {
+                expect(expr.contains(e.key), isFalse,
+                    reason: '$rel $path: pattern содержит ${e.value} '
+                        '"${e.key}" — конструкции нет в общем подмножестве '
+                        'RE2 и Dart, стороны разойдутся молча');
+              }
+              // Обратная ссылка: `\1`..`\9`. RE2 их не поддерживает.
+              expect(RegExp(r'\\[1-9]').hasMatch(expr), isFalse,
+                  reason: '$rel $path: pattern содержит обратную ссылку — '
+                      'RE2 её не поддерживает');
+
+              // Якоря — В САМОМ выражении: режим «совпасть целиком» стороны
+              // задают по-разному, а `^…$` читается одинаково.
+              expect(expr.startsWith('^'), isTrue,
+                  reason: '$rel $path: pattern без якоря ^ — совпадение по '
+                      'всей строке задаётся выражением, а не режимом');
+              expect(expr.endsWith(r'$'), isTrue,
+                  reason: '$rel $path: pattern без якоря \$');
+
+              // И компилируется: невалидное выражение рантайм пропускает, то
+              // есть правило не сработает НИ РАЗУ и молча.
+              expect(() => RegExp(expr), returnsNormally,
+                  reason: '$rel $path: pattern не компилируется Dart RegExp — '
+                      'санитайзер пропустит правило молча');
+            }
+            for (final e in node.entries) {
+              walk(e.value, path.isEmpty ? '${e.key}' : '$path.${e.key}');
+            }
+          } else if (node is List) {
+            for (final e in node) {
+              walk(e, path);
+            }
+          }
+        }
+
+        walk(jsonDecode(file.readAsStringSync()), '');
+      }
+
+      // Атрибут завела версия 1.1.9 ради формы `vless.encryption`; исчезнет он
+      // — исчезнет и правило, и молчаливо зелёный линтер это скрыл бы.
+      expect(checked, greaterThan(0),
+          reason: 'pattern в реестре не встречается вовсе — либо контракт '
+              'откатили, либо линтер смотрит не туда');
+    }, skip: synced ? null : 'контракт не синхронизирован');
+
+    // §477 — линтер атрибута `absent_values`.
+    test('absent_values: непустой список строк у строкового поля', () {
+      var checked = 0;
+      for (final file in registryDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.json'))) {
+        final rel = file.path.substring(registryDir.path.length + 1);
+        if (rel == 'warnings.json') continue;
+
+        void walk(Object? node, String path) {
+          if (node is Map) {
+            final av = node['absent_values'];
+            if (av != null) {
+              checked++;
+              expect(av, isA<List>(),
+                  reason: '$rel $path: absent_values обязан быть списком');
+              final list = (av as List);
+              expect(list, isNotEmpty,
+                  reason: '$rel $path: пустой absent_values — правило, '
+                      'которое выглядит написанным и не делает ничего');
+              for (final e in list) {
+                expect(e, isA<String>(),
+                    reason: '$rel $path: absent_values — литералы СТРОКАМИ: '
+                        'сравнение точное и только строковое');
+              }
+              // Выключатель — не значение: судить его закрытым набором
+              // значило бы объявить его же негодным.
+              final values = (node['values'] as List?) ?? const [];
+              for (final e in list) {
+                expect(values.contains(e), isFalse,
+                    reason: '$rel $path: "$e" стоит и в absent_values, и в '
+                        'values — поле одновременно выключатель и годное '
+                        'значение');
+              }
+            }
+            for (final e in node.entries) {
+              walk(e.value, path.isEmpty ? '${e.key}' : '$path.${e.key}');
+            }
+          } else if (node is List) {
+            for (final e in node) {
+              walk(e, path);
+            }
+          }
+        }
+
+        walk(jsonDecode(file.readAsStringSync()), '');
+      }
+
+      expect(checked, greaterThan(0),
+          reason: 'absent_values в реестре не встречается вовсе — либо '
+              'контракт откатили, либо линтер смотрит не туда');
+    }, skip: synced ? null : 'контракт не синхронизирован');
+
     test('REALITY на QUIC — один код на блок, key_share/short_id молчат', () {
       final res = RegistrySanitizer.sanitize({
         'type': 'hysteria2',

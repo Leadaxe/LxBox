@@ -121,6 +121,9 @@ List<String> _expectedDropped(Map<String, dynamic> data) {
 String _droppedRef(NodeWarning w) => switch (w) {
       DialerProxyUnusableWarning(:final ownerTag, :final label) =>
         ownerTag.isNotEmpty ? ownerTag : label,
+      // §477 — запись, снятую реестром целиком (`on_invalid: drop_node`),
+      // называет тег, который проход по дословной карте приписал коду.
+      RegistryWarning(:final ownerTag) when ownerTag.isNotEmpty => ownerTag,
       _ => w.runtimeType.toString(),
     };
 

@@ -89,9 +89,23 @@ UriMapping? mapVlessUri(String uri) {
   // Прежнее прочтение «снимается младшее по order» оставляло оба поля, из-за
   // чего правило и жило здесь рукописным.
 
-  // §335 — постквантовый слой: значение как есть, `none` = слой выключен
-  // (`vless.json` → `uri.query.encryption`). Закрытого enum у поля нет.
-  final encryption = (q['encryption'] ?? '').trim();
+  // §335/§477 — постквантовый слой. Маппер делает ровно ДВЕ вещи: берёт
+  // URL-декодированное значение (`Uri.queryParameters` декодирует само) и не
+  // кладёт ключ, если параметра не было вовсе. Всё остальное — обрезка краёв
+  // (`normalize: trim`), выключатель (`absent_values: ["none"]`) и форма
+  // (`pattern`) — работа САНИТАЙЗЕРА: правило записано один раз и исполняется
+  // одинаково на ссылке, в теле sing-box и в Xray-JSON.
+  //
+  // Обрезки и сравнения с `none` здесь БОЛЬШЕ НЕТ, и это осознанно. Прежний
+  // маппер сравнивал `EqualFold`, то есть считал `None`/`NONE` за «слоя нет».
+  // Ядро сличает свой литерал точно и с учётом регистра — для него `None`
+  // настоящее значение, на котором падает ВЕСЬ конфиг, а не только узел.
+  // Спрятать его под видом выключателя значило бы пропустить негодный узел в
+  // ядро (§477, контракт 1.1.9).
+  //
+  // Строка из одних пробелов ключа не получает: обрезать её здесь незачем —
+  // `trim` санитайзера сделает из неё пустую, и поле снимется как пустое.
+  final encryption = q['encryption'] ?? '';
 
   final body = <String, dynamic>{
     'type': 'vless',
@@ -99,8 +113,7 @@ UriMapping? mapVlessUri(String uri) {
     'server_port': port,
     'uuid': uuid,
     if (flow.isNotEmpty) 'flow': flow,
-    if (encryption.isNotEmpty && encryption.toLowerCase() != 'none')
-      'encryption': encryption,
+    if (encryption.trim().isNotEmpty) 'encryption': encryption,
     'packet_encoding': ?packetEncoding,
   };
 

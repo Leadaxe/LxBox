@@ -817,6 +817,25 @@ To check on a bump: `archiveCrashReport` is called before `os.Create`, and the
 early return on `len(content) == 0` (`log.go:29`) is still inside it — that is the
 same “non-empty means there was a crash” criterion our detection uses.
 
+### 6. The VLESS `encryption` method name is baked into a registry rule
+
+§477 (contract 1.1.9) checks the **shape** of `vless.encryption` against
+`^mlkem768x25519plus(\.[^.]+){3,}$`, and the method name is the only thing in it
+judged by content. A node whose value does not match is dropped, so a core that
+learns a **new** method without the registry learning it too would have its good
+nodes rejected.
+
+To check on a bump: compare the method name with
+`protocol/vless/lx_encryption.go` (`parseClientEncryption`). A new method or a
+new appearance in the core means the rule has to move first — it lives on the
+launcher side (`registry/protocols/vless.json`), so the bump needs a contract
+sync, not a local edit.
+
+The rest of the grammar (appearance, RTT, padding blocks, key lengths and
+coefficients) is deliberately **not** mirrored here: a copy would drift at the
+first bump and start rejecting working nodes. Anything finer than the shape is
+caught by the core itself.
+
 ## Client versus core: which side to fix a config bug on
 
 Sometimes a “this node kills the config” bug is fixed from both sides

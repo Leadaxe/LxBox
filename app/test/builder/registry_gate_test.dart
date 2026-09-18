@@ -94,6 +94,56 @@ void main() {
       expect(report.warnings.single, contains('no-uuid: '));
     }, skip: skip);
 
+    // §477 — второй эшелон для узла `origin.kind: json` (§455).
+    //
+    // Такой узел идёт в ядро ДОСЛОВНО, минуя модель, поэтому правило формы
+    // `encryption` обязано сработать и здесь: иначе одна негодная строка в
+    // одном узле подписки уронила бы старт ВСЕГО конфига (#147). Разбор
+    // отбраковывает такой узел раньше (`parseAll`), но гард — последний, кто
+    // видит тело перед ядром, и полагаться на один эшелон нельзя.
+    test('§477 — дословный JSON-узел с негодным encryption не едет в ядро',
+        () {
+      final entry = Outbound(<String, dynamic>{
+        'type': 'vless',
+        'tag': 'verbatim-enc-broken',
+        'server': 'example.com',
+        'server_port': 443,
+        'uuid': '11111111-1111-1111-1111-111111111111',
+        // Три части вместо четырёх — ровно случай #147.
+        'encryption': 'mlkem768x25519plus.native.0rtt',
+      });
+      final report = applyRegistryGate([entry],
+          coreVersion: _core, verbatim: {entry});
+      expect(report.dropped, [entry],
+          reason: 'запись обязана быть снята целиком, а не лишена поля');
+      // Текст реестра, с путём и СЫРЫМ значением.
+      final line = report.warnings.single;
+      expect(line, contains('verbatim-enc-broken: '));
+      expect(line, contains('[encryption=mlkem768x25519plus.native.0rtt]'));
+      expect(line, isNot(contains('vless_encryption_invalid')),
+          reason: 'человеку — текст реестра, а не голый код');
+    }, skip: skip);
+
+    test('§477 — дословный JSON-узел с годным encryption проходит нетронутым',
+        () {
+      const enc = 'mlkem768x25519plus.native.0rtt.'
+          'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+      final body = <String, dynamic>{
+        'type': 'vless',
+        'tag': 'verbatim-enc-ok',
+        'server': 'example.com',
+        'server_port': 443,
+        'uuid': '11111111-1111-1111-1111-111111111111',
+        'encryption': enc,
+      };
+      final entry = Outbound(Map<String, dynamic>.from(body));
+      final report = applyRegistryGate([entry],
+          coreVersion: _core, verbatim: {entry});
+      expect(report.dropped, isEmpty);
+      expect(report.warnings, isEmpty);
+      expect(entry.map, body, reason: '§455 — тело едет дословно');
+    }, skip: skip);
+
     test('валидное тело гард не трогает и молчит', () {
       final body = <String, dynamic>{
         'type': 'vless',
