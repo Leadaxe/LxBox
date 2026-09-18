@@ -953,7 +953,10 @@ void main() {
       expect(r.body!['h1'], '5-10');
       expect(r.body!['h2'], 7);
       expect(r.body!.containsKey('h3'), isFalse);
-      expect(_byCode(r, 'type_invalid').path, 'h3');
+      // §481 (контракт 1.1.11): у h1..h4 появился свой `on_invalid` —
+      // негодное значение снимает поле с awg_header_invalid, а не с общим
+      // type_invalid.
+      expect(_byCode(r, 'awg_header_invalid').path, 'h3');
     }, skip: skip);
 
     test('type int_array: reserved из трёх чисел цел, мусор снят', () {
