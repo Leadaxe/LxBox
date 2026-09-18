@@ -20,14 +20,11 @@
         {
           "id": "servers",
           "detect": {
-            "json": {
-              "type_of": {
-                "settings.servers": "array"
-              }
-            }
+            "default": true
           },
           "space": "json",
-          "base": "settings.servers.0"
+          "base": "settings.servers.0",
+          "impl": "Единственная форма — ветка default: элемент Xray уже опознан detect секции (protocol), и разбирать его иначе не из чего. Так же записана форма servers у trojan в живом реестре лаунчера (контракт 1.1.13)."
         }
       ],
       "defaults": {
