@@ -29,13 +29,13 @@ library;
 
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
-import '../../../models/transport_spec.dart';
 import '../../contract/body_sanitizer.dart';
 import '../../contract/registry.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'trojan_mapper.dart';
 import 'uri_mapper.dart';
+import 'vless_mapper.dart';
 
 /// Версия ядра, которую санитайзер видит при разборе: гейты, которым она
 /// нужна (`min_core`), здесь выключены. То же значение, что в
@@ -45,11 +45,12 @@ const _kParseTimeCore = '0.0.0';
 /// Схемы, переехавшие на конвейер. Растёт по шагу за протокол; список
 /// нормативен для стража покрытия mapper-правил
 /// (`test/parser/mapper_rules_coverage_test.dart`).
-const kPipelineSchemes = <String>{'trojan'};
+const kPipelineSchemes = <String>{'trojan', 'vless'};
 
 /// Мапперы переехавших схем, по схеме ссылки.
 const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'trojan': mapTrojanUri,
+  'vless': mapVlessUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё
@@ -87,6 +88,11 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
     warnings.addAll(res.warnings);
   }
 
+  // §453 — поля, которых реестр не описывает (`dialer.json` → `skipped`),
+  // дописываются ПОСЛЕ санитайзера: он снял бы их как `unknown_key` вместе с
+  // настройкой человека. Обоснование границы — [UriMapping.extensionFields].
+  body.addAll(mapping.extensionFields);
+
   // Имя узла: `tag` вычисляется из фрагмента общим правилом, как раньше.
   // `parseSingboxEntry` читает `label` из `tag`, поэтому тег кладётся в карту
   // перед вызовом — и снимается санитайзером он не может (ключ сборки).
@@ -98,48 +104,22 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
   // `label` — текст фрагмента, а не тег: ссылка без `#` даёт тег-фолбэк, и
   // подставить его в имя значило бы вернуть выдуманное `#trojan-host-443`
   // из `toUri()`.
-  final node = parseSingboxEntry(body, rawSource: uri, label: mapping.label);
+  // §103 D-008 — заголовок early data подставлен САМОЙ формой `?ed=N`
+  // хвостом пути. В теле этой разницы нет, и знает о ней только маппер:
+  // он один видел исходную форму. Знание доносится ДО постройки модели —
+  // шаг 2 пересобирал узел после (`_withImplicitEdHeader` ветвился по
+  // `TrojanSpec`), и каждая новая схема требовала бы там своей ветки.
+  final node = parseSingboxEntry(
+    body,
+    rawSource: uri,
+    label: mapping.label,
+    wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
+  );
   if (node == null) return null;
 
-  final out =
-      mapping.wsEarlyDataHeaderImplicit ? _withImplicitEdHeader(node) : node;
-  out.warnings.addAll(warnings);
-  markPipelineParsed(out);
-  return out;
-}
-
-/// §103 D-008 — пометить заголовок early data подставленным.
-///
-/// Флаг живёт только в модели: в теле его нет и быть не должно
-/// (`early_data_header_name` там стоит в обеих формах — так требует корпус).
-/// `parseSingboxEntry` строит транспорт из карты и о форме ссылки не знает,
-/// поэтому знание маппера доносится сюда — иначе `toUri()` дописал бы `eh=`,
-/// которого в исходной ссылке не было.
-NodeSpec _withImplicitEdHeader(NodeSpec node) {
-  if (node is! TrojanSpec) return node;
-  final t = node.transport;
-  if (t is! WsTransport || t.earlyDataHeaderName == null) return node;
-  return TrojanSpec(
-    id: node.id,
-    tag: node.tag,
-    label: node.label,
-    server: node.server,
-    port: node.port,
-    rawSource: node.rawSource,
-    password: node.password,
-    tls: node.tls,
-    transport: WsTransport(
-      path: t.path,
-      host: t.host,
-      headers: t.headers,
-      maxEarlyData: t.maxEarlyData,
-      earlyDataHeaderName: t.earlyDataHeaderName,
-      earlyDataHeaderImplicit: true,
-    ),
-    chained: node.chained,
-    tcpKeepAlive: node.tcpKeepAlive,
-    warnings: node.warnings,
-  );
+  node.warnings.addAll(warnings);
+  markPipelineParsed(node);
+  return node;
 }
 
 /// Узел, разобранный конвейером: его коды реестра уже стоят, по `emit()`

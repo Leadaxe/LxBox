@@ -284,9 +284,16 @@ JSON / Xray ───┘                  │
   canonicalised one (`chrome`), and which survived would be decided by call
   order rather than by a rule.
 
-Migrated so far: **trojan** (`kPipelineSchemes`). The remaining twelve schemes
-keep their parsers, and `transport.dart` still serves them — it was not
-touched.
+- Fields the registry does **not** describe because the launcher never writes
+  them (`dialer.json` → `skipped`: the three §453 TCP keep-alive keys) travel
+  in `UriMapping.extensionFields` and are merged into the body *after* the
+  sanitizer. Handing them to it would cost the setting: an unlisted key is
+  dropped with `unknown_key`, and these keys are ones the core knows and the
+  user typed. The gap closes when the registry describes them as fields.
+
+Migrated so far: **trojan**, **vless** (`kPipelineSchemes`). The remaining
+eleven schemes keep their parsers, and `transport.dart` still serves them — it
+was not touched (`parseVlessTls` in particular is still what anytls reads).
 
 ---
 

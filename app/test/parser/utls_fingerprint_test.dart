@@ -108,15 +108,28 @@ void main() {
       }
     });
 
-    test('REALITY + fp=edge → RealityFingerprintWarning, значение сохранено',
-        () {
+    // §472 шаг 3 — vless разбирается конвейером, и код ставит РЕЕСТР
+    // (`tls.json` → `utls.fingerprint`, `advisory` с `except`), а не
+    // рукописный `normalizeTlsFingerprint`. Исход прежний — значение цело,
+    // узел под предупреждением, — но код реестровый и несёт путь.
+    // Реестр здесь уже загружен: его грузит `setUpAll`-подобный вызов в
+    // группе «остальные URI-парсеры» ниже по файлу. Без него эти тесты
+    // проверяли бы разбор без санитайзера, то есть не то поведение, которое
+    // видит приложение.
+    test('REALITY + fp=edge → reality_fp_not_chrome, значение сохранено',
+        () async {
+      await ContractRegistry.I.loadFromDirectory('contract');
       final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
           '&fp=edge&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'edge',
           reason: '§444: отпечаток источника не подменяется ни в entry, ни в конфиге');
-      expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
-          'edge');
+      final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
+            (w) => w.code == 'reality_fp_not_chrome',
+            orElse: () => fail('нет кода reality_fp_not_chrome: ${spec.warnings}'),
+          );
+      expect(w.path, 'tls.utls.fingerprint');
+      expect(w.value, 'edge');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
@@ -129,13 +142,20 @@ void main() {
       expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty);
     });
 
-    test('REALITY + xray-псевдоним helloqq_auto → qq + предупреждение', () {
+    test('REALITY + xray-псевдоним helloqq_auto → qq + предупреждение',
+        () async {
+      await ContractRegistry.I.loadFromDirectory('contract');
       final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
           '&fp=helloqq_auto&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'qq');
-      expect(spec.warnings.whereType<RealityFingerprintWarning>().single.value,
-          'qq');
+      // Перевод написания кода не даёт, а отпечаток без гибридного шара —
+      // даёт, и на уже переведённом значении (§472 шаг 3: судит реестр).
+      final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
+            (w) => w.code == 'reality_fp_not_chrome',
+            orElse: () => fail('нет кода reality_fp_not_chrome: ${spec.warnings}'),
+          );
+      expect(w.value, 'qq');
     });
 
     test('REALITY + chrome-семейство и дефолтный random → без предупреждения',
@@ -194,11 +214,20 @@ void main() {
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
-    test('мусор → chrome + UnknownFingerprintWarning', () {
+    // §472 шаг 3 — тот же переезд, что у trojan шагом 2: мусор сводит к
+    // `chrome` реестр (`on_invalid: coerce`), код `utls_fp_unknown` несёт
+    // путь и СЫРОЕ значение ссылки.
+    test('мусор → chrome + код реестра utls_fp_unknown', () async {
+      await ContractRegistry.I.loadFromDirectory('contract');
       final spec =
           parseVless('vless://u@h:443?security=tls&fp=garbage&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
-      expect(spec.warnings, contains(const UnknownFingerprintWarning('garbage')));
+      final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
+            (w) => w.code == 'utls_fp_unknown',
+            orElse: () => fail('нет кода utls_fp_unknown: ${spec.warnings}'),
+          );
+      expect(w.path, 'tls.utls.fingerprint');
+      expect(w.value, 'garbage');
     });
 
     test('emit отдаёт канонизированный utls.fingerprint', () {

@@ -28,13 +28,13 @@ const _contractRoot = 'contract';
 /// Правила, которые LxBox сегодня НЕ исполняет, с причиной. Пустая причина
 /// недопустима: молчаливое расхождение и есть то, что страж ловит.
 const Map<String, String> _knownGaps = {
-  // Не реализовано НИКОГДА (ни старым парсером, ни конвейером): у trojan
-  // `sni` без точки и двоеточия уезжает в `server_name` как есть. Включение
-  // правила изменило бы тела и identity живых узлов, поэтому оно требует
-  // отдельного решения владельца, а не попутной правки шага 2. У hysteria2 и
-  // anytls та же эвристика реализована (их парсеры), у trojan — нет.
+  // Не реализовано НИКОГДА (ни старым парсером, ни конвейером): у trojan и
+  // vless `sni` без точки и двоеточия уезжает в `server_name` как есть.
+  // Включение правила изменило бы тела и identity живых узлов, поэтому оно
+  // требует отдельного решения владельца, а не попутной правки. У hysteria2 и
+  // anytls та же эвристика реализована (их парсеры), у trojan и vless — нет.
   'sni_heuristic_falls_back_to_server':
-      'не реализовано в LxBox ни на одном входе trojan; включение меняет '
+      'не реализовано в LxBox ни на одном входе trojan/vless; включение меняет '
           'тела и identity — отдельное решение (спека 472, шаг 3+)',
 };
 
@@ -46,6 +46,13 @@ const Map<String, String> _covered = {
   'ech_param_dropped_with_code': 'ech= не переносится, узел получает код',
   'ws_early_data_path_suffix': '?ed=N хвостом пути → два поля тела',
   'transport_name_dialect': 'headerType=http поверх tcp → транспорт http',
+  // §472 шаг 3 — правила, которые добавил переезд vless.
+  'plaintext_port_no_tls': 'vless без security на открытом порту — блока нет',
+  'pbk_makes_reality_block': 'pbk= создаёт блок REALITY, годность судит реестр',
+  'fp_empty_defaults_to_random': 'vless без fp= → random',
+  'vision_udp443_is_a_compound_name':
+      'flow=xtls-rprx-vision-udp443 → vision + packet_encoding=xudp',
+  'packet_encoding_none_means_absent': 'packetEncoding=none — ключа нет вовсе',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -170,6 +177,71 @@ void main() {
       expect(tr['type'], 'http');
       expect(tr['path'], '/c');
       expect(tr['host'], ['cdn.example']);
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (vless)', () {
+    test('vless без security на открытом порту — блока нет', () {
+      // Эвристики trojan не имеет: у него дефолт «TLS включён».
+      final plain = parseUri('vless://u@h.example:8080#n')!;
+      expect(plain.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
+      final tls = parseUri('vless://u@h.example:8443#n')!;
+      expect(tls.emit(TemplateVars.empty).map.containsKey('tls'), isTrue);
+    }, skip: skip);
+
+    test('pbk= создаёт блок REALITY, годность судит реестр', () {
+      const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
+      // Блок есть и без `security=reality`: гейт — сам ключ, а не маркер.
+      final ok = parseUri('vless://u@h.example:443?security=tls&pbk=$pbk#n')!;
+      final tls = ok.emit(TemplateVars.empty).map['tls'] as Map;
+      expect((tls['reality'] as Map)['public_key'], pbk);
+
+      // Мусор: блок создаёт маппер, а снимает его реестр по `base64_32`.
+      final junk =
+          parseUri('vless://u@h.example:443?security=reality&pbk=enabled#n')!;
+      final junkTls = junk.emit(TemplateVars.empty).map['tls'] as Map;
+      expect(junkTls.containsKey('reality'), isFalse);
+      expect(
+        junk.warnings.whereType<RegistryWarning>().map((w) => w.code),
+        contains('reality_pbk_invalid'),
+      );
+    }, skip: skip);
+
+    test('vless без fp= → random', () {
+      // D-009: конвенция обеих сторон, не дефолт ядра (у ядра пустой fp =
+      // chrome). Значение входит в identity-хеш живых узлов.
+      final spec = parseUri('vless://u@h.example:443?security=tls#n')!;
+      final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+      expect((tls['utls'] as Map)['fingerprint'], 'random');
+      // У trojan дефолта нет — блок не появляется вовсе.
+      final tr = parseUri('trojan://p@h.example:443?security=tls#n')!;
+      expect((tr.emit(TemplateVars.empty).map['tls'] as Map).containsKey('utls'),
+          isFalse);
+    }, skip: skip);
+
+    test('flow=xtls-rprx-vision-udp443 → vision + packet_encoding=xudp', () {
+      final spec =
+          parseUri('vless://u@h.example:443?security=tls&sni=x.com'
+              '&flow=xtls-rprx-vision-udp443#n')!;
+      final body = spec.emit(TemplateVars.empty).map;
+      expect(body['flow'], 'xtls-rprx-vision');
+      expect(body['packet_encoding'], 'xudp');
+      // Порт НЕ переписывается (DRIFT §7.4, решение владельца).
+      expect(body['server_port'], 443);
+    }, skip: skip);
+
+    test('packetEncoding=none — ключа нет вовсе', () {
+      // `none` в диалекте подписок = «без особой инкапсуляции». Ядро такого
+      // значения не знает и валится всем конфигом, поэтому кода за него нет:
+      // это синоним отсутствия, а не мусор.
+      final spec = parseUri('vless://u@h.example:443?security=tls&sni=x.com'
+          '&packetEncoding=none#n')!;
+      expect(spec.emit(TemplateVars.empty).map.containsKey('packet_encoding'),
+          isFalse);
+      expect(
+        spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
+        isNot(contains('packet_encoding_unknown')),
+      );
     }, skip: skip);
   });
 }

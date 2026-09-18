@@ -1010,6 +1010,7 @@ NodeSpec? parseSingboxEntry(
   Map<String, dynamic> entry, {
   String? rawSource,
   String? label,
+  bool wsEarlyDataHeaderImplicit = false,
 }) {
   // §454 — источник узла из JSON: его собственный объект outbound'а. Вызов из
   // целого конфига передаёт оригинал (до подмены тега лейблом), одиночный
@@ -1023,6 +1024,25 @@ NodeSpec? parseSingboxEntry(
   // §453 — dial-поля общие для всех носителей; читаем один раз до switch'а,
   // дальше просто прокидываем. У не-носителей ключи не читаются вовсе.
   final ka = tcpKeepAliveFromSingbox(entry);
+  // §103 D-008 / §472 шаг 3 — заголовок early data подставлен САМОЙ формой
+  // записи (`?ed=N` хвостом пути), а не написан автором. В теле этой разницы
+  // нет: `early_data_header_name` там стоит в обоих случаях, и корпус требует
+  // именно так. Знает о ней только тот, кто видел ИСХОДНУЮ форму, — маппер
+  // ссылки (`mappers/uri_pipeline.dart`). У JSON-входа формы «хвостом пути»
+  // не бывает, поэтому дефолт `false`.
+  TransportSpec? transportOf(Object? raw) {
+    final t = _transportFromSingbox(raw);
+    if (!wsEarlyDataHeaderImplicit) return t;
+    if (t is! WsTransport || t.earlyDataHeaderName == null) return t;
+    return WsTransport(
+      path: t.path,
+      host: t.host,
+      headers: t.headers,
+      maxEarlyData: t.maxEarlyData,
+      earlyDataHeaderName: t.earlyDataHeaderName,
+      earlyDataHeaderImplicit: true,
+    );
+  }
 
   switch (type) {
     case 'vless':
@@ -1038,11 +1058,18 @@ NodeSpec? parseSingboxEntry(
         uuid: entry['uuid']?.toString() ?? '',
         flow: entry['flow']?.toString() ?? '',
         tls: tls,
-        transport: _transportFromSingbox(entry['transport']),
+        transport: transportOf(entry['transport']),
         packetEncoding: normalizePacketEncoding(
           entry['packet_encoding']?.toString() ?? '',
           tag: tag,
         ),
+        // §335 / §472 шаг 3 — постквантовый слой читался ТОЛЬКО из Xray-JSON
+        // (`_vlessFromXray`), а из карты sing-box терялся молча: узел из
+        // JSON-редактора или Smart-Paste уезжал в конфиг без `encryption` и
+        // не поднимался. Обнаружено переездом URI-ветки на конвейер — теперь
+        // через эту карту идёт и ссылка (корпус
+        // `vless/encryption_mlkem768_long_key`).
+        encryption: entry['encryption']?.toString().trim() ?? '',
         tcpKeepAlive: ka,
       );
     case 'vmess':
@@ -1060,7 +1087,7 @@ NodeSpec? parseSingboxEntry(
         // Smart-Paste приносят `aes-128-ctr` наравне с подписками.
         security: normalizeVmessSecurity(entry['security']?.toString() ?? ''),
         tls: _tlsFromSingbox(entry['tls'], server),
-        transport: _transportFromSingbox(entry['transport']),
+        transport: transportOf(entry['transport']),
         tcpKeepAlive: ka,
       );
     case 'trojan':
@@ -1074,7 +1101,7 @@ NodeSpec? parseSingboxEntry(
         rawSource: src,
         password: entry['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
-        transport: _transportFromSingbox(entry['transport']),
+        transport: transportOf(entry['transport']),
         tcpKeepAlive: ka,
       );
     case 'anytls': // §269

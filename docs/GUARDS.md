@@ -115,6 +115,42 @@ Three channels, and they are not interchangeable.
 
 ## Layer 1 — URI parsing
 
+### 1.0 Schemes that no longer have layer-1 value rules (spec 472)
+
+`trojan` (step 2) and `vless` (step 3) reach the model through the unified
+pipeline — mapper → registry sanitiser → `parseSingboxEntry` — so the value
+rules listed in §§1.1–1.5 below **no longer run for them**. The rules
+themselves did not disappear: the same judgement is now made once, by the
+registry, for every input the node can arrive through. What the mapper still
+does is translate the *spelling* (aliases, uTLS hello names, `?ed=N` in the
+path, `flow=xtls-rprx-vision-udp443` splitting into two fields) — translation
+is not judgement, and the registry writes it down in its `mapper` section.
+
+| Rule, as §§1.2–1.5 describe it | Registry field that judges it now | Code |
+|---|---|---|
+| `fp` outside the dictionary → `chrome` | `tls.json` → `utls.fingerprint`, enum + `on_invalid: coerce` | `utls_fp_unknown` |
+| REALITY + fingerprint without the hybrid key share | `tls.json` → `utls.fingerprint`, `advisory` with `except` | `reality_fp_not_chrome` |
+| `pbk` not a 32-byte X25519 key → no REALITY block | `tls.json` → `reality.public_key`, `format: base64_32` | `reality_pbk_invalid` |
+| `sid` non-hex / odd / over 16 | `tls.json` → `reality.short_id`, `format: hex`, `normalize: hex_only` | `reality_short_id_invalid` |
+| `key_share` outside the enum | `tls.json` → `reality.key_share`, enum + `normalize: trim_lower` | `reality_key_share_invalid` |
+| VLESS `flow` outside `{"", vision}` | `protocols/vless.json` → `flow`, enum + `on_invalid: drop` | `flow_deprecated` |
+| VLESS `packetEncoding` outside the core's set | `protocols/vless.json` → `packet_encoding`, enum + `on_invalid: drop` | `packet_encoding_unknown` |
+| Transport path with broken percent-encoding | `transports.json` → `path`, `format: url_path` | `type_invalid` |
+| XHTTP `mode` / `session_placement` outside the enum | `transports.json` → `xhttp.*`, enum + `on_invalid: drop` | `xhttp_param_reset` |
+
+Every one of those codes now carries a `path` and the value **as the link's
+author wrote it** — the pipeline's sanitiser sees the raw map, before any
+normalisation.
+
+Two value rules stayed hand-written on the vless path because the registry
+cannot express them yet; both are requests to the launcher, written up in
+spec 472 §9.2. `vision_with_transport` — the registry's `flow.conflicts` rule
+drops the *younger* field by `body.order`, and `flow` is older than
+`transport`, so as written it removes neither. `tls_insecure` — `tls.insecure`
+is a plain `bool` with no `advisory`, so the sanitiser says nothing about it.
+
+The remaining eleven schemes still run every rule below.
+
 ### 1.1 Shared helpers (`uri_utils.dart`)
 
 | Check | Sanitiser | User sees | Code | Why | Task |

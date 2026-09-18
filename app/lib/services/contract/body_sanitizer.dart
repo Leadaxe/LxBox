@@ -209,6 +209,22 @@ final class _Ctx {
   /// отсутствующим — иначе `short_id` пережил бы мусорный `public_key`.
   final sanitized = <String, Object?>{};
 
+  /// §472 шаг 3 — пути, СНЯТЫЕ этим же прогоном с объяснением.
+  ///
+  /// Зависимое поле (`requires`) уходит вслед за тем, чего ему не хватает, и
+  /// второго сообщения это не заслуживает: человек уже прочёл, ПОЧЕМУ ушёл
+  /// `tls.reality.public_key`, а «`short_id` требует `public_key`» добавляет
+  /// к этому только шум. Корпус нормирует ровно так: у
+  /// `vless/reality_pbk_junk_degrade`, `tls_pbk_junk_enabled` и
+  /// `reality_key_share_without_pbk_ignored` в ожидании ОДИН код —
+  /// `reality_pbk_invalid`, а комментарий последнего говорит прямо: «снят не
+  /// он, а весь блок, поэтому кода `reality_key_share_invalid` НЕТ».
+  ///
+  /// Поле, которого в теле НЕ БЫЛО вовсе, сюда не попадает: там `requires`
+  /// — единственное объяснение, и код нужен (корпус
+  /// `hysteria2/salamander_ignores_gecko_sizes`).
+  final explainedDrops = <String>{};
+
   void warn(
     String code, {
     String? path,
@@ -495,8 +511,18 @@ final class _Ctx {
     //
     // Код ставится на исходном значении: человеку нужно видеть, что он
     // написал, а не что из этого осталось.
+    //
+    // §472 шаг 3 — сравнение идёт с `lower(trim(исходного))`, а не с самим
+    // исходным. Регистр и обрамляющие пробелы не ЗАБИРАЮТ ничего: `sid=ABCD`
+    // и `sid=abcd` — один и тот же идентификатор, и корпус на нём кода не
+    // ждёт (`vless/reality_valid_pbk_sid` — `warnings` нет вовсе), тогда как
+    // `0x1a2` и `48 ab12` его ждут. Эталон Go ровно такой же —
+    // `realityShortIDWouldDegrade` сверяет с `strings.ToLower(TrimSpace(raw))`
+    // (зеркало в Dart: `realityShortIdWouldDegrade`, `uri_utils.dart`).
+    // Расхождение было латентным: до конвейера `hex_only` встречался только на
+    // JSON-входе, где написанного заглавными `sid` в корпусе нет.
     final normCode = f.normalizeCode;
-    if (normCode != null && v != coerced.value) {
+    if (normCode != null && v != _foldForNormalizeCode(coerced.value)) {
       warn(normCode, path: path, value: coerced.value, secret: f.secret);
     }
 
@@ -692,6 +718,9 @@ final class _Ctx {
         return const _Value.drop();
       default:
         warn(code, path: path, value: value, secret: secret || f.secret);
+        // §472 шаг 3 — поле снято и причина названа: зависимым от него
+        // второго кода не полагается. См. [explainedDrops].
+        explainedDrops.add(path);
         return const _Value.drop();
     }
   }
@@ -746,8 +775,12 @@ final class _Ctx {
             : _present(need, kept, prefix);
         if (ok) continue;
         kept.remove(key);
-        warn(rel['code'] as String? ?? 'field_requires',
-            path: _join(prefix, key), params: {'requires': need});
+        // §472 шаг 3 — требуемое поле снял этот же прогон и уже объяснил
+        // почему: молча уходим следом. См. [explainedDrops].
+        if (!explainedDrops.contains(need)) {
+          warn(rel['code'] as String? ?? 'field_requires',
+              path: _join(prefix, key), params: {'requires': need});
+        }
         break;
       }
     }
@@ -929,6 +962,14 @@ String _normalizeString(String v, String norm) {
 }
 
 final _reHexRune = RegExp(r'^[0-9a-fA-F]$');
+
+/// §472 шаг 3 — исходное значение в форме, с которой сверяется `normalize_code`.
+///
+/// Код объявляет ПОТЕРЮ, а регистр и обрамляющие пробелы ничего не теряют.
+/// Значения другого типа (число, bool) нормализация строк не трогает — они
+/// возвращаются как есть и сравниваются напрямую.
+Object? _foldForNormalizeCode(Object? raw) =>
+    raw is String ? raw.trim().toLowerCase() : raw;
 
 /// Выражения реестра, о которых санитайзер уже сказал в лог. Один раз на
 /// процесс: незнакомое выражение — это бамп контракта впереди кода, и

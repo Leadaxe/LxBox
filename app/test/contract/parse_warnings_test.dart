@@ -147,18 +147,36 @@ void main() {
   });
 
   group('§460 W2a — дедуп с рукописными кодами', () {
+    // §472 шаг 3 — прежний пример на vless больше не годится: `flow` вне
+    // набора судит РЕЕСТР, рукописного `DeprecatedFlowWarning` на этом пути
+    // нет. Дедуп проверяется на схеме, которая ещё не переехала (tuic,
+    // шаг 5): он нужен ровно там, где рукописное правило и правило реестра
+    // говорят об одном поле.
     test('рукописный класс перебивает код реестра на том же коде', () {
-      // `flow` вне закрытого набора: парсер ставит DeprecatedFlowWarning
-      // (код flow_deprecated), реестр — свой код на том же поле.
+      final n = _one(
+        'tuic://11111111-1111-1111-1111-111111111111:pw@example.com:443'
+        '?congestion_control=nonsense&sni=a.example#node',
+      );
+      final hand =
+          n.warnings.whereType<TuicCongestionInvalidWarning>().toList();
+      expect(hand, isNotEmpty, reason: 'рукописное предупреждение на месте');
+      // Реестр тот же код вторым сообщением не дублирует.
+      expect(_registry(n).map((w) => w.code),
+          isNot(contains('tuic_congestion_invalid')));
+    }, skip: skip);
+
+    // §472 шаг 3 — а у переехавшей схемы источник кода РОВНО один: реестр.
+    test('у узла конвейера flow_deprecated приходит из реестра, с путём', () {
       final n = _one(
         'vless://11111111-1111-1111-1111-111111111111@example.com:443'
         '?security=tls&encryption=none&sni=a.example'
         '&flow=xtls-rprx-origin&type=tcp#node',
       );
-      final hand = n.warnings.whereType<DeprecatedFlowWarning>().toList();
-      expect(hand, isNotEmpty, reason: 'рукописное предупреждение на месте');
-      // Реестр тот же код вторым сообщением не дублирует.
-      expect(_registry(n).map((w) => w.code), isNot(contains('flow_deprecated')));
+      expect(n.warnings.whereType<DeprecatedFlowWarning>(), isEmpty);
+      final w = _registry(n).firstWhere((w) => w.code == 'flow_deprecated',
+          orElse: () => fail('нет кода flow_deprecated: ${n.warnings}'));
+      expect(w.path, 'flow');
+      expect(w.value, 'xtls-rprx-origin');
     }, skip: skip);
 
     test('обфускация: рукописный obfs_unknown не дублируется реестром', () {

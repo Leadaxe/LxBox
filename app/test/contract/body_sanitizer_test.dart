@@ -246,9 +246,19 @@ void main() {
       expect(_byCode(r, 'field_conflict').params['with'], 'tls.ech.enabled');
     }, skip: skip);
 
-    test('requires: key_share при невалидном public_key снимается', () {
+    test('requires: key_share при невалидном public_key снимается МОЛЧА', () {
       // public_key мусорный → снят своим кодом; key_share осмысленен только
-      // вместе с ним, поэтому уходит следом с field_requires.
+      // вместе с ним, поэтому уходит следом.
+      //
+      // §472 шаг 3 — СЛЕДОМ И МОЛЧА. Второго кода потеря зависимого поля не
+      // заслуживает: человек уже прочёл, почему ушёл `public_key`, а
+      // «`key_share` требует `public_key`» добавляет к этому только шум.
+      // Корпус нормирует ровно так — у `vless/reality_pbk_junk_degrade`,
+      // `tls_pbk_junk_enabled` и `reality_key_share_without_pbk_ignored` в
+      // ожидании ОДИН код, `reality_pbk_invalid`, а комментарий последнего
+      // говорит прямо: «снят не он, а весь блок, поэтому кода
+      // reality_key_share_invalid НЕТ». До шага 3 расхождение было латентным:
+      // на URI-вход санитайзер не смотрел, а в JSON-корпусе такого тела нет.
       final r = _san(_vless({
         'tls': {
           'enabled': true,
@@ -263,10 +273,18 @@ void main() {
       final reality = (r.body!['tls'] as Map)['reality'] as Map;
       expect(reality.containsKey('public_key'), isFalse);
       expect(reality.containsKey('key_share'), isFalse);
-      expect(_codes(r), contains('reality_pbk_invalid'));
+      expect(_codes(r), ['reality_pbk_invalid']);
+    }, skip: skip);
+
+    test('requires: поля, которого НЕ БЫЛО, объясняет только field_requires',
+        () {
+      // Обратная граница к тесту выше: `spoof` в теле не писали вовсе, и
+      // другого объяснения потере `spoof_method` нет — код обязан быть.
+      final r = _san(_vless({
+        'tls': {'enabled': true, 'spoof_method': 'wrong-checksum'}
+      }));
       expect(_codes(r), contains('field_requires'));
-      expect(_byCode(r, 'field_requires').params['requires'],
-          'tls.reality.public_key');
+      expect(_byCode(r, 'field_requires').params['requires'], 'tls.spoof');
     }, skip: skip);
 
     test('requires: spoof_method без spoof снимается', () {

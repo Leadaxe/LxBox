@@ -161,6 +161,12 @@ void main() {
     // Порог ниже — абсолютный потолок, а не проценты: миллисекунды на
     // CI-раннере и на ноутбуке несопоставимы, и тест на ±20 % был бы
     // флаки-генератором. Он ловит уход в квадратичность, запас десятикратный.
+    //
+    // §472 шаг 3 — берётся ЛУЧШИЙ из трёх прогонов, а не первый. `flutter
+    // test -j 2` гоняет изоляты параллельно, и шагом 3 рядом встал такой же
+    // перф-тест vless: два цикла по 2000 узлов на одной машине растягивали
+    // первый замер до ~12 с — при уходе в квадратичность медленны ВСЕ три,
+    // так что чувствительность теста это не снижает.
     test('2000 trojan-узлов разбираются за разумное время', () {
       const n = 2000;
       final nodes = <NodeSpec>[];
@@ -172,22 +178,26 @@ void main() {
       ];
 
       // Прогрев кэша схем и JIT.
-      for (var i = 0; i < 50; i++) {
+      for (var i = 0; i < 200; i++) {
         parseUri(uris[i]);
       }
 
-      final sw = Stopwatch()..start();
-      for (final u in uris) {
-        final s = parseUri(u);
-        if (s != null) nodes.add(s);
+      var best = 1 << 30;
+      for (var rep = 0; rep < 3; rep++) {
+        nodes.clear();
+        final sw = Stopwatch()..start();
+        for (final u in uris) {
+          final s = parseUri(u);
+          if (s != null) nodes.add(s);
+        }
+        sw.stop();
+        if (sw.elapsedMilliseconds < best) best = sw.elapsedMilliseconds;
       }
-      sw.stop();
       expect(nodes, hasLength(n));
       expect(
-        sw.elapsedMilliseconds,
+        best,
         lessThan(3000),
-        reason: 'разбор $n trojan-узлов конвейером: '
-            '${sw.elapsedMilliseconds} мс',
+        reason: 'разбор $n trojan-узлов конвейером: $best мс (лучший из трёх)',
       );
     }, skip: skip);
   });

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | Принято владельцем 18.09.2026; **шаги 1–2 реализованы** (разделы 7, 8), шаги 3–9 впереди |
+| **Статус** | Принято владельцем 18.09.2026; **шаги 1–3 реализованы** (разделы 7, 8, 9), шаги 4–9 впереди |
 | **Дата** | 2026-09-18 |
 | **Связанные** | фича 460 (реестр контракта, санитайзер, W2a/W2b), §454–§456 (`rawSource`, json дословно), §470 (раннеры сверяют `warnings[]`), лаунчер SPEC 131 (UNIFIED_NODE_PIPELINE), секция `mapper` реестра |
 
@@ -81,7 +81,7 @@ JSON / Xray ─────┘                     │
 |---|---|
 | **1** ✔ | JSON-половина: при разборе JSON-узла санитайзер идёт по ДОСЛОВНОЙ карте (`rawSource`), коды встают на `NodeSpec.warnings`; дедуп с рукописными по `(code, path)`; `_allWarningsOf` в body-раннере схлопывается в `node.warnings`; гард сборки остаётся (он судит ещё и min_core/platform). Раздел 7 |
 | **2** ✔ | Каркас маппера: интерфейс «ссылка → карта + warnings маппера», общие части (userinfo, порт, имя из фрагмента, транспорт из query — `transport.dart` в форме карты), точка входа `parseUri` = маппер → конвейер. Пилот — **trojan** (мало полей, есть транспорт и TLS). Раздел 8 |
-| **3** | **vless** (REALITY, flow, packet_encoding, xhttp — больше всего рукописных правил) |
+| **3** ✔ | **vless** (REALITY, flow, packet_encoding, xhttp — больше всего рукописных правил). Раздел 9 |
 | **4** | vmess, shadowsocks |
 | **5** | QUIC: hysteria2, tuic (+ `forbiddenTlsBlockWarnings` из §469 уходит: блоки доезжают до санитайзера в сырой карте) |
 | **6** | naive, anytls, http, socks, ssh |
@@ -265,3 +265,150 @@ trojan, семь; шесть покрыты, одно в расхождения�
 | 4. Identity не меняется | 33 ссылки корпуса: тело, `tag`, `label`, `rawSource`, `toUri()` и набор предупреждений сняты СТАРЫМ путём до правки и сошлись с конвейером; три хеша зафиксированы фикстурой в `trojan_pipeline_invariants_test.dart` |
 | 5. Перф | старый полный путь trojan (парсер + `annotateAllWithRegistry`) ~155 мс на 2000 узлов, конвейер ~193 мс — **×1,25** при бюджете ×1,5. Сравнивать надо ПОЛНЫЕ воронки: у старого пути санитайзер шёл отдельным проходом после разбора, и `parseTrojan` в отрыве от него мерил половину работы (там выходило ×3,5 — артефакт замера) |
 | 6. Один шаг — один коммит, полный зелёный прогон | «All tests passed» |
+
+## 9. Что вышло: шаг 3 (18.09.2026, `HASH_STEP3`)
+
+vless на конвейере. Схема с самым большим набором рукописных правил —
+десять из них уехали в реестр, одно осталось и названо ниже. Ссылок корпуса
+89, тестовых — ещё 144; identity не сдвинулась ни у одной.
+
+### 9.1 Снятые рукописные правила (десять) и коды из реестра
+
+`vless_parser.dart` стал строкой вызова конвейера. `transport.dart` не тронут:
+по нему продолжают ходить остальные схемы, и `parseVlessTls` по-прежнему зовёт
+anytls (шаг 6).
+
+| Было рукописным | Стало правилом реестра | Код |
+|---|---|---|
+| `normalizePacketEncoding` — мусор вне набора ядра | `protocols/vless.json` → `packet_encoding`, enum + `on_invalid: drop` | `packet_encoding_unknown` (был без адреса) |
+| `DeprecatedFlowWarning` — `flow` вне пары `""`/`vision` | `protocols/vless.json` → `flow`, enum + `on_invalid: drop` | `flow_deprecated` (тот же код, теперь с путём) |
+| `isValidRealityPublicKey` — гейт REALITY по §169 | `tls.json` → `reality.public_key`, `format: base64_32` | `reality_pbk_invalid` |
+| `realityShortIdWouldDegrade` + `normalizeRealityShortId` | `tls.json` → `reality.short_id`, `format: hex`, `normalize: hex_only`, `max: 16`, `len_parity: even` | `reality_short_id_invalid` (был без адреса) |
+| `realityKeyShareFromQuery` — enum `hybrid`/`classical` | `tls.json` → `reality.key_share`, enum + `normalize: trim_lower` | `reality_key_share_invalid` |
+| `normalizeTlsFingerprint` — мусорный `fp` → `chrome` | `tls.json` → `utls.fingerprint`, enum + `on_invalid: coerce chrome` | `utls_fp_unknown` (был без адреса) |
+| `RealityFingerprintWarning` — отпечаток без гибридного key share | `tls.json` → `utls.fingerprint`, `advisory` с `except` | `reality_fp_not_chrome` (тот же код, теперь с путём) |
+| `_guardUrlPath` — битый percent-путь транспорта | `transports.json` → `path`, `format: url_path` | `type_invalid` |
+| `XhttpParamResetWarning` на `mode`/`session_placement` | `transports.json` → `xhttp.*`, enum + `on_invalid: drop` | `xhttp_param_reset` (был из эмиссии, теперь из разбора) |
+| `_normalizeAlpn` — drop элемента, не похожего на ALPN-id | `tls.json` → `alpn`, `listable_string` | — (значение проходит) |
+
+Рукописным по-прежнему остаётся ПЕРЕВОД написания — это работа маппера, и
+реестр описывает её секцией `mapper`: алиасы `sni`/`peer`, семейство
+`insecure`, псевдонимы uTLS, `?ed=N` хвостом пути, раскрутка percent-кодирования,
+раскладка `flow=xtls-rprx-vision-udp443` на два поля, `packetEncoding=none` как
+синоним отсутствия.
+
+### 9.2 Что осталось рукописным СУЖДЕНИЕМ — и запрос к лаунчеру
+
+Два правила ЗНАЧЕНИЯ судить реестром сегодня нельзя. Оба одинаково касаются
+trojan, так что снимутся у обеих схем разом.
+
+1. **`vision_with_transport`** — `flow=xtls-rprx-vision` при живом транспорте.
+   Правило в реестре ЕСТЬ (`vless.json` → `flow.conflicts` → `transport`,
+   код `field_conflict`), но как записано, оно не срабатывает: `conflicts`
+   снимает МЛАДШЕЕ поле по `body.order`, а `flow` идёт раньше `transport` —
+   уцелели бы оба, и ядро такой узел не поднимет. **Просьба:** либо форма
+   конфликта с явным указанием, какая сторона уступает, либо запись правила у
+   `transport` (тогда снимался бы `flow` как младший из двух путей). Пока
+   решение живёт в `vless_mapper.dart`, с кодом `vision_with_transport`, —
+   именно его и ждут от LxBox override'ы корпуса
+   `flow_vision_ws_suppressed.expected.lxbox.json` и
+   `flow_vision_xhttp_suppressed.expected.lxbox.json`.
+2. **`tls_insecure`** — `tls.insecure` объявлен в `tls.json` обычным `bool`
+   без `advisory`, и санитайзер на нём молчит. Код info-шный, корпус его ждёт
+   (`vless/reality_vision_full.expected.lxbox.json`), поэтому ставит его
+   по-прежнему разбор. **Просьба:** `advisory` на `tls.insecure`, как у
+   `utls.fingerprint` с `reality_fp_not_chrome`.
+3. **Три поля §453** (`tcp_keep_alive`, `tcp_keep_alive_interval`,
+   `disable_tcp_keep_alive`) реестр числит строками в `dialer.json` →
+   `skipped` («лаунчер их не пишет»), а санитайзер снимает всё, чего нет в
+   `fields`, с кодом `unknown_key`. Пока они описаны только прозой, конвейер
+   проводит их мимо санитайзера (`UriMapping.extensionFields`). **Просьба:**
+   описать их полями `dialer.json` — ядро их знает (`DialerOptions`), а
+   «лаунчер не пишет» это про эмиттер, не про схему.
+
+### 9.3 Три дефекта, которые вскрыл переезд
+
+Все три были ЛАТЕНТНЫМИ: правила касались путей, по которым vless до сих пор
+не ходил.
+
+- **`encryption` терялся на sing-box-входе.** `parseSingboxEntry` поле не
+  читал вовсе — его знал только Xray-конвертер. Узел, вставленный
+  sing-box-объектом или отредактированный во вкладке JSON, уезжал в ядро без
+  постквантового слоя (§335). На конвейере это стало видно сразу: корпусный
+  `encryption_mlkem768_long_key` шёл через ту же карту. Исправлено в
+  `json_parsers.dart`.
+- **`normalize_code` ругался на смену регистра.** `sid=ABCD` → `abcd` — это не
+  потеря, и корпус (`reality_valid_pbk_sid`) кода не ждёт, а санитайзер его
+  ставил: он сравнивал результат нормализации с СЫРЫМ значением. Эталон Go
+  сравнивает с `lower(trim(raw))` (`realityShortIDWouldDegrade`). Исправлено в
+  `body_sanitizer.dart`; правило `normalize_code` в реестре одно, у
+  `short_id`, поэтому других путей правка не касается.
+- **`requires` объяснял потерю зависимого поля вторым кодом.** Узел с
+  мусорным `pbk` получал `reality_pbk_invalid` и следом `field_requires` на
+  `short_id` и на `key_share`, хотя корпус во всех трёх кейсах
+  (`reality_pbk_junk_degrade`, `tls_pbk_junk_enabled`,
+  `reality_key_share_without_pbk_ignored`) ждёт один код. Санитайзер теперь
+  молчит, когда требуемое поле снял он сам и уже назвал причину
+  (`explainedDrops`); поле, которого в теле НЕ БЫЛО, по-прежнему даёт
+  `field_requires` — там это единственное объяснение.
+
+Отдельно: **шаг 2 терял настройки TCP keep-alive у trojan.** Маппер клал их в
+тело, санитайзер снимал как `unknown_key`, и узел уезжал без §453-полей.
+`tcp_keep_alive_test.dart` этого не увидел — он не грузит реестр, и санитайзер
+там не работал вовсе. Исправлено вместе с vless (см. 9.2, п. 3); тест на это
+теперь есть в `vless_pipeline_invariants_test.dart`.
+
+### 9.4 Покрытие секции `mapper`
+
+Правил с `applies_to: [… vless …]` — десять; девять покрыты тестами
+(`mapper_rules_coverage_test.dart`), одно — то же расхождение, что у trojan.
+Сверх них покрыты два правила из `protocols/vless.json`
+(`vision_udp443_is_a_compound_name`, `packet_encoding_none_means_absent`):
+`applies_to` у них нет, и страж их не спрашивает, — но исполняет их маппер, и
+тесты на них написаны.
+
+- `sni_heuristic_falls_back_to_server` — `sni` без `.` и `:` должен уступать
+  адресу сервера. В LxBox не реализовано ни на одном входе vless, как и у
+  trojan. Включение изменило бы тела и identity живых узлов — отдельное
+  решение владельца.
+
+### 9.5 Инварианты раздела 3
+
+| Инвариант | Как проверен |
+|---|---|
+| 1. Корпус зелёный, без новых override | весь `test/contract` зелёный, ожидания корпуса vless не менялись ни на кейс, новых `.expected.lxbox.json` не заведено |
+| 2. Golden байт в байт | эталоны не перегенерированы, `git status` чист по фикстурам |
+| 3. `parseUri(toUri()) ≈ spec` | 79 ссылок корпуса из 87 разбираемых. Восемь исключений двух видов, оба — свойство ОБЩЕЙ URI-эмиссии, проверенное на СТАРОМ пути напрямую. **Явный `path=/`** (пять кейсов): `transportToQuery` его опускает (`p != '/'`), и круг даёт тело без ключа — тот же класс, что `tr` у trojan. Отбирается по свойству тела, а не списком тегов: корпус растёт. **Названные поимённо** (три): `enc-pq` — ссылка с `encryption` ~1600 символов перерастает `maxURILength` при сборке обратно; `xhttp-mode-invalid` и `xhttp-bogus-plc` — значение вне enum'а XHTTP раньше жило в модели и возвращалось в ссылку, теперь его снимает санитайзер, и круг даёт ссылку без мусора (тело и identity те же, расходится только текст ссылки — в сторону очистки) |
+| 4. Identity не меняется | 233 ссылки (89 корпусных + 144 из `app/test`): тело, `tag`, `label`, `rawSource`, `toUri()`, набор предупреждений и identity-хеш сняты СТАРЫМ путём ДО правки. Расхождений по identity, телу, тегу, имени и `rawSource` — НОЛЬ. Снимок 87 хешей корпуса зафиксирован фикстурой `test/fixtures/vless/pipeline_identity_before.json` |
+| 5. Перф | старый полный путь vless (парсер + `annotateAllWithRegistry`) ~222 мс на 2000 узлов, конвейер ~216 мс — **×0,97** при бюджете ×1,5. Конвейер ДЕШЕВЛЕ: второго прохода по `emit()` у его узлов нет вовсе. Оба перф-теста (trojan и vless) переведены на «лучший из трёх»: `flutter test -j 2` гоняет их параллельно, и первый замер под соседом растягивался до ~12 с |
+| 6. Один шаг — один коммит, зелёный прогон | «All tests passed» по затронутым каталогам |
+
+### 9.6 Расхождения с эталоном предупреждений
+
+Три, все объяснённые улучшения; лишних кодов не появилось, потерянных нет.
+
+| Ссылка | Было | Стало | Почему |
+|---|---|---|---|
+| `fp=qq` + REALITY | `reality_fp_not_chrome` с путём | то же + `params: {method: qq}` | `advisory` реестра кладёт `params`; раннер корпуса сверяет `params` только там, где их назвало ожидание |
+| `?tcp_keep_alive=30s` | `unknown_key` на `tcp_keep_alive` | кода нет | поле §453 больше не отдаётся санитайзеру и не теряется (9.2, п. 3) |
+| `?disable_tcp_keep_alive=true` | `unknown_key` | кода нет | то же |
+
+### 9.7 Заметки для шага 4 (vmess, shadowsocks)
+
+- **`parseSingboxEntry` — проверять состав полей ПЕРЕД переездом.** На vless
+  вскрылось, что он не читает `encryption`. Прежде чем переводить схему,
+  стоит сверить её ветку в `json_parsers.dart` с `body.fields` реестра:
+  поле, которого ветка не читает, на конвейере пропадёт молча.
+- **`transportMapFromQuery` умеет `networkOverride`** — он и писался под
+  vmess (`net=h2`, `net=tcp`). Дефолтный host для `h2` — параметр
+  `defaultHost`.
+- **vmess не URI, а base64-JSON.** Маппер принимает `Uri`
+  (`typedef UriMapper`), а объект v2rayN лежит в теле ссылки. Либо маппер
+  разбирает его сам из `Uri.path`, либо интерфейс получает вторую форму —
+  решить по месту, но лучше первое: `parseUri` не должен знать про формат.
+- **У shadowsocks своя userinfo** (`method:password` в base64, SIP002 и
+  legacy-форма) и `advisory` на `method` (`ss_method_legacy`) — код придёт из
+  реестра, рукописный класс снимать.
+- **Дедуп-тест `parse_warnings_test.dart`** («рукописный класс перебивает код
+  реестра») переехал на tuic: примеров у переехавших схем не остаётся по
+  определению. Шагу 5 (tuic) придётся выбрать следующую непереехавшую схему.
