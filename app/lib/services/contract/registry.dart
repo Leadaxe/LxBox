@@ -89,6 +89,28 @@ final class FieldSchema {
   Map<String, dynamic>? get maxWhen =>
       (raw['max_when'] as Map?)?.cast<String, dynamic>();
 
+  /// §481 (контракт 1.1.11) — УСЛОВНЫЙ ПОРОГ снизу, зеркало [maxWhen] с
+  /// тремя нарочными отличиями.
+  ///
+  /// Форма: `{min, code, action, absent_is_zero?, when}`.
+  ///
+  /// 1. **Значение НЕ заменяется.** У `max_when` завышенное число садится на
+  ///    потолок; здесь подстановка минимума означала бы выдумать за
+  ///    провайдера размер паддинга, от которого зависит рукопожатие.
+  /// 2. **Исключения по входу нет** (`except_sources`): правило про то, что
+  ///    ядро отвергает на загрузке ВСЕГО конфига, и кто написал тело —
+  ///    неважно.
+  /// 3. **`absent_is_zero`** — порог действует и на ОТСУТСТВУЮЩЕЕ поле: ядро
+  ///    читает незаданный `s2` как 0, и «ключ защиты есть, паддинга нет» так
+  ///    же фатально, как «ключ + паддинг 5». Без флага правило молчало бы
+  ///    ровно на том случае, который встречается в живых подписках чаще
+  ///    битого значения.
+  ///
+  /// Обычный [min] здесь не подошёл: он действует всегда и снял бы паддинг у
+  /// каждого обычного AmneziaWG-узла, где порога нет вовсе.
+  Map<String, dynamic>? get minWhen =>
+      (raw['min_when'] as Map?)?.cast<String, dynamic>();
+
   String? get format => raw['format'] as String?;
 
   /// §477 (контракт 1.1.9) — регулярное выражение на строковое значение,
@@ -223,6 +245,7 @@ final class BodySchema {
     required this.core,
     required this.order,
     required this.fields,
+    this.relations = const [],
   });
 
   /// Тег ядра, по которому сверен список полей.
@@ -231,6 +254,15 @@ final class BodySchema {
   final List<String> order;
 
   final Map<String, FieldSchema> fields;
+
+  /// §481 (контракт 1.1.11) — связи уровня ТЕЛА, а не поля.
+  ///
+  /// `conflicts`/`requires` живут у поля и говорят про пару «я и сосед»;
+  /// `ranges_disjoint` у `h1`–`h4` — свойство НАБОРА: виноват может быть любой
+  /// из четырёх, и снятие одного пару не развело бы.
+  ///
+  /// Форма элемента: `{kind, paths, defaults?, action, code}`.
+  final List<Map<String, dynamic>> relations;
 }
 
 /// Текст кода предупреждения из `registry/warnings.json`.
@@ -476,6 +508,10 @@ final class ContractRegistry {
       core: body['core'] as String? ?? '',
       order: order,
       fields: fields,
+      relations: [
+        for (final e in (body['relations'] as List?) ?? const [])
+          if (e is Map) e.cast<String, dynamic>(),
+      ],
     );
   }
 

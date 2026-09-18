@@ -69,15 +69,11 @@ library;
 
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
-import '../../app_log.dart';
 import '../uri_utils.dart';
 import 'uri_mapper.dart';
 
 /// Порт по умолчанию — канонический WireGuard.
 const _kDefaultPort = 51820;
-
-/// Дефолт `allowed_ips` при отсутствии параметра (D-022, обе стороны).
-const _kDefaultAllowedIps = '0.0.0.0/0, ::/0';
 
 /// §456 — имя узла из INI, когда ни комментария под `[Peer]`, ни `nameHint`
 /// нет. Оно же попадает в тег: INI тега не несёт.
@@ -262,15 +258,22 @@ UriMapping? _mapWireguardParams(
   // Реестр про написание молчит: `format: base64_32` только ПРОВЕРЯЕТ, а
   // проверяет он строгим декодером, для которого `…ccC=` вообще не base64.
   // Без нормализации одна нода давала бы два identity-хеша (D-030).
+  //
+  // §481 (контракт 1.1.11) — ГОДНОСТЬ ключа маппер больше НЕ судит. Раньше
+  // `normalizeWGKey == null` роняла узел МОЛЧА и только на входе «ссылка»: то
+  // же значение телом sing-box проверок не проходило вовсе и уносило мусор в
+  // ядро. Теперь негодный ключ уезжает в тело КАК ЕСТЬ, и его судит реестр
+  // (`format: base64_32`, `on_invalid: drop_node`, код `wg_key_invalid`) —
+  // одинаково на всех входах и С КОДОМ. Перевод написания остаётся здесь: о
+  // нём реестр молчит, а `format` проверяет строгим декодером, для которого
+  // `…ccC=` вообще не base64.
   final privateKeyRaw = (q['privatekey'] ?? q['private_key'] ?? '').trim();
   if (privateKeyRaw.isEmpty) return null;
-  final privateKey = normalizeWGKey(privateKeyRaw);
-  if (privateKey == null) return null;
+  final privateKey = normalizeWGKey(privateKeyRaw) ?? privateKeyRaw;
 
   final publicKeyRaw = (q['publickey'] ?? q['public_key'] ?? '').trim();
   if (publicKeyRaw.isEmpty) return null;
-  final publicKey = normalizeWGKey(publicKeyRaw);
-  if (publicKey == null) return null;
+  final publicKey = normalizeWGKey(publicKeyRaw) ?? publicKeyRaw;
 
   final address = q['address'] ?? '';
   if (address.isEmpty) return null;
@@ -281,43 +284,29 @@ UriMapping? _mapWireguardParams(
   // — в отличие от `privatekey`/`private_key`, где алиас добавлен намеренно,
   // D-021).
   //
-  // ЗАПРОС К ЛАУНЧЕРУ (спека 472, шаг 7). Битый psk ОТБРАКОВЫВАЕТ УЗЕЛ, и это
-  // требование КОРПУСА: `uri/wireguard/junk_presharedkey_rejected` ждёт
-  // `dropped: parse_error`, а не узел с одним кодом. Реестр же объявляет у
-  // `peers[].pre_shared_key` `on_invalid: {action: drop}` — то есть снял бы
-  // ПОЛЕ и оставил узел жить без общего ключа, а такой туннель к серверу с
-  // psk не поднимется вовсе. Пока две записи расходятся, держим ту, которую
-  // нормирует корпус.
+  // §481 (контракт 1.1.11) — ЗАПРОС ЗАКРЫТ В НАШУ СТОРОНУ: реестр объявил у
+  // `peers[].pre_shared_key` `on_invalid: {action: drop_node}` с кодом
+  // `wg_key_invalid`. Прежде реестр снимал здесь ПОЛЕ, а маппер ронял узел
+  // молча, и две записи расходились. Теперь узел роняет реестр, и мусорный psk
+  // уезжает ему как есть.
   final pskRaw = (q['presharedkey'] ?? '').trim();
-  final String psk;
-  if (pskRaw.isEmpty) {
-    psk = '';
-  } else {
-    final normalized = normalizeWGKey(pskRaw);
-    if (normalized == null) return null;
-    psk = normalized;
-  }
+  final psk = pskRaw.isEmpty ? '' : (normalizeWGKey(pskRaw) ?? pskRaw);
 
-  final badHeaders = <(String, String)>[];
   final badAwg3 = <(String, String)>[];
   // §463 — пути полей, снятых правилом `requires` реестра (одинокий `jmin`).
   final droppedRequires = <String>[];
-  final awg = Awg.fromQuery(q,
-      badHeaders: badHeaders,
-      badAwg3: badAwg3,
-      droppedRequires: droppedRequires);
+  final awg =
+      Awg.fromQuery(q, badAwg3: badAwg3, droppedRequires: droppedRequires);
 
-  final tag = tagFromLabel(label, 'wireguard', host, port);
-
-  // §421 — узел с битым ключом защиты / коротким паддингом выбрасывается:
-  // ядро отвергло бы конфиг целиком (SPEC 123 §2). Причина — в debug-лог.
-  if (awg != null) {
-    final dropReason = awg3NodeError(awg);
-    if (dropReason != null) {
-      AppLog.I.debug('$tag: ${dropReason.renderEn()}');
-      return null;
-    }
-  }
+  // §481 (контракт 1.1.11) — рукописная проверка AWG 3.x (`awg3NodeError`)
+  // СНЯТА: её исполняет реестр. Битый ключ защиты заголовков — `pattern` плюс
+  // `format: base64_32` с `on_invalid: drop_node` (`awg3_header_key_invalid`),
+  // короткий паддинг — `min_when` у `s1`–`s4` (`awg3_padding_too_short`,
+  // `absent_is_zero`). Оба кода были объявлены в `warnings.json` и НЕ
+  // СТАВИЛИСЬ никогда: рукописная проверка роняла узел молча и только на
+  // входе «ссылка». Нормализация написания ключа к std-base64 переехала в
+  // [normalizeAwgHeaderKey] — её реестр не делает.
+  if (awg != null) normalizeAwgHeaderKey(awg);
 
   final peer = <String, dynamic>{
     'address': host,
@@ -326,8 +315,13 @@ UriMapping? _mapWireguardParams(
     // §025 — WARP client_id: `reserved=b0,b1,b2` или base64 `client_id`.
     // Битое значение параметр опускает, узел живёт (`uri.query.reserved`).
     'reserved': ?_reserved(q['reserved'] ?? q['client_id'] ?? ''),
-    'allowed_ips': _cidrList(
-        q['allowedips'] ?? q['allowed_ips'] ?? _kDefaultAllowedIps),
+    // §481 (контракт 1.1.11) — дефолт `0.0.0.0/0,::/0` СНЯТ отсюда: он стал
+    // `default_when` у `peers[].allowed_ips`. Раньше он стоял двумя копиями
+    // (здесь и в конвертере профиля Amnezia) и на входе sing-box не работал
+    // вовсе — тело без `allowed_ips` узел ТЕРЯЛ, хотя ядро отвергает такого
+    // пира фаталом на весь конфиг. Тела узлов от переезда не сдвинулись:
+    // дефолт материализуется, как и прежде, только теперь одним местом.
+    'allowed_ips': ?_cidrListOrNull(q['allowedips'] ?? q['allowed_ips']),
     if (psk.isNotEmpty) 'pre_shared_key': psk,
     // §421 — число как раньше; AWG3-диапазон `25-35` — строкой.
     'persistent_keepalive_interval': ?parseWgKeepalive(q['keepalive']),
@@ -372,7 +366,6 @@ UriMapping? _mapWireguardParams(
   // появляется ни здесь, ни там.
   final askedAwg = awg != null ||
       Awg.hasAwg3Params(q) ||
-      badHeaders.isNotEmpty ||
       badAwg3.isNotEmpty ||
       droppedRequires.isNotEmpty;
 
@@ -383,10 +376,6 @@ UriMapping? _mapWireguardParams(
     tagAddress: (host, port),
     kindIsAwg: askedAwg,
     warnings: [
-      // §463 — код ПОФАКТОРНО, по одному на битый заголовок: конверт корпуса
-      // несёт одну запись, а человеку нужны все четыре имени.
-      for (final (field, value) in badHeaders)
-        AwgHeaderInvalidWarning(field, value),
       // §463 — код с путём: снятие по `requires` реестра, а не битое
       // значение (у `jmin` оно как раз корректное — не хватает пары).
       for (final field in droppedRequires)
@@ -405,6 +394,16 @@ List<String> _cidrList(String raw) => [
       for (final e in raw.split(','))
         if (e.trim().isNotEmpty) ensureCidr(e.trim()),
     ];
+
+/// §481 — то же, но `null` на ОТСУТСТВУЮЩЕМ параметре: ключа в теле не
+/// появляется вовсе, и дефолт материализует реестр (`default_when`). Пустая
+/// строка — тоже «параметра нет»: писать пустой список значило бы дать ядру
+/// «missing allowed ips for peer» фаталом на весь конфиг вместо дефолта.
+List<String>? _cidrListOrNull(String? raw) {
+  if (raw == null) return null;
+  final list = _cidrList(raw);
+  return list.isEmpty ? null : list;
+}
 
 /// Три байта `reserved` из десятичной тройки или base64; `null` — параметра
 /// нет или он битый (поле опускается, узел живёт).

@@ -141,13 +141,14 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
 ///
 /// Различать эти два «null» вызывающему не нужно: `parseUri` выбирает ветку
 /// ДО вызова, по имени схемы ([kPipelineSchemes]).
-NodeSpec? parseUriViaPipeline(String uri, String scheme) {
+NodeSpec? parseUriViaPipeline(String uri, String scheme,
+    {XrayDropVerdict? dropped}) {
   final mapper = _kMappers[scheme];
   if (mapper == null) return null;
   // §472 шаг 4 — маппер получает ИСХОДНЫЙ ТЕКСТ. Общего `Uri.tryParse` здесь
   // больше нет: у vmess и shadowsocks ссылка не URI, и приведение authority к
   // нижнему регистру убивало бы base64 (см. [UriMapper]).
-  return _runPipeline(uri, mapper);
+  return _runPipeline(uri, mapper, dropped: dropped);
 }
 
 /// §472 шаг 7 — тот же конвейер для входа, у которого СХЕМЫ НЕТ: текст INI

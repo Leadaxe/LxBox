@@ -143,6 +143,16 @@ final class RegistrySanitizer {
       root: body,
     );
     final out = ctx.sanitizeObject(body, schema.order, schema.fields, '');
+    // §481 (контракт 1.1.11) — связи уровня ТЕЛА, по ЧИСТОЙ карте.
+    //
+    // Ловушка, на которую наступил лаунчер и которую здесь обходим с самого
+    // начала: связь обязана читать результат санитайзинга, а не исходное тело.
+    // Поле, снятое за негодное значение, в тело не поедет, и ядро прочтёт
+    // вместо него свой дефолт; загляни связь в исходник, снятый
+    // `h1 = "1-4294967296"` продолжал бы «пересекаться» с соседями и хоронил
+    // бы узел кодом `awg_headers_overlap` вместо честного `awg_header_invalid`
+    // на самом поле — вина уезжала бы не на того.
+    if (!ctx.dropNode) ctx.applyBodyRelations(out, schema.relations);
     if (ctx.dropNode) {
       return SanitizeResult(null, ctx.warnings,
           explicitDropNode: ctx.explicitDropNode);
@@ -334,6 +344,12 @@ final class _Ctx {
         // AmneziaWG-узлу; обычный WireGuard поля не получает вовсе — ядро
         // берёт свой 1408, и наш дефолт спорил бы с ним и ломал identity-хеш
         // (CANON §2.4).
+        // §481 (контракт 1.1.11) — `min_when.absent_is_zero`: порог действует
+        // и на ОТСУТСТВУЮЩЕЕ поле. Стоит ДО `default_when`: у `s1`–`s4`
+        // дефолта нет вовсе, а появись он — материализованный дефолт судил бы
+        // сам себя.
+        _minWhenOnAbsent(f, _join(prefix, key));
+        if (dropNode) return out;
         final dw = f.defaultWhen;
         if (dw != null &&
             dw['absent'] == true &&
@@ -599,7 +615,17 @@ final class _Ctx {
   }
 
   _Value _sanitizeScalar(Object? value, FieldSchema f, String path) {
-    final coerced = _coerceType(value, f.type);
+    // §481 — `range_order` идёт ДО приведения типа, в отличие от прочих
+    // нормализаций. Причина в том, что он ИСПРАВЛЯЕТ негодность: перевёрнутая
+    // пара `awg_range` не проходит coerce вовсе (у таймингов AWG 3.x она и
+    // должна не проходить), и своп после него никогда бы не сработал.
+    // Нормализация написания обязана идти раньше судьи — здесь это видно
+    // буквально.
+    var value0 = value;
+    if (f.normalize == 'range_order' && value0 is String) {
+      value0 = _normalizeString(value0, 'range_order');
+    }
+    final coerced = _coerceType(value0, f.type);
     if (coerced == null) return _invalid(f, path, value);
     var v = coerced.value;
 
@@ -704,6 +730,10 @@ final class _Ctx {
     // исход правила зависит от того, КТО тело написал.
     v = _applyMaxWhen(v, f, path);
 
+    // §481 (контракт 1.1.11) — `min_when`: УСЛОВНЫЙ порог снизу. Значение не
+    // заменяется, узел уходит целиком (см. [_applyMinWhen]).
+    if (_applyMinWhen(v, f, path)) return const _Value.drop();
+
     // `advisory` — ядро значение принимает, но узел получает info-код.
     // Поле НЕ меняется.
     //
@@ -802,6 +832,126 @@ final class _Ctx {
     // Код на ИСХОДНОМ значении: человеку нужно видеть, что он написал.
     if (code != null) warn(code, path: path, value: v, secret: f.secret);
     return ceiling;
+  }
+
+  /// §481 (контракт 1.1.11) — связи секции `body.relations`.
+  ///
+  /// Единственный вид сегодня — `ranges_disjoint`: диапазоны перечисленных
+  /// полей не должны пересекаться. Свойство НАБОРА, а не пары «поле и сосед»,
+  /// поэтому `conflicts`/`requires` его не выражают — виноват может быть любой
+  /// из четырёх `h1`–`h4`, и снятие одного пару не развело бы.
+  ///
+  /// `defaults` обязателен по смыслу: незаданный заголовок участвует своим
+  /// типом сообщения WireGuard (`h1=1 … h4=4`), и «поля нет» тут не значит
+  /// «участника нет» — иначе `h1=2` рядом с незаданным `h2` прошло бы проверку
+  /// и уронило конфиг на старте.
+  ///
+  /// [clean] — ЧИСТАЯ карта (см. вызов в [RegistrySanitizer.sanitize]).
+  void applyBodyRelations(
+      Map<String, dynamic> clean, List<Map<String, dynamic>> relations) {
+    for (final rel in relations) {
+      final kind = rel['kind'];
+      if (kind != 'ranges_disjoint') {
+        _logUnknownExpression('relation', '$kind');
+        continue;
+      }
+      final paths = ((rel['paths'] as List?) ?? const []).map((e) => '$e');
+      final defaults = (rel['defaults'] as List?) ?? const [];
+      final spans = <String, (int, int)>{};
+      var i = -1;
+      for (final p in paths) {
+        i++;
+        final raw = clean.containsKey(p)
+            ? clean[p]
+            : (i < defaults.length ? defaults[i] : null);
+        final span = _rangeSpan(raw);
+        if (span != null) spans[p] = span;
+      }
+      final names = spans.keys.toList();
+      for (var a = 0; a < names.length; a++) {
+        for (var b = a + 1; b < names.length; b++) {
+          final x = spans[names[a]]!;
+          final y = spans[names[b]]!;
+          if (x.$1 > y.$2 || y.$1 > x.$2) continue;
+          final code = rel['code'] as String?;
+          if (code != null) {
+            // Адресуется ПАРОЙ: человеку нужно знать, какие два заголовка
+            // сошлись, а не только что где-то есть пересечение.
+            warn(code,
+                path: names[a],
+                value: '${names[a]}=${clean[names[a]] ?? ''} '
+                    '${names[b]}=${clean[names[b]] ?? ''}'.trim());
+          }
+          if (rel['action'] == 'drop_node') {
+            dropNode = true;
+            explicitDropNode = true;
+          }
+          return;
+        }
+      }
+    }
+  }
+
+  /// §481 (контракт 1.1.11) — условный порог снизу `min_when`.
+  ///
+  /// Возвращает `true`, когда правило сработало и поле снято (при
+  /// `action: drop_node` узел к этому моменту уже помечен на отбраковку).
+  ///
+  /// Три отличия от [_applyMaxWhen], каждое нарочное:
+  ///
+  /// - **`action: drop_node`, а не снятие поля.** Ядро отвергает такую пару на
+  ///   загрузке ВСЕГО конфига; снять поле значило бы отдать ядру узел, который
+  ///   оно всё равно не примет, и уронить чужие узлы вместе с ним;
+  /// - **замены значения нет** — подставить минимум значило бы выдумать за
+  ///   провайдера размер паддинга, от которого зависит рукопожатие;
+  /// - **исключения по входу нет** (`except_sources` у `max_when`): правило
+  ///   про то, что ядро не примет ни от кого.
+  ///
+  /// Условие читается по ИСХОДНОМУ телу ([root]), как у `max_when`: род узла
+  /// задаёт то, что написал автор, а не то, что уцелело после чистки.
+  /// Отсутствующее поле разбирает [_minWhenOnAbsent] — сюда оно не доходит.
+  bool _applyMinWhen(Object? v, FieldSchema f, String path) {
+    final rule = f.minWhen;
+    if (rule == null) return false;
+    final floor = rule['min'];
+    if (v is! num || floor is! num) return false;
+    if (v >= floor) return false;
+    if (!_conditionHolds(rule['when'], root)) return false;
+    _minWhenViolated(rule, f, path, v);
+    return true;
+  }
+
+  /// §481 — `min_when` с `absent_is_zero: true` на ОТСУТСТВУЮЩЕМ поле.
+  ///
+  /// Ядро читает незаданный `s2` как 0, и «ключ защиты заголовков есть,
+  /// паддинга нет» так же фатально, как «ключ + паддинг 5». Без этой ветки
+  /// правило молчало бы ровно на том случае, который в живых подписках
+  /// встречается чаще битого значения (кейс `awg3_padding_absent_with_header_key`).
+  void _minWhenOnAbsent(FieldSchema f, String path) {
+    final rule = f.minWhen;
+    if (rule == null || rule['absent_is_zero'] != true) return;
+    final floor = rule['min'];
+    if (floor is! num || floor <= 0) return;
+    if (!_conditionHolds(rule['when'], root)) return;
+    _minWhenViolated(rule, f, path, 0);
+  }
+
+  /// Общий исход обеих веток `min_when`: код и, при `drop_node`, отбраковка.
+  void _minWhenViolated(
+      Map<String, dynamic> rule, FieldSchema f, String path, Object? value) {
+    final code = rule['code'] as String?;
+    if (code != null) {
+      warn(code,
+          path: path,
+          value: value,
+          // Значение — размер паддинга, а не сам секрет: маскировать его
+          // нечего даже у `secret`-соседей.
+          params: {'field': path});
+    }
+    if (rule['action'] == 'drop_node') {
+      dropNode = true;
+      explicitDropNode = true;
+    }
   }
 
   /// §473 — условие правила значения (`default_when.when`, `max_when.when`).
@@ -1149,6 +1299,28 @@ String _normalizeString(String v, String norm) {
         if (_reHexRune.hasMatch(c)) b.write(c.toLowerCase());
       }
       return b.toString();
+    // §481 (контракт 1.1.11) — `range_order`: ТИХИЙ своп перевёрнутой пары
+    // границ («40-10» → «10-40»).
+    //
+    // Кода у свопа нет, и это осознанно. Правило «замена значения подписки
+    // видна» здесь не применяется: порядок границ смысла не несёт — ядро
+    // выбирает значение ИЗ диапазона, и [10,40] = [40,10]. Это перевод
+    // НАПИСАНИЯ, как `trim`, а не замена значения.
+    //
+    // Флаг стоит только у `h1`–`h4`. У таймингов AWG 3.x его нет намеренно:
+    // там перевёрнутая пара — опечатка человека, которую он обязан увидеть
+    // (SPEC 123 §2), и она уходит на `on_invalid` с `awg3_field_invalid`.
+    //
+    // Голое число («5») свопать нечего — возвращается как есть; мусор тоже
+    // проходит насквозь, его судит `type`/`on_invalid` следом.
+    case 'range_order':
+      final s = v.trim();
+      final dash = s.indexOf('-');
+      if (dash <= 0) return v;
+      final lo = int.tryParse(s.substring(0, dash));
+      final hi = int.tryParse(s.substring(dash + 1));
+      if (lo == null || hi == null || lo <= hi) return v;
+      return '$hi-$lo';
     default:
       _logUnknownExpression('normalize', norm);
       return v;
@@ -1266,13 +1438,32 @@ void _logUnknownExpression(String kind, String name) {
     // (h1..h4, таймеры lx.32). Форма прибытия законна ОБЕ, и подмена одной
     // на другую меняла бы конфиг на ровном месте, поэтому значение идёт как
     // есть; мусор вне этих двух форм снимается.
+    //
+    // §481 (контракт 1.1.11) — ГРАНИЦЫ uint32. Реестр объявил их у `awg_range`
+    // прямо: шире ядро отвергает разбором и роняет ВЕСЬ конфиг, поэтому
+    // значение снимается, а не усекается (усечение подсунуло бы серверу
+    // другой magic-заголовок и молча сломало бы рукопожатие). Проверяются обе
+    // границы диапазона и голое число.
     case 'awg_range':
-      if (value is int) return (value: value);
+      if (value is int) return _uint32Ok(value) ? (value: value) : null;
       if (value is double && value == value.roundToDouble()) {
-        return (value: value.toInt());
+        final n = value.toInt();
+        return _uint32Ok(n) ? (value: n) : null;
       }
       if (value is String && _reAwgRange.hasMatch(value.trim())) {
-        return (value: value.trim());
+        final s = value.trim();
+        final parts = [for (final p in s.split('-')) int.tryParse(p)];
+        for (final n in parts) {
+          if (n == null || !_uint32Ok(n)) return null;
+        }
+        // §481 — ПЕРЕВЁРНУТАЯ пара негодна сама по себе. Разводит эти два
+        // исхода `normalize: range_order`: поле с ним своп получает ТИХО и
+        // сюда приезжает уже прямой парой (`h1`–`h4`), а поле без него —
+        // тайминги AWG 3.x — доезжает как есть и снимается с кодом. Там
+        // перевёрнутая пара опечатка человека, и он обязан её увидеть
+        // (SPEC 123 §2).
+        if (parts.length == 2 && parts[0]! > parts[1]!) return null;
+        return (value: s);
       }
       return null;
     // `int_array` — массив целых (`peers[].reserved`: ровно три). Число
@@ -1300,6 +1491,28 @@ void _logUnknownExpression(String kind, String name) {
 
 /// Форма `awg_range`: голое число либо диапазон «N-M».
 final _reAwgRange = RegExp(r'^\d+(-\d+)?$');
+
+/// §481 — границы `awg_range` (контракт 1.1.11): ядро читает эти поля как
+/// uint32 и на большем числе валит разбор ВСЕГО конфига.
+bool _uint32Ok(int n) => n >= 0 && n <= 0xFFFFFFFF;
+
+/// §481 — отрезок значения `awg_range` для `ranges_disjoint`: голое число `N`
+/// — отрезок `[N, N]`, диапазон `"N-M"` — `[N, M]`. `null` — значение не в
+/// форме диапазона (его уже осудил `on_invalid`, второй раз не судим).
+(int, int)? _rangeSpan(Object? raw) {
+  if (raw is int) return (raw, raw);
+  if (raw is! String) return null;
+  final s = raw.trim();
+  final dash = s.indexOf('-');
+  if (dash < 0) {
+    final n = int.tryParse(s);
+    return n == null ? null : (n, n);
+  }
+  final lo = int.tryParse(s.substring(0, dash));
+  final hi = int.tryParse(s.substring(dash + 1));
+  if (lo == null || hi == null) return null;
+  return lo <= hi ? (lo, hi) : (hi, lo);
+}
 
 bool _formatOk(Object? v, String format) {
   if (v is List) return v.every((e) => _formatOk(e, format));

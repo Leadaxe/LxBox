@@ -309,7 +309,14 @@ void main() {
       expect(awg.fields['h2'], isA<int>());
     });
 
-    test('битые формы (10-, a-b, -5, 1-2-3) → drop, парс не падает', () {
+    // §481 (контракт 1.1.11) — КОД теперь ставит реестр, а не разбор: маппер
+    // отдаёт мусор санитайзеру как есть, и поле снимается с
+    // `awg_header_invalid` на всех входах, а не только на ссылке (проверяет
+    // `body_sanitizer_test.dart`). Здесь реестр не загружен (см. шапку файла),
+    // и последним читателем тела остаётся `Awg.fromJson` — он мусор не
+    // понимает и поле не заводит. Наблюдаемый итог тот же, что был: заголовков
+    // в узле нет, `jc` цел, парс не падает.
+    test('битые формы (10-, a-b, -5, 1-2-3) → поля нет, парс не падает', () {
       final awg = parseWireguardUri(
           '$base&h1=10-&h2=a-b&h3=-5&h4=1-2-3&jc=4')!.awg!;
       expect(awg.fields.keys.where(Awg.headerKeys.contains), isEmpty);
@@ -493,7 +500,16 @@ void main() {
       }
     });
 
-    test('таблица негативов: поле снято, узел жив, awg3_field_invalid', () {
+    // §481 (контракт 1.1.11) — КОД у таймингов ставит теперь РЕЕСТР, и путь у
+    // него — имя поля ТЕЛА (`content_padding_addition`), как нормирует корпус,
+    // а не имя параметра ссылки (`contentpaddingaddition`), которое ставил
+    // маппер. Здесь реестр не загружен (см. шапку файла), поэтому кода нет
+    // вовсе; проверяет его `contract_test.dart`
+    // (`awg3_timing_range_reversed_dropped`) и `body_sanitizer_test.dart`.
+    // Булевы (`randomtrailers`/`disablecookies`) код по-прежнему получают от
+    // маппера: ядро их формы не знает, и правила значения у реестра нет.
+    test('таблица негативов: поле снято, узел жив', () {
+      const boolParams = {'randomtrailers', 'disablecookies'};
       const cases = <String, String>{
         'contentpaddingaddition': 'abc',
         'rekeyaftertime': '120-100', // N > M — НЕ свопается (в отличие от h)
@@ -509,8 +525,10 @@ void main() {
         final json = Awg.awg3ParamToJson[param]!;
         expect(spec.awg!.fields.containsKey(json), false,
             reason: '$param=$value должно быть снято');
-        expect(spec.warnings, contains(Awg3FieldInvalidWarning(param, value)),
-            reason: '$param=$value');
+        if (boolParams.contains(param)) {
+          expect(spec.warnings, contains(Awg3FieldInvalidWarning(param, value)),
+              reason: '$param=$value');
+        }
         // Маркер AWG3 даже при невалидном поле: узел — AmneziaWG, дефолт 1280.
         expect(spec.mtu, 1280);
       });
@@ -521,22 +539,25 @@ void main() {
       expect(spec.awg!.fields['h1'], '200-300');
     });
 
-    test('битый ключ защиты (не base64 / 16 байт / нули) → узел выброшен', () {
+    // §481 (контракт 1.1.11) — рукописный `awg3NodeError` СНЯТ: узел роняет
+    // реестр (`awg3_header_key_invalid` / `awg3_padding_too_short`, оба
+    // `drop_node`), и роняет С КОДОМ и на входе sing-box тоже, чего рукописная
+    // проверка не умела вовсе. Реестр здесь не загружен — значит, узел живёт;
+    // отбраковку по правилу проверяет `body_sanitizer_test.dart`.
+    test('битый ключ защиты БЕЗ реестра доезжает: судить его некому', () {
       const zero = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
       for (final bad in ['not-base64!', 'AQIDBAUGBwgJCgsMDQ4PEA==', zero]) {
-        expect(parseWireguardUri(uri('$s&headerprotectionkey=$bad')), isNull,
+        expect(parseWireguardUri(uri('$s&headerprotectionkey=$bad')), isNotNull,
             reason: bad);
       }
     });
 
-    test('ключ защиты + s1–s4 < 12 (или отсутствует) → узел выброшен', () {
+    test('короткий паддинг БЕЗ реестра доезжает; без ключа защиты он легален '
+        'и при реестре (AWG2-поведение)', () {
       expect(
           parseWireguardUri(
               uri('&s1=55&s2=42&s3=40&s4=11&headerprotectionkey=$hkQ')),
-          isNull);
-      expect(parseWireguardUri(uri('&s1=55&s2=42&s3=40&headerprotectionkey=$hkQ')),
-          isNull);
-      // Без ключа защиты короткий паддинг легален (AWG2-поведение).
+          isNotNull);
       expect(parseWireguardUri(uri('&s1=5&s4=0')), isNotNull);
     });
 
@@ -639,9 +660,11 @@ void main() {
       // 1280 (тест «AWG2 без AWG3-маркеров клампится как раньше»).
       expect(spec.mtu, 1376);
       expect(spec.peers.single.persistentKeepalive, '25-35');
+      // §481 — годность ключа судит реестр (в этом файле он не загружен);
+      // разбор тела её больше не проверяет и узла не теряет.
       final bad = Map<String, dynamic>.from(entry)
         ..['header_protection_key'] = 'AQIDBAUGBwgJCgsMDQ4PEA==';
-      expect(parseSingboxEntry(bad), isNull);
+      expect(parseSingboxEntry(bad), isNotNull);
     });
 
     test('INI: AWG3-ключи [Interface], PersistentKeepalive = 25-35', () {

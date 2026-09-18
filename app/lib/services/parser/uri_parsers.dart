@@ -1,6 +1,7 @@
 import '../../models/node_spec.dart';
 import 'amnezia_link.dart';
 import 'mappers/uri_pipeline.dart';
+export 'mappers/uri_pipeline.dart' show XrayDropVerdict;
 import 'uri_utils.dart';
 import 'uri_parsers/anytls_parser.dart';
 import 'uri_parsers/http_parser.dart';
@@ -39,7 +40,14 @@ const _kWireguardSchemes = <String>{'wireguard', 'wg', 'awg'};
 
 /// Диспетчер по схеме URI. Возвращает NodeSpec или null (skip).
 /// Ошибки структуры (отсутствие host, uuid) — null, не throw.
-NodeSpec? parseUri(String uri) {
+///
+/// §481 (контракт 1.1.11) — [dropped]: КОД отбраковки наружу. `code` в
+/// `dropped[]` нормативен (D-088), `reason` — нет, а `null` в ответе сам по
+/// себе о причине не говорит: отличить «узел выброшен за негодный ключ WG» от
+/// «за пересечение заголовков» вызывающему было нечем, и проверить перенос
+/// правил в реестр — тоже. Заполняется на схемах конвейера; там, где схема ещё
+/// идёт своим парсером, остаётся пустым, и вызывающий сверяет один `ref`.
+NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
   final t = uri.trim();
   if (t.isEmpty) return null;
   final scheme = t.split('://').first.toLowerCase();
@@ -57,7 +65,7 @@ NodeSpec? parseUri(String uri) {
     // `parseWireguardUri`: у схемы есть ВТОРАЯ ФОРМА `awg://<base64 .conf>`
     // (§450), и распознать её надо ДО конвейера — её payload не URI вовсе.
     if (kPipelineSchemes.contains(scheme) && !_kWireguardSchemes.contains(scheme)) {
-      return parseUriViaPipeline(t, scheme);
+      return parseUriViaPipeline(t, scheme, dropped: dropped);
     }
     switch (scheme) {
       case 'vless':
@@ -95,7 +103,7 @@ NodeSpec? parseUri(String uri) {
       case 'wg':
       case 'wireguard':
       case 'awg': // §097 — AmneziaWG2 алиас (та же endpoint-логика, что WG)
-        return parseWireguardUri(t);
+        return parseWireguardUri(t, dropped: dropped);
       case 'masque': // §130 — MASQUE-WARP (CONNECT-IP)
         return parseMasqueUri(t);
       case 'vpn': // §103 §9.B12 — Amnezia vpn:// строкой внутри URI-списка

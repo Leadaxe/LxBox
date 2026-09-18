@@ -1093,30 +1093,19 @@ NodeSpec? parseSingboxEntry(
           (p['client_id'] is String
               ? parseReserved(p['client_id'] as String)
               : null);
-      // SPEC 103 D-023/D-030 — та же проверка ключей, что на URI/INI-путях:
-      // мусорный ключ из импортированного конфига валит `sing-box check`
-      // целиком, а неканоническая форма даёт другой identity-хеш той же ноде.
-      final wgPriv = normalizeWGKey(entry['private_key']?.toString() ?? '');
-      final wgPub = normalizeWGKey(p['public_key']?.toString() ?? '');
-      if (wgPriv == null || wgPub == null) return null;
-      // §421 — битый ключ защиты заголовка / короткий паддинг: узел
-      // выброшен, как на URI-пути (ядро отвергло бы конфиг целиком).
-      if (awg != null) {
-        final dropReason = awg3NodeError(awg);
-        if (dropReason != null) {
-          AppLog.I.debug('$wgTag: ${dropReason.renderEn()}');
-          return null;
-        }
-      }
+      // §481 (контракт 1.1.11) — ГОДНОСТЬ ключей и правила AWG 3.x судит
+      // ТОЛЬКО реестр (`wg_key_invalid`, `awg3_header_key_invalid`,
+      // `awg3_padding_too_short` — все с `drop_node`). Здесь остаётся перевод
+      // написания: неканоническая форма даёт другой identity-хеш той же ноде,
+      // а о написании реестр молчит.
+      final wgPrivRaw = entry['private_key']?.toString() ?? '';
+      final wgPubRaw = p['public_key']?.toString() ?? '';
+      final wgPriv = normalizeWGKey(wgPrivRaw) ?? wgPrivRaw;
+      final wgPub = normalizeWGKey(wgPubRaw) ?? wgPubRaw;
+      if (awg != null) normalizeAwgHeaderKey(awg);
       final wgPskRaw = p['pre_shared_key']?.toString() ?? '';
-      final String wgPsk;
-      if (wgPskRaw.isEmpty) {
-        wgPsk = '';
-      } else {
-        final normalized = normalizeWGKey(wgPskRaw);
-        if (normalized == null) return null;
-        wgPsk = normalized;
-      }
+      final wgPsk =
+          wgPskRaw.isEmpty ? '' : (normalizeWGKey(wgPskRaw) ?? wgPskRaw);
       return WireguardSpec(
         id: newUuidV4(),
         tag: wgTag,

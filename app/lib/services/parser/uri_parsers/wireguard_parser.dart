@@ -7,7 +7,7 @@ import '../uri_utils.dart';
 // WireGuard (URI form)
 // ════════════════════════════════════════════════════════════════════════════
 
-WireguardSpec? parseWireguardUri(String uri) {
+WireguardSpec? parseWireguardUri(String uri, {XrayDropVerdict? dropped}) {
   // §450 — вторая форма: после схемы не `key@host:port?…`, а base64 целого
   // wg-quick (панели с AmneziaWG 3.1). Штатный разбор видел бы в base64
   // «хост» без ключа и ронял узел молча. Форма опознаётся ДО конвейера: её
@@ -15,7 +15,10 @@ WireguardSpec? parseWireguardUri(String uri) {
   final fromConf = _parseWgConfBase64Link(uri);
   if (fromConf != null) return fromConf;
 
-  return parseUriViaPipeline(uri, 'wireguard') as WireguardSpec?;
+  // §481 — вердикт отбраковки наружу: ключи WG и правила AWG судит реестр, и
+  // раннер корпуса сверяет его `code`.
+  return parseUriViaPipeline(uri, 'wireguard', dropped: dropped)
+      as WireguardSpec?;
 }
 
 

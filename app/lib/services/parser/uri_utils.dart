@@ -275,27 +275,23 @@ String normalizePacketEncoding(
 /// занижение лишь чуть мельчит пакеты, завышение — тихий облом
 /// (handshake есть, данных нет). Явно заниженный MTU уважаем; обычный
 /// WG не трогаем (вызывать только при наличии AWG-полей).
-/// §421 — проверка AWG3 на УЗЕЛ (не на поле): битый ключ защиты заголовка
-/// или слишком короткий паддинг роняют весь конфиг на загрузке ядра, поэтому
-/// узел выбрасывается (та же политика, что у битого private/public key).
-/// Возвращает причину (`Awg3HeaderKeyInvalidWarning` /
-/// `Awg3PaddingTooShortWarning`) или `null`, если всё в порядке. Валидный
-/// ключ нормализуется В МЕСТЕ (url-safe/без паддинга → std base64 — единственная
-/// форма, которую декодирует ядро; иначе одна нода даёт два identity-хеша).
-/// Эталон Go `validateAWG3` (awg3.go).
-NodeWarning? awg3NodeError(Awg awg) {
+/// §481 (контракт 1.1.11) — только ПЕРЕВОД НАПИСАНИЯ ключа защиты заголовков
+/// AWG 3.x: url-safe / без паддинга → std base64, единственная форма, которую
+/// декодирует ядро (иначе одна нода даёт два identity-хеша).
+///
+/// Годность НЕ судится: прежний `awg3NodeError` роняд узел молча и только на
+/// входе «ссылка», а объявленные коды `awg3_header_key_invalid` и
+/// `awg3_padding_too_short` не ставились никогда. Теперь их ставит реестр —
+/// `pattern` + `format: base64_32` с `on_invalid: drop_node` у
+/// `header_protection_key` и `min_when` у `s1`–`s4`. Значение, которое не
+/// декодируется, остаётся В ТОМ ВИДЕ, В КАКОМ ПРИШЛО: судить его будет реестр,
+/// и в код предупреждения человеку нужно написанное им, а не наша догадка.
+void normalizeAwgHeaderKey(Awg awg) {
   final raw = awg.fields[Awg.headerKey];
-  if (raw is! String || raw.trim().isEmpty) return null;
+  if (raw is! String || raw.trim().isEmpty) return;
   final bytes = _decodeBase64Lenient(raw.trim());
-  if (bytes == null || bytes.length != 32 || bytes.every((b) => b == 0)) {
-    return const Awg3HeaderKeyInvalidWarning();
-  }
+  if (bytes == null || bytes.length != 32) return;
   awg.fields[Awg.headerKey] = base64.encode(bytes);
-  final short = awg.paddingTooShortField;
-  if (short != null) {
-    return Awg3PaddingTooShortWarning(short, Awg.awg3MinPadding);
-  }
-  return null;
 }
 
 /// §421 — `keepalive`/`PersistentKeepalive`: число как раньше, AWG3-диапазон

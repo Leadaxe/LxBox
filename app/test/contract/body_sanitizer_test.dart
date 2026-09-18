@@ -936,8 +936,11 @@ void main() {
         'tag': 'wg1',
         'address': ['10.0.0.2/32'],
         'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ=',
+        // §481 — значения НЕ пересекаются намеренно: пересечение h1..h4 теперь
+        // роняет узел связью `ranges_disjoint` (свой кейс ниже), и старая пара
+        // «5-10» + 7 проверяла бы уже не форму awg_range.
         'h1': '5-10',
-        'h2': 7,
+        'h2': 20,
         'h3': 'junk',
         'peers': [
           {
@@ -951,12 +954,172 @@ void main() {
       // Форма прибытия законна ОБЕ и не подменяется: `"5-10"` осталось
       // строкой, `7` — числом.
       expect(r.body!['h1'], '5-10');
-      expect(r.body!['h2'], 7);
+      expect(r.body!['h2'], 20);
       expect(r.body!.containsKey('h3'), isFalse);
       // §481 (контракт 1.1.11): у h1..h4 появился свой `on_invalid` —
       // негодное значение снимает поле с awg_header_invalid, а не с общим
       // type_invalid.
       expect(_byCode(r, 'awg_header_invalid').path, 'h3');
+    }, skip: skip);
+
+    // ───── §481 (контракт 1.1.11) — четыре новых атрибута ─────
+    //
+    // Все четыре завёл один заход лаунчера, и все четыре — ОБЩИЕ выражения
+    // движка: `if scheme == 'wireguard'` нигде не появляется, схема лишь
+    // объявляет их у своих полей.
+
+    Map<String, dynamic> wgBody([Map<String, dynamic> extra = const {}]) => {
+          'type': 'wireguard',
+          'tag': 'wg1',
+          'address': ['10.0.0.2/32'],
+          'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ=',
+          'peers': [
+            {
+              'address': '1.2.3.4',
+              'port': 51820,
+              'public_key': 'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU=',
+              'allowed_ips': ['0.0.0.0/0'],
+            }
+          ],
+          ...extra,
+        };
+
+    SanitizeResult sanWg([Map<String, dynamic> extra = const {}]) =>
+        _san(wgBody(extra), scheme: 'wireguard', core: '1.14.0-lx.40');
+
+    test('normalize range_order: перевёрнутая пара свопается ТИХО', () {
+      final r = sanWg({'h1': '40-10'});
+      expect(r.body!['h1'], '10-40',
+          reason: 'порядок границ смысла не несёт — ядро выбирает значение ИЗ '
+              'диапазона, и [10,40] = [40,10]');
+      // Кода нет: это перевод НАПИСАНИЯ, как trim, а не замена значения.
+      expect(_codes(r), isEmpty);
+    }, skip: skip);
+
+    test('normalize range_order: голое число и прямая пара не трогаются', () {
+      expect(sanWg({'h1': 7}).body!['h1'], 7);
+      expect(sanWg({'h1': '10-40'}).body!['h1'], '10-40');
+    }, skip: skip);
+
+    test('range_order НЕ стоит у таймингов AWG 3.x — перевёрнутая пара там '
+        'опечатка и снимается с кодом', () {
+      final r = sanWg({'rekey_after_time': '120-10'});
+      expect(r.body!.containsKey('rekey_after_time'), isFalse);
+      expect(_byCode(r, 'awg3_field_invalid').path, 'rekey_after_time');
+    }, skip: skip);
+
+    test('awg_range: граница ШИРЕ uint32 снимает поле (ядро отвергло бы '
+        'разбором весь конфиг)', () {
+      final r = sanWg({'h1': '1-4294967296'});
+      expect(r.body, isNotNull, reason: 'снимается ПОЛЕ, не узел');
+      expect(r.body!.containsKey('h1'), isFalse);
+      expect(_byCode(r, 'awg_header_invalid').path, 'h1');
+    }, skip: skip);
+
+    test('body.relations ranges_disjoint: пересечение h1..h4 роняет УЗЕЛ', () {
+      final r = sanWg({'h1': '5-10', 'h2': 7});
+      expect(r.body, isNull);
+      expect(r.explicitDropNode, isTrue);
+      expect(_codes(r), contains('awg_headers_overlap'));
+    }, skip: skip);
+
+    test('ranges_disjoint: незаданный заголовок участвует ДЕФОЛТОМ ядра', () {
+      // h2 не задан, ядро читает его как 2 — и h1=2 с ним пересекается.
+      final r = sanWg({'h1': 2});
+      expect(r.body, isNull);
+      expect(_codes(r), contains('awg_headers_overlap'));
+      // А непересекающийся с дефолтами набор живёт.
+      expect(sanWg({'h1': 100}).body, isNotNull);
+    }, skip: skip);
+
+    test('ranges_disjoint читает ЧИСТУЮ карту: снятое поле не «пересекается»',
+        () {
+      // Ловушка, на которую наступил лаунчер: загляни связь в ИСХОДНОЕ тело,
+      // снятый за негодное значение h1 продолжал бы спорить с соседями, и
+      // вина уехала бы не на того.
+      final r = sanWg({'h1': '1-4294967296', 'h2': 2});
+      expect(r.body, isNotNull);
+      expect(_codes(r), isNot(contains('awg_headers_overlap')));
+      expect(_byCode(r, 'awg_header_invalid').path, 'h1');
+    }, skip: skip);
+
+    test('min_when: паддинг ниже порога при заданном ключе роняет УЗЕЛ', () {
+      final r = sanWg({
+        'header_protection_key': 'aGVhZGVyS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIz',
+        's1': 5,
+        's2': 20,
+        's3': 20,
+        's4': 20,
+      });
+      expect(r.body, isNull);
+      expect(r.explicitDropNode, isTrue);
+      expect(_byCode(r, 'awg3_padding_too_short').path, 's1');
+    }, skip: skip);
+
+    test('min_when absent_is_zero: ОТСУТСТВУЮЩИЙ паддинг при ключе — так же '
+        'фатально', () {
+      final r = sanWg({
+        'header_protection_key': 'aGVhZGVyS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIz',
+      });
+      expect(r.body, isNull);
+      expect(_codes(r), contains('awg3_padding_too_short'));
+    }, skip: skip);
+
+    test('min_when: без ключа защиты порога НЕТ — обычный AmneziaWG живёт '
+        'с любым паддингом', () {
+      final r = sanWg({'s1': 5, 'jc': 3, 'jmin': 10, 'jmax': 50});
+      expect(r.body, isNotNull);
+      expect(r.body!['s1'], 5);
+      expect(_codes(r), isNot(contains('awg3_padding_too_short')));
+    }, skip: skip);
+
+    test('pattern у header_protection_key: все нули роняют УЗЕЛ', () {
+      // 32 нулевых байта и есть строка из одних `A` с паддингом.
+      final r = sanWg({
+        'header_protection_key': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        's1': 20,
+        's2': 20,
+        's3': 20,
+        's4': 20,
+      });
+      expect(r.body, isNull);
+      expect(_codes(r), contains('awg3_header_key_invalid'));
+    }, skip: skip);
+
+    test('ключи WG судит РЕЕСТР: не-32-байтный ключ роняет узел '
+        'с wg_key_invalid, а не молча', () {
+      final short = _san({
+        ...wgBody(),
+        'private_key': 'c2hvcnQ=',
+      }, scheme: 'wireguard', core: '1.14.0-lx.40');
+      expect(short.body, isNull);
+      expect(short.explicitDropNode, isTrue);
+      final w = _byCode(short, 'wg_key_invalid');
+      expect(w.path, 'private_key');
+      // `secret: true` — значение в предупреждении маскируется.
+      expect(w.value, '***');
+    }, skip: skip);
+
+    test('битый pre_shared_key роняет УЗЕЛ наравне с обязательными ключами',
+        () {
+      final body = wgBody();
+      (body['peers'] as List).first['pre_shared_key'] = 'not-base64-at-all!!';
+      final r = _san(body, scheme: 'wireguard', core: '1.14.0-lx.40');
+      expect(r.body, isNull, reason: 'решение владельца 19.09.2026: туннель '
+          'без ожидаемого сервером PSK — тихо сломанный туннель');
+      expect(_codes(r), contains('wg_key_invalid'));
+    }, skip: skip);
+
+    test('default_when у allowed_ips: тело без ключа получает дефолт, '
+        'а не теряет узел', () {
+      final body = wgBody();
+      (body['peers'] as List).first.remove('allowed_ips');
+      final r = _san(body, scheme: 'wireguard', core: '1.14.0-lx.40');
+      expect(r.body, isNotNull);
+      expect((r.body!['peers'] as List).first['allowed_ips'],
+          ['0.0.0.0/0', '::/0']);
+      // Кода нет — это дефолт-конвенция, а не замена значения.
+      expect(_codes(r), isEmpty);
     }, skip: skip);
 
     test('type int_array: reserved из трёх чисел цел, мусор снят', () {

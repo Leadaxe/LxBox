@@ -908,11 +908,9 @@ class Awg {
   /// Из URI query (строки). Числа → `int.tryParse` (битое → пропуск поля, не
   /// валим парс — forward-compat, как mtu/keepalive). h1–h4 дополнительно
   /// принимают диапазон `N-M` (§112). `i*` пустые пропускаем.
-  /// [badHeaders] — SPEC 103 `awg_header_invalid`: сюда собираются пары
-  /// (поле, сырое значение) для h1–h4, чьё значение не uint32 и не диапазон.
-  /// Только magic-headers: битые jc/jmin/jmax/s1–s4 Go роняет молча (эталон
-  /// `applyAWGFields`, node_parser_wireguard.go) — тихий дефолт там не ломает
-  /// handshake, а у заголовка ломает.
+  /// §481 (контракт 1.1.11) — параметра `badHeaders` больше нет: годность
+  /// `h1`–`h4` (как и `jc`/`jmin`/`jmax`/`s1`–`s4`) судит РЕЕСТР, и сырое
+  /// значение уезжает в тело как есть.
   ///
   /// §421 — [badAwg3]: пары (параметр, сырое значение) для AWG3-таймингов и
   /// булевых с мусором/перевёрнутым диапазоном — поле снято, узел живёт
@@ -925,22 +923,25 @@ class Awg {
   /// ([applyJunkSizeRequires]); вызывающий ставит на них код с путём.
   static Awg? fromQuery(
     Map<String, String> q, {
-    List<(String, String)>? badHeaders,
     List<(String, String)>? badAwg3,
     List<String>? droppedRequires,
   }) {
     final f = <String, Object>{};
     final hk = (q[awg3Param(headerKey)] ?? '').trim();
     if (hk.isNotEmpty) f[headerKey] = hk;
+    // §481 (контракт 1.1.11) — тайминги судит РЕЕСТР (`type: awg_range`,
+    // `on_invalid: awg3_field_invalid`), и негодное значение уезжает ему как
+    // есть. Прежде его снимал этот разбор, а код ставил маппер — с ИМЕНЕМ
+    // ПАРАМЕТРА ССЫЛКИ в пути (`rekeyaftertime`), тогда как контракт
+    // адресует поле ТЕЛА (`rekey_after_time`).
+    //
+    // Перевёрнутая пара («180-150») здесь НЕ свопается и не должна: у этих
+    // полей реестр `normalize: range_order` не объявляет — опечатку человек
+    // обязан увидеть (SPEC 123 §2), в отличие от `h1`–`h4`.
     for (final k in awg3RangeKeys) {
       final raw = (q[awg3Param(k)] ?? '').trim();
       if (raw.isEmpty) continue;
-      final v = parseAwg3Range(raw);
-      if (v == null) {
-        badAwg3?.add((awg3Param(k), raw));
-        continue;
-      }
-      f[k] = v;
+      f[k] = parseAwg3Range(raw) ?? raw;
     }
     for (final k in awg3BoolKeys) {
       final raw = (q[awg3Param(k)] ?? '').trim();
@@ -952,20 +953,27 @@ class Awg {
       }
       if (v) f[k] = true;
     }
+    // §481 (контракт 1.1.11) — СУДИТ РЕЕСТР, а не этот разбор.
+    //
+    // Было: битые `jc`/`jmin`/`jmax`/`s1`–`s4` снимались МОЛЧА, а соседи по
+    // тому же циклу `h1`–`h4` код получали. Асимметрия жила внутри одной
+    // функции и расходилась с буквой реестра; выравнивание пошло в сторону
+    // реестра — поле снимается С КОДОМ (`awg_header_invalid`), одинаково у
+    // всех семи.
+    //
+    // Поэтому мусор уезжает в тело КАК ЕСТЬ (строкой), и его судит санитайзер:
+    // `type: int` / `type: awg_range` не сойдутся, сработает `on_invalid`.
+    // Своп перевёрнутой пары у `h1`–`h4` тоже снят отсюда — это
+    // `normalize: range_order` реестра, тихий, как `trim`.
     for (final k in numKeys) {
-      final v = q[k];
-      if (v == null) continue;
-      if (headerKeys.contains(k)) {
-        final h = _parseHeader(v.trim());
-        if (h != null) {
-          f[k] = h;
-        } else if (v.trim().isNotEmpty) {
-          badHeaders?.add((k, v.trim()));
-        }
-        continue;
-      }
-      final n = int.tryParse(v.trim());
-      if (n != null) f[k] = n;
+      final v = q[k]?.trim();
+      if (v == null || v.isEmpty) continue;
+      // Числом кладётся только то, что ЧИСЛОМ и написано в смысле ядра
+      // (`strconv.ParseUint`): `-5` для него не число, а мусор, и подсунуть
+      // санитайзеру `int -5` значило бы выдать мусор за годную форму. Это
+      // граница ТИПА, не суждение о годности: и то и другое доезжает до
+      // реестра, просто в той форме, в какой написано.
+      f[k] = _parseUint32(v) ?? v;
     }
     for (final k in _iTagKeys) {
       final v = q[k];

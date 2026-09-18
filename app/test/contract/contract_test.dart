@@ -281,8 +281,13 @@ void main() {
 
         Map<String, dynamic> envelope;
         NodeSpec? spec;
+        // §481 (контракт 1.1.11) — раннер читает КОД отбраковки. `code` в
+        // `dropped[]` нормативен (D-088); без него конверт не отличал «узел
+        // выброшен за негодный ключ WG» от «за пересечение заголовков», то
+        // есть проверить перенос правил в реестр было нечем.
+        final verdict = XrayDropVerdict();
         try {
-          spec = parseUri(uri);
+          spec = parseUri(uri, dropped: verdict);
         } catch (_) {
           spec = null;
         }
@@ -290,7 +295,11 @@ void main() {
         if (spec == null) {
           // CANON §4: битая/нераспознанная нода → dropped, подписка живёт.
           envelope = _buildEnvelope(dropped: [
-            {'ref': uri, 'reason': 'parse_error'},
+            {
+              'ref': uri,
+              'reason': 'parse_error',
+              if (verdict.reason != null) 'code': verdict.reason!.code,
+            },
           ]);
         } else {
           envelope = _buildEnvelope(nodes: [_canonNode(spec)]);
