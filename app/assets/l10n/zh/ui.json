@@ -664,9 +664,6 @@
  "Any — tap Edit to filter by network / L7 protocol": {
   "value": "任意 — 点「编辑」可按网络 / L7 协议筛选"
  },
- "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.": {
-  "value": "AnyTLS 的「min_idle_session=%s」不是非负整数——该设置已丢弃，改用内核默认值。"
- },
  "Anything above is red.": {
   "value": "高于该值即标红。"
  },
@@ -1820,9 +1817,6 @@
  "Flow \"%s\" is deprecated.": {
   "value": "Flow「%s」已废弃。"
  },
- "Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.": {
-  "value": "Flow「xtls-rprx-vision」与「%s」传输不兼容——flow 已移除。"
- },
  "Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.": {
   "value": "清空 FakeIP 分配与已缓存的 DNS 响应。若 VPN 正在运行会重新加载。"
  },
@@ -2347,9 +2341,6 @@
  },
  "L×Box runs as a foreground service while VPN is active. A persistent notification is required by Android — it lets you see at a glance that VPN is on, and prevents the system from killing the tunnel in the background.\n\nNo promotional or alert notifications will be sent.": {
   "value": "VPN 开启期间 L×Box 以前台服务运行。Android 要求显示常驻通知——它能让你一眼看到 VPN 已开启，也能避免系统在后台杀掉隧道。\n\n不会发送任何推广或提示通知。"
- },
- "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.": {
-  "value": "MASQUE 的 HTTP 版本「%s」不是 h3、h2 或 auto——已改用 h3。"
  },
  "MASQUE registration failed": {
   "value": "MASQUE 注册失败"
@@ -3900,9 +3891,6 @@
  },
  "TLS server name (SNI) — optional": {
   "value": "TLS 服务器名（SNI）——可选"
- },
- "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.": {
-  "value": "TUIC 拥塞控制「%s」不属于 cubic、new_reno、bbr 之一——该设置已丢弃，改用内核默认值。"
  },
  "Tag": {
   "value": "标签"

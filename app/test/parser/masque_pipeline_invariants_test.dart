@@ -236,7 +236,8 @@ void main() {
       expect(w.value, 'tcp',
           reason: 'значение в коде — то, что написал автор ссылки');
       // Рукописного класса на пути ссылки больше нет: производитель один.
-      expect(spec.warnings.whereType<MasqueVhttpInvalidWarning>(), isEmpty);
+      // §472 шаг 9 — `MasqueVhttpInvalidWarning` снят совсем, и проверять его
+      // отсутствие больше нечем: он не компилируется.
     }, skip: skip);
 
     test('profile вне набора снимается реестром, узел живёт на дефолте', () {

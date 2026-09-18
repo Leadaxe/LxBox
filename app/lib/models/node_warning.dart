@@ -116,22 +116,11 @@ final class DeprecatedFlowWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
-/// §115 — `xtls-rprx-vision` валиден только на голом TLS; с любым
-/// транспортом (ws/grpc/httpupgrade/xhttp) несовместим — ядро такую
-/// комбинацию не поднимет. Парсер гасит flow, warning сообщает почему.
-final class VisionWithTransportWarning extends NodeWarning {
-  final String transport;
-  const VisionWithTransportWarning(this.transport);
-
-  @override
-  List<Object?> get props => [transport];
-
-  @override
-  String messageWith(GetLocalText t) => t.s("Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.", transport);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// §115 / §472 шаг 9 — `VisionWithTransportWarning` снят: гашение
+// `xtls-rprx-vision` при живом транспорте исполняет санитайзер по реестру
+// (`protocols/vless.json` → `flow`, `conflicts`), код `vision_with_transport`
+// приходит с путём и значением. Производителей в lib/ не осталось после
+// переезда Xray-входа (шаг 8).
 
 final class InsecureTlsWarning extends NodeWarning {
   const InsecureTlsWarning();
@@ -655,25 +644,10 @@ final class NaiveExtraHeadersInvalidWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
-/// `tuic_congestion_invalid` (warning) — TUIC `congestion_control` вне
-/// {cubic, new_reno, bbr}. Поле снимается (ядро подставит свой дефолт),
-/// узел живёт. Go-эталон: node_parser_tuic.go:73.
-final class TuicCongestionInvalidWarning extends NodeWarning {
-  final String value;
-
-  const TuicCongestionInvalidWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
+// §472 шаг 9 — `TuicCongestionInvalidWarning` снят: `congestion_control` вне
+// {cubic, new_reno, bbr} судит санитайзер по реестру (`tuic.json`, enum +
+// `on_invalid: drop`), код `tuic_congestion_invalid` приходит с путём и
+// значением. Производителей в lib/ не осталось после шага 5.
 
 /// `awg_header_invalid` (warning) — AmneziaWG magic-header (h1–h4) не uint32
 /// и не диапазон `lo-hi`. Поле снимается, ядро возьмёт WireGuard-дефолт —
@@ -791,45 +765,15 @@ final class Awg3RandomTrailersWideHeadersWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
-/// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2, auto};
-/// принудительно h3. `auto` принят контрактом 0.11.1 (ядро >= lx.27).
-/// Go-эталон: node_parser_masque.go:100.
-final class MasqueVhttpInvalidWarning extends NodeWarning {
-  final String value;
+// §472 шаг 9 — `MasqueVhttpInvalidWarning` снят: `vhttp` вне {h3, h2, auto}
+// приводит к h3 санитайзер по реестру (`protocols/masque.json`, enum +
+// `on_invalid: coerce h3`), код `masque_vhttp_invalid` приходит с путём и
+// значением. Производителей в lib/ не осталось после шага 7.
 
-  const MasqueVhttpInvalidWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
-
-/// `anytls_min_idle_invalid` (warning) — anytls `min_idle_session` не
-/// неотрицательное целое; поле снимается, узел живёт.
-/// Go-эталон: node_parser_anytls.go:40.
-final class AnyTlsMinIdleInvalidWarning extends NodeWarning {
-  final String value;
-
-  const AnyTlsMinIdleInvalidWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
+// §472 шаг 9 — `AnyTlsMinIdleInvalidWarning` снят: `min_idle_session` судит
+// санитайзер по реестру (`protocols/anytls.json`, `min: 0` +
+// `on_invalid: drop`), код `anytls_min_idle_invalid` приходит с путём и
+// значением. Производителей в lib/ не осталось после шага 6.
 
 /// `packet_encoding_unknown` (warning) — `packet_encoding` вне
 /// {xudp, packetaddr}. Поле снимается: неизвестное значение даёт не ошибку

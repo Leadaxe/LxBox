@@ -149,64 +149,67 @@ void main() {
   });
 
   group('§460 W2a — дедуп с рукописными кодами', () {
-    // §472 шаг 7 — пример стоит на ИСКУССТВЕННОМ производителе, и это не
-    // упрощение, а единственный оставшийся способ.
-    //
     // История переездов: vless (был здесь до шага 3) → tuic (шаги 3–4) →
     // anytls (шаг 5) → masque (шаг 6). Каждый раз пример искали на схеме,
     // которая ЕЩЁ НЕ переехала: дедуп нужен ровно там, где рукописное правило
     // и правило реестра говорят об одном поле, а у переехавшей схемы источник
-    // кода по определению один. Шаг 7 увёл masque, и кандидатов не осталось —
-    // у wireguard/AWG рукописные коды (`awg_*`) реестр дублем не объявляет.
+    // кода по определению один.
     //
-    // Поэтому производителя ставим руками: узел из sing-box-ТЕЛА конвейером не
-    // разбирается (`isPipelineParsed` на нём ложь), значит `annotateWithRegistry`
-    // по нему идёт и даёт код реестра. Дописываем на тот же узел рукописный
-    // класс с той же парой `(code, path)` — и проверяем, что запись остаётся
-    // ОДНА. Смысл прежний: два производителя, одна пара, один результат, и
-    // путь у него есть.
+    // §472 шаг 9 — шаги 6–7 держали пример на ИСКУССТВЕННОМ производителе
+    // (`AnyTlsMinIdleInvalidWarning` подсаживали руками), а шаг 9 снял и сам
+    // этот класс: производителей в lib/ у него не осталось. Пример вернулся на
+    // ЖИВОЙ путь — hysteria2-ТЕЛО с негодным `obfs.type`:
+    //
+    // - рукописный `UnknownObfsWarning` ставит `hysteria2_obfs.dart` при
+    //   разборе, и путь `obfs.type` он объявляет таблицей
+    //   `handwrittenWarningPath`;
+    // - реестр судит то же поле по ДОСЛОВНОЙ карте тела (шаг 1,
+    //   `annotateFromRawBody`): `protocols/hysteria2.json` →
+    //   `body.fields.obfs.type`, enum + `on_invalid: drop`, код `obfs_unknown`.
+    //
+    // Два производителя, одна пара `(code, path)`, одна запись на выходе.
+    // Через `annotateWithRegistry` (по `emit()`) этот случай не виден вовсе:
+    // негодный блок `obfs` типизированный парсер снимает, и судить в
+    // очищенном теле уже нечего — потому здесь дословная карта.
     test('рукописный + реестровый с одной парой (code, path) → одна запись',
         () {
-      // Производитель искусственный: узел строится из ТЕЛА (конвейер его не
-      // касается, `isPipelineParsed` на нём ложь), поэтому `annotateWithRegistry`
-      // по нему идёт и даёт `anytls_min_idle_invalid` на `min_idle_session`.
-      // Рукописный класс с той же парой существует и сегодня —
-      // `AnyTlsMinIdleInvalidWarning` объявляет тот же путь таблицей
-      // `handwrittenWarningPath`; с пути ССЫЛКИ его снял шаг 6, а на узел мы
-      // ставим его руками.
-      //
-      // `annotateWithRegistry` зовём сами, поэтому берём узел напрямую, а не
-      // через `parseAll`: воронка позвала бы аннотацию до нашей подсадки.
+      const raw = '{"type":"hysteria2","tag":"h","server":"e.example",'
+          '"server_port":443,"password":"p",'
+          '"obfs":{"type":"nonsense","password":"q"},'
+          '"tls":{"enabled":true,"server_name":"a.example"}}';
       NodeSpec build() => parseSingboxEntry({
-            'type': 'anytls',
-            'tag': 'a',
+            'type': 'hysteria2',
+            'tag': 'h',
             'server': 'e.example',
             'server_port': 443,
             'password': 'p',
-            'min_idle_session': -5,
+            'obfs': {'type': 'nonsense', 'password': 'q'},
             'tls': {'enabled': true, 'server_name': 'a.example'},
-          }, rawSource: 'не-JSON: дословной карты у узла нет')!;
+          }, rawSource: raw)!;
 
-      const code = 'anytls_min_idle_invalid';
-      const path = 'min_idle_session';
+      const code = 'obfs_unknown';
+      const path = 'obfs.type';
       // Путь рукописного класса нормативен: дедуп считается по ПАРЕ.
-      expect(handwrittenWarningPath(const AnyTlsMinIdleInvalidWarning('-5')), path);
+      expect(handwrittenWarningPath(const UnknownObfsWarning('nonsense')), path);
 
-      // Контроль: без рукописного класса код реестра приходит, с путём.
-      final plain = build();
-      annotateWithRegistry(plain);
+      // Контроль: без рукописного класса код реестра приходит, с путём и
+      // значением. Рукописный снимаем — иначе он этот код и закроет.
+      final plain = build()..warnings.clear();
+      annotateFromRawBody(plain);
       final fromRegistry = _registry(plain).where((w) => w.code == code).toList();
       expect(fromRegistry, hasLength(1),
-          reason: 'реестр судит min_idle_session по `min: 0` + `on_invalid: drop`');
+          reason: 'реестр судит obfs.type по enum + `on_invalid: drop`');
       expect(fromRegistry.single.path, path);
+      expect(fromRegistry.single.value, 'nonsense');
 
-      // А теперь тот же узел с рукописным классом на том же поле: остаётся
-      // ОДНА запись, и это рукописная — у неё человеческий текст.
-      final seeded = build()
-        ..warnings.add(const AnyTlsMinIdleInvalidWarning('-5'));
-      annotateWithRegistry(seeded);
-      expect(seeded.warnings.whereType<AnyTlsMinIdleInvalidWarning>(),
-          hasLength(1),
+      // А теперь тот же узел, как его отдаёт разбор: рукописный класс на месте
+      // (его поставил `hysteria2_obfs.dart`), и запись остаётся ОДНА — та, у
+      // которой человеческий текст.
+      final seeded = build();
+      expect(seeded.warnings.whereType<UnknownObfsWarning>(), hasLength(1),
+          reason: 'производитель рукописного класса живой, подсадки не нужно');
+      annotateFromRawBody(seeded);
+      expect(seeded.warnings.whereType<UnknownObfsWarning>(), hasLength(1),
           reason: 'рукописное предупреждение на месте');
       expect(_registry(seeded).map((w) => w.code), isNot(contains(code)),
           reason: 'реестр тот же код вторым сообщением не дублирует');

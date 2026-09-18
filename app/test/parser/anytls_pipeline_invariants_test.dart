@@ -147,11 +147,11 @@ void main() {
       // Прежде это правило исполнял `AnyTlsMinIdleInvalidWarning` — код без
       // пути и без значения. На нём же стоял дедуп-пример
       // `parse_warnings_test.dart`, переехавший шагом 6 на masque.
+      // §472 шаг 9 — сам класс снят (производителей в lib/ не осталось),
+      // поэтому проверять его отсутствие больше нечем: он не компилируется.
       for (final raw in ['-5', 'abc']) {
         final spec = parseUri('anytls://pw@h.example:443?sni=a.example'
             '&min_idle_session=$raw#n')!;
-        expect(spec.warnings.whereType<AnyTlsMinIdleInvalidWarning>(), isEmpty,
-            reason: 'рукописный класс на пути ссылки снят');
         final w = _registry(spec)
             .firstWhere((w) => w.code == 'anytls_min_idle_invalid');
         expect(w.path, 'min_idle_session');

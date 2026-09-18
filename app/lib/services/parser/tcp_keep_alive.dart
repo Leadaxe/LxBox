@@ -67,21 +67,7 @@ Map<String, String> tcpKeepAliveToQuery(TcpKeepAliveSpec? s) {
   };
 }
 
-/// Xray `streamSettings.sockopt` → spec. У Xray это целые СЕКУНДЫ, а не
-/// duration-строка: `> 0` → `'Ns'`, `0` = не задано. Любое отрицательное
-/// значит `SO_KEEPALIVE=0` (`sockopt_linux.go:143`), то есть keep-alive
-/// выключен — у нас это `disabled`.
-///
-/// Аргумент `Object?`, а не `Map?`: `streamSettings` в чужих конфигах бывает
-/// строкой, и каст уронил бы весь узел.
-TcpKeepAliveSpec? tcpKeepAliveFromXraySockopt(Object? sockopt) {
-  if (sockopt is! Map) return null;
-  final idle = (sockopt['tcpKeepAliveIdle'] as num?)?.toInt() ?? 0;
-  final interval = (sockopt['tcpKeepAliveInterval'] as num?)?.toInt() ?? 0;
-  final s = TcpKeepAliveSpec(
-    disabled: idle < 0 || interval < 0,
-    idle: idle > 0 ? '${idle}s' : '',
-    interval: interval > 0 ? '${interval}s' : '',
-  );
-  return s.isEmpty ? null : s;
-}
+// §472 шаг 9 — `tcpKeepAliveFromXraySockopt` снята: перевод секунд Xray в
+// duration-строку делает маппер (`mappers/xray_mapper.dart`), а судит
+// значение санитайзер по реестру. Единственным вызывающим был прежний
+// Xray-конвертер, и он уехал на конвейер шагом 8.

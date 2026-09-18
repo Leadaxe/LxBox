@@ -21,7 +21,6 @@ const kWarningCodes = <Type, String>{
   UnsupportedProtocolWarning: 'protocol_unsupported',
   MissingFieldWarning: 'field_missing',
   DeprecatedFlowWarning: 'flow_deprecated',
-  VisionWithTransportWarning: 'vision_with_transport',
   InsecureTlsWarning: 'tls_insecure',
   NaiveBuildTagWarning: 'naive_unavailable',
   UnknownFingerprintWarning: 'utls_fp_unknown',
@@ -45,7 +44,6 @@ const kWarningCodes = <Type, String>{
   NaivePaddingIgnoredWarning: 'naive_padding_ignored',
   // D-105 — отброшенная пара naive extra-headers.
   NaiveExtraHeadersInvalidWarning: 'naive_extra_headers_invalid',
-  TuicCongestionInvalidWarning: 'tuic_congestion_invalid',
   AwgHeaderInvalidWarning: 'awg_header_invalid',
   // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла
   // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.
@@ -53,8 +51,6 @@ const kWarningCodes = <Type, String>{
   Awg3HeaderKeyInvalidWarning: 'awg3_header_key_invalid',
   Awg3PaddingTooShortWarning: 'awg3_padding_too_short',
   Awg3RandomTrailersWideHeadersWarning: 'awg3_random_trailers_wide_headers',
-  MasqueVhttpInvalidWarning: 'masque_vhttp_invalid',
-  AnyTlsMinIdleInvalidWarning: 'anytls_min_idle_invalid',
   PacketEncodingUnknownWarning: 'packet_encoding_unknown',
   // §404 / D-085 — недостижимый `dialerProxy` роняет владельца целиком;
   // причина уезжает в `dropped[]` конверта (corpus/README, D-088).
@@ -86,16 +82,12 @@ String? warningCodeOf(NodeWarning w) =>
 /// человеку), а конверт по контракту несёт одну запись без пути.
 String? handwrittenWarningPath(NodeWarning w) => switch (w) {
       DeprecatedFlowWarning() => 'flow',
-      AnyTlsMinIdleInvalidWarning() => 'min_idle_session',
-      TuicCongestionInvalidWarning() => 'congestion_control',
       PacketEncodingUnknownWarning() => 'packet_encoding',
       UnknownFingerprintWarning() => 'tls.utls.fingerprint',
       RealityFingerprintWarning() => 'tls.utls.fingerprint',
       RealityShortIdInvalidWarning() => 'tls.reality.short_id',
       UnknownObfsWarning() => 'obfs.type',
       MissingObfsPasswordWarning() => 'obfs.password',
-      // §469 — контракт 1.1.4 назвал путь и значение и у `masque_vhttp_invalid`.
-      MasqueVhttpInvalidWarning() => 'vhttp',
       // §467 — `field` класса это ИМЯ КЛЮЧА, под которым значение уезжает в
       // `transport` (его ставит тот же `putEnum`, что и предупреждение),
       // поэтому путь выводится из него, а не перечисляется вариантами.

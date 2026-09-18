@@ -95,7 +95,6 @@ void main() {
         UnsupportedProtocolWarning() => 'protocol',
         MissingFieldWarning() => 'field',
         DeprecatedFlowWarning() => 'flow',
-        VisionWithTransportWarning() => 'vision_transport',
         InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
@@ -124,15 +123,12 @@ void main() {
         // §435 — только UI, кода контракта нет.
         SectionsRecordDroppedWarning() => 'sections_record_dropped',
         SectionsConflictWarning() => 'sections_conflict',
-        TuicCongestionInvalidWarning() => 'tuic_congestion_invalid',
         AwgHeaderInvalidWarning() => 'awg_header_invalid',
         Awg3FieldInvalidWarning() => 'awg3_field_invalid',
         Awg3HeaderKeyInvalidWarning() => 'awg3_header_key_invalid',
         Awg3PaddingTooShortWarning() => 'awg3_padding_too_short',
         Awg3RandomTrailersWideHeadersWarning() =>
           'awg3_random_trailers_wide_headers',
-        MasqueVhttpInvalidWarning() => 'masque_vhttp_invalid',
-        AnyTlsMinIdleInvalidWarning() => 'anytls_min_idle_invalid',
         PacketEncodingUnknownWarning() => 'packet_encoding_unknown',
         // §460 — санитайзер реестра: класс один на все свои коды, различает
         // их поле `code` (текст берётся из registry/warnings.json).

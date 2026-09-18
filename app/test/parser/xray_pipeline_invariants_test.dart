@@ -420,9 +420,9 @@ void main() {
         },
       ], []);
       expect(_codeOf(nodes.single, 'vision_with_transport'), isNotNull);
-      expect(nodes.single.warnings.whereType<VisionWithTransportWarning>(),
-          isEmpty,
-          reason: 'рукописный класс с этого входа снят');
+      // §472 шаг 9 — `VisionWithTransportWarning` снят совсем (последний
+      // производитель ушёл с переездом Xray-входа), и проверять его
+      // отсутствие больше нечем: он не компилируется.
     }, skip: skip);
 
     test('битый pbk объясняется кодом, а не молчаливой деградацией', () {

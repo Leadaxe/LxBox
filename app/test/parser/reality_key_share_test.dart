@@ -166,7 +166,7 @@ void main() {
       expect(spec.toUri(), isNot(contains('key_share')));
     });
 
-    test('anytls несёт key_share тем же путём (parseVlessTls)', () {
+    test('anytls несёт key_share тем же путём, что и vless', () {
       final spec = parseAnyTls(
           'anytls://p@h:443?security=reality&pbk=$_validPbk'
           '&key_share=hybrid#L')!;

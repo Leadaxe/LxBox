@@ -1,9 +1,7 @@
 import 'dart:convert';
 
 import '../../models/node_warning.dart';
-import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
-import '../app_log.dart';
 import 'uri_utils.dart';
 
 /// Разбор query-параметров URI в `TransportSpec?`.
@@ -199,10 +197,13 @@ String _guardUrlPath(String path, List<NodeWarning>? warnings) {
 /// `path=%2F%252Fassignment`: `Uri.queryParameters` декодит ровно один раз, и
 /// в путь уходит `/%2Fassignment` вместо `//assignment` → сервер даёт 404.
 ///
-/// Тот же приём, что в `_normalizeAlpn` (§151), но БЕЗ проверки валидности:
-/// путь может содержать что угодно — эмодзи (`path=Telegram🇨🇳`), двойные
-/// слэши (`//assignment`), `@`. Здесь только доводим декодирование до конца,
-/// ничего не отбрасывая. До 2 проходов: больше — почти наверняка мусор.
+/// Тот же приём, что у ALPN в мапперах (§151, `common_parts.dart`), но БЕЗ
+/// проверки валидности: путь может содержать что угодно — эмодзи
+/// (`path=Telegram🇨🇳`), двойные слэши (`//assignment`), `@`. Здесь только
+/// доводим декодирование до конца, ничего не отбрасывая. До 2 проходов:
+/// больше — почти наверняка мусор.
+final _percentSeq = RegExp(r'%[0-9A-Fa-f]{2}');
+
 String decodeResidualPercent(String raw) {
   var v = raw;
   var guard = 0;
@@ -480,214 +481,10 @@ void warnEchIgnored(Map<String, String> q, List<NodeWarning> warnings) {
   warnings.add(EchIgnoredWarning(raw.split('+').first.trim()));
 }
 
-/// §457 — `key_share=` из share-URI: только значение из [kRealityKeyShares].
-/// Иное — `null` (поле отброшено): ядро на неизвестном значении отвергает
-/// весь конфиг, а не один узел.
-///
-/// §459 (контракт §24.2 п. 7.12) — `trim` + `lower` перед enum'ом
-/// (реестр `tls.json`, `normalize: trim_lower`): ядро case-sensitive, но
-/// `key_share=Hybrid` в ссылке — намерение подписки, раньше терялось молча.
-String? realityKeyShareFromQuery(String? raw) {
-  final v = (raw ?? '').trim().toLowerCase();
-  if (v.isEmpty) return null;
-  if (kRealityKeyShares.contains(v)) return v;
-  AppLog.I.debug("reality: key_share '$raw' is not a known value, dropping");
-  return null;
-}
-
-/// §460 — обёртка [realityKeyShareFromQuery] с предупреждением реестра: значение
-/// задано, но вне enum → `reality_key_share_invalid` с путём и значением.
-String? _keyShareFromQuery(Map<String, String> q, List<NodeWarning>? warnings) {
-  final raw = (q['key_share'] ?? '').trim();
-  final v = realityKeyShareFromQuery(raw);
-  if (raw.isNotEmpty && v == null) {
-    warnings?.add(RegistryWarning(
-      code: 'reality_key_share_invalid',
-      path: 'tls.reality.key_share',
-      value: raw,
-    ));
-  }
-  return v;
-}
-
-/// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).
-TlsSpec parseVlessTls(
-  Map<String, String> q,
-  String server,
-  int port, {
-  List<NodeWarning>? warnings,
-}) {
-  // §320 — ECH из ссылки не включаем (ломает узлы), но предупреждаем.
-  if (warnings != null) warnEchIgnored(q, warnings);
-  final sec = (q['security'] ?? '').toLowerCase().trim();
-  final pbk = (q['pbk'] ?? '').trim();
-
-  if (sec == 'none') return TlsSpec.disabled;
-
-  var sni = q['sni'] ?? q['peer'] ?? '';
-  if (sni.isEmpty) sni = server;
-  var fp = (q['fp'] ?? q['fingerprint'] ?? '').toLowerCase().trim();
-  if (fp.isEmpty) fp = 'random';
-
-  // §169 — REALITY только при ВАЛИДНОМ X25519-ключе, не «pbk непустой».
-  // Мусор (pbk=enabled/true из битых подписок) → проваливаемся ниже в plain
-  // TLS, а не отравляем reality.public_key и весь config.json. См.
-  // isValidRealityPublicKey.
-  if (isValidRealityPublicKey(pbk)) {
-    // SPEC 103 `reality_short_id_invalid` — код ставится ДО нормализации:
-    // после неё исходного значения уже нет, а узел уехал бы с чужим sid.
-    final rawSid = q['sid'] ?? '';
-    if (warnings != null && realityShortIdWouldDegrade(rawSid)) {
-      warnings.add(RealityShortIdInvalidWarning(rawSid.trim()));
-    }
-    return TlsSpec(
-      enabled: true,
-      serverName: sni,
-      fingerprint: fp,
-      reality: RealitySpec(
-        publicKey: pbk,
-        shortId: normalizeRealityShortId(rawSid),
-        // §457 — имя параметра = ключ sing-box (прецедент §453). Читается
-        // только вместе с валидным REALITY; вне enum — отброшено с кодом
-        // реестра `reality_key_share_invalid` (§460, корпус
-        // vless/reality_key_share_bad_dropped).
-        keyShare: _keyShareFromQuery(q, warnings),
-      ),
-      insecure: isTlsInsecure(q),
-      alpn: alpnFromQuery(q),
-      );
-  }
-
-  // §464 (контракт W2d, DRIFT §2(b2)) — снятый REALITY объявляется кодом на
-  // ВСЕХ входах. Прежде URI-ветка деградировала до plain TLS молча (только
-  // debuglog), а импорт JSON ставил код: один и тот же узел, пришедший
-  // ссылкой и телом, нёс разные наборы кодов.
-  //
-  // Условие — `pbk=` В ССЫЛКЕ ЕСТЬ, но ключ негоден: пустой `pbk` значит
-  // «REALITY не просили», и кода не заслуживает.
-  if (warnings != null && pbk.isNotEmpty) {
-    warnings.add(RegistryWarning(
-      code: 'reality_pbk_invalid',
-      path: 'tls.reality.public_key',
-      value: pbk,
-    ));
-  }
-
-  if (sec == 'reality') {
-    return TlsSpec(
-      enabled: true,
-      serverName: sni,
-      fingerprint: fp,
-      insecure: isTlsInsecure(q),
-      alpn: alpnFromQuery(q),
-      );
-  }
-
-  if (sec.isEmpty && plaintextVlessPorts.contains(port)) return TlsSpec.disabled;
-
-  return TlsSpec(
-    enabled: true,
-    serverName: sni,
-    fingerprint: fp,
-    insecure: isTlsInsecure(q),
-    alpn: alpnFromQuery(q),
-  );
-}
-
-/// TLS parameters for Trojan.
-TlsSpec parseTrojanTls(
-  Map<String, String> q,
-  String server, {
-  List<NodeWarning>? warnings,
-}) {
-  if (warnings != null) warnEchIgnored(q, warnings);
-  final sec = (q['security'] ?? '').toLowerCase().trim();
-  if (sec == 'none') return TlsSpec.disabled;
-
-  var sni = q['sni'] ?? q['peer'] ?? q['host'] ?? '';
-  if (sni.isEmpty) sni = server;
-  final fp = (q['fp'] ?? '').toLowerCase().trim();
-
-  return TlsSpec(
-    enabled: true,
-    serverName: sni,
-    fingerprint: fp.isEmpty ? null : fp,
-    insecure: isTlsInsecure(q),
-    alpn: alpnFromQuery(q),
-  );
-}
-
-/// TLS parameters for VMess (активируется при `tls=tls` или `h2`).
-TlsSpec parseVmessTls(Map<String, dynamic> cfg, String server, String net) {
-  final tlsEnabled = cfg['tls'] == 'tls' || net == 'h2';
-  if (!tlsEnabled) return TlsSpec.disabled;
-
-  var sni = cfg['sni']?.toString() ?? '';
-  if (sni.isEmpty) sni = cfg['host']?.toString() ?? '';
-  if (sni.isEmpty) sni = server;
-
-  final alpn = cfg['alpn']?.toString() ?? '';
-  final fp = (cfg['fp']?.toString() ?? '').toLowerCase().trim();
-
-  return TlsSpec(
-    enabled: true,
-    serverName: sni,
-    fingerprint: fp.isEmpty ? null : fp,
-    insecure: cfg['insecure'] == '1' || cfg['insecure'] == true,
-    alpn: _normalizeAlpn(alpn), // §151 F2 — единый нормализатор ALPN
-  );
-}
-
 /// §097 — query-bool: `true`/`1` → true (для `no_grpc_header`).
 bool _truthy(String? v) {
   final s = (v ?? '').toLowerCase().trim();
   return s == 'true' || s == '1';
-}
-
-List<String> alpnFromQuery(Map<String, String> q) {
-  return _normalizeAlpn(q['alpn'] ?? '');
-}
-
-/// §151 F2 / SPEC 103 vless/alpn_multiply_encoded — нормализация ALPN-списка
-/// из сырого query/JSON значения.
-///
-/// Корень бага: некоторые подписки-агрегаторы шлют `alpn=http%252F1.1`
-/// (двойное percent-кодирование, а на практике встречается и multiply —
-/// `http%2525252F1.1`, вложенное 4 раза). `Uri.queryParameters` декодит ровно
-/// один раз → остаётся `%XX`-мусор, и он уходил в `tls.alpn` ядра дословно
-/// (валидный ALPN-id = `http/1.1`/`h2`/`h3`). Эталон Go
-/// `normalizePercentDecodeLoop` (node_parser_transport.go) декодирует
-/// БЕЗ ограничения проходов, до стабильной точки (`dec == s`) — элемент
-/// валиден после раскрутки, канон не выбрасывает его. Здесь: split по
-/// запятой, повторный decode до стабильности (с защитным потолком от
-/// патологического ввода — реальные multiply-encoded подписки укладываются
-/// в единицы проходов), и drop значений, которые после де-кода всё ещё
-/// содержат `%` / пробелы / управляющие символы (не валидный protocol-id).
-/// Корректные `h2`/`http/1.1`/`h3` не меняются.
-final _percentSeq = RegExp(r'%[0-9A-Fa-f]{2}');
-final _badAlpnChar = RegExp(r'[%\s\x00-\x1f]');
-
-List<String> _normalizeAlpn(String raw) {
-  if (raw.isEmpty) return const [];
-  final out = <String>[];
-  for (var e in raw.split(',')) {
-    e = e.trim();
-    if (e.isEmpty) continue;
-    // Раскручиваем до стабильности, как Go normalizePercentDecodeLoop;
-    // потолок в 16 проходов — защита от патологического ввода, не от
-    // легитимного multiply-encoding (тот стабилизируется за 3-5 проходов).
-    var guard = 0;
-    while (_percentSeq.hasMatch(e) && guard < 16) {
-      final decoded = Uri.tryParse('x://x?a=$e')?.queryParameters['a'];
-      if (decoded == null || decoded == e) break;
-      e = decoded.trim();
-      guard++;
-    }
-    // Drop значения, не похожие на валидный ALPN-id.
-    if (_badAlpnChar.hasMatch(e)) continue;
-    out.add(e);
-  }
-  return out;
 }
 
 /// Emit TransportSpec → строка query для `toUri()`. Возвращает пары

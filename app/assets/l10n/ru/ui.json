@@ -811,9 +811,6 @@
   "Any — tap Edit to filter by network / L7 protocol": {
     "value": "Любой — нажмите «Изменить», чтобы фильтровать по сети / L7-протоколу"
   },
-  "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.": {
-    "value": "В AnyTLS «min_idle_session=%s» — не целое неотрицательное число, поэтому настройка отброшена; действует значение ядра по умолчанию."
-  },
   "Anything above is red.": {
     "value": "Всё, что выше, — красный."
   },
@@ -1999,9 +1996,6 @@
   "Flow \"%s\" is deprecated.": {
     "value": "Flow «%s» устарел."
   },
-  "Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.": {
-    "value": "Flow «xtls-rprx-vision» несовместим с транспортом «%s» — flow убран."
-  },
   "Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.": {
     "value": "Сбросить выделения FakeIP и закэшированные DNS-ответы. Перезагружает VPN, если он работает."
   },
@@ -2540,9 +2534,6 @@
   },
   "L×Box runs as a foreground service while VPN is active. A persistent notification is required by Android — it lets you see at a glance that VPN is on, and prevents the system from killing the tunnel in the background.\n\nNo promotional or alert notifications will be sent.": {
     "value": "Пока VPN активен, L×Box работает как foreground-сервис. Android требует для него постоянное уведомление — по нему видно, что VPN включён, и система не закрывает туннель в фоне.\n\nРекламных и прочих оповещений не будет."
-  },
-  "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.": {
-    "value": "Версия HTTP «%s» для MASQUE — не h3, не h2 и не auto, поэтому использован h3."
   },
   "MASQUE registration failed": {
     "value": "Не удалось зарегистрировать MASQUE"
@@ -4106,9 +4097,6 @@
   },
   "TLS server name (SNI) — optional": {
     "value": "Имя сервера TLS (SNI) — необязательно"
-  },
-  "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.": {
-    "value": "Управление перегрузкой TUIC «%s» не входит в набор cubic, new_reno, bbr, поэтому настройка отброшена; действует значение ядра по умолчанию."
   },
   "Tag": {
     "value": "Тег"

@@ -35,17 +35,18 @@ String? _legacyWarningPath(NodeWarning w) => handwrittenWarningPath(w);
 /// `MissingObfsPasswordWarning` сюда НЕ попадает: его поле — тип обфускации,
 /// а код про пароль, и значением он не является (ожидание корпуса `value`
 /// у него не называет).
+///
+/// §472 шаг 9 — `AnyTlsMinIdleInvalidWarning`, `TuicCongestionInvalidWarning`
+/// и `MasqueVhttpInvalidWarning` отсюда ушли вместе с классами: эти коды
+/// теперь ставит санитайзер реестра (`RegistryWarning`), а он несёт значение
+/// сам, веткой выше.
 String? _legacyWarningValue(NodeWarning w) => switch (w) {
       DeprecatedFlowWarning(:final flow) => flow,
-      AnyTlsMinIdleInvalidWarning(:final value) => value,
-      TuicCongestionInvalidWarning(:final value) => value,
       PacketEncodingUnknownWarning(:final value) => value,
       UnknownFingerprintWarning(:final value) => value,
       RealityFingerprintWarning(:final value) => value,
       RealityShortIdInvalidWarning(:final value) => value,
       UnknownObfsWarning(:final value) => value,
-      // §469 — исходное `vhttp` до подмены на `h3`.
-      MasqueVhttpInvalidWarning(:final value) => value,
       // §467 — у `placementRequiresPacketUp` значение пустое (код про
       // сочетание, не про значение), и пустое в конверт не пишется.
       XhttpParamResetWarning(:final value) => value,
