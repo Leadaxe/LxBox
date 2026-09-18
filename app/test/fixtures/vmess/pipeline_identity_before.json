@@ -1,5 +1,5 @@
 {
-  "note": "§472 шаг 4 — identity-хеши vmess-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет vmess_pipeline_invariants_test.dart.",
+  "note": "§472 шаг 4 — identity-хеши vmess-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет vmess_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "base64_json_ws_tls": {
       "uri": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3Mtd3MiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsImhvc3QiOiJleGFtcGxlLTEuY29tIiwicGF0aCI6Ii92IiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS0xLmNvbSJ9",
@@ -72,6 +72,45 @@
     "xhttp_fallback_httpupgrade": {
       "uri": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgWEhUVFAiLCJhZGQiOiJleGFtcGxlLTQuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiYWlkIjoiMCIsIm5ldCI6InhodHRwIiwicGF0aCI6Ii94aCIsImhvc3QiOiJleGFtcGxlLTQuY29tIiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS00LmNvbSJ9",
       "identity": "6171a0f7a33ed594a9afd927e8233a596d1f6a1147b4c7fec6d4a0692ea4eb1b"
+    },
+    "b480:legacy_ipv6_authority": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXY2IiwiYWRkIjoiWzo6MV0iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJ0bHMiOiIifQ==",
+      "identity": "922e13d113ccbefe354a699d57f7e52f7fe4d89cab603b8f8194a62118393f53",
+      "tag": "legacy-v6",
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-v6",
+        "server": "[::1]",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "b480:legacy_tls_1": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXRsczEiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwidGxzIjoiMSJ9",
+      "identity": "9773cdfae96135c7b12fe3557ae9370ac5c4f109d49e3e0e4c704b4ed4403a56",
+      "tag": "legacy-tls1",
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-tls1",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "b480:legacy_tls_true": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXRsc3RydWUiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwidGxzIjoidHJ1ZSJ9",
+      "identity": "9773cdfae96135c7b12fe3557ae9370ac5c4f109d49e3e0e4c704b4ed4403a56",
+      "tag": "legacy-tlstrue",
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-tlstrue",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
     }
   }
 }

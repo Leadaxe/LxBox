@@ -1,5 +1,5 @@
 {
-  "_note": "§472 шаг 6 — снимок identity ssh, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе.",
+  "_note": "§472 шаг 6 — снимок identity ssh, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "default_port_22": {
       "uri": "ssh://admin@example-1.com#Default Port",
@@ -44,6 +44,32 @@
     "user_password": {
       "uri": "ssh://root:admin@192.0.2.60:22#Local SSH",
       "identity": "517105c216817977a50e095a3eb589784e91339fa91efbdcb8fbbf400d038c78"
+    },
+    "b480:pem_percent_encoded": {
+      "uri": "ssh://user@example-1.com:22?private_key=-----BEGIN+OPENSSH+PRIVATE+KEY-----%0Ab3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB%2Bw%2FAAAAAAAAA%0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%2Bw%3D%3D%0A-----END+OPENSSH+PRIVATE+KEY-----%0A#pem-pct",
+      "identity": "4ddbe7ff2f8231f172d490a4f6756f27dea261bd1fec79b4913bfe614342fff6",
+      "tag": "pem-pct",
+      "body": {
+        "type": "ssh",
+        "tag": "pem-pct",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      }
+    },
+    "b480:pem_raw_plus": {
+      "uri": "ssh://user@example-1.com:22?private_key=-----BEGIN+OPENSSH+PRIVATE+KEY-----%0Ab3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w%2FAAAAAAAAA%0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w%3D%3D%0A-----END+OPENSSH+PRIVATE+KEY-----%0A#pem-raw-plus",
+      "identity": "9ee7a6643cbf6a4b51ee6065e389ef773b55c7a8b76bef7d8b9b10da21c22516",
+      "tag": "pem-raw-plus",
+      "body": {
+        "type": "ssh",
+        "tag": "pem-raw-plus",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      }
     }
   }
 }

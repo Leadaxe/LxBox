@@ -17,40 +17,17 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// специфично для переезда протокола: identity, round-trip и цена.
 const _contractRoot = 'contract';
 
-/// Identity-хеши trojan-узлов корпуса, снятые СТАРЫМ путём до переезда
-/// (шаг 2, 18.09.2026).
+/// Хеши, теги и тела trojan-узлов лежат ФАЙЛОМ:
+/// `test/fixtures/trojan/pipeline_identity_before.json`.
 ///
-/// Зачем фикстура, а не «посчитать обоими путями»: старого пути больше нет —
-/// `parseTrojan` стал тонкой обёрткой над конвейером, и сравнивать было бы не
-/// с чем. Значения сняты до правки и записаны сюда; расхождение здесь значит,
-/// что у пользователей слетят выбор узла, отключения и цепочки
-/// (`node_hash.dart`: identity = сырой тег, дедуп подписки —
-/// `legacyNodeIdentityHash` от тела).
+/// Шаг 2 §472 держал три кейса картой прямо здесь; задачей §480 снимок
+/// доснят до тридцати пяти, и карта в литерале перестала читаться — формат
+/// теперь общий с остальными схемами (`vless`, `masque`, `wireguard`).
 ///
-/// Ключ — имя кейса корпуса, значение — `legacyNodeIdentityHash` (sha256
-/// канонической эмиссии без `tag`/`detour`).
-const Map<String, String> _identityBefore = {
-  'alpn_double_encoded':
-      '0d5a64225d0693fd330a5b622df7d7a4a9eed801c58e3055ef75283f0900cb51',
-  'fp_hellofirefox_alias':
-      '6ed4235fadb9fb3f484e319c80fd95d06596a8c653b4d80c22054faf6241c81d',
-  'ws_ed_path_tail':
-      '04f34c0487eb83d84313cf88ccd2853ba55a853416c947a40e07748ab435564f',
-};
-
-/// Ссылки кейсов, на которых снят [_identityBefore] (тот же корпус, но
-/// выписаны явно: тест обязан падать и тогда, когда кейс корпуса переписали).
-const Map<String, String> _identityUris = {
-  'alpn_double_encoded':
-      'trojan://pass123@example-1.com:443?type=ws&security=tls'
-          '&alpn=http%252F1.1&sni=example-1.com#alpn-dbl',
-  'fp_hellofirefox_alias':
-      'trojan://pass123@example-1.com:443?security=tls&fp=hellofirefox_auto'
-          '&sni=example-1.com#fp-ff',
-  'ws_ed_path_tail': 'trojan://pass123@example-1.com:443?type=ws'
-      '&path=%2Fx%3Fed%3D2560&security=tls&sni=example-1.com#ed-path',
-};
-
+/// Сверяет файл `before_480_identity_snapshot_test.dart`, а не этот тест: у
+/// групп ниже гейт на вендоренную копию `app/contract/` (корпус), которой на
+/// CI нет вовсе, и под ним снимок молча пропускался бы именно там, где он
+/// нужнее всего. Снимок гейтится на зеркало реестра `assets/contract`.
 void main() {
   final synced = Directory('$_contractRoot/registry').existsSync();
   final skip = synced ? null : 'контракт не синхронизирован';
@@ -61,19 +38,6 @@ void main() {
   });
 
   group('§472 инвариант 4 — identity trojan не меняется', () {
-    test('хеши фикстуры совпадают с конвейерными', () {
-      for (final e in _identityBefore.entries) {
-        final spec = parseUri(_identityUris[e.key]!);
-        expect(spec, isNotNull, reason: e.key);
-        expect(
-          legacyNodeIdentityHash(spec!),
-          e.value,
-          reason: 'identity кейса ${e.key} изменилась: у пользователей слетят '
-              'выбор узла, отключения и цепочки',
-        );
-      }
-    }, skip: skip);
-
     test('identity всего корпуса trojan считается и не пуста', () {
       final nodes = <NodeSpec>[];
       for (final f in Directory('$_contractRoot/corpus/uri/trojan')

@@ -1,5 +1,5 @@
 {
-  "_note": "§472 шаг 6 — снимок identity http(s) CONNECT-прокси, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе.",
+  "_note": "§472 шаг 6 — снимок identity http(s) CONNECT-прокси, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "proxy_http_default_port_80": {
       "uri": "proxy-http://p.example-1.com",
@@ -40,6 +40,36 @@
     "proxy_plus_https_alias": {
       "uri": "proxy+https://alice:pass123@h.example-1.com:8443?sni=proxy.example-corp.com#plus-https",
       "identity": "c49cdd9d4530f8bb9b14c4852c87e9a916aba862e52a66dc0939616bf0249abf"
+    },
+    "b480:extra_headers_https": {
+      "uri": "proxy-https://user1:pass123@example-1.com:8443?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#https-hdr",
+      "identity": "62670bbbbcf42eab12abd2c31dda49b86a88647504bdef92c2700d7733eb725c",
+      "tag": "https-hdr",
+      "body": {
+        "type": "http",
+        "tag": "https-hdr",
+        "server": "example-1.com",
+        "server_port": 8443,
+        "username": "user1",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "b480:extra_headers_unsorted": {
+      "uri": "proxy-http://user1:pass123@example-1.com:8080?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#http-hdr",
+      "identity": "c2b62c2bc7edf92565f517d9c818f91c30308bfd1fdd536695f9268ef846e272",
+      "tag": "http-hdr",
+      "body": {
+        "type": "http",
+        "tag": "http-hdr",
+        "server": "example-1.com",
+        "server_port": 8080,
+        "username": "user1",
+        "password": "pass123"
+      }
     }
   }
 }

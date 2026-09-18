@@ -1,5 +1,5 @@
 {
-  "_note": "§472 шаг 6 — снимок identity naive, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе.",
+  "_note": "§472 шаг 6 — снимок identity naive, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "anonymous_no_auth": {
       "uri": "naive+https://server.example-1.com:443",
@@ -72,6 +72,28 @@
     "utf8_fragment_label": {
       "uri": "naive+https://user1:pass123@example-1.com:443?#%E2%9C%85%20DE",
       "identity": "8333af7c86a585a07dda84c665effdf145a90f68402df7c0f20e2e4873b57dc1"
+    },
+    "b480:extra_headers_unsorted": {
+      "uri": "naive+https://user1:pass123@example-1.com:443?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#nv-hdr",
+      "identity": "63395e7d7c9a48d03739ab9000331bbf32f884199c0970297b68560747317828",
+      "tag": "nv-hdr",
+      "body": {
+        "type": "naive",
+        "tag": "nv-hdr",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "extra_headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     }
   }
 }

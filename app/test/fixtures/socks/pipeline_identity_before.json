@@ -1,5 +1,5 @@
 {
-  "_note": "§472 шаг 6 — снимок identity socks, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе.",
+  "_note": "§472 шаг 6 — снимок identity socks, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "auth_userpass": {
       "uri": "socks5://testuser:testpass123@example-1.com:1080#SOCKS%20Auth",
@@ -36,6 +36,113 @@
     "socks_short_scheme": {
       "uri": "socks://192.0.2.61:1080#Local",
       "identity": "75538222e08b4f8e6ab6c08b25859525e0a8ccedce489b9993847b2ca64385be"
+    },
+    "b480:socks4_no_fragment": {
+      "uri": "socks4://userid1@example-1.com:1080",
+      "identity": "29df0790e5eb22e6ed41befb35895ebaa97a43dbf631e3fdab373fffd3795413",
+      "tag": "socks-example-1.com-1080",
+      "body": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4_userid": {
+      "uri": "socks4://userid1@example-1.com:1080#s4-userid",
+      "identity": "29df0790e5eb22e6ed41befb35895ebaa97a43dbf631e3fdab373fffd3795413",
+      "tag": "s4-userid",
+      "body": {
+        "type": "socks",
+        "tag": "s4-userid",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4_userpass": {
+      "uri": "socks4://userid1:pass123@example-1.com:1080#s4-pw",
+      "identity": "3a28a2888e42dd47045ed6afd9c16b91ade6e7ce0f463439c81fba674cef99ce",
+      "tag": "s4-pw",
+      "body": {
+        "type": "socks",
+        "tag": "s4-pw",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1",
+        "password": "pass123"
+      }
+    },
+    "b480:socks4a_no_fragment": {
+      "uri": "socks4a://userid1@example-1.com:1080",
+      "identity": "8c037e18576de4780dcae5e66fdaa3ad5d200280491bfe38505155d93c210a28",
+      "tag": "socks-example-1.com-1080",
+      "body": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4a_userid": {
+      "uri": "socks4a://userid1@example-1.com:1080#s4a-userid",
+      "identity": "8c037e18576de4780dcae5e66fdaa3ad5d200280491bfe38505155d93c210a28",
+      "tag": "s4a-userid",
+      "body": {
+        "type": "socks",
+        "tag": "s4a-userid",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4a_userpass": {
+      "uri": "socks4a://userid1:pass123@example-1.com:1080#s4a-pw",
+      "identity": "0616273cb7047d44162158e28fdf5c75041813190c79c615f7a795a8ef542930",
+      "tag": "s4a-pw",
+      "body": {
+        "type": "socks",
+        "tag": "s4a-pw",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1",
+        "password": "pass123"
+      }
+    },
+    "b480:socks5_base64_userinfo": {
+      "uri": "socks5://dXNlcjE6cGFzczEyMw==@example-1.com:1080#s5-b64",
+      "identity": "f0f7387c003b2abca4bb4e7ca38bee3988fcf2d2f5dc3b26b6634576dd94e943",
+      "tag": "s5-b64",
+      "body": {
+        "type": "socks",
+        "tag": "s5-b64",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "dXNlcjE6cGFzczEyMw=="
+      }
+    },
+    "b480:socks5_no_fragment": {
+      "uri": "socks5://user1:pass123@example-1.com:1080",
+      "identity": "6b4ba2900d6b7bb5f44e3217c6212ca479bee71a0eb0ccc2b769f53839c7e0bd",
+      "tag": "socks-example-1.com-1080",
+      "body": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "user1",
+        "password": "pass123"
+      }
     }
   }
 }

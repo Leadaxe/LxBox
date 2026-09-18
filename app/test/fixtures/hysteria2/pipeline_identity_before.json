@@ -1,5 +1,5 @@
 {
-  "note": "§472 шаг 5 — identity-хеши hysteria2-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет hysteria2_pipeline_invariants_test.dart.",
+  "note": "§472 шаг 5 — identity-хеши hysteria2-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет hysteria2_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "allowinsecure_alias": {
       "uri": "hysteria2://pass123@203.0.113.1:443?sni=hy.example-1.com&allowInsecure=1#h",
@@ -92,6 +92,97 @@
     "utls_fingerprint_pinsha256": {
       "uri": "hysteria2://pass123@203.0.113.1:443?sni=hy.example-1.com&fingerprint=firefox&pinSHA256=YWJjZGVmZ2g=#h",
       "identity": "383abfa4e50658a21b2160192a61e7d0aa7c9440de08a0bd8d28175605083b57"
+    },
+    "b480:no_fragment": {
+      "uri": "hy2://pass123@example-1.com:443?sni=example-1.com",
+      "identity": "cb576f61bca9f20207b7347098a10a76eda32921c3d9f9988af28ebe6154095d",
+      "tag": "hysteria2-example-1.com-443",
+      "body": {
+        "type": "hysteria2",
+        "tag": "hysteria2-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "b480:obfs_password_encoded_plus": {
+      "uri": "hy2://pass123@example-1.com:443?obfs=salamander&obfs-password=ob%2Bfs123&sni=example-1.com#obfs-plus-enc",
+      "identity": "3bdb9c8811a310144c5b08d3f61f90c049a4f7cf3cdf702f6063a64e517d46dd",
+      "tag": "obfs-plus-enc",
+      "body": {
+        "type": "hysteria2",
+        "tag": "obfs-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "obfs": {
+          "type": "salamander",
+          "password": "ob+fs123"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "b480:obfs_password_raw_plus": {
+      "uri": "hy2://pass123@example-1.com:443?obfs=salamander&obfs-password=ob+fs123&sni=example-1.com#obfs-plus",
+      "identity": "3f200e3b57319b37587ab5767bb8d9127fadba54d036e2edc15f94863266372e",
+      "tag": "obfs-plus",
+      "body": {
+        "type": "hysteria2",
+        "tag": "obfs-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "obfs": {
+          "type": "salamander",
+          "password": "ob fs123"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "b480:pinsha256_lower": {
+      "uri": "hy2://pass123@example-1.com:443?pinsha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&sni=example-1.com#pin-lower",
+      "identity": "65540b133c7bc8d9acaf26cc87bda4a047bee090ea200a3276569c4a3d9c1827",
+      "tag": "pin-lower",
+      "body": {
+        "type": "hysteria2",
+        "tag": "pin-lower",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "certificate_public_key_sha256": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        }
+      }
+    },
+    "b480:pinsha256_pair": {
+      "uri": "hy2://pass123@example-1.com:443?pinSHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%2Cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&sni=example-1.com#pin-pair",
+      "identity": "cb576f61bca9f20207b7347098a10a76eda32921c3d9f9988af28ebe6154095d",
+      "tag": "pin-pair",
+      "body": {
+        "type": "hysteria2",
+        "tag": "pin-pair",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     }
   }
 }

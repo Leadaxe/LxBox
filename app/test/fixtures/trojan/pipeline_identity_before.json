@@ -1,0 +1,652 @@
+{
+  "_note": "§480 «до переезда» — снимок identity trojan, снятый ТЕКУЩИМ кодом до того, как маппер ссылок станет движком от реестра (19.09.2026). Шаг 2 §472 держал эти кейсы картой в самом тесте; здесь они вынесены файлом и добавлены остальные — формат общий с другими схемами. identity=null плюс dropped=true означает, что узел сегодня отбраковывается: это тоже свойство, которое обязано сохраниться (появившись, такой узел влез бы в подписку новым). Тела и теги сняты прогоном, а не сочинены: часть из них заведомо неверна (сырой «+» в query приезжает пробелом, имена параметров в другом регистре не читаются) — на то и снимок, чтобы отличить «починили» от «сломали». Сверяет trojan_pipeline_invariants_test.dart.",
+  "cases": {
+    "allow_insecure_camel": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&allowInsecure=1&sni=example-1.com#ai-camel",
+      "identity": "ab5672375feb7652b6b35f100e6e44ea101d65181fb047d6520c073b3c30400f",
+      "tag": "ai-camel",
+      "body": {
+        "type": "trojan",
+        "tag": "ai-camel",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
+    },
+    "allow_insecure_lower": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&allowinsecure=1&sni=example-1.com#ai-lower",
+      "identity": "ab5672375feb7652b6b35f100e6e44ea101d65181fb047d6520c073b3c30400f",
+      "tag": "ai-lower",
+      "body": {
+        "type": "trojan",
+        "tag": "ai-lower",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
+    },
+    "allow_insecure_true": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&allowInsecure=true&sni=example-1.com#ai-true",
+      "identity": "ab5672375feb7652b6b35f100e6e44ea101d65181fb047d6520c073b3c30400f",
+      "tag": "ai-true",
+      "body": {
+        "type": "trojan",
+        "tag": "ai-true",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
+    },
+    "allow_insecure_zero": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&allowInsecure=0&sni=example-1.com#ai-zero",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "ai-zero",
+      "body": {
+        "type": "trojan",
+        "tag": "ai-zero",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "alpn_double_encoded": {
+      "uri": "trojan://pass123@example-1.com:443?type=ws&security=tls&alpn=http%252F1.1&sni=example-1.com#alpn-dbl",
+      "identity": "0d5a64225d0693fd330a5b622df7d7a4a9eed801c58e3055ef75283f0900cb51",
+      "tag": "alpn-dbl",
+      "body": {
+        "type": "trojan",
+        "tag": "alpn-dbl",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "http/1.1"
+          ]
+        }
+      }
+    },
+    "alpn_pair": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&alpn=h2%2Chttp%2F1.1&sni=example-1.com#alpn-pair",
+      "identity": "fc2313757138294bd27661b521213a17f0ff47d804c17282e923c4e4eb4b0fe4",
+      "tag": "alpn-pair",
+      "body": {
+        "type": "trojan",
+        "tag": "alpn-pair",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "h2",
+            "http/1.1"
+          ]
+        }
+      }
+    },
+    "alpn_triple_encoded": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&alpn=http%25252F1.1&sni=example-1.com#alpn-tri",
+      "identity": "a26457142266aa722009ae994ab5373f754cff8d9b1309b27be83c6f6c0b647b",
+      "tag": "alpn-tri",
+      "body": {
+        "type": "trojan",
+        "tag": "alpn-tri",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "http/1.1"
+          ]
+        }
+      }
+    },
+    "fp_bogus": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&fp=bogus&sni=example-1.com#fp-bogus",
+      "identity": "62d3caa8740799732ad21af36edb4e0c22514ad58e65cca022b0f9b51a7c8a41",
+      "tag": "fp-bogus",
+      "body": {
+        "type": "trojan",
+        "tag": "fp-bogus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "fp_hellochrome_alias": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&fp=hellochrome_auto&sni=example-1.com#fp-ch",
+      "identity": "62d3caa8740799732ad21af36edb4e0c22514ad58e65cca022b0f9b51a7c8a41",
+      "tag": "fp-ch",
+      "body": {
+        "type": "trojan",
+        "tag": "fp-ch",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "fp_hellofirefox_alias": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&fp=hellofirefox_auto&sni=example-1.com#fp-ff",
+      "identity": "6ed4235fadb9fb3f484e319c80fd95d06596a8c653b4d80c22054faf6241c81d",
+      "tag": "fp-ff",
+      "body": {
+        "type": "trojan",
+        "tag": "fp-ff",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "firefox"
+          }
+        }
+      }
+    },
+    "grpc_tls": {
+      "uri": "trojan://pass123@example-1.com:443?type=grpc&security=tls&serviceName=gsvc&sni=example-1.com#grpc",
+      "identity": "a7faa032bf9b8c61ef3ab807d8518ae996e78608905988df81c69745866efe8d",
+      "tag": "grpc",
+      "body": {
+        "type": "trojan",
+        "tag": "grpc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "grpc",
+          "service_name": "gsvc"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "httpupgrade_tls": {
+      "uri": "trojan://pass123@example-1.com:443?type=httpupgrade&security=tls&host=example-1.com&path=%2Fhu&sni=example-1.com#hu",
+      "identity": "2157c04e3cb5f3fa0b9d84f851a67feedf4b9f4878bd248a06acaa8abe5e92bb",
+      "tag": "hu",
+      "body": {
+        "type": "trojan",
+        "tag": "hu",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "httpupgrade",
+          "path": "/hu",
+          "host": "example-1.com"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "no_fragment_fallback": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "trojan-example-1.com-443",
+      "body": {
+        "type": "trojan",
+        "tag": "trojan-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "password_encoded_plus_userinfo": {
+      "uri": "trojan://pa%2Bss123@example-1.com:443?security=tls&sni=example-1.com#pw-plus-enc",
+      "identity": "d3999e1f9890387215af817ab078bbf5f7ceb9fea13df14827e2e6b8cfb2453b",
+      "tag": "pw-plus-enc",
+      "body": {
+        "type": "trojan",
+        "tag": "pw-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pa+ss123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "password_percent_encoded": {
+      "uri": "trojan://p%40ss%2F123@example-1.com:443?security=tls&sni=example-1.com#pw-pct",
+      "identity": "5b3d7e0c112a52bb7f571daf6a120df324f2dd2ca284dfecb3aab3f4aaf41f24",
+      "tag": "pw-pct",
+      "body": {
+        "type": "trojan",
+        "tag": "pw-pct",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "p@ss/123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "password_raw_plus_userinfo": {
+      "uri": "trojan://pa+ss123@example-1.com:443?security=tls&sni=example-1.com#pw-plus",
+      "identity": "d3999e1f9890387215af817ab078bbf5f7ceb9fea13df14827e2e6b8cfb2453b",
+      "tag": "pw-plus",
+      "body": {
+        "type": "trojan",
+        "tag": "pw-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pa+ss123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "password_with_colon": {
+      "uri": "trojan://pa%3Ass%3A123@example-1.com:443?security=tls&sni=example-1.com#pw-colon",
+      "identity": "15de2be8cbf8375c590f46f9f3c33c6977690b6f40e0b2759f99d0c69c617af1",
+      "tag": "pw-colon",
+      "body": {
+        "type": "trojan",
+        "tag": "pw-colon",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pa:ss:123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "path_encoded_plus_pct": {
+      "uri": "trojan://pass123@example-1.com:443?type=ws&path=%2Fa%2Bb&security=tls&sni=example-1.com#path-plus-pct",
+      "identity": "a590641654cf8f9e849d4d147664a0c37100cb46db94e30a986411a40dbc9d80",
+      "tag": "path-plus-pct",
+      "body": {
+        "type": "trojan",
+        "tag": "path-plus-pct",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/a+b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "path_encoded_slash_raw_plus": {
+      "uri": "trojan://pass123@example-1.com:443?type=ws&path=%2Fa+b&security=tls&sni=example-1.com#path-plus-enc",
+      "identity": "226cc29e6328778459d650a77a55aedbf451ccdaddbbfe53c1d5386465c886fe",
+      "tag": "path-plus-enc",
+      "body": {
+        "type": "trojan",
+        "tag": "path-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/a b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "path_raw_plus": {
+      "uri": "trojan://pass123@example-1.com:443?type=ws&path=/a+b&security=tls&sni=example-1.com#path-plus",
+      "identity": "226cc29e6328778459d650a77a55aedbf451ccdaddbbfe53c1d5386465c886fe",
+      "tag": "path-plus",
+      "body": {
+        "type": "trojan",
+        "tag": "path-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/a b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "plaintext_port_80": {
+      "uri": "trojan://pass123@example-1.com:80#plain-80",
+      "identity": "c59f4ec49134b36fb61a3a8436b207494745f36c0a092f80091eabc426030bd2",
+      "tag": "plain-80",
+      "body": {
+        "type": "trojan",
+        "tag": "plain-80",
+        "server": "example-1.com",
+        "server_port": 80,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "reality_bad_pbk": {
+      "uri": "trojan://pass123@example-1.com:443?security=reality&pbk=enabled&sid=abcd&sni=example-1.com#reality-bad",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "reality-bad",
+      "body": {
+        "type": "trojan",
+        "tag": "reality-bad",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "reality_full": {
+      "uri": "trojan://pass123@example-1.com:443?security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com&fp=chrome#reality",
+      "identity": "62d3caa8740799732ad21af36edb4e0c22514ad58e65cca022b0f9b51a7c8a41",
+      "tag": "reality",
+      "body": {
+        "type": "trojan",
+        "tag": "reality",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "security_none": {
+      "uri": "trojan://pass123@example-1.com:80?security=none#sec-none",
+      "identity": "714a9c9865dce9c7a80665c3849f13f99e72e8d2249e27dc110920f810a25e70",
+      "tag": "sec-none",
+      "body": {
+        "type": "trojan",
+        "tag": "sec-none",
+        "server": "example-1.com",
+        "server_port": 80,
+        "password": "pass123"
+      }
+    },
+    "skip_cert_verify": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&skip-cert-verify=true&sni=example-1.com#scv",
+      "identity": "ab5672375feb7652b6b35f100e6e44ea101d65181fb047d6520c073b3c30400f",
+      "tag": "scv",
+      "body": {
+        "type": "trojan",
+        "tag": "scv",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
+    },
+    "tls_tcp": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#tls-tcp",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "tls-tcp",
+      "body": {
+        "type": "trojan",
+        "tag": "tls-tcp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "upper_allow_insecure": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&AllowInsecure=1&sni=example-1.com#up-ai",
+      "identity": "ab5672375feb7652b6b35f100e6e44ea101d65181fb047d6520c073b3c30400f",
+      "tag": "up-ai",
+      "body": {
+        "type": "trojan",
+        "tag": "up-ai",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
+    },
+    "upper_alpn": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&ALPN=h2&sni=example-1.com#up-alpn",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "up-alpn",
+      "body": {
+        "type": "trojan",
+        "tag": "up-alpn",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "upper_fp": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&Fp=chrome&sni=example-1.com#up-fp",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "up-fp",
+      "body": {
+        "type": "trojan",
+        "tag": "up-fp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "upper_security": {
+      "uri": "trojan://pass123@example-1.com:443?Security=tls&sni=example-1.com#up-sec",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "up-sec",
+      "body": {
+        "type": "trojan",
+        "tag": "up-sec",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "upper_sni": {
+      "uri": "trojan://pass123@example-1.com:443?security=tls&SNI=example-1.com#up-sni",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "up-sni",
+      "body": {
+        "type": "trojan",
+        "tag": "up-sni",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "upper_type_ws": {
+      "uri": "trojan://pass123@example-1.com:443?Type=ws&security=tls&path=%2Fws&sni=example-1.com#up-type",
+      "identity": "d12be7054f57ba0b6664ddea314239356ae45cc0311b46e5e262391080518866",
+      "tag": "up-type",
+      "body": {
+        "type": "trojan",
+        "tag": "up-type",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "ws_ed_path_tail": {
+      "uri": "trojan://pass123@example-1.com:443?type=ws&path=%2Fx%3Fed%3D2560&security=tls&sni=example-1.com#ed-path",
+      "identity": "04f34c0487eb83d84313cf88ccd2853ba55a853416c947a40e07748ab435564f",
+      "tag": "ed-path",
+      "body": {
+        "type": "trojan",
+        "tag": "ed-path",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/x",
+          "headers": {
+            "Host": "example-1.com"
+          },
+          "max_early_data": 2560,
+          "early_data_header_name": "Sec-WebSocket-Protocol"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "ws_ed_query_param": {
+      "uri": "trojan://pass123@example-1.com:443?type=ws&path=%2Fws&ed=2048&security=tls&sni=example-1.com#ed-q",
+      "identity": "474b584f38addd5adac0d96341e15ad1621f80aeecd5178de77f3af928a02aec",
+      "tag": "ed-q",
+      "body": {
+        "type": "trojan",
+        "tag": "ed-q",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          },
+          "max_early_data": 2048
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "ws_tls": {
+      "uri": "trojan://pass123@example-1.com:443?type=ws&security=tls&host=example-1.com&path=%2Fws&sni=example-1.com#ws",
+      "identity": "c05ce68abd1e7d0742975456e9c4a40e8bdda9dd05918e58d50da5c718045fdf",
+      "tag": "ws",
+      "body": {
+        "type": "trojan",
+        "tag": "ws",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    }
+  }
+}

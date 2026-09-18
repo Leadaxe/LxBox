@@ -1,5 +1,5 @@
 {
-  "note": "§472 шаг 4 — identity-хеши shadowsocks-узлов, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). Девять кейсов корпуса плюс одиннадцать ссылок из app/test (ключи с префиксом test:): корпус у схемы маленький, и одного его мало, чтобы поймать сдвиг. legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет shadowsocks_pipeline_invariants_test.dart.",
+  "note": "§472 шаг 4 — identity-хеши shadowsocks-узлов, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). Девять кейсов корпуса плюс одиннадцать ссылок из app/test (ключи с префиксом test:): корпус у схемы маленький, и одного его мало, чтобы поймать сдвиг. legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет shadowsocks_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "base64_userinfo": {
       "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMzQ1@example-1.com:8388#ss-b64",
@@ -80,6 +80,95 @@
     "test:ss://enc@h:443": {
       "uri": "ss://enc@h:443",
       "identity": null
+    },
+    "b480:no_fragment": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388",
+      "identity": "2fdb77820c224c35db712ccc581ef9ec79a0c6cf0fa1ed9602d7cb4db689069d",
+      "tag": "shadowsocks-example-1.com-8388",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "shadowsocks-example-1.com-8388",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "b480:password_with_colon": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGE6c3M6MTIz@example-1.com:8388#pw-colon",
+      "identity": "c91dfc752cbd69cdc8524de4d88977fc8d0af4a2b753da055ace6aaf6317ce3b",
+      "tag": "pw-colon",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "pw-colon",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pa:ss:123"
+      }
+    },
+    "b480:plugin_no_opts": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local#plug-bare",
+      "identity": "c5622b2e59b16810894993ed8f0b70dd2755b01cd25d40f06ea85c27920d01e4",
+      "tag": "plug-bare",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-bare",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local"
+      }
+    },
+    "b480:plugin_obfs_local": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local%3Bobfs%3Dhttp%3Bobfs-host%3Dx.example#plug",
+      "identity": "6d3235fec6d152da33ba4dc0b06f11a536267a06751671b4754cc73b634c731c",
+      "tag": "plug",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      }
+    },
+    "b480:plugin_opts_camel_alias": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local&pluginOpts=obfs%3Dhttp%3Bobfs-host%3Dx.example#plug-camel",
+      "identity": "c5622b2e59b16810894993ed8f0b70dd2755b01cd25d40f06ea85c27920d01e4",
+      "tag": "plug-camel",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-camel",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local"
+      }
+    },
+    "b480:plugin_opts_separate": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local&plugin_opts=obfs%3Dhttp%3Bobfs-host%3Dx.example#plug-sep",
+      "identity": "6d3235fec6d152da33ba4dc0b06f11a536267a06751671b4754cc73b634c731c",
+      "tag": "plug-sep",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-sep",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      }
+    },
+    "b480:ss2022_cleartext_userinfo": {
+      "uri": "ss://2022-blake3-aes-128-gcm:AAAAAAAAAAAAAAAAAAAAAA%3D%3D@example-1.com:8388#ss2022-clear",
+      "identity": null,
+      "dropped": true
     }
   }
 }

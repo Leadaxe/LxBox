@@ -1,5 +1,5 @@
 {
-  "_note": "§472 шаг 6 — снимок identity anytls, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе.",
+  "_note": "§472 шаг 6 — снимок identity anytls, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
   "cases": {
     "basic_password_host_port": {
       "uri": "anytls://pass123@srv.example-1.com:8443#AT-01",
@@ -48,6 +48,26 @@
     "session_fields": {
       "uri": "anytls://pass123@any.example-1.com:443/?sni=cover.example-1.com&insecure=1&fp=chrome&idle_session_timeout=30&min_idle_session=2#node",
       "identity": "85e6a036383c9ee10638e436254b79a54b67244e73c7a67693e564ce34f84d2d"
+    },
+    "b480:no_fragment": {
+      "uri": "anytls://pass123@example-1.com:443?sni=example-1.com",
+      "identity": "5980b2826eb25dd5cb35d1fd960ba4f8401003ee82d9a480514759deedb8e68f",
+      "tag": "anytls-example-1.com-443",
+      "body": {
+        "type": "anytls",
+        "tag": "anytls-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
     }
   }
 }
