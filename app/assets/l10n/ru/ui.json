@@ -1540,6 +1540,9 @@
   "Deselect all": {
     "value": "Снять выбор"
   },
+  "Details": {
+    "value": "Подробнее"
+  },
   "Detected: %s": {
     "value": "Обнаружено: %s"
   },
@@ -1798,6 +1801,9 @@
   "Error TTL": "TTL ошибки",
   "Error: %s": {
     "value": "Ошибка: %s"
+  },
+  "Errors": {
+    "value": "Ошибки"
   },
   "Events with no owning app": {
     "value": "События, у которых не определено приложение"
@@ -2326,7 +2332,12 @@
     "value": "Содержит:"
   },
   "Info": {
-    "value": "Информация"
+    "value": "Информация",
+    "special": {
+      "1": {
+        "value": "К сведению"
+      }
+    }
   },
   "Inline": {
     "value": "Встроенный"
@@ -2466,9 +2477,6 @@
   },
   "Lazy sleep": {
     "value": "Ленивый сон"
-  },
-  "Learn more": {
-    "value": "Подробнее"
   },
   "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
     "value": "Оставьте IP пустым, чтобы использовать сервер из регистрации. HTTP/3 работает лишь на нескольких адресах Cloudflare, HTTP/2 — на всём блоке."
@@ -4542,8 +4550,14 @@
   "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
     "value": "Ранние данные WebSocket «?ed=%d» перенесены из пути в отдельное поле, как требует ядро. Узел работает, но путь в конфиге отличается от указанного в ссылке."
   },
-  "What to do": {
-    "value": "Что сделать"
+  "What happened": {
+    "value": "Что произошло"
+  },
+  "What the app changed or could not apply": {
+    "value": "Что приложение изменило или не смогло применить"
+  },
+  "What you can do": {
+    "value": "Что можно сделать"
   },
   "Where to get L×Box": {
     "value": "Где взять L×Box"
@@ -4566,8 +4580,8 @@
   "Whole-node replace needs a pattern to find": {
     "value": "Замене по всему узлу нужен паттерн поиска"
   },
-  "Why": {
-    "value": "Почему"
+  "Why it happens": {
+    "value": "Почему так"
   },
   "Wi-Fi rules need permissions": {
     "value": "Правилам Wi-Fi нужны разрешения"

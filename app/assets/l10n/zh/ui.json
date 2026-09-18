@@ -1369,6 +1369,9 @@
  "Deselect all": {
   "value": "取消全选"
  },
+ "Details": {
+  "value": "详细信息"
+ },
  "Detected: %s": {
   "value": "已检测：%s"
  },
@@ -1620,6 +1623,9 @@
  },
  "Error: %s": {
   "value": "错误：%s"
+ },
+ "Errors": {
+  "value": "错误"
  },
  "Events with no owning app": {
   "value": "无归属应用的事件"
@@ -2131,7 +2137,12 @@
   "value": "包含："
  },
  "Info": {
-  "value": "信息"
+  "value": "信息",
+  "special": {
+   "1": {
+    "value": "供参考"
+   }
+  }
  },
  "Inline": {
   "value": "内联"
@@ -2273,9 +2284,6 @@
  },
  "Lazy sleep": {
   "value": "惰性休眠"
- },
- "Learn more": {
-  "value": "了解更多"
  },
  "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
   "value": "IP 留空则使用注册时返回的服务器。HTTP/3 只在少数 Cloudflare 地址上可用，HTTP/2 在整个网段都可用。"
@@ -4333,8 +4341,14 @@
  "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
   "value": "按内核要求，WebSocket early data「?ed=%d」已从路径移到独立字段。节点可正常工作，但配置中的路径与链接里的字面值不同。"
  },
- "What to do": {
-  "value": "该怎么做"
+ "What happened": {
+  "value": "发生了什么"
+ },
+ "What the app changed or could not apply": {
+  "value": "应用改动了什么，或有什么无法应用"
+ },
+ "What you can do": {
+  "value": "可以做什么"
  },
  "Where to get L×Box": {
   "value": "在哪里获取 L×Box"
@@ -4357,8 +4371,8 @@
  "Whole-node replace needs a pattern to find": {
   "value": "整节点替换需要一个用于查找的表达式"
  },
- "Why": {
-  "value": "原因"
+ "Why it happens": {
+  "value": "为什么会这样"
  },
  "Wi-Fi rules need permissions": {
   "value": "Wi-Fi 规则需要权限"

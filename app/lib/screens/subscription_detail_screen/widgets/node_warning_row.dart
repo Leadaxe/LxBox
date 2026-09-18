@@ -10,71 +10,40 @@ import 'node_warnings_sheet.dart';
 /// ([warningSeverityStyle]).
 ///
 /// §460 W2b — строка тапается: короткого текста хватает, чтобы заметить
-/// проблему, но не чтобы понять её. Тап открывает шторку со всем списком,
-/// причиной и способом исправления ([showNodeWarningsSheet]).
+/// проблему, но не чтобы понять её. Тап открывает шторку уведомлений со всем
+/// списком, причиной и способом исправления ([showNodeWarningsSheet]).
 ///
-/// §471 — два режима. В списке узлов ([compact] = true) текстом показывается
-/// только то, что требует действия: старшее из error/warning и «+N more» по
-/// ним же. Info туда не попадает — после §468/§469 info-кодов стало столько,
-/// что под каждым вторым узлом висела строка «делать ничего не надо», и
-/// настоящие проблемы в ней тонули. Наличие info отмечается синим значком без
-/// текста ПЕРЕД значком уровня. Полный текст info живёт на экране узла — там
-/// режим по умолчанию ([compact] = false), и текстом показываются все уровни.
+/// §471 — текстом показывается только то, что требует действия: старшее из
+/// error/warning и «+N more» по ним же. Info туда не попадает — после
+/// §468/§469 info-кодов стало столько, что под каждым вторым узлом висела
+/// строка «делать ничего не надо», и настоящие проблемы в ней тонули.
 ///
-/// §471 ревизия 1 — у узла с одними только info строки нет вовсе: значок
-/// уезжает к имени узла ([NodeInfoBadge] в `title`). Здесь это выражено тем,
-/// что компактный режим без actionable отдаёт [SizedBox.shrink]; список сам
-/// не вставляет строку в `subtitle` в этом случае.
+/// §479 — наличие info отмечается значком `ⓘ` в КОНЦЕ строки, приглушённым
+/// (`onSurfaceVariant`), а не синим: строка списка говорит о том, что требует
+/// внимания, и второй яркий значок спорил бы со значком уровня. Ревизия 1
+/// §471 (значок перед значком уровня и, у info-only узла, у имени) отменена:
+/// у имени значку не место, имя узла остаётся чистым.
 class NodeWarningRow extends StatelessWidget {
-  const NodeWarningRow(this.warnings, {super.key, this.compact = false});
+  const NodeWarningRow(this.warnings, {super.key});
 
   final List<NodeWarning> warnings;
-
-  /// Список узлов: info — значком, без текста. По умолчанию (экран узла) —
-  /// полный текст любого уровня.
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final sorted = [...warnings]
       ..sort((a, b) => b.severity.index.compareTo(a.severity.index));
-    // Что показываем текстом. В компактном режиме — только actionable; если
-    // их нет, текста не будет вовсе.
-    final spoken = compact
-        ? sorted.where((w) => w.severity != WarningSeverity.info).toList()
-        : sorted;
-    final infos =
-        sorted.where((w) => w.severity == WarningSeverity.info).toList();
+    // Текстом — только actionable; если их нет, строки не будет вовсе: info
+    // живёт значком в строке протокола ([NodeInfoBadge]).
+    final spoken = sorted
+        .where((w) => w.severity != WarningSeverity.info)
+        .toList();
+    final hasInfo = sorted.any((w) => w.severity == WarningSeverity.info);
 
-    // Ревизия 1: компактный режим без actionable — не строка, а значок у
-    // имени. Рисовать здесь нечего, и пустой `Row` в `subtitle` дал бы узлу
-    // лишнюю высоту.
     if (spoken.isEmpty) return const SizedBox.shrink();
 
-    final children = <Widget>[];
-    // Ревизия 1: info стоит ПЕРЕД значком уровня — `ⓘ ⚠ текст (+N more)`.
-    if (compact && infos.isNotEmpty) {
-      final (color, icon) = warningSeverityStyle(context, WarningSeverity.info);
-      children.addAll([
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 4),
-      ]);
-    }
     final w = spoken.first;
     final (color, icon) = warningSeverityStyle(context, w.severity);
     final more = spoken.length - 1;
-    children.addAll([
-      Icon(icon, size: 12, color: color),
-      const SizedBox(width: 4),
-      Expanded(
-        child: Text(
-          more > 0
-              ? getLocalText.s("%1\$s (+%2\$d more)", w.message(), more)
-              : w.message(),
-          style: TextStyle(fontSize: 10, color: color),
-        ),
-      ),
-    ]);
 
     return Semantics(
       button: true,
@@ -86,18 +55,34 @@ class NodeWarningRow extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => showNodeWarningsSheet(context, warnings),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: children,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                more > 0
+                    ? getLocalText.s("%1\$s (+%2\$d more)", w.message(), more)
+                    : w.message(),
+                style: TextStyle(fontSize: 10, color: color),
+              ),
+            ),
+            // §479 — info в конце строки: сначала то, что требует действия.
+            if (hasInfo) NodeInfoBadge(warnings),
+          ],
         ),
       ),
     );
   }
 }
 
-/// §471 ревизия 1 — синий `ⓘ` у ИМЕНИ узла в списке подписки: узел, у
-/// которого нет ничего кроме info, строки под собой не получает вовсе.
-/// Решение владельца по ASCII-макету: третья строка под каждым вторым узлом
-/// ломала ритм списка, а значок у имени читается как свойство узла.
+/// §479 — приглушённый `ⓘ` рядом со строкой узла: у узла без error/warning он
+/// стоит в начале строки протокола (`ⓘ vless  de1.example.com:443`), у узла с
+/// ними — в конце строки предупреждения. Третьей строки узел не получает ни в
+/// одном из случаев.
+///
+/// Цвет — `onSurfaceVariant`, а не синий уровня: в списке info не зовёт к
+/// действию, и яркий значок отбирал бы внимание у ⚠/✖ соседних строк. Внутри
+/// уведомлений info остаётся синим (палитра §471).
 ///
 /// Тап открывает ту же шторку, что и строка предупреждения. `opaque` и
 /// подложка 24×24 — чтобы тап не проваливался в `onTap` строки (разбор узла):
@@ -114,7 +99,6 @@ class NodeInfoBadge extends StatelessWidget {
     final infos =
         warnings.where((w) => w.severity == WarningSeverity.info).toList();
     if (infos.isEmpty) return const SizedBox.shrink();
-    final (color, icon) = warningSeverityStyle(context, WarningSeverity.info);
     return Semantics(
       button: true,
       // Текста рядом нет — метку скринридеру собираем из самого
@@ -126,7 +110,11 @@ class NodeInfoBadge extends StatelessWidget {
         child: SizedBox(
           width: 24,
           height: 24,
-          child: Icon(icon, size: 14, color: color),
+          child: Icon(
+            Icons.info_outline,
+            size: 14,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

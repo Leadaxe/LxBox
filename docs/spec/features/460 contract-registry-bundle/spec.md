@@ -630,6 +630,16 @@ JSON-источник (§455) идёт мимо модели и разбирае
 
 ### 10.2 Карточка
 
+> **Компонент заменён §479** (19.09.2026). Шторка на месте и открывается тем
+> же `showNodeWarningsSheet`, но содержимое собирает общий
+> `NodeNotificationsView` (`widgets/node_notifications_view.dart`) — он же
+> раздел `Notifications` экрана узла: шапка со счётчиками по уровням,
+> подразделы Errors/Warnings/Info, запись — раскрывающийся `ExpansionTile`.
+> Блоки переименованы: `Why` → `What happened` + `Why it happens`,
+> `What to do` → `What you can do`, `Learn more` → `Details`. Заголовок шторки
+> — `Notifications`. Описанное ниже — устройство W2b на момент 18.09.2026;
+> нормативно для этих мест [§479](../../tasks/479-notifications-levels-like-launcher.md).
+
 Тап по `NodeWarningRow` открывает `showNodeWarningsSheet` (`widgets/
 node_warnings_sheet.dart`) — список ВСЕХ предупреждений узла. Запись: значок и
 цвет по `severity` (те же, что в строке), текст предупреждения, ниже — `Why`

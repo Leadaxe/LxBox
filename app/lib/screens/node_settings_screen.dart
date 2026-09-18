@@ -21,7 +21,7 @@ import '../widgets/emoji_picker_button.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
-import 'subscription_detail_screen/widgets/node_warning_row.dart';
+import 'subscription_detail_screen/widgets/node_notifications_view.dart';
 
 /// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237).
 /// Вкладки: **Settings** (Protocol/Server/Tag + эмодзи-пикер + Detour),
@@ -512,14 +512,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           title: Text(getLocalText.s("Server")),
           subtitle: Text(_serverInfo, style: theme.textTheme.bodyMedium),
         ),
-        // §435 — предупреждения разбора узла (в т. ч. отброшенные записи
-        // секций и конфликт `sections`/`dns`+`route` из документа); раньше
-        // редактор их не показывал вовсе.
-        if (_node?.warnings.isNotEmpty ?? false)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: NodeWarningRow(_node!.warnings),
-          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: TextField(
@@ -567,8 +559,26 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ], // §322 — конец гейта detour-блока
         const SizedBox(height: 16),
         ..._buildSectionsBlock(theme),
+        // §479 — уведомления разбора узла (в т. ч. отброшенные записи секций
+        // и конфликт `sections`/`dns`+`route` из документа, §435). Последним
+        // блоком: это следствие того, что выше, а не настройка. Узел без
+        // уведомлений раздела не получает вовсе.
+        ..._buildNotificationsBlock(theme),
       ],
     );
+  }
+
+  /// §479 — раздел `Notifications`: тот же компонент, что в шторке из списка
+  /// подписки. Прежняя строка `NodeWarningRow` наверху экрана убрана — она
+  /// показывала одно предупреждение из многих и обрывала его на полуслове.
+  List<Widget> _buildNotificationsBlock(ThemeData theme) {
+    final warnings = _node?.warnings ?? const <NodeWarning>[];
+    if (warnings.isEmpty) return const [];
+    return [
+      _sectionHeader(getLocalText.s("Notifications"),
+          getLocalText.s("What the app changed or could not apply"), theme),
+      NodeNotificationsView(warnings),
+    ];
   }
 
   /// §435 — блок «Sections» (NODE_SECTIONS.md §7): счётчик записей,

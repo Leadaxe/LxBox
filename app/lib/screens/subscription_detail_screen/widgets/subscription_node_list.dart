@@ -194,28 +194,34 @@ class SubscriptionNodeList extends StatelessWidget {
                       size: 16, color: theme.colorScheme.primary),
                 ),
               ],
-              // §471 ревизия 1 — синий `ⓘ` у имени: только у узла, которому
-              // нечего сказать кроме info. Когда есть warning/error, значок
-              // стоит в строке предупреждения перед значком уровня, и здесь
-              // его быть не должно — иначе он задваивается.
-              if (node.warnings.isNotEmpty && !_hasActionable(node)) ...[
-                const SizedBox(width: 2),
-                NodeInfoBadge(node.warnings),
-              ],
             ],
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${node.protocol}  ${node.server}:${node.port}',
-                style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+              Row(
+                children: [
+                  // §479 — приглушённый `ⓘ` в НАЧАЛЕ строки протокола: у узла,
+                  // которому нечего сказать кроме info. Когда есть
+                  // warning/error, значок стоит в конце строки предупреждения
+                  // (сам `NodeWarningRow`), и здесь его быть не должно —
+                  // иначе он задваивается. Имя узла остаётся чистым
+                  // (ревизия 1 §471 отменена).
+                  if (node.warnings.isNotEmpty && !_hasActionable(node))
+                    NodeInfoBadge(node.warnings),
+                  Flexible(
+                    child: Text(
+                      '${node.protocol}  ${node.server}:${node.port}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
               ),
-              // §471 — компактный режим: info только значком, без текста.
-              // Ревизия 1: у узла с одними info строки нет вовсе — его значок
-              // уехал к имени, а пустая строка добавляла узлу высоты.
-              if (_hasActionable(node))
-                NodeWarningRow(node.warnings, compact: true),
+              // §471 — в списке info только значком, без текста: строки нет
+              // вовсе, если требующего действия нечего сказать.
+              if (_hasActionable(node)) NodeWarningRow(node.warnings),
             ],
           ),
           // §339 — бейдж результата теста; тап по err — текст ошибки.

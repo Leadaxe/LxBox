@@ -265,20 +265,23 @@ Tapping a subscription opens its screen with these tabs:
   setting that was cleaned up or dropped. Three levels, told apart by colour:
   red ✖ — an error, the node will most likely not work as it came; yellow ⚠ —
   something was cleaned up or substituted, worth a look; blue ⓘ — information
-  only, nothing to do. In the node list only red and yellow get text (the
-  topmost one plus a "+N more" counter that counts red and yellow alone), and
-  information is shown as a blue icon with no text — otherwise the lines that
-  do need attention drown in the ones that do not. Where that icon sits depends
-  on the node: if the node has nothing but information, it stands **next to the
-  node's name** and the node gets no extra line at all; if the node also has a
-  warning or an error, it stands in that line, **before** the level icon.
-  **Tap the line or the icon**
-  and a sheet opens with all of them, text and all. Each one gets, where the
-  contract has it, **Why** it happened and **What to do** about it; **Learn
-  more** opens the full page about that warning in a browser. On the node's own
-  screen every level is shown with its text. Most warnings do not mean the node
-  is broken: many describe a setting that was quietly dropped because the core
-  would have refused the whole config over it.
+  only, nothing to do. In the node list only red and yellow get text — a short
+  headline of the topmost one plus a "+N" counter that counts red and yellow
+  alone — because the lines that do need attention drown otherwise. Information
+  is a grey ⓘ with no text: at the start of the protocol line when that is all
+  the node has, and at the end of the warning line when the node also has a
+  warning or an error. The node's name stays clean, and the node never gets a
+  third line.
+- **Tap the warning line or the ⓘ** and the node's **Notifications** open: a
+  header counting the levels (`✖ 1 · ⚠ 2 · ⓘ 3`, levels with nothing to report
+  are left out), then Errors, Warnings and Info. Each notification is one
+  headline; tap it and it unfolds into the field it is about, **What happened**,
+  **Why it happens**, **What you can do**, and **Details** — a link to the full
+  page about that code in a browser. The same list is the **Notifications**
+  section at the bottom of the Settings tab on the node's own screen; a node
+  with nothing to report has no such section. Most notifications do not mean
+  the node is broken: many describe a setting that was quietly dropped because
+  the core would have refused the whole config over it.
 - **Filters** — node processing rules; applied on import and on every update. A
   rule = conditions + an action. A condition is `path operator value` (contains
   / equals / regex, Not and Case-sensitive checkboxes, several conditions
