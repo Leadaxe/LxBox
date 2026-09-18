@@ -15,6 +15,28 @@ enum WarningSeverity { info, warning, error }
 sealed class NodeWarning {
   const NodeWarning();
 
+  /// §480 — предупреждение ПО КОДУ реестра.
+  ///
+  /// Движок маппера знает только код: записи секции называют `on_present`/
+  /// `on_invalid` строкой, и выбирать подкласс ему нечем. Почти всегда ответ
+  /// — [RegistryWarning] с текстом из `warnings.json`; исключения — коды, у
+  /// которых СВОЙ подкласс с собственным текстом и собственным равенством,
+  /// заведённый раньше реестра.
+  ///
+  /// Список исключений держится здесь, одним местом, и короток намеренно:
+  /// каждый такой подкласс — это текст, живущий в коде вместо реестра, то
+  /// есть долг. Новый код заводить сюда не нужно — он получит
+  /// [RegistryWarning] и текст из реестра.
+  static NodeWarning byCode(
+    String code, {
+    required String path,
+    required String value,
+  }) =>
+      switch (code) {
+        'ech_ignored' => EchIgnoredWarning(value),
+        _ => RegistryWarning(code: code, path: path, value: value),
+      };
+
   /// §285 — тело рендера подкласса. [t] — локализатор: активная локаль для
   /// [message], пиненный английский [GetLocalText.en] для [renderEn].
   /// Публичный — переиспользуется композицией из ui_msg.dart (пофайловая

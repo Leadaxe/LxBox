@@ -72,6 +72,33 @@ final class MapperSections {
     _draftLoaded = true;
   }
 
+  /// Досыпать черновики С ДИСКА синхронно, когда секция понадобилась раньше
+  /// явной загрузки.
+  ///
+  /// Нужно ЮНИТ-ТЕСТАМ: разбор ссылки синхронный, а загрузка ассетов — нет, и
+  /// без этого каждый из полусотни тестов, который просто зовёт `parseUri`,
+  /// обязан был бы знать про секции и грузить их в `setUpAll`. Знание о
+  /// внутреннем устройстве разбора расползлось бы по всему дереву тестов.
+  ///
+  /// В приложении не работает и не нужен: там нет файловой системы с
+  /// ассетами, каталог читается из бандла, и загрузку делает `main()` до
+  /// первого разбора. Молчаливый отказ здесь — рабочее состояние.
+  void _loadDraftsFromDiskSync() {
+    _draftLoaded = true;
+    final dir = _draftDir ?? kDraftRoot;
+    final root = Directory('$dir/uri');
+    if (!root.existsSync()) return;
+    for (final f in root.listSync().whereType<File>()) {
+      if (!f.path.endsWith('.json')) continue;
+      final name = f.uri.pathSegments.last.replaceAll('.json', '');
+      try {
+        _draft[name] = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+      } catch (_) {
+        // Битый черновик — та же «секции нет»: схема идёт прежним путём.
+      }
+    }
+  }
+
   Future<String?> _readDraft(String rel) async {
     final dir = _draftDir;
     try {
@@ -109,7 +136,7 @@ final class MapperSections {
   Map<String, dynamic>? _rawSection(String kind, String singboxType) {
     final fromRegistry = _registrySection(kind, singboxType);
     if (fromRegistry != null) return fromRegistry;
-    if (!_draftLoaded) return null;
+    if (!_draftLoaded) _loadDraftsFromDiskSync();
     final file = _draft[singboxType];
     if (file == null) return null;
     final mappers = (file['mappers'] as Map?)?.cast<String, dynamic>();

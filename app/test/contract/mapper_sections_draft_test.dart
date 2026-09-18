@@ -45,6 +45,17 @@ const Set<String> _types = {
   'object',
 };
 
+/// Файлы черновика бывают ДВУХ форм, и обе нормативны (`PRIMITIVES.md` §0.1):
+///
+/// - секция протокола — корень несёт `mappers.<kind>`;
+/// - общий блок (`tls`, `transports`) — корень несёт `blocks.<диалект>`, и
+///   его записи вмонтируются в секцию схемы через `include`.
+///
+/// Проверки записей одинаковы для обеих; различается только вход в дерево.
+/// Файл `registry_mapper.schema.json` — это САМА JSON-схема грамматики, а не
+/// секция: он лежит рядом копией, и проверять его как секцию бессмысленно.
+bool _isBlocks(Map<String, dynamic> doc) => doc.containsKey('blocks');
+
 List<File> _sections() {
   final dir = Directory(_draftRoot);
   if (!dir.existsSync()) return const [];
@@ -52,8 +63,45 @@ List<File> _sections() {
       .listSync(recursive: true)
       .whereType<File>()
       .where((f) => f.path.endsWith('.json'))
+      .where((f) => !f.path.endsWith('registry_mapper.schema.json'))
       .toList()
     ..sort((a, b) => a.path.compareTo(b.path));
+}
+
+/// Все секции документа: у формы `mappers` — по виду источника, у формы
+/// `blocks` — по диалекту, и записи там лежат либо плоско, либо группами
+/// (`ws`, `http`, `$selector`). Группа — способ читать файл глазами;
+/// вариантность выражена `when` у самих записей.
+Map<String, Map<String, dynamic>> _sectionsOf(Map<String, dynamic> doc) {
+  if (!_isBlocks(doc)) {
+    return (doc['mappers'] as Map).cast<String, dynamic>().map(
+          (k, v) => MapEntry(k, (v as Map).cast<String, dynamic>()),
+        );
+  }
+  final out = <String, Map<String, dynamic>>{};
+  for (final d in (doc['blocks'] as Map).entries) {
+    final v = d.value;
+    if (v is! Map) continue;
+    final params = <String, dynamic>{};
+    for (final e in v.cast<String, dynamic>().entries) {
+      final ev = e.value;
+      if (ev is! Map) continue;
+      if (ev.containsKey('source')) {
+        params[e.key] = ev;
+      } else if (e.key == 'prefix' || e.key == 'strip') {
+        // Именованная таблица `value_map` (`fp_dialect`) — не записи.
+        continue;
+      } else {
+        for (final g in ev.cast<String, dynamic>().entries) {
+          if (g.value is Map && (g.value as Map).containsKey('source')) {
+            params['${e.key}.${g.key}'] = g.value;
+          }
+        }
+      }
+    }
+    if (params.isNotEmpty) out['${d.key}'] = {'params': params};
+  }
+  return out;
 }
 
 void main() {
@@ -72,17 +120,22 @@ void main() {
         doc = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
       });
 
-      test('корень несёт mappers и ничего постороннего', () {
-        expect(doc.keys.where((k) => !k.startsWith('_')), contains('mappers'));
-        final mappers = doc['mappers'];
-        expect(mappers, isA<Map<String, dynamic>>());
-        for (final kind in (mappers as Map).keys) {
+      test('корень несёт mappers либо blocks и ничего постороннего', () {
+        final top = doc.keys.where((k) => !k.startsWith('_')).toSet();
+        expect(top.contains('mappers') || top.contains('blocks'), isTrue,
+            reason: 'корень обязан нести либо mappers (секция протокола), '
+                'либо blocks (общий блок, вмонтируемый через include)');
+        if (_isBlocks(doc)) return;
+        for (final kind in (doc['mappers'] as Map).keys) {
           expect(const {'uri', 'xray', 'singbox', 'conf'}, contains(kind),
               reason: 'вид источника "$kind" вне набора грамматики');
         }
       });
 
       test('секция: только замороженные ключи, body_source из набора', () {
+        // У общего блока своей секции нет: он вмонтируется в секцию схемы, и
+        // `body_source` объявляет она.
+        if (_isBlocks(doc)) return;
         final mappers = (doc['mappers'] as Map).cast<String, dynamic>();
         for (final e in mappers.entries) {
           final sec = (e.value as Map).cast<String, dynamic>();
@@ -97,10 +150,9 @@ void main() {
       });
 
       test('записи таблицы: ключи и type из замороженного набора', () {
-        final mappers = (doc['mappers'] as Map).cast<String, dynamic>();
-        for (final e in mappers.entries) {
-          final sec = (e.value as Map).cast<String, dynamic>();
-          final params = (sec['params'] as Map?)?.cast<String, dynamic>() ?? {};
+        for (final e in _sectionsOf(doc).entries) {
+          final params =
+              (e.value['params'] as Map?)?.cast<String, dynamic>() ?? {};
           for (final p in params.entries) {
             final rec = (p.value as Map).cast<String, dynamic>();
             for (final k in rec.keys) {
@@ -123,6 +175,7 @@ void main() {
       });
 
       test('формы: у каждой есть id, ровно одна ветка default', () {
+        if (_isBlocks(doc)) return;
         final mappers = (doc['mappers'] as Map).cast<String, dynamic>();
         for (final e in mappers.entries) {
           final sec = (e.value as Map).cast<String, dynamic>();
@@ -145,10 +198,9 @@ void main() {
       });
 
       test('extract: регулярка компилируется, группы покрыты into', () {
-        final mappers = (doc['mappers'] as Map).cast<String, dynamic>();
-        for (final e in mappers.entries) {
-          final sec = (e.value as Map).cast<String, dynamic>();
-          final params = (sec['params'] as Map?)?.cast<String, dynamic>() ?? {};
+        for (final e in _sectionsOf(doc).entries) {
+          final params =
+              (e.value['params'] as Map?)?.cast<String, dynamic>() ?? {};
           for (final p in params.entries) {
             final ex = ((p.value as Map)['extract'] as Map?)
                 ?.cast<String, dynamic>();

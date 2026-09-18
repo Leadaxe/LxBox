@@ -321,6 +321,24 @@ final class _Run {
       value = _normalize(value, p.normalize!);
     }
 
+    // `maps_to: null` — значение ОБЪЯВЛЕННО никуда не едет (ECH, padding).
+    // Проверяется до `extract`: у такой записи регулярка не раскладывает
+    // значение по телу, а вырезает из него ту часть, которую показывают
+    // человеку в коде ([_applyOnPresent]).
+    if (p.mapsToPresent && p.mapsTo == null && p.sets.isEmpty) {
+      // `value_map` сюда всё же заглядывает: значение-выключатель
+      // (`none`, пусто) переведено в «ничего нет», и кода за него быть не
+      // должно — человек ничего не терял, он ничего и не просил.
+      final off = value is String && p.valueMap.isNotEmpty
+          ? _mapValue(p.valueMap, value)
+          : (matched: false, value: value);
+      if (!(off.matched && off.value == null)) {
+        _applyOnPresent(p, value is String ? value : '$value');
+      }
+      _applyImplies(p);
+      return;
+    }
+
     // `extract` — одно значение по нескольким путям.
     if (p.extract != null && value is String) {
       _applyExtract(p, value);
@@ -355,9 +373,7 @@ final class _Run {
     if (p.mapsTo != null) {
       _write(p.mapsTo!, typed, p);
     } else if (!hadSets && p.mapsToPresent) {
-      // `maps_to: null` — значение объявленно никуда не едет. Код о потере
-      // ставит `on_invalid`/`on_present`, если секция его объявила.
-      _applyOnPresent(p);
+      _applyOnPresent(p, raw is String ? raw : '$raw');
     }
 
     _applyImplies(p);
@@ -436,10 +452,29 @@ final class _Run {
     }
   }
 
-  void _applyOnPresent(MapperParam p) {
+  /// `on_present` — код о том, что ОБЪЯВЛЕННОЕ значение никуда не поехало.
+  ///
+  /// Отличается от `unknown_key` тем, что параметр реестру известен: человек
+  /// написал его сознательно, и молчание тут — потеря. В теле этого значения
+  /// уже нет, поэтому сказать о нём может только маппер.
+  ///
+  /// [value] несёт ту часть значения, которую показывают человеку. Чем она
+  /// отличается от сырой, говорит `extract` записи: правило «до первого `+`»
+  /// это форма значения, и держать его в коде значило бы завести первую
+  /// схемную функцию в общем движке.
+  void _applyOnPresent(MapperParam p, String raw) {
     final code = p.onPresent['code'] as String? ?? p.onInvalid['code'] as String?;
     if (code == null) return;
-    warnings.add(RegistryWarning(code: code, path: p.name, value: ''));
+    var shown = raw.trim();
+    final ex = p.extract;
+    if (ex != null) {
+      final m = _regex(ex.re).firstMatch(shown);
+      final first = ex.into.keys.isEmpty ? null : ex.into.keys.first;
+      if (m != null && first != null) {
+        shown = m.namedGroup(first) ?? shown;
+      }
+    }
+    warnings.add(NodeWarning.byCode(code, path: p.name, value: shown));
   }
 
   // ─────────────────────────── источники ───────────────────────────

@@ -48,7 +48,8 @@
       },
       "include": [
         "transports#uri",
-        "tls#uri"
+        "tls#uri",
+        "dialer#uri"
       ],
       "params": {
         "server": {

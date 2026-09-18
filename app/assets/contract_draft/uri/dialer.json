@@ -1,0 +1,21 @@
+{
+  "_draft": "ЧЕРНОВИК LxBox (у лаунчера блока dialer#uri нет; описательный dialer.body у него есть). §453/§474 — dial-поля keep-alive ссылка везёт отдельными параметрами, и судит их санитайзер наравне с прочими: имена параметров уже совпадают с ключами тела, поэтому записи плоские.",
+  "blocks": {
+    "uri": {
+      "tcp_keep_alive": {
+        "source": "query.tcp_keep_alive",
+        "maps_to": "tcp_keep_alive",
+        "impl": "Форму значения (duration) судит реестр, не маппер."
+      },
+      "tcp_keep_alive_interval": {
+        "source": "query.tcp_keep_alive_interval",
+        "maps_to": "tcp_keep_alive_interval"
+      },
+      "disable_tcp_keep_alive": {
+        "source": "query.disable_tcp_keep_alive",
+        "type": "bool_spelled",
+        "maps_to": "disable_tcp_keep_alive"
+      }
+    }
+  }
+}
