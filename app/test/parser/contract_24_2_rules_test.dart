@@ -1,0 +1,198 @@
+import 'dart:convert';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/models/transport_spec.dart';
+import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/uri_parsers.dart';
+
+// §463 — целевые правила контракта §24.2/§24.6, принятые владельцем
+// 18.09.2026. Корпус (test/contract/) нормирует их там, где у лаунчера есть
+// фикстура; здесь — правила, фикстуры под которые в корпусе нет, и границы,
+// которые корпус не трогает (эмит share-URI, sing-box-JSON вход).
+//
+// 7.3 (naive одиночный userinfo = password) сюда НЕ входит: дата
+// одновременной правки обеих сторон — 24.09.2026.
+
+/// Коды предупреждений узла (реестровые несут код полем).
+List<String> _codes(NodeSpec spec) => [
+      for (final w in spec.warnings)
+        if (w is RegistryWarning) w.code else w.runtimeType.toString(),
+    ];
+
+void main() {
+  group('§24.2 п. 7.1 — hellorandom* → random', () {
+    test('весь префикс даёт random, а не chrome и не randomized', () {
+      for (final fp in const [
+        'hellorandom',
+        'hellorandomized',
+        'hellorandomizedalpn',
+        'hellorandomizednoalpn',
+      ]) {
+        final spec = parseVless(
+            'vless://11111111-1111-1111-1111-111111111111@e.example.com:443?security=tls&fp=$fp#n');
+        expect(spec!.tls.fingerprint, 'random', reason: fp);
+        // Значение опознано — подменой оно не считается, кода нет.
+        expect(_codes(spec), isNot(contains('UnknownFingerprintWarning')),
+            reason: fp);
+      }
+    });
+  });
+
+  group('§24.2 п. 7.5 — anytls мусорный SNI', () {
+    test('имя без точки и двоеточия заменяется адресом сервера', () {
+      final spec =
+          parseAnyTls('anytls://pass123@a.example.com:443?sni=%F0%9F%94%92#n');
+      expect(spec!.tls.serverName, 'a.example.com');
+    });
+
+    test('нормальный SNI не трогается', () {
+      final spec =
+          parseAnyTls('anytls://pass123@a.example.com:443?sni=cover.example#n');
+      expect(spec!.tls.serverName, 'cover.example');
+    });
+  });
+
+  group('§24.2 п. 7.7 — дефолты TUIC не пишутся', () {
+    test('без congestion_control/alpn в ссылке поля не эмитятся', () {
+      final spec = parseTuic(
+          'tuic://11111111-2222-3333-4444-555555555555:pass123@t.example.com:443#n');
+      final entry = spec!.emit(TemplateVars.empty).map;
+      expect(entry.containsKey('congestion_control'), isFalse);
+      expect((entry['tls'] as Map).containsKey('alpn'), isFalse);
+    });
+  });
+
+  group('§24.2 п. 7.8 — TUIC udp_relay_mode', () {
+    test('мусор снимается с кодом, а не подменяется на native', () {
+      final spec = parseTuic(
+          'tuic://11111111-2222-3333-4444-555555555555:pass123@t.example.com:443?udp_relay_mode=quiс#n');
+      expect(spec!.udpRelayMode, isNull);
+      expect(_codes(spec), contains('tuic_udp_relay_mode_invalid'));
+      expect(spec.emit(TemplateVars.empty).map.containsKey('udp_relay_mode'),
+          isFalse);
+    });
+
+    test('валидные значения проходят без кода', () {
+      for (final v in const ['native', 'quic']) {
+        final spec = parseTuic(
+            'tuic://11111111-2222-3333-4444-555555555555:pass123@t.example.com:443?udp_relay_mode=$v#n');
+        expect(spec!.udpRelayMode, v);
+        expect(_codes(spec), isNot(contains('tuic_udp_relay_mode_invalid')));
+      }
+    });
+  });
+
+  group('§24.2 п. 7.9 — пустой пароль', () {
+    test('anytls и tuic без пароля отбраковываются', () {
+      expect(parseAnyTls('anytls://@a.example.com:443#n'), isNull);
+      expect(
+          parseTuic(
+              'tuic://11111111-2222-3333-4444-555555555555:@t.example.com:443#n'),
+          isNull);
+    });
+  });
+
+  group('§24.2 п. 7.10 — ss legacy stream-шифры', () {
+    // SIP002: userinfo — base64(method:password).
+    String ssUri(String method) =>
+        'ss://${base64.encode(utf8.encode('$method:pass123'))}'
+        '@s.example.com:8388#n';
+
+    test('узел живёт и получает info-код ss_method_legacy', () {
+      for (final m in const [
+        'aes-128-ctr',
+        'aes-192-ctr',
+        'aes-256-ctr',
+        'aes-128-cfb',
+        'aes-192-cfb',
+        'aes-256-cfb',
+        'rc4-md5',
+        'chacha20-ietf',
+        'xchacha20',
+      ]) {
+        final spec = parseShadowsocks(ssUri(m));
+        expect(spec, isNotNull, reason: m);
+        expect(spec!.method, m, reason: m);
+        expect(_codes(spec), contains('ss_method_legacy'), reason: m);
+      }
+    });
+
+    test('AEAD-методы кода не получают', () {
+      final spec = parseShadowsocks(ssUri('aes-256-gcm'));
+      expect(_codes(spec!), isNot(contains('ss_method_legacy')));
+    });
+
+    test('метод вне 18 значений ядра по-прежнему роняет узел', () {
+      expect(parseShadowsocks(ssUri('made-up-cipher')), isNull);
+    });
+  });
+
+  group('§24.2 п. 7.13 — splithttp = алиас xhttp', () {
+    test('URI type=splithttp даёт транспорт xhttp', () {
+      final spec = parseVless(
+          'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&type=splithttp&path=%2Fv1#n');
+      expect(spec!.transport, isA<XhttpTransport>());
+    });
+
+    test('sing-box JSON transport.type=splithttp', () {
+      final spec = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 'n',
+        'server': 'x.example.com',
+        'server_port': 443,
+        'uuid': '11111111-1111-1111-1111-111111111111',
+        'transport': {'type': 'splithttp', 'path': '/v1'},
+      });
+      expect((spec as VlessSpec).transport, isA<XhttpTransport>());
+    });
+  });
+
+  group('§24.2 п. 7.15 — socks password-only', () {
+    test('пароль без имени эмитится как :pass@', () {
+      final spec = SocksSpec(
+        id: 'i',
+        tag: 't',
+        label: 'l',
+        server: 's.example.com',
+        port: 1080,
+        rawSource: '',
+        username: '',
+        password: 'pass123',
+      );
+      expect(spec.toUri(), contains(':pass123@'));
+      // Круг замкнут: пароль переживает пересохранение узла.
+      final back = parseUri(spec.toUri()) as SocksSpec;
+      expect(back.password, 'pass123');
+    });
+  });
+
+  group('§24.6 — url_path', () {
+    test('битый percent в пути снимается с type_invalid, узел живёт', () {
+      final spec = parseTrojan(
+          'trojan://pass123@t.example.com:443?type=ws&path=%2Fx%25zz&security=tls#n');
+      expect(spec, isNotNull);
+      expect((spec!.transport as WsTransport).path, '');
+      expect(_codes(spec), contains('type_invalid'));
+    });
+
+    test('корректный percent-путь не трогается', () {
+      final spec = parseTrojan(
+          'trojan://pass123@t.example.com:443?type=ws&path=%2Fx%2Fy&security=tls#n');
+      expect((spec!.transport as WsTransport).path, '/x/y');
+      expect(_codes(spec), isNot(contains('type_invalid')));
+    });
+  });
+
+  group('§24.6 — пустой reality.short_id не эмитится', () {
+    test('ключа в теле нет', () {
+      final spec = parseVless(
+          'vless://11111111-1111-1111-1111-111111111111@r.example.com:443?security=reality'
+          '&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sni=cover.example#n');
+      final tls = spec!.emit(TemplateVars.empty).map['tls'] as Map;
+      expect((tls['reality'] as Map).containsKey('short_id'), isFalse);
+    });
+  });
+}

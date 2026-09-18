@@ -973,8 +973,14 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
           (h['host'] as List?)?.map((e) => e.toString()).toList() ??
           const <String>[];
       return HttpTransport(path: h['path']?.toString() ?? '/', hosts: hosts);
+    // §463 / контракт §24.2 п. 7.13 — `splithttp` = прежнее имя `xhttp` в
+    // Xray; настройки лежат под своим именем секции (`splithttpSettings`),
+    // поэтому читаем обе. Раньше такой узел оставался без транспорта вовсе.
+    case 'splithttp':
     case 'xhttp': // §097 — Xray xhttpSettings → нативный xhttp
-      final x = stream['xhttpSettings'] as Map? ?? const {};
+      final x = (stream['xhttpSettings'] ?? stream['splithttpSettings'])
+              as Map? ??
+          const {};
       // §399 — состав полей общий с URI-веткой. Xray допускает обе раскладки:
       // плоско в `xhttpSettings` и вложенным объектом `extra`; при конфликте
       // выигрывает `extra`. Битый/не-объектный `extra` игнорируется — узел
@@ -1585,6 +1591,8 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
         path: path,
         host: raw['host']?.toString() ?? '',
       );
+    // §463 / контракт §24.2 п. 7.13 — алиас прежнего имени Xray.
+    case 'splithttp':
     case 'xhttp': // §097 — нативный xhttp из sing-box JSON
       // §399 — состав полей общий с URI-веткой: round-trip через JSON-редактор
       // не должен срезать расширенные поля §127. `headers` — Map, идёт отдельно.

@@ -33,6 +33,18 @@ AnyTlsSpec? parseAnyTls(String uri) {
   // терять параметры — снимаем security перед парсингом, чтобы не получить
   // disabled (обнулив весь TLS-блок).
   final tlsQuery = Map<String, String>.from(q)..remove('security');
+  // §463 / контракт §24.2 п. 7.5 — мусорный SNI заменяется адресом сервера.
+  //
+  // Имя без точки и двоеточия (`🔒`, `localhost-ish`) именем хоста быть не
+  // может: `sing-box check` такой конфиг проходит, а рукопожатие мёртво —
+  // сервер получает SNI, которого не знает. Раньше значение уезжало в
+  // `tls.server_name` как есть, и узел молча не работал. Критерий — тот же,
+  // что у лаунчера (`tlsServerNameFromQuery`): есть `.` или `:` — имя, нет —
+  // фолбэк на `server`.
+  final sniRaw = (tlsQuery['sni'] ?? '').trim();
+  if (sniRaw.isNotEmpty && !sniRaw.contains(RegExp(r'[.:]'))) {
+    tlsQuery['sni'] = server;
+  }
   final warnings = <NodeWarning>[];
   // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
   final tls = normalizeTlsFingerprint(

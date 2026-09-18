@@ -398,6 +398,33 @@ bool isValidRealityPublicKey(String pbk) {
   return bytes != null && bytes.length == 32;
 }
 
+/// §463 / контракт §24.6 (`format: url_path`) — путь транспорта, который ядро
+/// разберёт `url.Parse`.
+///
+/// Ядро отвергает битое percent-кодирование фаталом на ВЕСЬ config.json
+/// («ws: parse path: invalid URL escape "%zz"»; то же у httpupgrade и http),
+/// поэтому такой путь — не порча одного узла, а потеря всего VPN. Проверяется
+/// ровно то, на чём падает `url.Parse`: после `%` обязаны идти две hex-цифры.
+/// Всё остальное (эмодзи, пробелы, кириллица) путь проходит — ядру это
+/// законный путь, и резать его мы не вправе.
+bool urlPathOk(String path) {
+  for (var i = 0; i < path.length; i++) {
+    if (path.codeUnitAt(i) != 0x25) continue; // '%'
+    if (i + 2 >= path.length) return false;
+    if (!_isHexDigit(path.codeUnitAt(i + 1)) ||
+        !_isHexDigit(path.codeUnitAt(i + 2))) {
+      return false;
+    }
+    i += 2;
+  }
+  return true;
+}
+
+bool _isHexDigit(int c) =>
+    (c >= 0x30 && c <= 0x39) || // 0-9
+    (c >= 0x41 && c <= 0x46) || // A-F
+    (c >= 0x61 && c <= 0x66); // a-f
+
 /// Reality short-id canonical form: hex-чар (0-9a-f), чётной длины, max 16.
 ///
 /// §343: ядро декодирует short_id как hex в `[8]byte` — нечётная длина или
@@ -482,7 +509,31 @@ String normalizeVmessSecurity(String raw) {
   return 'auto';
 }
 
-/// Валидные методы Shadowsocks (sing-box).
+/// §463 / контракт §24.2 п. 7.10 — устаревшие stream-шифры Shadowsocks
+/// (shadowstream), которые ядро принимает.
+///
+/// Реестр `protocols/shadowsocks.json` → `body.fields.method.advisory`:
+/// узел на таком шифре ЖИВЁТ и получает info-код `ss_method_legacy`.
+/// Криптографически они слабы (нет AEAD — трафик не аутентифицируется), но
+/// это выбор владельца сервера, а не повод молча выбросить рабочий узел:
+/// раньше оба клиента дропали их без объяснения, и человек видел, что из
+/// подписки «пропали ноды».
+const shadowsocksLegacyMethods = <String>{
+  'aes-128-ctr',
+  'aes-192-ctr',
+  'aes-256-ctr',
+  'aes-128-cfb',
+  'aes-192-cfb',
+  'aes-256-cfb',
+  'rc4-md5',
+  'chacha20-ietf',
+  'xchacha20',
+};
+
+/// Валидные методы Shadowsocks — 18 методов ядра
+/// (`sing-shadowsocks2 v0.2.1 method_registry`, реестр
+/// `protocols/shadowsocks.json` → `body.fields.method.values`). Значение вне
+/// набора = ошибка `CreateMethod` на ВЕСЬ конфиг, поэтому узел дропается.
 const shadowsocksMethods = {
   '2022-blake3-aes-128-gcm',
   '2022-blake3-aes-256-gcm',
@@ -493,10 +544,16 @@ const shadowsocksMethods = {
   'aes-256-gcm',
   'chacha20-ietf-poly1305',
   'xchacha20-ietf-poly1305',
+  ...shadowsocksLegacyMethods,
 };
 
 bool isValidShadowsocksMethod(String method) =>
     shadowsocksMethods.contains(method);
+
+/// §463 — метод принят ядром, но устарел: узел живёт с info-кодом
+/// `ss_method_legacy`.
+bool isLegacyShadowsocksMethod(String method) =>
+    shadowsocksLegacyMethods.contains(method);
 
 /// VLESS-порты, на которых обычно plain HTTP (без TLS) — как в v1.
 const plaintextVlessPorts = {80, 8080, 8880, 2052, 2082, 2086, 2095};

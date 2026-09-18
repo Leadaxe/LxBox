@@ -89,7 +89,16 @@ const Map<String, String> _xrayAliasPrefixes = {
   'helloqq': 'qq',
   'helloios': 'ios',
   'helloandroid': 'android',
-  'hellorandomized': 'randomized',
+  // §463 / контракт §24.2 п. 7.1 — `hellorandom*` (включая
+  // `hellorandomized`, `hellorandomizedalpn`, `hellorandomizednoalpn`) →
+  // `random`.
+  //
+  // Раньше префикс был `hellorandomized` → `randomized`, а голый
+  // `hellorandom` вообще не опознавался и подменялся на `chrome`: подписка
+  // просила СЛУЧАЙНЫЙ отпечаток, а получала фиксированный, то есть ровно ту
+  // узнаваемую сигнатуру, от которой уходила. Префикс укорочен до
+  // `hellorandom`, значение — `random` (как в Go).
+  'hellorandom': 'random',
 };
 
 /// Канонизация сырого значения. `junk` = значение не опознано и заменено

@@ -902,10 +902,14 @@ class Awg {
   /// валидирует `awg3NodeError` (на узел, не на поле). Вызывающий обязан
   /// подать `headerprotectionkey` с сохранённым `+` (queryParamPreservePlus):
   /// `Uri.queryParameters` превращает `+` base64 в пробел.
+  ///
+  /// §463 — [droppedRequires]: пути полей, снятых правилом `requires` реестра
+  /// ([applyJunkSizeRequires]); вызывающий ставит на них код с путём.
   static Awg? fromQuery(
     Map<String, String> q, {
     List<(String, String)>? badHeaders,
     List<(String, String)>? badAwg3,
+    List<String>? droppedRequires,
   }) {
     final f = <String, Object>{};
     final hk = (q[awg3Param(headerKey)] ?? '').trim();
@@ -957,7 +961,29 @@ class Awg {
         if (v != null && v.isNotEmpty) f[k] = v;
       }
     }
+    applyJunkSizeRequires(f, dropped: droppedRequires);
     return f.isEmpty ? null : Awg(f);
+  }
+
+  /// §463 / контракт §24.6 — `jmin` без `jmax` снимается
+  /// (`requires: [{path: jmax, code: awg_header_invalid}]` в
+  /// `registry/protocols/wireguard.json`).
+  ///
+  /// Отсутствующий `jmax` ядро читает как 0 и валит ВЕСЬ конфиг
+  /// («amneziawg: jmin (50) must be <= jmax (0)», проверено на
+  /// 1.14.0-lx.39) — вердикт B. Раньше одинокий `jmin` доезжал до тела:
+  /// `jc=abc` отбрасывался молча, а `jmin=50` оставался и ронял всё.
+  ///
+  /// Обратная пара (`jmax` без `jmin`) безопасна: `jmin` по умолчанию 0,
+  /// и `0 <= jmax` выполняется — реестр её и не требует.
+  ///
+  /// [dropped] — пути снятых полей для `warnings[]` узла.
+  static void applyJunkSizeRequires(Map<String, Object> f,
+      {List<String>? dropped}) {
+    if (f.containsKey('jmin') && !f.containsKey('jmax')) {
+      f.remove('jmin');
+      dropped?.add('jmin');
+    }
   }
 
   /// Из endpoint-JSON (корень). Числа: `num`→`int`; h1–h4 также `String`
@@ -994,6 +1020,9 @@ class Awg {
     for (final k in awg3BoolKeys) {
       if (m[k] == true) f[k] = true;
     }
+    // §463 — то же правило `requires`, что и на URI-пути: одинокий `jmin`
+    // роняет весь конфиг независимо от того, откуда тело пришло.
+    applyJunkSizeRequires(f);
     return f.isEmpty ? null : Awg(f);
   }
 

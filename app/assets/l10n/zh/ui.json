@@ -2610,6 +2610,9 @@
  "No source URI for this node": {
   "value": "此节点没有来源 URI"
  },
+ "This node holds a private key — sharing it as a link would expose the key": {
+  "value": "此节点包含私钥，分享链接会泄露该私钥"
+ },
  "No source provided": {
   "value": "未提供来源"
  },

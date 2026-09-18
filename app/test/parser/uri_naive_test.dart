@@ -109,23 +109,17 @@ void main() {
       expect(spec!.label, '✅ DE');
     });
 
-    test('empty host stays a live node (contract SPEC 103)', () {
-      // §103 empty_host_rejected — Go валидирует непустой hostname только
-      // для vless/trojan/ssh/tuic/anytls (node_parser_core.go:321-329);
-      // naive в этот список не входит, так что naive+https:// с пустым
-      // host остаётся живой нодой (server: "" — единственный настоящий
-      // reject тут — не-URI мусор). Раньше здесь ожидался null — это было
-      // расхождение с launcher-стороной контракта (contract/corpus/uri/
-      // naive/empty_host_rejected), приведено в соответствие.
-      final spec = parseNaive('naive+https://');
-      expect(spec, isNotNull);
-      expect(spec!.server, '');
-      expect(spec.port, 443);
-      expect(spec.tls.enabled, true);
-      // §103 — serverName хранит '' (= server); TlsSpec.toSingbox() уже
-      // опускает пустой server_name при эмите (entry-паритет с launcher,
-      // где Go тоже не пишет server_name для пустого host).
-      expect(spec.tls.serverName, '');
+    test('empty host rejects the node (contract §24.6)', () {
+      // §463 — узел с пустым host отбраковывается.
+      //
+      // Прежняя посылка (Go проверяет непустой hostname только у
+      // vless/trojan/ssh/tuic/anytls, а naive в список не входит) оказалась
+      // неверной: ядро на пустом адресе валит ВЕСЬ конфиг («invalid server
+      // address», `sing-box check` на 1.14.0-lx.39), то есть один такой узел
+      // из подписки оставлял человека без VPN целиком. Корпус
+      // (contract/corpus/uri/naive/empty_host_rejected) нормирует отбраковку
+      // с W2c лаунчера.
+      expect(parseNaive('naive+https://'), isNull);
     });
 
     test('dispatcher handles naive+https via parseUri', () {

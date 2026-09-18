@@ -594,9 +594,16 @@ Outbound emitSocks(SocksSpec s, TemplateVars vars) {
 }
 
 String toUriSocks(SocksSpec s) {
-  final userinfo = s.username.isEmpty
+  // §463 / контракт §24.2 п. 7.15 — userinfo: оба пусто → нет; только user →
+  // `user@`; только pass → `:pass@` (та же форма, что у http-прокси ниже).
+  //
+  // Раньше пустой username снимал userinfo ЦЕЛИКОМ, и пароль молча пропадал
+  // на первом же пересохранении узла: хранение узла — это его ссылка.
+  final hasUser = s.username.isNotEmpty;
+  final hasPass = s.password.isNotEmpty;
+  final userinfo = !hasUser && !hasPass
       ? ''
-      : (s.password.isEmpty
+      : (!hasPass
           ? '${encodeParam(s.username)}@'
           : '${encodeParam(s.username)}:${encodeParam(s.password)}@');
   final host = _wrapIpv6(s.server);

@@ -29,10 +29,15 @@ TuicSpec? parseTuic(String uri) {
   // дефолт само).
   final ccRaw = q['congestion_control'];
   final cc = _normalizeCongestion(ccRaw);
+  // §463 / контракт §24.2 п. 7.8 — мусор в `udp_relay_mode` СНИМАЕТСЯ, а не
+  // подменяется на `native`.
+  //
+  // Раньше любое непонятное значение схлопывалось в `native` и уезжало в
+  // тело явным полем: намерение подписки («quiс»-опечатка, новое значение)
+  // терялось молча, а узел выглядел настроенным. Ядро с lx.6 (SPEC 091) на
+  // мусоре и вовсе отказывается загружать конфиг — наш drop совпал.
   final urmRaw = q['udp_relay_mode'];
-  final urm = urmRaw == null
-      ? null
-      : (urmRaw.toLowerCase().trim() == 'quic' ? 'quic' : 'native');
+  final urm = _normalizeUdpRelayMode(urmRaw);
   final zeroRtt = (q['reduce_rtt'] ?? q['zero_rtt'] ?? '0') == '1' ||
       (q['reduce_rtt'] ?? q['zero_rtt'] ?? '').toLowerCase() == 'true';
 
@@ -58,6 +63,15 @@ TuicSpec? parseTuic(String uri) {
   // значение = «не задано», деградацией не считается.
   if (ccRaw != null && ccRaw.trim().isNotEmpty && cc == null) {
     warnings.add(TuicCongestionInvalidWarning(ccRaw.trim()));
+  }
+  // §463 / контракт §24.2 п. 7.8 — снятое значение объявляется кодом:
+  // молчаливая подмена скрывала потерю намерения подписки.
+  if (urmRaw != null && urmRaw.trim().isNotEmpty && urm == null) {
+    warnings.add(RegistryWarning(
+      code: 'tuic_udp_relay_mode_invalid',
+      path: 'udp_relay_mode',
+      value: urmRaw.trim(),
+    ));
   }
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
@@ -93,4 +107,14 @@ String? _normalizeCongestion(String? raw) {
   if (raw == null) return null;
   final s = raw.toLowerCase().trim();
   return {'bbr', 'cubic', 'new_reno'}.contains(s) ? s : null;
+}
+
+/// §463 / контракт §24.2 п. 7.8 — `udp_relay_mode` по той же логике, что и
+/// congestion: вне `{native, quic}` = «не задано», поле не пишется, ядро
+/// подставит свой дефолт. Реестр `protocols/tuic.json`:
+/// `on_invalid: {action: drop, code: tuic_udp_relay_mode_invalid}`.
+String? _normalizeUdpRelayMode(String? raw) {
+  if (raw == null) return null;
+  final s = raw.toLowerCase().trim();
+  return {'native', 'quic'}.contains(s) ? s : null;
 }

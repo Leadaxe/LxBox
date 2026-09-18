@@ -22,9 +22,6 @@ VlessSpec? parseVless(String uri) {
 
   final warnings = <NodeWarning>[];
   final transport = parseTransport(q, warnings: warnings);
-  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls = normalizeTlsFingerprint(
-      parseVlessTls(q, server, port, warnings: warnings), warnings);
 
   var flow = (q['flow'] ?? '').trim();
   var packetEncoding = '';
@@ -34,6 +31,23 @@ VlessSpec? parseVless(String uri) {
     flow = 'xtls-rprx-vision';
     packetEncoding = 'xudp';
   }
+  // packet_encoding: sing-box принимает только {"", xudp, packetaddr};
+  // xray-style `none` и любой мусор → panic в libbox. Allow-list нормализуем
+  // на входе, чтобы emit'ить безопасно. См. normalizePacketEncoding.
+  //
+  // §463 — блок стоит ДО разбора TLS: порядок кодов в конверте значим
+  // (CANON §6), и `junk_pair_with_body` — пара ссылка↔JSON — нормирует
+  // `packet_encoding` перед `tls.reality.short_id`. Разбор от TLS не
+  // зависит: читается только query.
+  if (packetEncoding.isEmpty) {
+    final raw = queryParamCI(q, 'packetEncoding') ?? '';
+    packetEncoding = normalizePacketEncoding(raw, tag: tag, warnings: warnings);
+  }
+
+  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
+  final tls = normalizeTlsFingerprint(
+      parseVlessTls(q, server, port, warnings: warnings), warnings);
+
   // §115 — flow = источник истины ссылка, НЕ угадываем по REALITY (раньше
   // bare-TCP+REALITY без flow получал навязанный vision → ломались валидные
   // none-сетапы). vision валиден только на голом TLS: с транспортом
@@ -43,12 +57,18 @@ VlessSpec? parseVless(String uri) {
     warnings.add(VisionWithTransportWarning(q['type'] ?? 'transport'));
     flow = '';
   }
-  // packet_encoding: sing-box принимает только {"", xudp, packetaddr};
-  // xray-style `none` и любой мусор → panic в libbox. Allow-list нормализуем
-  // на входе, чтобы emit'ить безопасно. См. normalizePacketEncoding.
-  if (packetEncoding.isEmpty) {
-    final raw = queryParamCI(q, 'packetEncoding') ?? '';
-    packetEncoding = normalizePacketEncoding(raw, tag: tag, warnings: warnings);
+  // §463 / контракт §24.6 — ядро принимает РОВНО два flow ("" и
+  // `xtls-rprx-vision`), остальное эмит не пишет (node_spec_emit §115).
+  // Раньше отбрасывание было молчаливым: человек видел узел без flow и не
+  // знал, что подписка просила устаревший `xtls-rprx-direct`. Код ставится
+  // на РАЗБОРЕ, где сырое значение ещё известно.
+  //
+  // Место в порядке кодов значимо (CANON §6): у `junk_pair_with_body` —
+  // пары ссылка↔JSON — коды идут `packet_encoding`, `short_id`, `flow`,
+  // и flow обязан быть последним. Полный паритет путей у обеих половин
+  // пары придёт с W2d лаунчера (вынос правил значений из URI-парсеров).
+  if (flow.isNotEmpty && flow != 'xtls-rprx-vision') {
+    warnings.add(DeprecatedFlowWarning(flow));
   }
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());

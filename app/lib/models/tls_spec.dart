@@ -264,7 +264,11 @@ class RealitySpec {
   Map<String, dynamic> toSingbox() => {
         'enabled': true,
         'public_key': publicKey,
-        'short_id': shortId,
+        // §463 / контракт §24.6 — пустой short_id ядру эквивалентен
+        // отсутствующему ключу (`omitempty` в структуре REALITY), и корпус
+        // нормирует именно опущенный. Писать `""` значило бы расходиться с
+        // лаунчером на ровном месте: REALITY без short_id легален.
+        if (shortId.isNotEmpty) 'short_id': shortId,
         // §457 — порядок полей структуры ядра; omitempty: пусто = нет ключа.
         if (keyShare != null && keyShare!.isNotEmpty) 'key_share': keyShare,
       };

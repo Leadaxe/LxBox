@@ -26,14 +26,18 @@ const _naiveKnownQueryKeys = <String>{
 /// query-параметру). Диспетчер (uri_parsers.dart) режет префикс перед
 /// вызовом и передаёт `isQuic` явно.
 NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
-  // §103 empty_host_rejected — Go валидирует непустой hostname только для
-  // vless/trojan/ssh/tuic/anytls (node_parser_core.go:321-329); naive в этот
-  // список не входит — `naive+https://` с пустым host остаётся живой нодой
-  // (server: "", tls.server_name опускается как пустая строка — TlsSpec
-  // уже это делает). Единственный настоящий reject — не-URI мусор
-  // (Uri.tryParse == null).
+  // §463 / контракт §24.6 — `naive+https://` с ПУСТЫМ host отбраковывается.
+  //
+  // Раньше здесь стояло обратное правило (зеркало Go: непустой hostname
+  // проверялся только у vless/trojan/ssh/tuic/anytls), и узел оставался
+  // живым с `server: ""`. Посылка оказалась неверной: ядро на пустом адресе
+  // валит ВЕСЬ конфиг («invalid server address», `sing-box check` на
+  // 1.14.0-lx.39), то есть один такой узел из подписки оставлял человека
+  // вообще без VPN. Обязательное строковое поле пустым быть не может —
+  // CANON §3.2.
   final p = Uri.tryParse(uri);
   if (p == null) return null;
+  if (p.host.isEmpty) return null;
 
   // SPEC 103 п.6 — userinfo без `:` это username, ПУСТОЙ password (зеркало
   // Go: url.User.Username()/Password(), node_parser_core.go:378-386 —
