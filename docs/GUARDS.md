@@ -34,6 +34,7 @@ config down.
 - [Principles](#principles)
 - [Where guards live](#where-guards-live)
 - [The guard over the guards — no field falls out of the round trip (§476)](#the-guard-over-the-guards--no-field-falls-out-of-the-round-trip-476)
+- [The last echelon — the core's own verdict (feature 478)](#the-last-echelon--the-cores-own-verdict-feature-478)
 - [How a user finds out](#how-a-user-finds-out)
 - [Layer 1 — URI parsing](#layer-1--uri-parsing)
 - [Layer 2 — JSON branches](#layer-2--json-branches)
@@ -156,15 +157,40 @@ working as designed.
 Nodes with `origin.kind: json` are out of scope by construction: they go to the
 core **verbatim**, never through the model (§455), so they have nothing to lose.
 
+## The last echelon — the core's own verdict (feature 478)
+
+Layers 1–4 cover what the app knows about. Feature 478 covers the rest: when
+the core refuses to start and names a node, that node is switched off with the
+same switch a person uses, the core's own text is stored next to the off-mark as
+a `core_rejected` warning record, and the start is retried. Duplicating the
+core's grammars in the app is the alternative and a dead end — a copy has to be
+re-checked at every bump, and a copy that fell behind rejects good nodes. So the
+cheap registry checks stay the first echelon and the core's verdict is the
+second, on everything nobody anticipated.
+
+Nothing here normalises a value. The unit of action is a whole node, the
+judgement is the core's, and the app's only decisions are *which* node the
+error names and *when to stop asking*.
+
+| Invariant | Why it has to hold | Where |
+|---|---|---|
+| The stored verdict is **authoritative** — it is the one warning the app persists, and the parse-time recompute of derived codes must not erase it. Every other `NodeWarning` is computed on parse and never stored; `core_rejected` is the opposite, and a sanitiser that rebuilds a node's warning list from scratch would silently drop the only record saying *why* the node is off | Without the record a disabled node is indistinguishable from one a person disabled by hand, and the two have opposite rules: the person's choice is never touched, the app's is cleared the moment the body changes. Losing the record means either re-enabling what the core refuses (a start failure the user cannot explain) or leaving a fixed node off forever | `models/core_reject_verdict.dart` (`upsertVerdict` replaces by code and puts the verdict first), `controllers/subscription_controller/core_reject_ops.dart` |
+| The automaton acts **only on a matched tag**. `parseCoreRejection` returns a node only when the tag it cut out is present in the tags of the config that was just built; nothing is guessed by index, by position or by elimination | The core's index is diagnostic (CANON §9.1) and the tag can itself contain `]` and `: `, so no cut of the string is unambiguous. Acting on an unmatched candidate would switch off a node the core never complained about — and the user's own server rather than the provider's broken one | `services/core_reject/core_error_parse.dart`, tags from `BuildResult.nodeByEmittedTag` (CANON §9.3) |
+| The **same tag named twice ends the loop**. A round that has nothing left to switch off — error not about a node, tag unmatched, tag already seen, node not switchable — breaks out (CANON §9.5) | The loop is finite by construction only because every round removes one node. A tag named twice means the removal did not take, and without the break the app would check, rebuild and check again forever, with the Start button spinning and no VPN | `services/core_reject/core_reject_guard.dart` (`_seenTags`, `_consume` → `null`) |
+| **Exactly two real core starts per press of Start** — the signalling one and the final one; everything in between is `Libbox.checkConfig` with no tunnel and no service | A real start raises a tunnel and a foreground service; a loop of them would flap the VPN state, and the kill-switch / lockdown decisions hang off that state. A rare error that `check` passes and `run` catches switches its node off but gets no third start: the next press of Start begins afresh and gets further | `services/core_reject/core_reject_guard.dart` (`realStart` twice, `check` in the loop), `HomeController.startAndAwaitVerdict` |
+| `warnings` stays **symmetric between the codec allowlist and the backup slice table** (§221) | A key in the record but not in the slice table travels to storage and is lost on backup; the reverse produces an export the import drops as unknown. The verdict has to survive a backup round trip beside the `disabled` mark it explains, or a restored device re-enables nodes the core already refused | `models/codec/source_record.dart` (`_subscriptionKeys`, `_serverKeys`, `_memberKeys`) ↔ `services/lx_backup_slice.dart` (three `BackupField(..., 'warnings', _c)` rows) |
+| The verdict is cleared by **exactly two events** — the node's body changed, or a person switched the node on. A core update clears nothing | Any third clearing rule is a guess about the core's opinion made without asking the core. A body comparison is a fact the app has in hand; "the core was updated, maybe it accepts it now" is not, and re-enabling a whole subscription on a bump would hand the user a failed start instead of a working VPN (owner's decision — the toggle is the manual mechanism) | `core_reject_ops.dart` (`canonicalNodeBody`, `refreshSubscriptionVerdicts`), `SubscriptionController.enableNodeByCoreTag` |
+
 ## How a user finds out
 
-Three channels, and they are not interchangeable.
+Four channels, and they are not interchangeable.
 
 | Channel | Type | Surface | Notes |
 |---|---|---|---|
 | `NodeWarning` | sealed subclass, `models/node_warning.dart` | Inline line under the node in the subscription screen, coloured by `severity` (`node_warning_row.dart`). Colour and icon per level come from one place — `warningSeverityStyle` in `widgets/banner_palette.dart` (§471): `error` red (`colorScheme.error`, `error_outline`), `warning` amber (`warning_amber`), `info` blue (`info_outline`). In the node list only `error`/`warning` get text; `info` is the icon alone — next to the node's name when the node has nothing else, otherwise before the level icon in the warning line — and the "+N more" counter ignores it | Deduped by type + data, not by rendered text (§279). Reaches `emitWarnings` as `'<tag>: <renderEn()>'` (`build_config.dart:282-285`) |
 | `emitWarnings` | `List<String>`, EN text, `BuildResult` | SnackBar (§105) + AppLog | Builder-layer channel. Free text, mostly without machine codes — the chain degradations are the exception (`chain_unsupported_by_core`, `chain_invalid`, `chain_hop_missing`, `chain_nested_position`, `chain_cycle_through_direction`) |
 | `ValidationIssue` | sealed, `models/validation.dart`, all `Severity.fatal` | Blocks the build: `FatalValidationException`, config is neither saved nor sent to the core (§141 P0.1) | Last line of defence, not the first — the graph sanitiser unties what it can *before* this |
+| `StoredWarning` with `core_rejected` | `models/core_reject_verdict.dart`, `code` + `params` | The same inline line and Notifications sheet as a `NodeWarning` (`RegistryWarning`, texts from the registry), plus a "N servers disabled" banner on the main screen with a **Show** list | The only warning the app **persists** — every other one is computed on parse. It rides next to the node's off-mark and is what tells "the app switched this off" from "a person did" (feature 478) |
 
 `NodeWarning` subclasses also carry machine codes for the shared contract
 (`app/contract/registry/warnings.json`), mapped by runtime type in

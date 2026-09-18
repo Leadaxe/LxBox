@@ -937,6 +937,53 @@ CommandClient: connectScreen() → the groups push stream (selectors only) plus
 UI updates: group dropdown, node list, traffic bar
 ```
 
+#### When the core refuses the config (feature 478)
+
+The core validates the config **as a whole** and refuses to start on the first
+node it cannot accept, naming it: `initialize outbound[3] vless[🇩🇪 Frankfurt]:
+parse encryption: unknown encryption appearance`. One node from a provider
+would otherwise cost the user every node, so the start above has a second
+branch. There is no pre-start check — a successful start costs nothing:
+
+```
+Start
+└─ реальный старт ядра (первый, сигнальный)
+   ├─ принято → VPN поднят → конец
+   └─ отказ
+      ├─ ошибка не про узел / без тега / тег не сопоставился → ошибка, как сейчас → конец
+      └─ ошибка называет узел → выключить узел + причина
+         └─ цикл check (тихо, без туннеля): пересобрать конфиг → checkConfig
+            ├─ назван узел → выключить + причина → следующий круг
+            │  └─ после 10 кругов → диалог
+            │     ├─ Keep checking → следующий круг, дальше без предела
+            │     └─ Stop → конец, VPN не поднят, выключенные остаются выключенными
+            ├─ ошибка не про узел / тот же тег назван повторно → ошибка → конец
+            └─ чисто → реальный старт ядра (второй, финальный)
+               ├─ принято → VPN поднят → плашка «выключено N» → конец
+               └─ отказ → ошибка, как сейчас → конец
+                  (если ошибка называет узел — он тоже выключается с причиной,
+                   но третьего старта нет: следующее нажатие Start начнёт заново)
+```
+
+Two real core starts per press, signalling and final; everything between them
+is `Libbox.checkConfig` with no tunnel and no service. The loop is finite by
+construction — each round switches one node off, and a round with nothing to
+switch off breaks out (CANON §9.5).
+
+The automaton (`services/core_reject/core_reject_guard.dart`) is pure: the
+core, the config build and the storage reach it through the `CoreRejectHost`
+interface, implemented over the controllers in
+`screens/home/core_reject_host.dart`. The core's error arrives asynchronously
+on the status event, so the real start is awaited through a completer
+(`HomeController.startAndAwaitVerdict`). The error string is parsed by CANON
+§9.1–§9.2 (`core_error_parse.dart`) and the tag is resolved to its source node
+through `BuildResult.nodeByEmittedTag`, the reverse map the same build
+produced (§9.3) — so a derived entry (a chain hop, a folder member, WARP, a
+subscription prefix) leads back to the node the user owns. Starts with no UI
+(auto-start, the §428 watchdog, the QS tile, the §047 Intent API) have no
+dialog, so the round limit stands and the answer is always Stop. The stored
+verdict is in `STORAGE.md`; the invariants are in `GUARDS.md`.
+
 ### 2. Adding a subscription and auto-config
 
 ```

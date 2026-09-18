@@ -282,6 +282,18 @@ Tapping a subscription opens its screen with these tabs:
   with nothing to report has no such section. Most notifications do not mean
   the node is broken: many describe a setting that was quietly dropped because
   the core would have refused the whole config over it.
+- **"The core rejected this server"** is the one red line that means the server
+  was switched off, not just commented on. The core checks the whole
+  configuration at once and refuses to start on the first server it cannot
+  accept — one bad line would otherwise leave you with no VPN at all. So the app
+  switches that server off, quotes what the core said, and starts again; when
+  several turn out to be bad, a banner on the main screen says how many and
+  **Show** lists them. Two ways back: flip the server's switch on again — the
+  core will check it at the next start, and if it still says no, the server goes
+  off again with the same explanation; or update the subscription — the provider
+  may have fixed the server already, and a server whose contents changed is
+  switched back on by itself. Servers you switched off by hand are never touched
+  by any of this.
 - **Filters** — node processing rules; applied on import and on every update. A
   rule = conditions + an action. A condition is `path operator value` (contains
   / equals / regex, Not and Case-sensitive checkboxes, several conditions

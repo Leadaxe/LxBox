@@ -513,6 +513,14 @@ chains (`saveServerLists`), `settings_storage/chains.dart` the chain part
                                               // is a legacy content hash written before §400: on
                                               // the source's first parse it migrates onto the
                                               // matching node's identity or is dropped.
+  "warnings": {                               // feature 478 — the core's verdict on a node, an
+    "NL-42": [                                // overlay keyed exactly as `disabled` (the node's
+      { "code": "core_rejected",              // identity), so the two travel together. Not written
+        "params": {                           // when empty. See "warnings (shared)" below
+          "reason": "parse encryption: unknown encryption appearance"
+        } }
+    ]
+  },
   "detour":                { "tag": "vpn-2" }, // the shared detour of the source, a NodeLink
                                               // (see "Node references" below); absent = none
   "detour_policy": {                          // LxBox. Written only when a flag differs from
@@ -577,6 +585,10 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
 {
   "kind":          "server",
   "id":            "<uuid>",
+  "warnings":      [                          // feature 478 — the core's verdict on this server,
+    { "code": "core_rejected",                // next to `enabled: false`. Not written when empty.
+      "params": { "reason": "…" } }           // See "warnings (shared)" below
+  ],
   "tag":           "Tokyo",                   // the tag of the parsed node (the first one, when the
                                               // text holds several — records before §368). Written for
                                               // the contract. For uri and json it is NOT applied on read:
@@ -685,7 +697,12 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
       "detour": { "folder_id": "<this folder id>", "tag": "Jump" } },  // §237 — personal detour
     { "kind": "server", "tag": "Beta", "enabled": false,
-      "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" } },       // per-member toggle
+      "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
+      "warnings": [ { "code": "core_rejected",
+                      "params": { "reason": "…" } } ] },               // per-member toggle, and
+                                                                       // feature 478's verdict
+                                                                       // next to it (not written
+                                                                       // when empty)
     { "kind": "unsupported", "enabled": true,
       "origin": { "kind": "uri", "raw": "foo://…" },
       "reason": "the member text does not parse into a node" },         // visible in the UI, editable
@@ -748,6 +765,64 @@ A folder member of `kind: chain` is not supported and is dropped with a note.
 
 Written only when a flag differs from the default. The detour target itself is the
 record's `detour` (a NodeLink), the model field `DetourPolicy.overrideDetour`.
+
+### `warnings` (shared) — the core's verdict (feature 478, CANON §9.4)
+
+A node's warnings are **not stored**: they are recomputed on every parse
+(`NodeSpec.warnings`), and a subscription's nodes are not stored at all — only
+`sub_cache/` and the disable overlay. Exactly one record breaks that rule, the
+verdict `core_rejected`: the core refused the config and named this node, so
+the app switched it off with the same switch a person uses and kept the core's
+own words next to the off-mark.
+
+```jsonc
+{ "code": "core_rejected",
+  "params": { "reason": "parse encryption: unknown encryption appearance" } }
+```
+
+No `path` and no severity — severity comes from the contract registry by code.
+There is **no separate reason field**: "the app switched it off" is the node
+being off **and** carrying `core_rejected`; no record next to an off-mark means
+a person switched it off. `reason` is the core's text verbatim, with the
+`initialize …[tag]: ` prefix removed.
+
+| Record | The off-mark | Where the verdict goes |
+|---|---|---|
+| a subscription node | `sources[].disabled: {identity: unix}` | `sources[].warnings: {identity: [{code, params}]}` — an overlay under the **same key**, the node's identity (`node_hash.dart`) |
+| a folder member | `nodes[].enabled: false` | `nodes[].warnings: [{code, params}]` |
+| a standalone server | `enabled: false` on the source | `warnings: [{code, params}]` on the source |
+
+On parse the stored record is added to the node's computed warnings (deduped by
+`(code, path)`); a duplicate by code is replaced by the fresher one and the
+verdict is put first — it is a verdict on the whole node, not a degradation of
+one field. `warnings` is in the record allowlist and in the backup slice table
+symmetrically (§221), so it rides to a backup next to the `disabled` it
+explains; on import it follows the neighbouring `disabled` (union). GC of the
+subscription overlay happens with `gcDisabledHashes`.
+
+**The verdict is tied to the node's body**, and exactly two events remove it:
+
+- **the body changed** — the record is erased **and** the node is switched back
+  on, so the next start checks it again. No fingerprints are stored; the old
+  and the new body are compared where both are in hand: a subscription refetch
+  (`SubscriptionController._fetchEntryByRef`) and a hand edit of a node (the
+  node editor's save, `updateConnectionAt`, `updateMemberAt`). What is compared
+  is the canonical body — the node's `emit()` serialized with sorted keys
+  (`canonicalNodeBody`) — not the tag identity (it does not depend on the body)
+  and not `nodeIdentityKey` (it does not see TLS or transport, and that is
+  exactly where a node tends to be unusable). No old body to compare against
+  (an empty or unreadable subscription cache) also removes the verdict: an
+  extra check by the core is cheaper than a repaired node left switched off;
+- **a person switches the node back on** — the record is erased and the node is
+  checked again at the next start.
+
+The same body under a restart, a rehydration from cache, a refetch returning
+the same text or a rebuild keeps the node off and the record standing. **A core
+update does not clear verdicts** (owner's decision): a new core that would
+accept the node is something the user checks with the toggle, and no "core
+version last time" setting is kept. Nodes a person switched off — no
+`core_rejected` next to the mark — are never touched; such a node does not
+reach the config in the first place, so a verdict cannot appear on it.
 
 ### Node references — NodeLink (§439, D-112)
 
