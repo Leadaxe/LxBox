@@ -156,9 +156,18 @@ void main() {
     });
 
     // §219/D-026 — plain WG без mtu НЕ дефолтит 1408 в модели (ядро само
-    // ставит его); модель не зависит от источника парсинга (JSON vs URI).
-    // AWG-clamp до 1280 без изменений.
-    test('JSON endpoint: AWG без mtu → 1280, plain WG без mtu → не задан', () {
+    // ставит его).
+    //
+    // §473 (контракт 1.1.5) — ПОДСТАНОВКА дефолта у AWG-узла осталась той же
+    // на всех входах, а ЗАМЕНА завышенного значения на JSON-входе снята:
+    // тело sing-box написали в собственной форме ядра человек или подписка, и
+    // молча переписывать его нельзя (`max_when.except_sources`, решение
+    // владельца 18.09.2026). Узел вместо замены получает info-код
+    // `awg_mtu_high` — его ставит санитайзер по дословной карте, см.
+    // `test/contract/parse_warnings_test.dart`. Это единственное место
+    // контракта, где вход узла влияет на результат, и парность входов здесь
+    // нарушена НАМЕРЕННО.
+    test('JSON endpoint: AWG без mtu → 1280, завышенный mtu сохраняется', () {
       Map<String, dynamic> entry({bool awg = false, int? mtu}) => {
             'type': 'wireguard',
             'tag': 't',
@@ -175,10 +184,12 @@ void main() {
               }
             ],
           };
-      expect((parseSingboxEntry(entry(awg: true)) as WireguardSpec).mtu, 1280);
+      expect((parseSingboxEntry(entry(awg: true)) as WireguardSpec).mtu, 1280,
+          reason: 'подстановка дефолта работает и на JSON-входе');
       expect(
           (parseSingboxEntry(entry(awg: true, mtu: 1420)) as WireguardSpec).mtu,
-          1280);
+          1420,
+          reason: '§473 — написанное в форме ядра не переписывается');
       expect((parseSingboxEntry(entry()) as WireguardSpec).mtu, isNull);
       expect((parseSingboxEntry(entry(mtu: 1420)) as WireguardSpec).mtu, 1420);
     });
@@ -551,7 +562,7 @@ void main() {
       expect(spec.toUri(), contains('randomtrailers=on'));
     });
 
-    test('JSON endpoint: AWG3-ключи, keepalive строкой, кламп 1280; '
+    test('JSON endpoint: AWG3-ключи, keepalive строкой, mtu цел (§473); '
         'битый ключ → null', () {
       final entry = <String, dynamic>{
         'type': 'wireguard',
@@ -582,7 +593,10 @@ void main() {
       expect(f['rekey_timeout'], 5);
       expect(f['random_trailers'], true);
       expect(f.containsKey('disable_cookies'), false); // false = ключа нет
-      expect(spec.mtu, 1280);
+      // §473 — вход `singbox`: 1376 из тела сохраняется, узел получает
+      // info-код `awg_mtu_high`. На ссылке та же величина заменилась бы на
+      // 1280 (тест «AWG2 без AWG3-маркеров клампится как раньше»).
+      expect(spec.mtu, 1376);
       expect(spec.peers.single.persistentKeepalive, '25-35');
       final bad = Map<String, dynamic>.from(entry)
         ..['header_protection_key'] = 'AQIDBAUGBwgJCgsMDQ4PEA==';

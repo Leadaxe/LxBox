@@ -758,6 +758,113 @@ void main() {
       expect(r.body!['down_mbps'], 100);
     }, skip: skip);
 
+    test('§473 default_when с when: дефолт только у AmneziaWG-узла', () {
+      Map<String, dynamic> wg({bool awg = false}) => {
+            'type': 'wireguard',
+            'tag': 'wg',
+            if (awg) 'jc': 10,
+            'address': ['10.0.0.2/32'],
+            'private_key': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
+            'peers': [
+              {
+                'address': 'example-3.com',
+                'port': 51820,
+                'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
+                'allowed_ips': ['0.0.0.0/0'],
+              },
+            ],
+          };
+
+      final awg = _san(wg(awg: true), scheme: 'wireguard');
+      expect(awg.body!['mtu'], 1280);
+      expect(_codes(awg), isEmpty, reason: 'дефолт — не замена, кода нет');
+
+      // Обычному WireGuard поля не достаётся: ядро берёт свой 1408, и наш
+      // дефолт спорил бы с ним и ломал identity-хеш (CANON §2.4).
+      final plain = _san(wg(), scheme: 'wireguard');
+      expect(plain.body!.containsKey('mtu'), isFalse);
+      expect(_codes(plain), isEmpty);
+    }, skip: skip);
+
+    test('§473 max_when: потолок, исключение по входу и род узла', () {
+      Map<String, dynamic> body(int mtu, {bool awg = true}) => {
+            'type': 'wireguard',
+            'tag': 'wg',
+            'mtu': mtu,
+            if (awg) 'jc': 10,
+            'address': ['10.0.0.2/32'],
+            'private_key': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
+            'peers': [
+              {
+                'address': 'example-3.com',
+                'port': 51820,
+                'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
+                'allowed_ips': ['0.0.0.0/0'],
+              },
+            ],
+          };
+
+      // Вход не из `except_sources` — замена с warning-кодом на ИСХОДНОМ
+      // значении.
+      final clamped = RegistrySanitizer.sanitize(body(1420),
+          scheme: 'wireguard', coreVersion: _core);
+      expect(clamped.body!['mtu'], 1280);
+      expect(clamped.warnings.single.code, 'awg_mtu_clamped');
+      expect(clamped.warnings.single.path, 'mtu');
+      expect(clamped.warnings.single.value, '1420');
+
+      // Вход `singbox` — значение цело, код info.
+      final kept = RegistrySanitizer.sanitize(body(1420),
+          scheme: 'wireguard',
+          coreVersion: _core,
+          source: BodySource.singbox);
+      expect(kept.body!['mtu'], 1420);
+      expect(kept.warnings.single.code, 'awg_mtu_high');
+      expect(kept.warnings.single.value, '1420');
+
+      // Обычный WireGuard — правила нет ни на каком входе.
+      for (final src in BodySource.values) {
+        final plain = RegistrySanitizer.sanitize(body(1420, awg: false),
+            scheme: 'wireguard', coreVersion: _core, source: src);
+        expect(plain.body!['mtu'], 1420, reason: '$src');
+        expect(plain.warnings, isEmpty, reason: '$src');
+      }
+
+      // Значение НИЖЕ потолка правило не трогает: потолок, а не дефолт.
+      final low = RegistrySanitizer.sanitize(body(1200),
+          scheme: 'wireguard', coreVersion: _core);
+      expect(low.body!['mtu'], 1200);
+      expect(low.warnings, isEmpty);
+    }, skip: skip);
+
+    test('§473 any_set судит НАЛИЧИЕ ключа, а не заданность значения', () {
+      // Пара к §467: `conflicts`/`requires` судят значение, и `jc: 0` для них
+      // «не задано». Здесь ровно наоборот — `jc: 0` значит «мусорные пакеты
+      // выключены» у настоящего AmneziaWG, и потолок обязан остаться.
+      // Смешай предикаты — туннель молча перестал бы нести данные.
+      for (final marker in const [0, false, '', <String>[]]) {
+        final r = RegistrySanitizer.sanitize({
+          'type': 'wireguard',
+          'tag': 'wg',
+          'mtu': 1420,
+          'jc': marker,
+          'address': ['10.0.0.2/32'],
+          'private_key': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
+          'peers': [
+            {
+              'address': 'example-3.com',
+              'port': 51820,
+              'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
+              'allowed_ips': ['0.0.0.0/0'],
+            },
+          ],
+        }, scheme: 'wireguard', coreVersion: _core);
+        expect(r.body!['mtu'], 1280, reason: 'jc=$marker — ключ есть');
+        expect(r.warnings.map((w) => w.code), contains('awg_mtu_clamped'),
+            reason: 'jc=$marker');
+      }
+    }, skip: skip);
+
     test('grpc service_name: нормализации нет — значение как есть', () {
       // §468 (контракт 1.1.3): правило `normalize: grpc_service_name` снято
       // целиком. Ведущий «/» разбирает ядро v1.14.1-lx.8 само, и любая

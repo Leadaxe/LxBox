@@ -7,6 +7,7 @@ import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import '../contract/parse_warnings.dart';
+import '../contract/registry.dart' show awgMtuByRegistry;
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
 import 'tcp_keep_alive.dart';
@@ -1348,10 +1349,20 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
             reserved: reserved,
           ),
         ],
-        // §421 — AWG3-маркер (ключ корня или диапазонный keepalive) тоже
-        // делает узел AmneziaWG: кламп до 1280, как у AWG2 (SPEC 123).
+        // §473 (контракт 1.1.5) — на входе `singbox` завышенный MTU НЕ
+        // заменяется: тело в собственной форме ядра написали человек или
+        // подписка, и молча переписывать его нельзя (`except_sources`,
+        // решение владельца 18.09.2026). Узел получает info-код
+        // `awg_mtu_high` — его ставит санитайзер по дословной карте
+        // (`annotateFromRawBody`), и второй копии правила здесь не нужно.
+        //
+        // Дефолт 1280 при ОТСУТСТВИИ `mtu` действует и тут: исключение про
+        // ЗАМЕНУ написанного, а не про подстановку недостающего (кейс корпуса
+        // `body/singbox/endpoints_awg_mtu_default`). §421 — AWG3-маркер
+        // (ключ корня или диапазонный keepalive) делает узел AmneziaWG
+        // наравне с AWG2-полями.
         mtu: awg != null || Awg.hasAwg3Json(entry)
-            ? awgClampMtu(rawMtu, wgTag)
+            ? (rawMtu ?? awgMtuByRegistry(null))
             : rawMtu,
         awg: awg,
       );

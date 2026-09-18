@@ -129,6 +129,10 @@ extension ServerListBuild on ServerList {
         main.map
           ..clear()
           ..addAll(verbatim);
+        // §473 — вход этой записи `singbox`: тело написал автор узла в форме
+        // ядра. Гард реестра на сборке прочтёт метку и не подменит ему
+        // значение, которому реестр ставит условный потолок (`max_when`).
+        ctx.noteVerbatim(main);
       }
 
       // Allocate tags (детуры первыми — чтобы main мог сослаться на tag).

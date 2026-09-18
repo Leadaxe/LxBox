@@ -895,7 +895,7 @@ Scheme aliases: `wireguard://`, `wg://` and `awg://` — all three are parsed by
 | Private key | userinfo | WireGuard private key |
 | Public key | `publickey` | Peer public key (required) |
 | Address | `address` | Comma-separated local addresses (required) |
-| MTU | `mtu` | The MTU value (default 1408; every AmneziaWG node, 3.x included, is clamped to `min(mtu, 1280)` — see [8.5](#85-amneziawg-awg-awg2)) |
+| MTU | `mtu` | The MTU value (default 1408; on every AmneziaWG node, 3.x included, the registry caps it at 1280 — replaced on link/INI inputs, kept with an info code on a sing-box body, see [8.5](#85-amneziawg-awg-awg2)) |
 | Pre-shared key | `presharedkey` | Peer pre-shared key |
 | Keepalive | `keepalive` | Persistent keepalive interval: `N` seconds, or an AWG 3.x range `N-M` (emitted as the string `"N-M"`; the core re-picks the interval on every timer, §421) |
 | Allowed IPs | `allowedips` | Peer allowed IPs (default: `0.0.0.0/0, ::/0`) |
@@ -982,7 +982,21 @@ The model is the `Awg` class in [`node_spec.dart`](../app/lib/models/node_spec.d
 
 ### MTU clamp
 
-For AWG nodes the client MTU is **clamped to `min(mtu, 1280)`**; with no explicit `mtu` the default is **1280** (`awgClampMtu` in [`uri_utils.dart`](../app/lib/services/parser/uri_utils.dart)). Ordinary WG is left alone (the default stays 1408).
+Since contract 1.1.5 (§473) the rule lives in the **registry**, not in Dart: the ceiling, the default and the set of marker fields that make a node AmneziaWG all come from `wireguard.body.fields.mtu` (`max_when`, `default_when`). The app reads them through `awgMtuByRegistry` / `RegistrySanitizer`; no second copy of the numbers exists in the code.
+
+For AWG nodes the client MTU is **clamped to `min(mtu, 1280)`**, and with no explicit `mtu` the default is **1280**. Ordinary WG is left alone (the core's own default of 1408 applies, and the field is not emitted at all).
+
+**What makes a node AmneziaWG** is the presence of any one of ~27 marker keys (`jc`, `jmin`, `jmax`, `s1`–`s4`, `h1`–`h4`, `i1`–`i5`, `id`, `ip`, `ib`, `header_protection_key`, `content_padding_addition`, the AWG 3.x timers, `random_trailers`, `disable_cookies`). The condition judges the **presence of the key**, not whether the value is non-empty: `jc: 0` means “junk packets off” on a genuine AmneziaWG node, and reading it as “no field” would lift the ceiling off a node that needs it. This is the opposite of how `conflicts`/`requires` are judged (§467, by value) — the two predicates are deliberately separate.
+
+**The input decides whether the value is replaced** (owner's decision of 2026-09-18 — the only place in the contract where the input affects the result):
+
+| Input | `mtu > 1280` on an AWG node | Code |
+|---|---|---|
+| sing-box body (`origin.kind: json`, subscription bodies, a pasted object) | **kept as written** | `awg_mtu_high`, info |
+| link (`wireguard://`, `awg://`), `.conf`, Amnezia export, editor form | replaced with 1280 | `awg_mtu_clamped`, warning |
+| any input, `mtu` not set | 1280 substituted | none — a default is not a replacement |
+
+The grounds are about ownership, not technology: a sing-box body was written in the core's own form by the user or the subscription, and rewriting that silently is not the app's to do; a value in a link or a `.conf` was made up by the provider's generator. The exception survives a restart by construction — the input is derived from `rawSource`, the very text kept in storage, and parsing runs afresh on every load. It is honoured by the build gate too, so §455 (a `json` node reaches the core verbatim) still holds.
 
 Why 1280:
 - it is both AmneziaWG's own recommended client MTU and the minimum IPv6 MTU, so it is safe on any path (PPPoE 1492, mobile, nested tunnels);
@@ -991,7 +1005,7 @@ Why 1280:
 
 An explicitly lower MTU (≤ 1280) is respected as given.
 
-**AWG 3.x is clamped the same way** (§421, decision of 2026-09-05 after the device acceptance: with the 1376 an Amnezia export carries, no data flowed through the owner's server; with 1280 the tunnel worked). An AWG 3.x marker on its own — any AWG 3.x key, even a malformed one, or a ranged `keepalive` — makes the node AmneziaWG even without a single AWG 2.0 field, so it gets the 1280 default and the clamp like any other AWG node. An explicitly lower value (1200) is respected.
+**AWG 3.x is treated the same way** (§421, decision of 2026-09-05 after the device acceptance: with the 1376 an Amnezia export carries, no data flowed through the owner's server; with 1280 the tunnel worked). An AWG 3.x marker on its own — any AWG 3.x key, even a malformed one, or a ranged `keepalive` — makes the node AmneziaWG even without a single AWG 2.0 field, so it gets the 1280 default and the ceiling like any other AWG node. An explicitly lower value (1200) is respected.
 
 ### INI
 

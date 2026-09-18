@@ -33,10 +33,19 @@ final class RegistryGateReport {
 /// (`direct`/`block`/`dns`) и группы Направлений (`selector`/`urltest`) сюда
 /// не приходят — они не тело узла (спека §2.4).
 ///
+/// §473 — [verbatim] называет записи, чьё тело взято ДОСЛОВНО из
+/// JSON-источника (§455, `verbatimBodyOf`): их вход — `singbox`, и правило
+/// `max_when.except_sources` оставляет им значение, которое на прочих входах
+/// заменило бы потолком. Без этой метки гард переписал бы `mtu: 1420`
+/// AmneziaWG-узлу на сборке — то есть ровно то, чего §455 не позволяет:
+/// узел `origin.kind: json` идёт в ядро дословно. Пустое множество —
+/// поведение как прежде.
+///
 /// Реестр не загружен — no-op: приложение работает как до §460.
 RegistryGateReport applyRegistryGate(
   List<SingboxEntry> entries, {
   required String coreVersion,
+  Set<SingboxEntry> verbatim = const {},
 }) {
   if (!ContractRegistry.I.isLoaded) {
     return const RegistryGateReport([], []);
@@ -54,6 +63,8 @@ RegistryGateReport applyRegistryGate(
       Map<String, dynamic>.from(entry.map),
       scheme: type,
       coreVersion: coreVersion,
+      source:
+          verbatim.contains(entry) ? BodySource.singbox : BodySource.other,
     );
     if (res.warnings.isEmpty && res.body == null) continue;
 

@@ -1,6 +1,7 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../app_log.dart';
+import '../../contract/parse_warnings.dart' show awgMtuWarnings;
 import '../ini_parser.dart';
 import '../uri_utils.dart';
 
@@ -156,6 +157,11 @@ WireguardSpec? parseWireguardUri(String uri) {
         Awg3FieldInvalidWarning(field, value),
       if (awg != null && awg.randomTrailersWithWideHeaders)
         const Awg3RandomTrailersWideHeadersWarning(),
+      // §473 — замена MTU потолком реестра перестала быть молчаливой: код и
+      // потолок берутся из `max_when`, значение в коде — то, что написал
+      // автор ссылки. Вход ссылки под `except_sources` не подпадает, поэтому
+      // здесь всегда `awg_mtu_clamped`.
+      ...awgMtuWarnings(rawMtu, isAwg: isAwg),
     ],
     tag: tag,
     label: label,

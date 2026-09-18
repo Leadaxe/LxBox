@@ -331,6 +331,104 @@ void main() {
     }, skip: skip);
   });
 
+  // §473 (контракт 1.1.5) — условный потолок MTU у AmneziaWG и исключение по
+  // входу. Правило одно, а исход у него два, и решает вход узла.
+  group('§473 — потолок MTU AmneziaWG', () {
+    // AWG-endpoint ТЕЛОМ sing-box: вход `singbox`.
+    String awgBody(int? mtu) => '{"type":"wireguard","tag":"awg-ep",'
+        '${mtu == null ? '' : '"mtu":$mtu,'}'
+        '"address":["10.0.0.2/32"],'
+        '"private_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=","jc":10,'
+        '"peers":[{"address":"example-3.com","port":51820,'
+        '"public_key":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",'
+        '"allowed_ips":["0.0.0.0/0"]}]}';
+
+    test('тело sing-box с mtu=1420: значение цело, код info', () {
+      final n = _one(awgBody(1420));
+      expect(n.emit(TemplateVars.empty).map['mtu'], 1420,
+          reason: 'написанное человеком в форме ядра не переписывается');
+      final w = _byCode(n, 'awg_mtu_high');
+      expect(w.path, 'mtu');
+      expect(w.value, '1420');
+      // Ровно ОДИН код про MTU: проходов санитайзера у JSON-входа два, и
+      // разойдись они входом, узел получил бы и info, и warning об одном поле.
+      expect(
+          _registry(n).where((w) => w.code.startsWith('awg_mtu_')), hasLength(1));
+    }, skip: skip);
+
+    test('та же нода ССЫЛКОЙ: значение заменено, код warning', () {
+      // Парность входов нарушена НАМЕРЕННО (решение владельца 18.09.2026):
+      // значение из ссылки сочинял генератор провайдера, а не автор узла.
+      final n = _one(
+          'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@example-3.com:51820'
+          '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D'
+          '&address=10.0.0.2/32&mtu=1420&jc=10#awg-link');
+      expect(n.emit(TemplateVars.empty).map['mtu'], 1280);
+      final w = _byCode(n, 'awg_mtu_clamped');
+      expect(w.path, 'mtu');
+      expect(w.value, '1420',
+          reason: 'в коде исходное значение, а не то, чем его заменили');
+    }, skip: skip);
+
+    test('ссылка без mtu: дефолт 1280, кода нет', () {
+      final n = _one(
+          'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@example-3.com:51820'
+          '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D'
+          '&address=10.0.0.2/32&jc=10#awg-nomtu');
+      expect(n.emit(TemplateVars.empty).map['mtu'], 1280);
+      expect(_registry(n).map((w) => w.code),
+          isNot(contains('awg_mtu_clamped')));
+      expect(_registry(n).map((w) => w.code), isNot(contains('awg_mtu_high')));
+    }, skip: skip);
+
+    test('обычный WireGuard ссылкой с mtu=1420: без замены и без кодов', () {
+      final n = _one(
+          'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@example-3.com:51820'
+          '?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D'
+          '&address=10.0.0.2/32&mtu=1420#plain-wg');
+      expect(n.emit(TemplateVars.empty).map['mtu'], 1420);
+      expect(_registry(n).where((w) => w.code.startsWith('awg_mtu_')), isEmpty);
+    }, skip: skip);
+
+    test('jc: 0 в теле — законный AWG-узел, потолок действует', () {
+      // Условие `any_set` судит НАЛИЧИЕ ключа. Прочитай оно `jc: 0` как «поля
+      // нет» (предикат `conflicts`/`requires`, §467), с такого узла потолок
+      // снялся бы, и туннель молча перестал бы нести данные.
+      final n = _one(awgBody(1420).replaceFirst('"jc":10', '"jc":0'));
+      expect(_byCode(n, 'awg_mtu_high').value, '1420');
+    }, skip: skip);
+
+    test('исключение по входу ПЕРЕЖИВАЕТ перезапуск', () {
+      // Вход определяется по `rawSource` — тому самому тексту, что лежит в
+      // хранении, и разбор идёт заново при каждой загрузке. Считай мы вход из
+      // чего-то сессионного, узел получил бы кламп задним числом при
+      // следующем старте: настройка человека исчезла бы молча.
+      final raw = awgBody(1420);
+      final before = UserServer(
+        id: 'src-awg',
+        name: 'awg',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        rawBody: raw,
+        nodes: _parse(raw),
+      );
+      expect(before.nodes.single.emit(TemplateVars.empty).map['mtu'], 1420);
+
+      final read = sourceFromRecord(
+        jsonDecode(jsonEncode(sourceToRecord(before)))
+            as Map<String, dynamic>,
+      ).value;
+      final node = (read as ServerList).nodes.single;
+      expect(node.emit(TemplateVars.empty).map['mtu'], 1420,
+          reason: 'тот же mtu после разбор → запись → чтение');
+      final codes = node.warnings.map(warningCodeOf).whereType<String>();
+      expect(codes, contains('awg_mtu_high'));
+      expect(codes, isNot(contains('awg_mtu_clamped')),
+          reason: 'тот же код, а не подменённый на замену');
+    }, skip: skip);
+  });
+
   group('§460 W2a — цена разбора', () {
     // Аннотация считается на КАЖДОМ узле подписки, поэтому её цена измерена,
     // а не предположена. Замер на рабочей машине (2000 узлов vless+ws+tls,

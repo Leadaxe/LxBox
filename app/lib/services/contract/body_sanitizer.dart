@@ -23,6 +23,36 @@ import '../parser/uri_utils.dart'
     show decodeBase64Safe, normalizeSingboxDuration, urlPathOk;
 import 'registry.dart';
 
+/// §473 — вход, которым тело приехало в приложение.
+///
+/// Единственное место контракта, где вход влияет на РЕЗУЛЬТАТ, а не только на
+/// разбор: `max_when.except_sources` (контракт 1.1.5, решение владельца
+/// 18.09.2026). Основание не техническое, а по владению — тело sing-box
+/// человек или подписка написали в собственной форме ядра, и молча
+/// переписывать его приложение не вправе; значение из ссылки или `.conf`
+/// сочинял генератор провайдера.
+///
+/// Перечисление намеренно НЕ повторяет словарь `sources` реестра целиком
+/// (`uri`/`singbox`/`xray`/`wgconf`/`amnezia`): различать вход тоньше нам
+/// нечем и незачем — правило одно, и делит оно ровно надвое. Появится второе
+/// правило с другим делением — перечисление расширится по нему, а не заранее.
+enum BodySource {
+  /// Тело в собственной форме ядра: объект `outbounds[]`/`endpoints[]`,
+  /// пришедший JSON-ом (`origin.kind: json`, §455) либо дословная карта
+  /// провайдера при разборе JSON-подписки.
+  singbox('singbox'),
+
+  /// Всё остальное: ссылка, INI (`.conf`), `amnezia://`, форма редактора —
+  /// тело собрал наш разбор, а не автор узла.
+  other('');
+
+  const BodySource(this.registryName);
+
+  /// Имя входа в словаре `sources` реестра; у [other] пустое — под
+  /// `except_sources` оно не подпадает ни при каком списке.
+  final String registryName;
+}
+
 /// Результат санитайзинга одной записи.
 final class SanitizeResult {
   const SanitizeResult(this.body, this.warnings);
@@ -67,12 +97,21 @@ final class RegistrySanitizer {
   /// сборки может стать другой), поэтому поле, которое ядро «пока не знает»,
   /// при разборе не снимается и о нём не сообщается — это работа гарда
   /// сборки.
+  ///
+  /// §473 — [source] нужен ровно одному правилу, `max_when.except_sources`:
+  /// на входе [BodySource.singbox] завышенное значение сохраняется и узел
+  /// получает info-код вместо замены. Параметр явный и обязательный к
+  /// передаче на том пути, где вход известен: глобального состояния у
+  /// санитайзера нет и не будет — оно разошлось бы с телом на первом же
+  /// параллельном разборе. Дефолт [BodySource.other] — консервативный: он
+  /// означает «вход неизвестен», и правило применяется как прежде, заменой.
   static SanitizeResult sanitize(
     Map<String, dynamic> body, {
     required String scheme,
     required String coreVersion,
     String platform = 'android',
     bool applyCoreGates = true,
+    BodySource source = BodySource.other,
   }) {
     final schema = ContractRegistry.I.schemaFor(scheme);
     if (schema == null) return SanitizeResult(body, const []);
@@ -82,6 +121,7 @@ final class RegistrySanitizer {
       coreVersion: coreVersion,
       platform: platform,
       applyCoreGates: applyCoreGates,
+      source: source,
       root: body,
     );
     final out = ctx.sanitizeObject(body, schema.order, schema.fields, '');
@@ -142,12 +182,16 @@ final class _Ctx {
     required this.coreVersion,
     required this.platform,
     required this.applyCoreGates,
+    required this.source,
     required this.root,
   });
 
   final String scheme;
   final String coreVersion;
   final String platform;
+
+  /// §473 — вход тела; читает его только `max_when.except_sources`.
+  final BodySource source;
 
   /// §460 W2a — считать ли гейты, зависящие от запущенного ядра
   /// (`min_core`, `platform`). При разборе — нет (24.1.6).
@@ -220,9 +264,19 @@ final class _Ctx {
         // на ВЕСЬ конфиг). В отличие от `default` (CANON §2.4 — не пишется),
         // такой дефолт материализуется явно, и кода на него нет: узел жив и в
         // порядке.
+        //
+        // §473 (контракт 1.1.5) — у `default_when` появилось условие `when`:
+        // дефолт, зависящий от РОДА узла. `mtu: 1280` дописывается только
+        // AmneziaWG-узлу; обычный WireGuard поля не получает вовсе — ядро
+        // берёт свой 1408, и наш дефолт спорил бы с ним и ломал identity-хеш
+        // (CANON §2.4).
         final dw = f.defaultWhen;
-        if (dw != null && dw['absent'] == true) {
+        if (dw != null &&
+            dw['absent'] == true &&
+            _conditionHolds(dw['when'], src)) {
           kept[key] = dw['value'];
+          final code = dw['code'] as String?;
+          if (code != null) warn(code, path: _join(prefix, key));
           continue;
         }
         // `required` без поля — запись уходит целиком (24.1.7): ядро такую
@@ -462,6 +516,12 @@ final class _Ctx {
       return _invalid(f, path, violation, secret: f.secret);
     }
 
+    // §473 (контракт 1.1.5) — `max_when`: УСЛОВНЫЙ потолок. В отличие от
+    // `max`, нарушение которого делает значение негодным (`on_invalid` →
+    // поле снимается), здесь значение законно — потолок диктует род узла, и
+    // исход правила зависит от того, КТО тело написал.
+    v = _applyMaxWhen(v, f, path);
+
     // `advisory` — ядро значение принимает, но узел получает info-код.
     // Поле НЕ меняется.
     //
@@ -491,6 +551,88 @@ final class _Ctx {
     }
 
     return _Value.keep(v);
+  }
+
+  /// §473 — условный потолок `max_when`. Возвращает значение, которое
+  /// остаётся в теле: заменённое потолком либо исходное.
+  ///
+  /// Три исхода, и путать их нельзя:
+  ///
+  /// 1. условие `when` не выполнено (узел не того рода) — правила нет вовсе;
+  /// 2. выполнено, вход НЕ в `except_sources` — значение заменяется потолком,
+  ///    код `code` (severity warning);
+  /// 3. выполнено, вход В `except_sources` — значение остаётся, код
+  ///    `note_code` (severity info).
+  ///
+  /// Исход 3 — единственное место контракта, где вход узла влияет на
+  /// результат (решение владельца 18.09.2026): тело в форме ядра человек или
+  /// подписка написали сами, и молча переписывать его нельзя.
+  ///
+  /// Условие читается по ИСХОДНОМУ телу объекта ([root] через [_anySetInBody]),
+  /// а не по уже очищенному: род узла задаёт то, что автор написал. Битый
+  /// `jc`, снятый парой строк выше, AmneziaWG-узел AmneziaWG-узлом быть не
+  /// перестаёт (§463 — то же основание у рукописного `isAwg`).
+  Object? _applyMaxWhen(Object? v, FieldSchema f, String path) {
+    final rule = f.maxWhen;
+    if (rule == null) return v;
+    final ceiling = rule['max'];
+    if (v is! num || ceiling is! num) return v;
+    if (v <= ceiling) return v;
+    if (!_conditionHolds(rule['when'], root)) return v;
+
+    final except = (rule['except_sources'] as List?)?.map((e) => '$e');
+    if (except != null && except.contains(source.registryName)) {
+      final note = rule['note_code'] as String?;
+      // `note_code` обязателен по схеме при `except_sources`; без него
+      // молчание лучше выдуманного кода — значение всё равно сохраняется.
+      if (note != null) warn(note, path: path, value: v, secret: f.secret);
+      return v;
+    }
+
+    final code = rule['code'] as String?;
+    // Код на ИСХОДНОМ значении: человеку нужно видеть, что он написал.
+    if (code != null) warn(code, path: path, value: v, secret: f.secret);
+    return ceiling;
+  }
+
+  /// §473 — условие правила значения (`default_when.when`, `max_when.when`).
+  ///
+  /// Форма реестра одна: `{any_set: [ключ, …]}`. Пустое/отсутствующее условие
+  /// — правило безусловно.
+  ///
+  /// [body] — объект, в котором ищутся ключи. Незнакомую форму условия читаем
+  /// как «не выполнено»: правило значения, чьё условие непонятно, применять
+  /// наугад нельзя (в отличие от незнакомого `normalize`, который просто
+  /// ничего не делает).
+  bool _conditionHolds(Object? when, Map<String, dynamic> body) {
+    if (when == null) return true;
+    if (when is! Map) return true;
+    final anySet = (when['any_set'] as List?)?.map((e) => '$e');
+    if (anySet != null) return _anySetInBody(anySet, body);
+    _logUnknownExpression('when', when.keys.join(','));
+    return false;
+  }
+
+  /// §473 — предикат «КЛЮЧ ПРИСУТСТВУЕТ», и только он.
+  ///
+  /// **Не путать с [_meaningful]** — предикатом «ЗНАЧЕНИЕ ЗАДАНО», по которому
+  /// судят `conflicts`/`requires` (§467). Разница не стилистическая: `jc: 0`
+  /// — законная запись «мусорные пакеты выключены» у настоящего
+  /// AmneziaWG-узла (кейс корпуса `awg_jc_zero_explicit`, наш
+  /// `awg_test.dart`). Прочитай условие рода узла через [_meaningful], с
+  /// такого узла потолок MTU снялся бы, и туннель молча не понёс бы данные.
+  ///
+  /// Обратное смешение так же вредно: `max_concurrency: "16-32"` при
+  /// `max_connections: "0"` — не конфликт, и там судить надо значение.
+  ///
+  /// Пути условия — ключи корня тела (реестр называет их так же, как
+  /// `conflicts`/`requires`): вложенных условий у `any_set` сегодня нет, и
+  /// выдумывать их разбор здесь нечего — сегмент с точкой просто не найдётся.
+  static bool _anySetInBody(Iterable<String> keys, Map<String, dynamic> body) {
+    for (final key in keys) {
+      if (body.containsKey(key)) return true;
+    }
+    return false;
   }
 
   /// Нарушенное ограничение — возвращает значение для текста кода, `null`

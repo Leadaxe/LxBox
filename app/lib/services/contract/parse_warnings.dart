@@ -99,6 +99,63 @@ List<NodeWarning> forbiddenTlsBlockWarnings(
   return out;
 }
 
+/// §473 — потолок `mtu` у AmneziaWG и его коды ИЗ РЕЕСТРА
+/// (`wireguard.body.fields.mtu.max_when`).
+///
+/// Правило живёт в реестре целиком: и потолок (1280), и оба кода. В Dart
+/// остаётся только вызов — второй копии правила не заводится, иначе она
+/// разошлась бы с контрактом на первом же бампе (то же основание, что у
+/// [forbiddenTlsBlockWarnings]).
+///
+/// Почему код ставит ПАРСЕР, а не санитайзер разбора. Санитайзер при разборе
+/// смотрит на `emit()` уже построенной модели, а `mtu` модели к этому моменту
+/// уже приведён к потолку: тело узла из ссылки нормировано корпусом и обязано
+/// остаться прежним (эталоны `uri/wireguard/*`), поэтому кламп на входе
+/// снимать нельзя, а после него правило реестра видит законные 1280 и молчит.
+/// Ровно та же граница, что у `forbidden_for` на QUIC-схемах (§469, W2a).
+/// Снимется сама, когда конвейер 472 доведёт разбор ссылок до санитайзера
+/// (шаг 7) и потолок начнёт исполнять он.
+///
+/// [isAwg] — род узла по ЗАПРОСУ ссылки, а не по уцелевшим полям (§463):
+/// ссылка просила AmneziaWG, и потолок — свойство запрошенного протокола.
+/// Условие `when.any_set` реестра судит то же самое по телу; здесь тела ещё
+/// нет, и решает вызывающий.
+///
+/// [rawMtu] — значение, как его написал автор ссылки. `null` (поля нет) кода
+/// не даёт: подстановка дефолта — не замена.
+///
+/// [source] — вход узла. На [BodySource.singbox] значение сохраняется и код
+/// info-шный; вызывают отсюда только входы ссылки и INI, но параметр явный:
+/// умолчание «вход тот, что обычно» — это ровно та неявность, из-за которой
+/// исключение теряется от перезапуска.
+///
+/// Реестр не загружен — пустой список: молчание лучше выдуманного кода.
+List<NodeWarning> awgMtuWarnings(
+  int? rawMtu, {
+  required bool isAwg,
+  BodySource source = BodySource.other,
+}) {
+  final out = <NodeWarning>[];
+  if (!isAwg || rawMtu == null) return out;
+  final rule = ContractRegistry.I.schemaFor('wireguard')?.fields['mtu']?.maxWhen;
+  if (rule == null) return out;
+  final ceiling = rule['max'];
+  if (ceiling is! num || rawMtu <= ceiling) return out;
+
+  final excepted = ((rule['except_sources'] as List?) ?? const [])
+      .map((e) => '$e')
+      .contains(source.registryName);
+  final code =
+      (excepted ? rule['note_code'] : rule['code']) as String?;
+  if (code == null) return out;
+  out.add(RegistryWarning(
+    code: code,
+    path: 'mtu',
+    value: RegistrySanitizer.renderWarningValue(rawMtu),
+  ));
+  return out;
+}
+
 /// §469 — блок `tls.utls` в форме sing-box из отпечатка ссылки/тела; пустой
 /// отпечаток блока не даёт (ядро берёт свой дефолт, а не заданное значение).
 Map<String, Map<String, dynamic>> utlsBlockOf(String? fingerprint) =>
@@ -164,6 +221,12 @@ void annotateWithRegistry(NodeSpec node) {
     scheme: type,
     coreVersion: _kParseTimeCore,
     applyCoreGates: false,
+    // §473 — вход у ОБОИХ проходов один: он свойство УЗЛА, а не прохода.
+    // Разойдись они, узел из sing-box-тела получил бы по дословной карте info
+    // `awg_mtu_high`, а следом по `emit()` — warning `awg_mtu_clamped` о том
+    // же поле: коды разные, дедуп по паре `(code, path)` их не схлопнет, и
+    // человек прочёл бы два противоположных сообщения об одном `mtu`.
+    source: bodySourceOf(node),
   );
   _mergeRegistryWarnings(node, res.warnings);
 }
@@ -215,9 +278,32 @@ void annotateFromRawBody(NodeSpec node) {
     scheme: type,
     coreVersion: _kParseTimeCore,
     applyCoreGates: false,
+    // §473 — этот проход по построению идёт по телу в форме ядра: карта
+    // sing-box, которую написал автор узла. Это и есть вход `singbox`.
+    source: BodySource.singbox,
   );
   _mergeRegistryWarnings(node, res.warnings);
 }
+
+/// §473 — вход, которым приехало тело узла.
+///
+/// Признак ровно тот же, по которому [annotateFromRawBody] опознаёт свою
+/// карту: `rawSource` — JSON-объект с полем `type`. Второго признака заводить
+/// нельзя — два ответа на вопрос «чей это вход» разошлись бы, и узел получил
+/// бы разные правила на разных проходах.
+///
+/// Вход СТАБИЛЕН и потому переживает перезапуск: `rawSource` — то, что лежит
+/// в хранении (§454–§456), и разбор идёт заново при каждой загрузке. Считай
+/// мы вход из чего-то, что живёт только в сессии (флаг импорта, путь вызова),
+/// узел с `mtu: 1420` получил бы кламп задним числом при следующем старте —
+/// настройка человека исчезла бы молча.
+///
+/// Xray-JSON сюда не попадает: у него `rawSource` — объект Xray, где тип
+/// записи зовётся `protocol` (см. [annotateFromRawBody], шаг 8 спеки 472).
+BodySource bodySourceOf(NodeSpec node) =>
+    _rawSingboxBodyOf(node)?['type'] is String
+        ? BodySource.singbox
+        : BodySource.other;
 
 /// Дословное тело JSON-узла как карта sing-box, либо `null`.
 ///

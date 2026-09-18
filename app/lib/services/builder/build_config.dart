@@ -311,6 +311,9 @@ Future<BuildResult> buildConfig({
   final registryReport = applyRegistryGate(
     [...ctx.outbounds, ...ctx.endpoints],
     coreVersion: settings.coreVersion,
+    // §473 — записи с дословным JSON-телом (§455) идут в ядро как написаны:
+    // правило условного потолка (`max_when`) им значение не подменяет.
+    verbatim: ctx.verbatimEntries,
   );
   ctx.dropRegistryEntries(registryReport.dropped);
 
@@ -863,6 +866,13 @@ class _BuildCtx implements EmitContext {
   /// §435 — узел → финальный тег (после префикса и `allocateTag`).
   final emittedTagByNode = <NodeSpec, String>{};
 
+  /// §473 — записи с дословным JSON-телом (§455): их вход — `singbox`.
+  ///
+  /// Identity-множество (`identityHashCode`), а не по равенству: тело
+  /// переписывается на месте и ключом карты быть не может, а две записи с
+  /// одинаковым телом — всё равно разные записи.
+  final verbatimEntries = <SingboxEntry>{};
+
   /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
   final warnings = <String>[];
 
@@ -884,6 +894,11 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmitted(NodeSpec node, String finalTag) {
     emittedTagByNode[node] = finalTag;
+  }
+
+  @override
+  void noteVerbatim(SingboxEntry entry) {
+    verbatimEntries.add(entry);
   }
 
   @override

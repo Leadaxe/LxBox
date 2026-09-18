@@ -65,10 +65,21 @@ void main() {
           // не трогает, проверять нечего.
           if (ContractRegistry.I.schemaFor(type) == null) continue;
 
+          // §473 — вход берётся из ПУТИ кейса: `body/singbox/**` это тела в
+          // собственной форме ядра, и правило `max_when.except_sources`
+          // оставляет им значение. Прогони мы их входом «ссылка», кейс
+          // `endpoints_awg_mtu_high` был бы зелёным ложно: первый проход
+          // заклампил бы 1420 до 1280, второй промолчал бы, и инвариант
+          // «санитайзер идемпотентен» подтвердился бы на теле, которого в
+          // приложении не бывает.
+          final source =
+              rel.startsWith('singbox/') ? BodySource.singbox : BodySource.other;
+
           final first = RegistrySanitizer.sanitize(
             Map<String, dynamic>.from(body),
             scheme: type,
             coreVersion: _core,
+            source: source,
           );
           // Запись, снятая целиком, инвариант не нарушает: в конфиг она не
           // попадёт.
@@ -78,9 +89,21 @@ void main() {
             Map<String, dynamic>.from(first.body!),
             scheme: type,
             coreVersion: _core,
+            source: source,
           );
+          // Инвариант — про НЕГОДНОЕ значение: то, что санитайзер снял или
+          // подменил, второй проход находить не должен. Коды severity `info`
+          // из этого исключены по определению: ими реестр помечает значение,
+          // которое ОСТАВЛЯЕТ (`advisory`, `max_when.note_code`), и они
+          // повторяются на каждом проходе ровно потому, что тело не меняют.
+          // Устойчивость тела проверяет сравнение ниже, а не этот expect.
+          final kept = second.warnings
+              .where((w) =>
+                  ContractRegistry.I.textFor(w.code)?.severity != 'info')
+              .map((w) => '${w.code}@${w.path}')
+              .toList();
           expect(
-            second.warnings.map((w) => '${w.code}@${w.path}').toList(),
+            kept,
             isEmpty,
             reason: '$rel: после санитайзера в теле ${raw['label']} '
                 '($type) остались значения, которые реестр считает негодными',
@@ -209,6 +232,73 @@ void main() {
         expect((res.body?['tls'] as Map?)?.containsKey('utls'), isFalse,
             reason: '$scheme: блок обязан быть снят');
       }
+    }, skip: synced ? null : 'контракт не синхронизирован');
+
+    test('§473 — max_when: коды из warnings.json, note_code при except_sources',
+        () {
+      // Три ошибки в правиле молчаливы и потому опасны: код, которого нет в
+      // `warnings.json` (узел получит запись без текста — на строке останется
+      // голый идентификатор); `except_sources` без `note_code` (на исключённом
+      // входе правило не сделает НИЧЕГО, и о завышенном значении не узнает
+      // никто); пустое `when.any_set` (правило станет безусловным и снимет
+      // поле у каждого узла схемы).
+      final codes = ((jsonDecode(
+                      File('$_contractRoot/registry/warnings.json')
+                          .readAsStringSync())
+                  as Map<String, dynamic>)['warnings'] as Map)
+          .keys
+          .map((e) => '$e')
+          .toSet();
+
+      var checked = 0;
+      for (final file in Directory('$_contractRoot/registry')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.json'))) {
+        final rel = file.path.split('/').last;
+        if (rel == 'warnings.json') continue;
+
+        void walk(Object? node, String path) {
+          if (node is Map) {
+            final mw = node['max_when'];
+            if (mw is Map) {
+              checked++;
+              expect(codes, contains('${mw['code']}'),
+                  reason: '$rel $path: код "${mw['code']}" отсутствует в '
+                      'warnings.json — узел получил бы запись без текста');
+              if (mw.containsKey('except_sources')) {
+                expect(mw['note_code'], isNotNull,
+                    reason: '$rel $path: есть except_sources, но нет '
+                        'note_code — на исключённом входе правило промолчит '
+                        'вовсе, и о завышенном значении не узнает никто');
+                expect(codes, contains('${mw['note_code']}'),
+                    reason: '$rel $path: note_code "${mw['note_code']}" '
+                        'отсутствует в warnings.json');
+              }
+              final anySet = (mw['when'] as Map?)?['any_set'];
+              expect(anySet, isA<List>().having((l) => l.length, 'непустой',
+                  greaterThan(0)),
+                  reason: '$rel $path: пустое when.any_set сделало бы потолок '
+                      'безусловным — он снял бы поле у каждого узла схемы');
+            }
+            for (final e in node.entries) {
+              walk(e.value, path.isEmpty ? '${e.key}' : '$path.${e.key}');
+            }
+          } else if (node is List) {
+            for (final e in node) {
+              walk(e, path);
+            }
+          }
+        }
+
+        walk(jsonDecode(file.readAsStringSync()), '');
+      }
+
+      // Атрибут завела версия 1.1.5 ради потолка MTU у AmneziaWG; исчезнет он
+      // — исчезнет и правило, и молчаливо зелёный линтер это скрыл бы.
+      expect(checked, greaterThan(0),
+          reason: 'max_when в реестре не встречается вовсе — либо контракт '
+              'откатили, либо линтер смотрит не туда');
     }, skip: synced ? null : 'контракт не синхронизирован');
 
     test('REALITY на QUIC — один код на блок, key_share/short_id молчат', () {

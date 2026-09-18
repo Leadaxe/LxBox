@@ -110,6 +110,103 @@ void main() {
       expect(entry.map, body);
     }, skip: skip);
 
+    // §473 — условный потолок MTU у AmneziaWG (`max_when`, контракт 1.1.5) и
+    // его исключение по входу. Гард — единственный, кто тело переписывает, и
+    // именно здесь исключение обязано соблюдаться: §455 обещает, что узел
+    // `origin.kind: json` идёт в ядро ДОСЛОВНО.
+    Endpoint awgEndpoint(int? mtu, {String tag = 'awg-ep'}) =>
+        Endpoint(<String, dynamic>{
+          'type': 'wireguard',
+          'tag': tag,
+          'mtu': ?mtu,
+          'address': ['10.0.0.2/32'],
+          'private_key': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
+          'jc': 10,
+          'peers': [
+            {
+              'address': 'example-3.com',
+              'port': 51820,
+              'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
+              'allowed_ips': ['0.0.0.0/0'],
+            },
+          ],
+        });
+
+    test('§455 — дословному JSON-телу гард MTU НЕ подменяет, только info', () {
+      final entry = awgEndpoint(1420);
+      final report = applyRegistryGate([entry],
+          coreVersion: _core, verbatim: {entry});
+
+      // Главное: тело в ядро уходит как написано. Подмени гард значение —
+      // настройка человека исчезла бы на сборке, а §455 обещает обратное.
+      expect(entry.map['mtu'], 1420);
+      expect(report.dropped, isEmpty);
+      // Info-код при этом есть: молчать о завышенном MTU тоже нельзя —
+      // туннель поднимется, а данные не пойдут.
+      expect(report.warnings.single, contains('awg-ep: '));
+      expect(report.warnings.single, contains('[mtu=1420]'));
+      expect(report.warnings.single, contains('MTU above 1280'));
+    }, skip: skip);
+
+    test('то же тело БЕЗ метки дословности: MTU заменён потолком', () {
+      // Узел из ссылки/INI: тело собрал наш разбор, и потолок работает
+      // заменой. Пара к тесту выше — различие входов НАМЕРЕННОЕ, и держать
+      // его надо на виду.
+      final entry = awgEndpoint(1420);
+      final report = applyRegistryGate([entry], coreVersion: _core);
+
+      expect(entry.map['mtu'], 1280);
+      expect(report.warnings.single, contains('[mtu=1420]'),
+          reason: 'в коде — ИСХОДНОЕ значение, а не то, чем его заменили');
+      expect(report.warnings.single, contains('MTU lowered to 1280'));
+    }, skip: skip);
+
+    test('обычный WireGuard: потолка нет ни на каком входе', () {
+      // `max_when.when.any_set` судит РОД узла. Сработай он по полю, а не по
+      // набору awg-ключей, каждый plain-WG-узел потерял бы свой MTU.
+      final entry = Endpoint(<String, dynamic>{
+        'type': 'wireguard',
+        'tag': 'plain-wg',
+        'mtu': 1420,
+        'address': ['10.0.0.2/32'],
+        'private_key': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
+        'peers': [
+          {
+            'address': 'example-3.com',
+            'port': 51820,
+            'public_key': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
+            'allowed_ips': ['0.0.0.0/0'],
+          },
+        ],
+      });
+      final report = applyRegistryGate([entry], coreVersion: _core);
+      expect(entry.map['mtu'], 1420);
+      expect(report.warnings, isEmpty);
+    }, skip: skip);
+
+    test('jc: 0 — законный AWG-узел, потолок с него не снимается', () {
+      // Предикат условия судит НАЛИЧИЕ ключа, а не непустоту значения
+      // (в отличие от `conflicts`/`requires`, §467). `jc: 0` значит «мусорные
+      // пакеты выключены» у настоящего AmneziaWG — прочитай условие это как
+      // «поля нет», туннель молча перестал бы нести данные.
+      final entry = awgEndpoint(1420, tag: 'awg-jc0');
+      entry.map['jc'] = 0;
+      final report = applyRegistryGate([entry], coreVersion: _core);
+      expect(entry.map['mtu'], 1280);
+      expect(report.warnings.single, contains('awg-jc0: '));
+    }, skip: skip);
+
+    test('MTU не задан — дефолт 1280 дописывается и на дословном теле', () {
+      // Исключение по входу — про ЗАМЕНУ написанного, а не про подстановку
+      // недостающего: кода тут нет, а поле появляется (кейс корпуса
+      // `body/singbox/endpoints_awg_mtu_default`).
+      final entry = awgEndpoint(null);
+      final report = applyRegistryGate([entry],
+          coreVersion: _core, verbatim: {entry});
+      expect(entry.map['mtu'], 1280);
+      expect(report.warnings, isEmpty);
+    }, skip: skip);
+
     test('реестр не загружен — гард no-op', () {
       // Отдельного способа «выгрузить» реестр нет и заводить его незачем:
       // ветку проверяем на типе, схемы которого в реестре нет, — путь тот же

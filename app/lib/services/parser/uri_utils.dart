@@ -4,6 +4,7 @@ import 'dart:math';
 import '../../models/node_spec.dart' show Awg;
 import '../../models/node_warning.dart';
 import '../app_log.dart';
+import '../contract/registry.dart' show awgMtuByRegistry;
 
 /// Максимальная длина URI (защита от мусорных base64-бомб). Совпадает с v1.
 const int maxURILength = 65536;
@@ -310,11 +311,25 @@ Object? parseWgKeepalive(String? raw) {
   return r is String ? r : null;
 }
 
+/// §473 — потолок и дефолт `mtu` у AmneziaWG-узла ПО РЕЕСТРУ
+/// (`wireguard.body.fields.mtu`: `max_when.max`, `default_when.value`).
+///
+/// До контракта 1.1.5 число 1280 стояло здесь константой, а срез был
+/// молчаливым: человек писал 1420, получал 1280 и не знал об этом. Теперь
+/// правило читается из реестра, а код о замене ставит парсер
+/// ([awgMtuWarnings]) — тем же способом, каким §469 ставит коды запрещённых
+/// TLS-блоков.
+///
+/// Сама замена остаётся здесь, а не в санитайзере, ровно по одной причине:
+/// тело узла из ссылки/INI нормировано корпусом и меняться не должно, а
+/// санитайзер разбора тело не переписывает (§460 W2a, граница 1). Переезд —
+/// шаг 7 фичи 472.
 int awgClampMtu(int? raw, String tag) {
-  if (raw == null) return 1280;
-  if (raw <= 1280) return raw;
-  AppLog.I.debug('$tag: clamped AWG mtu $raw→1280');
-  return 1280;
+  final out = awgMtuByRegistry(raw);
+  if (raw != null && out != raw) {
+    AppLog.I.debug('$tag: clamped AWG mtu $raw→$out');
+  }
+  return out;
 }
 
 /// §106 — bare IP без CIDR-префикса (`172.16.0.2`) ломает sing-box на
