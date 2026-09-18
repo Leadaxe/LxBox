@@ -197,4 +197,4 @@ coerce` обязан нести СВОЙ код, и `type_invalid` у него �
 
 | хеш | что |
 |---|---|
-| `db15f0af` | контракт 1.1.7, conflicts-декларант, advisory для bool, dial-поля в реестре, `vmess_security_unknown`; рукописный остаток конвейера снят |
+| `3fc6017f` | контракт 1.1.7, conflicts-декларант, advisory для bool, dial-поля в реестре, `vmess_security_unknown`; рукописный остаток конвейера снят |
