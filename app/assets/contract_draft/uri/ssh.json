@@ -1,0 +1,142 @@
+{
+  "_note": "§480 — секция-маппер ссылки ssh в замороженной грамматике SPEC 133. Списано построчно с ssh_mapper.dart. Ключевое: PEM многострочный, и '+' внутри него литерален (delta480 — поле формата base64/PEM, decode_extra.plus_literal).",
+  "mappers": {
+    "uri": {
+      "body_source": "uri",
+      "detect": {
+        "scheme_in": [
+          "ssh"
+        ]
+      },
+      "forms": [
+        {
+          "id": "url",
+          "detect": {
+            "default": true
+          },
+          "decode": [
+            "url"
+          ],
+          "space": "url"
+        }
+      ],
+      "userinfo": {
+        "split": {
+          "sep": ":",
+          "limit": 2
+        },
+        "into": [
+          "user",
+          "password"
+        ]
+      },
+      "label": {
+        "source": "fragment",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        }
+      },
+      "defaults": {
+        "type": "ssh",
+        "server_port": 22
+      },
+      "params": {
+        "server": {
+          "source": "host",
+          "maps_to": "server",
+          "required": true
+        },
+        "server_port": {
+          "source": "port",
+          "maps_to": "server_port",
+          "type": "int",
+          "materialize_default": true,
+          "desc_ru": "Канонический порт ssh — 22."
+        },
+        "user": {
+          "source": "userinfo.user",
+          "maps_to": "user",
+          "required": true,
+          "desc_ru": "Обязателен: без него маппер отвечает null (Dart — null-skip, ssh_parser.dart:17). Дефолт 'root' реестра НЕ материализуется маппером — узла без user просто нет."
+        },
+        "password": {
+          "source": "userinfo.pass",
+          "maps_to": "password"
+        },
+        "private_key": {
+          "source": "query.private_key",
+          "maps_to": "private_key",
+          "decode_extra": {
+            "mode": "query",
+            "passes": 1,
+            "plus_literal": true
+          },
+          "desc_ru": "Многострочный PEM: %0A раскрывается ОДИН раз, раскрутки до стабильной точки нет — она сломала бы ключ, где '%' законен. plus_literal: поле PEM/base64-формата, '+' внутри ключа буквален (delta480: было — '+' становился пробелом, стало — литерал)."
+        },
+        "private_key_path": {
+          "source": "query.private_key_path",
+          "maps_to": "private_key_path",
+          "when": {
+            "private_key": {
+              "present": false
+            }
+          },
+          "desc_ru": "Учитывается только при пустом private_key (ext: desktop)."
+        },
+        "private_key_passphrase": {
+          "source": "query.private_key_passphrase",
+          "maps_to": "private_key_passphrase"
+        },
+        "host_key": {
+          "source": "query.host_key",
+          "maps_to": "host_key",
+          "type": "list",
+          "list": {
+            "sep": ",",
+            "item": "string"
+          },
+          "normalize": "trim",
+          "desc_ru": "Список через запятую; пустые элементы отбрасываются, остальные trim (uri.query.host_key.impl)."
+        },
+        "host_key_algorithms": {
+          "source": "query.host_key_algorithms",
+          "maps_to": "host_key_algorithms",
+          "type": "list",
+          "list": {
+            "sep": ",",
+            "item": "string"
+          },
+          "normalize": "trim"
+        },
+        "client_version": {
+          "source": "query.client_version",
+          "maps_to": "client_version",
+          "desc_ru": "ext: desktop. Наш маппер его сегодня НЕ читает — запись заведена по реестру; если корпус покажет расхождение, снимается."
+        }
+      },
+      "include": [
+        "dialer.keep_alive#uri"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "uri_param_unknown"
+      },
+      "emit": {
+        "form": "url",
+        "param_order": [
+          "client_version",
+          "host_key",
+          "host_key_algorithms",
+          "private_key",
+          "private_key_passphrase",
+          "private_key_path"
+        ]
+      }
+    }
+  }
+}

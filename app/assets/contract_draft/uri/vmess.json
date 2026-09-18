@@ -1,0 +1,233 @@
+{
+  "_note": "§480 — секция-маппер ссылки vmess. Ссылка не URI, а контейнер: за vmess:// лежит base64, и внутри одна из двух форм — v2rayN JSON или legacy cleartext. ОБЕ формы дают ОДНУ карту, различаются только СЛОВАРЁМ (где взять значение), что и выражено source-картой по id формы.",
+  "mappers": {
+    "uri": {
+      "body_source": "uri",
+      "detect": {
+        "scheme_in": [
+          "vmess"
+        ]
+      },
+      "forms": [
+        {
+          "id": "v2rayn",
+          "detect": {
+            "json": {
+              "type_of": {
+                "$root": "object"
+              }
+            }
+          },
+          "decode": [
+            "base64",
+            "json"
+          ],
+          "space": "json",
+          "_desc_ru": "Основная форма. Порядок форм НОРМАТИВЕН: JSON пробуется первым, cleartext — правило legacy_cleartext_fallback, то есть именно откат."
+        },
+        {
+          "id": "legacy",
+          "detect": {
+            "default": true
+          },
+          "decode": [
+            "base64",
+            {
+              "reparse": "url"
+            }
+          ],
+          "space": "url",
+          "_desc_ru": "legacy cleartext 'method:uuid@host:port?type=ws&tls=1'. IPv6 в скобках снимается лексером движка — delta480: было (ручной lastIndexOf(':')) — '[2001:db8::1]:443' давал server '[2001:db8::1]', стало — '2001:db8::1'."
+        }
+      ],
+      "userinfo": {
+        "split": {
+          "sep": ":",
+          "limit": 2
+        },
+        "into": [
+          "security",
+          "uuid"
+        ],
+        "_desc_ru": "Только у формы legacy: 'method:uuid@'. Двоеточие обязательно; uuid может содержать свои — limit:2."
+      },
+      "label": {
+        "source": {
+          "v2rayn": "json.ps",
+          "legacy": "fragment"
+        },
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        },
+        "_desc_ru": "У JSON-формы фрагмент НЕ читается вовсе (uri.userinfo.impl — Go не передаёт фрагмент в parseVMessJSON, Dart не передавал в _vmessFromJson); имя берётся из ключа ps."
+      },
+      "defaults": {
+        "type": "vmess",
+        "server_port": 443
+      },
+      "params": {
+        "server": {
+          "source": {
+            "v2rayn": "json.add",
+            "legacy": "host"
+          },
+          "maps_to": "server",
+          "required": true,
+          "desc_ru": "uri.query.add.impl — отсутствие даёт drop ноды."
+        },
+        "server_port": {
+          "source": {
+            "v2rayn": "json.port",
+            "legacy": "port"
+          },
+          "maps_to": "server_port",
+          "type": "int",
+          "materialize_default": true,
+          "desc_ru": "uri.query.port.impl: Go — drop ноды, Dart — fallback 443. Поведение сохранено как было: identity живых узлов не двигается."
+        },
+        "uuid": {
+          "source": {
+            "v2rayn": "json.id",
+            "legacy": "userinfo.pass"
+          },
+          "maps_to": "uuid",
+          "normalize": "trim",
+          "required": true
+        },
+        "security": {
+          "source": {
+            "v2rayn": [
+              "json.scy",
+              "json.security"
+            ],
+            "legacy": "userinfo.user"
+          },
+          "maps_to": "security",
+          "normalize": "trim_lower",
+          "materialize_default": true,
+          "value_map": {
+            "chacha20-ietf-poly1305": "chacha20-poly1305",
+            "": "auto",
+            "null": "auto",
+            "undefined": "auto"
+          },
+          "emit_when": "always",
+          "desc_ru": "Ключ security ОБЯЗАН появиться в теле: у ядра поле без omitempty, у схемы required, опущенный ключ уронил бы узел кодом field_missing. Перевод chacha20-ietf-poly1305 → chacha20-poly1305 — имя того же шифра в диалекте Xray; без перевода реальный шифр подписки схлопнулся бы в auto. Пусто/'null'/'undefined' строкой (их шлют реальные панели, корпус json_scy_null_to_auto) → auto. §474: сведение МУСОРА к auto отсюда СНЯТО — судит реестр (enum + on_invalid coerce auto, код vmess_security_unknown)."
+        },
+        "alter_id": {
+          "source": {
+            "v2rayn": "json.aid",
+            "legacy": "query.aid"
+          },
+          "maps_to": "alter_id",
+          "type": "int",
+          "omit_default": 0,
+          "desc_ru": "Числом или строкой — оба вида читают обе стороны. Нулевой в тело не пишется."
+        },
+        "net": {
+          "source": {
+            "v2rayn": "json.net",
+            "legacy": "query.type"
+          },
+          "selector": true,
+          "maps_to": "transport.type",
+          "normalize": "trim_lower",
+          "value_map": {
+            "": null,
+            "tcp": null,
+            "raw": null,
+            "h2": "http"
+          },
+          "sets": {
+            "h2": {
+              "tls.enabled": true
+            }
+          },
+          "desc_ru": "У cleartext-формы транспорт зовётся 'type', а не 'net' (uri.query.net.aliases). net=h2 включает TLS ПРИНУДИТЕЛЬНО (uri.query.tls.impl, оба проекта) — sets на значении селектора, без отдельной ветки."
+        },
+        "tls": {
+          "source": {
+            "v2rayn": "json.tls",
+            "legacy": "query.tls"
+          },
+          "selector": true,
+          "maps_to": null,
+          "normalize": "trim_lower",
+          "sets": {
+            "tls": {
+              "tls.enabled": true
+            },
+            "1": {
+              "tls.enabled": true
+            },
+            "true": {
+              "tls.enabled": true
+            },
+            "": {},
+            "none": {}
+          },
+          "desc_ru": "ТРИ разных правила истинности сведены к одной таблице. У JSON-формы истина ровно одна — строка 'tls' (cfg['tls']=='tls'); у legacy-формы семейство '1|true|tls' (uri.query.tls.impl). Значения '1'/'true' у JSON-формы истиной сегодня НЕ являются — если корпус это подтвердит, таблица разводится по формам."
+        },
+        "mode": {
+          "source": {
+            "v2rayn": "json.mode",
+            "legacy": "query.mode"
+          },
+          "maps_to": "transport.mode",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "desc_ru": "SPEC 071/103 vmess/json_net_xhttp — при net=xhttp ключ mode лежит в самом объекте v2rayN, наравне с path/host."
+        },
+        "sni": {
+          "source": {
+            "v2rayn": [
+              "json.sni",
+              "json.host"
+            ],
+            "legacy": [
+              "query.sni",
+              "query.peer"
+            ]
+          },
+          "maps_to": "tls.server_name",
+          "default_from": "server",
+          "when": {
+            "tls.enabled": true
+          },
+          "desc_ru": "SNI-цепочка расходится СЕРЕДИНОЙ: у контейнера v2rayN это sni → host → сервер (ключа peer у него нет), у legacy-формы sni → peer → сервер (ключ host там адресует транспорт). Этим формы и отличаются."
+        },
+        "ech": {
+          "source": {
+            "v2rayn": "json.ech",
+            "legacy": "query.ech"
+          },
+          "maps_to": null,
+          "on_present": {
+            "action": "drop",
+            "code": "ech_param_dropped_with_code"
+          },
+          "desc_ru": "§320 — ссылочная форма ECH адреса в теле sing-box не имеет, а чужой ключ рвёт рукопожатие. Без записи потеря была бы молчаливой."
+        }
+      },
+      "include": [
+        "transports#uri",
+        "tls#uri.vmess_convention",
+        "dialer.keep_alive#uri"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "uri_param_unknown"
+      },
+      "emit": {
+        "form": "v2rayn",
+        "param_order": []
+      }
+    }
+  }
+}

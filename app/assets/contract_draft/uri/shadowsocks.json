@@ -1,0 +1,136 @@
+{
+  "_note": "§480 — секция-маппер ссылки ss (shadowsocks). Списано построчно с shadowsocks_mapper.dart. Три формы: SIP002 (base64 userinfo), legacy (вся authority в base64), SS2022 (та же SIP002, особенность в пароле — он идёт после ПЕРВОГО ':').",
+  "mappers": {
+    "uri": {
+      "body_source": "uri",
+      "detect": {
+        "scheme_in": [
+          "ss"
+        ]
+      },
+      "forms": [
+        {
+          "id": "sip002",
+          "detect": {
+            "regex": "^[^#]*@"
+          },
+          "decode": [
+            "url"
+          ],
+          "space": "url",
+          "_desc_ru": "Наличие '@' до фрагмента: userinfo кодирован, адрес открыт."
+        },
+        {
+          "id": "legacy",
+          "detect": {
+            "default": true
+          },
+          "decode": [
+            "percent",
+            "base64",
+            {
+              "reparse": "authority"
+            }
+          ],
+          "space": "url",
+          "_desc_ru": "До-SIP002: в base64 уехала вся запись 'method:password@host:port'. Фрагмент отрезается ДО декода."
+        }
+      ],
+      "userinfo": {
+        "decode": [
+          "percent",
+          "base64?"
+        ],
+        "split": {
+          "sep": ":",
+          "limit": 2
+        },
+        "into": [
+          "method",
+          "password"
+        ],
+        "_desc_ru": "percent ДО base64 — панели экранируют '='-паддинг как %3D (корпус sip002_escaped_padding). 'base64?' — try-decode с фолбэком «не base64 → как есть»: delta480, открытый SS2022 'method:key@host' теперь читается (было — уходил в безусловный base64 и давал мусор). limit:2 — пароль это ВСЁ после первого ':': у SS2022 он бывает составным (k1:k2)."
+      },
+      "label": {
+        "source": "fragment",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        },
+        "_desc_ru": "scheme_source: singbox_type — тег безымянного узла 'shadowsocks-host-8388', а не 'ss-host-8388'. Так делал старый парсер, identity живых узлов не двигается."
+      },
+      "defaults": {
+        "type": "shadowsocks",
+        "server_port": 8388
+      },
+      "params": {
+        "server": {
+          "source": "host",
+          "maps_to": "server",
+          "required": true
+        },
+        "server_port": {
+          "source": "port",
+          "maps_to": "server_port",
+          "type": "int",
+          "materialize_default": true,
+          "desc_ru": "Неразбираемый порт → 8388 (поведение сохранено как было)."
+        },
+        "method": {
+          "source": "userinfo.user",
+          "maps_to": "method",
+          "normalize": "trim",
+          "required": true,
+          "desc_ru": "Значение КАК ПРИШЛО: набор из восемнадцати методов и info-код для девяти stream-шифров — правила реестра (body.fields.method)."
+        },
+        "password": {
+          "source": "userinfo.pass",
+          "maps_to": "password",
+          "required": true,
+          "desc_ru": "Пустой пароль = «записи нет» (uri.query.password.impl: «Пустой → drop ноды»). Это структура: поля санитайзеру судить бы не досталось."
+        },
+        "plugin": {
+          "source": "query.plugin",
+          "maps_to": "plugin",
+          "extract": {
+            "re": "^(?P<name>[^;]*)(?:;(?P<opts>.*))?$",
+            "into": {
+              "name": "plugin",
+              "opts": "plugin_opts"
+            }
+          },
+          "priority": 1,
+          "desc_ru": "SIP003 'plugin=name;k=v;k=v…': имя до первого ';', опции хвостом. Закрытого enum у имени плагина ядро не держит."
+        },
+        "plugin_opts": {
+          "source": "query.plugin_opts",
+          "aliases": [
+            "pluginOpts"
+          ],
+          "maps_to": "plugin_opts",
+          "priority": 2,
+          "merge": "keep_first",
+          "desc_ru": "Опции берутся из хвоста `plugin`, а при его отсутствии — отсюда (priority 2 + keep_first). Алиас pluginOpts — delta480: было — не читался, стало — читается (имена параметров регистронезависимо)."
+        }
+      },
+      "include": [
+        "dialer.keep_alive#uri"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "uri_param_unknown"
+      },
+      "emit": {
+        "form": "sip002",
+        "param_order": [
+          "plugin",
+          "plugin_opts"
+        ]
+      }
+    }
+  }
+}

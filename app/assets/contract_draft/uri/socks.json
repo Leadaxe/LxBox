@@ -1,0 +1,116 @@
+{
+  "_note": "§480 — секция-маппер ссылки socks в замороженной грамматике SPEC 133 (PRIMITIVES.md §0). Черновик: движок исполняет его вместо рукописного socks_mapper.dart. Поведение списано ПОСТРОЧНО с нашего маппера, а не с черновика лаунчера, — расхождения помечены delta480.",
+  "mappers": {
+    "uri": {
+      "body_source": "uri",
+      "detect": {
+        "scheme_in": [
+          "socks",
+          "socks5",
+          "socks4",
+          "socks4a"
+        ]
+      },
+      "forms": [
+        {
+          "id": "url",
+          "detect": {
+            "default": true
+          },
+          "decode": [
+            "url"
+          ],
+          "space": "url"
+        }
+      ],
+      "userinfo": {
+        "split": {
+          "sep": ":",
+          "limit": 2
+        },
+        "into": [
+          "username",
+          "password"
+        ]
+      },
+      "label": {
+        "source": "fragment",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        }
+      },
+      "defaults": {
+        "type": "socks",
+        "server_port": 1080
+      },
+      "scheme_sets": {
+        "socks": {
+          "version": "5"
+        },
+        "socks5": {
+          "version": "5"
+        },
+        "socks4": {
+          "version": "4"
+        },
+        "socks4a": {
+          "version": "4a"
+        }
+      },
+      "params": {
+        "server": {
+          "source": "host",
+          "maps_to": "server",
+          "required": true,
+          "desc_ru": "Адрес сервера; без него записи не построить (маппер отвечает null)."
+        },
+        "server_port": {
+          "source": "port",
+          "maps_to": "server_port",
+          "type": "int",
+          "materialize_default": true,
+          "desc_ru": "Порт; по умолчанию 1080 (uri.userinfo.impl)."
+        },
+        "username": {
+          "source": "userinfo.user",
+          "maps_to": "username",
+          "desc_ru": "Опционален; пустой в тело не пишется."
+        },
+        "password": {
+          "source": "userinfo.pass",
+          "maps_to": "password",
+          "desc_ru": "Опционален. У версии 4 пароля нет вовсе, но написанный переносится как есть — маппер значения не судит."
+        },
+        "version": {
+          "source": "scheme",
+          "maps_to": "version",
+          "materialize_default": true,
+          "desc_ru": "§475 socks_scheme_is_version — версию несёт СХЕМА, значение подставляет scheme_sets. Пишется в тело ЯВНО: значение стоит в телах всех живых узлов обеих сторон."
+        }
+      },
+      "include": [
+        "dialer.keep_alive#uri"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "uri_param_unknown"
+      },
+      "emit": {
+        "form": "url",
+        "form_from": {
+          "version": {
+            "4": "socks4",
+            "4a": "socks4a",
+            "*": "socks5"
+          }
+        },
+        "param_order": []
+      }
+    }
+  }
+}

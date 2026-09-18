@@ -1,0 +1,114 @@
+{
+  "_note": "§480 — секция-маппер ссылки anytls. Форма trojan-подобная, но TLS читается по конвенции VLESS: есть REALITY (pbk/sid), дефолт отпечатка random, алиас fingerprint. Два отличия от vless: TLS обязателен (security игнорируется) и включена эвристика SNI.",
+  "mappers": {
+    "uri": {
+      "body_source": "uri",
+      "detect": {
+        "scheme_in": [
+          "anytls"
+        ]
+      },
+      "forms": [
+        {
+          "id": "url",
+          "detect": {
+            "default": true
+          },
+          "decode": [
+            "url"
+          ],
+          "space": "url"
+        }
+      ],
+      "userinfo": {
+        "into": [
+          "password"
+        ],
+        "_desc_ru": "Пароль = ВЕСЬ userinfo, без split: двоеточие — законная часть пароля (кейс корпуса percent_encoded_password нормирует 'p@ss:word'). Go берёт только Username() — расхождение зафиксировано реестром и сохранено как было."
+      },
+      "label": {
+        "source": "fragment",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        }
+      },
+      "defaults": {
+        "type": "anytls",
+        "server_port": 443
+      },
+      "scheme_sets": {
+        "anytls": {
+          "tls.enabled": true
+        }
+      },
+      "params": {
+        "server": {
+          "source": "host",
+          "maps_to": "server",
+          "required": true
+        },
+        "server_port": {
+          "source": "port",
+          "maps_to": "server_port",
+          "type": "int",
+          "materialize_default": true
+        },
+        "password": {
+          "source": "userinfo",
+          "maps_to": "password",
+          "required": true,
+          "desc_ru": "Пустой пароль — записи нет."
+        },
+        "security": {
+          "source": "query.security",
+          "maps_to": null,
+          "desc_ru": "ИГНОРИРУЕТСЯ до чтения TLS. AnyTLS живёт только поверх TLS (body.fields.tls → required, ядро отвечает C.ErrTLSRequired), и security=none для него бессмысленен: правило security_none_no_tls унесло бы весь блок вместе с sni, alpn и insecure, которые автор написал. Кейс корпуса security_none_params_kept нормирует именно это."
+        },
+        "idle_session_check_interval": {
+          "source": "query.idle_session_check_interval",
+          "maps_to": "idle_session_check_interval",
+          "type": "duration",
+          "normalize": "duration_bare_seconds",
+          "desc_ru": "Голое число это секунды — та же конвенция, что heartbeat_bare_number у tuic. Форма записи это работа маппера; годность судит реестр."
+        },
+        "idle_session_timeout": {
+          "source": "query.idle_session_timeout",
+          "maps_to": "idle_session_timeout",
+          "type": "duration",
+          "normalize": "duration_bare_seconds"
+        },
+        "min_idle_session": {
+          "source": "query.min_idle_session",
+          "maps_to": "min_idle_session",
+          "type": "int",
+          "on_invalid": {
+            "action": "keep",
+            "code": null
+          },
+          "desc_ru": "Идёт в карту КАК ПРИШЁЛ — числом если число, иначе строкой: годность («неотрицательное целое») судит реестр, min:0 + on_invalid drop с кодом anytls_min_idle_invalid. Привести здесь к числу значило бы судить."
+        }
+      },
+      "include": [
+        "tls#uri.vless_convention",
+        "dialer.keep_alive#uri"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "uri_param_unknown"
+      },
+      "emit": {
+        "form": "url",
+        "param_order": [
+          "idle_session_check_interval",
+          "idle_session_timeout",
+          "min_idle_session"
+        ]
+      }
+    }
+  }
+}
