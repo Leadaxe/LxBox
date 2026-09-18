@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
@@ -222,11 +223,22 @@ void main() {
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
 
-    test('trojan: мусор → chrome + warning', () {
+    // §472 шаг 2 — trojan разбирается конвейером, и мусорный отпечаток судит
+    // РЕЕСТР (`tls.json` → `utls.fingerprint`: enum + `on_invalid: coerce
+    // chrome`), а не рукописный `normalizeTlsFingerprint`. Исход прежний —
+    // `chrome` плюс предупреждение, — но код реестровый (`utls_fp_unknown`) и
+    // несёт путь со значением, чего у рукописного класса не было.
+    test('trojan: мусор → chrome + код реестра utls_fp_unknown', () async {
+      await ContractRegistry.I.loadFromDirectory('contract');
       final spec =
           parseTrojan('trojan://p@h:443?security=tls&fp=bogus&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
-      expect(spec.warnings, contains(const UnknownFingerprintWarning('bogus')));
+      final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
+            (w) => w.code == 'utls_fp_unknown',
+            orElse: () => fail('нет кода utls_fp_unknown: ${spec.warnings}'),
+          );
+      expect(w.path, 'tls.utls.fingerprint');
+      expect(w.value, 'bogus');
     });
 
     test('trojan: пустой fp → null (без utls-блока)', () {

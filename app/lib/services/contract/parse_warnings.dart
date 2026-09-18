@@ -35,6 +35,7 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/template_vars.dart';
 import '../../models/tls_spec.dart';
+import '../parser/mappers/uri_pipeline.dart' show isPipelineParsed;
 import 'body_sanitizer.dart';
 import 'registry.dart';
 import 'warning_codes.dart';
@@ -203,6 +204,14 @@ void annotateWithRegistry(NodeSpec node) {
 
   // Группы (§322) тела узла не имеют — санитайзеру там нечего смотреть.
   if (node.isGroup) return;
+
+  // §472 шаг 2 — узел, разобранный конвейером, санитайзер уже прошёл: по
+  // СЫРОЙ карте ссылки, до всякой нормализации. Второй проход по `emit()`
+  // дал бы те же коды, но с `value` уже канонизированным (`chrome` вместо
+  // написанного автором `HelloChrome_120`), и какой из двух останется,
+  // решал бы порядок вызовов, а не правило. Источник кодов у такого узла
+  // один — см. `mappers/uri_pipeline.dart`, `markPipelineParsed`.
+  if (isPipelineParsed(node)) return;
 
   final Map<String, dynamic> body;
   try {

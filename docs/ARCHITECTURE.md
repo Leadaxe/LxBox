@@ -245,6 +245,49 @@ HomeController.saveParsedConfig(configJson)  →  native VpnService
 - `EmitContext.allocateTag(baseTag)` guarantees global uniqueness across all lists.
 - Warnings bubble up: at parse time into `NodeSpec.warnings`, at emit time appended by the emit. (The XHTTP fallback to `httpupgrade` was removed in §097 — the transport is now native.)
 
+### Node parse pipeline: mapper → sanitizer → model (spec 472)
+
+A link used to reach the model through a per-protocol parser that carried its
+own value rules, while JSON input carried a second copy of the same rules. The
+pipeline below replaces both with one route — the same one the launcher uses.
+It is being rolled out one protocol per step; `parseUri` dispatches by scheme,
+and schemes that have not moved yet still use their own parser.
+
+```
+link ──mapper──┐
+               ├─► raw map ─► registry sanitizer ─► clean map ─► parseSingboxEntry ─► NodeSpec
+JSON / Xray ───┘                  │
+                                  └─► warnings (code, path, value) ─► NodeSpec.warnings
+```
+
+- **Mapper** (`parser/mappers/`) translates the dialect and **judges nothing**:
+  parameter aliases, userinfo, port, name from the fragment, TLS and transport
+  from the query — all in sing-box key layout. Its rules are written down in
+  the registry's `mapper` section (`registry/tls.json`, `transports.json`,
+  `protocols/*.json`); the code executes them and
+  `test/parser/mapper_rules_coverage_test.dart` guards that no registry rule
+  for a migrated scheme goes unimplemented and unnamed.
+  The only warnings a mapper raises are about the *translation* losing or
+  relocating something (`ws_early_data_converted`, `ech_ignored`) — the body no
+  longer holds those values, so the sanitizer has nothing to say about them.
+- **Sanitizer** (`contract/body_sanitizer.dart`) is the single judge of values.
+  Core gates (`min_core`, `platform`) are off at parse time: they depend on the
+  running core, the node does not.
+- **`parseSingboxEntry`** is the only "map → model" route. It is fed the
+  **clean** map, so the model is a typed view of what will reach the core.
+- `rawSource` is unchanged: a link keeps its link, JSON keeps its JSON
+  (§454–§456).
+- A node parsed by the pipeline **skips** the second `emit()`-based annotation
+  pass (`annotateWithRegistry`). Not because of duplicates — those are deduped
+  by `(code, path)` — but because of `value`: the pipeline's sanitizer sees the
+  link's raw value (`fp=HelloChrome_120`), the `emit()` pass sees the
+  canonicalised one (`chrome`), and which survived would be decided by call
+  order rather than by a rule.
+
+Migrated so far: **trojan** (`kPipelineSchemes`). The remaining twelve schemes
+keep their parsers, and `transport.dart` still serves them — it was not
+touched.
+
 ---
 
 ## Wizard template (`assets/wizard_template.json`)

@@ -1,5 +1,6 @@
 import '../../models/node_spec.dart';
 import 'amnezia_link.dart';
+import 'mappers/uri_pipeline.dart';
 import 'uri_utils.dart';
 import 'uri_parsers/anytls_parser.dart';
 import 'uri_parsers/http_parser.dart';
@@ -42,6 +43,12 @@ NodeSpec? parseUri(String uri) {
   // терялась, хотя десктоп её принимал (§103 §9.B12).
   if (scheme != 'vpn' && uri.length > maxURILength) return null;
   try {
+    // §472 шаг 2 — схемы, переехавшие на конвейер «маппер → санитайзер по
+    // реестру → модель», идут им; остальные пока своим парсером. Список
+    // растёт по шагу за протокол (спека 472, раздел 4).
+    if (kPipelineSchemes.contains(scheme)) {
+      return parseUriViaPipeline(t, scheme);
+    }
     switch (scheme) {
       case 'vless':
         return parseVless(t);

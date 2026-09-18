@@ -5,6 +5,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -23,6 +24,14 @@ List<String> _codes(NodeSpec spec) => [
     ];
 
 void main() {
+  // §472 шаг 2 — правила §24.6 для trojan исполняет РЕЕСТР (`format:
+  // url_path`), а не рукописный guard в парсере: без загруженного реестра
+  // судить значение стало нечем. В приложении он загружается на старте
+  // (`main.dart`), здесь — так же явно.
+  setUpAll(() async {
+    await ContractRegistry.I.loadFromDirectory('contract');
+  });
+
   group('§24.2 п. 7.1 — hellorandom* → random', () {
     test('весь префикс даёт random, а не chrome и не randomized', () {
       for (final fp in const [

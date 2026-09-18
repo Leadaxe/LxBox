@@ -1000,7 +1000,17 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
 
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).
 /// Используется для JSON-редактора и Smart-Paste одиночного sing-box entry.
-NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
+///
+/// §472 шаг 2 — [label] задаётся явно, когда имя узла НЕ равно тегу. У
+/// JSON-узла имя и есть тег (их источник один), но у ссылки имя — текст
+/// фрагмента, а тег из него вычислен: ссылка без `#` даёт тег-фолбэк
+/// `trojan-host-443` при пустом имени, и подставить его в `label` значило бы
+/// вернуть выдуманное `#trojan-host-443` из `toUri()`.
+NodeSpec? parseSingboxEntry(
+  Map<String, dynamic> entry, {
+  String? rawSource,
+  String? label,
+}) {
   // §454 — источник узла из JSON: его собственный объект outbound'а. Вызов из
   // целого конфига передаёт оригинал (до подмены тега лейблом), одиночный
   // entry — сам себе источник.
@@ -1009,7 +1019,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
   final tag = entry['tag']?.toString() ?? '';
   final server = entry['server']?.toString() ?? '';
   final port = (entry['server_port'] as num?)?.toInt() ?? 0;
-  final label = tag;
+  final label0 = label ?? tag;
   // §453 — dial-поля общие для всех носителей; читаем один раз до switch'а,
   // дальше просто прокидываем. У не-носителей ключи не читаются вовсе.
   final ka = tcpKeepAliveFromSingbox(entry);
@@ -1021,7 +1031,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return VlessSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'vless-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1040,7 +1050,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return VmessSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'vmess-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1058,7 +1068,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return TrojanSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'trojan-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1078,7 +1088,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return AnyTlsSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'anytls-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1099,7 +1109,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return ShadowsocksSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'ss-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1134,7 +1144,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
         warnings: hy2Warnings,
         id: newUuidV4(),
         tag: tag.isEmpty ? 'hy2-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1169,7 +1179,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return NaiveSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'naive-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1191,7 +1201,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
             'tuic', tlsBlocksOfBody(entry['tls'])),
         id: newUuidV4(),
         tag: tag.isEmpty ? 'tuic-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1214,7 +1224,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return SshSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'ssh-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1230,7 +1240,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return SocksSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'socks-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1257,7 +1267,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return HttpSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'http-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1330,7 +1340,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return WireguardSpec(
         id: newUuidV4(),
         tag: wgTag,
-        label: label,
+        label: label0,
         server: peerServer,
         port: peerPort,
         rawSource: src,
@@ -1405,7 +1415,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
             'masque', tlsBlocksOfBody(masqueTls)),
         id: newUuidV4(),
         tag: tag.isEmpty ? 'masque-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1429,7 +1439,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return TailscaleSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'tailscale' : tag,
-        label: label,
+        label: label0,
         body: entry,
         rawSource: src,
       );
