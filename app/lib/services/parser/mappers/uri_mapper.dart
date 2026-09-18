@@ -82,4 +82,14 @@ final class UriMapping {
 /// Перевод ссылки одной схемы. `null` — ссылка не разбирается вовсе
 /// (нет хоста, нет обязательного userinfo): тем же `null`, каким отвечал
 /// прежний парсер, конвейер отдаёт «узла нет».
-typedef UriMapper = UriMapping? Function(Uri uri);
+///
+/// Аргумент — ИСХОДНЫЙ ТЕКСТ ссылки, а не `Uri` (§472 шаг 4). Шаги 2 и 3
+/// принимали `Uri`: у trojan и vless ссылка и есть URI, и разбор строки —
+/// работа платформы. У vmess и shadowsocks это не так. `vmess://` везёт
+/// base64-полезную нагрузку там, где у URI стоит authority, а `Uri` приводит
+/// authority к нижнему регистру — base64 после этого не декодируется вовсе
+/// (`eyJ2IjoiMiJ9` → `eyj2ijoimij9`). Та же беда у legacy-формы
+/// `ss://base64(method:password@host:port)`. Поэтому решать, читается ли
+/// ссылка как URI, стало делом самого маппера: trojan и vless зовут
+/// `Uri.tryParse` первой строкой, vmess и shadowsocks работают с текстом.
+typedef UriMapper = UriMapping? Function(String uri);

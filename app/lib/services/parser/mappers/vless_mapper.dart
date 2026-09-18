@@ -50,8 +50,10 @@ const _kVision = 'xtls-rprx-vision';
 /// `null` — ссылки нет: без хоста или без userinfo записи не построить
 /// (`uuid` у схемы `required`, и пустой userinfo = drop узла — `uri.userinfo`
 /// реестра).
-UriMapping? mapVlessUri(Uri p) {
-  if (p.host.isEmpty || p.userInfo.isEmpty) return null;
+UriMapping? mapVlessUri(String uri) {
+  // §472 шаг 4 — `Uri.tryParse` зовёт сам маппер (см. [UriMapper]).
+  final p = Uri.tryParse(uri);
+  if (p == null || p.host.isEmpty || p.userInfo.isEmpty) return null;
 
   // `uri.userinfo.impl` — часть до `:` (Go Username(), Dart split(':').first).
   final uuid = Uri.decodeComponent(p.userInfo.split(':').first);

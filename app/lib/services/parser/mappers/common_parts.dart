@@ -79,6 +79,7 @@ Map<String, dynamic>? tlsMapFromQuery(
   String server,
   int port, {
   Set<int> plaintextPorts = const {},
+  List<String> sniAliases = const ['sni', 'peer', 'host'],
   List<String> fpAliases = const ['fp'],
   String defaultFingerprint = '',
   bool reality = false,
@@ -98,7 +99,19 @@ Map<String, dynamic>? tlsMapFromQuery(
 
   // `sni_heuristic_falls_back_to_server` — выбор ИСТОЧНИКА поля, а не
   // суждение о значении: цепочка алиасов и откат на адрес сервера.
-  var sni = q['sni'] ?? q['peer'] ?? q['host'] ?? '';
+  //
+  // [sniAliases] — сама цепочка. Диалекты расходятся её серединой: у
+  // share-URI это `sni` → `peer` → `host`, у контейнера v2rayN — `sni` →
+  // `host` (ключа `peer` у него нет, `protocols/vmess.json` →
+  // `uri.query.sni.impl`). Аргумент, а не ветка по схеме внутри.
+  var sni = '';
+  for (final alias in sniAliases) {
+    final v = q[alias] ?? '';
+    if (v.isNotEmpty) {
+      sni = v;
+      break;
+    }
+  }
   if (sni.isEmpty) sni = server;
 
   var fp = '';

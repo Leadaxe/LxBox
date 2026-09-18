@@ -36,6 +36,7 @@ import '../uri_utils.dart';
 import 'trojan_mapper.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
+import 'vmess_mapper.dart';
 
 /// Версия ядра, которую санитайзер видит при разборе: гейты, которым она
 /// нужна (`min_core`), здесь выключены. То же значение, что в
@@ -45,12 +46,13 @@ const _kParseTimeCore = '0.0.0';
 /// Схемы, переехавшие на конвейер. Растёт по шагу за протокол; список
 /// нормативен для стража покрытия mapper-правил
 /// (`test/parser/mapper_rules_coverage_test.dart`).
-const kPipelineSchemes = <String>{'trojan', 'vless'};
+const kPipelineSchemes = <String>{'trojan', 'vless', 'vmess'};
 
 /// Мапперы переехавших схем, по схеме ссылки.
 const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'trojan': mapTrojanUri,
   'vless': mapVlessUri,
+  'vmess': mapVmessUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё
@@ -63,10 +65,10 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
   final mapper = _kMappers[scheme];
   if (mapper == null) return null;
 
-  final parsed = Uri.tryParse(uri);
-  if (parsed == null) return null;
-
-  final mapping = mapper(parsed);
+  // §472 шаг 4 — маппер получает ИСХОДНЫЙ ТЕКСТ. Общего `Uri.tryParse` здесь
+  // больше нет: у vmess и shadowsocks ссылка не URI, и приведение authority к
+  // нижнему регистру убивало бы base64 (см. [UriMapper]).
+  final mapping = mapper(uri);
   if (mapping == null) return null;
 
   final warnings = <NodeWarning>[...mapping.warnings];

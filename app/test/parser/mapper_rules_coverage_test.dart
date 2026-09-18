@@ -34,8 +34,8 @@ const Map<String, String> _knownGaps = {
   // требует отдельного решения владельца, а не попутной правки. У hysteria2 и
   // anytls та же эвристика реализована (их парсеры), у trojan и vless — нет.
   'sni_heuristic_falls_back_to_server':
-      'не реализовано в LxBox ни на одном входе trojan/vless; включение меняет '
-          'тела и identity — отдельное решение (спека 472, шаг 3+)',
+      'не реализовано в LxBox ни на одном входе trojan/vless/vmess; включение '
+          'меняет тела и identity — отдельное решение (спека 472, шаг 3+)',
 };
 
 /// Правила, покрытые тестами этого файла: id → имя теста.
@@ -53,6 +53,9 @@ const Map<String, String> _covered = {
   'vision_udp443_is_a_compound_name':
       'flow=xtls-rprx-vision-udp443 → vision + packet_encoding=xudp',
   'packet_encoding_none_means_absent': 'packetEncoding=none — ключа нет вовсе',
+  // §472 шаг 4 — правило, которое добавил переезд vmess.
+  'legacy_cleartext_fallback':
+      'не-JSON payload читается как method:uuid@host:port',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -242,6 +245,125 @@ void main() {
         spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
         isNot(contains('packet_encoding_unknown')),
       );
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (vmess)', () {
+    /// `vmess://base64(<json>)` — основная форма контейнера.
+    String jsonLink(Map<String, dynamic> cfg) =>
+        'vmess://${base64.encode(utf8.encode(jsonEncode(cfg)))}';
+
+    const base = <String, dynamic>{
+      'v': '2',
+      'ps': 'n',
+      'add': 'h.example',
+      'port': '443',
+      'id': '11111111-1111-1111-1111-111111111111',
+    };
+
+    test('не-JSON payload читается как method:uuid@host:port', () {
+      // `legacy_cleartext_fallback` — откат, а не равноправная форма: JSON
+      // пробуется первым. Транспорт и TLS у этой формы в query-хвосте.
+      final spec = parseUri('vmess://${base64.encode(utf8.encode(
+        'aes-128-gcm:11111111-1111-1111-1111-111111111111@203.0.113.7:8443'
+        '?type=ws&path=%2Fws&tls=1',
+      ))}#Legacy');
+      expect(spec, isNotNull);
+      final body = spec!.emit(TemplateVars.empty).map;
+      expect(body['security'], 'aes-128-gcm');
+      expect(body['server_port'], 8443);
+      expect((body['transport'] as Map)['type'], 'ws');
+      expect((body['tls'] as Map)['enabled'], isTrue);
+      // Фрагмент читает ТОЛЬКО эта форма (`uri.userinfo.impl`).
+      expect(spec.label, 'Legacy');
+    }, skip: skip);
+
+    test('JSON-форма фрагмент ссылки не читает', () {
+      // Так у обеих сторон: имя узла берётся из ключа `ps`, а `#…` после
+      // base64 выбрасывается (`protocols/vmess.json` → `uri.userinfo.impl`).
+      final spec = parseUri('${jsonLink({...base, 'ps': 'изPS'})}#изФрагмента');
+      expect(spec!.label, 'изPS');
+    }, skip: skip);
+
+    test('net=h2 включает TLS и даёт транспорт http', () {
+      // `transport_name_dialect` в диалекте контейнера: `net=h2` → `http`,
+      // и TLS включается принудительно, без ключа `tls` (`uri.query.tls`).
+      final spec = parseUri(jsonLink({...base, 'net': 'h2'}))!;
+      final body = spec.emit(TemplateVars.empty).map;
+      expect((body['transport'] as Map)['type'], 'http');
+      expect((body['tls'] as Map)['enabled'], isTrue);
+      // Хост транспорта откатывается на адрес сервера.
+      expect((body['transport'] as Map)['host'], ['h.example']);
+    }, skip: skip);
+
+    test('без tls=tls блока TLS нет вовсе', () {
+      // Тот же вопрос СТРУКТУРЫ, что `security_none_no_tls` у прочих схем:
+      // явный `tls:{enabled:false}` ронял ядра lx.5..lx.18 (SPEC 045).
+      final spec = parseUri(jsonLink({...base, 'net': 'tcp'}))!;
+      expect(spec.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
+    }, skip: skip);
+
+    test('SNI контейнера: sni → host → сервер', () {
+      // Цепочка у контейнера СВОЯ — среднее звено `host`, а не `peer`
+      // (`uri.query.sni.impl`). Ключ `host` при этом адресует и транспорт.
+      final byHost = parseUri(jsonLink(
+          {...base, 'net': 'tcp', 'tls': 'tls', 'host': 'cdn.example'}))!;
+      expect((byHost.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
+          'cdn.example');
+
+      final bySni = parseUri(jsonLink({
+        ...base,
+        'net': 'tcp',
+        'tls': 'tls',
+        'host': 'cdn.example',
+        'sni': 'sni.example',
+      }))!;
+      expect((bySni.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
+          'sni.example');
+
+      final byServer =
+          parseUri(jsonLink({...base, 'net': 'tcp', 'tls': 'tls'}))!;
+      expect(
+          (byServer.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
+          'h.example');
+    }, skip: skip);
+
+    test('fp в написании uTLS → имя семейства, alpn одной строкой → список',
+        () {
+      // `utls_xray_hello_names` и `alpn_comma_list` — те же общие части, что
+      // у trojan и vless: диалект контейнера подаёт им те же имена ключей.
+      final spec = parseUri(jsonLink({
+        ...base,
+        'net': 'tcp',
+        'tls': 'tls',
+        'fp': 'hellofirefox_auto',
+        'alpn': 'h2,http/1.1',
+      }))!;
+      final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+      expect((tls['utls'] as Map)['fingerprint'], 'firefox');
+      expect(tls['alpn'], ['h2', 'http/1.1']);
+    }, skip: skip);
+
+    test('?ed=N хвостом пути → два поля тела', () {
+      // `ws_early_data_path_suffix` — путь у контейнера лежит ключом `path`.
+      final spec = parseUri(
+          jsonLink({...base, 'net': 'ws', 'path': '/x?ed=2560'}))!;
+      final tr = spec.emit(TemplateVars.empty).map['transport'] as Map;
+      expect(tr['path'], '/x');
+      expect(tr['max_early_data'], 2560);
+      expect(tr['early_data_header_name'], 'Sec-WebSocket-Protocol');
+    }, skip: skip);
+
+    test('ech= не переносится, узел получает код', () {
+      final spec = parseUri(jsonLink({
+        ...base,
+        'net': 'tcp',
+        'tls': 'tls',
+        'ech': 'ip.gs+1.1.1.1',
+      }))!;
+      final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+      expect(tls.containsKey('ech'), isFalse);
+      expect(spec.warnings.whereType<EchIgnoredWarning>(), isNotEmpty);
     }, skip: skip);
   });
 }

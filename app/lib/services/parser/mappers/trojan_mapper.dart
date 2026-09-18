@@ -25,8 +25,12 @@ const _kDefaultPort = 443;
 ///
 /// `null` — ссылки нет: без хоста или без пароля запись не построить
 /// (`password` у схемы `required`, узел ушёл бы целиком).
-UriMapping? mapTrojanUri(Uri p) {
-  if (p.host.isEmpty) return null;
+UriMapping? mapTrojanUri(String uri) {
+  // §472 шаг 4 — `Uri.tryParse` зовёт сам маппер: у vmess и shadowsocks
+  // ссылка URI не является (см. [UriMapper]), и общего разбора у конвейера
+  // больше нет.
+  final p = Uri.tryParse(uri);
+  if (p == null || p.host.isEmpty) return null;
 
   // РАСХОЖДЕНИЕ с Go зафиксировано реестром (`uri.userinfo.impl`): при `:` в
   // userinfo Go берёт паролем часть ДО `:`, Dart — весь userinfo. Поведение

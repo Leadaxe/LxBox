@@ -285,7 +285,11 @@ void main() {
       expect(spec.tls.fingerprint, isNull);
     });
 
-    test('vmess: мусор в fp из base64-JSON → chrome + warning', () {
+    // §472 шаг 4 — тот же переезд, что у trojan шагом 2 и vless шагом 3:
+    // мусорный отпечаток сводит к `chrome` РЕЕСТР (`tls.json` →
+    // `utls.fingerprint`: enum + `on_invalid: coerce chrome`), и код
+    // `utls_fp_unknown` несёт путь и СЫРОЕ значение из контейнера.
+    test('vmess: мусор в fp из base64-JSON → chrome + код реестра', () {
       final cfg = {
         'v': '2',
         'ps': 'L',
@@ -301,8 +305,13 @@ void main() {
       final uri = 'vmess://${base64Encode(utf8.encode(jsonEncode(cfg)))}';
       final spec = parseVmess(uri)!;
       expect(spec.tls.fingerprint, 'chrome');
-      expect(spec.warnings, contains(const UnknownFingerprintWarning('wat')));
-    });
+      final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
+            (w) => w.code == 'utls_fp_unknown',
+            orElse: () => fail('нет кода utls_fp_unknown: ${spec.warnings}'),
+          );
+      expect(w.path, 'tls.utls.fingerprint');
+      expect(w.value, 'wat');
+    }, skip: skip);
 
     test('anytls: псевдоним молча (через VLESS-конвенцию)', () {
       final spec =
