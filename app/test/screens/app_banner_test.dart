@@ -11,6 +11,8 @@ void main() {
     onClearError: () {},
     onShareCrash: () {},
     onDismissCrash: () {},
+    onShowCoreRejected: () {},
+    onDismissCoreRejected: () {},
   );
 
   Set<String> keys(

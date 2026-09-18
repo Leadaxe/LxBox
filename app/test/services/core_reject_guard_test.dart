@@ -84,8 +84,12 @@ class FakeCore implements CoreRejectHost {
   }
 
   @override
-  void onProgress(CoreRejectPhase phase, int disabledCount, int round) =>
-      progress.add((phase, disabledCount, round));
+  void onProgress(
+    CoreRejectPhase phase,
+    int round, {
+    List<DisabledNode> disabledNodes = const [],
+  }) =>
+      progress.add((phase, disabledNodes.length, round));
 }
 
 void main() {
@@ -343,7 +347,11 @@ class _ScriptedCore implements CoreRejectHost {
       CoreRejectPrompt.stop;
 
   @override
-  void onProgress(CoreRejectPhase phase, int disabledCount, int round) {}
+  void onProgress(
+    CoreRejectPhase phase,
+    int round, {
+    List<DisabledNode> disabledNodes = const [],
+  }) {}
 }
 
 /// Ядро, упрямо называющее один и тот же тег: выключение его не лечит.
@@ -377,5 +385,9 @@ class _StubbornCore implements CoreRejectHost {
       CoreRejectPrompt.keepChecking;
 
   @override
-  void onProgress(CoreRejectPhase phase, int disabledCount, int round) {}
+  void onProgress(
+    CoreRejectPhase phase,
+    int round, {
+    List<DisabledNode> disabledNodes = const [],
+  }) {}
 }
