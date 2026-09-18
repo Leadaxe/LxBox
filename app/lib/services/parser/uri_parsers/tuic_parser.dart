@@ -74,7 +74,7 @@ TuicSpec? parseTuic(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     uuid: uuid,
     password: password,
     congestionControl: cc,

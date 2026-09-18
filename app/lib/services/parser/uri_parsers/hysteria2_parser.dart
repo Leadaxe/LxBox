@@ -135,7 +135,7 @@ Hysteria2Spec? parseHysteria2(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     password: password,
     obfs: obfs.type,
     obfsPassword: obfs.password,

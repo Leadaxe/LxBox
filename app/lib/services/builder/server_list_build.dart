@@ -12,6 +12,7 @@ import '../safe_regex.dart';
 import '../tag_resolver.dart';
 import 'core_chain_capability.dart';
 import 'node_link_resolve.dart';
+import 'verbatim_body.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
 ///
@@ -115,6 +116,20 @@ extension ServerListBuild on ServerList {
       final raw = server.getEntries(ctx, skipDetour: skipDetour);
       final main = raw.main;
       final detours = raw.detours;
+
+      // §455 — источник записи JSON → тело узла дословно (объект источника),
+      // а не emit() модели. Звенья родной цепочки — через модель.
+      final verbatim = switch (this) {
+        final UserServer u => verbatimBodyOf(u.rawBody, server),
+        final FolderServers f when i < f.memberRaws.length =>
+          verbatimBodyOf(f.memberRaws[i], server),
+        _ => null,
+      };
+      if (verbatim != null) {
+        main.map
+          ..clear()
+          ..addAll(verbatim);
+      }
 
       // Allocate tags (детуры первыми — чтобы main мог сослаться на tag).
       final detourBases = <String>[];

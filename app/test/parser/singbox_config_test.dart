@@ -659,13 +659,13 @@ void main() {
   });
 
   group('§368 — источник для UI (§302)', () {
-    test('sourceCompact = сам outbound, sourceExtended = конфиг', () {
+    test('rawSource = сам outbound, sourceExtended = конфиг (§454)', () {
       final r = parse([
         cfg([vless('a', 'a.com')], extra: {
           'route': {'rules': []}
         })
       ]);
-      expect(r.single.sourceCompact, contains('"tag": "a"'));
+      expect(r.single.rawSource, contains('"tag": "a"'));
       expect(r.single.sourceExtended, contains('route'));
     });
   });

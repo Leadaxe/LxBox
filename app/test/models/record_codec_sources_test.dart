@@ -213,7 +213,8 @@ void main() {
           FolderMember(raw: _uriBeta, enabled: false),
           FolderMember(raw: 'foo://not-a-node'),
           FolderMember(raw: _jsonOutbound, sections: _sections()),
-          FolderMember(raw: _wgIni),
+          // §456 — тег INI-члена живёт в записи и возвращается nameHint'ом.
+          FolderMember(raw: _wgIni, nameHint: 'WireGuard'),
         ],
       );
       final record = sourceToRecord(f);
@@ -513,6 +514,41 @@ void main() {
       }).value!.nodes);
       expect(a.nodes, isNotEmpty);
       expect(a, b);
+    });
+  });
+
+  group('§456 — wg_ini: тег записи применяется', () {
+    test('одиночный сервер: тег записи становится именем узла', () {
+      final notes = <String>[];
+      final read = sourceFromRecord({
+        'kind': 'server',
+        'id': 's-ini',
+        'tag': 'Proton CH',
+        'enabled': true,
+        'origin': {'kind': 'wg_ini', 'raw': _wgIni},
+      }, notes: notes);
+      final srv = read.value! as UserServer;
+      expect(srv.nodes.single.tag, 'Proton CH');
+      expect(srv.rawBody, _wgIni, reason: 'INI сохранён байт в байт');
+      expect(notes, isEmpty, reason: 'у wg_ini расхождения нет — тег применён');
+      expect(sourceToRecord(srv)['tag'], 'Proton CH');
+    });
+
+    test('член папки: тег записи переживает перечитывание через nameHint', () {
+      final f = sourceFromRecord({
+        'kind': 'folder',
+        'id': 'f-ini',
+        'nodes': [
+          {
+            'kind': 'server',
+            'tag': 'Home WG',
+            'enabled': true,
+            'origin': {'kind': 'wg_ini', 'raw': _wgIni},
+          },
+        ],
+      }).value! as FolderServers;
+      expect(f.members.single.nameHint, 'Home WG');
+      expect(f.members.single.node!.tag, 'Home WG');
     });
   });
 }

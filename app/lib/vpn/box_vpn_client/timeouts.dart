@@ -65,6 +65,10 @@ class _Timeouts {
   /// консервативно («изменилось»), так что щедрить смысла нет.
   static const formatConfig = Duration(seconds: 5);
 
+  /// §455 — `checkConfig`: parse + box.New одного узла; DNS/outbound
+  /// создаются без сети, но с большим PEM/ECH — секунды.
+  static const checkConfig = Duration(seconds: 10);
+
   /// §263 `clearDnsCache` — удалить cache.db + (при running) reload ядра ~3с.
   /// Запас на slow devices, как у reload.
   static const dnsCache = Duration(seconds: 10);

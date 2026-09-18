@@ -1,6 +1,7 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../transport.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
 
@@ -36,10 +37,12 @@ TrojanSpec? parseTrojan(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     password: password,
     tls: tls,
     transport: transport,
     warnings: warnings,
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }

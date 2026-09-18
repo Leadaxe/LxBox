@@ -156,7 +156,6 @@ List<NodeSpec> _bindGroupMembers(
     // §5.1 — пустой urltest роняет старт ядра: группу без членов не выпускаем.
     if (links.isEmpty) continue;
     out.add(n.copyWith(membership: ExplicitMembers(links))
-      ..sourceCompact = n.sourceCompact
       ..sourceExtended = n.sourceExtended);
   }
   return out;
@@ -261,11 +260,12 @@ List<NodeSpec> _parseOne(
     final ob = candidates[i];
     final rawTag = ob['tag']?.toString().trim() ?? '';
     try {
-      final spec = parseSingboxEntry(_withLabel(ob, _entryLabel(
-        tag: rawTag,
-        index: i,
-        tagUses: tagUses,
-      )));
+      // §454 — источник узла = оригинальный outbound (до подмены тега лейблом).
+      final compact = _prettyJson(ob);
+      final spec = parseSingboxEntry(
+        _withLabel(ob, _entryLabel(tag: rawTag, index: i, tagUses: tagUses)),
+        rawSource: compact,
+      );
       if (spec == null) {
         final type = ob['type']?.toString() ?? '';
         if (type.isNotEmpty) unsupported.add(type);
@@ -297,12 +297,9 @@ List<NodeSpec> _parseOne(
       if (seen.contains(signature)) continue;
       seen.add(signature);
 
-      // §302 — исходник узла для UI: compact = сам outbound, extended = весь
-      // конфиг как пришёл (его соседи-секции).
-      final compact = _prettyJson(ob);
-      node
-        ..sourceCompact = compact
-        ..sourceExtended = extended == compact ? null : extended;
+      // §302 — расширенный исходник: весь конфиг как пришёл (его
+      // соседи-секции), только когда отличается от самого outbound'а.
+      node.sourceExtended = extended == compact ? null : extended;
 
       if (rawTag.isNotEmpty) nodeByTag[rawTag] = node;
       result.add(node);
@@ -517,7 +514,7 @@ String _entryLabel({
 ///
 /// `parseSingboxEntry` берёт и `tag`, и `label` из поля `tag`; когда тег
 /// повторяется, нам нужен суффикс. Копия — не мутация: исходный конфиг ещё
-/// нужен для `sourceCompact` и резолва detour по оригинальным тегам.
+/// нужен для `rawSource` и резолва detour по оригинальным тегам.
 Map<String, dynamic> _withLabel(Map<String, dynamic> entry, String label) {
   if (label.isEmpty || label == entry['tag']?.toString()) return entry;
   return {...entry, 'tag': label};
@@ -716,7 +713,8 @@ AutoSelectSpec? _groupToSpec(
     membership: const ExplicitMembers([]),
     params: params,
     warnings: warnings,
-  )..sourceCompact = _prettyJson(group);
+    rawSource: _prettyJson(group), // §454 — источник группы = её объект
+  );
   groups[spec] = (refs: refs, lost: lost);
   return spec;
 }

@@ -19,7 +19,12 @@ library;
 
 import 'dart:convert';
 
+import '../../models/node_spec.dart';
+import '../../models/singbox_entry.dart';
+import '../../models/template_vars.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../services/parser/body_decoder.dart';
+import '../../services/parser/parse_all.dart';
 
 sealed class NodeDocumentPrep {
   const NodeDocumentPrep();
@@ -80,8 +85,13 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
 
   // Голое тело: `type` на верхнем уровне. Секции не трогает — контроллер
   // получает тело без `sections`/`dns`/`route` и оставляет контейнер как есть.
+  // §455 — тег не менялся → текст уходит как набран (источник байт в байт),
+  // перекодируется только ради подмены тега.
   if (map['type'] is String) {
-    if (newTag.isNotEmpty) map['tag'] = newTag;
+    if (newTag.isEmpty || map['tag'] == newTag) {
+      return NodeDocumentReady(text, isDocument: false);
+    }
+    map['tag'] = newTag;
     return NodeDocumentReady(jsonEncode(map), isDocument: false);
   }
 
@@ -108,9 +118,43 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
       if (hasEndpoints) ...endpoints,
       if (hasOutbounds) ...outbounds,
     ]);
-    if (body != null) body['tag'] = newTag;
+    if (body != null && body['tag'] != newTag) {
+      body['tag'] = newTag;
+      return NodeDocumentReady(jsonEncode(map), isDocument: true);
+    }
   }
-  return NodeDocumentReady(jsonEncode(map), isDocument: true);
+  return NodeDocumentReady(text, isDocument: true);
+}
+
+/// §455 — полезная нагрузка для `Libbox.checkConfig()`: минимальный конфиг
+/// из одного узла — тело источника (`rawSource` первого узла, §454: оригинал
+/// outbound'а и у голого тела, и у документа) без `detour` (ссылка на чужой
+/// тег ядру неизвестна) под `outbounds` или `endpoints` по типу узла.
+/// `null` — текст не дал узла; об этом скажет контроллер при сохранении.
+String? checkPayloadFor(String text) {
+  final List<NodeSpec> nodes;
+  try {
+    nodes = parseAll(decode(text));
+  } catch (_) {
+    return null;
+  }
+  if (nodes.isEmpty) return null;
+  final node = nodes.first;
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(node.rawSource);
+  } catch (_) {
+    return null;
+  }
+  if (decoded is! Map) return null;
+  final body = Map<String, dynamic>.from(decoded)..remove('detour');
+  final key = switch (node.emit(TemplateVars.empty)) {
+    Endpoint() => 'endpoints',
+    Outbound() => 'outbounds',
+  };
+  return jsonEncode({
+    key: [body],
+  });
 }
 
 /// Первый элемент, похожий на тело узла: объект с `type`, не служебный и

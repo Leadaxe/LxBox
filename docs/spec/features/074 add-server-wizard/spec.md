@@ -104,7 +104,7 @@ final spec = SocksSpec(
   label: _tagController.text.trim(),
   server: _hostController.text.trim(),
   port: int.parse(_portController.text),
-  rawUri: '',
+  rawSource: '',
   username: _usernameController.text,
   password: _passwordController.text,
 );

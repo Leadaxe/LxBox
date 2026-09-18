@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -43,12 +44,14 @@ SshSpec? parseSsh(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     user: user,
     password: password,
     privateKey: q['private_key'] ?? '',
     privateKeyPassphrase: q['private_key_passphrase'] ?? '',
     hostKey: hostKey,
     hostKeyAlgorithms: hostKeyAlgorithms,
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }

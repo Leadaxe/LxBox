@@ -24,7 +24,7 @@ void main() {
           label: label,
           server: server,
           port: port,
-          rawUri: '',
+          rawSource: '',
           username: username,
           password: password,
           tls: TlsSpec(enabled: true, serverName: server),
@@ -98,7 +98,7 @@ void main() {
     test('omits :443 default port', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
-        server: 'h.example.com', port: 443, rawUri: '',
+        server: 'h.example.com', port: 443, rawSource: '',
         username: 'u', password: 'p',
         tls: const TlsSpec(enabled: true, serverName: 'h.example.com'),
       );
@@ -108,7 +108,7 @@ void main() {
     test('keeps non-default port', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
-        server: 'h', port: 8443, rawUri: '',
+        server: 'h', port: 8443, rawSource: '',
         password: 'p',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
       );
@@ -118,7 +118,7 @@ void main() {
     test('anonymous → no userinfo in URI', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
-        server: 'h', port: 443, rawUri: '',
+        server: 'h', port: 443, rawSource: '',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
       );
       expect(s.toUri(), 'naive+https://h#t');
@@ -127,7 +127,7 @@ void main() {
     test('serializes extra-headers sorted, CRLF-encoded', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
-        server: 'h', port: 443, rawUri: '',
+        server: 'h', port: 443, rawSource: '',
         username: 'u', password: 'p',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
         extraHeaders: const {'B-Two': '2', 'A-One': '1'},
@@ -149,7 +149,7 @@ void main() {
       // На входе невозможный header — encoder тихо дропает.
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
-        server: 'h', port: 443, rawUri: '',
+        server: 'h', port: 443, rawSource: '',
         username: 'u', password: 'p',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
         extraHeaders: const {'X Bad': 'v', 'X-Good': 'ok'},

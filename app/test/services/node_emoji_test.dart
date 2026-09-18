@@ -15,7 +15,7 @@ void main() {
         label: 'wg',
         server: server,
         port: 51820,
-        rawUri: '',
+        rawSource: '',
         privateKey: 'k',
         localAddresses: const [],
         peers: const [],

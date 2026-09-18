@@ -1561,9 +1561,6 @@
  "Edit source…": {
   "value": "编辑来源…"
  },
- "Edit tag, detour, and all server parameters": {
-  "value": "编辑标签、detour 及所有服务器参数"
- },
  "Edit…": {
   "value": "编辑…"
  },
@@ -4971,5 +4968,38 @@
  },
  "node is disabled": {
   "value": "节点已停用"
+ },
+ "Source is empty": {
+  "value": "来源为空"
+ },
+ "The core rejected the node: %s": {
+  "value": "内核拒绝了该节点：%s"
+ },
+ "Edit JSON?": {
+  "value": "编辑 JSON？"
+ },
+ "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
+  "value": "来源将被替换为此 JSON，节点将原样发送给内核。应用不再检查这样的节点：只有内核会在保存时校验它，出错可能导致节点无法连接。无法再变回链接。如有可能，请改为编辑来源。"
+ },
+ "Source replaced with JSON": {
+  "value": "来源已替换为 JSON"
+ },
+ "sing-box JSON: sent to the core as is. The core checks it on save.": {
+  "value": "sing-box JSON：原样发送给内核。内核在保存时进行检查。"
+ },
+ "WireGuard config: saved as is. The tag is stored separately.": {
+  "value": "WireGuard 配置：原样保存。标签单独存储。"
+ },
+ "Link: the tag goes into its fragment on save.": {
+  "value": "链接：保存时标签会写入其片段。"
+ },
+ "The node's original text. Save writes it as is.": {
+  "value": "节点的原始文本。保存时原样写入。"
+ },
+ "What the core receives. Read-only: edit the source instead.": {
+  "value": "内核收到的内容。只读：请改为编辑来源。"
+ },
+ "Edit JSON": {
+  "value": "编辑 JSON"
  }
 }

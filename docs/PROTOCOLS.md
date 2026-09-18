@@ -54,6 +54,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 16. [MASQUE (Cloudflare WARP)](#96-masque-cloudflare-warp)
 16a. [Tailscale (endpoint)](#97-tailscale-endpoint)
 17. [JSON Outbound / config (raw sing-box)](#10-json-outbound)
+17a. [TCP keep-alive (dial fields)](#105-tcp-keep-alive-dial-fields)
 18. [Xray JSON Array](#11-xray-json-array)
 19. [XHTTP transport](#xhttp-transport)
 
@@ -151,6 +152,7 @@ vless://UUID@host:port?query_params#label
 | ALPN | `alpn` | Comma-separated ALPN values |
 | Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → 32 bytes); garbage falls back to plain TLS plus a warning (§169) |
 | Short ID | `sid` | REALITY short ID (hex, max 16 chars) |
+| REALITY key share | `key_share` | `hybrid` \| `classical` (sing-box `tls.reality.key_share`, §457). Read only together with a valid `pbk`; anything outside the enum is dropped silently — the core rejects an unknown value along with the whole config. Requires the core pin `v1.14.1-lx.4` or newer |
 | Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp`, `raw` |
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
@@ -212,6 +214,7 @@ vless://UUID@host:port?query_params#label
 ### TLS Behavior
 
 - If `pbk` is present **and is a valid X25519 public key** (base64/base64url, decodes to exactly 32 bytes): REALITY TLS is enabled. An invalid `pbk` (e.g. `pbk=enabled`/`true` from broken subscriptions) falls back to **plain TLS** with a parse warning instead of emitting a REALITY block the core rejects — before §169 one broken node used to poison the whole `config.json` at startup.
+- **REALITY `key_share` (§457, core `v1.14.1-lx.4`+).** `tls.reality.key_share` picks the key share of the REALITY ClientHello: `hybrid` demands `X25519MLKEM768` (~1.5–1.9 KB, two TCP segments — what Xray ≥ v26.9.8 requires), `classical` strips the hybrid out of `key_share` and `supported_groups` (~0.5 KB, one segment — for older servers and networks that drop the large hello). Absent means whatever the fingerprint carries. It arrives from sing-box JSON (`tls.reality.key_share`) and from the share URI (`key_share=`, the same name as the core key, §453); in the URI it is read only when the REALITY block is actually built, i.e. `pbk` is a valid X25519 key. Any value outside `{hybrid, classical}` — including a different case such as `Hybrid`, a number, or an empty string — is **dropped silently**, and the node stays alive: the core answers an unknown value with `unknown reality key_share` and refuses to create the outbound, which takes the whole config down. This is not `reality_fp_not_chrome` (§451): that warning is about the fingerprint, not about `key_share`, and its logic is untouched.
 - `flow` is **never** auto-derived from REALITY (§115): it is taken verbatim from the link. Historically bare-TCP+REALITY without `flow` got a forced Vision, breaking valid `none` setups.
 - `xtls-rprx-vision` is valid only on bare TLS. If a transport (ws/grpc/xhttp/http/httpupgrade) is present, the explicit `flow` is dropped with a `VisionWithTransportWarning` (the core would not bring up that combination). `emit()` writes `flow` only when it is exactly `xtls-rprx-vision` with no transport.
 - If `security=none`: no TLS block.
@@ -581,7 +584,7 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 ### Behaviour Notes
 
 - TLS is **always** enabled — `tls.enabled = true`, `tls.server_name = host`. NaïveProxy without TLS is meaningless.
-- The naive outbound in sing-box rejects `alpn`, `insecure`, `utls`, `reality`, `min_version`, `cipher_suites`, `fragment`. The parser deliberately leaves them unset; users wanting custom TLS edit the JSON directly via the config editor (spec 007).
+- The naive outbound in sing-box rejects `alpn`, `insecure`, `disable_sni`, `utls`, `reality`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment`, `kernel_*`. The parser deliberately leaves them unset. What naive **does** accept on top of `enabled`/`server_name` is `certificate` (PEM, string or array — its own trusted root, fed to cronet) and `certificate_path`; both survive the JSON round-trip since §454 (issue #140). The pin `certificate_public_key_sha256` is silently ignored by naive and therefore dropped.
 - `network`/`udp_over_tcp`/`quic` fields are **not** emitted in v1 — the URI standard does not carry them and naive QUIC mode is deferred (see spec 037 §10).
 - `extra_headers` keys are sorted lexicographically when emitted to JSON or back to URI form, for deterministic round-trip.
 - `padding` is silently dropped because sing-box has no corresponding option.
@@ -622,6 +625,7 @@ accepts the de-facto Trojan-style form used by Karing / v2rayN mods.
 | Query: `sni` / `peer` / `host` | TLS server name | `host` |
 | Query: `fp` | uTLS fingerprint | `random` |
 | Query: `pbk` / `sid` | REALITY public key / short ID (valid X25519 → REALITY, else plain TLS, §169) | none |
+| Query: `key_share` | REALITY key share `hybrid` \| `classical` (§457, core lx.4+); read only with a valid `pbk`, outside the enum dropped | none |
 | Query: `alpn` | comma-separated ALPN list | none |
 | Query: `allowInsecure` / `insecure` | Skip cert verify (warns) | `false` |
 | Query: `idle_session_check_interval` | Go-duration (`"30s"`) | core default (30s) |
@@ -1052,6 +1056,14 @@ Auto-detected when input contains both `[Interface]` and `[Peer]` sections.
 
 ### Conversion
 
+The INI text **is** the node's source (§456): it is stored as is, byte for byte,
+comments included (`origin.kind: wg_ini`), and the Source tab of the node editor
+shows that same text. The tag is not part of the text — it is a field of the
+storage record. The initial name comes, in this order, from the first comment
+right under `[Peer]` that has no `=` (Proton writes the server name there:
+`# CH-FREE#11`), else from the file name on import, else `WireGuard`. The
+`wireguard://` URI below is an internal step of the parser and never leaves it.
+
 The INI config is converted to a `wireguard://` URI internally using `wireGuardConfigToUri()`:
 
 1. Parse `[Interface]`: `PrivateKey`, `Address`, `MTU` plus the AWG fields `Jc`/`Jmin`/`Jmax`/`S1`–`S4`/`H1`–`H4`/`I1`–`I5` (§097, see [8.5](#85-amneziawg-awg-awg2); keys are case-insensitive, the case of the value is preserved, and `i*` are URL-escaped in the query) and the AWG 3.x keys `HeaderProtectionKey`, `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts`, `RandomTrailers`, `DisableCookies` (§421; passed through under the same lower-cased names)
@@ -1375,9 +1387,109 @@ Membership uses **explicit identity keys**, not a tag regex as in §322 — insi
 ### Notes
 
 - Entries are **re-parsed** into typed `NodeSpec`s via `parseSingboxEntry` — nothing is passed through verbatim. Supported `type` values: `vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `hysteria2`, `naive`, `tuic`, `ssh`, `socks`, `http`, `wireguard`, `masque`.
-- Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. hysteria2 port hopping, ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
+- Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
+- **TLS block (§454, contract TASKS_LXBOX §22):** the model carries every key of the core's `OutboundTLSOptions` (`option/tls.go`). Typed and gated: `server_name`, `alpn`, `insecure`, `utls`, `reality`, `certificate_public_key_sha256`. Passed through in the form they arrived (a string stays a string, an array stays an array; booleans only when `true`): `disable_sni`, `min_version`, `max_version`, `cipher_suites`, `curve_preferences`, `certificate`, `certificate_path`, `client_certificate`, `client_certificate_path`, `client_key`, `client_key_path`, `fragment`, `fragment_fallback_delay`, `record_fragment`, `kernel_tx`, `kernel_rx`. Not emitted: `ech` (core built without `with_ech`) and unknown keys (the core rejects them on the whole config). Emit order follows the core struct, except that `alpn` stays before `insecure` for byte-parity with earlier releases (the identity hash sorts keys, so it does not care). Naive keeps only `certificate`/`certificate_path` of the passthrough set; QUIC types (hysteria2/tuic) keep it whole and drop `utls`/`reality` as before.
 - The `tag` field is used for display; an absent tag falls back to `<type>-<server>-<port>`.
 - This is for advanced users who want to specify the exact sing-box configuration, and for migrating from sing-box itself.
+
+---
+
+## 10.5 TCP keep-alive (dial fields)
+
+sing-box dial options (core ≥ 1.13.0) that tune the TCP keep-alive probes of an
+outbound's socket. They are **not** protocol settings: in the core they live in
+`DialerOptions`, shared by every outbound that dials over TCP. Added in §453.
+
+Without them the core applies its own defaults — first probe after 5 minutes,
+then one every 75 seconds (`constant/timeout.go`).
+
+### Keys
+
+| Key | Type | Meaning | Default |
+|-----|------|---------|---------|
+| `disable_tcp_keep_alive` | bool | Turn keep-alive off on the socket entirely | `false` |
+| `tcp_keep_alive` | Go-duration (`"30s"`) | Idle time before the first probe | core default (5m) |
+| `tcp_keep_alive_interval` | Go-duration (`"15s"`) | Interval between probes | core default (75s) |
+
+### Carriers
+
+`vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `naive`, `ssh`, `socks`,
+`http` — nine types that dial over TCP.
+
+QUIC/UDP types (`hysteria2`, `tuic`, `wireguard`, `masque`), `tailscale` and
+group nodes do **not** carry the fields: there is no TCP socket to apply them
+to. The keys are ignored on input and never emitted.
+
+### URI Names
+
+The query parameter names are identical to the sing-box keys:
+
+```
+vless://uuid@h.example:443?tcp_keep_alive=30s&tcp_keep_alive_interval=15s#KA
+socks5://user:pass@h.example:1080?disable_tcp_keep_alive=1#NoKA
+```
+
+`disable_tcp_keep_alive` accepts `1` or `true`.
+
+There is no share-URI standard for these fields — this is an L×Box extension,
+following the AnyTLS precedent (5.6, §269). Other clients ignore unknown query
+parameters. The URI form is required, not cosmetic: a node is stored as text
+(URI or JSON), so without it the fields would be dropped on every re-save that
+goes through `toUri()`.
+
+VMess carries them as keys of the base64-encoded v2rayN JSON object, under the
+same sing-box names; the cleartext VMess form uses the query tail.
+
+Shadowsocks and SOCKS URIs gain a query string **only** when a field is set —
+a node without them serializes exactly as before.
+
+### Xray Mapping
+
+Xray stores keep-alive in `streamSettings.sockopt` as whole **seconds**, not
+duration strings:
+
+| Xray `sockopt` | Value | L×Box |
+|----------------|-------|-------|
+| `tcpKeepAliveIdle` | `> 0` | `tcp_keep_alive: "<n>s"` |
+| `tcpKeepAliveInterval` | `> 0` | `tcp_keep_alive_interval: "<n>s"` |
+| either | `< 0` | `disable_tcp_keep_alive: true` (Xray sets `SO_KEEPALIVE=0`, `sockopt_linux.go:143`) |
+| either | `0` | not set |
+
+### Generated sing-box Outbound
+
+```json
+{
+  "type": "vless",
+  "tag": "KA",
+  "server": "h.example",
+  "server_port": 443,
+  "uuid": "…",
+  "tcp_keep_alive": "30s",
+  "tcp_keep_alive_interval": "15s"
+}
+```
+
+The fields are appended after the protocol keys, next to `detour` — both are
+dial fields written from the same place in the emitter.
+
+### Behaviour Notes
+
+- Only non-empty values are written. `disable_tcp_keep_alive: false` and empty
+  durations produce no keys at all, so a node without keep-alive settings emits
+  byte-for-byte what it did before §453.
+- A duration that is not a valid Go-duration is **dropped silently**, and the
+  other two fields survive. Bare integers are read as seconds first (`30` →
+  `"30s"`, D-024); anything still unparseable would make the core's
+  `badoption.Duration` reject the **whole** config, so it never reaches it.
+  No warning is raised — this is a power-user path, same as hysteria2 obfs
+  (§358).
+- There is no UI form field: the fields are entered through the Outbound JSON
+  tab or arrive from an import.
+
+### Reference
+
+- sing-box dial fields: https://sing-box.sagernet.org/configuration/shared/dial/
+- LxBox spec: [`docs/spec/tasks/453-tcp-keep-alive-dial-fields.md`](spec/tasks/453-tcp-keep-alive-dial-fields.md)
 
 ---
 

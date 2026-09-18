@@ -1,6 +1,7 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../transport.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
 
@@ -53,7 +54,7 @@ AnyTlsSpec? parseAnyTls(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     password: password,
     tls: tls,
     // SPEC 103 D-024 — голое число (секунды) → duration-строка с суффиксом
@@ -64,5 +65,7 @@ AnyTlsSpec? parseAnyTls(String uri) {
     idleSessionTimeout: normalizeSingboxDuration(q['idle_session_timeout'] ?? ''),
     minIdleSession: (minIdle != null && minIdle >= 0) ? minIdle : null,
     warnings: warnings,
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }

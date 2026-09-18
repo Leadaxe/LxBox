@@ -4,7 +4,7 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// Round-trip §4 спеки 026: `parseUri(spec.toUri()) ≈ spec`. Сравнение без
-/// `id`, `rawUri`, `warnings` — это ephemeral поля, не связанные со значением
+/// `id`, `rawSource`, `warnings` — это ephemeral поля, не связанные со значением
 /// узла.
 void main() {
   group('Round-trip URI → Spec → URI → Spec', () {

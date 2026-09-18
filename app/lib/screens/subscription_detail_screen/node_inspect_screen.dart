@@ -18,8 +18,8 @@ import '../../widgets/node_diagnostics_tab.dart';
 ///   объект, extended — весь элемент как пришёл от провайдера (с dns/
 ///   inbounds/routing соседями). Для URI-тел источник один — строка.
 ///
-/// Источник берём из `NodeSpec.sourceCompact/sourceExtended`, а НЕ из
-/// `rawUri`: у JSON-нод последний — синтетическая заглушка (`xray://<tag>`).
+/// Источник — `NodeSpec.rawSource` (§454: у JSON-нод это их объект outbound'а),
+/// расширенный вид — `sourceExtended`.
 class NodeInspectScreen extends StatefulWidget {
   const NodeInspectScreen({
     super.key,
@@ -48,10 +48,9 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
   String get _json => const JsonEncoder.withIndent('  ')
       .convert(_node.emit(TemplateVars.empty).map);
 
-  /// Исходный фрагмент. Fallback на rawUri — для нод, распарсенных до
-  /// появления полей источника (регидрация старого кэша).
+  /// Исходный фрагмент узла (§454/§456: у WG из INI — сам INI).
   String get _source {
-    final compact = _node.sourceCompact ?? _node.rawUri;
+    final compact = _node.rawSource;
     if (!_extended) return compact;
     return _node.sourceExtended ?? compact;
   }

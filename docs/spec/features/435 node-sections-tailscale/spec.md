@@ -195,7 +195,7 @@ tailscale`. Раннеры `contract_test`/`body_contract_test` добавляю
 
 Всё остальное в `dns`/`route` игнорируется, как раньше. Результат кладётся в
 `NodeSpec.importedSections` (mutable, не сериализуется — как
-`sourceCompact`); контейнер (`addFromInput`, `addMembersToFolder`, редактор
+`rawSource`); контейнер (`addFromInput`, `addMembersToFolder`, редактор
 узла) переносит его в `UserServer.sections` / `FolderMember.sections` **при
 добавлении**. При перечитывании `raw_body` на старте `importedSections`
 игнорируется: истина — поле контейнера.

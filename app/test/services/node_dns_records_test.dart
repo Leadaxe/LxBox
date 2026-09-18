@@ -57,7 +57,7 @@ void main() {
         label: tag,
         server: '10.0.0.1',
         port: 1080,
-        rawUri: 'socks://10.0.0.1:1080#$tag',
+        rawSource: 'socks://10.0.0.1:1080#$tag',
       );
 
   UserServer user(

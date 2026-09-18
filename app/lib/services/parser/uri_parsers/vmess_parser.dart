@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
+import '../tcp_keep_alive.dart';
 import '../transport.dart';
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
@@ -37,7 +38,7 @@ VmessSpec? parseVmess(String uri) {
   return _vmessLegacy(decoded, fragment, uri);
 }
 
-VmessSpec? _vmessFromJson(Map<String, dynamic> cfg, String rawUri) {
+VmessSpec? _vmessFromJson(Map<String, dynamic> cfg, String rawSource) {
   final server = cfg['add']?.toString() ?? '';
   final id = cfg['id']?.toString() ?? '';
   if (server.isEmpty || id.isEmpty) return null;
@@ -91,13 +92,16 @@ VmessSpec? _vmessFromJson(Map<String, dynamic> cfg, String rawUri) {
     label: label,
     server: server,
     port: port,
-    rawUri: rawUri,
+    rawSource: rawSource,
     uuid: id,
     alterId: alterId,
     security: security,
     tls: tls,
     transport: transport,
     warnings: warnings,
+    // §453 — в base64-JSON dial-поля лежат ключами самого объекта v2rayN,
+    // под именами sing-box, а не в query: читаем как из sing-box-entry.
+    tcpKeepAlive: tcpKeepAliveFromSingbox(cfg),
   );
 }
 
@@ -106,7 +110,7 @@ VmessSpec? _vmessFromJson(Map<String, dynamic> cfg, String rawUri) {
 // `method:uuid@host:port?type=ws&path=%2Fws&tls=1` несёт транспорт/TLS в
 // query-хвосте после host:port, как обычный share-URI. Раньше этот хвост
 // просто отбрасывался (`.split('?').first`) — транспорт/TLS терялись.
-VmessSpec? _vmessLegacy(String s, String fragment, String rawUri) {
+VmessSpec? _vmessLegacy(String s, String fragment, String rawSource) {
   final atIdx = s.indexOf('@');
   if (atIdx < 0) return null;
   final userinfo = s.substring(0, atIdx);
@@ -166,11 +170,14 @@ VmessSpec? _vmessLegacy(String s, String fragment, String rawUri) {
     label: label,
     server: host,
     port: port,
-    rawUri: rawUri,
+    rawSource: rawSource,
     uuid: uuid,
     security: normalizeVmessSecurity(method),
     tls: tls,
     transport: transport,
     warnings: warnings,
+    // §453 — cleartext-форма несёт dial-поля в query-хвосте, как обычный
+    // share-URI.
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }

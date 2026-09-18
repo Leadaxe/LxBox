@@ -187,6 +187,7 @@ Three channels, and they are not interchangeable.
 | httpupgrade / xhttp `host` empty | **no fallback to sni** (unlike ws) | silent | `transport.dart:118-121, 228-231` | the fallback produced different configs and identity hashes for an empty host | §103 D-016 |
 | No `path` key at all (ws/httpupgrade/xhttp) | path stays `''`, `/` **not** substituted | silent | `transport.dart:45-48, 114-117, 224-226` | only an explicit `path=` reaches the config | SPEC 103 CANON §2.4 |
 | VLESS `sec` empty and port in `{80, 8080, 8880, 2052, …}` | TLS disabled by port whitelist | silent | `transport.dart:502`, list `uri_utils.dart:427` | ports that normally carry plain HTTP | — |
+| `key_share=` outside `{hybrid, classical}` (a different case, a number, an empty value) | field dropped, the node lives | silent | `transport.dart` `realityKeyShareFromQuery` | the core answers an unknown value with `unknown reality key_share` and refuses the outbound — and with it the whole config. Read only together with a valid `pbk`: without a REALITY block there is nowhere to put it | §457 |
 
 ### 1.5 Per-protocol URI parsers
 
@@ -220,7 +221,7 @@ something more than reject or default.
 | AnyTLS `min_idle_session` not a non-negative integer | field cleared | `AnyTlsMinIdleInvalidWarning` | `anytls_parser.dart:44-48` | core default applies, node lives | SPEC 103 |
 | AnyTLS / TUIC durations as bare numbers | `s` suffix appended | silent | `anytls_parser.dart:62-64`, `tuic_parser.dart:66-69` | whole-config fatal otherwise | D-024 |
 | Naive `padding` parameter | discarded | `NaivePaddingIgnoredWarning` (info) | `naive_parser.dart:55-60` | no sing-box equivalent; previously log-only, so the user never learned their parameter was dropped | SPEC 103 |
-| Naive TLS block | trimmed to `enabled` + `server_name` | silent | `naive_parser.dart:72-74` | naive accepts nothing else in TLS; the validator rejects alpn/utls/insecure/reality | §281 |
+| Naive TLS block | `enabled` + `server_name` only (the URI carries nothing else) | silent | `naive_parser.dart:72-74` | naive accepts only `certificate(_path)` on top of these; the validator rejects alpn/utls/insecure/reality | §281 |
 | Naive extra-header without `:` / empty name / name outside the charset | line discarded | silent | `naive_parser.dart:94-115` | HTTP header-name charset from the DuckSoft de-facto spec | §084 M7 |
 | Naive empty host | node **not** rejected (deliberate) | silent | `naive_parser.dart:20-27` | Go validates a non-empty hostname only for five schemes, naive not among them | §103 |
 | MASQUE `vhttp` outside `{h3, h2, auto}` | forced to `h3` | `MasqueVhttpInvalidWarning` | `masque_parser.dart:60-67` | mirrors `node_parser_masque.go` | SPEC 103 |
@@ -240,6 +241,7 @@ something more than reject or default.
 | Unknown scheme, or any exception inside a protocol parser | `null`, line skipped | silent | `uri_parsers.dart:89-94` | structural errors return null rather than throw | — |
 | Base64 body: over 20% control bytes, under 16 chars, or no `://`/`{`/`[` after decoding | decode refused or rolled back | silent | `body_decoder.dart:96, 144-169` | probably binary | — |
 | Lines starting with `#`, `//`, `;` | skipped (counted in `skippedComments`) | silent | `body_decoder.dart:131-135` | — | §219 |
+| TCP keep-alive duration in the query that is not a Go-duration | field dropped, the other two survive | silent (deliberate) | `tcp_keep_alive.dart:18-22` | a bare integer is read as seconds first (D-024); anything still unparseable would make the core's `badoption.Duration` reject the whole config. A new warning type would drag in strings and the l10n gates of three languages for a power-user path (as with hysteria2 obfs, §358) | §453 |
 
 ## Layer 2 — JSON branches
 
@@ -268,16 +270,20 @@ something more than reject or default.
 | AnyTLS with no/disabled TLS block | minimal `enabled` block substituted | silent | `json_parsers.dart:1042-1047` | AnyTLS is always over TLS | §269 |
 | `up_mbps: 100.0` (double, not int) | read as `num` | silent | `json_parsers.dart:1102-1107` | `as int` would sink the whole node via TypeError | §404 |
 | `server_ports` mixed array `[443, "20000:30000"]` | element-wise `toString()`, empties dropped | silent | `json_parsers.dart:498-507` | `cast<String>()` throws on read and the node would be lost, though the range parses fine | §404 |
-| naive full TLS block in JSON | trimmed to `enabled` + `server_name` | silent | `json_parsers.dart:1134-1137` | the rest is fatal on outbound creation | §281 |
+| naive full TLS block in JSON | trimmed to `enabled` + `server_name` + `certificate` + `certificate_path` | silent | `json_parsers.dart` `_naiveTlsFromSingbox` | the rest (`disable_sni`, `insecure`, `alpn`, versions, `client_*`, `fragment*`, `kernel_*`, `utls`, `reality`) is fatal on outbound creation (`protocol/naive/outbound.go:45-86`); the pin `certificate_public_key_sha256` is silently not read by naive, so it is dropped rather than promise pinning that does not happen | §281, §454 |
+| TLS passthrough key (`kTlsPassthroughKeys`: `certificate`, `certificate_path`, `disable_sni`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment*`, `kernel_*`) with a value of the wrong type — number instead of PEM, object instead of string, `false` for a bool | key dropped, the node lives | silent | `json_parsers.dart` `tlsPassthroughFromSingbox` | a `Listable[string]` with garbage sinks the decode of the whole config in the core; `false` is the core's omitempty | §454 |
+| TLS key outside the core's `OutboundTLSOptions` (typos, `ech`) | key dropped | silent (`ech` — `ech_ignored`, §320) | `json_parsers.dart` `_tlsFromSingbox` | the core rejects an unknown field on the whole config; `ech` — the core is built without `with_ech` | §454, D-006 |
 | WG private/public/psk not 32 bytes | node rejected | silent | `json_parsers.dart:1254-1268` | garbage sinks `sing-box check` entirely; a non-canonical form changes the identity hash | D-023/D-030 |
 | WG `reserved` not a 3-element array in 0..255 | `null` — degrade to "no reserved" | silent | `json_parsers.dart:1349-1358` | do not lose the node | §219 |
 | WG AWG with `mtu` over 1280 | clamped | silent | `json_parsers.dart:1290` | mirrors the URI parser so the model does not depend on the source | §097 |
 | MASQUE flat legacy `network`/`sni`/`skip_cert_verify` | never read | silent | `json_parsers.dart:1307-1313` | a flat `sni` beside `tls.server_name` made the core fail fast | §393 |
 | `reality.enabled != true` or invalid `public_key` | `reality = null`, node stays plain TLS | silent | `json_parsers.dart:1385-1395` | do not poison config.json | §169 |
 | `reality.short_id` non-hex / odd / over 16 | dropped (`''`) | silent | `json_parsers.dart:1392-1394` | as in the URI branch | §343 |
+| `reality.key_share` outside `{hybrid, classical}` (a different case, a number, an empty string) | field dropped, the node lives | silent | `json_parsers.dart` `_realityKeyShare` | the core answers an unknown value with `unknown reality key_share` and refuses the outbound — and with it the whole config; degrade the field, not the config | §457 |
 | ws/httpupgrade `path` key absent | path `''`, no `/` default | silent | `json_parsers.dart:1412-1416` | canonical sing-box JSON does not write the default either | §103 D-016 |
 | Glued Xray path `/x?ed=N` in ws JSON | tail cut | silent (no warnings channel here) | `json_parsers.dart:1413-1415` | glued Xray paths reach the editor too | §303 |
 | JSON flavour unrecognised, or `clashYaml` | 0 nodes | silent | `body_decoder.dart:181-209`, `parse_all.dart:191-193` | the `xrayArray` branch works, and its classification must not shift on ambiguous input | §368 §7.1 |
+| `tcp_keep_alive` / `tcp_keep_alive_interval` not a Go-duration | field dropped, the other two survive | silent (deliberate) | `tcp_keep_alive.dart:18-22`, `json_parsers.dart:1006` | same guard as the URI branch — the value is read with `toString()`, not a cast, because a hand-edited JSON writes the duration as a number | §453 |
 
 ### 2.2 Xray import (`parseXrayElement`)
 
@@ -409,6 +415,7 @@ with a warning rather than hand the core a file it will reject"
 | Broken / empty `node_filter` regex | `tryCompileRegex` → null → all base nodes | silent | `build_config.dart:715-722` | — | §125 |
 | `defaultFilter` landed on a non-member | `default` key simply not written | silent | `build_config.dart:895-909` | otherwise the core rejects the config ("default outbound not found") and takes the first option anyway | §141 |
 | An auto-select node inside a Direction's urltest twin | excluded | silent | `build_config.dart:753-763` | urltest inside urltest would measure the inner group's pick, not a server | §322 |
+| A server or folder member whose source is a JSON object (`origin.kind: json`) | the source object goes into the config **verbatim** — the model's gates (§169/§281/§282/§343, the naive TLS filter) do not run on it; its `detour` key is dropped and re-decided by the build | silent at build; at Save the core's own verdict (`Libbox.checkConfig`) is shown and a rejected body is not stored | `verbatim_body.dart`, `server_list_build.dart` (before `getEntries`), `node_settings_screen.dart` `_saveSource` | the user wrote a sing-box object themselves — the launcher sends such an object as is too (TASKS_LXBOX §22); the gate is the core, not the model, and one bad key would otherwise sink the whole config | §455 |
 | `clash_api` block | no longer injected | — | `build_config.dart:168-171` | the core is built without `with_clash_api`, and the block is a fatal start failure | §122 |
 | `lx_idle_suspend_reachable` without the base `lx_idle_suspend` | reachable not written | silent | `build_config.dart:475-484` | core: "lx_idle_suspend_reachable requires lx_idle_suspend" | §215/§272 |
 | Proxy auth without a password | `proxy_auth = 'false'` | silent | `build_config.dart:187-192` | guards against `[{"":""}]` | §067 |

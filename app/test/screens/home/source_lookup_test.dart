@@ -16,7 +16,7 @@ NodeSpec _node(String tag) => VlessSpec(
       label: tag,
       server: '1.2.3.4',
       port: 443,
-      rawUri: 'vless://stub',
+      rawSource: 'vless://stub',
       uuid: '00000000-0000-0000-0000-000000000000',
     );
 

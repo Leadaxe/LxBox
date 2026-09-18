@@ -308,7 +308,7 @@ parseXrayElement(element, seen) -> List<NodeSpec>
        seen += key
        spec = convert(ob, _elementLabel(remarks, ob, i))    ← P3
        если spec == null → warning + continue               ← P5
-       приложить sourceCompact/sourceExtended (§302)
+       приложить rawSource/sourceExtended (§302)
        приложить chained если dialerProxy
 ```
 

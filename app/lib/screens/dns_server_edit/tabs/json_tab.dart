@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../models/codec/dns_record.dart' show dnsServerToRecord;
 import '../../../services/builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
 import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
@@ -96,8 +97,11 @@ class _ReadOnlyPreview extends StatelessWidget {
           .convert(c.resolved?.body ?? const {});
     }
 
-    final storageJson =
-        const JsonEncoder.withIndent('  ').convert(c.snapshot());
+    // Запись хранения — кодеком (§439: у DnsServerRef нет toJson; модель в
+    // JsonEncoder напрямую — «Converting object to an encodable object
+    // failed», #143).
+    final storageJson = const JsonEncoder.withIndent('  ')
+        .convert(dnsServerToRecord(c.snapshot()));
 
     return Padding(
       padding: EdgeInsets.fromLTRB(

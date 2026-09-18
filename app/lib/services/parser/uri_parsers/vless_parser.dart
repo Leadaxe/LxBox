@@ -1,6 +1,7 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../transport.dart';
+import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
 
@@ -64,7 +65,7 @@ VlessSpec? parseVless(String uri) {
     label: label,
     server: server,
     port: port,
-    rawUri: uri,
+    rawSource: uri,
     uuid: uuid,
     flow: flow,
     tls: tls,
@@ -72,5 +73,7 @@ VlessSpec? parseVless(String uri) {
     packetEncoding: packetEncoding,
     encryption: encryption,
     warnings: warnings,
+    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
+    tcpKeepAlive: tcpKeepAliveFromQuery(q),
   );
 }
