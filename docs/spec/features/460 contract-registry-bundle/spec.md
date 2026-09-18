@@ -3,7 +3,7 @@
 **Тип:** фича
 **Статус:** **W1 и W2a реализованы, тесты зелёные (5013 passed / 15 skipped)**; остаток W2 и W3 — после волн лаунчера
 **Коммит W1:** `feat(460): реестр контракта в приложении — бандлинг 1.1.0, санитайзер по схеме тела, RegistryWarning, гард на сборке (W1)`
-**Коммит W2a:** `feat(460): W2a — предупреждения реестра на узле при разборе (path/value), дедуп с рукописными кодами`
+**Коммит W2a:** `cc74b25c` — `feat(460): W2a — предупреждения реестра на узле при разборе (path/value), дедуп с рукописными кодами`
 **Решение владельца (18.09.2026):** бандлим реестр и генерируем правила из него; `warnings` в бэкап не пишем; 14 пунктов §24.2 приняты; дата синхронной правки naive userinfo — 24.09.2026.
 **Контракт:** 1.1.0, `TASKS_LXBOX.md` §24 (SPEC 131 лаунчера, D-122); `schema/registry_body.schema.json`; `registry/protocols/*.json` → `body`, `tls.json`, `transports.json`, `multiplex.json`, `dialer.json`; `registry/warnings.json` (`title_*`/`text_*`).
 **Связано:** §454 (TLS-allowlist руками — первый шаг к тому же), §455 (JSON-источник дословно — получает гард реестра на сборке), §459 (guard-фиксы B-вердиктов до конвейера), §302 (правила импорта над emit-JSON), §283/§400 (identity — тег, схема на него не влияет), §311 (running config).
@@ -76,13 +76,13 @@ builder/build_config.dart ── после `list.build(ctx)`, до пост-ш�
 | `on_invalid.action` | `drop` — снять поле; `coerce` — `value`; `drop_node` — запись целиком |
 | `required` | нет поля → `field_missing`, `drop_node` |
 | `secret` | в `value` предупреждения `***` |
-| `conflicts` | оба заданы → снять младшее по `order` с кодом |
-| `requires` | нет требуемого → снять с кодом |
+| `conflicts` | оба **заданы по ЗНАЧЕНИЮ** (§467) → снять младшее по `order` с кодом |
+| `requires` | нет требуемого (по тому же предикату) → снять с кодом |
 | `forbidden_for` / `allowed_for` | по `singbox_type` записи, код из атрибута (naive-TLS: `tls_field_unsupported_naive`) |
 | `min_core` | версия ядра ниже → снять (гейт сборки, 24.1.6); сравнение `X.Y.Z-lx.N` |
 | `platform` | не `android` → снять |
 | `advisory` | значение в списке → info-код, поле не меняется (`ss_method_legacy`) |
-| `all_or_nothing` | частичный объект → дополнить дефолтами соседей, `partial_object_defaulted` |
+| `all_or_nothing` | **§467: действия не влечёт** — атрибут документирует поведение ядра (частичная секция = незаданные поля нулями), дописывать дефолты соседей нельзя. В W1 дописывал, код `partial_object_defaulted` снят вместе с правилом |
 | `tristate`, `managed`, `deprecated`, `decision_pending`, `default`, `drop_always`, `build_tag` | W1: не трогает (документировано); `default` не материализуется (CANON §2.4) |
 
 Порядок ключей результата — `order` схемы (эмиттер по `body.order`,
@@ -102,7 +102,7 @@ builder/build_config.dart ── после `list.build(ctx)`, до пост-ш�
 
 Все рукописные сообщения `NodeWarning` остаются; новые коды (`unknown_key`,
 `type_invalid`, `field_conflict`, `field_requires`,
-`tls_field_unsupported_naive`, `partial_object_defaulted`,
+`tls_field_unsupported_naive`,
 `ss_method_legacy`, `reality_key_share_invalid`, `alias_shadowed`) —
 только через `RegistryWarning`. Точки §459, где стоял `AppLog.warning`,
 переходят на `RegistryWarning` там, где у парсера есть список warnings.
@@ -193,8 +193,8 @@ Go `normalizeWarningsForCompare`): `code` обязателен всегда, `pa
   (`key_share` без `public_key`); forbidden_for (naive + `tls.alpn`);
   min_core (`key_share` на `1.14.1-lx.3` снят, на lx.4 — нет); platform;
   advisory (`ss` `aes-128-cfb` → `ss_method_legacy`, поле цело);
-  all_or_nothing (`transport.xmux` частичный → дополнен, код); порядок по
-  `order`.
+  all_or_nothing (§467: `transport.xmux` частичный проходит как есть, без
+  дефолтов и без кода); порядок по `order`.
 - `test/builder/registry_gate_test.dart`: сервер с JSON-источником `{type:
   naive, …, "foo": 1, tls:{insecure:true, certificate:…}}` → в конфиге нет
   `foo` и `tls.insecure`, `certificate` цел, два предупреждения в
@@ -265,7 +265,7 @@ Go `normalizeWarningsForCompare`): `code` обязателен всегда, `pa
 их закрывает один класс `RegistryWarning` (различает поле `code`):
 
 `unknown_key`, `type_invalid`, `field_conflict`, `field_requires`,
-`tls_field_unsupported_naive`, `partial_object_defaulted`, `ss_method_legacy`,
+`tls_field_unsupported_naive`, `ss_method_legacy`,
 `port_invalid`, `reality_key_share_invalid`, `reality_pbk_invalid`,
 `ss_method_invalid`, `tuic_udp_relay_mode_invalid`.
 
@@ -320,6 +320,42 @@ Per-app override'ов W1 **не завёл ни одного**. Семь кра�
 Гейт `min_core` в реестре тоже остаётся: `default_when` отвечает на «ядро без
 поля не работает», `min_core` — на «ядро этого поля ещё не знает», и путать их
 нельзя.
+
+## 7a. §467 — семантика `conflicts` и `all_or_nothing` (контракт 1.1.1)
+
+Два правила таблицы 2.2 были реализованы неверно ОБЕИМИ сторонами; у лаунчера
+дефект испортил рабочую секцию `xmux` у 13 живых узлов. Задача —
+[§467](../../tasks/467-contract-111-sync.md), обоснование — контракт §24.9.
+
+**1. `conflicts` судит ЗНАЧЕНИЕ, а не наличие ключа.** Провайдеры присылают
+секции в полной форме, где незаданные поля выписаны нулями:
+`max_concurrency: "16-32"` при `max_connections: "0"`. Проверка на наличие
+ключа читала это как конфликт, снимала рабочее значение и возвращала дефолт
+`"1-1"` — пропускная способность узла падала молча. Ядро
+(`transport/v2rayxhttp/xmux.go`) считает конфликтом только оба > 0.
+
+Предикат «задано» — ОДИН на весь слой связей (`conflicts`, `requires`;
+`forbidden_when` в теле реестра не встречается — он живёт прозой в секции
+`mapper`). Не задано: ключа нет, `null`, `""`, `0`, `false`, пустой объект,
+пустой массив и строка-число из одних нулей (`"0"`, `"0-0"` — `XmuxRange`
+приходит строкой). Код — `_meaningful` в `body_sanitizer.dart`; правило общее
+и так же судит `certificate` ↔ `pins`, `reality` ↔ `ech`.
+
+**2. `all_or_nothing` действия не влечёт.** Атрибут был понят наоборот: ядро
+при частично заданной секции оставляет незаданные поля нулями (= без лимита),
+поэтому дописывание дефолтов навязывало узлу лимиты, которых у него не было.
+Атрибут остаётся в реестре документацией о поведении ядра. Код
+`partial_object_defaulted` снят из `warnings.json` и из кода.
+
+**Формат реестра 1.1.1.** `degrade[]` у протоколов удалён (Dart его не читал);
+у кодов появились `cause_en`/`cause_ru` (строка) и `fix_en`/`fix_ru` (массив
+строк) — заведены полями `WarningText`, отсутствие норма (нужны W2b, раздел 8);
+новая секция `mapper` соседствует с `body` и загрузчик её просто не читает.
+
+Проверка: юниты на предикат и на обе формы конфликта, кейс корпуса
+`body/singbox/vless_xhttp_xmux_zero_neighbours` — тело байт в байт, warnings
+пусты. Override'ов не заводилось; `_overrideIgnored` из §465 снят — лаунчер
+удалил свой `password_only_userinfo.expected.lxbox.json`.
 
 ## 8. W2b — карточка предупреждения и своя копия документации (решение владельца 18.09.2026)
 

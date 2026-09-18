@@ -12,7 +12,7 @@
       "meaning": "user:password",
       "desc_en": "user:password of the account.",
       "desc_ru": "user:password учётной записи.",
-      "impl": "user:pass → username+password. ОДИНОЧНЫЙ USERINFO БЕЗ ДВОЕТОЧИЯ — ЭТО PASSWORD (naive+https://secret@host → password=secret, username пуст): конвенция DuckSoft, та же что у hysteria2. РАЗРЫВ ЗАКРЫТ (DRIFT §7.3, вариант А, решение владельца 18.09.2026, синхронно с LxBox 24.09.2026): прежде Go клал значение в username, тогда как его же эмиттер share-URI пишет пароль в user-слот — ссылка, отданная Go, читалась Go же «наоборот», а кросс-эмит с Dart не сходился. Кейс корпуса — uri/naive/password_only_userinfo. naive+quic — §9.B1: Dart добавляет (сейчас naive+quic парсит только Go; транспорт запоминается как quic:true + quic_congestion_control:bbr). Dart toUriNaive опускает порт 443 (каноничная форма DuckSoft) и всегда пишет naive+https."
+      "impl": "user:pass → username+password. ОДИНОЧНЫЙ USERINFO БЕЗ ДВОЕТОЧИЯ — ЭТО PASSWORD (naive+https://secret@host → password=secret, username пуст): конвенция DuckSoft, та же что у hysteria2. РАЗРЫВ ЗАКРЫТ (DRIFT §7.3, вариант А, решение владельца 18.09.2026, дата синхронизации с LxBox снята владельцем 18.09.2026): прежде Go клал значение в username, тогда как его же эмиттер share-URI пишет пароль в user-слот — ссылка, отданная Go, читалась Go же «наоборот», а кросс-эмит с Dart не сходился. Кейс корпуса — uri/naive/password_only_userinfo. naive+quic — §9.B1: Dart добавляет (сейчас naive+quic парсит только Go; транспорт запоминается как quic:true + quic_congestion_control:bbr). Dart toUriNaive опускает порт 443 (каноничная форма DuckSoft) и всегда пишет naive+https."
     },
     "query": {
       "extra-headers": {
@@ -38,11 +38,26 @@
     "param_order": ["extra-headers"],
     "note": "Схема при эмите: Go — naive+quic при quic:true, иначе naive+https; Dart — всегда naive+https (нет quic, §9.B1). Dart опускает порт 443, Go пишет всегда."
   },
-  "degrade": [
-    "битая пара в extra-headers (нет ':', запрещённые символы в имени, CR/LF/NUL в значении) → пара скипается с warning, остальные живут",
-    "padding → игнор с warning",
-    "неизвестный query-параметр → Dart: warning + игнор; Go: молча остаётся в Query и отсекается allowlist-эмиттером",
-    "TLS-блок несёт только enabled+server_name (=server): alpn/utls/reality/insecure намеренно не эмитятся — sing-box naive их отвергает"
+  "mapper": [
+    {
+      "id": "tls_block_kept_minimal",
+      "from": "any TLS options on a naive node",
+      "to": "a `tls` block carrying only `enabled` and `server_name`",
+      "kind": "drop",
+      "code": "tls_field_unsupported_naive",
+      "desc_en": "The naive outbound of sing-box rejects the rest of the TLS options, so they are deliberately not emitted.",
+      "desc_ru": "naive-outbound sing-box отвергает остальные опции TLS, поэтому они намеренно не эмитятся.",
+      "impl": "Правило выражено в реестре: forbidden_for ['naive'] на полях tls.json. Здесь записано, ПОЧЕМУ блок остаётся урезанным."
+    },
+    {
+      "id": "broken_header_pair_skipped",
+      "from": "a broken pair in `extra-headers` (no `:`, a forbidden character in the name, CR/LF/NUL in the value)",
+      "to": "that pair is skipped; the other headers survive",
+      "kind": "drop",
+      "desc_en": "One malformed header does not cost the node its remaining headers.",
+      "desc_ru": "Одна битая пара не стоит узлу остальных заголовков.",
+      "impl": "core/config/subscription/node_parser_naive.go."
+    }
   ],
   "refs": {
     "go": [

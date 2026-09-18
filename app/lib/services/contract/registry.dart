@@ -166,6 +166,10 @@ final class WarningText {
     required this.textEn,
     required this.textRu,
     required this.params,
+    this.causeEn,
+    this.causeRu,
+    this.fixEn = const [],
+    this.fixRu = const [],
   });
 
   final String code;
@@ -177,6 +181,16 @@ final class WarningText {
   final String titleRu;
   final String textEn;
   final String textRu;
+
+  /// §467 — «почему так вышло», одной строкой; контракт 1.1.1. Кода без
+  /// причины в реестре быть может, и это норма: блок просто не рисуется
+  /// (карточка — W2b, раздел 8 спеки 460).
+  final String? causeEn;
+  final String? causeRu;
+
+  /// §467 — «что сделать», списком шагов. Пустой список = блока нет.
+  final List<String> fixEn;
+  final List<String> fixRu;
 
   /// Имена подстановок помимо неявных `path`/`value`.
   final List<String> params;
@@ -258,6 +272,13 @@ final class ContractRegistry {
         titleRu: w['title_ru'] as String? ?? '',
         textEn: w['text_en'] as String? ?? '',
         textRu: w['text_ru'] as String? ?? '',
+        // §467 — контракт 1.1.1: причина строкой, способ исправления списком
+        // строк. Отсутствие любого из них — норма (реестр наполняется
+        // постепенно), поэтому читаются мягко и загрузку не роняют.
+        causeEn: w['cause_en'] as String?,
+        causeRu: w['cause_ru'] as String?,
+        fixEn: _stringList(w['fix_en']),
+        fixRu: _stringList(w['fix_ru']),
         params: [
           ...implicit,
           ...((w['params'] as List?) ?? const []).cast<String>(),
@@ -396,6 +417,14 @@ final class _SchemaSlot {
   const _SchemaSlot(this.schema);
 
   final BodySchema? schema;
+}
+
+/// §467 — массив строк из реестра (`fix_en`/`fix_ru`). Не массив или его
+/// отсутствие — пустой список: реестр вправе ехать впереди клиента, и
+/// незнакомая форма поля загрузку не роняет.
+List<String> _stringList(Object? v) {
+  if (v is! List) return const [];
+  return [for (final e in v) if (e is String) e];
 }
 
 /// Файлы `registry/protocols/` — перечислены поимённо: `rootBundle` каталог

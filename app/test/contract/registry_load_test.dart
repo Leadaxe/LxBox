@@ -24,9 +24,9 @@ void main() {
       await ContractRegistry.I.loadFromDirectory(_contractRoot);
     });
 
-    test('реестр 1.1.0 грузится', () {
+    test('реестр 1.1.1 грузится', () {
       expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, '1.1.0');
+      expect(ContractRegistry.I.version, '1.1.1');
     }, skip: synced ? null : 'контракт не синхронизирован');
 
     test('схема vless раскрывает tls / transports / dialer', () {
@@ -114,7 +114,7 @@ void main() {
       // санитайзер в APK работал бы по другой схеме, чем тесты.
       final mirror = ContractRegistry.I;
       await mirror.loadFromDirectory('assets/contract');
-      expect(mirror.version, '1.1.0');
+      expect(mirror.version, '1.1.1');
       expect(mirror.schemaFor('vless'), isNotNull);
       // Вернуть загрузку с копии — остальные тесты файла уже отработали, но
       // порядок в группе не нормирован.

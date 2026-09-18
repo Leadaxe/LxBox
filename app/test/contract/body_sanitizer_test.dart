@@ -334,7 +334,12 @@ void main() {
       expect(_byCode(r, 'ss_method_legacy').severity, WarningSeverity.info);
     }, skip: skip);
 
-    test('all_or_nothing: частичный xmux дополнен дефолтами', () {
+    // §467 — `all_or_nothing` действия санитайзера НЕ влечёт.
+    //
+    // Атрибут читался наоборот. Ядро при частично заданной секции оставляет
+    // незаданные поля нулями (= без лимита), поэтому дописывание дефолтов
+    // навязывало узлу лимиты, которых у него не было (контракт §24.9).
+    test('all_or_nothing: частичный xmux проходит как есть, без дефолтов', () {
       final r = _san(_vless({
         'transport': {
           'type': 'xhttp',
@@ -343,11 +348,69 @@ void main() {
       }));
       final xmux = ((r.body!['transport'] as Map)['xmux']) as Map;
       expect(xmux['max_connections'], '4-8');
-      // Задание одного поля обнуляет дефолты соседних — они дописаны явно.
-      expect(xmux['h_max_request_times'], '600-900');
-      expect(xmux['h_max_reusable_secs'], '1800-3000');
-      expect(_codes(r), contains('partial_object_defaulted'));
+      expect(xmux.containsKey('h_max_request_times'), isFalse,
+          reason: 'дефолт соседа не дописывается');
+      expect(xmux.containsKey('h_max_reusable_secs'), isFalse);
+      expect(xmux.keys.toList(), ['max_connections'],
+          reason: 'секция байт в байт та, что пришла');
+      expect(_codes(r), isEmpty);
     }, skip: skip);
+
+    // §467 — `conflicts` судит ЗНАЧЕНИЕ, а не наличие ключа (контракт §24.9).
+    group('§467 conflicts по значению', () {
+      test('xmux в полной форме с нулями: конфликта нет, тело не изменено', () {
+        // Ровно та секция, на которой у лаунчера испортились 13 живых узлов:
+        // провайдер выписывает незаданные поля нулями.
+        final xmuxIn = {
+          'max_concurrency': '16-32',
+          'max_connections': '0',
+          'c_max_reuse_times': '0',
+          'h_max_request_times': '600-900',
+          'h_max_reusable_secs': '1800-3000',
+          'h_keep_alive_period': 0,
+        };
+        final r = _san(_vless({
+          'transport': {
+            'type': 'xhttp',
+            'xmux': Map<String, dynamic>.from(xmuxIn),
+          }
+        }));
+        final xmux = ((r.body!['transport'] as Map)['xmux']) as Map;
+        expect(xmux['max_concurrency'], '16-32',
+            reason: 'рабочее значение остаётся: "0" у соседа = не задано');
+        expect(Map<String, dynamic>.from(xmux.cast<String, dynamic>()), xmuxIn,
+            reason: 'тело байт в байт');
+        expect(_codes(r), isEmpty);
+      }, skip: skip);
+
+      test('оба > 0 — конфликт как раньше', () {
+        final r = _san(_vless({
+          'transport': {
+            'type': 'xhttp',
+            'xmux': {'max_concurrency': '16-32', 'max_connections': '4-8'},
+          }
+        }));
+        expect(_codes(r), contains('field_conflict'));
+        final xmux = ((r.body!['transport'] as Map)['xmux']) as Map;
+        // Снимается младшее по порядку схемы, старшее остаётся.
+        expect(
+            xmux.containsKey('max_concurrency') &&
+                xmux.containsKey('max_connections'),
+            isFalse);
+      }, skip: skip);
+
+      test('«0-0» у соседа — тоже не задано', () {
+        final r = _san(_vless({
+          'transport': {
+            'type': 'xhttp',
+            'xmux': {'max_concurrency': '16-32', 'max_connections': '0-0'},
+          }
+        }));
+        expect(_codes(r), isEmpty);
+        final xmux = ((r.body!['transport'] as Map)['xmux']) as Map;
+        expect(xmux['max_concurrency'], '16-32');
+      }, skip: skip);
+    });
 
     test('порядок ключей — входящий: гард не переставляет валидное тело', () {
       // `order` реестра нормирует ЭМИТТЕР (24.1.1); гард §460 — второй эшелон

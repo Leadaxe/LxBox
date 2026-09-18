@@ -45,18 +45,6 @@ const _endpointSchemes = {'wireguard', 'tailscale'}; // §435 — tailscale то
 /// и meta.extension»). Чужой extension = схемы у нас нет.
 const _thisSide = 'lxbox';
 
-/// Кейсы корпуса, чей per-app override заведомо устарел: сверяемся с общей
-/// базой `<case>.expected.json`, override игнорируется.
-///
-/// `uri/naive/password_only_userinfo` — §465: ждёт снятия override у
-/// лаунчера, убрать при следующем синке. Override хранит прежнее ожидание
-/// (`username=onlypass`), от которого обе стороны отказались в W2d
-/// (DRIFT §7.3, вариант А); правку мы внесли раньше, чем лаунчер удалил файл,
-/// поэтому кейс на время смотрит в базу, где уже `password=onlypass`.
-const _overrideIgnored = <String>{
-  'naive/password_only_userinfo',
-};
-
 /// Схемы, объявленные реестром расширением ЧУЖОЙ стороны
 /// (`registry/protocols/<scheme>.json` → `"extension"`).
 ///
@@ -128,6 +116,11 @@ String? _legacyWarningPath(NodeWarning w) => switch (w) {
       RealityShortIdInvalidWarning() => 'tls.reality.short_id',
       UnknownObfsWarning() => 'obfs.type',
       MissingObfsPasswordWarning() => 'obfs.password',
+      // §467 — `field` класса это ИМЯ КЛЮЧА, под которым значение уезжает в
+      // `transport` (его ставит тот же `putEnum`, что и предупреждение),
+      // поэтому путь выводится из него, а не перечисляется вариантами:
+      // новый xhttp-параметр получит путь сам.
+      XhttpParamResetWarning(:final field) => 'transport.$field',
       _ => null,
     };
 
@@ -145,6 +138,9 @@ String? _legacyWarningValue(NodeWarning w) => switch (w) {
       RealityFingerprintWarning(:final value) => value,
       RealityShortIdInvalidWarning(:final value) => value,
       UnknownObfsWarning(:final value) => value,
+      // §467 — у `placementRequiresPacketUp` значение пустое (код про
+      // сочетание, не про значение), и пустое в конверт не пишется.
+      XhttpParamResetWarning(:final value) => value,
       _ => null,
     };
 
@@ -563,12 +559,6 @@ void main() {
           // различие задокументировано) ИЛИ результат действительно
           // расходится с общей базой. Иначе регенерация плодила бы копии —
           // ровно ту лавину, которую снёс аудит 0.8.0.
-          //
-          // Игнорируемый override не трогаем: он нам не источник ожидания,
-          // а его содержимое принадлежит лаунчеру до снятия.
-          if (_overrideIgnored.contains(name)) {
-            return;
-          }
           if (overrideFile.existsSync()) {
             overrideFile.writeAsStringSync(_prettyPrint(envelope));
           } else if (baseFile.existsSync()) {
@@ -586,10 +576,8 @@ void main() {
         // Override — только для by-design различий (IDENTITY §4a); в норме
         // сверяемся с общим ожиданием, и правка канона у лаунчера доезжает
         // до нас красным тестом.
-        final expectedFile = (overrideFile.existsSync() &&
-                !_overrideIgnored.contains(name))
-            ? overrideFile
-            : baseFile;
+        final expectedFile =
+            overrideFile.existsSync() ? overrideFile : baseFile;
 
         if (!expectedFile.existsSync()) {
           fail('$rel: нет ни ${baseFile.uri.pathSegments.last}, ни '

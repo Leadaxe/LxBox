@@ -324,30 +324,16 @@ final class _Ctx {
     final cleaned = sanitizeObject(map, f.order ?? const [], fields, path);
     if (dropNode) return const _Value.drop();
 
-    // `all_or_nothing` — в ядре задание одного поля обнуляет дефолты
-    // соседних: частичный объект дописывается дефолтами явно, чтобы секция
-    // вела себя так, как выглядит.
-    if (f.allOrNothing && cleaned.isNotEmpty) {
-      final missing = <String>[];
-      for (final key in f.order ?? const <String>[]) {
-        if (cleaned.containsKey(key)) continue;
-        final def = fields[key]?.defaultValue;
-        if (def == null) continue;
-        missing.add(key);
-      }
-      if (missing.isNotEmpty) {
-        final withDefaults = <String, dynamic>{};
-        for (final key in f.order ?? const <String>[]) {
-          if (cleaned.containsKey(key)) {
-            withDefaults[key] = cleaned[key];
-          } else if (missing.contains(key)) {
-            withDefaults[key] = fields[key]!.defaultValue;
-          }
-        }
-        warn('partial_object_defaulted', path: path);
-        return _Value.keep(withDefaults);
-      }
-    }
+    // §467 — `all_or_nothing` НЕ влечёт действия санитайзера.
+    //
+    // Атрибут читался наоборот: считалось, что частичный объект надо
+    // дополнить дефолтами соседей. Ядро при частично заданной секции
+    // оставляет незаданные поля НУЛЯМИ (= без лимита), поэтому дописывание
+    // навязывало узлу лимиты, которых у него не было: у 13 живых узлов
+    // vless+xhttp одной подписки лаунчера так испортился рабочий `xmux`
+    // (контракт §24.9). Атрибут остаётся в реестре документацией о поведении
+    // ядра, частичный объект проходит как есть. Код `partial_object_defaulted`
+    // снят из `warnings.json` вместе с этим правилом.
     return _Value.keep(cleaned);
   }
 
@@ -621,13 +607,47 @@ final class _Ctx {
   bool _branchDone(String prefix) =>
       sanitized.keys.any((k) => k.startsWith('$prefix.'));
 
-  /// `false` у bool-флага = «выключено», а не «задано»: `requires`
-  /// `tls.utls.enabled` при `enabled: false` не выполнено.
+  /// Предикат «задано» — ОДИН на весь слой связей (`conflicts`, `requires`,
+  /// `forbidden_when`); §467, контракт §24.9.
+  ///
+  /// Судится ЗНАЧЕНИЕ, а не наличие ключа. Не задано: ключ отсутствует,
+  /// `null`, `""`, `0`, `false`, пустой объект, пустой массив и строка-число
+  /// из одних нулей (`"0"`, `"0-0"` — диапазоны `XmuxRange` приходят
+  /// строками).
+  ///
+  /// Провайдеры присылают секции в полной форме, где незаданные поля выписаны
+  /// нулями. По наличию ключа `max_concurrency: "16-32"` при
+  /// `max_connections: "0"` читался как конфликт, рабочее значение снималось и
+  /// возвращалось дефолтом `"1-1"` — пропускная способность узла падала молча
+  /// (13 узлов на реальном state лаунчера). Ядро
+  /// (`transport/v2rayxhttp/xmux.go`) считает конфликтом только оба > 0.
+  /// Правило общее: так же судятся `certificate` ↔ `pins` и `reality` ↔ `ech`.
   static bool _meaningful(Object? v) {
     if (v == null) return false;
     if (v is bool) return v;
-    if (v is String) return v.isNotEmpty;
+    if (v is num) return v != 0;
+    if (v is String) return v.isNotEmpty && !_allZeroNumeric(v);
+    if (v is Iterable) return v.isNotEmpty;
+    if (v is Map) return v.isNotEmpty;
     return true;
+  }
+
+  /// Строка-число из одних нулей: `"0"`, `"0-0"`, `"00"`. Форма «N-M» —
+  /// `XmuxRange`: диапазон из нулей это тот же ноль, то есть «не задано».
+  /// Строка с непустой цифрой (`"0-32"`) задана.
+  static bool _allZeroNumeric(String s) {
+    var sawDigit = false;
+    for (final unit in s.codeUnits) {
+      if (unit == 0x30) {
+        sawDigit = true;
+        continue;
+      }
+      // Разделитель диапазона и пробелы игнорируем, любой другой символ
+      // (в т.ч. цифра 1..9 и буква) делает строку заданной.
+      if (unit == 0x2D || unit == 0x20) continue;
+      return false;
+    }
+    return sawDigit;
   }
 
   /// Идёт ли [a] раньше [b] в порядке эмиссии тела. Пути конфликтов реестра
