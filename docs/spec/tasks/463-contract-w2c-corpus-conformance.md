@@ -86,7 +86,7 @@
 | 7.10 ss legacy stream-шифры | узел дропался молча | набор = 18 методов ядра, узел живёт с info `ss_method_legacy` | `uri_utils.dart:521, 537`, `shadowsocks_parser.dart:95-98` |
 | 7.13 Xray `splithttp` | не опознавался — узел без транспорта | алиас `xhttp`, читается и `splithttpSettings` | `transport.dart:129`, `json_parsers.dart:979, 1595` |
 | 7.15 socks password-only | userinfo снималось целиком, пароль терялся | `:pass@` | `node_spec_emit.dart:596-607` |
-| 7.16 ssh `private_key` | уезжал в ссылку «Copy link» | действие отказывает и объясняет | `node_actions.dart:168-185` |
+| 7.16 ssh `private_key` | уезжал в ссылку «Copy link» | ~~действие отказывает и объясняет~~ → отказ **отменён** [§466](466-copy-link-private-key-confirm.md): предупреждение с подтверждением, одинаково у SSH, WireGuard/AWG и MASQUE | `node_spec.dart:159`, `node_actions.dart:159-206` |
 | 7.17 WG MTU 1408 | — | уже верно: поле не пишется, дефолт ставит ядро | `wireguard_parser.dart:125-132` |
 | 7.18 WG-ключи не 32 байта | — | уже верно на обоих входах: узел дропается | `uri_utils.dart:128-132` |
 
@@ -97,6 +97,14 @@
 перезагрузке. Поэтому граница проведена там, где она содержательно и есть — на
 действии «Copy link»: как у лаунчера (`ErrShareURINotSupported`), отказ
 объявляется, а не подменяется урезанной ссылкой.
+
+> **Отменено 18.09.2026 — [§466](466-copy-link-private-key-confirm.md).** Отказ
+> прожил до решения владельца: он ломал перенос своего узла между своими
+> устройствами и был непоследователен — SSH-ключ не отдавался вовсе, а
+> приватный ключ WireGuard уезжал в буфер молча. Граница осталась на том же
+> действии, но стала подтверждением: диалог «Link contains a private key» с
+> Cancel / Copy anyway, одинаково у SSH с `private_key`, WireGuard/AWG и
+> MASQUE. `toUri()` по-прежнему не трогается.
 
 **7.3 (naive одиночный userinfo = password) не делалось** — согласованная дата
 одновременной правки обеих сторон 24.09.2026.

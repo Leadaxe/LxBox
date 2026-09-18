@@ -2610,8 +2610,14 @@
  "No source URI for this node": {
   "value": "此节点没有来源 URI"
  },
- "This node holds a private key — sharing it as a link would expose the key": {
-  "value": "此节点包含私钥，分享链接会泄露该私钥"
+ "Link contains a private key": {
+  "value": "链接中包含私钥"
+ },
+ "Anyone who gets this link can use the key. Copy it only to move the node to your own device.": {
+  "value": "拿到这条链接的人都能使用该私钥。仅在把节点迁移到自己的设备时才复制它。"
+ },
+ "Copy anyway": {
+  "value": "仍然复制"
  },
  "No source provided": {
   "value": "未提供来源"

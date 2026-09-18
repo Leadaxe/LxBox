@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | В работе |
+| **Статус** | Реализовано, тесты зелёные (5002) |
 | **Дата** | 2026-09-18 |
 | **Источник** | решение владельца 18.09.2026 (вариант В), контракт §24.2 п. 7.16 |
 | **Связанные** | §463 (ввёл отказ для SSH — отменяется), §465 |
@@ -58,3 +58,34 @@
   l10n-чекеры зелёные;
 - CHANGELOG, USER_GUIDE.md и USER_GUIDE.ru.md (раздел про копирование
   ссылки), GUARDS.md (строка 7.16) обновлены.
+
+## Сделано
+
+Геттер `NodeSpec.linkCarriesPrivateKey` (`node_spec.dart:159`, по умолчанию
+`false`) с тремя переопределениями — `SshSpec` (`:607`, только при непустом
+`privateKey`: `toUriSsh` пишет `private_key` в query лишь тогда),
+`WireguardSpec` (`:1137`) и `MasqueSpec` (`:1222`, `privateKeyDer` в userinfo).
+AWG отдельным классом не оказался — это `WireguardSpec.awg != null`, тот же
+эмиттер, потому ветки под него нет.
+
+`copyNodeUri` стала `Future<void>`: при `linkCarriesPrivateKey` —
+`_confirmPrivateKeyInLink` (`node_actions.dart:159`), `AlertDialog` с Cancel /
+Copy anyway; `showDialog` возвращает `null` при тапе мимо, что читается как
+отказ. Вызов в `node_list.dart` обёрнут в `unawaited`. Отказ-снэкбар §463 и его
+ключ убраны из кода и обоих словарей (`ru`, `zh`), три новых ключа добавлены
+туда же.
+
+Тесты — `test/screens/home/copy_node_uri_private_key_test.dart` (13 кейсов:
+геттер по четырём протоколам, наличие ключа в самой ссылке, обе ветки диалога,
+тап мимо, WG и MASQUE, vless и SSH-с-паролем без диалога, неизвестный тег).
+`flutter analyze` чист, `flutter test` — 5002 passed, 15 skipped, четыре
+l10n-чекера с `--strict` зелёные.
+
+Контракт: сессии лаунчера сообщить, чтобы 7.16 в `TASKS_LXBOX.md` получил
+пометку «LxBox: с подтверждением» — **не сделано, ждёт владельца**.
+
+## Коммиты
+
+| Коммит | Что |
+|---|---|
+| `TBD` | геттер, диалог, l10n (ru/zh), тесты, CHANGELOG, USER_GUIDE ×2, GUARDS, спека 463 |

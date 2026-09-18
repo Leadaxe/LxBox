@@ -349,7 +349,10 @@ class HomeNodeList extends StatelessWidget {
             onHighlight: () => controller.setHighlightedNode(tag),
             onActivate: () => unawaited(controller.switchNode(tag)),
             onPing: () => unawaited(controller.runNodeUrltest(tag)),
-            onCopyUri: () => copyNodeUri(context, tag, subController),
+            // §466 — copyNodeUri стал async (диалог подтверждения у узла с
+            // приватным ключом в ссылке); пункт меню — VoidCallback.
+            onCopyUri: () =>
+                unawaited(copyNodeUri(context, tag, subController)),
             onViewJson: () => viewOutboundJson(context, tag, state,
                 subController: subController, homeController: controller),
             onRunUrltest: isUrltestGroup

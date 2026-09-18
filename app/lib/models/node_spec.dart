@@ -145,6 +145,19 @@ sealed class NodeSpec {
   /// Тип протокола — для UI иконок и дебага.
   String get protocol;
 
+  /// §466 — [toUri] этого узла несёт приватный ключ владельца.
+  ///
+  /// Признак для экрана, а не для эмиттера: `toUri()` у нас одновременно и
+  /// форма хранения (инвариант `parseUri(spec.toUri()) ≈ spec`), вырезать из
+  /// неё ключ нельзя — он потерялся бы при перезагрузке узла. Но ссылку
+  /// пересылают, и это другая граница доверия, чем локальное хранение:
+  /// «Copy URI» у такого узла спрашивает подтверждение (§466 заменил отказ
+  /// §463).
+  ///
+  /// Пароли, UUID и PSK признаком НЕ считаются: это секрет доступа к конкретному
+  /// прокси, а не ключ, которым владелец опознаётся где-то ещё.
+  bool get linkCarriesPrivateKey => false;
+
   /// §322 — узел-группа (пул автовыбора), а не соединение. У такого нет
   /// адреса: `server`/`port` пусты, пинг берётся у выбранного члена. Гейт для
   /// операций, требующих `server:port`, и для тех, что раздают ссылку наружу
@@ -587,6 +600,11 @@ final class SshSpec extends NodeSpec {
 
   @override
   String toUri() => e.toUriSsh(this);
+
+  /// §466 — `toUriSsh` пишет `private_key` в query только когда ключ непустой;
+  /// узел с одним паролем ключа в ссылке не несёт.
+  @override
+  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1112,6 +1130,11 @@ final class WireguardSpec extends NodeSpec {
 
   @override
   String toUri() => e.toUriWireguard(this);
+
+  /// §466 — приватный ключ интерфейса уходит в userinfo ссылки. AWG (`awg`
+  /// != null) — тот же класс, тот же эмиттер, потому отдельной ветки нет.
+  @override
+  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 /// §130 — MASQUE (CONNECT-IP over HTTP/3/HTTP-2) для Cloudflare WARP.
@@ -1192,6 +1215,11 @@ final class MasqueSpec extends NodeSpec {
 
   @override
   String toUri() => e.toUriMasque(this);
+
+  /// §466 — `toUriMasque` кладёт [privateKeyDer] (SEC1 DER нашего ECDSA) в
+  /// userinfo ссылки.
+  @override
+  bool get linkCarriesPrivateKey => privateKeyDer.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

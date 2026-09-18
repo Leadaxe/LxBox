@@ -1016,6 +1016,15 @@ settings are remembered separately for each direction. Pattern syntax — see
 in **Node Settings** (the emoji picker button); when a server is added, the label
 is filled in automatically from the country/name.
 
+**Copy URI.** A long press on a server opens its menu; **Copy URI** puts the
+server's link on the clipboard. If that link carries a private key — an SSH node
+with an inline key, any WireGuard or AmneziaWG node, MASQUE — L×Box asks first:
+"Link contains a private key". Anyone who gets the link can use the key, so
+**Copy anyway** is meant for moving the node to your own second device, not for
+sharing. **Cancel** (or a tap outside the dialog) leaves the clipboard untouched.
+The key is not cut out of the link, because that same text is how the node is
+stored — stripping it would destroy the node on reload.
+
 **Each direction has its own pings.** Latency measurements are stored per direction:
 the test URL and timeout are configured per direction, so "180 ms" measured by
 different tests are different quantities. Switching directions doesn't wipe the
