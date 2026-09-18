@@ -101,7 +101,18 @@ final class HttpTransport extends TransportSpec {
 final class HttpUpgradeTransport extends TransportSpec {
   final String path;
   final String host;
-  const HttpUpgradeTransport({this.path = '', this.host = ''});
+
+  /// §476 — заголовки запроса (`V2RayHTTPUpgradeOptions.Headers` ядра).
+  /// Реестр числит их полем варианта (`transports.json` → `httpupgrade`), а
+  /// модель не знала: узел с `User-Agent`, пересохранённый через JSON-вкладку,
+  /// терял их молча. `Host` сюда не попадает — он живёт полем [host].
+  final Map<String, String> headers;
+
+  const HttpUpgradeTransport({
+    this.path = '',
+    this.host = '',
+    this.headers = const {},
+  });
 
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
@@ -112,6 +123,7 @@ final class HttpUpgradeTransport extends TransportSpec {
       if (path.isNotEmpty) 'path': path,
     };
     if (host.isNotEmpty) m['host'] = host;
+    if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
     return (m, const []);
   }
 }

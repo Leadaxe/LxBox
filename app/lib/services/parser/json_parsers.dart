@@ -1692,6 +1692,12 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       return WsTransport(
         path: path,
         host: headers?['Host']?.toString() ?? '',
+        // §476 — прочие заголовки ЧИТАЮТСЯ. `WsTransport.headers` их эмитит, а
+        // эта ветка брала из карты один `Host`: узел с `User-Agent` или
+        // `X-Forwarded-For`, пересохранённый через JSON-вкладку, терял их
+        // молча. `Host` остаётся отдельным полем (его пишет эмиттер сам) и в
+        // карту заголовков не дублируется.
+        headers: _headersExceptHost(headers),
         maxEarlyData: edField is int ? edField : edFromPath,
         earlyDataHeaderName:
             (raw['early_data_header_name']?.toString().isNotEmpty ?? false)
@@ -1706,6 +1712,13 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
         hosts:
             (raw['host'] as List?)?.map((e) => e.toString()).toList() ??
             const [],
+        // §476 — заголовки ЧИТАЮТСЯ: `HttpTransport.headers` их эмитит, а эта
+        // ветка не читала вовсе. У http-транспорта `Host` живёт отдельным
+        // полем `host` (списком), поэтому карта берётся целиком.
+        headers: (raw['headers'] as Map?)?.map(
+              (k, v) => MapEntry(k.toString(), _headerValue(v)),
+            ) ??
+            const {},
       );
     case 'httpupgrade':
       // §303 — early data у httpupgrade нет, но хвост пути всё равно чужой.
@@ -1718,6 +1731,9 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       return HttpUpgradeTransport(
         path: path,
         host: raw['host']?.toString() ?? '',
+        // §476 — заголовки ЧИТАЮТСЯ, как у ws. `Host` идёт отдельным полем.
+        headers: _headersExceptHost(
+            (raw['headers'] as Map?)?.cast<String, dynamic>()),
       );
     // §463 / контракт §24.2 п. 7.13 — алиас прежнего имени Xray.
     case 'splithttp':
@@ -1735,6 +1751,27 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
     default:
       return null;
   }
+}
+
+/// §476 — заголовки транспорта, кроме `Host`: он живёт отдельным полем модели
+/// (`WsTransport.host`) и эмитится ею же, так что в карте он был бы вторым
+/// производителем одного ключа.
+Map<String, String> _headersExceptHost(Map<String, dynamic>? raw) {
+  if (raw == null) return const {};
+  final out = <String, String>{};
+  for (final e in raw.entries) {
+    if (e.key == 'Host') continue;
+    out[e.key] = _headerValue(e.value);
+  }
+  return out;
+}
+
+/// Значение заголовка: sing-box зовёт его `Listable[string]` — строка либо
+/// массив. Модель держит строку, поэтому из списка берётся первый элемент,
+/// ровно как у `naive.extra_headers` и `http.headers` узла.
+String _headerValue(Object? v) {
+  if (v is List) return v.isEmpty ? '' : v.first.toString();
+  return v?.toString() ?? '';
 }
 
 /// §421 — `persistent_keepalive_interval` из JSON: число → `int`,

@@ -16,8 +16,15 @@ import 'package:collection/collection.dart';
 ///
 /// `kernel_tx`/`kernel_rx` ядро принимает только на Linux — Android им и
 /// является.
+///
+/// §476 — `engine`, `spoof`, `spoof_method` и `handshake_timeout` добавлены
+/// стражем круга «тело → модель → emit»: реестр числит их полями
+/// `OutboundTLSOptions` (`tls.json`), эмиттер писать их умел, а разбор не
+/// читал — узел, сохранённый через JSON-вкладку, терял их молча. Тот же
+/// класс, что `tls.certificate` в #140.
 const kTlsPassthroughKeys = <String>[
   'disable_sni',
+  'engine',
   'min_version',
   'max_version',
   'cipher_suites',
@@ -31,8 +38,11 @@ const kTlsPassthroughKeys = <String>[
   'fragment',
   'fragment_fallback_delay',
   'record_fragment',
+  'spoof',
+  'spoof_method',
   'kernel_tx',
   'kernel_rx',
+  'handshake_timeout',
   'ech',
 ];
 
@@ -78,6 +88,9 @@ const kNaiveTlsPassthroughKeys = <String>{
 /// равно). Сквозные — на местах структуры ядра относительно соседей.
 const _kTlsEmitOrder = <String>[
   'enabled',
+  // §476 — `engine` стоит в `OutboundTLSOptions` сразу за `enabled`, до
+  // `disable_sni`; порядок списка = порядок полей структуры ядра.
+  'engine',
   'server_name',
   'alpn',
   'insecure',
@@ -96,10 +109,16 @@ const _kTlsEmitOrder = <String>[
   'fragment',
   'fragment_fallback_delay',
   'record_fragment',
+  // §476 — `spoof`/`spoof_method` стоят в структуре ядра за
+  // `record_fragment`, перед kTLS-парой.
+  'spoof',
+  'spoof_method',
   'kernel_tx',
   'kernel_rx',
   // §459 — в `OutboundTLSOptions` ECH стоит между `handshake_timeout` и
-  // `utls`; ближайший сосед из нашего набора — `kernel_rx`.
+  // `utls`. §476 — `handshake_timeout` теперь сквозной, и ECH встал на своё
+  // место структуры: сразу за ним.
+  'handshake_timeout',
   'ech',
   'utls',
   'reality',

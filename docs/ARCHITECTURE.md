@@ -275,6 +275,19 @@ JSON / Xray ───┘                  │
   running core, the node does not.
 - **`parseSingboxEntry`** is the only "map → model" route. It is fed the
   **clean** map, so the model is a typed view of what will reach the core.
+  It is also, by construction, **the list of body keys LxBox can read** — it
+  reads them one by one, by hand. The launcher has no such list (its body stays
+  a map all the way through the registry), and the asymmetry has a cost: a key
+  nobody wrote a line for vanishes in silence, while the emitter still writes
+  that field back for everything it does know. Five such losses surfaced by
+  accident during spec 472 alone, plus `tls.certificate` in #140. Since §476
+  the list's completeness is a **test**, not a habit:
+  `test/contract/body_fields_roundtrip_test.dart` generates bodies filling every
+  field of every registry schema and runs each through the same round trip —
+  sanitizer, `parseSingboxEntry`, `emit()` — so a field the parser stops reading
+  fails the build and is named. What stays outside the trip is listed with a
+  reason in `kNotModelled`, and the list is checked for staleness too. Details
+  in [`GUARDS.md`](GUARDS.md#the-guard-over-the-guards--no-field-falls-out-of-the-round-trip-476).
 - `rawSource` is unchanged: a link keeps its link, JSON keeps its JSON
   (§454–§456).
 - A node parsed by the pipeline **skips** the second `emit()`-based annotation

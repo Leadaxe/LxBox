@@ -33,6 +33,7 @@ config down.
 
 - [Principles](#principles)
 - [Where guards live](#where-guards-live)
+- [The guard over the guards — no field falls out of the round trip (§476)](#the-guard-over-the-guards--no-field-falls-out-of-the-round-trip-476)
 - [How a user finds out](#how-a-user-finds-out)
 - [Layer 1 — URI parsing](#layer-1--uri-parsing)
 - [Layer 2 — JSON branches](#layer-2--json-branches)
@@ -98,6 +99,60 @@ object before emitting.
 | 2 — JSON branches | `app/lib/services/parser/singbox_config.dart`, `json_parsers.dart` | Imported sing-box and Xray configs |
 | 3 — node emission | `app/lib/models/transport_spec.dart`, `tls_spec.dart`, `node_spec_emit.dart`, `node_spec.dart` | The node → outbound JSON step, common to all sources |
 | 4 — config assembly | `app/lib/services/builder/**`, incl. `post_steps/**` and `validator.dart` | The whole file: graph, groups, rules, DNS |
+
+## The guard over the guards — no field falls out of the round trip (§476)
+
+Layers 1–4 answer "is this value usable". A different defect hides under them:
+a field that is perfectly usable and simply **never read**.
+
+`parseSingboxEntry` reads the body key by key, by hand. A key nobody wrote a
+line for disappears without a sound — no warning, no log, no dropped node — and
+the emitter happily writes it back out for the fields it *does* know. The user
+sees it as: typed the field into the JSON tab, pressed Save, and the node went
+to the core without it. Over a single day of spec 472 this bit `encryption`
+(vless), `plugin`/`plugin_opts` (shadowsocks), `quic` (naive),
+`host_key_algorithms` (ssh) and `min_idle_session` (anytls) — every one of them
+found by accident, while doing something else. Issue #140 (`tls.certificate`)
+was the same defect a month earlier.
+
+The launcher cannot have this class at all: its body travels as a map through
+the registry, and no list of readable keys exists. Ours is the list —
+`parseSingboxEntry` itself — so its completeness needs a watchdog.
+
+`test/contract/body_fields_roundtrip_test.dart` builds, for every protocol the
+app models, bodies in which **every** field of the registry schema is filled
+(`body_field_generator.dart`, values derived from the schema: `values`,
+`format`, `min`/`max`, `len`, nested objects, the shared `tls`/`transport`/
+`multiplex`/dialer blocks). Mutually exclusive fields — `conflicts`, `requires`,
+transport variants, `reality` against `ech` — get several bodies per protocol,
+and coverage is itself asserted: a field that lands in no body fails the test.
+Each body then goes round the same path the pipeline uses — registry sanitiser,
+`parseSingboxEntry`, `emit()` — and the result is compared with the body as the
+sanitiser left it.
+
+Two properties make it a guard rather than a fixture:
+
+- values come **from the schema**, so a field added by a contract bump enters
+  the bodies the day the contract arrives, instead of ageing out of a
+  hand-written sample;
+- an expression the generator cannot build a value for **fails the test by
+  name** rather than being skipped. The sanitiser does the opposite with an
+  unknown expression (leaves the value alone — 24.1, the registry running ahead
+  of the code is a working state); the difference is deliberate: production has
+  to survive a contract bump, the watchdog has to notice one.
+
+What is deliberately outside the round trip lives in one list, `kNotModelled`,
+`"scheme.path" → reason`. An entry with no reason fails; an entry that has
+become **stale** — the field now survives the trip — fails too, so the list
+cannot quietly outlive the defect it described. Three kinds of entry: keys the
+app sets itself (`detour`, `domain_resolver`), core features the app does not
+model at all on either side (multiplex, UDP-over-TCP, the QUIC tuning knobs —
+absent from the model *and* the emitter, so nothing is being lost), and fields
+waiting on another task (`socks.version` → §475; wireguard and masque → step 7
+of spec 472).
+
+Nodes with `origin.kind: json` are out of scope by construction: they go to the
+core **verbatim**, never through the model (§455), so they have nothing to lose.
 
 ## How a user finds out
 
@@ -388,6 +443,9 @@ something more than reject or default.
 | TLS passthrough key (`kTlsPassthroughKeys`: `certificate`, `certificate_path`, `disable_sni`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment*`, `kernel_*`) with a value of the wrong type — number instead of PEM, object instead of string, `false` for a bool | key dropped, the node lives | silent | `json_parsers.dart` `tlsPassthroughFromSingbox` | a `Listable[string]` with garbage sinks the decode of the whole config in the core; `false` is the core's omitempty | §454 |
 | `vmess.security` outside the core's enum / absent | the same funnel as the URI: `trim`+`lower`, enum of six, alias `chacha20-ietf-poly1305`, anything else → `auto` | silent (AppLog only) | `json_parsers.dart` `parseSingboxEntry`, `normalizeVmessSecurity` | the JSON editor and Smart-Paste bring `aes-128-ctr` just like subscriptions do; the core drops the whole config on it | §459 (contract §24.2 item 7.11) |
 | TLS key outside the core's `OutboundTLSOptions` (typos) | key dropped | silent | `json_parsers.dart` `_tlsFromSingbox` | the core rejects an unknown field on the whole config | §454 |
+| `tls.engine`, `tls.spoof`, `tls.spoof_method`, `tls.handshake_timeout` in a body | **passes through as is**, emitted in the core struct's position | silent | `tls_spec.dart` `kTlsPassthroughKeys`, `json_parsers.dart` `tlsPassthroughFromSingbox` | all four are `OutboundTLSOptions` fields the registry has always listed and the emitter could always write, but the parser never read them — a node saved through the JSON tab lost them without a trace. Found by the round-trip guard below, not by a report | §476 |
+| ws / httpupgrade `headers` other than `Host` | **read into the model** and emitted back | silent | `json_parsers.dart` `_headersExceptHost`, `transport_spec.dart` `HttpUpgradeTransport.headers` | the emitter merged `Host` with `headers` and wrote both, but ws read only `Host` out of the map and httpupgrade had no `headers` field at all: a node with `User-Agent` lost it on re-save. `Host` stays a separate field so the two do not both produce the same key | §476 |
+| http transport `headers` | read into the model | silent | `json_parsers.dart`, case `http` of `_transportFromSingbox` | `HttpTransport.headers` existed and was emitted; the JSON branch simply never filled it | §476 |
 | `tls.ech` as an object | **passes through as is**, emitted in the core struct's position (between `kernel_rx` and `utls`); the app does not look inside | silent | `json_parsers.dart` `tlsPassthroughFromSingbox`, `tls_spec.dart` `kTlsObjectKeys` | premise D-006 ("the core is built without `with_ech`") was false: `common/tls/ech_tag_stub.go` declares the tag itself deprecated, ECH is always compiled in, and `tls.ech` passes `sing-box check` on the lx.4 pin. naive reads the block too (`protocol/naive/outbound.go:139-155`) | §459 (contract §24.2 item 7.2), revises §454/D-006 |
 | `tls.ech` not an object (a string, a number, an array) | key dropped | silent | `json_parsers.dart` `tlsPassthroughFromSingbox` | same guard as the rest of the allowlist — the core would reject the wrong shape on the whole config | §459 |
 | WG private/public/psk not 32 bytes | node rejected | silent | `json_parsers.dart:1254-1268` | garbage sinks `sing-box check` entirely; a non-canonical form changes the identity hash | D-023/D-030 |
