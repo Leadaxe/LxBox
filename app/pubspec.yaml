@@ -65,6 +65,12 @@ flutter:
     - assets/contract/VERSION
     - assets/contract/registry/
     - assets/contract/registry/protocols/
+    # §480 — секции-мапперы, пока лаунчер не влил их в сам реестр: исполняет
+    # движок маппера, и без бандлинга разбор ссылки остался бы без таблицы.
+    # Каталоги Flutter не рекурсивны — каждый вид источника отдельной строкой.
+    - assets/contract_draft/uri/
+    - assets/contract_draft/conf/
+    - assets/contract_draft/xray/
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)
 

@@ -136,12 +136,12 @@
           "materialize_default": true,
           "impl": "D-022 — дефолт в теле обеих сторон."
         },
-        "$peer_address": {
+        "peer_address": {
           "source": "host",
           "maps_to": "peers[].address",
           "impl": "Запись — endpoint: адреса сервера в корне тела нет вовсе, он лежит в peers[]. Share-URI несёт строго ОДНОГО пира."
         },
-        "$peer_port": {
+        "peer_port": {
           "source": "port",
           "maps_to": "peers[].port",
           "type": "int",
