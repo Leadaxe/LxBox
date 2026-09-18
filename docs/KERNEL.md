@@ -25,7 +25,30 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.1-lx.5`** (see `app/android/libbox.version`) — a single
+**The current pin: `v1.14.1-lx.7`** (see `app/android/libbox.version`) — lx.5 plus
+two more layers; lx.6 was never pinned on its own, it is contained in lx.7.
+**SPEC 091** (lx.6) tightens two validators. `tuic.udp_relay_mode` used to accept
+any string at all: a typo such as `"fast"` went through silently and the node then
+behaved as if the field had not been set. The core now answers
+`unknown udp_relay_mode: fast (expected native or quic)` and fails the config.
+The same commit validates the masque `uri` field, whose only allowed value is
+`standard`. **SPEC 092** (lx.7) names the entry in initialization errors: where
+the core used to say `initialize outbound[0]: invalid short_id` it now says
+`initialize outbound[0] vless[proxy-de-1]: invalid short_id`, i.e. the type and
+the tag next to the index. Six places carry it — DNS server, endpoint, inbound,
+service, outbound and certificate provider. The errors raised *inside* the
+constructors were left alone, and the libbox API surface did not move either.
+This one came from a user request filed against LxBox on 18.09: the app shows the
+core's error text verbatim, and a bare index into an internal config array tells
+nobody with a fifty-node subscription which node broke. The wire format, the
+config schema, the AAR tag sets, the Go toolchain and the submodules are all
+unchanged; the Java surface is identical to lx.5 (javap over all 253 classes of
+`classes.jar` — diff empty).
+LxBox's own guard for `tuic.udp_relay_mode` (§459, contract §24.2 item 7.8) stays
+in place: it rejects the garbage in the node form, before the core is ever
+started, and reports it where the user can fix it.
+
+**`v1.14.1-lx.5`** — a single
 hotfix on top of lx.4. **SPEC 090**: a REALITY `short_id` longer than 16 hex
 characters is now rejected with `invalid short_id` before decoding, on the client
 (`common/tls/reality_client.go`) and on the server (`reality_server.go`) alike.
@@ -795,7 +818,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.1-lx.5** (current pin) | **REALITY `short_id` hotfix** (fork SPEC 090): a `short_id` longer than 16 hex characters is rejected with `invalid short_id` before decoding, on the client and on the server; until lx.5 it panicked with `index out of range` inside `hex.Decode` writing into an `[8]byte`. Found by the contract's DRIFT inventory (§461). Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.4 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.7** (current pin) | **Validation and named entries in errors** (§462). Fork SPEC 092 — an initialization error now carries the type and the tag of the entry next to its index: `initialize outbound[0] vless[proxy-de-1]: invalid short_id`; six places (DNS server, endpoint, inbound, service, outbound, certificate provider), errors inside the constructors and the libbox API untouched. Came from a user request of 18.09 — LxBox shows the core's text as is, and a bare index names nothing. Contains lx.6, fork SPEC 091 — `tuic.udp_relay_mode` no longer accepts any string it is given (`unknown udp_relay_mode: X (expected native or quic)`), and the masque `uri` is validated against `standard`. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.5 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.5** | **REALITY `short_id` hotfix** (fork SPEC 090): a `short_id` longer than 16 hex characters is rejected with `invalid short_id` before decoding, on the client and on the server; until lx.5 it panicked with `index out of range` inside `hex.Decode` writing into an `[8]byte`. Found by the contract's DRIFT inventory (§461). Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.4 (javap diff over all 253 classes — empty). |
 | **v1.14.1-lx.4** | **REALITY: fragmentation and `key_share`.** Fork SPEC 088 — `tls.fragment` / `tls.record_fragment` now apply to REALITY as well: until lx.4 the REALITY client built its handshake on the bare socket and skipped them silently, including the automatic `record_fragment` under a `detour`. Fork SPEC 089 — a per-node `tls.reality.key_share` (`hybrid` \| `classical`), an unknown value rejects the whole config; LxBox emits it from §457. Wire format, tag sets and toolchain unchanged; Java surface identical to lx.3 (javap diff over all 253 classes — empty). |
 | **v1.14.0-lx.39** | **SOCKS5 UDP hotfix** (fork SPEC 085): a UDP ASSOCIATE reply with `BND.ADDR` `0.0.0.0`/`::` no longer makes the client dial the relay at the local system — the proxy server address is used instead. Java surface identical to lx.38. |
 | **v1.14.0-lx.38** | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
