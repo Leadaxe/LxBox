@@ -11,6 +11,7 @@ import '../handlers/backup.dart';
 import '../handlers/chains.dart';
 import '../handlers/directions.dart';
 import '../handlers/config.dart';
+import '../handlers/core_reject.dart';
 import '../handlers/device.dart';
 import '../handlers/diag.dart';
 import '../handlers/files.dart';
@@ -183,6 +184,9 @@ class DebugServer {
       ..mount('/directions', directionsHandler) // §238 — Направления роутинга §125
       ..mount('/chains', chainsHandler) // §393 C — источники-цепочки SPEC 110
       ..mount('/folders', foldersHandler) // §238 — папки серверов §234
+      // Фича 478 — страховка «отказ ядра выключает узел»: фаза автомата,
+      // вердикты, плашка и диалог предела наблюдаемы и управляемы снаружи.
+      ..mount('/core_reject', coreRejectHandler)
       ..mount('/warp', warpHandler)
       ..mount('/settings', settingsHandler)
       ..mount('/wifi_history', wifiHistoryHandler)

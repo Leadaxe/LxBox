@@ -62,6 +62,22 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
+  "%d DNS rules": {
+    "value": {
+      "one": "%d DNS-правило",
+      "few": "%d DNS-правила",
+      "many": "%d DNS-правил",
+      "other": "%d DNS-правил"
+    }
+  },
+  "%d DNS servers": {
+    "value": {
+      "one": "%d DNS-сервер",
+      "few": "%d DNS-сервера",
+      "many": "%d DNS-серверов",
+      "other": "%d DNS-серверов"
+    }
+  },
   "%d MB": {
     "value": "%d МБ"
   },
@@ -325,6 +341,14 @@
       "other": "%d протокола"
     }
   },
+  "%d rules": {
+    "value": {
+      "one": "%d правило",
+      "few": "%d правила",
+      "many": "%d правил",
+      "other": "%d правил"
+    }
+  },
   "%d seconds": {
     "value": {
       "one": "%d секунда",
@@ -347,6 +371,22 @@
       "few": "Удалено %d сервера",
       "many": "Удалено %d серверов",
       "other": "Удалено %d сервера"
+    }
+  },
+  "%d servers disabled": {
+    "value": {
+      "one": "Отключено серверов: %d",
+      "few": "Отключено серверов: %d",
+      "many": "Отключено серверов: %d",
+      "other": "Отключено серверов: %d"
+    }
+  },
+  "%d servers disabled — there may be more": {
+    "value": {
+      "one": "Отключено серверов: %d — возможно, есть ещё",
+      "few": "Отключено серверов: %d — возможно, есть ещё",
+      "many": "Отключено серверов: %d — возможно, есть ещё",
+      "other": "Отключено серверов: %d — возможно, есть ещё"
     }
   },
   "%d src": {
@@ -425,6 +465,9 @@
   "%s (missing)": {
     "value": "%s (отсутствует)"
   },
+  "%s DNS server(s) switched to vpn-1": {
+    "value": "DNS-серверов переключено на vpn-1: %s"
+  },
   "%s available": {
     "value": "Доступна %s",
     "special": {
@@ -438,9 +481,6 @@
   },
   "%s copied": {
     "value": "Скопировано: %s"
-  },
-  "%s DNS server(s) switched to vpn-1": {
-    "value": "DNS-серверов переключено на vpn-1: %s"
   },
   "%s detour reference(s) reset to None": {
     "value": "detour-ссылок сброшено в None: %s"
@@ -526,6 +566,14 @@
   "(unsupported var type: %s)": {
     "value": "(неподдерживаемый тип переменной: %s)"
   },
+  "+%d more": {
+    "value": {
+      "one": "и ещё %d",
+      "few": "и ещё %d",
+      "many": "и ещё %d",
+      "other": "и ещё %d"
+    }
+  },
   "0 = keep pool full": {
     "value": "0 = держать пул полным"
   },
@@ -568,11 +616,20 @@
   "A nested chain (%s) is only allowed at the first position — move it to the top or remove it.": {
     "value": "Вложенная цепочка (%s) допустима только первой позицией — поднимите её наверх или уберите."
   },
+  "A one-time key is consumed on the first login; the device identity then lives in the state directory. Clearing the app data registers a new device.": {
+    "value": "Одноразовый ключ расходуется при первом входе; дальше идентичность устройства живёт в каталоге состояния. Очистка данных приложения регистрирует новое устройство."
+  },
   "A routing loop was found between groups. Review the loop below and break it, then start again.": {
     "value": "Обнаружена петля маршрутизации между группами. Просмотрите петлю ниже, разорвите её и запустите снова."
   },
   "A server cannot detour through itself": {
     "value": "Сервер не может идти detour через самого себя"
+  },
+  "A workspace with this name already exists": {
+    "value": "Рабочее пространство с таким именем уже есть"
+  },
+  "A workspace with this name already exists. Its saved state will be replaced.": {
+    "value": "Рабочее пространство с таким именем уже есть. Его сохранённое состояние будет заменено."
   },
   "ACTIVE": {
     "value": "АКТИВЕН"
@@ -591,6 +648,12 @@
   },
   "Accept automation commands": {
     "value": "Принимать команды автоматизации"
+  },
+  "Accept default resolvers": {
+    "value": "Принимать резолверы по умолчанию"
+  },
+  "Accept routes": {
+    "value": "Принимать маршруты"
   },
   "Access denied (%d) — check subscription token": {
     "value": "Доступ запрещён (%d) — проверьте токен подписки"
@@ -772,9 +835,6 @@
   "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
     "value": "Усыплять и туннели активного маршрута (члены пула, выбранный узел) после долгого затишья — например, за ночь. Первое соединение после сна будет дольше примерно на один RTT. Держите значение не меньше тайм-аута простоя Направлений (по умолчанию 30 минут). Требует включённой настройки «Усыплять неактивные туннели»."
   },
-  "AmneziaWG header \"%1$s=%2$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.": {
-    "value": "Заголовок AmneziaWG «%1$s=%2$s» — не число и не диапазон «нижняя-верхняя», поэтому отброшен. Ядро возьмёт обычный заголовок WireGuard, и рукопожатие может не совпасть с сервером."
-  },
   "AmneziaWG 3 field \"%1$s=%2$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.": {
     "value": "Поле AmneziaWG 3 «%1$s=%2$s» — не число, не упорядоченный диапазон «нижняя-верхняя» и не on/off, поэтому отброшено. Ядро возьмёт своё значение по умолчанию."
   },
@@ -786,6 +846,9 @@
   },
   "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.": {
     "value": "Случайные хвосты AmneziaWG 3 сочетаются с широким диапазоном magic-заголовков (65536 и больше); сервер может принять часть исходящих пакетов за рукопожатия и отбросить их."
+  },
+  "AmneziaWG header \"%1$s=%2$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.": {
+    "value": "Заголовок AmneziaWG «%1$s=%2$s» — не число и не диапазон «нижняя-верхняя», поэтому отброшен. Ядро возьмёт обычный заголовок WireGuard, и рукопожатие может не совпасть с сервером."
   },
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
@@ -810,6 +873,9 @@
   },
   "Any — tap Edit to filter by network / L7 protocol": {
     "value": "Любой — нажмите «Изменить», чтобы фильтровать по сети / L7-протоколу"
+  },
+  "Anyone who gets this link can use the key. Copy it only to move the node to your own device.": {
+    "value": "Кто получит эту ссылку, сможет воспользоваться ключом. Копируйте её, только чтобы перенести узел на своё устройство."
   },
   "Anything above is red.": {
     "value": "Всё, что выше, — красный."
@@ -877,6 +943,12 @@
   "At least two positions are needed: the core rejects a single-hop chain.": {
     "value": "Нужно минимум две позиции: цепочку из одного хопа ядро отвергает."
   },
+  "Auth key": {
+    "value": "Ключ авторизации"
+  },
+  "Auth key required": {
+    "value": "Нужен ключ авторизации"
+  },
   "Auto": {
     "value": "Авто"
   },
@@ -885,6 +957,12 @@
   },
   "Auto nodes are deleted with the folder: %s": {
     "value": "Авто-узлы удаляются вместе с папкой: %s"
+  },
+  "Auto · %s": {
+    "value": "Auto · %s"
+  },
+  "Auto · country not detected": {
+    "value": "Auto · страна не определена"
   },
   "Auto-ping after connect": {
     "value": "Автопинг после подключения"
@@ -1053,6 +1131,14 @@
   "Check the filter of: %s — the old prefix is part of a regex construct there and was left as is.": {
     "value": "Проверьте фильтр: %s — там старый префикс входит в regex-конструкцию и оставлен как есть."
   },
+  "Checking servers… (%d disabled)": {
+    "value": {
+      "one": "Проверка серверов… (выключено: %d)",
+      "few": "Проверка серверов… (выключено: %d)",
+      "many": "Проверка серверов… (выключено: %d)",
+      "other": "Проверка серверов… (выключено: %d)"
+    }
+  },
   "Choose a file first": {
     "value": "Сначала выберите файл"
   },
@@ -1079,6 +1165,12 @@
   },
   "Clear cached files": {
     "value": "Удалить кэшированные файлы"
+  },
+  "Clear sections": {
+    "value": "Очистить секции"
+  },
+  "Clear sections?": {
+    "value": "Очистить секции?"
   },
   "Client subnet": {
     "value": "Подсеть клиента"
@@ -1176,6 +1268,9 @@
   "Config locked. UI actions will not rebuild config.": {
     "value": "Конфиг заблокирован. Действия в UI не пересобирают конфиг."
   },
+  "Config rebuild failed: %s": {
+    "value": "Сборка конфига не удалась: %s"
+  },
   "Config rebuilt: %d nodes": {
     "value": {
       "one": "Конфиг пересобран: %d узел",
@@ -1258,6 +1353,9 @@
   "Control L×Box from Tasker / Macrodroid / Llama and other automation apps via Android broadcast intents.": {
     "value": "Управляйте L×Box из Tasker / MacroDroid / Llama и других приложений автоматизации через broadcast-интенты Android."
   },
+  "Control URL (optional)": {
+    "value": "Control URL (необязательно)"
+  },
   "Copied": {
     "value": "Скопировано"
   },
@@ -1281,6 +1379,9 @@
   },
   "Copy URL": {
     "value": "Копировать URL"
+  },
+  "Copy anyway": {
+    "value": "Всё равно копировать"
   },
   "Copy detour": {
     "value": "Копировать detour"
@@ -1336,6 +1437,9 @@
   "Couldn't stop the VPN — try again.": {
     "value": "Не удалось остановить VPN — попробуйте ещё раз."
   },
+  "Country code (2 letters)": {
+    "value": "Код страны (2 буквы)"
+  },
   "Crashes": {
     "value": "Падения"
   },
@@ -1362,6 +1466,9 @@
   },
   "Custom rules, tun apps, DNS options, final outbound": {
     "value": "Свои правила, приложения туннеля, параметры DNS, финальный исходящий канал"
+  },
+  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
+    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale."
   },
   "Cut": {
     "value": "Вырезать"
@@ -1521,6 +1628,9 @@
   },
   "Delete unreachable?": {
     "value": "Удалить недоступные?"
+  },
+  "Delete workspace “%s”?": {
+    "value": "Удалить рабочее пространство «%s»?"
   },
   "Delete…": {
     "value": "Удалить…"
@@ -1708,11 +1818,11 @@
   "Drop existing detours — every node connects through this outbound": {
     "value": "Сбросить существующие detour — каждый узел подключается через этот исходящий канал"
   },
-  "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
-    "value": "Каждый источник подписывает приложение своим ключом, поэтому сборки из разных источников не ставятся друг поверх друга. Чтобы перейти: сделайте резервную копию настроек, удалите L×Box, установите из нового источника и восстановите копию."
-  },
   "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.": {
     "value": "ECH не применён: «%s» из ссылки указывает на публичный ECH-пробник, а не на этот сервер — включение сломало бы TLS-рукопожатие."
+  },
+  "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
+    "value": "Каждый источник подписывает приложение своим ключом, поэтому сборки из разных источников не ставятся друг поверх друга. Чтобы перейти: сделайте резервную копию настроек, удалите L×Box, установите из нового источника и восстановите копию."
   },
   "Edit": {
     "value": "Изменить"
@@ -1722,6 +1832,12 @@
   },
   "Edit DNS Server": {
     "value": "Изменить DNS-сервер"
+  },
+  "Edit JSON": {
+    "value": "Править JSON"
+  },
+  "Edit JSON?": {
+    "value": "Править JSON?"
   },
   "Edit auto node": {
     "value": "Настройка авто-узла"
@@ -1792,6 +1908,9 @@
   "Enter a valid http(s):// URL": {
     "value": "Введите корректный URL вида http(s)://"
   },
+  "Ephemeral": {
+    "value": "Эфемерный"
+  },
   "Error": {
     "value": "Ошибка"
   },
@@ -1831,6 +1950,9 @@
   },
   "Exclude matching (invert)": {
     "value": "Исключить совпадающие (инверсия)"
+  },
+  "Exit node (optional)": {
+    "value": "Выходной узел (необязательно)"
   },
   "Expired": {
     "value": "срок истёк"
@@ -1904,6 +2026,9 @@
   },
   "Failed to download SRS for \"%s\". Check internet and try again.": {
     "value": "Не удалось скачать SRS для «%s». Проверьте интернет и повторите."
+  },
+  "Failed to load workspace: %s": {
+    "value": "Не удалось загрузить рабочее пространство: %s"
   },
   "Failed to parse config": {
     "value": "Не удалось разобрать конфиг"
@@ -2040,6 +2165,9 @@
   "From %s %s": {
     "value": "Из %s %s"
   },
+  "From nodes · read-only, edited in the node": {
+    "value": "Из узлов · только чтение, правятся в узле"
+  },
   "From routing rules · ordered as in Routing": {
     "value": "Из правил маршрутизации · порядок как в «Маршрутизации»"
   },
@@ -2119,6 +2247,9 @@
   "Haptic feedback": {
     "value": "Виброотклик"
   },
+  "Has node sections": {
+    "value": "Есть секции узла"
+  },
   "Headers copied": {
     "value": "Заголовки скопированы"
   },
@@ -2179,6 +2310,9 @@
   "Host required": {
     "value": "Укажите хост"
   },
+  "Hostname (optional)": {
+    "value": "Имя хоста (необязательно)"
+  },
   "Hostnames sing-box resolves internally (your VPN server addresses, custom outbound endpoints) will go through your ISP's DNS, bypassing the VPN tunnel. Pick a regular DNS server for full privacy.": {
     "value": "Имена, которые sing-box резолвит сам (адреса ваших VPN-серверов и других исходящих подключений), пойдут через DNS провайдера мимо туннеля VPN. Для полной приватности выберите обычный DNS-сервер."
   },
@@ -2205,6 +2339,9 @@
   },
   "Idle timeout will be raised to %s when the config is built": {
     "value": "При сборке idle timeout будет поднят до %s"
+  },
+  "If you stop, the VPN will not start. The servers already turned off will stay off.": {
+    "value": "Если остановить, VPN не запустится. Уже выключенные серверы останутся выключенными."
   },
   "Ignore": {
     "value": "Не напоминать"
@@ -2363,6 +2500,9 @@
   "Invalid JSON: %s": {
     "value": "Некорректный JSON: %s"
   },
+  "Invalid JSON: empty array": {
+    "value": "Некорректный JSON: пустой массив"
+  },
   "Invalid MASQUE config": {
     "value": "Некорректный конфиг MASQUE"
   },
@@ -2397,11 +2537,17 @@
   "It will be rebuilt clean on the next connect.": {
     "value": "Чистый кэш будет создан при следующем подключении."
   },
+  "Its saved state will be removed. This cannot be undone.": {
+    "value": "Его сохранённое состояние будет удалено. Отменить это нельзя."
+  },
   "JSON": {
     "value": "JSON"
   },
   "JSON copied": {
     "value": "JSON скопирован"
+  },
+  "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
+    "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
   },
   "JSON or JSON5 (// and /* */ comments)": {
     "value": "JSON или JSON5 (комментарии // и /* */)"
@@ -2426,6 +2572,9 @@
   },
   "Keep VPN on exit": {
     "value": "Сохранять VPN при выходе"
+  },
+  "Keep checking": {
+    "value": "Проверять дальше"
   },
   "Keep servers": {
     "value": "Оставить серверы"
@@ -2484,6 +2633,12 @@
   "Lifecycle": {
     "value": "Жизненный цикл"
   },
+  "Link contains a private key": {
+    "value": "В ссылке закрытый ключ"
+  },
+  "Link: the tag goes into its fragment on save.": {
+    "value": "Ссылка: тег при сохранении попадает в её фрагмент."
+  },
   "List %d": {
     "value": "Список %d"
   },
@@ -2492,6 +2647,9 @@
   },
   "Live retention window": {
     "value": "Окно хранения Live-журнала"
+  },
+  "Load": {
+    "value": "Загрузить"
   },
   "Load balance": {
     "value": "Балансировка"
@@ -2507,6 +2665,9 @@
   },
   "Loading installed apps…": {
     "value": "Загрузка списка приложений…"
+  },
+  "Loading workspace…": {
+    "value": "Загрузка рабочего пространства…"
   },
   "Local file": {
     "value": "Локальный файл"
@@ -2540,6 +2701,9 @@
   },
   "MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — standard HTTPS transport, and the exit IP is often in another country.": {
     "value": "MASQUE туннелирует IP поверх HTTP/3 (QUIC) в Cloudflare — стандартный транспорт HTTPS, а выходной IP часто находится в другой стране."
+  },
+  "MagicDNS of the tailnet via a Tailscale node · no address": {
+    "value": "MagicDNS сети tailnet через узел Tailscale · без адреса"
   },
   "Make experiment": {
     "value": "Провести эксперимент"
@@ -2626,17 +2790,32 @@
   "Name in use — renamed to \"%s\"": {
     "value": "Имя занято — переименовано в «%s»"
   },
+  "Name is empty": {
+    "value": "Имя пустое"
+  },
   "Name is required": {
     "value": "Укажите имя"
+  },
+  "Name is too long": {
+    "value": "Имя слишком длинное"
+  },
+  "Name must not contain / or \\": {
+    "value": "Имя не должно содержать / или \\"
+  },
+  "Name must not start with a dot": {
+    "value": "Имя не должно начинаться с точки"
   },
   "Names are not resolving while the connection is alive — the DNS path looks blocked. In DNS settings you can:\n  • route your DNS servers through the VPN — set their outbound to a direction so queries go inside the tunnel;\n  • switch the final resolver to your operator's DNS — works everywhere, but your operator sees every domain.\nFakeIP resolves names inside the tunnel with placeholder IPs — no pre-tunnel DNS leaks.": {
     "value": "Имена не резолвятся, хотя соединение живо — путь DNS выглядит заблокированным. В настройках DNS можно:\n  • направить DNS-серверы через VPN — задайте им исходящее Направление, чтобы запросы шли внутри туннеля;\n  • переключить финальный резолвер на DNS оператора — работает везде, но оператор видит каждый домен.\nFakeIP резолвит имена внутри туннеля через IP-заглушки — без утечек DNS до туннеля."
   },
-  "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
-    "value": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound)."
+  "Names outside the tailnet go to the default DNS servers; off — NXDOMAIN": {
+    "value": "Имена вне tailnet идут к DNS-серверам по умолчанию; выкл — NXDOMAIN"
   },
   "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.": {
     "value": "Запись extra-headers NaïveProxy «%s» не является корректным заголовком и отброшена. Остальные заголовки сохранены, но этот сервер не увидит."
+  },
+  "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
+    "value": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound)."
   },
   "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.": {
     "value": "У параметра NaïveProxy «padding=%s» нет соответствия в ядре, поэтому он проигнорирован. Узел остаётся рабочим."
@@ -2698,6 +2877,9 @@
   "No OOM reports": {
     "value": "Отчётов OOM нет"
   },
+  "No Tailscale nodes yet — add one on the Servers screen first": {
+    "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
+  },
   "No Wi-Fi conditions — rule is active on every network.": {
     "value": "Условий Wi-Fi нет — правило активно в любой сети."
   },
@@ -2709,6 +2891,12 @@
   },
   "No active connections to close": {
     "value": "Нет активных соединений для закрытия"
+  },
+  "No address": {
+    "value": "Без адреса"
+  },
+  "No address (Tailscale)": {
+    "value": "Без адреса (Tailscale)"
   },
   "No apps match": {
     "value": "Совпадений нет"
@@ -2804,15 +2992,6 @@
   "No source URI for this node": {
     "value": "У этого узла нет исходного URI"
   },
-  "Link contains a private key": {
-    "value": "В ссылке закрытый ключ"
-  },
-  "Anyone who gets this link can use the key. Copy it only to move the node to your own device.": {
-    "value": "Кто получит эту ссылку, сможет воспользоваться ключом. Копируйте её, только чтобы перенести узел на своё устройство."
-  },
-  "Copy anyway": {
-    "value": "Всё равно копировать"
-  },
   "No source provided": {
     "value": "Источник не указан"
   },
@@ -2831,6 +3010,12 @@
   "No valid outbounds in JSON": {
     "value": "В JSON нет валидных outbound-объектов"
   },
+  "Node": {
+    "value": "Узел"
+  },
+  "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
+    "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
+  },
   "Node Settings": {
     "value": "Настройки узла"
   },
@@ -2839,6 +3024,9 @@
   },
   "Node info copied": {
     "value": "Данные узла скопированы"
+  },
+  "Node section record dropped: %s": {
+    "value": "Запись секции узла отброшена: %s"
   },
   "Node — direct detour": {
     "value": "Узел — прямой detour"
@@ -2897,8 +3085,14 @@
   "Not imported: %s": {
     "value": "Не импортируется: %s"
   },
+  "Not included in the file": {
+    "value": "Не попало в файл"
+  },
   "Not recording": {
     "value": "Запись не идёт"
+  },
+  "Not set": {
+    "value": "Не задан"
   },
   "Nothing left to add: every available target is already in the chain.": {
     "value": "Добавить больше нечего: все доступные цели уже в цепочке."
@@ -2953,8 +3147,14 @@
   "On update": {
     "value": "При обновлении"
   },
+  "One URL per line — several rule sets in one rule.": {
+    "value": "По одному URL на строку — несколько наборов правил в одном правиле."
+  },
   "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
     "value": "Один узел ведёт трафик обратно в собственную цепочку. Нажмите на него, чтобы открыть источник, измените или уберите его detour, затем запустите снова."
+  },
+  "One rule holds one JSON object. Add each object of the array as a separate rule.": {
+    "value": "Одно правило — один JSON-объект. Добавьте каждый объект массива отдельным правилом."
   },
   "One-way": {
     "value": "Одностороннее"
@@ -2992,6 +3192,9 @@
   "Orange up to, ms": {
     "value": "Оранжевый до, мс"
   },
+  "Other country code…": {
+    "value": "Другой код страны…"
+  },
   "Other directions": {
     "value": "Другие Направления"
   },
@@ -3021,6 +3224,12 @@
   },
   "Overview": {
     "value": "Обзор"
+  },
+  "Overwrite": {
+    "value": "Перезаписать"
+  },
+  "Overwrite “%s”?": {
+    "value": "Перезаписать «%s»?"
   },
   "PARAMETERS": {
     "value": "ПАРАМЕТРЫ"
@@ -3052,6 +3261,9 @@
   },
   "Paste a proxy URL": {
     "value": "Вставьте proxy-ссылку"
+  },
+  "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
+    "value": "Чтобы приложить правила узла, вставьте на вкладке JSON конфиг sing-box с dns/route или документ с «sections»."
   },
   "Paste a sing-box outbound JSON": {
     "value": "Вставьте JSON исходящего канала sing-box"
@@ -3296,6 +3508,9 @@
   "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.": {
     "value": "Короткий идентификатор REALITY «%s» — не корректный hex, поэтому отброшен (иначе сломался бы весь конфиг). Узел подключится без короткого идентификатора."
   },
+  "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".": {
+    "value": "REALITY с uTLS fingerprint «%s»: серверы Xray начиная с v26.9.8 отвергают такой ClientHello. Если соединение не устанавливается, попробуйте «chrome»."
+  },
   "Range %1$d..%2$d": {
     "value": "Диапазон %1$d..%2$d"
   },
@@ -3376,6 +3591,9 @@
   },
   "Regenerate": {
     "value": "Сгенерировать заново"
+  },
+  "Region": {
+    "value": "Регион"
   },
   "Register": {
     "value": "Зарегистрировать"
@@ -3632,6 +3850,9 @@
   "Rules": {
     "value": "Правила"
   },
+  "Rules and DNS records this node carries": {
+    "value": "Правила и DNS-записи, которые узел носит с собой"
+  },
   "Rules changed. Refresh the subscription to apply them.": {
     "value": "Правила изменены. Обновите подписку, чтобы применить их."
   },
@@ -3665,14 +3886,11 @@
   "SRS URL is empty": {
     "value": "URL SRS пуст"
   },
-  "SRS: %s (+%d)": {
-    "value": "SRS: %s (+%d)"
-  },
-  "One URL per line — several rule sets in one rule.": {
-    "value": "По одному URL на строку — несколько наборов правил в одном правиле."
-  },
   "SRS: %s": {
     "value": "SRS: %s"
+  },
+  "SRS: %s (+%d)": {
+    "value": "SRS: %s (+%d)"
   },
   "SSID": {
     "value": "SSID"
@@ -3685,6 +3903,9 @@
   },
   "Save": {
     "value": "Сохранить"
+  },
+  "Save as…": {
+    "value": "Сохранить как…"
   },
   "Save to Downloads": {
     "value": "Сохранить в «Загрузки»"
@@ -3701,6 +3922,9 @@
   "Saved as %s (%d bytes)": {
     "value": "Сохранено как %s (%d байт)"
   },
+  "Saved as “%s”": {
+    "value": "Сохранено как «%s»"
+  },
   "Saved direction \"%1$s\" — %2$s": {
     "value": "Направление «%1$s» сохранено — %2$s"
   },
@@ -3712,6 +3936,14 @@
   },
   "Saved to Downloads: %s (%d bytes)": {
     "value": "Сохранено в «Загрузки»: %s (%d байт)"
+  },
+  "Saved · %d section records dropped": {
+    "value": {
+      "one": "Сохранено · %d запись секций отброшена",
+      "few": "Сохранено · %d записи секций отброшены",
+      "many": "Сохранено · %d записей секций отброшено",
+      "other": "Сохранено · %d записей секций отброшено"
+    }
   },
   "Saved. Force-stop & reopen app to apply.": {
     "value": "Сохранено. Полностью закройте и снова откройте приложение, чтобы применить."
@@ -3727,6 +3959,12 @@
   },
   "Search domain / IP / app": {
     "value": "Поиск: домен / IP / приложение"
+  },
+  "Sections": {
+    "value": "Секции"
+  },
+  "Sections cleared": {
+    "value": "Секции очищены"
   },
   "Select a %s file": {
     "value": "Выберите файл %s"
@@ -3801,6 +4039,9 @@
   },
   "Servers in this folder have no detours yet. You can still route all of them through one of your servers, or set personal detours per server (tap a server on the Servers tab).": {
     "value": "У серверов этой папки пока нет detour. Тем не менее можно направить их все через один из ваших серверов или задать каждому личный detour (нажмите на сервер на вкладке «Серверы»)."
+  },
+  "Servers: %d": {
+    "value": "Серверов: %d"
   },
   "Session History": {
     "value": "История сессии"
@@ -3885,6 +4126,9 @@
   "Shown as the server title in the Servers list. If empty, \"%s\" is used.": {
     "value": "Показывается как заголовок сервера в списке «Серверы». Если пусто, используется «%s»."
   },
+  "Shown in Routing and DNS with the node's tag": {
+    "value": "Показываются в Routing и DNS с тегом узла"
+  },
   "Single object or array of outbounds. WireGuard routes to endpoints[] automatically.": {
     "value": "Один объект или массив исходящих каналов. WireGuard автоматически направляется в endpoints[]."
   },
@@ -3918,8 +4162,14 @@
   "Source copied": {
     "value": "Источник скопирован"
   },
+  "Source is empty": {
+    "value": "Источник пуст"
+  },
   "Source not found in your lists": {
     "value": "Источник не найден в ваших списках"
+  },
+  "Source replaced with JSON": {
+    "value": "Источник заменён на JSON"
   },
   "Source: local file": {
     "value": "Источник: локальный файл"
@@ -3976,6 +4226,9 @@
   "Stop VPN?": {
     "value": "Остановить VPN?"
   },
+  "Stop checking": {
+    "value": "Остановить"
+  },
   "Stop timed out": {
     "value": "Остановка не завершилась вовремя"
   },
@@ -3987,6 +4240,9 @@
   },
   "Stopping…": {
     "value": "Остановка…"
+  },
+  "Stored JSON": {
+    "value": "JSON как хранится"
   },
   "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
     "value": "Хранится только на устройстве. При выключении записи не удаляются — убирайте их по одной в «Pick saved» (долгое нажатие на чип → Remove)."
@@ -4122,6 +4378,15 @@
   "Tag prefix": {
     "value": "Префикс тегов"
   },
+  "Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions": {
+    "value": "IP Tailscale или имя машины-пира, которая анонсирует exit node; чтобы пустить интернет через него, выберите этот узел Направлением на Home. Оставьте пустым для доступа только в tailnet — узел не появится в Направлениях"
+  },
+  "Tailscale node": {
+    "value": "Узел Tailscale"
+  },
+  "Tailscale node is required": {
+    "value": "Нужно выбрать узел Tailscale"
+  },
   "Taken by another VPN": {
     "value": "Занят другим VPN"
   },
@@ -4197,14 +4462,55 @@
   "The core has not panicked. Note that this channel only covers Go panics — native crashes and kills by the system are not recorded here.": {
     "value": "Ядро не паниковало. Учтите: сюда попадают только паники Go — нативные падения и убийства системой здесь не фиксируются."
   },
+  "The core has rejected %d servers so far, and each was turned off. Keep checking the rest? On a large subscription this can take a while.": {
+    "value": {
+      "one": "Ядро не приняло уже %d серверов, каждый из них выключен. Проверять остальные? На большой подписке это может занять время.",
+      "few": "Ядро не приняло уже %d серверов, каждый из них выключен. Проверять остальные? На большой подписке это может занять время.",
+      "many": "Ядро не приняло уже %d серверов, каждый из них выключен. Проверять остальные? На большой подписке это может занять время.",
+      "other": "Ядро не приняло уже %d серверов, каждый из них выключен. Проверять остальные? На большой подписке это может занять время."
+    }
+  },
+  "The core rejected it, so it was turned off to let the VPN start: %s": {
+    "value": "Ядро его не приняло — он выключен, чтобы VPN смог запуститься: %s"
+  },
+  "The core rejected the node: %s": {
+    "value": "Ядро отвергло узел: %s"
+  },
+  "The core rejected them, so they were turned off to let the VPN start: %s": {
+    "value": "Ядро их не приняло — они выключены, чтобы VPN смог запуститься: %s"
+  },
+  "The country you use the app in. Drives region-specific defaults: today the WARP SNI pool, later routing rule presets. Auto = country of the mobile network, then of the device locale.": {
+    "value": "Страна, в которой вы пользуетесь приложением. Определяет региональные дефолты: сегодня SNI-пул WARP, дальше пресеты правил маршрутизации. Auto = страна мобильной сети, затем локали устройства."
+  },
+  "The current workspace cannot be deleted": {
+    "value": "Текущее рабочее пространство удалить нельзя"
+  },
+  "The device is removed from the tailnet when it goes offline": {
+    "value": "Устройство удаляется из tailnet, когда уходит в офлайн"
+  },
+  "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
+    "value": "Документ несёт и «sections», и «dns»/«route» — оставьте что-то одно"
+  },
+  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
+    "value": "Документ несёт и «sections», и «dns»/«route»: взяты «sections», остальное проигнорировано."
+  },
   "The first position (%s) dials through its own detour — the real path is longer than shown: one more hop precedes it that is not in this list.": {
     "value": "Первая позиция (%s) ходит через свой detour — реальный путь длиннее показанного: перед ней есть ещё один хоп, которого нет в списке."
   },
   "The name \"%s\" is already taken by another node, direction or chain — two outbounds with one tag cannot coexist.": {
     "value": "Имя «%s» уже занято другим узлом, Направлением или цепочкой — два исходящих канала с одним тегом не уживутся."
   },
+  "The node's original text. Save writes it as is.": {
+    "value": "Исходный текст узла. Save записывает его как есть."
+  },
+  "The node's rules and DNS records will be removed. The node itself stays.": {
+    "value": "Правила и DNS-записи узла будут удалены. Сам узел останется."
+  },
   "The servers it selects from stay in the folder.": {
     "value": "Серверы, из которых он выбирает, останутся в папке."
+  },
+  "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
+    "value": "Источник заменится этим JSON, и узел будет уходить в ядро как есть. Приложение перестанет проверять такой узел: его проверяет только ядро при сохранении, и ошибка может оставить узел без соединения. Обратно в ссылку узел не превратится. Если можете, правьте источник."
   },
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
@@ -4223,6 +4529,9 @@
   },
   "These route through this node:": {
     "value": "Через этот узел ходят:"
+  },
+  "These settings have no place in the shared format:": {
+    "value": "Этим настройкам нет места в общем формате:"
   },
   "This chain has no positions to probe.": {
     "value": "В этой цепочке нет позиций для замера."
@@ -4374,9 +4683,6 @@
   "Unknown uTLS fingerprint \"%s\" replaced with \"chrome\" (would otherwise break the whole config).": {
     "value": "Неизвестный uTLS fingerprint «%s» заменён на «chrome» (иначе сломался бы весь конфиг)."
   },
-  "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".": {
-    "value": "REALITY с uTLS fingerprint «%s»: серверы Xray начиная с v26.9.8 отвергают такой ClientHello. Если соединение не устанавливается, попробуйте «chrome»."
-  },
   "Unlimited": {
     "value": "никогда"
   },
@@ -4422,6 +4728,9 @@
   "Upload": {
     "value": "Отдача"
   },
+  "Usage region": {
+    "value": "Регион использования"
+  },
   "Use \"%s\" as…": {
     "value": "Использовать «%s» как…"
   },
@@ -4436,6 +4745,9 @@
   },
   "Use servers' own detours": {
     "value": "Использовать собственные detour серверов"
+  },
+  "Use subnet routes advertised by other tailnet devices": {
+    "value": "Использовать маршруты подсетей, которые анонсируют другие устройства tailnet"
   },
   "Use subscription detour servers": {
     "value": "Использовать detour-серверы подписки"
@@ -4538,26 +4850,32 @@
   "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
     "value": "Ранние данные WebSocket «?ed=%d» перенесены из пути в отдельное поле, как требует ядро. Узел работает, но путь в конфиге отличается от указанного в ссылке."
   },
+  "What goes into this direction": {
+    "value": "Что входит в Направление"
+  },
   "What happened": {
     "value": "Что произошло"
   },
   "What the app changed or could not apply": {
     "value": "Что приложение изменило или не смогло применить"
   },
+  "What the core receives. Read-only: edit the source instead.": {
+    "value": "То, что получит ядро. Только чтение: правьте источник."
+  },
   "What you can do": {
     "value": "Что можно сделать"
-  },
-  "Where to get L×Box": {
-    "value": "Где взять L×Box"
-  },
-  "What goes into this direction": {
-    "value": "Что входит в Направление"
   },
   "When to pause the tunnel to save battery. Takes effect on next VPN connect.": {
     "value": "Когда приостанавливать туннель ради экономии батареи. Вступает в силу при следующем подключении VPN."
   },
+  "Where to get L×Box": {
+    "value": "Где взять L×Box"
+  },
   "Which direction carries DNS queries to this server. Direct — no detour key in the config.": {
     "value": "Какое Направление несёт DNS-запросы к этому серверу. «Напрямую» — без ключа detour в конфиге."
+  },
+  "Which node's tailnet answers the queries": {
+    "value": "Чья сеть tailnet отвечает на запросы"
   },
   "While this is on, the per-subscription \"On update\" setting is hidden — everything is applied immediately. Turning it off brings each subscription's own choice back.": {
     "value": "Пока включено, настройка «При обновлении» в подписках скрыта — всё применяется сразу. Выключите — вернётся собственный выбор каждой подписки."
@@ -4584,17 +4902,32 @@
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
   },
+  "WireGuard config: saved as is. The tag is stored separately.": {
+    "value": "Конфиг WireGuard: сохраняется как есть. Тег хранится отдельно."
+  },
   "Works only if the rule-set contains domains — IP-only lists never match DNS queries.": {
     "value": "Работает, только если rule-set содержит домены — списки из одних IP никогда не совпадают с DNS-запросами."
+  },
+  "Workspace name": {
+    "value": "Имя рабочего пространства"
+  },
+  "Workspace not found": {
+    "value": "Рабочее пространство не найдено"
+  },
+  "Workspace “%s” loaded": {
+    "value": "Рабочее пространство «%s» загружено"
+  },
+  "Workspaces": {
+    "value": "Рабочие пространства"
   },
   "Writes a new value into the matching nodes.": {
     "value": "Записывает новое значение в подходящие узлы."
   },
-  "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
-    "value": "Режим XHTTP установлен в «packet-up»: ссылка требует передавать данные восходящего потока в заголовке, а ядро принимает это только в таком режиме (иначе конфиг не загрузился бы)."
-  },
   "XHTTP \"%1$s\" reset to default — %2$s (would otherwise break the whole config).": {
     "value": "Параметр XHTTP «%1$s» сброшен на значение по умолчанию — %2$s (иначе сломался бы весь конфиг)."
+  },
+  "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
+    "value": "Режим XHTTP установлен в «packet-up»: ссылка требует передавать данные восходящего потока в заголовке, а ядро принимает это только в таком режиме (иначе конфиг не загрузился бы)."
   },
   "XHTTP padding": {
     "value": "набивка XHTTP"
@@ -4722,6 +5055,9 @@
   "first matching node becomes default": {
     "value": "первый совпавший узел станет узлом по умолчанию"
   },
+  "from node %s": {
+    "value": "из узла %s"
+  },
   "group": {
     "value": "группа"
   },
@@ -4772,6 +5108,9 @@
   },
   "node": {
     "value": "узел"
+  },
+  "node is disabled": {
+    "value": "узел выключен"
   },
   "not found": {
     "value": "не найдено"
@@ -4828,6 +5167,9 @@
   },
   "server missing": {
     "value": "сервер отсутствует"
+  },
+  "sing-box JSON: sent to the core as is. The core checks it on save.": {
+    "value": "sing-box JSON: уходит в ядро как есть. Ядро проверяет его при сохранении."
   },
   "sing-box config preview": {
     "value": "превью конфига sing-box"
@@ -4919,292 +5261,5 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
-  },
-  "Servers: %d": {
-    "value": "Серверов: %d"
-  },
-  "These settings have no place in the shared format:": {
-    "value": "Этим настройкам нет места в общем формате:"
-  },
-  "Not included in the file": {
-    "value": "Не попало в файл"
-  },
-  "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
-    "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
-  },
-  "Workspaces": {
-    "value": "Рабочие пространства"
-  },
-  "Load": {
-    "value": "Загрузить"
-  },
-  "Save as…": {
-    "value": "Сохранить как…"
-  },
-  "Workspace name": {
-    "value": "Имя рабочего пространства"
-  },
-  "Overwrite “%s”?": {
-    "value": "Перезаписать «%s»?"
-  },
-  "A workspace with this name already exists. Its saved state will be replaced.": {
-    "value": "Рабочее пространство с таким именем уже есть. Его сохранённое состояние будет заменено."
-  },
-  "Overwrite": {
-    "value": "Перезаписать"
-  },
-  "Loading workspace…": {
-    "value": "Загрузка рабочего пространства…"
-  },
-  "Workspace “%s” loaded": {
-    "value": "Рабочее пространство «%s» загружено"
-  },
-  "Saved as “%s”": {
-    "value": "Сохранено как «%s»"
-  },
-  "Failed to load workspace: %s": {
-    "value": "Не удалось загрузить рабочее пространство: %s"
-  },
-  "Name is empty": {
-    "value": "Имя пустое"
-  },
-  "Name is too long": {
-    "value": "Имя слишком длинное"
-  },
-  "Name must not contain / or \\": {
-    "value": "Имя не должно содержать / или \\"
-  },
-  "Name must not start with a dot": {
-    "value": "Имя не должно начинаться с точки"
-  },
-  "Workspace not found": {
-    "value": "Рабочее пространство не найдено"
-  },
-  "A workspace with this name already exists": {
-    "value": "Рабочее пространство с таким именем уже есть"
-  },
-  "The current workspace cannot be deleted": {
-    "value": "Текущее рабочее пространство удалить нельзя"
-  },
-  "Delete workspace “%s”?": {
-    "value": "Удалить рабочее пространство «%s»?"
-  },
-  "Its saved state will be removed. This cannot be undone.": {
-    "value": "Его сохранённое состояние будет удалено. Отменить это нельзя."
-  },
-  "Config rebuild failed: %s": {
-    "value": "Сборка конфига не удалась: %s"
-  },
-  "Auto · %s": {
-    "value": "Auto · %s"
-  },
-  "Usage region": {
-    "value": "Регион использования"
-  },
-  "The country you use the app in. Drives region-specific defaults: today the WARP SNI pool, later routing rule presets. Auto = country of the mobile network, then of the device locale.": {
-    "value": "Страна, в которой вы пользуетесь приложением. Определяет региональные дефолты: сегодня SNI-пул WARP, дальше пресеты правил маршрутизации. Auto = страна мобильной сети, затем локали устройства."
-  },
-  "Not set": {
-    "value": "Не задан"
-  },
-  "Auto · country not detected": {
-    "value": "Auto · страна не определена"
-  },
-  "Other country code…": {
-    "value": "Другой код страны…"
-  },
-  "Country code (2 letters)": {
-    "value": "Код страны (2 буквы)"
-  },
-  "Region": {
-    "value": "Регион"
-  },
-  "Node section record dropped: %s": {
-    "value": "Запись секции узла отброшена: %s"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
-    "value": "Документ несёт и «sections», и «dns»/«route»: взяты «sections», остальное проигнорировано."
-  },
-  "%d DNS rules": {
-    "value": {
-      "one": "%d DNS-правило",
-      "few": "%d DNS-правила",
-      "many": "%d DNS-правил",
-      "other": "%d DNS-правил"
-    }
-  },
-  "%d DNS servers": {
-    "value": {
-      "one": "%d DNS-сервер",
-      "few": "%d DNS-сервера",
-      "many": "%d DNS-серверов",
-      "other": "%d DNS-серверов"
-    }
-  },
-  "%d rules": {
-    "value": {
-      "one": "%d правило",
-      "few": "%d правила",
-      "many": "%d правил",
-      "other": "%d правил"
-    }
-  },
-  "A one-time key is consumed on the first login; the device identity then lives in the state directory. Clearing the app data registers a new device.": {
-    "value": "Одноразовый ключ расходуется при первом входе; дальше идентичность устройства живёт в каталоге состояния. Очистка данных приложения регистрирует новое устройство."
-  },
-  "Accept default resolvers": {
-    "value": "Принимать резолверы по умолчанию"
-  },
-  "Accept routes": {
-    "value": "Принимать маршруты"
-  },
-  "Auth key": {
-    "value": "Ключ авторизации"
-  },
-  "Auth key required": {
-    "value": "Нужен ключ авторизации"
-  },
-  "Clear sections": {
-    "value": "Очистить секции"
-  },
-  "Clear sections?": {
-    "value": "Очистить секции?"
-  },
-  "Control URL (optional)": {
-    "value": "Control URL (необязательно)"
-  },
-  "Custom server type \"%s\" — edit it on the JSON tab. The form supports UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale.": {
-    "value": "Нестандартный тип сервера «%s» — правьте его на вкладке JSON. Форма поддерживает UDP / DoT / DoH / DoQ / DoH3 / Group / Tailscale."
-  },
-  "Ephemeral": {
-    "value": "Эфемерный"
-  },
-  "Exit node (optional)": {
-    "value": "Выходной узел (необязательно)"
-  },
-  "From nodes · read-only, edited in the node": {
-    "value": "Из узлов · только чтение, правятся в узле"
-  },
-  "Has node sections": {
-    "value": "Есть секции узла"
-  },
-  "Hostname (optional)": {
-    "value": "Имя хоста (необязательно)"
-  },
-  "Invalid JSON: empty array": {
-    "value": "Некорректный JSON: пустой массив"
-  },
-  "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\"": {
-    "value": "JSON должен быть объектом outbound с «type» или документом с «endpoints»/«outbounds»"
-  },
-  "Tailscale IP or machine name of a peer that advertises an exit node; pick this node as the Direction on Home to route your internet through it. Leave empty for tailnet access only — the node will not appear in Directions": {
-    "value": "IP Tailscale или имя машины-пира, которая анонсирует exit node; чтобы пустить интернет через него, выберите этот узел Направлением на Home. Оставьте пустым для доступа только в tailnet — узел не появится в Направлениях"
-  },
-  "MagicDNS of the tailnet via a Tailscale node · no address": {
-    "value": "MagicDNS сети tailnet через узел Tailscale · без адреса"
-  },
-  "Names outside the tailnet go to the default DNS servers; off — NXDOMAIN": {
-    "value": "Имена вне tailnet идут к DNS-серверам по умолчанию; выкл — NXDOMAIN"
-  },
-  "No Tailscale nodes yet — add one on the Servers screen first": {
-    "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
-  },
-  "No address": {
-    "value": "Без адреса"
-  },
-  "No address (Tailscale)": {
-    "value": "Без адреса (Tailscale)"
-  },
-  "Node": {
-    "value": "Узел"
-  },
-  "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
-    "value": "Чтобы приложить правила узла, вставьте на вкладке JSON конфиг sing-box с dns/route или документ с «sections»."
-  },
-  "Rules and DNS records this node carries": {
-    "value": "Правила и DNS-записи, которые узел носит с собой"
-  },
-  "Saved · %d section records dropped": {
-    "value": {
-      "one": "Сохранено · %d запись секций отброшена",
-      "few": "Сохранено · %d записи секций отброшены",
-      "many": "Сохранено · %d записей секций отброшено",
-      "other": "Сохранено · %d записей секций отброшено"
-    }
-  },
-  "Sections": {
-    "value": "Секции"
-  },
-  "Sections cleared": {
-    "value": "Секции очищены"
-  },
-  "Shown in Routing and DNS with the node's tag": {
-    "value": "Показываются в Routing и DNS с тегом узла"
-  },
-  "Stored JSON": {
-    "value": "JSON как хранится"
-  },
-  "Tailscale node": {
-    "value": "Узел Tailscale"
-  },
-  "Tailscale node is required": {
-    "value": "Нужно выбрать узел Tailscale"
-  },
-  "The device is removed from the tailnet when it goes offline": {
-    "value": "Устройство удаляется из tailnet, когда уходит в офлайн"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
-    "value": "Документ несёт и «sections», и «dns»/«route» — оставьте что-то одно"
-  },
-  "The node's rules and DNS records will be removed. The node itself stays.": {
-    "value": "Правила и DNS-записи узла будут удалены. Сам узел останется."
-  },
-  "Use subnet routes advertised by other tailnet devices": {
-    "value": "Использовать маршруты подсетей, которые анонсируют другие устройства tailnet"
-  },
-  "Which node's tailnet answers the queries": {
-    "value": "Чья сеть tailnet отвечает на запросы"
-  },
-  "from node %s": {
-    "value": "из узла %s"
-  },
-  "node is disabled": {
-    "value": "узел выключен"
-  },
-  "One rule holds one JSON object. Add each object of the array as a separate rule.": {
-    "value": "Одно правило — один JSON-объект. Добавьте каждый объект массива отдельным правилом."
-  },
-  "Source is empty": {
-    "value": "Источник пуст"
-  },
-  "The core rejected the node: %s": {
-    "value": "Ядро отвергло узел: %s"
-  },
-  "Edit JSON?": {
-    "value": "Править JSON?"
-  },
-  "The source will be replaced by this JSON and the node will go to the core as is. The app stops checking such a node: only the core validates it on save, and a mistake can leave it unable to connect. There is no way back to a link. Edit the source instead when you can.": {
-    "value": "Источник заменится этим JSON, и узел будет уходить в ядро как есть. Приложение перестанет проверять такой узел: его проверяет только ядро при сохранении, и ошибка может оставить узел без соединения. Обратно в ссылку узел не превратится. Если можете, правьте источник."
-  },
-  "Source replaced with JSON": {
-    "value": "Источник заменён на JSON"
-  },
-  "sing-box JSON: sent to the core as is. The core checks it on save.": {
-    "value": "sing-box JSON: уходит в ядро как есть. Ядро проверяет его при сохранении."
-  },
-  "WireGuard config: saved as is. The tag is stored separately.": {
-    "value": "Конфиг WireGuard: сохраняется как есть. Тег хранится отдельно."
-  },
-  "Link: the tag goes into its fragment on save.": {
-    "value": "Ссылка: тег при сохранении попадает в её фрагмент."
-  },
-  "The node's original text. Save writes it as is.": {
-    "value": "Исходный текст узла. Save записывает его как есть."
-  },
-  "What the core receives. Read-only: edit the source instead.": {
-    "value": "То, что получит ядро. Только чтение: правьте источник."
-  },
-  "Edit JSON": {
-    "value": "Править JSON"
   }
 }

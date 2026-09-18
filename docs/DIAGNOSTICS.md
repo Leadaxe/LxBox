@@ -88,12 +88,33 @@ Auth: `Authorization: Bearer $TOKEN` (the token is in `vars.debug_token`).
 | `GET /profiler/live/stream` | An SSE stream of system-wide events (live push) |
 | `GET /profiler/live/unattributed` | §177 — recent unattributed events (a DNS failure with no owner UID, and the like) |
 | `GET /profiler/live/state` | `{recording, started_at, buffer_count, unattributed_count, banner_active}`. `buffer_count=0` while `recording=true` means no events are arriving (the profiler is recording, but into nothing) |
+| `GET /core_reject` | Feature 478 — the auto-disable guard of the current (or last) Start: `{phase, round, round_limit, disabled:[{tag,reason}], outcome, error}`. `phase` = `idle\|signal_start\|checking\|awaiting_prompt\|final_start\|done`; `outcome` is `null` until a run finished, then `started_clean\|started_with_disabled\|failed\|stopped_by_user`. `disabled` lists what **this run** turned off, in the order the core named it. In-memory: empty after a process restart |
+| `GET /core_reject/nodes` | Every verdict standing in **storage** — `[{source, tag, reason}]`. Unlike `/core_reject`, this survives a restart: it is what is actually written next to the nodes. `source` is the name of the subscription / folder / server the node belongs to |
+| `GET /core_reject/banner` | The “N disabled” banner: `{visible, count, nodes:[{tag,reason}]}`. It is raised only on `outcome=started_with_disabled` — the VPN came up, but not with the set the user asked for |
+| `GET /core_reject/prompt` | The round-limit dialog: `{pending, count, limit}`. `count` is the number printed in the dialog — the round **limit**, not the tally of disabled nodes |
+| `GET /core_reject/notifications[?tag=<tag>]` | What the node row and card will render, without a screenshot: `[{code, severity, params, title_en, text_en}]`. The texts are resolved from the contract registry and pinned to English (a machine surface must not depend on the device locale), so this is how you check that `core_rejected` resolves to a real text and not to the bare code. Without `tag` — a map `{tag: [...]}` over every node that has stored warnings |
 
 **Read-only and safe.** The one exception in the table is
 `PUT /settings/core_logs_verbose`: it only changes the log filter
 (SharedPreferences, not `lxbox_settings.json`), triggers no rebuild and spoils no
 evidence. Every other write endpoint (`POST /action/*`, `PUT /config`,
 `PUT /settings/*`) is destructive — see below.
+
+**Driving the auto-disable guard (feature 478).** The read endpoints above show
+what the guard did; these three write endpoints let you drive it without
+touching the screen. They change stored state — use them on a test device, not
+while collecting evidence for a bug report.
+
+| Endpoint | What it does |
+|---|---|
+| `POST /core_reject/prompt?answer=stop\|keep` | Answers the round-limit dialog in place of the user (the body `{"answer":"..."}` works too). `keep` drops the limit until this Start ends; `stop` ends the run — the VPN stays down and the already-disabled nodes stay disabled. → `{answered:true, answer}`. `409` when nothing is pending |
+| `POST /core_reject/enable?tag=<tag>` | Re-enables a node by its core tag — the same path as the banner button: the verdict is wiped and the node gets checked again on the next Start. → `{enabled, tag}`; `404` when no node carries that tag |
+| `POST /core_reject/banner/dismiss` | Closes the “N disabled” banner (idempotent). The verdicts stay — the message was dismissed, not the decision |
+
+One Start runs **two** real core starts — a signal one and a final one — with
+the silent `checkConfig` loop in between; each round of that loop disables one
+node. So `phase` walking `signal_start → checking → final_start → done` with a
+non-empty `disabled` is the normal success path, not a fault.
 
 ### ~~Clash API~~ — REMOVED (§122)
 

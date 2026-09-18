@@ -388,6 +388,8 @@ class HomeController extends ChangeNotifier
     // событие. Теперь один emit, одно rebuild.
 
     if (tunnel == TunnelStatus.connected) {
+      // Фича 478 — ядро приняло конфиг: сигнальный/финальный старт удался.
+      _settleStartOutcome(null);
       _emit(_state.copyWith(
         tunnel: tunnel,
         connectedSince: DateTime.now(),
@@ -477,6 +479,10 @@ class HomeController extends ChangeNotifier
           revoked: tunnel == TunnelStatus.revoked,
           errorReason: event.errorReason);
       final reasonEn = stopReason?.renderEn() ?? '';
+      // Фича 478 — отказ ядра: отдать его текст ждущей страховке. Берём
+      // ДОСЛОВНЫЙ текст native-события, а не отрендеренную строку: разбор
+      // CANON §9 работает по формату ядра, а не по обёртке приложения.
+      _settleStartOutcome(event.errorReason ?? '');
       _emit(
         _state.copyWith(
           tunnel: tunnel,
@@ -671,6 +677,40 @@ class HomeController extends ChangeNotifier
 
   /// Atomic start: native call + intent-based sticky reset.
   /// Returns true если startVPN принят (reached Starting), false иначе.
+  /// Фича 478 — ожидание ИСХОДА реального старта. `startVPN()` отвечает лишь
+  /// «принято к исполнению», а вердикт ядра приходит асинхронно событием
+  /// статуса: `connected` = приняло, `disconnected` с текстом = отказ.
+  /// Страховке нужен именно исход, поэтому здесь его ждёт completer, который
+  /// разрешает обработчик события.
+  Completer<String?>? _startOutcome;
+
+  /// Разрешить ожидание: `null` — ядро приняло, иначе текст отказа.
+  void _settleStartOutcome(String? error) {
+    final c = _startOutcome;
+    if (c == null || c.isCompleted) return;
+    _startOutcome = null;
+    c.complete(error);
+  }
+
+  /// Фича 478 — реальный старт ядра с ожиданием вердикта. `null` — принято;
+  /// строка — текст отказа ядра (её разбирает CANON §9). Таймаут отдаёт
+  /// пустую строку: ответить нечем, страховка деградирует консервативно.
+  Future<String?> startAndAwaitVerdict({
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    final c = Completer<String?>();
+    _startOutcome = c;
+    await start();
+    if (_state.tunnel == TunnelStatus.connected) {
+      _settleStartOutcome(null);
+      return null;
+    }
+    return c.future.timeout(timeout, onTimeout: () {
+      _startOutcome = null;
+      return '';
+    });
+  }
+
   Future<bool> _startInternal() async {
     await _pushNotificationLabels();
     final ok = await _vpn.startVPN();

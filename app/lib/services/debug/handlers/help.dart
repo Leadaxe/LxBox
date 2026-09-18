@@ -411,6 +411,51 @@ POST   /folders/{id}/probe                     Headless "Test servers" run; resu
                                                  ~members/6 × timeout_ms; lower timeout_ms for big folders
                                                  to fit the 30s request timeout.
 
+=== Core-rejected nodes (auto-disable guard) ===
+
+When the core refuses a config naming a node, the app disables that node,
+records the reason next to it and re-checks silently until the config is
+clean. One Start does TWO real core starts (signal + final); between them
+runs the silent check loop. Everything the guard does is observable here —
+no screen needed.
+
+GET  /core_reject                              Guard state of the current (or last) run:
+                                                 {phase, round, round_limit, disabled:[{tag,reason}],
+                                                 outcome, error}. phase: idle|signal_start|checking|
+                                                 awaiting_prompt|final_start|done. outcome (null until a
+                                                 run finished): started_clean|started_with_disabled|
+                                                 failed|stopped_by_user. disabled = nodes this RUN
+                                                 turned off, in the order the core named them.
+GET  /core_reject/nodes                        Every verdict standing in STORAGE (survives a process
+                                                 restart, unlike the run state above):
+                                                 [{source, tag, reason}]. source = the subscription /
+                                                 folder / server name the node belongs to.
+GET  /core_reject/banner                       "N disabled" banner: {visible, count, nodes:[{tag,reason}]}.
+                                                 Raised only on outcome=started_with_disabled — the VPN
+                                                 came up, but not with the set the user asked for.
+POST /core_reject/banner/dismiss               Close the banner (idempotent). Verdicts stay — the message
+                                                 was dismissed, not the decision. → {ok, action, visible,
+                                                 count, nodes}
+GET  /core_reject/prompt                       Round-limit dialog: {pending, count, limit}. count is the
+                                                 number in the dialog text (the round LIMIT, not the
+                                                 disabled tally).
+POST /core_reject/prompt?answer=stop|keep      Answer it in place of the user (body {"answer":"..."} also
+                                                 works). keep = drop the limit until this Start ends;
+                                                 stop = end the run, VPN stays down, disabled nodes stay
+                                                 disabled. → {answered:true, answer}. 409 when nothing
+                                                 is pending.
+POST /core_reject/enable?tag=<tag>             Re-enable a node by its core tag (same as the banner
+                                                 button): the verdict is wiped, the node is checked
+                                                 again. → {enabled, tag}; 404 when no node carries
+                                                 that tag.
+GET  /core_reject/notifications[?tag=<tag>]    What the node row and card will render, WITHOUT a
+                                                 screenshot: [{code, severity, params, title_en,
+                                                 text_en}] for that node. Texts come from the contract
+                                                 registry and are pinned English (a machine surface must
+                                                 not depend on the device locale). No tag → a map
+                                                 {tag: [...]} of every node that has stored warnings.
+                                                 404 when the given tag has none.
+
 === Wi-Fi history (saved networks for routing rule editor) ===
 
 GET    /wifi_history                           list [{ssid, bssid, last_seen}]
@@ -673,6 +718,15 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/folders/{id}/members/{idx}/move', 'params': {'rebuild': 'true|false'}, 'body': '{"to":"<folder id>"}', 'description': 'Move member to another folder'},
     {'method': 'POST', 'path': '/folders/{id}/move-server', 'params': {'rebuild': 'true|false'}, 'body': '{"server_id":"<subs entry id>"}', 'description': 'Move a standalone single server INTO the folder (splits 1:1 by nodes)'},
     {'method': 'POST', 'path': '/folders/{id}/probe', 'body': 'optional {"url":"...","timeout_ms":N} (defaults = global ping_options)', 'description': 'Headless Test servers run, results in response. Statuses: ok|failed|broken|invalid|not_in_config|pending. Synchronous — lower timeout_ms for big folders (30s request timeout).'},
+    // Core-rejected nodes (auto-disable guard, feature 478)
+    {'method': 'GET', 'path': '/core_reject', 'description': 'Guard state of the current/last run: {phase, round, round_limit, disabled:[{tag,reason}], outcome, error}. phase: idle|signal_start|checking|awaiting_prompt|final_start|done. outcome (null until a run finished): started_clean|started_with_disabled|failed|stopped_by_user. disabled = nodes THIS run turned off, in the order the core named them. One Start does two real core starts (signal + final) with a silent check loop between them.'},
+    {'method': 'GET', 'path': '/core_reject/nodes', 'description': 'Every verdict standing in storage (survives a process restart, unlike the run state): [{source, tag, reason}]. source = the subscription/folder/server name the node belongs to.'},
+    {'method': 'GET', 'path': '/core_reject/banner', 'description': '"N disabled" banner: {visible, count, nodes:[{tag,reason}]}. Raised only on outcome=started_with_disabled.'},
+    {'method': 'POST', 'path': '/core_reject/banner/dismiss', 'description': 'Close the banner (idempotent). Verdicts stay — the message was dismissed, not the decision. → {ok, action, visible, count, nodes}'},
+    {'method': 'GET', 'path': '/core_reject/prompt', 'description': 'Round-limit dialog: {pending, count, limit}. count is the number in the dialog text (the round LIMIT, not the disabled tally).'},
+    {'method': 'POST', 'path': '/core_reject/prompt', 'params': {'answer': 'stop|keep'}, 'body': '{"answer":"stop|keep"} (alternative to the query param)', 'description': 'Answer the round-limit dialog in place of the user. keep = drop the limit until this Start ends; stop = end the run (VPN stays down, disabled nodes stay disabled). → {answered:true, answer}. 409 when nothing is pending.'},
+    {'method': 'POST', 'path': '/core_reject/enable', 'params': {'tag': 'core tag of the node'}, 'body': '{"tag":"..."} (alternative to the query param)', 'description': 'Re-enable a node by its core tag (same as the banner button): the verdict is wiped and the node is checked again. → {enabled, tag}; 404 when no node carries that tag.'},
+    {'method': 'GET', 'path': '/core_reject/notifications', 'params': {'tag': 'core tag (omit for every node with stored warnings)'}, 'description': 'What the node row and card will render, without a screenshot: [{code, severity, params, title_en, text_en}]. Texts come from the contract registry, pinned English (a machine surface must not depend on the device locale). No tag → a map {tag: [...]}. 404 when the given tag has no stored warnings.'},
     // Wi-Fi history (saved networks for routing rule editor)
     {'method': 'GET', 'path': '/wifi_history', 'description': 'List [{ssid, bssid, last_seen}], cap 50'},
     {'method': 'POST', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Upsert entry; bssid lower-cased'},

@@ -7,6 +7,10 @@ import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
+import '../services/core_reject/core_reject_guard.dart';
+import '../services/core_reject/core_reject_state.dart';
+import 'home/core_reject_host.dart';
+import 'home/core_reject_ui.dart';
 import '../services/error_humanize.dart';
 import '../services/support/active_time_tracker.dart';
 import '../services/support/support_message.dart';
@@ -950,12 +954,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // auto_updater.dart) — 4 триггера, общая логика. При Start никакого
     // синхронного HTTP-fetch'а не делаем: если подписки протухли, trigger 2
     // (VPN connected + 2 мин) подтянет их через туннель.
-    await _controller.start();
+    // Фича 478 — реальный старт ядра идёт через страховку: отказ, назвавший
+    // узел, выключает его и запускает тихий цикл checkConfig. Успешный старт
+    // не платит ничего: перед обычным стартом проверок нет.
+    await _runWithCoreRejectGuard();
     // §219 — inline error-snackbar удалён: он был мёртвым кодом. start()
     // эмитит lastError через _emit→notifyListeners→_onControllerChange, который
     // СИНХРОННО показывает snackbar и зовёт clearError() до возврата сюда →
     // lastError.isNotEmpty здесь всегда false. Ошибки централизованы в
     // _onControllerChange (см. коммент §166 выше).
+  }
+
+  /// Фича 478 — прогон страховки на одно нажатие Start. Дерево ветвлений —
+  /// в `core_reject_guard.dart`; здесь только связка с экраном: вопрос
+  /// человеку диалогом и плашка по итогу.
+  Future<void> _runWithCoreRejectGuard() async {
+    CoreRejectState.I.beginRun();
+    final host = AppCoreRejectHost(
+      home: _controller,
+      sub: _subController,
+      // Пересборка круга — тихая: человек в это время смотрит на кнопку
+      // Start, а не на снэкбары о пересобранном конфиге.
+      rebuildAndSave: () async {
+        final ok = await _rebuildConfig(silent: true);
+        return ok ? _controller.state.configRaw : null;
+      },
+      askPrompt: (limit) async {
+        if (!mounted) return CoreRejectPrompt.stop;
+        // Вопрос виден и Debug API — владелец проверяет фичу без экрана.
+        final viaApi = CoreRejectState.I.askPrompt(limit);
+        final viaUi = showCoreRejectPrompt(context, limit);
+        final answer = await Future.any([viaApi, viaUi]);
+        CoreRejectState.I.answerPrompt(answer);
+        return answer;
+      },
+    );
+    final run = await CoreRejectGuard(host).run();
+    CoreRejectState.I.finish(run);
+    if (!mounted) return;
+    if (run.outcome == CoreRejectOutcome.failed && run.error.isNotEmpty) {
+      // Ошибка показывается обычным путём (_onControllerChange): автомат её
+      // не перехватывает, а лишь довёл до неё быстрее.
+      AppLog.I.warning('core reject guard: ${run.error}');
+    }
   }
 
   /// §107 single-flight: параллельные триггеры (возврат на home + гейт на

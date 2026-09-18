@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
+import '../../../services/core_reject/core_reject_state.dart';
 import '../../../services/crash_banner_state.dart';
+import '../core_reject_ui.dart';
 import '../../../services/crash_share.dart';
 import '../../../services/haptic_service.dart';
 import '../home_dialogs.dart';
@@ -90,7 +92,11 @@ class HomeControls extends StatelessWidget {
         children: [
           Row(
             children: [
-              FilledButton.icon(
+              // Фича 478 — подпись кнопки зависит от фазы страховки, и
+              // HomeState о ней не знает: подписка отдельная, как у плашки.
+              AnimatedBuilder(
+                animation: CoreRejectState.I,
+                builder: (context, _) => FilledButton.icon(
                 // §372 — D-pad: на Android TV фокус при открытии экрана должен
                 // стоять на главном действии, иначе первое нажатие пульта
                 // уходит в никуда и выглядит как «кнопки не работают».
@@ -111,7 +117,14 @@ class HomeControls extends StatelessWidget {
                 ),
                 label: Text(state.tunnelUp
                     ? getLocalText.s("Stop")
-                    : getLocalText.s("Start")),
+                    // Фича 478 — во время тихого цикла кнопка говорит, чем
+                    // занята и сколько уже выключено; отмена доступна всегда.
+                    : CoreRejectState.I.checking
+                        ? getLocalText.plural(
+                            "Checking servers… (%d disabled)",
+                            CoreRejectState.I.disabled.length)
+                        : getLocalText.s("Start")),
+                ),
               ),
               const SizedBox(width: 8),
               // Статус-чип отдаёт ширину первым: Start/Stop и reload имеют
@@ -128,13 +141,20 @@ class HomeControls extends StatelessWidget {
           // CrashBannerState (файловая система + storage-отметка), поэтому
           // подписка отдельная.
           AnimatedBuilder(
-            animation: CrashBannerState.I,
+            // Фича 478 — плашка «выключено N серверов» приходит из
+            // CoreRejectState, как краш-плашка из CrashBannerState: это
+            // итог прогона страховки, а не поле HomeState.
+            animation: Listenable.merge(
+                [CrashBannerState.I, CoreRejectState.I]),
             builder: (context, _) => BannerStack(
               banners: activeBanners(
                 state,
                 configDirty: subController.configDirty,
                 busy: subController.busy,
                 crashPending: CrashBannerState.I.pending != null,
+                coreRejected: CoreRejectState.I.bannerVisible
+                    ? CoreRejectState.I.bannerNodes
+                    : const [],
                 autoApplying: autoApplying, // §338
                 actions: BannerActions(
                   onRebuild: () => unawaited(onRebuildAndClearDirty()),
@@ -146,6 +166,9 @@ class HomeControls extends StatelessWidget {
                   onShareCrash: () => unawaited(_shareCrash()),
                   onDismissCrash: () =>
                       unawaited(CrashBannerState.I.markShown()),
+                  onShowCoreRejected: () => unawaited(showCoreRejectList(
+                      context, CoreRejectState.I.bannerNodes)),
+                  onDismissCoreRejected: CoreRejectState.I.dismissBanner,
                 ),
               ),
             ),

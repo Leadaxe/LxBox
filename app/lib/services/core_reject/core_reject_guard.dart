@@ -181,8 +181,14 @@ abstract interface class CoreRejectHost {
   /// нет, и предел остаётся пределом.
   Future<CoreRejectPrompt> askKeepChecking(int disabledCount);
 
-  /// Уведомить о смене фазы/счётчика: кнопка Start и Debug API.
-  void onProgress(CoreRejectPhase phase, int disabledCount, int round);
+  /// Уведомить о смене фазы: кнопка Start, плашка и Debug API. Выключенные
+  /// отдаются СПИСКОМ, а не счётчиком — Debug API показывает теги с
+  /// причинами, и по числу их не восстановить.
+  void onProgress(
+    CoreRejectPhase phase,
+    int round, {
+    List<DisabledNode> disabledNodes,
+  });
 }
 
 /// Прогон страховки на одно нажатие Start.
@@ -209,7 +215,7 @@ final class CoreRejectGuard {
 
   void _to(CoreRejectPhase p) {
     _phase = p;
-    _host.onProgress(p, _disabled.length, _round);
+    _host.onProgress(p, _round, disabledNodes: List.unmodifiable(_disabled));
   }
 
   CoreRejectRun _finish(CoreRejectOutcome outcome, {String error = ''}) {
@@ -263,7 +269,8 @@ final class CoreRejectGuard {
 
       _round++;
       final verdict = await _host.check(built.configJson);
-      _host.onProgress(CoreRejectPhase.checking, _disabled.length, _round);
+      _host.onProgress(CoreRejectPhase.checking, _round,
+          disabledNodes: List.unmodifiable(_disabled));
 
       if (verdict.ok) break; // чисто → финальный старт
 
@@ -308,7 +315,8 @@ final class CoreRejectGuard {
     if (!await _host.disableNode(hit.tag, hit.reason)) return null;
     final d = DisabledNode(tag: hit.tag, reason: hit.reason);
     _disabled.add(d);
-    _host.onProgress(_phase, _disabled.length, _round);
+    _host.onProgress(_phase, _round,
+        disabledNodes: List.unmodifiable(_disabled));
     return d;
   }
 

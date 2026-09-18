@@ -99,6 +99,11 @@ bool _mapEq(Map<String, String> a, Map<String, String> b) {
   return true;
 }
 
+/// Вердикт по тексту ядра сразу предупреждением узла — для показа там, где
+/// хранимой записи под рукой нет (плашка, шторка прогона).
+RegistryWarning coreRejectedWarningOf(String reason) =>
+    StoredWarning.coreRejected(reason).toWarning();
+
 /// Список записей → JSON; пустой список кодируется как отсутствие ключа
 /// (решает вызывающий кодек).
 List<Map<String, dynamic>> storedWarningsToJson(List<StoredWarning> ws) =>

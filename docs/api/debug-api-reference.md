@@ -81,6 +81,7 @@ auth), а не факт, что за границей всё открыто.
 - [Directions CRUD — `/directions/*`](#directions-crud--directions)
 - [Chains CRUD — `/chains/*`](#chains-crud--chains)
 - [Folders CRUD — `/folders/*`](#folders-crud--folders)
+- [Core-rejected nodes — `/core_reject/*`](#core-rejected-nodes--core_reject)
 - [WARP — `/warp`](#warp--warp)
 - [Pool — `/pool`](#pool--pool)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
@@ -876,6 +877,103 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
   `override_detour` одиночного сервера; папочные tag_prefix/policy не
   наследуются.
 - URL-снапшот с недоступным URL → 502 `upstream_error` (сетевой fetch).
+
+---
+
+## Core-rejected nodes — `/core_reject/*`
+
+Фича 478 — страховка «узел, который не приняло ядро, выключается сам». Ядро
+отказало, назвав узел → приложение выключает этот узел, кладёт рядом причину
+и тихо перепроверяет конфиг, пока он не станет чистым.
+
+**Одно нажатие Start = ДВА реальных старта ядра** (сигнальный и финальный),
+между ними — тихий цикл `checkConfig` без туннеля; каждый круг цикла выключает
+ровно один узел. Поэтому `phase`, прошедшая
+`signal_start → checking → final_start → done` с непустым `disabled`, —
+нормальный успех, а не сбой.
+
+| Endpoint | Метод | Что |
+|---|---|---|
+| `/core_reject` | GET | состояние автомата текущего (или последнего) прогона |
+| `/core_reject/nodes` | GET | **все** вердикты, стоящие в хранении: `[{source, tag, reason}]` |
+| `/core_reject/banner` | GET | плашка «выключено N»: `{visible, count, nodes:[{tag,reason}]}` |
+| `/core_reject/banner/dismiss` | POST | закрыть плашку (идемпотентно) |
+| `/core_reject/prompt` | GET | вопрос про предел кругов: `{pending, count, limit}` |
+| `/core_reject/prompt?answer=stop\|keep` | POST | ответить на него за человека |
+| `/core_reject/enable?tag=<tag>` | POST | снять вердикт руками, узел проверится заново |
+| `/core_reject/notifications[?tag=<tag>]` | GET | что нарисуют строка и карточка узла: `[{code, severity, params, title_en, text_en}]` |
+
+`GET /core_reject`:
+
+```json
+{
+  "phase": "checking",
+  "round": 3,
+  "round_limit": 10,
+  "disabled": [{"tag": "vpn-1-node-7", "reason": "unknown method: rc4-md5"}],
+  "outcome": null,
+  "error": ""
+}
+```
+
+| Поле | Что |
+|---|---|
+| `phase` | `idle` \| `signal_start` \| `checking` \| `awaiting_prompt` \| `final_start` \| `done` |
+| `round` | круг тихой проверки; `0` — цикл ещё не начинался |
+| `round_limit` | после этого числа кругов автомат спрашивает человека |
+| `disabled` | узлы, выключенные **этим прогоном**, в порядке отказов ядра |
+| `outcome` | `null` до конца прогона, затем `started_clean` \| `started_with_disabled` \| `failed` \| `stopped_by_user` |
+| `error` | текст ошибки прогона; пусто у успеха |
+
+**Прогон vs хранение.** `/core_reject` живёт в памяти — после перезапуска
+процесса он пуст. Стоящие вердикты лежат рядом с узлами и перезапуск
+переживают: их отдаёт `/core_reject/nodes`, где `source` — имя подписки,
+папки или сервера, которому узел принадлежит.
+
+**Плашка** поднимается только на `outcome=started_with_disabled`: VPN поднят,
+но не тем составом, который задавал человек. `dismiss` закрывает сообщение,
+а не отменяет решение — вердикты остаются.
+
+**Вопрос про предел.** `count` — число ИЗ ТЕКСТА диалога, то есть предел
+кругов, а не счётчик выключенных. `keep` снимает предел до конца этого Start,
+`stop` заканчивает прогон: VPN не поднят, выключенные остаются выключенными.
+Ответ принимается и query-параметром, и телом `{"answer":"..."}`.
+
+**`/core_reject/notifications` — проверка рендера без экрана.** Тексты
+приходят ДАННЫМИ контракта (`registry/warnings.json`), поэтому проверять надо
+резолв кода, а не вёрстку: если `core_rejected` не нашёлся в реестре,
+`title_en` вернётся самим кодом. Ответ пиненно английский — machine-поверхность
+не должна зависеть от локали устройства. Без `tag` — карта `{tag: [...]}` по
+всем узлам, у которых хранимые записи есть.
+
+```bash
+# Довести ядро до отказа и смотреть, что делает автомат
+curl -X POST -H "$HDR" "$BASE/action/start-vpn-headless"
+curl -s -H "$HDR" "$BASE/core_reject" | jq
+
+# Если автомат уперся в предел кругов — ответить за человека
+curl -s -H "$HDR" "$BASE/core_reject/prompt" | jq
+curl -X POST -H "$HDR" "$BASE/core_reject/prompt?answer=keep"
+
+# Что в итоге выключено и почему (переживает перезапуск процесса)
+curl -s -H "$HDR" "$BASE/core_reject/nodes" | jq
+
+# Что увидит человек на строке узла — код, severity и оба текста
+curl -s -H "$HDR" "$BASE/core_reject/notifications?tag=vpn-1-node-7" | jq
+
+# Вернуть узел руками
+curl -X POST -H "$HDR" "$BASE/core_reject/enable?tag=vpn-1-node-7"
+curl -X POST -H "$HDR" "$BASE/core_reject/banner/dismiss"
+```
+
+**Quirks:**
+- `POST /core_reject/prompt` без висящего вопроса → 409 `conflict`. Ответ в
+  пустоту значил бы, что автомат ждёт чего-то другого, — молча это не
+  проглатывается.
+- `answer` вне `stop|keep` → 400; `keep_checking` принимается синонимом `keep`.
+- `POST /core_reject/enable` с тегом, которого нет ни у одного узла → 404.
+- `GET /core_reject/notifications?tag=` с тегом без хранимых записей → 404
+  (пустой список значил бы «узел есть, записей нет» — это разные факты).
 
 ---
 
