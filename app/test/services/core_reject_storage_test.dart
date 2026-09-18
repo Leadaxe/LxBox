@@ -269,6 +269,63 @@ void main() {
     });
   });
 
+  group('снятие вердикта ручной правкой узла (CANON §9.4 п. 1)', () {
+    final verdict = [StoredWarning.coreRejected('bad')];
+    final a = parseUri('vless://u@h:443?type=ws&security=tls&sni=x#A')!;
+
+    test('тело изменилось → вердикт снимается', () {
+      expect(
+        verdictDroppedByEdit(
+          warnings: verdict,
+          before: a,
+          after: parseUri('vless://u@h:443?type=ws&security=tls&sni=y#A')!,
+        ),
+        true,
+      );
+    });
+
+    test('пересохранение того же тела → вердикт держится', () {
+      expect(
+        verdictDroppedByEdit(
+          warnings: verdict,
+          before: a,
+          // Другой порядок параметров — то же тело после нормализации.
+          after: parseUri('vless://u@h:443?security=tls&sni=x&type=ws#A')!,
+        ),
+        false,
+      );
+    });
+
+    test('переименование — тоже смена тела: emit() включает tag', () {
+      expect(
+        verdictDroppedByEdit(
+          warnings: verdict,
+          before: a,
+          after: parseUri('vless://u@h:443?type=ws&security=tls&sni=x#B')!,
+        ),
+        true,
+        reason: 'та же функция, что на refetch; лишняя проверка ядром дешевле '
+            'починенного узла, оставшегося выключенным',
+      );
+    });
+
+    test('вердикта не было → правка ничего не включает', () {
+      expect(
+        verdictDroppedByEdit(
+          warnings: const [StoredWarning(code: 'tls_insecure')],
+          before: a,
+          after: parseUri('vless://u@h:443?type=ws&security=tls&sni=y#A')!,
+        ),
+        false,
+      );
+    });
+
+    test('сравнивать нечем (узла нет) → вердикт снимается', () {
+      expect(verdictDroppedByEdit(warnings: verdict, before: null, after: a),
+          true);
+    });
+  });
+
   group('вердикт на разобранном узле (§479)', () {
     test('хранимая запись дописывается в warnings узла первой', () {
       final nodes = [

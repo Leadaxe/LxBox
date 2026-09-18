@@ -152,6 +152,39 @@ SubscriptionServers clearSubscriptionVerdict(
   return (disabled: nextDisabled, warnings: nextWarnings);
 }
 
+/// CANON §9.4 п. 1 для ОДНОГО узла — ручная правка тела в редакторе (член
+/// папки, ручной сервер). Подписка сравнивается картами (`refreshSubscription\
+/// Verdicts`): там узлов много и они приходят пачкой с сети; здесь правится
+/// ровно один, и сравнивать надо его самого.
+///
+/// Сравнение — тем же `canonicalNodeBody`, что и на refetch: один вопрос —
+/// одна функция, иначе редактор и подписка разошлись бы в том, что считать
+/// «тем же телом».
+///
+/// `true` — вердикт снимается И узел включается обратно (ровно то, что делает
+/// ручное включение: `enabled: true` + [dropVerdict]). `false` — тело то же
+/// либо вердикта на узле и не было, трогать нечего.
+///
+/// Узел без вердикта не оживает: смена тела включает только то, что выключила
+/// страховка, выключенное человеком остаётся выключенным.
+///
+/// Переименование узла для этой функции — тоже смена тела: `emit()` включает
+/// `tag`. Сужать не стали — на refetch подписки действует ровно та же
+/// функция, и ответ на один вопрос должен быть один; цена ошибки
+/// несимметрична (лишняя проверка ядром дешевле починенного узла,
+/// оставшегося выключенным).
+bool verdictDroppedByEdit({
+  required List<StoredWarning> warnings,
+  required NodeSpec? before,
+  required NodeSpec? after,
+}) {
+  if (!warnings.any((w) => w.isCoreRejected)) return false;
+  // Узла не стало (или не было) — сравнивать нечем: вердикт снимается.
+  // Лишняя проверка ядром дешевле починенного узла, оставшегося выключенным.
+  if (before == null || after == null) return true;
+  return canonicalNodeBody(before) != canonicalNodeBody(after);
+}
+
 /// Канонические тела набора по идентичности узла — для сравнения «до/после».
 Map<String, String> bodiesByIdentity(List<NodeSpec> nodes) {
   final ids = sourceNodeIdentities(nodes);

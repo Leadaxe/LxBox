@@ -1801,7 +1801,23 @@ class SubscriptionController extends ChangeNotifier {
       nameHint: hint,
       sections: imported,
     );
-    final current = members[memberIndex].node;
+    var current = members[memberIndex].node;
+    // Фича 478 / CANON §9.4 п. 1 — человек правил тело в редакторе: вердикт
+    // ядра привязан к ТЕЛУ, и на изменённом теле он недействителен. Запись
+    // стирается И узел включается обратно — тем же составом полей, что у
+    // ручного включения (`toggleMemberAt`). Тело то же (правка имени, пробелы)
+    // → вердикт держится.
+    if (verdictDroppedByEdit(
+      warnings: members[memberIndex].warnings,
+      before: previous,
+      after: current,
+    )) {
+      members[memberIndex] = members[memberIndex].copyWith(
+        enabled: true,
+        warnings: dropVerdict(members[memberIndex].warnings),
+      );
+      current = members[memberIndex].node;
+    }
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     // §439 (D-113) — правка тела могла сменить тег: ссылки идут за узлом.
@@ -2874,12 +2890,24 @@ class SubscriptionController extends ChangeNotifier {
       nodes.addAll(parseAll(decoded, nameHint: nameHint));
     }
     final before = _lists();
+    // Фича 478 / CANON §9.4 п. 1 — человек правил тело ручного сервера:
+    // вердикт ядра привязан к ТЕЛУ и на изменённом теле недействителен.
+    // Запись стирается И узел включается обратно — тем же составом полей,
+    // что у ручного включения (`enableNodeByCoreTag`). У `UserServer` узел
+    // один, сравниваем первый: остальные — секции того же документа.
+    final dropVerdictByEdit = verdictDroppedByEdit(
+      warnings: list.warnings,
+      before: list.nodes.isEmpty ? null : list.nodes.first,
+      after: nodes.isEmpty ? null : nodes.first,
+    );
     final next = list.copyWith(
       // §243 — displayName у UserServer name игнорирует (legacy v2.11.0 мог
       // записать туда имя файла); при пересохранении затираем совсем.
       name: '',
       rawBody: connections.join('\n'),
       nodes: nodes,
+      enabled: dropVerdictByEdit ? true : null,
+      warnings: dropVerdictByEdit ? dropVerdict(list.warnings) : null,
       // §435 — голое тело секции не трогает; документ с `sections` или с
       // `dns`/`route` замещает их целиком (NODE_SECTIONS.md §7).
       sections: nodes.isEmpty ? null : nodes.first.importedSections,
