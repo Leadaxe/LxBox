@@ -553,15 +553,30 @@ contract/                    # §460 the contract registry inside the app (contr
   registry_warning.dart      #   the render side of RegistryWarning (the class itself lives in models/node_warning.dart,
                              #   because NodeWarning is sealed): title_<lang>/text_<lang> from the registry, ru for a
                              #   Russian UI and en otherwise, {path}/{value}/{param} substitution, severity by code
-  parse_warnings.dart        #   §460 W2a annotateAllWithRegistry — the SECOND sanitiser pass, at PARSE time: it runs
-                             #   over emit() of an already built NodeSpec and appends RegistryWarning(path, value) to
-                             #   node.warnings, so the ⚠ on a subscription row names the field. The body is NOT touched
-                             #   here (the copy the sanitiser returns is discarded — cleaning stays with the build gate),
-                             #   the core gates are off (applyCoreGates: false — min_core/platform judge a build against
-                             #   a running core, not a parse), and a code a hand-written NodeWarning already carries is
-                             #   not added twice. Called from parseAll, the one funnel every input goes through
-  warning_codes.dart         #   kWarningCodes: hand-written NodeWarning class → contract code, plus warningCodeOf().
-                             #   Lives in lib because both the conformance runners and the parse-time dedup read it
+  parse_warnings.dart        #   the sanitiser at PARSE time — TWO passes, both appending RegistryWarning(path, value)
+                             #   to node.warnings so the ⚠ on a subscription row names the field:
+                             #     annotateAllFromRawBody  §472 step 1 — over the VERBATIM provider map. A node that
+                             #       came as JSON keeps that map in rawSource (§455), and it still holds what the typed
+                             #       parser strips on the way into the model: a key outside the schema, a blacklisted
+                             #       flow, a TLS field the scheme forbids. Before step 1 such a node carried no codes at
+                             #       all — only the build gate knew them, so the user read them in the build report
+                             #       rather than on the node row (§470). A URI/INI node has no verbatim map (rawSource
+                             #       is a link or an INI text) and this pass skips it; Xray-JSON is skipped too — its
+                             #       rawSource is an XRAY object, and the mapper to a sing-box map is step 8 of §472
+                             #     annotateAllWithRegistry §460 W2a — over emit() of the already built NodeSpec, which
+                             #       is what URI/INI nodes are judged by, and what catches values the PARSE itself put
+                             #       there (normalisation, all_or_nothing defaults)
+                             #   The verbatim pass runs FIRST: on an equal (code, path) the earlier record wins, and its
+                             #   value names what lay in the body rather than what the parse turned it into. The body is
+                             #   NOT touched by either pass (the copy the sanitiser returns is discarded — cleaning stays
+                             #   with the build gate), the core gates are off (applyCoreGates: false — min_core/platform
+                             #   judge a build against a running core, not a parse), and dedup is by (code, path): a
+                             #   hand-written class that names a field closes only that field, one without a path closes
+                             #   its code entirely. Called from parseAll, the one funnel every input goes through
+  warning_codes.dart         #   kWarningCodes: hand-written NodeWarning class → contract code, plus warningCodeOf()
+                             #   and handwrittenWarningPath() — the field a hand-written class stands for, where the
+                             #   class field IS that path. Lives in lib because both the conformance runners and the
+                             #   parse-time dedup read them
   contract_docs.dart         #   §460 W2b contractWarningDocUrl(code) — the address of the page about a warning
                              #   code in OUR mirror of the contract docs (docs/contract/warnings.md#<code>, branch
                              #   main). The anchor is the code verbatim: gendocs emits an explicit <a id="<code>"></a>

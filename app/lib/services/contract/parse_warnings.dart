@@ -22,7 +22,14 @@
 ///    корпусе.
 ///
 /// Реестр не загружен — весь модуль no-op.
+///
+/// §472 шаг 1 снял границу 1 для JSON-входа: у узла, пришедшего телом, есть
+/// ДОСЛОВНАЯ карта провайдера (`rawSource`, §455), и санитайзер идёт по ней —
+/// см. [annotateFromRawBody]. Тело узла по-прежнему не меняется: очищенная
+/// карта выбрасывается, берутся только коды.
 library;
+
+import 'dart:convert';
 
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
@@ -158,13 +165,100 @@ void annotateWithRegistry(NodeSpec node) {
     coreVersion: _kParseTimeCore,
     applyCoreGates: false,
   );
-  if (res.warnings.isEmpty) return;
+  _mergeRegistryWarnings(node, res.warnings);
+}
 
-  // Коды, которые узлу уже назвал парсер: рукописное предупреждение о том же
-  // сильнее кода реестра.
-  final handwritten = <String>{};
-  // Пары `{code, path}`, уже стоящие на узле: один и тот же путь дважды
-  // конверт контракта не несёт (CANON §6) и человеку он не нужен.
+/// §472 шаг 1 — предупреждения реестра по ДОСЛОВНОЙ карте JSON-узла.
+///
+/// [annotateWithRegistry] судит `emit()` уже разобранного узла, и мусор к
+/// этому моменту снят типизированным парсером: `flow=xtls-rprx-direct` не
+/// доехал до поля, `tls.insecure` снял `_tlsFromSingbox`, а ключ вне схемы
+/// (`totally_unknown_key`) не имеет куда попасть в принципе. Такой узел
+/// оставался БЕЗ кодов, хотя пользователю есть что сказать: коды этих полей
+/// знал только гард сборки (§455, `registry_gate.dart`), и человек видел их в
+/// отчёте сборки, а не в строке узла (§470).
+///
+/// У JSON-входа дословная карта есть — это `rawSource` (§454–§456), объект
+/// outbound'а как прислал провайдер. Санитайзер идёт по ней, и его коды с
+/// путём и значением встают на узел. Это ровно тот конвейер, что у лаунчера:
+/// вход → карта sing-box → санитайзер по реестру.
+///
+/// Границы шага те же, что у W2a: **тело узла не меняется** (очищенная карта
+/// выбрасывается — чистит по-прежнему гард сборки, узел в хранении обязан
+/// остаться тем, что прислал провайдер), **гейты ядра выключены**
+/// (`min_core`/`platform` зависят от запущенного ядра, а `entry` узла — нет).
+///
+/// Xray-JSON сюда НЕ попадает: у таких узлов `rawSource` — объект **Xray**
+/// (`json_parsers.dart`, `_prettyJson(o)`), а санитайзер судит карту
+/// **sing-box**, и ключи у них разные (`streamSettings` против `transport`,
+/// `settings.vnext[].users[]` против `uuid`). Дословной sing-box-карты у
+/// Xray-узла нет, пока её не построит маппер — это шаг 8 спеки 472. Здесь
+/// такая карта была бы выдумкой, а `path`/`value` кода обязаны называть то,
+/// что лежало в теле.
+void annotateFromRawBody(NodeSpec node) {
+  if (!ContractRegistry.I.isLoaded) return;
+
+  final chained = node.chained;
+  if (chained != null) annotateFromRawBody(chained);
+
+  if (node.isGroup) return;
+
+  final raw = _rawSingboxBodyOf(node);
+  if (raw == null) return;
+  final type = raw['type'];
+  if (type is! String) return;
+
+  final res = RegistrySanitizer.sanitize(
+    // Копия: санитайзер переписывает карту, а `rawSource` узла — текст
+    // провайдера, и трогать его нельзя.
+    Map<String, dynamic>.from(raw),
+    scheme: type,
+    coreVersion: _kParseTimeCore,
+    applyCoreGates: false,
+  );
+  _mergeRegistryWarnings(node, res.warnings);
+}
+
+/// Дословное тело JSON-узла как карта sing-box, либо `null`.
+///
+/// `rawSource` у URI-узла — ссылка, у INI — текст конфига, у Xray — объект
+/// Xray: ни то, ни другое, ни третье санитайзеру sing-box-схемы не карта.
+/// Единственный признак, по которому JSON-вход опознаётся, — сам JSON-объект
+/// с полем `type` (его проверяет вызывающий): `type` есть у sing-box и нет у
+/// Xray, где тип записи зовётся `protocol`.
+Map<String, dynamic>? _rawSingboxBodyOf(NodeSpec node) {
+  final src = node.rawSource.trimLeft();
+  if (!src.startsWith('{')) return null;
+  try {
+    final v = jsonDecode(src);
+    return v is Map<String, dynamic> ? v : null;
+  } catch (_) {
+    // Битый JSON в `rawSource` — не повод ронять разбор подписки.
+    return null;
+  }
+}
+
+/// Дописать узлу коды реестра, не задвоив уже сказанное.
+///
+/// Дедуп — по паре `(code, path)`: конверт контракта одну и ту же пару дважды
+/// не несёт (CANON §6), и человеку второе сообщение о том же поле не нужно.
+///
+/// Рукописный класс сильнее кода реестра: у него человеческий текст и место в
+/// корпусе. Но «сильнее» считается ПО ПУТИ, а не по одному коду: рукописный
+/// класс, который путь несёт (`flow` у `DeprecatedFlowWarning`), закрывает
+/// только свой путь, а код реестра о другом поле с тем же кодом остаётся.
+/// Классы без пути (их большинство: путь знают пятнадцать из них,
+/// `corpus_warnings.dart`) закрывают код целиком — иначе на одном поле
+/// оказались бы два сообщения, рукописное без адреса и реестровое с адресом.
+/// Оставляется ОДНА запись, и предпочтение у той, что несёт путь: адрес поля
+/// — это то, чего человеку не хватало (§470, `unknown_key` без `value`).
+void _mergeRegistryWarnings(NodeSpec node, List<RegistryWarning> incoming) {
+  if (incoming.isEmpty) return;
+
+  // Коды рукописных классов, не назвавших поля: такой класс закрывает свой код
+  // целиком — приписать ему путь здесь было бы выдумкой.
+  final handwrittenAnywhere = <String>{};
+  // Пары `(code, path)`, уже стоящие на узле.
   final seen = <String>{};
   for (final w in node.warnings) {
     final code = warningCodeOf(w);
@@ -172,12 +266,17 @@ void annotateWithRegistry(NodeSpec node) {
     if (w is RegistryWarning) {
       seen.add('$code ${w.path ?? ''}');
     } else {
-      handwritten.add(code);
+      final path = handwrittenWarningPath(w);
+      if (path == null) {
+        handwrittenAnywhere.add(code);
+      } else {
+        seen.add('$code $path');
+      }
     }
   }
 
-  for (final w in res.warnings) {
-    if (handwritten.contains(w.code)) continue;
+  for (final w in incoming) {
+    if (handwrittenAnywhere.contains(w.code)) continue;
     if (!seen.add('${w.code} ${w.path ?? ''}')) continue;
     node.warnings.add(w);
   }
@@ -188,5 +287,13 @@ void annotateAllWithRegistry(List<NodeSpec> nodes) {
   if (!ContractRegistry.I.isLoaded) return;
   for (final n in nodes) {
     annotateWithRegistry(n);
+  }
+}
+
+/// §472 шаг 1 — [annotateFromRawBody] для списка узлов.
+void annotateAllFromRawBody(List<NodeSpec> nodes) {
+  if (!ContractRegistry.I.isLoaded) return;
+  for (final n in nodes) {
+    annotateFromRawBody(n);
   }
 }

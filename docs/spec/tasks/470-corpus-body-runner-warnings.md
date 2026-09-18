@@ -79,6 +79,14 @@ URI-раннер корпуса (`test/contract/contract_test.dart`) сверя�
 `trojan-full-tls`) в конверте один раз. Функция схлопнется в `node.warnings`,
 когда следующие волны проложат путь от `rawSource` к `NodeSpec.warnings`.
 
+> **СХЛОПНУТА** шагом 1 фичи
+> [472](../features/472%20unified-parse-pipeline/spec.md) (18.09.2026,
+> `ecb1a616`): путь от `rawSource` к `NodeSpec.warnings` проложен, санитайзер
+> идёт по дословной карте в самом разборе, и раннер читает один источник —
+> `node.warnings`. `_allWarningsOf` и `_rawBodyOf` из
+> `body_contract_test.dart` удалены; ожидания корпуса не менялись ни на кейс,
+> то есть коды, пути, значения и порядок сошлись с контрактом теми же.
+
 С объединением три из четырёх красных стали зелёными сразу — коды, пути,
 значения и порядок сошлись с контрактом побайтно, включая формы
 `map[enabled:true fingerprint:chrome]` и `[MTIzNDU2…]`.

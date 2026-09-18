@@ -64,3 +64,41 @@ const kWarningCodes = <Type, String>{
 /// Код предупреждения: у реестра он поле, у рукописных классов — тип.
 String? warningCodeOf(NodeWarning w) =>
     w is RegistryWarning ? w.code : kWarningCodes[w.runtimeType];
+
+/// §472 шаг 1 — путь поля для рукописного класса, если поле класса И ЕСТЬ
+/// этот путь; иначе `null`.
+///
+/// Таблица переехала из `test/contract/corpus_warnings.dart`
+/// (`_legacyWarningPath`) по той же причине, по которой туда же переехала
+/// [kWarningCodes]: у неё появился второй потребитель — дедуп предупреждений
+/// при разборе (`parse_warnings.dart`). Санитайзер по дословной карте знает
+/// адрес каждого поля, и без пути рукописного класса дедуп получался грубым:
+/// код закрывался целиком, вместе с кодами реестра о ДРУГИХ полях (у naive
+/// `tls_field_unsupported_naive` приходит на шесть путей разом). Две копии
+/// таблицы разошлись бы на первом же новом классе.
+///
+/// Приписывать путь классу, который его не знает, нельзя: `path` нормативен
+/// (CANON §6), и выдуманное значение расходилось бы с контрактом молча. Класс
+/// вне таблицы пути не имеет — и в дедупе закрывает свой код целиком.
+///
+/// `AwgHeaderInvalidWarning` сюда НЕ попадает намеренно: код ставится
+/// пофакторно на каждый битый заголовок (`h1`…`h4` — четыре сообщения
+/// человеку), а конверт по контракту несёт одну запись без пути.
+String? handwrittenWarningPath(NodeWarning w) => switch (w) {
+      DeprecatedFlowWarning() => 'flow',
+      AnyTlsMinIdleInvalidWarning() => 'min_idle_session',
+      TuicCongestionInvalidWarning() => 'congestion_control',
+      PacketEncodingUnknownWarning() => 'packet_encoding',
+      UnknownFingerprintWarning() => 'tls.utls.fingerprint',
+      RealityFingerprintWarning() => 'tls.utls.fingerprint',
+      RealityShortIdInvalidWarning() => 'tls.reality.short_id',
+      UnknownObfsWarning() => 'obfs.type',
+      MissingObfsPasswordWarning() => 'obfs.password',
+      // §469 — контракт 1.1.4 назвал путь и значение и у `masque_vhttp_invalid`.
+      MasqueVhttpInvalidWarning() => 'vhttp',
+      // §467 — `field` класса это ИМЯ КЛЮЧА, под которым значение уезжает в
+      // `transport` (его ставит тот же `putEnum`, что и предупреждение),
+      // поэтому путь выводится из него, а не перечисляется вариантами.
+      XhttpParamResetWarning(:final field) => 'transport.$field',
+      _ => null,
+    };

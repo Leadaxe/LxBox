@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/app_log.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
@@ -69,22 +72,20 @@ void main() {
       expect(w.path, 'uuid');
     }, skip: skip);
 
-    // ГРАНИЦА ВОЛНЫ, найдена на этих тестах.
+    // ГРАНИЦА ВОЛНЫ W2a — СНЯТА для JSON шагом 1 фичи 472.
     //
-    // Разбор смотрит НЕ на присланное тело, а на `emit()` уже построенного
-    // `NodeSpec`, и модель узла — сама по себе фильтр: JSON-парсер кладёт в
-    // спеку только то, что у неё есть полем, приводя типы. Поэтому до
-    // санитайзера при разборе не доходят ровно два класса мусора:
+    // Раньше разбор смотрел только на `emit()` уже построенного `NodeSpec`, а
+    // модель — сама по себе фильтр: JSON-парсер кладёт в спеку то, что у неё
+    // есть полем, приводя типы. Мусор вне модели (`totally_bogus`,
+    // `tls.min_version: 5` числом) до санитайзера не доезжал, и коды этих
+    // полей знал только гард СБОРКИ — человек читал их в отчёте сборки, а не
+    // в строке узла.
     //
-    //   * ключ, которого у модели нет (`totally_bogus`) — `unknown_key`;
-    //   * значение, не прошедшее приведение типа в парсере
-    //     (`tls.min_version: 5` числом) — оно снимается там же, молча.
-    //
-    // Это не дефект W2a: такой мусор не доезжает и до ядра, а дословный
-    // JSON-источник (§455) проходит мимо модели и разбирается гардом
-    // СБОРКИ, который эти коды и выдаёт. Тест держит границу явной, чтобы
-    // «реестр не заметил unknown_key» не читалось как регрессия.
-    test('мусор вне модели до разбора не доходит — он снят парсером', () {
+    // Теперь у JSON-входа санитайзер идёт по ДОСЛОВНОЙ карте (`rawSource`,
+    // §455), и такой мусор получает код на узле. Тело при этом по-прежнему не
+    // меняется: `emit()` мусора не несёт — его снял парсер, а очищенную карту
+    // санитайзера разбор выбрасывает.
+    test('JSON: мусор вне модели даёт код на узле, тело не меняя', () {
       final n = _one('''
 {"type":"vless","tag":"n","server":"example.com","server_port":443,
  "uuid":"11111111-1111-1111-1111-111111111111","totally_bogus":1,
@@ -92,10 +93,19 @@ void main() {
 ''');
       final emitted = n.emit(TemplateVars.empty).map;
       expect(emitted.containsKey('totally_bogus'), isFalse,
-          reason: 'ключ вне модели снял JSON-парсер, а не санитайзер');
+          reason: 'ключ вне модели снял JSON-парсер; тело узла не меняется');
       expect((emitted['tls'] as Map).containsKey('min_version'), isFalse,
           reason: 'значение не прошло приведение типа в парсере');
-      expect(_registry(n).map((w) => w.code), isNot(contains('unknown_key')));
+
+      // Ключ вне схемы: код приходит из дословной карты, с путём и значением.
+      final unknown = _byCode(n, 'unknown_key');
+      expect(unknown.path, 'totally_bogus');
+      expect(unknown.value, '1');
+
+      // Значение не того типа — тоже видно на дословной карте, где оно ещё
+      // лежит числом.
+      final bad = _byCode(n, 'type_invalid');
+      expect(bad.path, 'tls.min_version');
     }, skip: skip);
 
     test('разбор тело узла не меняет', () {
@@ -159,6 +169,165 @@ void main() {
       if (n.warnings.whereType<UnknownObfsWarning>().isNotEmpty) {
         expect(codes, isNot(contains('obfs_unknown')));
       }
+    }, skip: skip);
+  });
+
+  group('§472 шаг 1 — санитайзер по дословной карте JSON-узла', () {
+    test('коды дословного тела встают на узел с путём и значением', () {
+      // Тот же узел, что в корпусе (`vless_junk_pair.body`): три класса мусора,
+      // и ни один из них не доживает до `emit()` — их снял типизированный
+      // парсер. До шага 1 узел оставался без кодов вовсе.
+      final n = _one(
+        '{"type":"vless","tag":"junk","server":"a.example","server_port":443,'
+        '"uuid":"11111111-1111-1111-1111-111111111111",'
+        '"flow":"xtls-rprx-direct","packet_encoding":"teleport",'
+        '"tls":{"enabled":true,"server_name":"a.example",'
+        '"reality":{"enabled":true,'
+        '"public_key":"AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",'
+        '"short_id":"abc"}}}',
+      );
+      expect(_byCode(n, 'flow_deprecated').value, 'xtls-rprx-direct');
+      expect(_byCode(n, 'packet_encoding_unknown').value, 'teleport');
+      expect(_byCode(n, 'reality_short_id_invalid').path,
+          'tls.reality.short_id');
+    }, skip: skip);
+
+    test('дословная карта: тело узла не меняется', () {
+      // Санитайзер работает наблюдателем — очищенную карту разбор
+      // выбрасывает. `rawSource` обязан остаться тем, что прислал провайдер
+      // (§455: JSON-источник уходит в ядро дословно).
+      const raw = '{"type":"naive","tag":"m","server":"m.example",'
+          '"server_port":443,"username":"u","password":"p",'
+          '"totally_unknown_key":"whatever",'
+          '"tls":{"enabled":true,"server_name":"m.example","insecure":true}}';
+      final n = _one(raw);
+      expect(jsonDecode(n.rawSource), jsonDecode(raw),
+          reason: 'дословный источник узла не тронут');
+      final emitted = n.emit(TemplateVars.empty).map;
+      expect(emitted.containsKey('totally_unknown_key'), isFalse);
+      expect((emitted['tls'] as Map).containsKey('insecure'), isFalse);
+      expect(_byCode(n, 'unknown_key').value, 'whatever');
+    }, skip: skip);
+
+    test('гейты ядра выключены и на дословной карте', () {
+      // `tls.reality.key_share` несёт min_core 1.14.1-lx.4. Валидное значение
+      // в ДОСЛОВНОМ теле обязано пройти молча: версии ядра при разборе нет.
+      final n = _one(
+        '{"type":"vless","tag":"ks","server":"a.example","server_port":443,'
+        '"uuid":"11111111-1111-1111-1111-111111111111",'
+        '"tls":{"enabled":true,"server_name":"a.example",'
+        '"utls":{"enabled":true,"fingerprint":"chrome"},'
+        '"reality":{"enabled":true,'
+        '"public_key":"AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",'
+        '"short_id":"abcd","key_share":"classical"}}}',
+      );
+      final codes = _registry(n).map((w) => w.code);
+      expect(codes, isNot(contains('reality_key_share_invalid')));
+      expect(codes, isNot(contains('min_core_unsupported')));
+    }, skip: skip);
+
+    test('дедуп: рукописный класс с путём закрывает только свой путь', () {
+      // У naive реестр шлёт `tls_field_unsupported_naive` на КАЖДОЕ
+      // запрещённое поле. Рукописный `InsecureTlsWarning` пути не несёт, и до
+      // шага 1 дедуп по одному коду съел бы весь набор. Здесь проверяется, что
+      // на каждое поле остаётся ровно одна запись и адреса не потеряны.
+      final n = _one(
+        '{"type":"naive","tag":"j","server":"s.example","server_port":443,'
+        '"username":"u","password":"p",'
+        '"tls":{"enabled":true,"server_name":"s.example","insecure":true,'
+        '"alpn":["h2"],"min_version":"1.2","fragment":true}}',
+      );
+      final paths = _registry(n)
+          .where((w) => w.code == 'tls_field_unsupported_naive')
+          .map((w) => w.path)
+          .toList();
+      expect(
+        paths,
+        containsAll(<String>[
+          'tls.insecure',
+          'tls.alpn',
+          'tls.min_version',
+          'tls.fragment',
+        ]),
+      );
+      // Ни одна пара (code, path) не повторяется — ни внутри набора, ни с
+      // рукописными классами.
+      final pairs = <String>[
+        for (final w in n.warnings)
+          '${warningCodeOf(w) ?? ''} ${w is RegistryWarning ? w.path ?? '' : handwrittenWarningPath(w) ?? ''}',
+      ];
+      expect(pairs.toSet().length, pairs.length,
+          reason: 'пара (code, path) обязана быть одна: $pairs');
+    }, skip: skip);
+
+    test('URI-узел дословной карты не имеет — прежнее поведение', () {
+      // `rawSource` ссылки — это ссылка, а не JSON: второй проход её
+      // пропускает, и коды приходят только от `emit()`-прохода, как в W2a.
+      final n = _one(
+        'vless://11111111-1111-1111-1111-111111111111@example.com:443'
+        '?security=reality&encryption=none&sni=a.example'
+        '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
+        '&sid=ab&key_share=garbage&type=tcp#node',
+      );
+      expect(n.rawSource.startsWith('{'), isFalse);
+      final w = _byCode(n, 'reality_key_share_invalid');
+      expect(w.path, 'tls.reality.key_share');
+    }, skip: skip);
+
+    test('Xray-JSON остаётся на шаг 8: дословной sing-box-карты у него нет',
+        () {
+      // У Xray-узла `rawSource` — объект XRAY (`streamSettings`,
+      // `settings.vnext[]`), а санитайзер судит карту sing-box. Общего у них
+      // нет даже имени поля типа: `protocol` против `type`. Мусор здесь на
+      // узел не встаёт — и это НЕ дефект шага 1, а его граница: маппер
+      // «Xray-карта → sing-box-карта» заводится шагом 8 спеки 472.
+      final n = _one(
+        '[{"remarks":"xr","outbounds":[{"tag":"x","protocol":"vless",'
+        '"settings":{"vnext":[{"address":"x.example","port":443,'
+        '"users":[{"id":"11111111-1111-1111-1111-111111111111",'
+        '"flow":"xtls-rprx-direct","encryption":"none"}]}]},'
+        '"streamSettings":{"network":"tcp","security":"none",'
+        '"totally_unknown_key":"whatever"}}]}]',
+      );
+      expect(n.rawSource.contains('streamSettings'), isTrue,
+          reason: 'источник Xray-узла — его собственный объект');
+      expect(_registry(n).map((w) => w.code), isNot(contains('unknown_key')),
+          reason: 'sing-box-санитайзер по Xray-карте не ходит (шаг 8)');
+    }, skip: skip);
+
+    test('предупреждения переживают хранение: узел разбирается заново', () {
+      // Узел хранится ТЕКСТОМ (`raw_body` записи 1.0), и при чтении записи
+      // разбирается тем же `parseAll`. Значит коды не сериализуются, а
+      // считаются заново на каждой загрузке — проверяется полным
+      // круговоротом через кодек записи.
+      const raw = '{"type":"naive","tag":"stored","server":"m.example",'
+          '"server_port":443,"username":"u","password":"p",'
+          '"totally_unknown_key":"whatever",'
+          '"tls":{"enabled":true,"server_name":"m.example","insecure":true}}';
+      final before = UserServer(
+        id: 'src-1',
+        name: 'stored',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        rawBody: raw,
+        nodes: _parse(raw),
+      );
+      expect(_byCode(before.nodes.single, 'unknown_key').path,
+          'totally_unknown_key');
+
+      final read = sourceFromRecord(
+        jsonDecode(jsonEncode(sourceToRecord(before)))
+            as Map<String, dynamic>,
+      ).value;
+      expect(read, isNotNull, reason: 'запись прочиталась');
+      final node = (read as ServerList).nodes.single;
+      final codes = node.warnings
+          .map(warningCodeOf)
+          .whereType<String>()
+          .toSet();
+      expect(codes, contains('unknown_key'));
+      expect(codes, contains('tls_field_unsupported_naive'));
     }, skip: skip);
   });
 
@@ -234,6 +403,54 @@ void main() {
         sw.elapsedMilliseconds,
         lessThan(3000),
         reason: 'разбор $n узлов с реестром: ${sw.elapsedMilliseconds} мс',
+      );
+    }, skip: skip);
+
+    // §472 шаг 1 — у JSON-входа проходов санитайзера ДВА: по дословной карте и
+    // по `emit()`. Цена второго прохода измеряется здесь, тем же порогом и по
+    // тому же образцу: он про «ушло в квадратичность», а не про проценты.
+    // Дословный проход вдобавок разбирает `rawSource` из текста, поэтому кейс
+    // взят худший — тело с мусором, на котором санитайзер не выходит рано.
+    //
+    // Замер на рабочей машине (та же машина, тот же прогон, что у URI-кейса
+    // выше): URI 2000 узлов ~138 мс, JSON 2000 узлов с мусором ~595 мс.
+    // Разница — не второй санитайзер сам по себе, а `jsonDecode` дословного
+    // тела на каждом узле плюс полный обход схемы там, где у чистого узла
+    // санитайзер выходит рано. Инвариант 5 спеки 472 (не хуже ×1,5 к W2a)
+    // считается по СВОЕМУ входу: JSON-разбора под W2a не существовало, узел
+    // оставался без кодов вовсе.
+    test('2000 JSON-узлов с мусором разбираются за разумное время', () {
+      const n = 2000;
+      final entries = <String>[
+        for (var i = 0; i < n; i++)
+          '{"type":"vless","tag":"node$i","server":"e$i.example",'
+              '"server_port":443,'
+              '"uuid":"11111111-1111-1111-1111-111111111111",'
+              '"flow":"xtls-rprx-direct","packet_encoding":"teleport",'
+              '"totally_unknown_key":"whatever",'
+              '"tls":{"enabled":true,"server_name":"a.example",'
+              '"utls":{"enabled":true,"fingerprint":"chrome"},'
+              '"reality":{"enabled":true,'
+              '"public_key":"AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",'
+              '"short_id":"abc"}}}',
+      ];
+      final decoded = decode('[${entries.join(',')}]');
+
+      expect(parseAll(decoded), hasLength(n)); // прогрев
+
+      final sw = Stopwatch()..start();
+      final nodes = parseAll(decoded);
+      sw.stop();
+      expect(nodes, hasLength(n));
+
+      // Коды на месте: замер обязан мерить работу, а не пустой проход.
+      expect(_registry(nodes.first).map((w) => w.code),
+          contains('flow_deprecated'));
+
+      expect(
+        sw.elapsedMilliseconds,
+        lessThan(3000),
+        reason: 'разбор $n JSON-узлов с реестром: ${sw.elapsedMilliseconds} мс',
       );
     }, skip: skip);
   });

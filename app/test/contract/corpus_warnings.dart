@@ -23,42 +23,12 @@ const kContractRoot = 'contract';
 /// Путь поля для рукописных классов — ТОЛЬКО там, где поле класса и есть
 /// путь (CANON §6: `path` обязателен у кодов уровня поля).
 ///
-/// Приписывать путь классу, который его не знает, нельзя: раннер сверяет
-/// `path` там, где ожидание его назвало, и выдуманное значение расходилось бы
-/// с контрактом молча — хуже, чем честное отсутствие. Классы вне карты
-/// отдают запись из одного `code`, и ожидания корпуса от них пути не требуют.
-/// Путь `AwgHeaderInvalidWarning` сюда НЕ попадает намеренно: код ставится
-/// пофакторно на каждый битый заголовок (`h1`…`h4` в одной ссылке — четыре
-/// сообщения человеку), а конверт по контракту несёт одну запись без пути
-/// (`awg_ranged_h_broken_dropped`: лаунчер зовёт `AddWarning` без поля).
-/// Приписать здесь путь значило бы разбить одну запись на четыре.
-/// §464 (W2d) — путей стало больше: вынеся правила значений в реестр, лаунчер
-/// узнал адрес каждого поля, и ожидания корпуса теперь называют `path`+`value`
-/// у пятнадцати кодов. У нас правила остаются в парсерах (реестр — второй
-/// эшелон, §460 W1), поэтому путь приписывается здесь — но по тому же
-/// правилу: только классам, у которых поле класса И ЕСТЬ этот путь, один и
-/// тот же на все свои случаи.
-String? _legacyWarningPath(NodeWarning w) => switch (w) {
-      // Код уровня поля `flow`: путь назван в ожиданиях корпуса.
-      DeprecatedFlowWarning() => 'flow',
-      AnyTlsMinIdleInvalidWarning() => 'min_idle_session',
-      TuicCongestionInvalidWarning() => 'congestion_control',
-      PacketEncodingUnknownWarning() => 'packet_encoding',
-      UnknownFingerprintWarning() => 'tls.utls.fingerprint',
-      RealityFingerprintWarning() => 'tls.utls.fingerprint',
-      RealityShortIdInvalidWarning() => 'tls.reality.short_id',
-      UnknownObfsWarning() => 'obfs.type',
-      MissingObfsPasswordWarning() => 'obfs.password',
-      // §469 — контракт 1.1.4 назвал путь и значение и у `masque_vhttp_invalid`
-      // (`vhttp` = `tcp`). Поле класса и есть этот путь, один на все случаи.
-      MasqueVhttpInvalidWarning() => 'vhttp',
-      // §467 — `field` класса это ИМЯ КЛЮЧА, под которым значение уезжает в
-      // `transport` (его ставит тот же `putEnum`, что и предупреждение),
-      // поэтому путь выводится из него, а не перечисляется вариантами:
-      // новый xhttp-параметр получит путь сам.
-      XhttpParamResetWarning(:final field) => 'transport.$field',
-      _ => null,
-    };
+/// §472 шаг 1 — таблица переехала в lib
+/// ([handwrittenWarningPath], `services/contract/warning_codes.dart`): у неё
+/// появился второй потребитель, дедуп предупреждений при разборе. Здесь
+/// остался только вызов — две копии разошлись бы на первом же новом классе,
+/// ровно как это было бы с `kWarningCodes`.
+String? _legacyWarningPath(NodeWarning w) => handwrittenWarningPath(w);
 
 /// Значение, вызвавшее код, — по той же логике, что и [_legacyWarningPath].
 ///
