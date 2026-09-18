@@ -12,11 +12,21 @@
         },
         {"id": "url", "detect": {"default": true}, "decode": ["url"], "space": "url"}
       ],
-      "userinfo": {"into": ["password"]},
-      "label": {"source": "fragment", "normalize": ["strip_control", "trim"]},
+      "userinfo": {
+        "into": ["password"],
+        "impl": "Пароль — userinfo ЦЕЛИКОМ, вместе с двоеточиями: формы user:pass у hysteria2 нет, и 'p:1@host' значит пароль 'p:1'. Пустой пароль узла НЕ роняет (в отличие от vless/trojan/tuic) — ключ просто не пишется."
+      },
+      "label": {
+        "source": ["fragment", "path"],
+        "normalize": ["strip_control", "trim"],
+        "value_map": {"🇪🇳": "🇬🇧"},
+        "fallback": {"template": "{scheme}-{server}-{server_port}", "scheme_source": "singbox_type"}
+      },
       "defaults": {"server_port": 443},
-      "scheme_sets": {"*": {"type": "hysteria2"}},
+      "include": ["tls#uri"],
       "params": {
+        "server": {"source": "host", "maps_to": "server", "required": true},
+        "server_port": {"source": "port", "maps_to": "server_port", "type": "int"},
         "$multiport": {
           "source": "port_raw",
           "selector": true,
@@ -27,25 +37,20 @@
               "rest": {"path": "server_ports", "normalize": "port_range_spec"}
             }
           },
-          "impl": "Multi-port прямо в authority (host:443,20000-30000). Uri.parse такую строку не читает вовсе: authority восстанавливается на ПЕРВОМ числовом порту, остальное уезжает в тот же конвейер, что и ?mport=. Порядок слияния — authority, потом query (merge: prepend у mport)."
+          "impl": "Multi-port прямо в authority (host:443,20000-30000). Платформенный парсер URL такую строку не читает вовсе — её берёт лексер движка из port_raw: authority встаёт на ПЕРВЫЙ числовой порт, остальное уезжает в тот же конвейер, что и ?mport=. Порядок слияния — authority, потом query."
         },
         "mport": {
           "source": ["query.mport", "query.ports"],
           "maps_to": "server_ports",
           "merge": "append",
           "normalize": "port_range_spec",
-          "impl": "Форма ядра — \"low:high\" через ДВОЕТОЧИЕ; дефис ссылки даёт фатал «bad port range». Одиночный порт становится парой N:N."
-        },
-        "password": {
-          "source": "userinfo",
-          "maps_to": "password",
-          "impl": "Пароль — userinfo ЦЕЛИКОМ, вместе с двоеточиями: формы user:pass у hysteria2 нет. Пустой пароль узла НЕ роняет (в отличие от vless/trojan/tuic) — ключ просто не пишется."
+          "impl": "Форма ядра — 'low:high' через ДВОЕТОЧИЕ; дефис ссылки даёт фатал «bad port range». Одиночный порт становится парой N:N."
         },
         "obfs": {
           "source": "query.obfs",
           "selector": true,
           "maps_to": "obfs.type",
-          "impl": "Пустой obfs блока не даёт вовсе. Годность типа судит реестр (allowlist hysteria2_obfs, код obfs_unknown)."
+          "impl": "Пустой obfs блока не даёт вовсе: ключ, которого ссылка не просила, в теле выглядел бы настройкой. Годность типа судит реестр (allowlist hysteria2_obfs, код obfs_unknown)."
         },
         "obfs-password": {
           "source": "query.obfs-password",
@@ -65,15 +70,13 @@
           "when": {"obfs.type": {"present": true}}
         },
         "upmbps": {
-          "source": "query.upmbps",
-          "aliases": ["up_mbps"],
+          "source": ["query.upmbps", "query.up_mbps"],
           "maps_to": "up_mbps",
           "type": "int",
-          "impl": "§464 — на входе читаются ОБА написания; канон эмита один (upmbps)."
+          "impl": "§464 — на входе читаются ОБА написания; канон эмита один (upmbps), иначе round-trip разошёлся бы с лаунчером побайтно."
         },
         "downmbps": {
-          "source": "query.downmbps",
-          "aliases": ["down_mbps"],
+          "source": ["query.downmbps", "query.down_mbps"],
           "maps_to": "down_mbps",
           "type": "int"
         },
@@ -81,14 +84,17 @@
           "source": "query.pinSHA256",
           "maps_to": "tls.certificate_public_key_sha256",
           "list": {"sep": ",", "coerce_scalar": true},
-          "impl": "delta480: список по запятой вместо одного элемента \"a,b\" (D133-11)."
+          "impl": "§103/D-078 — пиннинг публичного ключа сертификата; на QUIC валиден (в отличие от utls/reality). DELTAS D133-11 / delta480-1: список по запятой вместо одного элемента 'a,b'."
+        },
+        "$quic_sni_heuristic": {
+          "source": "query.sni",
+          "maps_to": null,
+          "impl": "У hysteria2 эвристика написания SNI ЕСТЬ на обоих проектах (uri.query.sni.impl): имя без точки и двоеточия либо '🔒' уступает адресу сервера — в отличие от trojan и vless, где её нет. Общий блок tls#uri несёт только цепочку источников и default_from: host; вторая половина правила объявляется здесь."
         }
       },
-      "include": ["tls#uri"],
-      "emit": {
-        "form": "url",
-        "omit_default": ["server_port"]
-      }
+      "scheme_sets": {"*": {"tls.enabled": true}},
+      "unknown_key": {"action": "keep", "code": "uri_param_unknown"},
+      "emit": {"form": "url", "param_order": "alphabetical", "omit_default": ["server_port"]}
     }
   }
 }

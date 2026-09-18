@@ -6,30 +6,37 @@
       "forms": [
         {"id": "url", "detect": {"default": true}, "decode": ["url"], "space": "url"}
       ],
-      "userinfo": {"split": {"sep": ":", "limit": 2}, "into": ["uuid", "password"]},
-      "label": {"source": "fragment", "normalize": ["strip_control", "trim"]},
+      "userinfo": {
+        "split": {"sep": ":", "limit": 2},
+        "into": ["uuid", "password"],
+        "impl": "userinfo = uuid:password, в отличие от hysteria2, где двоеточие часть пароля. Пароль — всё ПОСЛЕ первого ':' (limit:2), чтобы двоеточие внутри пароля не потерялось."
+      },
+      "label": {
+        "source": ["fragment", "path"],
+        "normalize": ["strip_control", "trim"],
+        "value_map": {"🇪🇳": "🇬🇧"},
+        "fallback": {"template": "{scheme}-{server}-{server_port}", "scheme_source": "singbox_type"}
+      },
       "defaults": {"server_port": 443},
-      "scheme_sets": {"*": {"type": "tuic"}},
+      "include": ["tls#uri"],
       "params": {
+        "server": {"source": "host", "maps_to": "server", "required": true},
+        "server_port": {"source": "port", "maps_to": "server_port", "type": "int"},
         "uuid": {"source": "userinfo.user", "maps_to": "uuid", "required": true},
         "password": {
           "source": "userinfo.pass",
           "maps_to": "password",
           "required": true,
-          "impl": "Пароль — всё ПОСЛЕ первого ':' (limit:2): двоеточие внутри пароля законно. Оба поля требуются непустыми — прежний парсер так же."
+          "impl": "Оба поля требуются непустыми — так же, как прежний парсер. Go мягче (пустой password даёт warning, узел живёт) — расхождение строгости, снимать его этой волной не уполномочены."
         },
         "congestion_control": {
           "source": "query.congestion_control",
           "maps_to": "congestion_control",
-          "impl": "Ключа не было в ссылке ⇒ поле не задано, дефолт подставит ядро. Значение вне enum уезжает КАК ЕСТЬ — снимет реестр кодом tuic_congestion_invalid."
+          "impl": "§103 D-016(в) — ключа не было в ссылке ⇒ поле не задано, дефолт подставит ядро. Значение вне enum уезжает КАК ЕСТЬ: снимет реестр кодом tuic_congestion_invalid."
         },
-        "udp_relay_mode": {
-          "source": "query.udp_relay_mode",
-          "maps_to": "udp_relay_mode"
-        },
+        "udp_relay_mode": {"source": "query.udp_relay_mode", "maps_to": "udp_relay_mode"},
         "reduce_rtt": {
-          "source": "query.reduce_rtt",
-          "aliases": ["zero_rtt", "zero_rtt_handshake"],
+          "source": ["query.reduce_rtt", "query.zero_rtt", "query.zero_rtt_handshake"],
           "type": "bool_spelled",
           "maps_to": "zero_rtt_handshake",
           "omit_default": false,
@@ -39,19 +46,24 @@
           "source": "query.heartbeat",
           "maps_to": "heartbeat",
           "normalize": "duration_bare_seconds",
-          "impl": "heartbeat_bare_number: голое число это секунды (10 → \"10s\"), поле ядра — duration-строка."
+          "impl": "heartbeat_bare_number: голое число это секунды (10 → '10s'), поле ядра — duration-строка."
         },
         "disable_sni": {
           "source": "query.disable_sni",
           "type": "bool_spelled",
-          "sets": {
-            "true": {"tls.disable_sni": true, "tls.server_name": null}
-          },
-          "impl": "G2 — sets с null СНИМАЕТ tls.server_name: расширение SNI не отправляется вовсе, значит имени сервера в теле быть не должно. Сам ключ disable_sni кладётся в тело (его знает ядро и sing-box-вход)."
+          "maps_to": "tls.disable_sni",
+          "sets": {"true": {"tls.server_name": null}},
+          "impl": "G2 / DELTAS D133-3 — sets с null СНИМАЕТ tls.server_name: расширение SNI не отправляется вовсе, значит имени сервера в теле быть не должно. Сам ключ disable_sni при этом в теле есть — его знает и ядро, и sing-box-вход; без него намерение автора не выражено ничем, и toUri() не мог вернуть disable_sni=1. Общий блок tls#uri объявляет только maps_to; снятие пути — здесь."
+        },
+        "$sni_no_heuristic": {
+          "source": "query.sni",
+          "maps_to": null,
+          "impl": "Эвристики НАПИСАНИЯ SNI у tuic нет: реестр говорит только про ПУСТОЙ sni, и прежний парсер откатывался на сервер ровно на пустом. Включить проверку точки и двоеточия здесь значило бы сдвинуть тела и identity живых узлов — то же решение, что у trojan и vless."
         }
       },
-      "include": ["tls#uri"],
-      "emit": {"form": "url", "omit_default": ["server_port"]}
+      "scheme_sets": {"*": {"tls.enabled": true}},
+      "unknown_key": {"action": "keep", "code": "uri_param_unknown"},
+      "emit": {"form": "url", "param_order": "alphabetical", "omit_default": ["server_port"]}
     }
   }
 }

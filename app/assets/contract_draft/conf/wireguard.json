@@ -412,6 +412,10 @@
           "type": "wireguard"
         }
       },
+      "unknown_key": {
+        "action": "drop",
+        "code": "uri_param_unknown"
+      },
       "emit": null
     }
   }

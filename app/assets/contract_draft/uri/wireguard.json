@@ -50,19 +50,24 @@
         ]
       },
       "label": {
-        "source": "fragment",
+        "source": [
+          "fragment",
+          "path"
+        ],
         "normalize": [
           "strip_control",
           "trim"
-        ]
+        ],
+        "value_map": {
+          "🇪🇳": "🇬🇧"
+        },
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        }
       },
       "defaults": {
         "server_port": 51820
-      },
-      "scheme_sets": {
-        "*": {
-          "type": "wireguard"
-        }
       },
       "params": {
         "privatekey": {
@@ -77,7 +82,7 @@
           "normalize": "base64_std",
           "required": true,
           "decode_extra": {
-            "preserve_plus": true
+            "plus_literal": true
           },
           "impl": "D-021 — userinfo сильнее query-фолбэка, читаются оба написания. Сырой '/' percent-энкодится до разбора authority (§106). normalize base64_std — НЕ суждение: 4 формы base64 приводятся к std с паддингом (D-023/D-030), без этого одна нода даёт два identity-хеша. Годность (32 байта) судит реестр: body.private_key format base64_32, drop_node."
         },
@@ -90,7 +95,7 @@
           "normalize": "base64_std",
           "required": true,
           "decode_extra": {
-            "preserve_plus": true
+            "plus_literal": true
           }
         },
         "presharedkey": {
@@ -101,7 +106,7 @@
           "maps_to": "peers[].pre_shared_key",
           "normalize": "base64_std",
           "decode_extra": {
-            "preserve_plus": true
+            "plus_literal": true
           },
           "impl": "Негодный psk роняет УЗЕЛ — правило реестра (on_invalid drop_node, код wg_key_invalid, контракт 1.1.11), не маппера."
         },
@@ -325,7 +330,7 @@
           "source": "query.headerprotectionkey",
           "maps_to": "header_protection_key",
           "decode_extra": {
-            "preserve_plus": true
+            "plus_literal": true
           },
           "impl": "§421 — base64 32 байт; '+' читается буквально (D133-7). Годность судит реестр (контракт 1.1.11: drop_node)."
         },
@@ -397,8 +402,18 @@
           "omit_default": false
         }
       },
+      "scheme_sets": {
+        "*": {
+          "type": "wireguard"
+        }
+      },
+      "unknown_key": {
+        "action": "keep",
+        "code": "uri_param_unknown"
+      },
       "emit": {
         "form": "url",
+        "param_order": "alphabetical",
         "omit_default": [
           "server_port"
         ]

@@ -6,26 +6,34 @@
       "forms": [
         {"id": "url", "detect": {"default": true}, "decode": ["url"], "space": "url"}
       ],
-      "userinfo": {"into": ["private_key"]},
-      "label": {"source": "fragment", "normalize": ["strip_control", "trim"]},
+      "userinfo": {
+        "into": ["private_key"],
+        "impl": "Приватный ключ клиента, base64(SEC1 DER). Сырой '/' внутри ключа percent-энкодится ДО разбора authority (§106) — иначе платформа примет его за начало пути и ключ пропадёт."
+      },
+      "label": {
+        "source": ["fragment", "path"],
+        "normalize": ["strip_control", "trim"],
+        "value_map": {"🇪🇳": "🇬🇧"},
+        "fallback": {"template": "{scheme}-{server}-{server_port}", "scheme_source": "singbox_type"}
+      },
       "defaults": {"server_port": 443},
-      "scheme_sets": {"*": {"type": "masque"}},
+      "include": ["tls#uri"],
       "params": {
+        "server": {"source": "host", "maps_to": "server", "required": true},
+        "server_port": {"source": "port", "maps_to": "server_port", "type": "int"},
         "private_key": {
-          "source": ["userinfo", "query.private_key"],
-          "aliases": ["privatekey"],
+          "source": ["userinfo", "query.private_key", "query.privatekey"],
           "maps_to": "private_key",
           "required": true,
-          "decode_extra": {"preserve_plus": true},
-          "impl": "userinfo сильнее query-фолбэка. Сырой '/' внутри base64(SEC1 DER) percent-энкодится ДО разбора authority — иначе платформа примет его за начало пути и ключ пропадёт (§106)."
+          "decode_extra": {"plus_literal": true},
+          "impl": "userinfo сильнее query-фолбэка; оба написания принимают обе стороны."
         },
         "publickey": {
-          "source": "query.publickey",
-          "aliases": ["public_key"],
+          "source": ["query.publickey", "query.public_key"],
           "maps_to": "public_key",
           "required": true,
-          "decode_extra": {"preserve_plus": true},
-          "impl": "D133-7 — поле base64-формата читает '+' буквально; прежде узел с сырым '+' в ключе молча пропадал."
+          "decode_extra": {"plus_literal": true},
+          "impl": "base64(PKIX DER) серверного ключа (pinning). DELTAS D133-7 / delta480-2: поле base64-формата читает '+' буквально; прежде сырой '+' становился пробелом и ключ терял первый символ."
         },
         "address": {
           "source": "query.address",
@@ -36,14 +44,14 @@
             "ip": {"when": {"item": {"not_matches": ":"}}, "take": "first"},
             "ipv6": {"when": {"item": {"matches": ":"}}, "take": "first"}
           },
-          "impl": "Локальные адреса туннеля списком; ядро держит их двумя ОТДЕЛЬНЫМИ полями, по одному на семейство. Первый v4 → ip, первый v6 → ipv6. Ни одного годного адреса — узла нет."
+          "impl": "Локальные адреса туннеля списком; ядро держит их двумя ОТДЕЛЬНЫМИ полями, по одному на семейство: первый v4 → ip, первый v6 → ipv6. Bare IP получает префикс. Ни одного годного адреса — узла нет."
         },
         "profile": {
           "source": "query.profile",
           "maps_to": "profile",
           "default_when": {"absent": true, "value": "cloudflare"},
           "materialize_default": true,
-          "impl": "Дефолт пишется в тело ЯВНО: конвенция обеих сторон входит в identity-хеш живых MASQUE-узлов, а default реестра в тело не материализуется (CANON §2.4)."
+          "impl": "Дефолт пишется в тело ЯВНО: default реестра по CANON §2.4 в тело не материализуется, а корпус присутствия ждёт и на нём стоит identity живых узлов."
         },
         "vhttp": {
           "source": "query.vhttp",
@@ -51,34 +59,32 @@
           "default_when": {"absent": true, "value": "h3"},
           "materialize_default": true,
           "emit_when": "always",
-          "impl": "vhttp_empty_defaults_to_h3. У ядра дефолт auto, у обеих сторон конвенция h3 — и она в теле. Значение вне enum подменяет реестр кодом masque_vhttp_invalid."
+          "impl": "vhttp_empty_defaults_to_h3 — КОНВЕНЦИЯ обеих сторон, а не дефолт ядра (у ядра auto), и значение входит в identity-хеш живых MASQUE-узлов. Значение вне enum подменяет реестр кодом masque_vhttp_invalid."
         },
         "mtu": {
           "source": "query.mtu",
           "maps_to": "mtu",
           "type": "int",
           "default_when": {"absent": true, "value": 1280},
-          "materialize_default": true
-        },
-        "sni": {
-          "source": "query.sni",
-          "maps_to": "tls.server_name",
-          "impl": "Пусто = дефолт профиля ядра, ключа в теле нет. Эвристики написания у masque нет."
-        },
-        "disable_sni": {
-          "source": "query.disable_sni",
-          "type": "bool_spelled",
-          "maps_to": "tls.disable_sni",
-          "omit_default": false
+          "materialize_default": true,
+          "impl": "Корпус нормирует присутствие (uri/masque/default_vhttp_h3 несёт mtu: 1280). Клампа как у AWG нет."
         },
         "idle_timeout": {"source": "query.idle_timeout", "maps_to": "idle_timeout"},
         "keep_alive": {
-          "source": "query.keep_alive",
-          "aliases": ["keep_alive_period"],
-          "maps_to": "keep_alive_period"
+          "source": ["query.keep_alive", "query.keep_alive_period"],
+          "maps_to": "keep_alive_period",
+          "impl": "Имя ссылки короче имени ядра; только для vhttp=h3."
+        },
+        "$legacy_flat": {
+          "source": ["query.network", "query.server_name"],
+          "maps_to": null,
+          "since": "0.8.0",
+          "on_present": {"action": "note", "code": "uri_param_unknown"},
+          "impl": "Контракт 0.8.0 / D-078 — legacy-написания снесены: '?network=h2' рядом с vhttp роняло бы ядро fail-fast'ом. Это не потеря значения, а снятое написание."
         }
       },
-      "emit": {"form": "url", "omit_default": ["server_port"]}
+      "unknown_key": {"action": "keep", "code": "uri_param_unknown"},
+      "emit": {"form": "url", "param_order": "alphabetical", "omit_default": ["server_port"]}
     }
   }
 }
