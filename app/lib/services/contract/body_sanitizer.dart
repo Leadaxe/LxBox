@@ -505,6 +505,33 @@ final class _Ctx {
 
     // `ref` — спуск в общую суб-схему (tls / multiplex / transports).
     final ref = f.ref;
+
+    // §481 (контракт 1.1.12, CANON §6.1) — `absent_when`: ВЫКЛЮЧАТЕЛЬ ВНУТРИ
+    // САМОГО ОБЪЕКТА. Совпали все перечисленные ключи — объект снимается
+    // ЦЕЛИКОМ и ТИХО: это запись «настройки нет», а не деградация, и сообщать
+    // человеку нечего.
+    //
+    // Проверка стоит ЗДЕСЬ, до спуска, и это нормативный порядок: судится ДО
+    // правил полей самого объекта и ДО связей соседей (`conflicts`/`requires`/
+    // `forbidden_for`, условия `when.any_set`). Снятый объект «не задан» для
+    // любой проверки наличия, и вместе с ним исчезает всё, что внутри.
+    // Иначе `tls: {enabled: false, reality: {…}}` дал бы коды на поля блока,
+    // которого в теле не будет, а сосед потерял бы своё значение из-за
+    // конфликта с несуществующим блоком.
+    //
+    // Объявлен атрибут у поля-объекта ЛИБО у секции суб-схемы: у `tls` он
+    // стоит ОДИН раз, на секции, и при разрешении `ref` переезжает в каждый
+    // протокол — отдельной копии на схему не заводится.
+    final absentWhen = f.absentWhen ??
+        (f.type == 'ref' && ref != null
+            ? ContractRegistry.I.sharedSchema(ref)?.absentWhen
+            : null);
+    if (absentWhen != null &&
+        value is Map &&
+        _absentWhenHolds(absentWhen, value)) {
+      return const _Value.drop();
+    }
+
     if (f.type == 'ref' && ref != null) {
       return _sanitizeRef(value, f, ref, path);
     }
@@ -832,6 +859,25 @@ final class _Ctx {
     // Код на ИСХОДНОМ значении: человеку нужно видеть, что он написал.
     if (code != null) warn(code, path: path, value: v, secret: f.secret);
     return ceiling;
+  }
+
+  /// §481 (контракт 1.1.12) — выполнено ли условие `absent_when`.
+  ///
+  /// Совпасть обязаны ВСЕ перечисленные ключи: перечисление — это «и», а не
+  /// «или». Отсутствующий у объекта ключ условия совпадением не считается —
+  /// `tls: {server_name: …}` без `enabled` это НЕ «TLS выключен», это тело без
+  /// флага, и судить его надо обычными правилами.
+  ///
+  /// Сравнение — по ПЕЧАТНОЙ ФОРМЕ скаляра, как у `values` и `advisory`:
+  /// `false` и `"false"` совпадают, потому что тело приезжает и разбором JSON,
+  /// и от маппера, где булев флаг бывает строкой.
+  static bool _absentWhenHolds(Map<String, dynamic> rule, Map<Object?, Object?> obj) {
+    if (rule.isEmpty) return false;
+    for (final e in rule.entries) {
+      if (!obj.containsKey(e.key)) return false;
+      if ('${obj[e.key]}' != '${e.value}') return false;
+    }
+    return true;
   }
 
   /// §481 (контракт 1.1.11) — связи секции `body.relations`.

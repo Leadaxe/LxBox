@@ -111,6 +111,20 @@ final class FieldSchema {
   Map<String, dynamic>? get minWhen =>
       (raw['min_when'] as Map?)?.cast<String, dynamic>();
 
+  /// §481 (контракт 1.1.12, CANON §6.1) — ВЫКЛЮЧАТЕЛЬ ВНУТРИ САМОГО ОБЪЕКТА:
+  /// совпали все перечисленные ключи — объект снимается ЦЕЛИКОМ и ТИХО.
+  ///
+  /// Форма: `{"enabled": false}`. Нужен там, где выключатель секции лежит
+  /// внутри неё: у ядра `tls: {enabled: false}` значит «TLS НЕ ЗАДАН»
+  /// (конструктор возвращает `(nil, nil)`), а не «TLS с выключенным флагом».
+  /// [absentValues] это не выражает — он про значение САМОГО поля и только
+  /// строковый.
+  ///
+  /// Допустим у `type: object` и у секции суб-схемы ([BodySchema.absentWhen]);
+  /// у `tls` объявлен ОДИН раз, на секции, и переезжает через `ref`.
+  Map<String, dynamic>? get absentWhen =>
+      (raw['absent_when'] as Map?)?.cast<String, dynamic>();
+
   String? get format => raw['format'] as String?;
 
   /// §477 (контракт 1.1.9) — регулярное выражение на строковое значение,
@@ -246,6 +260,7 @@ final class BodySchema {
     required this.order,
     required this.fields,
     this.relations = const [],
+    this.absentWhen,
   });
 
   /// Тег ядра, по которому сверен список полей.
@@ -263,6 +278,11 @@ final class BodySchema {
   ///
   /// Форма элемента: `{kind, paths, defaults?, action, code}`.
   final List<Map<String, dynamic>> relations;
+
+  /// §481 (контракт 1.1.12) — `absent_when` секции: объявленный ОДИН раз у
+  /// суб-схемы (`tls`), он при разрешении `ref` действует в каждом протоколе.
+  /// Смысл и порядок — [FieldSchema.absentWhen] и CANON §6.1.
+  final Map<String, dynamic>? absentWhen;
 }
 
 /// Текст кода предупреждения из `registry/warnings.json`.
@@ -512,6 +532,7 @@ final class ContractRegistry {
         for (final e in (body['relations'] as List?) ?? const [])
           if (e is Map) e.cast<String, dynamic>(),
       ],
+      absentWhen: (body['absent_when'] as Map?)?.cast<String, dynamic>(),
     );
   }
 

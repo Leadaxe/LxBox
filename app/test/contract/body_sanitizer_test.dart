@@ -1110,6 +1110,64 @@ void main() {
       expect(_codes(r), contains('wg_key_invalid'));
     }, skip: skip);
 
+    // ───── §481 (контракт 1.1.12, CANON §6.1) — `absent_when` ─────
+
+    test('absent_when: tls{enabled:false} снимается ЦЕЛИКОМ и ТИХО', () {
+      final r = _san(_vless({
+        'tls': {'enabled': false, 'server_name': 'example.com'}
+      }));
+      expect(r.body!.containsKey('tls'), isFalse,
+          reason: 'у ядра это «TLS не задан», а не «TLS с выключенным флагом»: '
+              'явный disabled-блок ронял ядра lx.5..lx.18 в SIGSEGV');
+      // Кода нет: запись «настройки нет» — не деградация.
+      expect(_codes(r), isEmpty);
+    });
+
+    test('absent_when судится ДО правил полей: мусор ВНУТРИ снятого блока '
+        'кодов не даёт', () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': false,
+          'reality': {'enabled': true, 'public_key': 'не-ключ-вовсе'},
+        }
+      }));
+      expect(r.body!.containsKey('tls'), isFalse);
+      expect(_codes(r), isEmpty,
+          reason: 'иначе человек получил бы коды на поля блока, которого в '
+              'теле не будет');
+    });
+
+    test('absent_when у вложенного: reality{enabled:false} исчезает, '
+        'живой tls остаётся', () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'server_name': 'example.com',
+          'reality': {'enabled': false, 'public_key': 'не-ключ-вовсе'},
+        }
+      }));
+      final tls = r.body!['tls'] as Map;
+      expect(tls['enabled'], true);
+      expect(tls.containsKey('reality'), isFalse);
+      expect(_codes(r), isEmpty);
+    });
+
+    test('absent_when: tls БЕЗ ключа `enabled` — тело без флага, а не '
+        'выключенный TLS', () {
+      final r = _san(_vless({
+        'tls': {'server_name': 'example.com'}
+      }));
+      expect(r.body!.containsKey('tls'), isTrue);
+    });
+
+    test('absent_when сравнивает по печатной форме: строковое "false" '
+        'совпадает с булевым', () {
+      final r = _san(_vless({
+        'tls': {'enabled': 'false', 'server_name': 'example.com'}
+      }));
+      expect(r.body!.containsKey('tls'), isFalse);
+    });
+
     test('default_when у allowed_ips: тело без ключа получает дефолт, '
         'а не теряет узел', () {
       final body = wgBody();
