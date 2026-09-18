@@ -1128,7 +1128,14 @@ NodeSpec? parseSingboxEntry(
             entry['idle_session_check_interval']?.toString() ?? ''),
         idleSessionTimeout: normalizeSingboxDuration(
             entry['idle_session_timeout']?.toString() ?? ''),
-        minIdleSession: (entry['min_idle_session'] as num?)?.toInt(),
+        // §472 шаг 6 — `_asInt`, а не жёсткий каст. Каст `as num?` бросал на
+        // ЛЮБОМ нечисловом значении, а `parseUri`/`parseSingboxEntry` ловят
+        // исключение и отдают `null`: узел исчезал целиком и молча. Задеть
+        // это могло и тело провайдера (`"min_idle_session": "3"` строкой —
+        // обычное дело у агрегаторов), и ссылку на конвейере, где сырое
+        // значение обязано доехать до санитайзера СО СВОИМ написанием, чтобы
+        // код `anytls_min_idle_invalid` назвал то, что написал автор.
+        minIdleSession: _asInt(entry['min_idle_session']),
         tcpKeepAlive: ka,
       );
     case 'shadowsocks':

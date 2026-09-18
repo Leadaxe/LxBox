@@ -1,83 +1,29 @@
 import '../../../models/node_spec.dart';
-import '../../../models/node_warning.dart';
-import '../transport.dart';
-import '../tcp_keep_alive.dart';
-import '../uri_utils.dart';
-import '../utls_fingerprint.dart';
+import '../mappers/uri_pipeline.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // AnyTLS — see task 269.
 // ════════════════════════════════════════════════════════════════════════════
-// URI-стандарта у AnyTLS нет; принимаем trojan-подобную форму
-// `anytls://password@host:port?sni=..&fp=..&alpn=..&pbk=..&insecure=..#label`.
-// AnyTLS всегда поверх TLS — TLS форсим enabled даже при security=none.
 
-AnyTlsSpec? parseAnyTls(String uri) {
-  final p = Uri.tryParse(uri);
-  if (p == null || p.host.isEmpty) return null;
-
-  // userinfo = password (как trojan): user:pass схлопываем, `:`-разделённый
-  // пароль остаётся целым.
-  final userParts = p.userInfo.split(':');
-  final password = Uri.decodeComponent(userParts.join(':'));
-  if (password.isEmpty) return null;
-
-  final server = p.host;
-  final port = p.hasPort ? p.port : 443;
-  final q = Map<String, String>.from(p.queryParameters);
-  final label = decodeFragment(p.fragment);
-  final tag = tagFromLabel(label, 'anytls', server, port);
-
-  // TLS через VLESS-конвенцию — она несёт REALITY (pbk/sid), sni/fp/alpn/insecure.
-  // AnyTLS всегда поверх TLS: security=none для него бессмысленен и не должен
-  // терять параметры — снимаем security перед парсингом, чтобы не получить
-  // disabled (обнулив весь TLS-блок).
-  final tlsQuery = Map<String, String>.from(q)..remove('security');
-  // §463 / контракт §24.2 п. 7.5 — мусорный SNI заменяется адресом сервера.
-  //
-  // Имя без точки и двоеточия (`🔒`, `localhost-ish`) именем хоста быть не
-  // может: `sing-box check` такой конфиг проходит, а рукопожатие мёртво —
-  // сервер получает SNI, которого не знает. Раньше значение уезжало в
-  // `tls.server_name` как есть, и узел молча не работал. Критерий — тот же,
-  // что у лаунчера (`tlsServerNameFromQuery`): есть `.` или `:` — имя, нет —
-  // фолбэк на `server`.
-  final sniRaw = (tlsQuery['sni'] ?? '').trim();
-  if (sniRaw.isNotEmpty && !sniRaw.contains(RegExp(r'[.:]'))) {
-    tlsQuery['sni'] = server;
-  }
-  final warnings = <NodeWarning>[];
-  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls = normalizeTlsFingerprint(
-      parseVlessTls(tlsQuery, server, port, warnings: warnings), warnings);
-
-  if (tls.insecure) warnings.add(const InsecureTlsWarning());
-
-  // SPEC 103 `anytls_min_idle_invalid` — не неотрицательное целое: поле
-  // снимается (ядро подставит дефолт), узел живёт. Go: node_parser_anytls.go:40.
-  final minIdleRaw = (q['min_idle_session'] ?? '').trim();
-  final minIdle = int.tryParse(minIdleRaw);
-  if (minIdleRaw.isNotEmpty && (minIdle == null || minIdle < 0)) {
-    warnings.add(AnyTlsMinIdleInvalidWarning(minIdleRaw));
-  }
-
-  return AnyTlsSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: uri,
-    password: password,
-    tls: tls,
-    // SPEC 103 D-024 — голое число (секунды) → duration-строка с суффиксом
-    // `s`; ядро (badoption.Duration) отвергает "30" без единицы измерения
-    // фаталом на весь конфиг (зеркало Go normalizeTuicHeartbeat).
-    idleSessionCheckInterval:
-        normalizeSingboxDuration(q['idle_session_check_interval'] ?? ''),
-    idleSessionTimeout: normalizeSingboxDuration(q['idle_session_timeout'] ?? ''),
-    minIdleSession: (minIdle != null && minIdle >= 0) ? minIdle : null,
-    warnings: warnings,
-    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
-    tcpKeepAlive: tcpKeepAliveFromQuery(q),
-  );
-}
+/// §472 шаг 6 — anytls разбирается КОНВЕЙЕРОМ: маппер переводит ссылку в сырую
+/// карту sing-box, санитайзер реестра судит значения, `parseSingboxEntry`
+/// строит модель (`mappers/uri_pipeline.dart`).
+///
+/// Своего разбора у этой функции больше нет — осталось имя, под которым её
+/// зовут `parseUri` и тесты. Что уехало из неё в реестр:
+///
+/// | было рукописным | стало правилом реестра |
+/// |---|---|
+/// | `AnyTlsMinIdleInvalidWarning` — `min_idle_session` не неотрицательное целое | `protocols/anytls.json` → `min_idle_session`, `min: 0` + `on_invalid: drop`, код `anytls_min_idle_invalid` с путём и значением |
+/// | `normalizeTlsFingerprint` — мусорный `fp` → `chrome` + предупреждение | `tls.json` → `utls.fingerprint`, enum + `on_invalid: coerce chrome`, код `utls_fp_unknown` |
+/// | `InsecureTlsWarning` при `insecure` | `tls.json` → `insecure`, `advisory` (§474) |
+/// | `isValidRealityPublicKey` — гейт REALITY по §169 | `tls.json` → `reality.public_key`, `format: base64_32`, код `reality_pbk_invalid` |
+/// | `realityShortIdWouldDegrade` + `normalizeRealityShortId` | `tls.json` → `reality.short_id`, `format: hex`, `normalize: hex_only`, `max: 16`, `len_parity: even` |
+/// | `_keyShareFromQuery` — enum `hybrid`/`classical` | `tls.json` → `reality.key_share`, enum + `normalize: trim_lower` |
+/// | `alpnFromQuery` — drop элемента, не похожего на ALPN-id | `tls.json` → `alpn`, `listable_string` |
+///
+/// Рукописным остался ПЕРЕВОД написания: пароль целиком из userinfo, снятие
+/// `security` перед чтением TLS (AnyTLS живёт только поверх TLS), голое число
+/// duration-полей как секунды и эвристика SNI — см. `mappers/anytls_mapper.dart`.
+AnyTlsSpec? parseAnyTls(String uri) =>
+    parseUriViaPipeline(uri, 'anytls') as AnyTlsSpec?;

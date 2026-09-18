@@ -152,22 +152,32 @@ void main() {
     // переехавшей схемы источник кода по определению один.
     //
     // История переездов: vless (был здесь до шага 3) → tuic (шаги 3–4) →
-    // anytls. Шаг 5 увёл tuic на конвейер, и пример переехал на anytls —
-    // `min_idle_session` там судит рукописный `AnyTlsMinIdleInvalidWarning`, а
-    // реестр объявляет на том же поле тот же код `anytls_min_idle_invalid`
-    // (`protocols/anytls.json` → `on_invalid`). anytls идёт шагом 6; когда
-    // переедет и он, пример придётся снова перенести — на naive, http, socks
-    // или ssh.
+    // anytls (шаг 5) → masque. Шаг 6 увёл anytls на конвейер, и пример
+    // переехал на masque — единственную схему, у которой рукописный класс и
+    // правило реестра по-прежнему говорят об ОДНОМ поле: `vhttp` судит
+    // рукописный `MasqueVhttpInvalidWarning` (`masque_parser.dart`), а реестр
+    // объявляет на том же поле тот же код `masque_vhttp_invalid`
+    // (`protocols/masque.json` → `body.fields.vhttp.on_invalid`). Кейс взят из
+    // корпуса (`uri/masque/vhttp_invalid_forced_h3`).
+    //
+    // masque переезжает шагом 7, и других кандидатов после него не остаётся:
+    // у wireguard/AWG рукописные коды (`awg_*`) реестр дублем не объявляет.
+    // Когда переедет masque, пример придётся строить на искусственном
+    // производителе, а не искать схему.
     test('рукописный класс перебивает код реестра на том же коде', () {
       final n = _one(
-        'anytls://pw@example.com:443?sni=a.example&min_idle_session=-5#node',
+        'masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCC'
+        'qGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKK'
+        'iuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443'
+        '?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnM'
+        'hgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZ'
+        'EWw%3D%3D&address=172.16.0.2%2F32&vhttp=tcp#x',
       );
-      final hand =
-          n.warnings.whereType<AnyTlsMinIdleInvalidWarning>().toList();
+      final hand = n.warnings.whereType<MasqueVhttpInvalidWarning>().toList();
       expect(hand, isNotEmpty, reason: 'рукописное предупреждение на месте');
       // Реестр тот же код вторым сообщением не дублирует.
       expect(_registry(n).map((w) => w.code),
-          isNot(contains('anytls_min_idle_invalid')));
+          isNot(contains('masque_vhttp_invalid')));
     }, skip: skip);
 
     // §472 шаг 3 — а у переехавшей схемы источник кода РОВНО один: реестр.

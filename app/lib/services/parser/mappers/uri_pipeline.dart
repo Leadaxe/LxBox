@@ -33,6 +33,7 @@ import '../../contract/body_sanitizer.dart';
 import '../../contract/registry.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
+import 'anytls_mapper.dart';
 import 'hysteria2_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'trojan_mapper.dart';
@@ -62,6 +63,7 @@ const kPipelineSchemes = <String>{
   'hysteria2',
   'hy2',
   'tuic',
+  'anytls',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -73,6 +75,7 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'hysteria2': mapHysteria2Uri,
   'hy2': mapHysteria2Uri,
   'tuic': mapTuicUri,
+  'anytls': mapAnyTlsUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё

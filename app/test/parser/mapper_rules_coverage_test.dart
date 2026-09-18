@@ -54,6 +54,17 @@ const Map<String, String> _knownGaps = {
   'sni_heuristic_falls_back_to_server@tuic':
       'реализован только откат пустого sni на адрес сервера; проверки '
           'написания нет — включение меняет тела и identity (спека 472, шаг 5)',
+  // §472 шаг 6 — у anytls правило записано в реестре (`applies_to` его
+  // называет), но исполнять его нельзя ПО СУЩЕСТВУ схемы: AnyTLS живёт
+  // только поверх TLS (`anytls.json` → `body.fields.tls` → `required`, ядро
+  // отвечает `C.ErrTLSRequired`). Сними маппер блок по `security=none` — и
+  // узел уехал бы без TLS, то есть не поднялся бы вовсе, потеряв заодно
+  // `sni`/`alpn`/`insecure`, которые автор написал рядом. Корпус нормирует
+  // именно обратное: `uri/anytls/security_none_params_kept`.
+  'security_none_no_tls@anytls':
+      'у anytls tls обязателен (C.ErrTLSRequired), security=none снимается '
+          'до чтения блока; корпус нормирует security_none_params_kept '
+          '(спека 472, шаг 6)',
 };
 
 /// Правила, покрытые тестами этого файла: id → имя теста.
@@ -79,6 +90,9 @@ const Map<String, String> _covered = {
       'sni без точки/двоеточия и 🔒 уступают адресу сервера',
   'mport_range_spec': 'mport=1000-2000,3000 → server_ports [low:high]',
   'heartbeat_bare_number': 'heartbeat=10 → "10s"',
+  // §472 шаг 6 — правило, которое добавил переезд anytls.
+  'sni_heuristic_falls_back_to_server@anytls':
+      'anytls: sni без точки/двоеточия и 🔒 уступают адресу сервера',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -353,6 +367,52 @@ void main() {
           parseUri('tuic://$uuid:p@h.example:443?alpn=h3,h3-29#n')!;
       expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['alpn'],
           ['h3', 'h3-29']);
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (anytls)', () {
+    test('anytls: sni без точки/двоеточия и 🔒 уступают адресу сервера', () {
+      // `sni_heuristic_falls_back_to_server` — у anytls правило ЕСТЬ на обоих
+      // проектах, как у hysteria2 (см. _knownGaps по trojan/vless/vmess).
+      for (final bad in ['localhost', '🔒']) {
+        final spec = parseUri(
+            'anytls://pw@h.example:443?sni=${Uri.encodeComponent(bad)}#n')!;
+        expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
+            'h.example',
+            reason: 'sni=$bad');
+      }
+    }, skip: skip);
+
+    test('anytls: pbk= создаёт блок REALITY, годность судит реестр', () {
+      const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
+      final ok = parseUri('anytls://pw@h.example:443?pbk=$pbk&sid=abcd#n')!;
+      final tls = ok.emit(TemplateVars.empty).map['tls'] as Map;
+      expect((tls['reality'] as Map)['public_key'], pbk);
+    }, skip: skip);
+
+    test('anytls: без fp= → random, fp в написании uTLS → семейство', () {
+      // `fp_empty_defaults_to_random` и `utls_xray_hello_names` на одной схеме.
+      final bare = parseUri('anytls://pw@h.example:443?sni=a.b#n')!;
+      expect(
+          ((bare.emit(TemplateVars.empty).map['tls'] as Map)['utls']
+              as Map)['fingerprint'],
+          'random');
+      final alias =
+          parseUri('anytls://pw@h.example:443?sni=a.b&fp=hellofirefox_auto#n')!;
+      expect(
+          ((alias.emit(TemplateVars.empty).map['tls'] as Map)['utls']
+              as Map)['fingerprint'],
+          'firefox');
+    }, skip: skip);
+
+    test('anytls: alpn одной строкой → список, ech= не переносится', () {
+      // `alpn_comma_list` и `ech_param_dropped_with_code`.
+      final spec = parseUri('anytls://pw@h.example:443?sni=a.b'
+          '&alpn=h2,http/1.1&ech=ip.gs+1.1.1.1#n')!;
+      final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+      expect(tls['alpn'], ['h2', 'http/1.1']);
+      expect(tls.containsKey('ech'), isFalse);
+      expect(spec.warnings.whereType<EchIgnoredWarning>(), isNotEmpty);
     }, skip: skip);
   });
 
