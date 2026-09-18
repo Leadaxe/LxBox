@@ -1,0 +1,47 @@
+{
+  "mappers": {
+    "xray": {
+      "detect": {"json": {"value_of": {"protocol": "hysteria"}}},
+      "body_source": "xray",
+      "unknown_key": {"action": "drop", "code": "json_field_unknown"},
+      "forms": [
+        {"id": "flat", "detect": {"default": true}, "space": "json", "base": "settings", "level": "outbound"}
+      ],
+      "label": {
+        "fallback": {"template": "{scheme}-{server}-{server_port}", "scheme_source": "as_written"}
+      },
+      "defaults": {"server_port": 443},
+      "params": {
+        "version": {
+          "source": ["json.streamSettings.hysteriaSettings.version", "json.settings.version"],
+          "selector": true,
+          "type": "int",
+          "default_when": {"absent": true, "value": 2},
+          "sets": {"2": {"type": "hysteria2"}},
+          "on_no_match": {"action": "drop_node", "code": "protocol_unsupported"},
+          "impl": "§321 — protocol:\"hysteria\" с version:2 это форма форка Xray (апстрим hysteria2 не поддерживает вовсе). version:1 у нас своего Spec не имеет — узла нет."
+        },
+        "address": {"source": "json.$base.address", "maps_to": "server", "required": true},
+        "port": {"source": "json.$base.port", "maps_to": "server_port", "type": "int"},
+        "auth": {
+          "source": "json.streamSettings.hysteriaSettings.auth",
+          "maps_to": "password",
+          "empty": "significant",
+          "impl": "Пустой auth даёт пустой password — так же, как прежняя ветка."
+        },
+        "$quic_params": {
+          "source": "json.streamSettings.hysteriaSettings.finalmask",
+          "maps_to": null,
+          "impl": "finalmask.quicParams НЕ переносим: у sing-box нет соответствия, а unknown field валит весь конфиг."
+        },
+        "$quic_tls_blocks": {
+          "source": "json.streamSettings.security",
+          "maps_to": null,
+          "impl": "quic_has_no_utls_or_reality — блоки tls.utls/tls.reality снимает МАППЕР, а не санитайзер: Hysteria2Spec их не эмитил никогда, и отдай маппер их судье, узел получил бы код tls_not_applicable_quic там, где раньше стояла тишина. Тег держит историческое написание hy2 (mappers.xray — своё правило, DELTAS D133-6)."
+        }
+      },
+      "include": ["tls#xray"],
+      "emit": null
+    }
+  }
+}
