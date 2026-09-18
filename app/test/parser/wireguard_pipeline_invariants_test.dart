@@ -411,6 +411,133 @@ void main() {
     }, skip: skip);
   });
 
+  group('§472 шаг 7 / §456 — INI это ещё один МАППЕР конвейера', () {
+    const proton = '[Interface]\n'
+        '# Bouncing = 0\n'
+        'PrivateKey = $_priv\n'
+        'Address = 10.2.0.2/32\nDNS = 10.2.0.1\nMTU = 1420\n\n'
+        '[Peer]\n# CH-FREE#11\nPublicKey = $_pub\n'
+        'AllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n';
+
+    test('источник узла — сам INI, байт в байт', () {
+      // §456 — синтетического `wg://` наружу не выходит, и его больше нет
+      // внутри вовсе: маппер читает INI напрямую.
+      final spec = parseWireguardIni(proton, nameHint: 'file')!;
+      expect(spec.rawSource, proton);
+      expect(spec.rawSource, isNot(contains('wireguard://')));
+    }, skip: skip);
+
+    test('имя: комментарий под [Peer] сильнее nameHint, тот — сильнее фолбэка',
+        () {
+      expect(parseWireguardIni(proton, nameHint: 'file')!.tag, 'CH-FREE#11');
+      final noComment = proton.replaceAll('# CH-FREE#11\n', '');
+      expect(parseWireguardIni(noComment, nameHint: 'file')!.tag, 'file');
+      expect(parseWireguardIni(noComment)!.tag, 'WireGuard');
+      // `# Bouncing = 0` в `[Interface]` именем не считается — там `=`.
+      expect(parseWireguardIni(noComment, nameHint: '   ')!.tag, 'WireGuard');
+    }, skip: skip);
+
+    test('узел INI разобран КОНВЕЙЕРОМ: коды реестра на нём уже стоят', () {
+      // AWG-INI с завышенным MTU: потолок исполняет санитайзер, код приходит
+      // из реестра — ровно как у ссылки.
+      final ini = proton.replaceAll('MTU = 1420', 'MTU = 1420\nJc = 4');
+      final spec = parseWireguardIni(ini)!;
+      expect(spec.emit(TemplateVars.empty).map['mtu'], 1280);
+      final w = _registry(spec).firstWhere((w) => w.code == 'awg_mtu_clamped',
+          orElse: () => fail('нет кода: ${spec.warnings}'));
+      expect(w.path, 'mtu');
+      expect(w.value, '1420');
+      // Второй проход по `emit()` такой узел не трогает (отметка конвейера).
+      final before = spec.warnings.length;
+      annotateAllWithRegistry([spec]);
+      expect(spec.warnings, hasLength(before));
+    }, skip: skip);
+
+    test('обычный WG из INI: MTU автора цел, кодов нет', () {
+      final spec = parseWireguardIni(proton)!;
+      expect(spec.emit(TemplateVars.empty).map['mtu'], 1420);
+      expect(_registry(spec), isEmpty);
+    }, skip: skip);
+
+    test('Endpoint: host:port, [IPv6]:port и голый IPv6 (§219)', () {
+      String withEndpoint(String e) =>
+          proton.replaceAll('Endpoint = 1.2.3.4:51820', 'Endpoint = $e');
+      final v4 = parseWireguardIni(withEndpoint('h.example:1234'))!;
+      expect(v4.server, 'h.example');
+      expect(v4.port, 1234);
+
+      final v6 = parseWireguardIni(withEndpoint('[2001:db8::1]:1234'))!;
+      expect(v6.server, '2001:db8::1');
+      expect(v6.port, 1234);
+
+      // §219 — несколько `:` без скобок: порт от адреса неотличим.
+      final bare = parseWireguardIni(withEndpoint('2001:db8::1'))!;
+      expect(bare.server, '2001:db8::1');
+      expect(bare.port, 51820);
+    }, skip: skip);
+
+    test('без Endpoint / PrivateKey / PublicKey узла нет', () {
+      for (final drop in const ['Endpoint', 'PrivateKey', 'PublicKey']) {
+        final ini = proton
+            .split('\n')
+            .where((l) => !l.trim().startsWith(drop))
+            .join('\n');
+        expect(parseWireguardIni(ini), isNull, reason: 'без $drop');
+      }
+    }, skip: skip);
+
+    test('DNS из INI в тело не уезжает (у endpoint такого поля нет)', () {
+      final body = parseWireguardIni(proton)!.emit(TemplateVars.empty).map;
+      expect(body.containsKey('dns'), isFalse);
+    }, skip: skip);
+
+    test('AWG-ключи [Interface] и Reserved [Peer] переводятся как в ссылке',
+        () {
+      const ini = '[Interface]\nPrivateKey = $_priv\n'
+          'Address = 10.2.0.2/32\nJc = 4\nJmin = 40\nJmax = 70\n'
+          'H1 = 1234567\nI1 = <b 0xdeadbeef>\n\n'
+          '[Peer]\nPublicKey = $_pub\nAllowedIPs = 0.0.0.0/0\n'
+          'Endpoint = 1.2.3.4:51820\nReserved = 1,2,3\n'
+          'PersistentKeepalive = 25\n';
+      final body = parseWireguardIni(ini)!.emit(TemplateVars.empty).map;
+      expect(body['jc'], 4);
+      expect(body['h1'], 1234567);
+      expect(body['i1'], '<b 0xdeadbeef>');
+      final peer = (body['peers'] as List).first as Map;
+      expect(peer['reserved'], [1, 2, 3]);
+      expect(peer['persistent_keepalive_interval'], 25);
+    }, skip: skip);
+
+    test('§110 — Amnezia vpn:// остаётся КОНТЕЙНЕРОМ поверх того же маппера',
+        () {
+      // `vpn://` это не третий вход, а распаковщик: он достаёт из профиля
+      // готовые INI-тексты и отдаёт их сюда же. Отдельного переезда ему не
+      // нужно — он поехал конвейером вместе с INI.
+      const ini = '[Interface]\nPrivateKey = $_priv\n'
+          'Address = 10.2.0.2/32\nJc = 4\nMTU = 1420\n\n'
+          '[Peer]\nPublicKey = $_pub\nAllowedIPs = 0.0.0.0/0\n'
+          'Endpoint = 1.2.3.4:51820\n';
+      final profile = jsonEncode({
+        'containers': [
+          {
+            'container': 'amnezia-awg',
+            'awg': {
+              'last_config': jsonEncode({'config': ini}),
+            },
+          },
+        ],
+        'defaultContainer': 'amnezia-awg',
+        'description': 'Профиль',
+      });
+      final spec = parseUri(
+          'vpn://${base64Url.encode(utf8.encode(profile)).replaceAll('=', '')}')!;
+      expect(spec.tag, 'Профиль');
+      expect(spec.rawSource, ini, reason: '§456 — источник узла это его INI');
+      expect(spec.emit(TemplateVars.empty).map['mtu'], 1280,
+          reason: 'потолок AWG исполнил санитайзер — узел на конвейере');
+    }, skip: skip);
+  });
+
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
     test('annotateAllWithRegistry на разобранном AWG ничего не добавляет', () {
       final spec = parseUri('wireguard://$_priv@h.example:51820'

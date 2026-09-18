@@ -978,11 +978,11 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 > In the WireGuard spec `reserved_zero[3]` means bytes `[1..3]` of the packet header, right after the message type at `[0]`; the magic headers `h1`–`h4` write **all 4 bytes** `[0..3]` at once (as a uint32), which is to say they overwrite exactly that `reserved_zero`.
 > The bytes are physically the same; the meaning is not. Conflating them has already caused a real bug: unconditionally clearing `b[1:4]` for the WARP client_id wiped out ranged magic (fixed in core `lx.9`). When working with either field, be explicit about which one you mean.
 
-The model is the `Awg` class in [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, where `null` means ordinary WG). The round trip is complete: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` with no loss.
+The model is the `Awg` class in [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, where `null` means ordinary WG). The round trip is complete: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` with no loss. The order of AWG keys in the body is the same on all three inputs — AWG 3.x first, then the numeric AWG2 fields and `i*` — because golden configs are compared byte for byte.
 
 ### MTU clamp
 
-Since contract 1.1.5 (§473) the rule lives in the **registry**, not in Dart: the ceiling, the default and the set of marker fields that make a node AmneziaWG all come from `wireguard.body.fields.mtu` (`max_when`, `default_when`). The app reads them through `awgMtuByRegistry` / `RegistrySanitizer`; no second copy of the numbers exists in the code.
+Since contract 1.1.5 (§473) the rule lives in the **registry**, not in Dart: the ceiling, the default and the set of marker fields that make a node AmneziaWG all come from `wireguard.body.fields.mtu` (`max_when`, `default_when`). Since §472 step 7 the registry also **executes** it, on every input, through `RegistrySanitizer`; the hand-written `awgClampMtu` / `awgMtuByRegistry` / `awgMtuWarnings` are gone. Two cases the sanitiser cannot reach stay with the pipeline, and both would otherwise fail silently: a node that **asked** for AmneziaWG but kept no valid AWG field (the condition judges keys in the body, and none are left — §463), and a registry that failed to load (`kAwgMtuFallback`). No second copy of the numbers exists in the code.
 
 For AWG nodes the client MTU is **clamped to `min(mtu, 1280)`**, and with no explicit `mtu` the default is **1280**. Ordinary WG is left alone (the core's own default of 1408 applies, and the field is not emitted at all).
 

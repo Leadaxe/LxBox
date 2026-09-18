@@ -135,11 +135,29 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
 NodeSpec? parseUriViaPipeline(String uri, String scheme) {
   final mapper = _kMappers[scheme];
   if (mapper == null) return null;
-
   // §472 шаг 4 — маппер получает ИСХОДНЫЙ ТЕКСТ. Общего `Uri.tryParse` здесь
   // больше нет: у vmess и shadowsocks ссылка не URI, и приведение authority к
   // нижнему регистру убивало бы base64 (см. [UriMapper]).
-  final mapping = mapper(uri);
+  return _runPipeline(uri, mapper);
+}
+
+/// §472 шаг 7 — тот же конвейер для входа, у которого СХЕМЫ НЕТ: текст INI
+/// (`wg-quick`).
+///
+/// Отличие от [parseUriViaPipeline] ровно одно — маршрутизация. У ссылки
+/// маппер выбирается по схеме, а INI-текст схемы не несёт вовсе, и выбирает
+/// его вызывающий (`ini_parser.dart`): формат опознан раньше, ещё на входе
+/// приложения (`parse_all.dart`, `body_decoder.dart`). Всё остальное —
+/// санитайзер, тег, `rawSource`, отметка «разобран конвейером» — общее.
+///
+/// [source] уезжает в `rawSource` узла как есть: у INI это текст файла байт в
+/// байт (§456).
+NodeSpec? parseIniViaPipeline(String source, UriMapper mapper) =>
+    _runPipeline(source, mapper);
+
+/// Общее тело конвейера: маппер → санитайзер → `parseSingboxEntry`.
+NodeSpec? _runPipeline(String source, UriMapper mapper) {
+  final mapping = mapper(source);
   if (mapping == null) return null;
 
   final warnings = <NodeWarning>[...mapping.warnings];
@@ -249,7 +267,7 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
   // `TrojanSpec`), и каждая новая схема требовала бы там своей ветки.
   final node = parseSingboxEntry(
     body,
-    rawSource: uri,
+    rawSource: source,
     label: mapping.label,
     wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
   );

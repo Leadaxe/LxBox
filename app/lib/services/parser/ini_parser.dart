@@ -1,37 +1,42 @@
 import '../../models/node_spec.dart';
-import 'uri_parsers.dart';
+import 'mappers/uri_pipeline.dart';
+import 'mappers/wireguard_mapper.dart';
 
-/// Парсинг WireGuard INI → WireguardSpec через wg:// URI (§3.3).
+/// Разбор WireGuard INI (`wg-quick`) в `WireguardSpec`.
 ///
-/// Обязательные поля: `[Interface].PrivateKey`, `[Peer].PublicKey`,
-/// `[Peer].Endpoint`. Остальные — опциональные с дефолтами.
+/// §472 шаг 7 — INI идёт ТЕМ ЖЕ КОНВЕЙЕРОМ, что и ссылка: маппер переводит
+/// текст INI в сырую карту sing-box, санитайзер реестра судит значения,
+/// `parseSingboxEntry` строит модель. Второй вход той же схемы отличается
+/// ровно разбором входа — выход у обоих один
+/// (`mappers/wireguard_mapper.dart`, [mapWireguardIni]).
 ///
-/// §456 — источник узла (`rawSource`) — сам INI-текст, байт в байт;
-/// синтетический URI — внутренний шаг. Имя узла (INI тега не несёт), по
-/// убыванию силы: первый комментарий под `[Peer]` без `=` (Proton пишет туда
-/// имя сервера: `# CH-FREE#11`), затем [nameHint] (имя файла при импорте
-/// §243, тег записи при чтении хранения, поле Tag редактора), затем
-/// `WireGuard`. Тег хранится полем записи, не в тексте.
+/// Синтетического `wg://`-URI внутри БОЛЬШЕ НЕТ. Он был промежуточной формой
+/// (§3.3, затем §456) и стоил двух лишних превращений текста — сборки query с
+/// percent-кодированием и обратного разбора её же; на конвейере обе стороны
+/// говорят картой, и посредник не нужен. Поведение при этом прежнее: имена
+/// параметров у INI-маппера те же, что у query ссылки, и дальше обе воронки
+/// сходятся в одном коде.
+///
+/// §456 — **источник узла (`rawSource`) это сам INI-текст, байт в байт**.
+/// Конвейер кладёт в него свой аргумент, поэтому текст передаётся туда
+/// напрямую.
+///
+/// §456 — **имя узла** (INI тега не несёт), по убыванию силы:
+///
+/// 1. первый комментарий сразу под `[Peer]` без `=` — Proton пишет туда имя
+///    сервера (`# CH-FREE#11`); строки вида `# Bouncing = 0` в `[Interface]`
+///    не годятся;
+/// 2. [nameHint] — имя файла при импорте (§243), тег записи при чтении
+///    хранения, поле Tag редактора при Save;
+/// 3. `WireGuard`.
+///
+/// Тег хранится полем записи, не в тексте.
 WireguardSpec? parseWireguardIni(String config, {String? nameHint}) {
   final peerName = peerCommentName(config);
-  final uri = _iniToUri(config, peerName ?? nameHint);
-  if (uri == null) return null;
-  final spec = parseWireguardUri(uri);
-  if (spec == null) return null;
-  return WireguardSpec(
-    id: spec.id,
-    tag: spec.tag,
-    label: spec.label,
-    server: spec.server,
-    port: spec.port,
-    rawSource: config,
-    privateKey: spec.privateKey,
-    localAddresses: spec.localAddresses,
-    peers: spec.peers,
-    mtu: spec.mtu,
-    awg: spec.awg, // §097 — не теряем AWG при rebuild
-    warnings: spec.warnings,
-  );
+  return parseIniViaPipeline(
+    config,
+    (text) => mapWireguardIni(text, nameHint: peerName ?? nameHint),
+  ) as WireguardSpec?;
 }
 
 /// §456 — имя сервера из комментария под `[Peer]`: первая строка секции,
@@ -52,116 +57,4 @@ String? peerCommentName(String config) {
     return name;
   }
   return null;
-}
-
-String? _iniToUri(String config, String? nameHint) {
-  final lines = config.split(RegExp(r'\r?\n'));
-  String section = '';
-  String privateKey = '';
-  String address = '';
-  String publicKey = '';
-  String endpoint = '';
-  String allowedIps = '';
-  String presharedKey = '';
-  String reserved = ''; // §126 — WARP client_id (reserved/client_id в [Peer])
-  int mtu = 0;
-  String keepalive = ''; // §421 — `N` или AWG3-диапазон `N-M`, сырым
-  // §097 — AmneziaWG2 поля из [Interface] (Jc/Jmin/.../I1-I5; регистр value
-  // сохраняем, ключ lowercase). Прокинем в URI-query → Awg.fromQuery.
-  final awg = <String, String>{};
-
-  for (final line in lines) {
-    final t = line.trim();
-    if (t.startsWith('[')) {
-      section = t.toLowerCase();
-      continue;
-    }
-    final idx = t.indexOf('=');
-    if (idx < 0) continue;
-    final k = t.substring(0, idx).trim().toLowerCase();
-    final v = t.substring(idx + 1).trim();
-    if (section == '[interface]') {
-      if (k == 'privatekey') privateKey = v;
-      if (k == 'address') address = v;
-      if (k == 'mtu') mtu = int.tryParse(v) ?? 0;
-      if (Awg.numKeys.contains(k) || Awg.strKeys.contains(k)) awg[k] = v;
-      // §421 — AWG3-ключи (HeaderProtectionKey, ContentPaddingAddition,
-      // Rekey*/Reject*/KeepaliveTimeout/MaxHandshakeAttempts, RandomTrailers,
-      // DisableCookies) — под теми же lowercase-именами в query.
-      if (Awg.awg3ParamToJson.containsKey(k)) awg[k] = v;
-    } else if (section == '[peer]') {
-      if (k == 'publickey') publicKey = v;
-      if (k == 'endpoint') endpoint = v;
-      // §103 amnezia_vpn_plain_wg — раньше AllowedIPs из INI не читался
-      // вовсе, и wireguard_parser.dart:37 молча подставлял дефолт
-      // '0.0.0.0/0, ::/0' на любой INI (даже с явным одиночным
-      // '0.0.0.0/0') — IPv4-only INI получал лишний IPv6-дефолт-роут.
-      if (k == 'allowedips') allowedIps = v;
-      if (k == 'presharedkey') presharedKey = v;
-      if (k == 'persistentkeepalive') keepalive = v;
-      // §126 — WARP `client_id` → reserved. Amnezia-генератор кладёт его в
-      // [Peer] как `Reserved` (или `ClientId`); парсер reserved (parseReserved)
-      // принимает и `b0,b1,b2`, и base64. Прокидываем сырым в URI-query.
-      if (k == 'reserved' || k == 'client_id' || k == 'clientid') reserved = v;
-    }
-  }
-
-  if (privateKey.isEmpty || publicKey.isEmpty || endpoint.isEmpty) return null;
-
-  // endpoint → host + port (поддержка IPv6 [::1]:51820).
-  String host;
-  String port;
-  if (endpoint.startsWith('[')) {
-    final close = endpoint.indexOf(']');
-    host = endpoint.substring(1, close > 0 ? close : endpoint.length);
-    final after = close > 0 ? endpoint.substring(close + 1) : '';
-    port = after.startsWith(':') ? after.substring(1) : '51820';
-  } else {
-    final lastColon = endpoint.lastIndexOf(':');
-    final firstColon = endpoint.indexOf(':');
-    if (lastColon > 0 && firstColon == lastColon) {
-      host = endpoint.substring(0, lastColon);
-      port = endpoint.substring(lastColon + 1);
-    } else if (lastColon > 0) {
-      // §219 — несколько ':' без скобок = голый IPv6. Порт здесь ПРИНЦИПИАЛЬНО
-      // неотличим от адреса (`2001:db8::1:51820` vs адрес `...::1:51820`), т.к.
-      // WireGuard требует `[IPv6]:port`. Осознанная деградация: весь endpoint —
-      // host, порт по умолчанию. Явный порт голого IPv6 сюда не долетает — это
-      // ожидаемо (некорректный по спеке формат), не баг.
-      host = endpoint;
-      port = '51820';
-    } else {
-      host = endpoint;
-      port = '51820';
-    }
-  }
-
-  final params = <String, String>{
-    'publickey': publicKey,
-    'privatekey': privateKey,
-    'address': address,
-  };
-  if (allowedIps.isNotEmpty) params['allowedips'] = allowedIps;
-  if (mtu > 0) params['mtu'] = mtu.toString();
-  if (presharedKey.isNotEmpty) params['presharedkey'] = presharedKey;
-  if (keepalive.isNotEmpty) params['keepalive'] = keepalive;
-  if (reserved.isNotEmpty) params['reserved'] = reserved; // §126
-
-  // §097 — AWG-поля в query (encodeComponent ниже эскейпит i* с <>/пробелами).
-  awg.forEach((k, v) {
-    if (v.isNotEmpty) params[k] = v;
-  });
-
-  final query = params.entries
-      .map((e) =>
-          '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
-      .join('&');
-
-  final wrappedHost = host.contains(':') && !host.startsWith('[') ? '[$host]' : host;
-  // §243 — фрагмент = имя источника (имя файла), фолбэк — прежний 'WireGuard'.
-  // encodeComponent симметричен разбору (parseWireguardUri → decodeFragment →
-  // Uri.decodeComponent): пробелы/скобки/кириллица переживают round-trip.
-  final hint = nameHint?.trim() ?? '';
-  final fragment = Uri.encodeComponent(hint.isEmpty ? 'WireGuard' : hint);
-  return 'wireguard://$wrappedHost:$port?$query#$fragment';
 }

@@ -317,9 +317,18 @@ body it produces (`quic: true`), and `proxy-https` differs from `proxy-http` by
 whether the body has a `tls` block at all. Aliases that change nothing —
 `socks5` for `socks`, the `proxy+…` plus-forms of §268 — share one mapper.
 
-Still on their own parsers: **wireguard/AWG** and **masque** (step 7), and the
-Xray-JSON converter (step 8). `transport.dart` still serves them and was not
-touched.
+Step 7 brought over the last two schemes — **masque** and **wireguard/AWG** —
+and with them the **second input of the same scheme, the INI text**
+(`wg-quick`). A mapper takes the source text, so an INI mapper differs from a
+link mapper only in how it reads the input: the output is the same sing-box
+map (`mappers/wireguard_mapper.dart` → `mapWireguardIni`, entry point
+`parseIniViaPipeline`). The synthetic `wg://` URI that used to stand between
+the INI and the parser is gone; `rawSource` stays the INI text byte for byte
+(§456). Amnezia's `vpn://` is not a third input but a **container**: it unpacks
+the profile into ready INI texts and hands each to the same mapper.
+
+Still on its own path: the **Xray-JSON converter** (step 8). `transport.dart`
+still serves it and was not touched.
 
 **QUIC brought one structural change** (step 5). `tls.utls` and `tls.reality`
 are forbidden on QUIC schemes, and until this step the *emitter* stripped them
@@ -630,10 +639,12 @@ parser/                      # Parser v2 (text → NodeSpec)
   json_parsers.dart          #   parseXrayElement + parseSingboxEntry (round-trip)
   singbox_config.dart        #   §368: a sing-box config or an array of them → nodes, groups and detours
                              #   (at parity with the Xray branch: two passes, dedup, synonyms)
-  ini_parser.dart            #   WireGuard INI → wg:// URI → WireguardSpec
+  ini_parser.dart            #   §472 step 7: WireGuard INI → mapWireguardIni → the same pipeline
+                             #   (the synthetic wg:// URI is gone; rawSource stays the INI text, §456)
   transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
   uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding
-                             #   an allow-list; awgClampMtu (§097 — the client MTU of AWG nodes is ≤1280)
+                             #   an allow-list, normalizeWGKey (32-byte base64 canon, D-030)
+                             #   (§473/§472 step 7: the AWG MTU clamp moved to the registry — awgClampMtu is gone)
 contract/                    # §460 the contract registry inside the app (contract 1.1.0, TASKS_LXBOX §24)
   registry.dart              #   ContractRegistry.I — loads assets/contract/ (rootBundle behind an AssetLoader,
                              #   loadFromDirectory in tests); BodySchema by singbox_type with the refs expanded
