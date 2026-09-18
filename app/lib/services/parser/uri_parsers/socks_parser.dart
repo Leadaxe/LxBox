@@ -1,42 +1,21 @@
 import '../../../models/node_spec.dart';
-import '../tcp_keep_alive.dart';
-import '../uri_utils.dart';
+import '../mappers/uri_pipeline.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // SOCKS 5
 // ════════════════════════════════════════════════════════════════════════════
 
+/// §472 шаг 6 — socks разбирается КОНВЕЙЕРОМ: маппер переводит ссылку в сырую
+/// карту sing-box, санитайзер реестра судит значения, `parseSingboxEntry`
+/// строит модель (`mappers/uri_pipeline.dart`).
+///
+/// Рукописных правил ЗНАЧЕНИЯ у socks не было ни одного, и судить в схеме
+/// нечего: собственных query-параметров у неё нет вовсе
+/// (`registry/protocols/socks.json` → `uri.query` пуст), а `version` в тело из
+/// ссылки не пишется — см. `mappers/socks_mapper.dart`.
 SocksSpec? parseSocks(String uri) {
-  final p = Uri.tryParse(uri);
-  if (p == null || p.host.isEmpty) return null;
-
-  final userParts = p.userInfo.split(':');
-  final username = userParts.isEmpty || userParts.first.isEmpty
-      ? ''
-      : Uri.decodeComponent(userParts.first);
-  final password = userParts.length > 1
-      ? Uri.decodeComponent(userParts.sublist(1).join(':'))
-      : '';
-
-  // §453 — socks-URI раньше query не читал вовсе; dial-поля приходят только
-  // отсюда, прочих параметров у схемы нет.
-  final q = Map<String, String>.from(p.queryParameters);
-
-  final server = p.host;
-  final port = p.hasPort ? p.port : 1080;
-  final label = decodeFragment(p.fragment);
-  final tag = tagFromLabel(label, 'socks', server, port);
-
-  return SocksSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: uri,
-    username: username,
-    password: password,
-    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
-    tcpKeepAlive: tcpKeepAliveFromQuery(q),
-  );
+  // `socks://` и `socks5://` эквивалентны (`socks.json` → aliases); обе
+  // записи таблицы ведут в один маппер.
+  final scheme = uri.split('://').first.toLowerCase();
+  return parseUriViaPipeline(uri, scheme) as SocksSpec?;
 }

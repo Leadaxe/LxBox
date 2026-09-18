@@ -38,6 +38,7 @@ import 'hysteria2_mapper.dart';
 import 'http_mapper.dart';
 import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
+import 'socks_mapper.dart';
 import 'trojan_mapper.dart';
 import 'tuic_mapper.dart';
 import 'uri_mapper.dart';
@@ -77,6 +78,9 @@ const kPipelineSchemes = <String>{
   'proxy-https',
   'proxy+http',
   'proxy+https',
+  // §472 шаг 6 — socks; `socks5` алиас написания (`socks.json` → aliases).
+  'socks',
+  'socks5',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -95,6 +99,8 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'proxy-https': mapHttpProxyUri,
   'proxy+http': mapHttpProxyUri,
   'proxy+https': mapHttpProxyUri,
+  'socks': mapSocksUri,
+  'socks5': mapSocksUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё
