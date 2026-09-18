@@ -290,9 +290,10 @@ void main() {
           },
         }
       }));
-      final reality = (r.body!['tls'] as Map)['reality'] as Map;
-      expect(reality.containsKey('public_key'), isFalse);
-      expect(reality.containsKey('key_share'), isFalse);
+      // §472 шаг 5 — блок уходит ЦЕЛИКОМ (`public_key` у него `required`), и
+      // это ровно то, что говорит комментарий корпуса выше: «снят не он, а
+      // весь блок». Код по-прежнему один.
+      expect((r.body!['tls'] as Map).containsKey('reality'), isFalse);
       expect(_codes(r), ['reality_pbk_invalid']);
     }, skip: skip);
 
@@ -636,8 +637,13 @@ void main() {
       }));
       expect(_byCode(r, 'reality_pbk_invalid').path, 'tls.reality.public_key');
       expect(_byCode(r, 'reality_pbk_invalid').value, 'enabled');
-      final reality = (r.body!['tls'] as Map)['reality'] as Map;
-      expect(reality.containsKey('public_key'), isFalse);
+      // §472 шаг 5 — снимается ВЕСЬ блок, а не одно поле: `public_key` у
+      // REALITY `required`, и реестр пишет исход прямо (`tls.json` →
+      // `reality.public_key`, impl): «мусорный pbk снимает блок целиком и
+      // узел деградирует до plain TLS». Прежде оставался блок без ключа —
+      // форма, которую ядро не принимает.
+      expect(r.body, isNotNull, reason: 'узел жив, деградировал до plain TLS');
+      expect((r.body!['tls'] as Map).containsKey('reality'), isFalse);
     }, skip: skip);
 
     test('format base64_32: ровно 32 байта проходят в любом написании', () {

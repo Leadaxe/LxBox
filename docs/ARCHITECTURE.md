@@ -296,7 +296,8 @@ JSON / Xray ───┘                  │
   no field for it.
 
 Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**,
-**hysteria2** (`kPipelineSchemes`, which also lists the scheme alias `hy2`).
+**hysteria2** and **tuic** (`kPipelineSchemes`, which also lists the scheme
+alias `hy2`).
 The remaining schemes keep their parsers, and `transport.dart` still serves
 them — it was not touched (`parseVlessTls` in particular is still what anytls
 reads).

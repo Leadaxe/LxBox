@@ -46,6 +46,14 @@ const Map<String, String> _knownGaps = {
   'sni_heuristic_falls_back_to_server@vmess':
       'не реализовано в LxBox ни на одном входе vmess; включение меняет тела '
           'и identity — отдельное решение (спека 472, шаг 4)',
+  // У tuic реализована только ПОЛОВИНА правила: пустой `sni` уступает адресу
+  // сервера (так делал и прежний парсер), а проверки написания — точки,
+  // двоеточия, значка `🔒` — нет. Реестр называет у tuic ту же эвристику, что
+  // у hysteria2 («Go: эвристика точки/двоеточия»); включение её здесь сдвинуло
+  // бы тела и identity живых узлов, у которых `sni` задан коротким именем.
+  'sni_heuristic_falls_back_to_server@tuic':
+      'реализован только откат пустого sni на адрес сервера; проверки '
+          'написания нет — включение меняет тела и identity (спека 472, шаг 5)',
 };
 
 /// Правила, покрытые тестами этого файла: id → имя теста.
@@ -66,10 +74,11 @@ const Map<String, String> _covered = {
   // §472 шаг 4 — правило, которое добавил переезд vmess.
   'legacy_cleartext_fallback':
       'не-JSON payload читается как method:uuid@host:port',
-  // §472 шаг 5 — правила, которые добавил переезд hysteria2.
+  // §472 шаг 5 — правила, которые добавил переезд hysteria2 и tuic.
   'sni_heuristic_falls_back_to_server@hysteria2':
       'sni без точки/двоеточия и 🔒 уступают адресу сервера',
   'mport_range_spec': 'mport=1000-2000,3000 → server_ports [low:high]',
+  'heartbeat_bare_number': 'heartbeat=10 → "10s"',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -316,6 +325,34 @@ void main() {
           parseUri('hysteria2://p@h.example:443?sni=x.com&alpn=h3,h3-29#n')!;
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls['alpn'], ['h3', 'h3-29']);
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (tuic)', () {
+    const uuid = '11111111-1111-1111-1111-111111111111';
+
+    test('heartbeat=10 → "10s"', () {
+      // `heartbeat_bare_number` — форма записи: голое число это секунды, а
+      // поле ядра duration-строка (`type: duration` реестра).
+      final spec = parseUri('tuic://$uuid:p@h.example:443?heartbeat=10#n')!;
+      expect(spec.emit(TemplateVars.empty).map['heartbeat'], '10s');
+      // Явную duration маппер не трогает.
+      final explicit =
+          parseUri('tuic://$uuid:p@h.example:443?heartbeat=30s#n')!;
+      expect(explicit.emit(TemplateVars.empty).map['heartbeat'], '30s');
+    }, skip: skip);
+
+    test('пустой sni уступает адресу сервера', () {
+      final spec = parseUri('tuic://$uuid:p@h.example:443?alpn=h3#n')!;
+      expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
+          'h.example');
+    }, skip: skip);
+
+    test('alpn одной строкой → список тела', () {
+      final spec =
+          parseUri('tuic://$uuid:p@h.example:443?alpn=h3,h3-29#n')!;
+      expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['alpn'],
+          ['h3', 'h3-29']);
     }, skip: skip);
   });
 

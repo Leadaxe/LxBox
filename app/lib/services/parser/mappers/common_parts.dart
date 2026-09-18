@@ -36,7 +36,11 @@ const _kInsecureKeys = {
 
 /// Истина query-bool в форме прибытия: `1`, `true`, `yes` (контракт —
 /// единообразно у обеих сторон).
-bool _queryTruthy(String v) {
+///
+/// §472 шаг 5 — публичная: тот же набор читают собственные bool-параметры
+/// схем (`reduce_rtt` и `disable_sni` у tuic). Своя копия у маппера разошлась
+/// бы с этой на первом же новом написании.
+bool queryTruthy(String v) {
   final s = v.trim().toLowerCase();
   return s == '1' || s == 'true' || s == 'yes';
 }
@@ -48,7 +52,7 @@ bool _queryTruthy(String v) {
 bool insecureFromQuery(Map<String, String> q) {
   for (final e in q.entries) {
     final k = e.key.toLowerCase().replaceAll('-', '').replaceAll('_', '');
-    if (_kInsecureKeys.contains(k) && _queryTruthy(e.value)) return true;
+    if (_kInsecureKeys.contains(k) && queryTruthy(e.value)) return true;
   }
   return false;
 }
@@ -119,9 +123,9 @@ Map<String, dynamic>? tlsMapFromQuery(
       break;
     }
   }
-  // `sni_heuristic_falls_back_to_server` — выбор ИСТОЧНИКА поля: имя без
-  // точки и двоеточия адресом быть не может, `🔒` это витринный значок
-  // подписки. Оба проекта судят так у hysteria2 и anytls.
+  // Вторая половина того же правила — уже о НАПИСАНИИ: имя без точки и
+  // двоеточия адресом быть не может, `🔒` это витринный значок подписки. Её
+  // исполняют не все схемы, поэтому она под флагом ([sniHeuristic]).
   if (sniHeuristic &&
       sni.isNotEmpty &&
       (sni == '🔒' || (!sni.contains('.') && !sni.contains(':')))) {

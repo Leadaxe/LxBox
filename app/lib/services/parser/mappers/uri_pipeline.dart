@@ -36,6 +36,7 @@ import '../uri_utils.dart';
 import 'hysteria2_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'trojan_mapper.dart';
+import 'tuic_mapper.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
 import 'vmess_mapper.dart';
@@ -48,6 +49,7 @@ const _kParseTimeCore = '0.0.0';
 /// Схемы, переехавшие на конвейер. Растёт по шагу за протокол; список
 /// нормативен для стража покрытия mapper-правил
 /// (`test/parser/mapper_rules_coverage_test.dart`).
+///
 /// §472 шаг 5 — `hy2` стоит в списке отдельной записью: это АЛИАС СХЕМЫ
 /// (`hysteria2.json` → `aliases`), и `parseUri` маршрутизирует по тексту
 /// схемы, а не по типу тела. Перевод алиаса в каноническое имя — работа
@@ -59,6 +61,7 @@ const kPipelineSchemes = <String>{
   'ss',
   'hysteria2',
   'hy2',
+  'tuic',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -69,6 +72,7 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'ss': mapShadowsocksUri,
   'hysteria2': mapHysteria2Uri,
   'hy2': mapHysteria2Uri,
+  'tuic': mapTuicUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё

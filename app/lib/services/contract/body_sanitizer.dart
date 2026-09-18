@@ -361,6 +361,23 @@ final class _Ctx {
       final path = _join(prefix, key);
       final res = _sanitizeValue(src[key], f, path);
       if (dropNode) return out;
+      // §472 шаг 5 — обязательное поле, СНЯТОЕ как негодное, равносильно
+      // отсутствующему: причина уже названа своим кодом (`type_invalid` на
+      // `uuid` не в форме UUID), а запись без него ядро не примет — у tuic
+      // это «invalid uuid» фаталом на ВЕСЬ конфиг. Прежде такой узел уезжал
+      // с ПУСТЫМ значением: ни прежнего поведения, ни честной отбраковки.
+      //
+      // Граница та же, что у отсутствующего поля выше: на корне уходит узел,
+      // внутри объекта — сам объект (мусорный `reality.public_key` оставляет
+      // узел на plain TLS, ровно как этого требует реестр).
+      if (!res.keep && f.required) {
+        if (prefix.isEmpty) {
+          dropNode = true;
+        } else {
+          dropObject = true;
+        }
+        return out;
+      }
       if (res.keep) kept[key] = res.value;
     }
 

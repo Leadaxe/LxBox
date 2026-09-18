@@ -1237,10 +1237,10 @@ NodeSpec? parseSingboxEntry(
     case 'tuic':
       if (server.isEmpty || port == 0) return null;
       return TuicSpec(
-        // §469 — то же, что у hysteria2: uTLS на QUIC снимается эмитом, код
-        // ставит разбор по правилу реестра.
-        warnings: forbiddenTlsBlockWarnings(
-            'tuic', tlsBlocksOfBody(entry['tls'])),
+        // §472 шаг 5 — рукописного производителя `tls_not_applicable_quic`
+        // здесь больше нет, по той же причине, что и у hysteria2: с шага 1
+        // правило реестра исполняет проход по ДОСЛОВНОЙ карте
+        // (`annotateFromRawBody`), по тому же телу и с тем же значением.
         id: newUuidV4(),
         tag: tag.isEmpty ? 'tuic-$server-$port' : tag,
         label: label0,
@@ -1572,7 +1572,17 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
   return normalizeTlsFingerprint(
     TlsSpec(
       enabled: true,
-      serverName: raw['server_name']?.toString() ?? server,
+      // §472 шаг 5 — `disable_sni` отменяет ОТКАТ на адрес сервера, но не
+      // трогает имя, которое автор написал сам.
+      //
+      // Откат существует, чтобы у обычного узла в модели стояло имя, которое
+      // ядро и так подставит. При `disable_sni` ядро не отправляет расширение
+      // SNI вовсе, так что подставлять было бы нечего: `toUri()` вернул бы
+      // `sni=`, которого автор не писал. Тело от этого не меняется — ключ
+      // сквозной (`kTlsPassthroughKeys`) и сохраняется как есть, вместе с
+      // явным `server_name`, если он там был.
+      serverName: raw['server_name']?.toString() ??
+          (raw['disable_sni'] == true ? null : server),
       // §460 — `alpn` у ядра Listable: массив → типизированный список, строка
       // → сквозной ключ в форме прибытия (корпус outbound_array_tls_fields
       // `vless-alpn-str`); раньше `as List` на строке ронял узел целиком.
