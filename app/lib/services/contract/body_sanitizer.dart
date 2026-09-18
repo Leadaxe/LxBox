@@ -194,10 +194,18 @@ final class _Ctx {
 
     // 1. Неизвестные реестру ключи — снять (24.1.3). Ядро отвергает такой
     // ключ ошибкой на ВЕСЬ конфиг, оставить его нельзя.
+    //
+    // §470 — `value` ставится и здесь: конверт корпуса называет его у
+    // `unknown_key` (`manual_object_junk`), и лаунчер печатает снятое
+    // значение (`nodeflow/sanitize.go` → `s.warn("unknown_key", path,
+    // src[name], …)`). Без него человек видел «ключ снят» и не знал, ЧТО
+    // именно снято, а раннер тел молча расходился с контрактом на одном
+    // недостающем поле. `secret` тут неоткуда взять: ключа в схеме нет, а
+    // значит нет и его флага — печатаем как есть, ровно как вторая сторона.
     for (final key in src.keys) {
       if (fields.containsKey(key)) continue;
       if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
-      warn('unknown_key', path: _join(prefix, key));
+      warn('unknown_key', path: _join(prefix, key), value: src[key]);
     }
 
     // 2. Значения — по одному, в порядке схемы: и результат, и список

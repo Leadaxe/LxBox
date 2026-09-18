@@ -68,9 +68,12 @@ void main() {
       // Путь есть у обоих. §469 — у запрета (`forbidden_for`) появилось и
       // ЗНАЧЕНИЕ: ожидания корпуса его называют
       // (`singbox/outbound_array_tls_fields` → `tls.insecure` = `true`), а
-      // гейт до этого ставил код без него. `unknown_key` значения по-прежнему
-      // не несёт — там снят сам ключ, и говорить про него нечего.
-      expect(joined, contains('[foo]'));
+      // гейт до этого ставил код без него.
+      // §470 — значение появилось и у `unknown_key`: конверт корпуса называет
+      // его (`body/singbox/manual_object_junk`), и лаунчер печатает снятое
+      // `src[name]`. «Ключ снят» без значения не говорило человеку, ЧТО он
+      // потерял, а раннер тел расходился с контрактом на одном этом поле.
+      expect(joined, contains('[foo=1]'));
       expect(joined, contains('[tls.insecure=true]'));
       // Текст из warnings.json, а не голый код.
       expect(joined, isNot(contains('unknown_key')));

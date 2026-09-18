@@ -6,9 +6,13 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
+
+import 'corpus_warnings.dart';
 
 // Конформанс-раннер корпуса ТЕЛ подписки (SPEC 103, фаза 2), сторона LxBox.
 // Аналог core/config/contract_body_test.go — гоняет тот же
@@ -26,7 +30,7 @@ import 'package:lxbox/services/parser/parse_all.dart';
 // кейс `xray/dialer_proxy_missing` проходил бы и при молчаливой потере узла,
 // то есть ровно при том дефекте, ради которого он и заведён.
 
-const _contractRoot = 'contract';
+const _contractRoot = kContractRoot;
 
 /// Имя этой стороны в `meta.extension` (corpus/README).
 const _thisSide = 'lxbox';
@@ -141,6 +145,79 @@ List<String> _expectedChainLabels(Map<String, dynamic> node) {
   return out;
 }
 
+/// §470 — узлы, чьи `warnings[]` сторона пока не сверяет по известной причине:
+/// `<кейс>|<подпись узла>` → причина.
+///
+/// Ожидание НЕ подгоняется и override не заводится (override живёт у
+/// лаунчера): запись означает задокументированное расхождение по существу и
+/// снимается вместе с работой, которая его закрывает. Образец — `_pendingCases`
+/// backup-раннера и `_overrideIgnored` §465.
+///
+/// ПУСТ: при включении сверки покраснели четыре узла, и все четыре — одна
+/// причина, объединение путей разбора (см. [_allWarningsOf]) плюс один наш
+/// дефект (`unknown_key` без `value`). Расхождений по существу не нашлось.
+const Map<String, String> _pendingWarningNodes = {};
+
+/// §470 — предупреждения узла ДВУХ путей разом: разбора и гарда сборки.
+///
+/// Граница W2a (§460, `parse_warnings.dart`) режет их пополам. Санитайзер при
+/// разборе смотрит на `emit()` уже разобранного узла, то есть на тело, из
+/// которого типизированный парсер (`parseSingboxEntry`) мусор УЖЕ убрал:
+/// `flow=xtls-rprx-direct` не доехал до поля, `tls.insecure` снял
+/// `_tlsFromSingbox`, `totally_unknown_key` не имеет куда попасть в принципе.
+/// Коды этих полей ставит гард сборки (§455, `registry_gate.dart`) — он один
+/// работает на ДОСЛОВНОМ JSON провайдера, который узел хранит в `rawSource`.
+///
+/// У лаунчера обе половины — один конвейер: парсер тела и санитайзер по
+/// реестру идут подряд, и конверт несёт коды обоих. Поэтому раннер объединяет
+/// их ЯВНО, здесь: иначе он сверял бы не поведение приложения, а половину
+/// поведения, и кейсы `vless_junk_pair`/`manual_object_junk` были бы красными
+/// при полностью исправном приложении — пользователь эти коды видит, просто
+/// на другом экране (отчёт сборки, а не строка узла).
+///
+/// Прод-поведение ради раннера не меняется: объединение живёт только здесь.
+/// Когда W2b/W2c проложат путь от `rawSource` к `NodeSpec.warnings`, функция
+/// схлопнется в `node.warnings`.
+///
+/// Дедуп по `(code, path)` делает `warningListOf`: код, который поставили оба
+/// пути (`field_conflict` у `trojan-full-tls`), в конверте один раз.
+List<NodeWarning> _allWarningsOf(NodeSpec spec) {
+  final out = <NodeWarning>[...spec.warnings];
+  final raw = _rawBodyOf(spec);
+  if (raw == null) return out;
+  final type = raw['type'];
+  if (type is! String) return out;
+  final res = RegistrySanitizer.sanitize(
+    Map<String, dynamic>.from(raw),
+    scheme: type,
+    coreVersion: _kParseTimeCore,
+    // Гейты ЯДРА выключены и здесь: `entry` узла от запущенного ядра не
+    // зависит (24.1.6), а ожидания корпуса пишутся без привязки к версии.
+    applyCoreGates: false,
+  );
+  out.addAll(res.warnings);
+  return out;
+}
+
+/// Дословное тело узла (§455): для JSON-входов `rawSource` — объект
+/// outbound'а как прислал провайдер. Для URI/INI это не JSON, и разбирать
+/// там нечего: у тех путей коды ставит парсер, и они уже в `spec.warnings`.
+Map<String, dynamic>? _rawBodyOf(NodeSpec spec) {
+  final src = spec.rawSource.trimLeft();
+  if (!src.startsWith('{')) return null;
+  try {
+    final v = jsonDecode(src);
+    return v is Map<String, dynamic> ? v : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Версия ядра, которую санитайзер видит вне запущенного ядра — то же
+/// значение, что у `parse_warnings.dart`: гейты, которым версия нужна,
+/// выключены.
+const _kParseTimeCore = '0.0.0';
+
 void main() {
   final root = Directory('$_contractRoot/corpus/body');
   if (!root.existsSync()) {
@@ -156,6 +233,12 @@ void main() {
     ..sort((a, b) => a.path.compareTo(b.path));
 
   group('contract corpus: subscription bodies', () {
+    setUpAll(() async {
+      if (Directory('$_contractRoot/registry').existsSync()) {
+        await ContractRegistry.I.loadFromDirectory(_contractRoot);
+      }
+    });
+
     for (final file in cases) {
       final name = file.path.substring(root.path.length + 1);
       final base = file.path.substring(0, file.path.length - '.body'.length);
@@ -225,6 +308,39 @@ void main() {
           expect(_chainLabels(spec), wantChain,
               reason: 'канон хопа: label звеньев обязан быть сырым тегом '
                   'релея (D-085), без маркера ⚙');
+        }
+
+        // §470 — `warnings[]` по тем же правилам, что у URI-раннера
+        // (`corpus_warnings.dart`, CANON §6/§7). Узлы ищутся по подписи: у
+        // многоузловых тел ожидание и результат уже сверены по составу выше.
+        for (final wantNode in wantNodes) {
+          final scheme = '${wantNode['scheme']}';
+          final entry =
+              (wantNode['entry'] as Map?)?.cast<String, dynamic>() ?? {};
+          final srv = entry['server'] ?? _wgPeerServer(entry) ?? '';
+          final prt = entry['server_port'] ?? _wgPeerPort(entry) ?? 0;
+          final sig = '$scheme|$srv|$prt';
+          final pending = _pendingWarningNodes['$name|$sig'];
+          if (pending != null) {
+            markTestSkipped('warnings[] узла $sig: $pending');
+            continue;
+          }
+          final matched = specs.where((s) => _nodeSignature(s) == sig).toList();
+          if (matched.isEmpty) continue;
+
+          final gotW = warningListOf(_allWarningsOf(matched.first), scheme);
+          final gotNode = <String, dynamic>{
+            if (gotW.isNotEmpty) 'warnings': gotW,
+          };
+          final want = deepCopyEnvelope(wantNode) as Map<String, dynamic>;
+          normalizeNodeWarnings(gotNode, want);
+          normalizeNodeWarnings(want, null);
+          final g = canonEncode(gotNode['warnings'] ?? const []);
+          final w = canonEncode(want['warnings'] ?? const []);
+          if (g != w) {
+            fail('warnings[] узла $sig разошлись с контрактом\n'
+                '--- got ---\n$g\n--- want ---\n$w');
+          }
         }
       });
     }

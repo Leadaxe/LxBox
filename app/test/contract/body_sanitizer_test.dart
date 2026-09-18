@@ -64,6 +64,25 @@ void main() {
       expect(r.body!['uuid'], '11111111-1111-1111-1111-111111111111');
     }, skip: skip);
 
+    // §470 — `unknown_key` несёт и СНЯТОЕ ЗНАЧЕНИЕ: конверт корпуса называет
+    // его (`body/singbox/manual_object_junk`), и лаунчер печатает `src[name]`
+    // (`nodeflow/sanitize.go`). Без `value` человек узнавал, что ключ снят,
+    // но не ЧТО снято, а body-раннер расходился с контрактом молча — ровно
+    // тот дефект, ради которого §470 включил сверку `warnings[]`.
+    test('unknown_key несёт снятое значение', () {
+      final r = _san(_vless({'totally_unknown_key': 'whatever'}));
+      expect(_byCode(r, 'unknown_key').value, 'whatever');
+    }, skip: skip);
+
+    // Форма `value` нормативна (CANON §6): объект — `map[k:v k:v]` с ключами
+    // по алфавиту, и у снятого ключа она та же, что у прочих кодов.
+    test('unknown_key печатает объект по канону корпуса', () {
+      final r = _san(_vless({
+        'totally_unknown_key': {'b': 2, 'a': true}
+      }));
+      expect(_byCode(r, 'unknown_key').value, 'map[a:true b:2]');
+    }, skip: skip);
+
     test('type: строка вместо порта не приводится → drop_node', () {
       // server_port: on_invalid = drop_node, code = port_invalid.
       final r = _san(_vless({'server_port': 'x'}));
@@ -507,6 +526,66 @@ void main() {
   // §464 — выражения реестра, приехавшие с W2d лаунчера. По кейсу на
   // выражение: реестр нормативен для обеих сторон, и «санитайзер молча не
   // знает правила» неотличимо от «правила нет».
+  // §470 — форма `value` нормативна для ВСЕХ реализаций (CANON §6, лаунчер
+  // `8068f7a0`): корпус сверяет её побайтно, и своего смысла у неё нет —
+  // это Go-печать `%v`, которую не-Go сторона воспроизводит сама. Кейс на
+  // каждое правило текста канона: скаляр, объект, массив, вложенность,
+  // обрезка по рунам, `secret`.
+  group('renderWarningValue — CANON §6', () {
+    test('скаляр — как есть, без кавычек', () {
+      expect(RegistrySanitizer.renderWarningValue(true), 'true');
+      expect(RegistrySanitizer.renderWarningValue(443), '443');
+      expect(RegistrySanitizer.renderWarningValue('h3'), 'h3');
+    });
+
+    test('объект — map[k:v k:v] с ключами по алфавиту', () {
+      expect(
+        RegistrySanitizer.renderWarningValue(
+            {'fingerprint': 'chrome', 'enabled': true}),
+        'map[enabled:true fingerprint:chrome]',
+      );
+    });
+
+    test('вложенный объект печатается тем же правилом', () {
+      expect(
+        RegistrySanitizer.renderWarningValue({
+          'b': {'y': 2, 'x': 1},
+          'a': 0,
+        }),
+        'map[a:0 b:map[x:1 y:2]]',
+      );
+    });
+
+    test('массив — [a b c], порядок сохраняется', () {
+      expect(RegistrySanitizer.renderWarningValue(['h2', 'http/1.1']),
+          '[h2 http/1.1]');
+      expect(RegistrySanitizer.renderWarningValue([]), '[]');
+    });
+
+    test('обрезка — 64 РУНЫ и многоточие U+2026', () {
+      // Ровно 64 руны не трогаются; 65-я даёт хвост `…`.
+      final exact = 'a' * 64;
+      expect(RegistrySanitizer.renderWarningValue(exact), exact);
+      final long = 'a' * 65;
+      expect(RegistrySanitizer.renderWarningValue(long), '${'a' * 64}…');
+    });
+
+    test('обрезка считает РУНЫ, а не кодовые единицы UTF-16', () {
+      // Эмодзи вне BMP = две кодовые единицы на руну: по байтам строка из 64
+      // эмодзи давно перевалила бы лимит, по рунам — ровно на границе.
+      final runes64 = '🙂' * 64;
+      expect(RegistrySanitizer.renderWarningValue(runes64), runes64);
+      expect(RegistrySanitizer.renderWarningValue('🙂' * 65), '$runes64…');
+    });
+
+    test('secret-поле — *** вместо значения', () {
+      expect(
+        RegistrySanitizer.renderWarningValue('hunter2', secret: true),
+        '***',
+      );
+    });
+  });
+
   group('RegistrySanitizer — выражения W2d (§464)', () {
     test('format base64_32: ключ не 32 байта после декода — REALITY снят', () {
       // `enabled` — валидный base64 на 5 байт: прежний format base64 его
