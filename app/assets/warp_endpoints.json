@@ -77,7 +77,7 @@
       "consumer-masque.cloudflareclient.com", "www.cloudflare.com", "www.google.com",
       "www.microsoft.com", "www.bing.com", "www.apple.com", "www.wikipedia.org",
       "cdn.jsdelivr.net", "aws.amazon.com", "deepseek.com",
-      "cdnjs.cloudflare.com", "speed.cloudflare.com", "4pda.to",
+      "cdnjs.cloudflare.com", "speed.cloudflare.com", "4pda.to", "hcaptcha.com",
       "pypi.org"
     ]
   },
@@ -100,7 +100,7 @@
           "max.ru", "vk.ru", "www.google.com", "www.microsoft.com", "www.bing.com",
           "www.apple.com", "www.wikipedia.org", "cdn.jsdelivr.net", "aws.amazon.com",
           "deepseek.com", 
-          "cdnjs.cloudflare.com", "speed.cloudflare.com", "4pda.to", "pypi.org",
+          "cdnjs.cloudflare.com", "speed.cloudflare.com", "4pda.to", "hcaptcha.com", "pypi.org",
           "2gis.ru", "apteka.ru", "autonews.ru", "beeline.ru", "profi.ru", "psbank.ru", "rt.ru", "rutube.ru", "vk.ru"
         ]
       }
