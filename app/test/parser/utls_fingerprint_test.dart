@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
@@ -16,6 +17,21 @@ const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 /// («unknown uTLS fingerprint»). Xray-псевдонимы канонизируются молча,
 /// неопознанный мусор → chrome + UnknownFingerprintWarning.
 void main() {
+  // §472 шаги 2–3 — отпечаток судит РЕЕСТР, а не рукописный
+  // `normalizeTlsFingerprint`: тестам переехавших схем (trojan, vless) нужен
+  // загруженный реестр, иначе они проверяли бы разбор БЕЗ санитайзера, то
+  // есть не то поведение, которое видит приложение. Гейт — как во всём
+  // `test/contract`: `app/contract/` вендорится локально и в репозиторий не
+  // коммитится (§460), на CI его нет. Тесты чистых функций и непереехавших
+  // схем от реестра не зависят и идут всегда.
+  final synced = Directory('contract/registry').existsSync();
+  final skip = synced ? null : 'контракт не синхронизирован';
+
+  setUpAll(() async {
+    if (!synced) return;
+    await ContractRegistry.I.loadFromDirectory('contract');
+  });
+
   group('normalizeUtlsFingerprintValue (чистая функция)', () {
     test('значения словаря проходят как есть', () {
       for (final fp in kUtlsFingerprints) {
@@ -116,9 +132,7 @@ void main() {
     // группе «остальные URI-парсеры» ниже по файлу. Без него эти тесты
     // проверяли бы разбор без санитайзера, то есть не то поведение, которое
     // видит приложение.
-    test('REALITY + fp=edge → reality_fp_not_chrome, значение сохранено',
-        () async {
-      await ContractRegistry.I.loadFromDirectory('contract');
+    test('REALITY + fp=edge → reality_fp_not_chrome, значение сохранено', () {
       final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
           '&fp=edge&pbk=$_validPbk#L')!;
@@ -131,7 +145,7 @@ void main() {
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'edge');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
-    });
+    }, skip: skip);
 
     test('REALITY + xray-псевдоним hellofirefox_auto → firefox, без предупреждения',
         () {
@@ -142,9 +156,7 @@ void main() {
       expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty);
     });
 
-    test('REALITY + xray-псевдоним helloqq_auto → qq + предупреждение',
-        () async {
-      await ContractRegistry.I.loadFromDirectory('contract');
+    test('REALITY + xray-псевдоним helloqq_auto → qq + предупреждение', () {
       final spec = parseVless(
           'vless://u@h:443?type=tcp&security=reality&encryption=none'
           '&fp=helloqq_auto&pbk=$_validPbk#L')!;
@@ -156,7 +168,7 @@ void main() {
             orElse: () => fail('нет кода reality_fp_not_chrome: ${spec.warnings}'),
           );
       expect(w.value, 'qq');
-    });
+    }, skip: skip);
 
     test('REALITY + chrome-семейство и дефолтный random → без предупреждения',
         () {
@@ -217,8 +229,7 @@ void main() {
     // §472 шаг 3 — тот же переезд, что у trojan шагом 2: мусор сводит к
     // `chrome` реестр (`on_invalid: coerce`), код `utls_fp_unknown` несёт
     // путь и СЫРОЕ значение ссылки.
-    test('мусор → chrome + код реестра utls_fp_unknown', () async {
-      await ContractRegistry.I.loadFromDirectory('contract');
+    test('мусор → chrome + код реестра utls_fp_unknown', () {
       final spec =
           parseVless('vless://u@h:443?security=tls&fp=garbage&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
@@ -228,7 +239,7 @@ void main() {
           );
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'garbage');
-    });
+    }, skip: skip);
 
     test('emit отдаёт канонизированный utls.fingerprint', () {
       final spec = parseVless(
@@ -257,8 +268,7 @@ void main() {
     // chrome`), а не рукописный `normalizeTlsFingerprint`. Исход прежний —
     // `chrome` плюс предупреждение, — но код реестровый (`utls_fp_unknown`) и
     // несёт путь со значением, чего у рукописного класса не было.
-    test('trojan: мусор → chrome + код реестра utls_fp_unknown', () async {
-      await ContractRegistry.I.loadFromDirectory('contract');
+    test('trojan: мусор → chrome + код реестра utls_fp_unknown', () {
       final spec =
           parseTrojan('trojan://p@h:443?security=tls&fp=bogus&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
@@ -268,7 +278,7 @@ void main() {
           );
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'bogus');
-    });
+    }, skip: skip);
 
     test('trojan: пустой fp → null (без utls-блока)', () {
       final spec = parseTrojan('trojan://p@h:443?security=tls&sni=x.com#L')!;

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
@@ -22,9 +24,17 @@ const _pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 /// коду, а не по типу класса: так тест переживёт и шаг 9, когда рукописные
 /// классы уйдут у остальных схем. Реестр обязан быть загружен — без него
 /// санитайзер молчит и тест проверял бы не то поведение, которое видит
-/// приложение.
+/// приложение. `app/contract/` вендорится локально и в репозиторий не
+/// коммитится (§460), поэтому на CI его нет и тесты пропускаются — ровно как
+/// весь `test/contract`.
 void main() {
-  setUpAll(() async => ContractRegistry.I.loadFromDirectory('contract'));
+  final synced = Directory('contract/registry').existsSync();
+  final skip = synced ? null : 'контракт не синхронизирован';
+
+  setUpAll(() async {
+    if (!synced) return;
+    await ContractRegistry.I.loadFromDirectory('contract');
+  });
 
   /// Коды предупреждений узла — рукописные и реестровые одинаково.
   List<String> codes(NodeSpec n) =>
@@ -101,7 +111,7 @@ void main() {
       expect(codes(b.node), isNot(contains('reality_fp_not_chrome')),
           reason: fp);
     }
-  });
+  }, skip: skip);
 
   test('REALITY + fp=edge/ios/android/360/qq → предупреждение на узле',
       () async {
@@ -111,7 +121,7 @@ void main() {
       expect(codes(b.node), contains('reality_fp_not_chrome'), reason: fp);
       expect(valueOf(b.node, 'reality_fp_not_chrome'), fp, reason: fp);
     }
-  });
+  }, skip: skip);
 
   test('REALITY + пустой fp (sing-box JSON) → chrome', () async {
     final node = parseSingboxEntry({
@@ -130,7 +140,7 @@ void main() {
     final b = await build([node]);
     expect(b.utls['fingerprint'], 'chrome');
     expect(codes(b.node), isNot(contains('reality_fp_not_chrome')));
-  });
+  }, skip: skip);
 
   test('vless REALITY без fp и с fp= → chrome (дефолт random не уходит)',
       () async {
@@ -141,21 +151,21 @@ void main() {
       expect(b.utls['fingerprint'], 'chrome', reason: 'q="$q"');
       expect(codes(b.node), isNot(contains('reality_fp_not_chrome')));
     }
-  });
+  }, skip: skip);
 
   test('REALITY + явный fp=random → chrome (в модели неотличим от дефолта)',
       () async {
     final b = await buildUri(reality('&fp=random'));
     expect(b.utls['fingerprint'], 'chrome');
     expect(codes(b.node), isNot(contains('reality_fp_not_chrome')));
-  });
+  }, skip: skip);
 
   test('REALITY + fp=randomized → как есть, с предупреждением', () async {
     final b = await buildUri(reality('&fp=randomized'));
     expect(b.utls['fingerprint'], 'randomized');
     expect(codes(b.node), contains('reality_fp_not_chrome'));
     expect(valueOf(b.node, 'reality_fp_not_chrome'), 'randomized');
-  });
+  }, skip: skip);
 
   test('TLS без REALITY + fp=firefox → firefox, без предупреждения', () async {
     final b = await buildUri(
@@ -163,7 +173,7 @@ void main() {
         '?type=tcp&security=tls&fp=firefox&sni=example-1.com#T');
     expect(b.utls['fingerprint'], 'firefox');
     expect(codes(b.node), isNot(contains('reality_fp_not_chrome')));
-  });
+  }, skip: skip);
 
   test('§281: мусор → chrome + utls_fp_unknown (TLS и REALITY)', () async {
     final tls = await buildUri(
@@ -180,5 +190,5 @@ void main() {
     expect(codes(r.node), contains('utls_fp_unknown'));
     expect(codes(r.node), isNot(contains('reality_fp_not_chrome')),
         reason: 'chrome после канонизации — не повод для REALITY-предупреждения');
-  });
+  }, skip: skip);
 }
