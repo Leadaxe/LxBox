@@ -1,0 +1,57 @@
+{
+  "mappers": {
+    "uri": {
+      "detect": {"scheme_in": ["tuic"]},
+      "body_source": "uri",
+      "forms": [
+        {"id": "url", "detect": {"default": true}, "decode": ["url"], "space": "url"}
+      ],
+      "userinfo": {"split": {"sep": ":", "limit": 2}, "into": ["uuid", "password"]},
+      "label": {"source": "fragment", "normalize": ["strip_control", "trim"]},
+      "defaults": {"server_port": 443},
+      "scheme_sets": {"*": {"type": "tuic"}},
+      "params": {
+        "uuid": {"source": "userinfo.user", "maps_to": "uuid", "required": true},
+        "password": {
+          "source": "userinfo.pass",
+          "maps_to": "password",
+          "required": true,
+          "impl": "Пароль — всё ПОСЛЕ первого ':' (limit:2): двоеточие внутри пароля законно. Оба поля требуются непустыми — прежний парсер так же."
+        },
+        "congestion_control": {
+          "source": "query.congestion_control",
+          "maps_to": "congestion_control",
+          "impl": "Ключа не было в ссылке ⇒ поле не задано, дефолт подставит ядро. Значение вне enum уезжает КАК ЕСТЬ — снимет реестр кодом tuic_congestion_invalid."
+        },
+        "udp_relay_mode": {
+          "source": "query.udp_relay_mode",
+          "maps_to": "udp_relay_mode"
+        },
+        "reduce_rtt": {
+          "source": "query.reduce_rtt",
+          "aliases": ["zero_rtt", "zero_rtt_handshake"],
+          "type": "bool_spelled",
+          "maps_to": "zero_rtt_handshake",
+          "omit_default": false,
+          "impl": "Три написания 0-RTT; целевой набор контракта — объединение обоих проектов. false в тело не пишется."
+        },
+        "heartbeat": {
+          "source": "query.heartbeat",
+          "maps_to": "heartbeat",
+          "normalize": "duration_bare_seconds",
+          "impl": "heartbeat_bare_number: голое число это секунды (10 → \"10s\"), поле ядра — duration-строка."
+        },
+        "disable_sni": {
+          "source": "query.disable_sni",
+          "type": "bool_spelled",
+          "sets": {
+            "true": {"tls.disable_sni": true, "tls.server_name": null}
+          },
+          "impl": "G2 — sets с null СНИМАЕТ tls.server_name: расширение SNI не отправляется вовсе, значит имени сервера в теле быть не должно. Сам ключ disable_sni кладётся в тело (его знает ядро и sing-box-вход)."
+        }
+      },
+      "include": ["tls#uri"],
+      "emit": {"form": "url", "omit_default": ["server_port"]}
+    }
+  }
+}

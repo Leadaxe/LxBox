@@ -1,0 +1,418 @@
+{
+  "mappers": {
+    "conf": {
+      "detect": {
+        "ini": {
+          "sections": [
+            "Interface"
+          ]
+        }
+      },
+      "body_source": "wgconf",
+      "forms": [
+        {
+          "id": "awg3",
+          "detect": {
+            "ini": {
+              "keys_any": [
+                "HeaderProtectionKey",
+                "ContentPaddingAddition",
+                "RekeyAfterTime",
+                "RekeyTimeout",
+                "RejectAfterTime",
+                "KeepaliveTimeout",
+                "MaxHandshakeAttempts",
+                "RandomTrailers",
+                "DisableCookies"
+              ]
+            }
+          },
+          "space": "ini",
+          "level": "endpoint"
+        },
+        {
+          "id": "awg",
+          "detect": {
+            "ini": {
+              "keys_any": [
+                "Jc",
+                "Jmin",
+                "Jmax",
+                "S1",
+                "S2",
+                "S3",
+                "S4",
+                "H1",
+                "H2",
+                "H3",
+                "H4",
+                "I1",
+                "I2",
+                "I3",
+                "I4",
+                "I5"
+              ]
+            }
+          },
+          "space": "ini",
+          "level": "endpoint"
+        },
+        {
+          "id": "wg",
+          "detect": {
+            "default": true
+          },
+          "space": "ini",
+          "level": "endpoint"
+        }
+      ],
+      "ini_dialect": {
+        "key_case": "lower",
+        "value_case": "preserve",
+        "comment_prefixes": [
+          "#",
+          ";"
+        ],
+        "inline_comments": false,
+        "repeated_key": "last_wins",
+        "sections": {
+          "Peer": {
+            "repeat": "first_only",
+            "on_extra": {
+              "code": "wgconf_extra_peer_dropped"
+            }
+          }
+        },
+        "on_extra": {
+          "action": "drop"
+        },
+        "impl": "DRAFT-атрибут грамматики. Наш разбор дословно: ключи в lower, значения as-is, комментарии '#'/';' только целой строкой, повторяющийся ключ — последний выигрывает, секции кроме [Interface]/[Peer] игнорируются, читается ТОЛЬКО первая [Peer]."
+      },
+      "defaults": {
+        "peers[].port": 51820
+      },
+      "label": {
+        "source": "ini.$comment.Peer",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "WireGuard"
+        }
+      },
+      "params": {
+        "privatekey": {
+          "source": "ini.Interface.PrivateKey",
+          "maps_to": "private_key",
+          "normalize": "base64_std",
+          "required": true
+        },
+        "address": {
+          "source": "ini.Interface.Address",
+          "maps_to": "address",
+          "list": {
+            "sep": ","
+          },
+          "normalize": "cidr_prefix",
+          "required": true
+        },
+        "mtu": {
+          "source": "ini.Interface.MTU",
+          "maps_to": "mtu",
+          "type": "int"
+        },
+        "dns": {
+          "source": "ini.Interface.DNS",
+          "maps_to": null,
+          "on_present": {
+            "action": "note",
+            "code": "wgconf_dns_ignored"
+          },
+          "impl": "У sing-box endpoint dns-поля нет — лоссы by design (wireguard.json uri.query.dns.impl), но теперь не молча."
+        },
+        "publickey": {
+          "source": "ini.Peer.PublicKey",
+          "maps_to": "peers[].public_key",
+          "normalize": "base64_std",
+          "required": true
+        },
+        "presharedkey": {
+          "source": "ini.Peer.PresharedKey",
+          "aliases": [
+            "preshared_key"
+          ],
+          "maps_to": "peers[].pre_shared_key",
+          "normalize": "base64_std"
+        },
+        "allowedips": {
+          "source": "ini.Peer.AllowedIPs",
+          "maps_to": "peers[].allowed_ips",
+          "list": {
+            "sep": ","
+          },
+          "normalize": "cidr_prefix",
+          "default_when": {
+            "absent": true,
+            "value": "0.0.0.0/0,::/0"
+          },
+          "materialize_default": true,
+          "impl": "§103 amnezia_vpn_plain_wg — читать обязательно: без этого IPv4-only INI получал дефолтный ::/0 в придачу."
+        },
+        "endpoint": {
+          "source": "ini.Peer.Endpoint",
+          "selector": true,
+          "required": true,
+          "extract": {
+            "re": "^(?:\\[(?P<h6>[^\\]]+)\\](?::(?P<p6>\\d+))?|(?P<h>[^:]+):(?P<p>\\d+))$",
+            "into": {
+              "h6": "peers[].address",
+              "p6": {
+                "path": "peers[].port",
+                "type": "int"
+              },
+              "h": "peers[].address",
+              "p": {
+                "path": "peers[].port",
+                "type": "int"
+              }
+            }
+          },
+          "on_no_match": {
+            "action": "take_all",
+            "into": "peers[].address",
+            "defaults": {
+              "peers[].port": 51820
+            }
+          },
+          "impl": "G7 — [IPv6]:port, host:port и ГОЛЫЙ IPv6 (§219: несколько ':' без скобок — адрес целиком, порт по умолчанию 51820, потому что отличить его нечем). Пустой Endpoint — узла нет."
+        },
+        "keepalive": {
+          "source": "ini.Peer.PersistentKeepalive",
+          "maps_to": "peers[].persistent_keepalive_interval",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "reserved": {
+          "source": "ini.Peer.Reserved",
+          "aliases": [
+            "client_id",
+            "clientid"
+          ],
+          "maps_to": "peers[].reserved",
+          "list": {
+            "sep": ",",
+            "item": "int",
+            "len": 3
+          },
+          "on_invalid": {
+            "action": "drop"
+          },
+          "impl": "§126 — WARP client_id: десятичная тройка либо base64 трёх байт."
+        },
+        "jc": {
+          "source": "ini.Interface.Jc",
+          "maps_to": "jc",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "jmin": {
+          "source": "ini.Interface.Jmin",
+          "maps_to": "jmin",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "jmax": {
+          "source": "ini.Interface.Jmax",
+          "maps_to": "jmax",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s1": {
+          "source": "ini.Interface.S1",
+          "maps_to": "s1",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s2": {
+          "source": "ini.Interface.S2",
+          "maps_to": "s2",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s3": {
+          "source": "ini.Interface.S3",
+          "maps_to": "s3",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s4": {
+          "source": "ini.Interface.S4",
+          "maps_to": "s4",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "h1": {
+          "source": "ini.Interface.H1",
+          "maps_to": "h1",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          }
+        },
+        "h2": {
+          "source": "ini.Interface.H2",
+          "maps_to": "h2",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          }
+        },
+        "h3": {
+          "source": "ini.Interface.H3",
+          "maps_to": "h3",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          }
+        },
+        "h4": {
+          "source": "ini.Interface.H4",
+          "maps_to": "h4",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          }
+        },
+        "i1": {
+          "source": "ini.Interface.I1",
+          "maps_to": "i1"
+        },
+        "i2": {
+          "source": "ini.Interface.I2",
+          "maps_to": "i2"
+        },
+        "i3": {
+          "source": "ini.Interface.I3",
+          "maps_to": "i3"
+        },
+        "i4": {
+          "source": "ini.Interface.I4",
+          "maps_to": "i4"
+        },
+        "i5": {
+          "source": "ini.Interface.I5",
+          "maps_to": "i5"
+        },
+        "id": {
+          "source": "ini.Interface.Id",
+          "maps_to": "id"
+        },
+        "ip": {
+          "source": "ini.Interface.Ip",
+          "maps_to": "ip"
+        },
+        "ib": {
+          "source": "ini.Interface.Ib",
+          "maps_to": "ib"
+        },
+        "headerprotectionkey": {
+          "source": "ini.Interface.HeaderProtectionKey",
+          "maps_to": "header_protection_key"
+        },
+        "contentpaddingaddition": {
+          "source": "ini.Interface.ContentPaddingAddition",
+          "maps_to": "content_padding_addition",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "rekeyaftertime": {
+          "source": "ini.Interface.RekeyAfterTime",
+          "maps_to": "rekey_after_time",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "rekeytimeout": {
+          "source": "ini.Interface.RekeyTimeout",
+          "maps_to": "rekey_timeout",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "rejectaftertime": {
+          "source": "ini.Interface.RejectAfterTime",
+          "maps_to": "reject_after_time",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "keepalivetimeout": {
+          "source": "ini.Interface.KeepaliveTimeout",
+          "maps_to": "keepalive_timeout",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "maxhandshakeattempts": {
+          "source": "ini.Interface.MaxHandshakeAttempts",
+          "maps_to": "max_handshake_attempts",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "randomtrailers": {
+          "source": "ini.Interface.RandomTrailers",
+          "maps_to": "random_trailers",
+          "type": "bool_spelled",
+          "omit_default": false
+        },
+        "disablecookies": {
+          "source": "ini.Interface.DisableCookies",
+          "maps_to": "disable_cookies",
+          "type": "bool_spelled",
+          "omit_default": false
+        }
+      },
+      "scheme_sets": {
+        "*": {
+          "type": "wireguard"
+        }
+      },
+      "emit": null
+    }
+  }
+}

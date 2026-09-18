@@ -1,0 +1,84 @@
+{
+  "mappers": {
+    "uri": {
+      "detect": {"scheme_in": ["masque"]},
+      "body_source": "uri",
+      "forms": [
+        {"id": "url", "detect": {"default": true}, "decode": ["url"], "space": "url"}
+      ],
+      "userinfo": {"into": ["private_key"]},
+      "label": {"source": "fragment", "normalize": ["strip_control", "trim"]},
+      "defaults": {"server_port": 443},
+      "scheme_sets": {"*": {"type": "masque"}},
+      "params": {
+        "private_key": {
+          "source": ["userinfo", "query.private_key"],
+          "aliases": ["privatekey"],
+          "maps_to": "private_key",
+          "required": true,
+          "decode_extra": {"preserve_plus": true},
+          "impl": "userinfo сильнее query-фолбэка. Сырой '/' внутри base64(SEC1 DER) percent-энкодится ДО разбора authority — иначе платформа примет его за начало пути и ключ пропадёт (§106)."
+        },
+        "publickey": {
+          "source": "query.publickey",
+          "aliases": ["public_key"],
+          "maps_to": "public_key",
+          "required": true,
+          "decode_extra": {"preserve_plus": true},
+          "impl": "D133-7 — поле base64-формата читает '+' буквально; прежде узел с сырым '+' в ключе молча пропадал."
+        },
+        "address": {
+          "source": "query.address",
+          "list": {"sep": ","},
+          "normalize": "cidr_prefix",
+          "required": true,
+          "split_into": {
+            "ip": {"when": {"item": {"not_matches": ":"}}, "take": "first"},
+            "ipv6": {"when": {"item": {"matches": ":"}}, "take": "first"}
+          },
+          "impl": "Локальные адреса туннеля списком; ядро держит их двумя ОТДЕЛЬНЫМИ полями, по одному на семейство. Первый v4 → ip, первый v6 → ipv6. Ни одного годного адреса — узла нет."
+        },
+        "profile": {
+          "source": "query.profile",
+          "maps_to": "profile",
+          "default_when": {"absent": true, "value": "cloudflare"},
+          "materialize_default": true,
+          "impl": "Дефолт пишется в тело ЯВНО: конвенция обеих сторон входит в identity-хеш живых MASQUE-узлов, а default реестра в тело не материализуется (CANON §2.4)."
+        },
+        "vhttp": {
+          "source": "query.vhttp",
+          "maps_to": "vhttp",
+          "default_when": {"absent": true, "value": "h3"},
+          "materialize_default": true,
+          "emit_when": "always",
+          "impl": "vhttp_empty_defaults_to_h3. У ядра дефолт auto, у обеих сторон конвенция h3 — и она в теле. Значение вне enum подменяет реестр кодом masque_vhttp_invalid."
+        },
+        "mtu": {
+          "source": "query.mtu",
+          "maps_to": "mtu",
+          "type": "int",
+          "default_when": {"absent": true, "value": 1280},
+          "materialize_default": true
+        },
+        "sni": {
+          "source": "query.sni",
+          "maps_to": "tls.server_name",
+          "impl": "Пусто = дефолт профиля ядра, ключа в теле нет. Эвристики написания у masque нет."
+        },
+        "disable_sni": {
+          "source": "query.disable_sni",
+          "type": "bool_spelled",
+          "maps_to": "tls.disable_sni",
+          "omit_default": false
+        },
+        "idle_timeout": {"source": "query.idle_timeout", "maps_to": "idle_timeout"},
+        "keep_alive": {
+          "source": "query.keep_alive",
+          "aliases": ["keep_alive_period"],
+          "maps_to": "keep_alive_period"
+        }
+      },
+      "emit": {"form": "url", "omit_default": ["server_port"]}
+    }
+  }
+}

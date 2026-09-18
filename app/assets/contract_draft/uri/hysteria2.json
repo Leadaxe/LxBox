@@ -1,0 +1,94 @@
+{
+  "mappers": {
+    "uri": {
+      "detect": {"scheme_in": ["hysteria2", "hy2"]},
+      "body_source": "uri",
+      "forms": [
+        {
+          "id": "wrapped",
+          "detect": {"all": [{"not": {"text": {"contains": "@"}}}, {"regex": "^[A-Za-z0-9+/=_-]+\\s*$"}]},
+          "decode": ["base64", {"reparse": "url"}],
+          "space": "url"
+        },
+        {"id": "url", "detect": {"default": true}, "decode": ["url"], "space": "url"}
+      ],
+      "userinfo": {"into": ["password"]},
+      "label": {"source": "fragment", "normalize": ["strip_control", "trim"]},
+      "defaults": {"server_port": 443},
+      "scheme_sets": {"*": {"type": "hysteria2"}},
+      "params": {
+        "$multiport": {
+          "source": "port_raw",
+          "selector": true,
+          "extract": {
+            "re": "^(?P<first>\\d+)(?P<rest>[,:-].*)?$",
+            "into": {
+              "first": {"path": "server_port", "type": "int"},
+              "rest": {"path": "server_ports", "normalize": "port_range_spec"}
+            }
+          },
+          "impl": "Multi-port прямо в authority (host:443,20000-30000). Uri.parse такую строку не читает вовсе: authority восстанавливается на ПЕРВОМ числовом порту, остальное уезжает в тот же конвейер, что и ?mport=. Порядок слияния — authority, потом query (merge: prepend у mport)."
+        },
+        "mport": {
+          "source": ["query.mport", "query.ports"],
+          "maps_to": "server_ports",
+          "merge": "append",
+          "normalize": "port_range_spec",
+          "impl": "Форма ядра — \"low:high\" через ДВОЕТОЧИЕ; дефис ссылки даёт фатал «bad port range». Одиночный порт становится парой N:N."
+        },
+        "password": {
+          "source": "userinfo",
+          "maps_to": "password",
+          "impl": "Пароль — userinfo ЦЕЛИКОМ, вместе с двоеточиями: формы user:pass у hysteria2 нет. Пустой пароль узла НЕ роняет (в отличие от vless/trojan/tuic) — ключ просто не пишется."
+        },
+        "obfs": {
+          "source": "query.obfs",
+          "selector": true,
+          "maps_to": "obfs.type",
+          "impl": "Пустой obfs блока не даёт вовсе. Годность типа судит реестр (allowlist hysteria2_obfs, код obfs_unknown)."
+        },
+        "obfs-password": {
+          "source": "query.obfs-password",
+          "maps_to": "obfs.password",
+          "when": {"obfs.type": {"present": true}}
+        },
+        "obfs-min-packet-size": {
+          "source": "query.obfs-min-packet-size",
+          "maps_to": "obfs.min_packet_size",
+          "type": "int",
+          "when": {"obfs.type": {"present": true}}
+        },
+        "obfs-max-packet-size": {
+          "source": "query.obfs-max-packet-size",
+          "maps_to": "obfs.max_packet_size",
+          "type": "int",
+          "when": {"obfs.type": {"present": true}}
+        },
+        "upmbps": {
+          "source": "query.upmbps",
+          "aliases": ["up_mbps"],
+          "maps_to": "up_mbps",
+          "type": "int",
+          "impl": "§464 — на входе читаются ОБА написания; канон эмита один (upmbps)."
+        },
+        "downmbps": {
+          "source": "query.downmbps",
+          "aliases": ["down_mbps"],
+          "maps_to": "down_mbps",
+          "type": "int"
+        },
+        "pinSHA256": {
+          "source": "query.pinSHA256",
+          "maps_to": "tls.certificate_public_key_sha256",
+          "list": {"sep": ",", "coerce_scalar": true},
+          "impl": "delta480: список по запятой вместо одного элемента \"a,b\" (D133-11)."
+        }
+      },
+      "include": ["tls#uri"],
+      "emit": {
+        "form": "url",
+        "omit_default": ["server_port"]
+      }
+    }
+  }
+}

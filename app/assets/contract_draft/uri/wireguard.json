@@ -1,0 +1,408 @@
+{
+  "mappers": {
+    "uri": {
+      "detect": {
+        "scheme_in": [
+          "wireguard",
+          "awg"
+        ]
+      },
+      "body_source": "uri",
+      "forms": [
+        {
+          "id": "conf_b64",
+          "detect": {
+            "all": [
+              {
+                "not": {
+                  "text": {
+                    "contains": "@"
+                  }
+                }
+              },
+              {
+                "regex": "^[A-Za-z0-9+/=_-]+\\s*$"
+              }
+            ]
+          },
+          "decode": [
+            "base64",
+            "ini"
+          ],
+          "space": "ini",
+          "level": "endpoint"
+        },
+        {
+          "id": "url",
+          "detect": {
+            "default": true
+          },
+          "decode": [
+            "url"
+          ],
+          "space": "url",
+          "level": "endpoint"
+        }
+      ],
+      "userinfo": {
+        "into": [
+          "private_key"
+        ]
+      },
+      "label": {
+        "source": "fragment",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ]
+      },
+      "defaults": {
+        "server_port": 51820
+      },
+      "scheme_sets": {
+        "*": {
+          "type": "wireguard"
+        }
+      },
+      "params": {
+        "privatekey": {
+          "source": [
+            "userinfo",
+            "query.privatekey"
+          ],
+          "aliases": [
+            "private_key"
+          ],
+          "maps_to": "private_key",
+          "normalize": "base64_std",
+          "required": true,
+          "decode_extra": {
+            "preserve_plus": true
+          },
+          "impl": "D-021 — userinfo сильнее query-фолбэка, читаются оба написания. Сырой '/' percent-энкодится до разбора authority (§106). normalize base64_std — НЕ суждение: 4 формы base64 приводятся к std с паддингом (D-023/D-030), без этого одна нода даёт два identity-хеша. Годность (32 байта) судит реестр: body.private_key format base64_32, drop_node."
+        },
+        "publickey": {
+          "source": "query.publickey",
+          "aliases": [
+            "public_key"
+          ],
+          "maps_to": "peers[].public_key",
+          "normalize": "base64_std",
+          "required": true,
+          "decode_extra": {
+            "preserve_plus": true
+          }
+        },
+        "presharedkey": {
+          "source": "query.presharedkey",
+          "aliases": [
+            "preshared_key"
+          ],
+          "maps_to": "peers[].pre_shared_key",
+          "normalize": "base64_std",
+          "decode_extra": {
+            "preserve_plus": true
+          },
+          "impl": "Негодный psk роняет УЗЕЛ — правило реестра (on_invalid drop_node, код wg_key_invalid, контракт 1.1.11), не маппера."
+        },
+        "address": {
+          "source": "query.address",
+          "maps_to": "address",
+          "list": {
+            "sep": ","
+          },
+          "normalize": "cidr_prefix",
+          "required": true
+        },
+        "allowedips": {
+          "source": "query.allowedips",
+          "aliases": [
+            "allowed_ips"
+          ],
+          "maps_to": "peers[].allowed_ips",
+          "list": {
+            "sep": ","
+          },
+          "normalize": "cidr_prefix",
+          "default_when": {
+            "absent": true,
+            "value": "0.0.0.0/0,::/0"
+          },
+          "materialize_default": true,
+          "impl": "D-022 — дефолт в теле обеих сторон."
+        },
+        "$peer_address": {
+          "source": "host",
+          "maps_to": "peers[].address",
+          "impl": "Запись — endpoint: адреса сервера в корне тела нет вовсе, он лежит в peers[]. Share-URI несёт строго ОДНОГО пира."
+        },
+        "$peer_port": {
+          "source": "port",
+          "maps_to": "peers[].port",
+          "type": "int",
+          "default_when": {
+            "absent": true,
+            "value": 51820
+          },
+          "materialize_default": true
+        },
+        "reserved": {
+          "source": "query.reserved",
+          "aliases": [
+            "client_id"
+          ],
+          "maps_to": "peers[].reserved",
+          "list": {
+            "sep": ",",
+            "item": "int",
+            "len": 3
+          },
+          "on_invalid": {
+            "action": "drop"
+          },
+          "impl": "§025/§126 WARP client_id: десятичная тройка b0,b1,b2 либо base64 трёх байт. Битое значение параметр ОПУСКАЕТ, узел живёт."
+        },
+        "keepalive": {
+          "source": "query.keepalive",
+          "maps_to": "peers[].persistent_keepalive_interval",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop"
+          },
+          "impl": "§421 — число как раньше (int), AWG3-диапазон 25-35 строкой. Битое значение опускается, узел живёт."
+        },
+        "mtu": {
+          "source": "query.mtu",
+          "maps_to": "mtu",
+          "type": "int",
+          "impl": "§473 — кладётся В ТОЙ ФОРМЕ, в какой его написал автор, и только если написал. Потолок 1280 и дефолт AWG — правила реестра (body.fields.mtu max_when/default_when): напиши маппер своё число, default_when не сработал бы вовсе."
+        },
+        "listenport": {
+          "source": "query.listenport",
+          "maps_to": "listen_port",
+          "type": "int"
+        },
+        "name": {
+          "source": "query.name",
+          "maps_to": null,
+          "omit_default": "singbox-wg0"
+        },
+        "dns": {
+          "source": "query.dns",
+          "maps_to": null,
+          "on_present": {
+            "action": "note",
+            "code": "wgconf_dns_ignored"
+          },
+          "impl": "У sing-box endpoint нет dns-поля; параметр лоссы by design — но теперь не молча."
+        },
+        "jc": {
+          "source": "query.jc",
+          "maps_to": "jc",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "jmin": {
+          "source": "query.jmin",
+          "maps_to": "jmin",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "jmax": {
+          "source": "query.jmax",
+          "maps_to": "jmax",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s1": {
+          "source": "query.s1",
+          "maps_to": "s1",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s2": {
+          "source": "query.s2",
+          "maps_to": "s2",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s3": {
+          "source": "query.s3",
+          "maps_to": "s3",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "s4": {
+          "source": "query.s4",
+          "maps_to": "s4",
+          "type": "int",
+          "on_invalid": {
+            "action": "drop"
+          }
+        },
+        "h1": {
+          "source": "query.h1",
+          "maps_to": "h1",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          },
+          "impl": "§112 — 'N' числом, 'N-M' строкой; D-031: перевёрнутая пара 300-200 нормализуется в 200-300, иначе одна нода даёт два хеша. Код ПОФАКТОРНО, по одному на битый заголовок (§463)."
+        },
+        "h2": {
+          "source": "query.h2",
+          "maps_to": "h2",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          }
+        },
+        "h3": {
+          "source": "query.h3",
+          "maps_to": "h3",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          }
+        },
+        "h4": {
+          "source": "query.h4",
+          "maps_to": "h4",
+          "normalize": "range_order:swap",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg_header_invalid"
+          }
+        },
+        "i1": {
+          "source": "query.i1",
+          "maps_to": "i1"
+        },
+        "i2": {
+          "source": "query.i2",
+          "maps_to": "i2"
+        },
+        "i3": {
+          "source": "query.i3",
+          "maps_to": "i3"
+        },
+        "i4": {
+          "source": "query.i4",
+          "maps_to": "i4"
+        },
+        "i5": {
+          "source": "query.i5",
+          "maps_to": "i5"
+        },
+        "id": {
+          "source": "query.id",
+          "maps_to": "id"
+        },
+        "ip": {
+          "source": "query.ip",
+          "maps_to": "ip"
+        },
+        "ib": {
+          "source": "query.ib",
+          "maps_to": "ib"
+        },
+        "headerprotectionkey": {
+          "source": "query.headerprotectionkey",
+          "maps_to": "header_protection_key",
+          "decode_extra": {
+            "preserve_plus": true
+          },
+          "impl": "§421 — base64 32 байт; '+' читается буквально (D133-7). Годность судит реестр (контракт 1.1.11: drop_node)."
+        },
+        "contentpaddingaddition": {
+          "source": "query.contentpaddingaddition",
+          "maps_to": "content_padding_addition",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "rekeyaftertime": {
+          "source": "query.rekeyaftertime",
+          "maps_to": "rekey_after_time",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "rekeytimeout": {
+          "source": "query.rekeytimeout",
+          "maps_to": "rekey_timeout",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "rejectaftertime": {
+          "source": "query.rejectaftertime",
+          "maps_to": "reject_after_time",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "keepalivetimeout": {
+          "source": "query.keepalivetimeout",
+          "maps_to": "keepalive_timeout",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "maxhandshakeattempts": {
+          "source": "query.maxhandshakeattempts",
+          "maps_to": "max_handshake_attempts",
+          "normalize": "range_order:strict",
+          "on_invalid": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
+        },
+        "randomtrailers": {
+          "source": "query.randomtrailers",
+          "maps_to": "random_trailers",
+          "type": "bool_spelled",
+          "omit_default": false,
+          "impl": "on/true/1 → true; off/пусто → ключа НЕТ вовсе (никогда false: лишний ключ менял бы identity-хеш)."
+        },
+        "disablecookies": {
+          "source": "query.disablecookies",
+          "maps_to": "disable_cookies",
+          "type": "bool_spelled",
+          "omit_default": false
+        }
+      },
+      "emit": {
+        "form": "url",
+        "omit_default": [
+          "server_port"
+        ]
+      }
+    }
+  }
+}
