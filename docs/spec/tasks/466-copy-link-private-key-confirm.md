@@ -88,4 +88,4 @@ l10n-чекера с `--strict` зелёные.
 
 | Коммит | Что |
 |---|---|
-| `TBD` | геттер, диалог, l10n (ru/zh), тесты, CHANGELOG, USER_GUIDE ×2, GUARDS, спека 463 |
+| `5bd15ea7` | геттер, диалог, l10n (ru/zh), тесты, CHANGELOG, USER_GUIDE ×2, GUARDS, спека 463 |
