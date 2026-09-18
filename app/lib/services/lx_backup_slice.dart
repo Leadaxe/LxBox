@@ -85,6 +85,9 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'identity', _c),
   BackupField(BackupRecord.subscription, 'update', _c),
   BackupField(BackupRecord.subscription, 'disabled', _c),
+  // Фича 478 / CANON §9.4 — вердикт ядра едет вместе с отметкой выключения:
+  // без него узел приехал бы выключенным без объяснения (§221 симметрия).
+  BackupField(BackupRecord.subscription, 'warnings', _c),
   BackupField(BackupRecord.subscription, 'detour', _c),
   BackupField(BackupRecord.subscription, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.subscription, 'import_rules', _s, declared: true),
@@ -105,6 +108,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.server, 'id', _c),
   BackupField(BackupRecord.server, 'tag', _c),
   BackupField(BackupRecord.server, 'enabled', _c),
+  // Фича 478 — вердикт ядра рядом с `enabled`.
+  BackupField(BackupRecord.server, 'warnings', _c),
   BackupField(BackupRecord.server, 'origin', _c),
   // Хранение `body` не пишет; экспорт дописывает его JSON-исходнику (§4.1).
   BackupField(BackupRecord.server, 'body', _c),
@@ -130,6 +135,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'kind', _c),
   BackupField(BackupRecord.folderNode, 'tag', _c),
   BackupField(BackupRecord.folderNode, 'enabled', _c),
+  // Фича 478 — вердикт ядра рядом с `enabled`.
+  BackupField(BackupRecord.folderNode, 'warnings', _c),
   BackupField(BackupRecord.folderNode, 'origin', _c),
   BackupField(BackupRecord.folderNode, 'body', _c),
   BackupField(BackupRecord.folderNode, 'detour', _c),
