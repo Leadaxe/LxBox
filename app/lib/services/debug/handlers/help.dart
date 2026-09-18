@@ -444,6 +444,12 @@ POST /core_reject/prompt?answer=stop|keep      Answer it in place of the user (b
                                                  stop = end the run, VPN stays down, disabled nodes stay
                                                  disabled. → {answered:true, answer}. 409 when nothing
                                                  is pending.
+POST /core_reject/cancel                       Cancel the running guard — the same as tapping the
+                                                 button while it says "Checking servers…". The current
+                                                 round finishes, the next one does not start; outcome
+                                                 = stopped_by_user (VPN stays down, disabled nodes stay
+                                                 disabled). → {cancelled:true, phase, round}. 409 when
+                                                 no run is in flight.
 POST /core_reject/enable?tag=<tag>             Re-enable a node by its core tag (same as the banner
                                                  button): the verdict is wiped, the node is checked
                                                  again. → {enabled, tag}; 404 when no node carries
@@ -725,6 +731,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/core_reject/banner/dismiss', 'description': 'Close the banner (idempotent). Verdicts stay — the message was dismissed, not the decision. → {ok, action, visible, count, nodes}'},
     {'method': 'GET', 'path': '/core_reject/prompt', 'description': 'Round-limit dialog: {pending, count, limit}. count is the number in the dialog text (the round LIMIT, not the disabled tally).'},
     {'method': 'POST', 'path': '/core_reject/prompt', 'params': {'answer': 'stop|keep'}, 'body': '{"answer":"stop|keep"} (alternative to the query param)', 'description': 'Answer the round-limit dialog in place of the user. keep = drop the limit until this Start ends; stop = end the run (VPN stays down, disabled nodes stay disabled). → {answered:true, answer}. 409 when nothing is pending.'},
+    {'method': 'POST', 'path': '/core_reject/cancel', 'description': 'Cancel the running guard — the same as tapping the button while it says "Checking servers…". The current round finishes, the next one does not start; outcome = stopped_by_user (VPN stays down, disabled nodes stay disabled). → {cancelled:true, phase, round}. 409 when no run is in flight.'},
     {'method': 'POST', 'path': '/core_reject/enable', 'params': {'tag': 'core tag of the node'}, 'body': '{"tag":"..."} (alternative to the query param)', 'description': 'Re-enable a node by its core tag (same as the banner button): the verdict is wiped and the node is checked again. → {enabled, tag}; 404 when no node carries that tag.'},
     {'method': 'GET', 'path': '/core_reject/notifications', 'params': {'tag': 'core tag (omit for every node with stored warnings)'}, 'description': 'What the node row and card will render, without a screenshot: [{code, severity, params, title_en, text_en}]. Texts come from the contract registry, pinned English (a machine surface must not depend on the device locale). No tag → a map {tag: [...]}. 404 when the given tag has no stored warnings.'},
     // Wi-Fi history (saved networks for routing rule editor)

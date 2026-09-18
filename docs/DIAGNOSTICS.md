@@ -108,6 +108,7 @@ while collecting evidence for a bug report.
 | Endpoint | What it does |
 |---|---|
 | `POST /core_reject/prompt?answer=stop\|keep` | Answers the round-limit dialog in place of the user (the body `{"answer":"..."}` works too). `keep` drops the limit until this Start ends; `stop` ends the run — the VPN stays down and the already-disabled nodes stay disabled. → `{answered:true, answer}`. `409` when nothing is pending |
+| `POST /core_reject/cancel` | Cancels the running guard — the same as tapping the button while it reads “Checking servers…”. The current round finishes, the next one does not start; the outcome is `stopped_by_user`: the VPN stays down and the already-disabled nodes stay disabled. → `{cancelled:true, phase, round}`. `409` when no run is in flight |
 | `POST /core_reject/enable?tag=<tag>` | Re-enables a node by its core tag — the same path as the banner button: the verdict is wiped and the node gets checked again on the next Start. → `{enabled, tag}`; `404` when no node carries that tag |
 | `POST /core_reject/banner/dismiss` | Closes the “N disabled” banner (idempotent). The verdicts stay — the message was dismissed, not the decision |
 

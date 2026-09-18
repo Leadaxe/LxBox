@@ -29,6 +29,7 @@ import '../transport/response.dart';
 /// - `POST /core_reject/banner/dismiss`   → закрыть плашку
 /// - `GET  /core_reject/prompt`           → висит ли вопрос про предел кругов
 /// - `POST /core_reject/prompt?answer=stop|keep` → ответить на него
+/// - `POST /core_reject/cancel`          → отменить идущий прогон (кнопка)
 /// - `POST /core_reject/enable?tag=<tag>` → снять вердикт вручную
 /// - `GET  /core_reject/notifications[?tag=<tag>]` → предупреждения узла
 ///   с кодами и текстами реестра
@@ -47,6 +48,7 @@ Future<DebugResponse> coreRejectHandler(
         _ => throw BadRequest(
             'method ${req.method} not allowed on /core_reject/prompt'),
       },
+    '/core_reject/cancel' => _cancel(req, ctx),
     '/core_reject/enable' => _enable(req, ctx),
     '/core_reject/notifications' => _notifications(req, ctx),
     _ => throw NotFound('core_reject path: ${req.path}'),
@@ -157,6 +159,23 @@ Future<DebugResponse> _answerPrompt(DebugRequest req, DebugContext ctx) async {
   return JsonResponse({
     'answered': true,
     'answer': answer == CoreRejectPrompt.stop ? 'stop' : 'keep',
+  });
+}
+
+/// `POST /core_reject/cancel` — отменить идущий прогон: то же, что нажатие
+/// на кнопку в фазе тихого цикла. Круг доигрывает, следующий не начинается,
+/// исход — `stopped_by_user`.
+///
+/// Без идущего прогона — 409, а не тихое «ок»: отмена в пустоту означала бы,
+/// что проверяющий смотрит не на тот прогон, и он бы этого не заметил.
+Future<DebugResponse> _cancel(DebugRequest req, DebugContext ctx) async {
+  _requirePost(req);
+  final s = CoreRejectState.I;
+  if (!s.cancelRun()) throw const Conflict('no run to cancel');
+  return JsonResponse({
+    'cancelled': true,
+    'phase': _phaseWire(s.phase),
+    'round': s.round,
   });
 }
 

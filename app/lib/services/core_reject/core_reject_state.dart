@@ -70,6 +70,39 @@ class CoreRejectState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── отмена идущего прогона ────────────────────────────────────────────
+  VoidCallback? _cancel;
+
+  /// Есть ли кого отменять. Кнопка Start в фазе тихого цикла рисуется как
+  /// Stop именно по [checking], а не по этому флагу: связка с автоматом —
+  /// деталь, а человек видит фазу.
+  bool get cancellable => _cancel != null;
+
+  /// Прогон отдаёт сюда свой `cancel()`: сам автомат живёт один прогон и
+  /// снаружи его не удержать, а кнопка и Debug API должны до него дотянуться.
+  /// [finish] связь рвёт — отменять завершённый прогон нечего.
+  void bindCancel(VoidCallback cancel) {
+    _cancel = cancel;
+    notifyListeners();
+  }
+
+  /// Отмена (кнопка в фазе цикла либо `POST /core_reject/cancel`). Итог тот
+  /// же, что у Stop в диалоге предела: VPN не поднимается, выключенные
+  /// остаются выключенными. Круг доигрывает до конца — прерывать ядро на
+  /// середине `checkConfig` нечем.
+  ///
+  /// Висящий вопрос про предел закрывается тем же нажатием: иначе автомат
+  /// остался бы ждать ответа на диалог, который человек уже перекрыл
+  /// отменой. `false` — отменять нечего.
+  bool cancelRun() {
+    final c = _cancel;
+    if (c == null) return false;
+    c();
+    if (_promptPending) answerPrompt(CoreRejectPrompt.stop);
+    notifyListeners();
+    return true;
+  }
+
   // ── вопрос про предел кругов ──────────────────────────────────────────
   bool _promptPending = false;
   int _promptCount = 0;
@@ -147,6 +180,7 @@ class CoreRejectState extends ChangeNotifier {
   /// ошибку.
   void finish(CoreRejectRun run) {
     _phase = CoreRejectPhase.done;
+    _cancel = null;
     _round = run.rounds;
     _disabled = List.unmodifiable(run.disabled);
     _lastOutcome = run.outcome;
@@ -171,5 +205,6 @@ class CoreRejectState extends ChangeNotifier {
     _promptPending = false;
     _promptCount = 0;
     _promptCompleter = null;
+    _cancel = null;
   }
 }

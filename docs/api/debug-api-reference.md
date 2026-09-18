@@ -900,6 +900,7 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 | `/core_reject/banner/dismiss` | POST | закрыть плашку (идемпотентно) |
 | `/core_reject/prompt` | GET | вопрос про предел кругов: `{pending, count, limit}` |
 | `/core_reject/prompt?answer=stop\|keep` | POST | ответить на него за человека |
+| `/core_reject/cancel` | POST | отменить идущий прогон — то же, что нажатие кнопки в фазе цикла |
 | `/core_reject/enable?tag=<tag>` | POST | снять вердикт руками, узел проверится заново |
 | `/core_reject/notifications[?tag=<tag>]` | GET | что нарисуют строка и карточка узла: `[{code, severity, params, title_en, text_en}]` |
 
@@ -938,6 +939,14 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 кругов, а не счётчик выключенных. `keep` снимает предел до конца этого Start,
 `stop` заканчивает прогон: VPN не поднят, выключенные остаются выключенными.
 Ответ принимается и query-параметром, и телом `{"answer":"..."}`.
+
+**Отмена.** Во время тихого цикла кнопка на главном экране остаётся на своём
+месте и становится отменой — иконка остановки, подпись та же
+(`Checking servers… (N disabled)`). `POST /core_reject/cancel` делает ровно то
+же самое снаружи: текущий круг доигрывает (прерывать ядро на середине
+`checkConfig` нечем), следующий не начинается, исход — `stopped_by_user`. Если
+в этот момент висел вопрос про предел, он закрывается ответом `stop`. Без
+идущего прогона — 409.
 
 **`/core_reject/notifications` — проверка рендера без экрана.** Тексты
 приходят ДАННЫМИ контракта (`registry/warnings.json`), поэтому проверять надо

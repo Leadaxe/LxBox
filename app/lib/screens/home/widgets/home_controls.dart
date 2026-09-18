@@ -96,15 +96,25 @@ class HomeControls extends StatelessWidget {
               // HomeState о ней не знает: подписка отдельная, как у плашки.
               AnimatedBuilder(
                 animation: CoreRejectState.I,
-                builder: (context, _) => FilledButton.icon(
+                builder: (context, _) {
+                  // Фича 478 — во время тихого цикла кнопка остаётся тем же
+                  // местом и становится отменой: иконка остановки, нажатие =
+                  // `cancel()` автомата (итог как у Stop в диалоге предела —
+                  // VPN не поднят, выключенные остаются выключенными). Своих
+                  // строк отмена не заводит: подпись та же, что у фазы.
+                  final checking = CoreRejectState.I.checking;
+                  final pressable = checking || toggleEnabled;
+                  return FilledButton.icon(
                 // §372 — D-pad: на Android TV фокус при открытии экрана должен
                 // стоять на главном действии, иначе первое нажатие пульта
                 // уходит в никуда и выглядит как «кнопки не работают».
                 autofocus: true,
-                onPressed: toggleEnabled
+                onPressed: pressable
                     ? () {
                         HapticService.I.onConnectTap();
-                        if (state.tunnelUp) {
+                        if (checking) {
+                          CoreRejectState.I.cancelRun();
+                        } else if (state.tunnelUp) {
                           confirmStop(context, controller, state);
                         } else {
                           onStartWithAutoRefresh();
@@ -112,19 +122,22 @@ class HomeControls extends StatelessWidget {
                       }
                     : null,
                 icon: Icon(
-                  state.tunnelUp ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                  state.tunnelUp || checking
+                      ? Icons.stop_rounded
+                      : Icons.play_arrow_rounded,
                   size: 20,
                 ),
                 label: Text(state.tunnelUp
                     ? getLocalText.s("Stop")
                     // Фича 478 — во время тихого цикла кнопка говорит, чем
                     // занята и сколько уже выключено; отмена доступна всегда.
-                    : CoreRejectState.I.checking
+                    : checking
                         ? getLocalText.plural(
                             "Checking servers… (%d disabled)",
                             CoreRejectState.I.disabled.length)
                         : getLocalText.s("Start")),
-                ),
+                  );
+                },
               ),
               const SizedBox(width: 8),
               // Статус-чип отдаёт ширину первым: Start/Stop и reload имеют

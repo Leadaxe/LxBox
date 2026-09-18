@@ -989,7 +989,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         return answer;
       },
     );
-    final run = await CoreRejectGuard(host).run();
+    final guard = CoreRejectGuard(host);
+    // Отмена доступна всегда (спека раздел 3): кнопка Start в фазе тихого
+    // цикла и `POST /core_reject/cancel` дотягиваются до автомата только
+    // отсюда — сам он живёт ровно этот прогон.
+    CoreRejectState.I.bindCancel(guard.cancel);
+    final run = await guard.run();
     CoreRejectState.I.finish(run);
     if (!mounted) return;
     if (run.outcome == CoreRejectOutcome.failed && run.error.isNotEmpty) {

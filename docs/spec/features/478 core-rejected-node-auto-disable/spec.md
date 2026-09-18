@@ -357,6 +357,17 @@ Show. Новых экранов нет: список выключенных ве
 `NodeNotificationsView` (§479). Кнопка Start во время цикла — `home_controls.dart`,
 плашка — `widgets/app_banner.dart`.
 
+**Отмена.** Во время тихого цикла кнопка остаётся на своём месте и становится
+отменой: иконка `Icons.stop_rounded` (та же, что у обычного Stop), подпись
+прежняя — `Checking servers… (%d disabled)`, своих строк отмена не заводит.
+Нажатие зовёт `CoreRejectState.I.cancelRun()` → `CoreRejectGuard.cancel()`:
+круг доигрывает (прерывать ядро на середине `checkConfig` нечем), следующий не
+начинается, исход — `stoppedByUser`, ровно как у Stop в диалоге предела. Если
+в этот момент висел вопрос про предел, он закрывается ответом `stop` — иначе
+автомат ждал бы ответа на диалог, который человек уже перекрыл отменой.
+Дотянуться до автомата можно только через [CoreRejectState]: сам он живёт один
+прогон, и `bindCancel` в `_runWithCoreRejectGuard` — единственная связь.
+
 ### Debug API
 
 `app/lib/services/debug/handlers/core_reject.dart`, описания — в
@@ -364,7 +375,8 @@ Show. Новых экранов нет: список выключенных ве
 (все стоящие вердикты из хранения — в отличие от прогона, переживают
 перезапуск процесса), `GET /core_reject/banner`,
 `POST /core_reject/banner/dismiss`, `GET /core_reject/prompt` и
-`POST /core_reject/prompt?answer=stop|keep`, `POST /core_reject/enable?tag=`,
+`POST /core_reject/prompt?answer=stop|keep`, `POST /core_reject/cancel`
+(отмена идущего прогона — то же, что кнопка), `POST /core_reject/enable?tag=`,
 `GET /core_reject/notifications[?tag=]`.
 
 ### Замер
