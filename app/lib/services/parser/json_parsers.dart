@@ -1293,6 +1293,17 @@ NodeSpec? parseSingboxEntry(
         privateKey: entry['private_key']?.toString() ?? '',
         privateKeyPassphrase: entry['private_key_passphrase']?.toString() ?? '',
         hostKey: hk is List ? hk.map((e) => e.toString()).toList() : const [],
+        // §472 шаг 6 — поле ЧИТАЕТСЯ из тела. `emitSsh` его пишет, а эта
+        // ветка не читала вовсе: узел, пересохранённый через JSON или
+        // отредактированный во вкладке JSON, терял список алгоритмов
+        // host-ключа молча. Тот же класс, что `encryption` у vless (шаг 3),
+        // `plugin` у shadowsocks (шаг 4) и `quic` у naive выше.
+        hostKeyAlgorithms: switch (entry['host_key_algorithms']) {
+          final List l => l.map((e) => e.toString()).toList(),
+          // `listable_string` реестра: одиночная строка — законная форма.
+          final String s when s.isNotEmpty => [s],
+          _ => const <String>[],
+        },
         tcpKeepAlive: ka,
       );
     case 'socks':

@@ -296,11 +296,17 @@ JSON / Xray ───┘                  │
   no field for it.
 
 Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**,
-**hysteria2** and **tuic** (`kPipelineSchemes`, which also lists the scheme
-alias `hy2`).
-The remaining schemes keep their parsers, and `transport.dart` still serves
-them — it was not touched (`parseVlessTls` in particular is still what anytls
-reads).
+**hysteria2**, **tuic**, **anytls**, **naive**, **http(s) proxy**, **socks**
+and **ssh** (`kPipelineSchemes`). The set lists every spelling the dispatcher
+routes by, because a scheme name can carry more than a spelling: `hy2` is a
+plain alias of `hysteria2`, but `naive+quic` differs from `naive+https` by the
+body it produces (`quic: true`), and `proxy-https` differs from `proxy-http` by
+whether the body has a `tls` block at all. Aliases that change nothing —
+`socks5` for `socks`, the `proxy+…` plus-forms of §268 — share one mapper.
+
+Still on their own parsers: **wireguard/AWG** and **masque** (step 7), and the
+Xray-JSON converter (step 8). `transport.dart` still serves them and was not
+touched.
 
 **QUIC brought one structural change** (step 5). `tls.utls` and `tls.reality`
 are forbidden on QUIC schemes, and until this step the *emitter* stripped them
