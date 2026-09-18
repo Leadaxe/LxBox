@@ -202,7 +202,7 @@ void main() {
 
     test('имя узла — из комментария под [Peer] (G7)', () {
       final label = section(path, 'conf')['label'] as Map;
-      expect(label['source'], r'ini.$comment.Peer');
+      expect((label['source'] as List), contains(r'ini.$comment.Peer'));
     });
 
     test('Endpoint: голый IPv6 берётся адресом целиком, порт по умолчанию '

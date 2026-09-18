@@ -92,7 +92,10 @@
         "peers[].port": 51820
       },
       "label": {
-        "source": "ini.$comment.Peer",
+        "source": [
+          "fragment",
+          "ini.$comment.Peer"
+        ],
         "normalize": [
           "strip_control",
           "trim"
@@ -102,6 +105,11 @@
         }
       },
       "params": {
+        "$label_chain": {
+          "source": "ini.Peer.Endpoint",
+          "maps_to": null,
+          "impl": "§456 — INI тега не несёт, и цепочка метки у ДВУХ входов этой секции разная. Файл: комментарий под [Peer] без '=' (Proton пишет туда '# CH-FREE#11') → nameHint вызывающего (имя файла при импорте, тег записи, поле Tag редактора) → 'WireGuard'. Ссылка awg://<base64 .conf>: фрагмент → ХОСТ Endpoint (зеркало Go ConvertWGConfText, §450, тест awg_test 'без фрагмента метка = хост Endpoint') → и только потом общий фолбэк. Поэтому у ссылочной формы шага 'WireGuard' на корпусе не достигается."
+        },
         "privatekey": {
           "source": "ini.Interface.PrivateKey",
           "maps_to": "private_key",
