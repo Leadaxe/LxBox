@@ -82,8 +82,15 @@ const kPipelineSchemes = <String>{
   'proxy+http',
   'proxy+https',
   // §472 шаг 6 — socks; `socks5` алиас написания (`socks.json` → aliases).
+  //
+  // §475 — `socks4`/`socks4a` тоже алиасы схемы, но НЕ написания: схема здесь
+  // дискриминатор ВЕРСИИ (`version` 4 / 4a против 5), как суффикс
+  // `proxy-https://` — дискриминатор TLS. Тело у всех четырёх одно
+  // (`type: socks`), различается одно поле, и маппер у них общий.
   'socks',
   'socks5',
+  'socks4',
+  'socks4a',
   // §472 шаг 6 — ssh.
   'ssh',
   // §472 шаг 7 — masque (§130). Алиасов схема не имеет.
@@ -119,6 +126,8 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'proxy+https': mapHttpProxyUri,
   'socks': mapSocksUri,
   'socks5': mapSocksUri,
+  'socks4': mapSocksUri,
+  'socks4a': mapSocksUri,
   'ssh': mapSshUri,
   'masque': mapMasqueUri,
   'wireguard': mapWireguardUri,

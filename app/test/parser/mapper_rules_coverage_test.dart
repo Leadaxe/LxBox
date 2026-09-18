@@ -54,17 +54,14 @@ const Map<String, String> _knownGaps = {
   'sni_heuristic_falls_back_to_server@tuic':
       'реализован только откат пустого sni на адрес сервера; проверки '
           'написания нет — включение меняет тела и identity (спека 472, шаг 5)',
-  // §472 шаг 6 — у anytls правило записано в реестре (`applies_to` его
-  // называет), но исполнять его нельзя ПО СУЩЕСТВУ схемы: AnyTLS живёт
-  // только поверх TLS (`anytls.json` → `body.fields.tls` → `required`, ядро
-  // отвечает `C.ErrTLSRequired`). Сними маппер блок по `security=none` — и
-  // узел уехал бы без TLS, то есть не поднялся бы вовсе, потеряв заодно
-  // `sni`/`alpn`/`insecure`, которые автор написал рядом. Корпус нормирует
-  // именно обратное: `uri/anytls/security_none_params_kept`.
-  'security_none_no_tls@anytls':
-      'у anytls tls обязателен (C.ErrTLSRequired), security=none снимается '
-          'до чтения блока; корпус нормирует security_none_params_kept '
-          '(спека 472, шаг 6)',
+  // §475 — записи `security_none_no_tls@anytls` здесь БОЛЬШЕ НЕТ, и вернуть
+  // её будет нечем: контракт 1.1.8 убрал anytls из `applies_to` самого
+  // правила (`registry/tls.json`). Расхождения не осталось — реестр и
+  // приложение говорят одно и то же: у AnyTLS TLS обязателен
+  // (`C.ErrTLSRequired`, `protocol/anytls/outbound.go:45`), `security=none`
+  // лишь игнорируется, а `sni`/`alpn`/`insecure` из той же ссылки остаются
+  // (корпус: `uri/anytls/security_none_params_kept`). Правило стояло на нём
+  // мёртвым: исполнись оно — узел ронял бы конфиг целиком.
   // §472 шаг 7 — у masque эвристики нет НИ ОДНОЙ её половины: прежний парсер
   // читал `sni` как есть и на адрес сервера пустое значение не откатывал. Это
   // не упущение, а свойство схемы: пустой `sni` у masque значит «дефолт
@@ -128,6 +125,9 @@ const Map<String, String> _covered = {
   // нет (лежит в `protocols/wireguard.json` и относится к схеме целиком).
   'bare_ip_gets_prefix':
       'wireguard: bare IP в address/allowed_ips получает /32 или /128',
+  // §475 — единственное mapper-правило socks. `applies_to` у него нет (лежит
+  // в `protocols/socks.json` и относится к схеме целиком).
+  'socks_scheme_is_version': 'socks: схема ссылки → version тела',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -448,6 +448,51 @@ void main() {
       expect(tls['alpn'], ['h2', 'http/1.1']);
       expect(tls.containsKey('ech'), isFalse);
       expect(spec.warnings.whereType<EchIgnoredWarning>(), isNotEmpty);
+    }, skip: skip);
+  });
+
+  group('§475 — правила mapper на живых ссылках (socks)', () {
+    test('socks: схема ссылки → version тела', () {
+      // `socks_scheme_is_version`. Своего query-параметра под версию у схемы
+      // нет ни в одном диалекте — дискриминатором работает схема.
+      for (final (uri, want) in const [
+        ('socks://h.example:1080#n', '5'),
+        ('socks5://h.example:1080#n', '5'),
+        ('socks4://h.example:1080#n', '4'),
+        ('socks4a://h.example:1080#n', '4a'),
+      ]) {
+        final spec = parseUri(uri)!;
+        expect(spec.emit(TemplateVars.empty).map['version'], want,
+            reason: uri);
+      }
+    }, skip: skip);
+
+    test('socks: та же таблица работает обратно — узел эмитит свою схему', () {
+      // Маппер и эмиттер обязаны читать ОДНУ таблицу: иначе узел версии 4
+      // перестал бы переживать круг своей же ссылки, и притом молча.
+      for (final uri in const [
+        'socks4://user@h.example:1080#n',
+        'socks4a://h.example:1080#n',
+        'socks5://user:pass@h.example:1080#n',
+      ]) {
+        final spec = parseUri(uri)!;
+        final again = parseUri(spec.toUri())!;
+        expect(again.emit(TemplateVars.empty).map['version'],
+            spec.emit(TemplateVars.empty).map['version'],
+            reason: uri);
+        expect(spec.toUri(), startsWith(uri.split('://').first),
+            reason: '$uri: схема ссылки обязана называть версию узла');
+      }
+    }, skip: skip);
+
+    test('socks4: пароль из ссылки переносится КАК ЕСТЬ', () {
+      // У версии 4 пароля нет вовсе (userinfo — это userid), но маппер
+      // значения не судит: годность пары судит ядро.
+      final spec = parseUri('socks4://user:pass@h.example:1080#n')!;
+      final body = spec.emit(TemplateVars.empty).map;
+      expect(body['version'], '4');
+      expect(body['username'], 'user');
+      expect(body['password'], 'pass');
     }, skip: skip);
   });
 

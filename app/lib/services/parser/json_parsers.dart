@@ -1314,6 +1314,16 @@ NodeSpec? parseSingboxEntry(
         server: server,
         port: port,
         rawSource: src,
+        // §475 — версия ЧИТАЕТСЯ из тела. Раньше ветка её не читала вовсе, и
+        // тело с `version: "4"` из JSON-вкладки уезжало в ядро пятёркой:
+        // поле модели с дефолтом `'5'` никто не заполнял. Годность значения
+        // судит санитайзер (enum реестра + `type_invalid`), сюда оно приходит
+        // уже проверенным; пустое или отсутствующее — дефолт ядра, то есть
+        // прежние `'5'`.
+        version: (entry['version']?.toString().trim().toLowerCase() ?? '')
+                .isEmpty
+            ? '5'
+            : entry['version'].toString().trim().toLowerCase(),
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         tcpKeepAlive: ka,

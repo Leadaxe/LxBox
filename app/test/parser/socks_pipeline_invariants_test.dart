@@ -5,9 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
+import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 6, раздел 3 спеки — инварианты переезда socks на конвейер.
@@ -141,9 +143,10 @@ void main() {
           bare.emit(TemplateVars.empty).map);
     }, skip: skip);
 
-    test('version в теле всегда "5" и в ссылку не пишется', () {
-      // Поле ставит ЭМИТТЕР из модели (дефолт `5`), маппер его не кладёт:
-      // положи он — тело поехало бы и из ссылки, чего прежний путь не делал.
+    test('version у пятёрки — "5" и своего параметра в ссылке не имеет', () {
+      // §475 — поле кладёт МАППЕР, по схеме ссылки, а эмиттер пишет то, что в
+      // модели. У версии 5 это прежнее значение байт в байт: своего
+      // query-параметра под версию у схемы нет ни в одном диалекте.
       final spec = parseUri('socks5://u:p@h.example:1080#n')!;
       expect(spec.emit(TemplateVars.empty).map['version'], '5');
       expect(spec.toUri(), isNot(contains('version=')));
@@ -176,6 +179,104 @@ void main() {
           parseUri('socks5://u@h.example:1080?tcp_keep_alive=30s#n')!;
       expect(spec.emit(TemplateVars.empty).map['tcp_keep_alive'], '30s');
       expect(_registry(spec).map((w) => w.code), isNot(contains('unknown_key')));
+    }, skip: skip);
+  });
+
+  group('§475 — версию SOCKS несёт схема ссылки', () {
+    test('схема → version тела, все четыре формы', () {
+      for (final (uri, want) in const [
+        ('socks://h.example:1080#n', '5'),
+        ('socks5://h.example:1080#n', '5'),
+        ('socks4://h.example:1080#n', '4'),
+        ('socks4a://h.example:1080#n', '4a'),
+      ]) {
+        final spec = parseUri(uri);
+        expect(spec, isNotNull, reason: '$uri не разобрался');
+        expect(spec!.emit(TemplateVars.empty).map['version'], want,
+            reason: uri);
+      }
+    }, skip: skip);
+
+    test('эмиттер выбирает схему по версии — круг замкнут', () {
+      // Маппер и эмиттер читают ОДНУ таблицу (`kSocksVersionByScheme`).
+      // Разъедься они — узел версии 4 перестал бы переживать круг своей же
+      // ссылки, и заметить это было бы нечем.
+      for (final uri in const [
+        'socks4://userid@h.example:1080#n',
+        'socks4a://h.example:1080#n',
+        'socks5://u:p@h.example:1080#n',
+      ]) {
+        final a = parseUri(uri)!;
+        expect(a.toUri(), startsWith('${uri.split('://').first}://'),
+            reason: '$uri: схема ссылки обязана называть версию узла');
+        final b = parseUri(a.toUri())!;
+        expect(b.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map,
+            reason: 'круг изменил тело: $uri');
+      }
+    }, skip: skip);
+
+    test('socks4: пароль из ссылки переносится как есть', () {
+      // У версии 4 пароля нет вовсе (userinfo — это userid), но маппер
+      // значения не судит: годность пары судит ядро.
+      final body = parseUri('socks4://user:pass@h.example:1080#n')!
+          .emit(TemplateVars.empty)
+          .map;
+      expect(body['version'], '4');
+      expect(body['username'], 'user');
+      expect(body['password'], 'pass');
+    }, skip: skip);
+
+    test('тело из JSON-вкладки: version "4" доезжает до emit()', () {
+      // Критерий приёмки §475. До правки ветка socks `parseSingboxEntry`
+      // поле не читала вовсе, и тело с `version: "4"` уезжало в ядро
+      // пятёркой: поле модели с дефолтом `'5'` никто не заполнял.
+      final spec = parseSingboxEntry(<String, dynamic>{
+        'type': 'socks',
+        'tag': 'sb-socks4',
+        'server': 'h.example',
+        'server_port': 1080,
+        'version': '4',
+        'username': 'userid',
+      })!;
+      expect((spec as SocksSpec).version, '4');
+      expect(spec.emit(TemplateVars.empty).map['version'], '4');
+      // И обратно в ссылку — той же схемой.
+      expect(spec.toUri(), startsWith('socks4://'));
+    }, skip: skip);
+
+    test('тело без ключа version — прежняя пятёрка', () {
+      // Пусто = 5 по дефолту ядра; ключа тело не получает от нас ниоткуда,
+      // кроме эмиттера, и эмиттер пишет ту же пятёрку, что писал всегда.
+      final spec = parseSingboxEntry(<String, dynamic>{
+        'type': 'socks',
+        'tag': 'sb-socks-bare',
+        'server': 'h.example',
+        'server_port': 1080,
+      })!;
+      expect((spec as SocksSpec).version, '5');
+      expect(spec.emit(TemplateVars.empty).map['version'], '5');
+      expect(spec.toUri(), startsWith('socks5://'));
+    }, skip: skip);
+
+    test('негодная версия — общий type_invalid, узел живёт как SOCKS5', () {
+      // Своего кода правило не заводит: снимает значение общий enum реестра,
+      // и узел работает по дефолту ядра — ровно то, что код и описывает.
+      final body = <String, dynamic>{
+        'type': 'socks',
+        'server': 'h.example',
+        'server_port': 1080,
+        'version': '6',
+      };
+      final res = RegistrySanitizer.sanitize(body,
+          scheme: 'socks', coreVersion: '1.14.1-lx.4', applyCoreGates: false);
+      expect(res.body, isNotNull, reason: 'узел обязан выжить');
+      expect(res.body!.containsKey('version'), isFalse,
+          reason: 'негодное значение снимается');
+      expect(res.warnings.map((w) => '${w.code}@${w.path}'),
+          contains('type_invalid@version'));
+
+      final spec = parseSingboxEntry(res.body!)! as SocksSpec;
+      expect(spec.version, '5', reason: 'узел живёт как SOCKS5');
     }, skip: skip);
   });
 

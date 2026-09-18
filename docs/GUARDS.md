@@ -148,8 +148,10 @@ cannot quietly outlive the defect it described. Three kinds of entry: keys the
 app sets itself (`detour`, `domain_resolver`), core features the app does not
 model at all on either side (multiplex, UDP-over-TCP, the QUIC tuning knobs —
 absent from the model *and* the emitter, so nothing is being lost), and fields
-waiting on another task (`socks.version` → §475; wireguard and masque → step 7
-of spec 472).
+waiting on another task (wireguard and masque → step 7 of spec 472).
+`socks.version` was the third kind until §475 read it in the socks branch; the
+entry had to go the moment the field survived the trip, which is the guard
+working as designed.
 
 Nodes with `origin.kind: json` are out of scope by construction: they go to the
 core **verbatim**, never through the model (§455), so they have nothing to lose.
@@ -176,7 +178,8 @@ Three channels, and they are not interchangeable.
 `hysteria2` and `tuic` (step 5, the scheme alias `hy2://` included) and
 `anytls`, `naive` (both `naive+https://` and `naive+quic://`), the
 `http(s)` proxy (`proxy-http(s)://` and the `proxy+…` forms), `socks`
-(`socks5://` included) and `ssh` (step 6) reach the model through
+(all four of `socks://`, `socks5://`, `socks4://`, `socks4a://` — §475) and
+`ssh` (step 6) reach the model through
 the unified pipeline — mapper → registry sanitiser → `parseSingboxEntry` — so
 the value rules listed in §§1.1–1.5 below **no longer run for them**.
 Three of the step-6 schemes — naive, socks and ssh — had **no** layer-1 value

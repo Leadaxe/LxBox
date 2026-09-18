@@ -81,8 +81,11 @@ NodeSpec? parseUri(String uri) {
         return parseTuic(t);
       case 'ssh':
         return parseSsh(t);
+      // §475 — четыре схемы, одно тело: версию несёт схема.
       case 'socks':
       case 'socks5':
+      case 'socks4':
+      case 'socks4a':
         return parseSocks(t);
       case 'proxy-http': // §222 — HTTP(S) CONNECT proxy
       case 'proxy-https':

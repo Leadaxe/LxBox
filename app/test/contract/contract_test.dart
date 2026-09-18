@@ -7,6 +7,7 @@ import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'package:lxbox/services/parser/uri_utils.dart' show socksSchemeForVersion;
 
 import 'corpus_warnings.dart';
 
@@ -84,6 +85,32 @@ const _canonScheme = <String, String>{
   'shadowsocks': 'ss',
 };
 
+/// §475 — `scheme` конверта у socks называет ВЕРСИЮ, а не только протокол.
+///
+/// Обычно схема конверта выводится из имени протокола: одному типу ядра
+/// отвечает одна схема ссылки, а её алиасы написания (`socks://`, `awg://`,
+/// `hy2://`) канонизируются к базовой (корпус: `socks_alias`, `awg_scheme_alias`
+/// — все дают `scheme: wireguard`/`socks`).
+///
+/// У socks это не так с контракта 1.1.8: `socks4://` и `socks4a://` — НЕ
+/// написание, а дискриминатор версии протокола. Тип тела у всех четырёх один
+/// (`socks`), различает их поле `version`, и лаунчер пишет в конверт именно ту
+/// схему, которой узел эмитится (`node_parser_core.go:308-334`). Поэтому схему
+/// здесь выбирает та же таблица, что у маппера и эмиттера, — третьей копии
+/// правила не заводим.
+///
+/// `socks5://` в эту ветку не попадает намеренно: у лаунчера он НЕ
+/// канонизируется (тег узла строится из схемы, и переименование сбросило бы
+/// identity живых узлов — IDENTITY §4a-C), у нас канонизируется, и разница
+/// закрыта per-app override'ами корпуса. Версия 5 у нас даёт `socks`, как и
+/// раньше.
+String _envelopeScheme(NodeSpec spec) {
+  if (spec is SocksSpec && spec.version != '5') {
+    return socksSchemeForVersion(spec.version);
+  }
+  return _canonScheme[spec.protocol] ?? spec.protocol;
+}
+
 // §460 W2a — таблица «класс → код» и `warningCodeOf` переехали в lib
 // (`services/contract/warning_codes.dart`): второй их потребитель — дедуп
 // предупреждений реестра при разборе, и держать две копии значило бы
@@ -115,7 +142,7 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
 
   final node = <String, dynamic>{
     'kind': kind,
-    'scheme': _canonScheme[spec.protocol] ?? spec.protocol,
+    'scheme': _envelopeScheme(spec),
     if (spec.label.isNotEmpty) 'label': spec.label,
     'entry': entry,
   };

@@ -617,7 +617,11 @@ String toUriSocks(SocksSpec s) {
   final frag = encodeFragment(s.label);
   // §453 — как у ss: query появляется только при непустых dial-полях.
   final qs = buildQuery(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  return 'socks5://$userinfo$host:${s.port}'
+  // §475 — схему выбирает ВЕРСИЯ, по той же таблице, что читает маппер
+  // ссылки. Прежняя форма (`socks5://`) остаётся у версии 5 и у всего, чего в
+  // таблице нет, — так что у живых узлов ссылка не меняется ни на символ.
+  final scheme = socksSchemeForVersion(s.version);
+  return '$scheme://$userinfo$host:${s.port}'
       '${qs.isEmpty ? '' : '?$qs'}'
       '${frag.isEmpty ? '' : '#$frag'}';
 }

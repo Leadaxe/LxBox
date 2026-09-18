@@ -780,15 +780,31 @@ Default port: **22**.
 ```
 socks://user:password@host:port#label
 socks5://user:password@host:port#label
+socks4://userid@host:port#label
+socks4a://userid@host:port#label
 ```
 
-Both `socks://` and `socks5://` are accepted. Default port: **1080**.
+Default port: **1080**.
+
+**The scheme carries the protocol version.** A SOCKS link has no query
+parameter for the version in any dialect, so the scheme itself is the
+discriminator — the way the `proxy-https://` suffix discriminates TLS for the
+HTTP proxy. One table serves both ends, the link mapper and the share-URI
+emitter (`socksSchemeForVersion`, `uri_utils.dart`): a node parsed from
+`socks4://` is emitted back as `socks4://`.
+
+| Scheme | `version` in the body |
+|---|---|
+| `socks://`, `socks5://` | `"5"` |
+| `socks4://` | `"4"` |
+| `socks4a://` | `"4a"` |
 
 ### Parsed Parameters
 
 | Parameter | Source | Description |
 |-----------|--------|-------------|
-| Username | userinfo (before `:`) | SOCKS username |
+| Version | the scheme | SOCKS protocol version |
+| Username | userinfo (before `:`) | SOCKS username; with `socks4` this is the userid |
 | Password | userinfo (after `:`) | SOCKS password |
 
 ### sing-box Outbound Mapping
@@ -807,7 +823,16 @@ Both `socks://` and `socks5://` are accepted. Default port: **1080**.
 
 ### Notes
 
-- Always mapped to SOCKS version 5.
+- `version` is written into the body explicitly, including the `"5"` the core
+  would assume anyway: the value already stands in every live SOCKS node on
+  both sides of the contract, and dropping it would rewrite them all for no
+  difference to the core.
+- A sing-box body is read as written: an explicit `"5"` passes through, a body
+  with no key gets none. A version outside the set is dropped by the registry
+  enum (`type_invalid`) and the node runs as SOCKS5, the core's default.
+- SOCKS4 has no password at all — the userinfo is a userid, which the core
+  sends as `username`. A password written in the link is still carried over as
+  is: the mapper does not judge values, the core does.
 - Username and password are optional.
 
 ### Reference

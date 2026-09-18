@@ -27,6 +27,11 @@ bool isDirectLink(String input) {
       t.startsWith('awg://') ||
       t.startsWith('socks5://') ||
       t.startsWith('socks://') ||
+      // §475 — версию SOCKS несёт схема; детектор обязан знать все четыре,
+      // иначе `socks4://` не опознаётся как прямая ссылка и вставка из буфера
+      // падает на «not a subscription URL, proxy link, or JSON».
+      t.startsWith('socks4://') ||
+      t.startsWith('socks4a://') ||
       // §268 — naive/masque парсер знал, а классификатор импорта — нет:
       // ссылки падали на «not a subscription URL, proxy link, or JSON».
       t.startsWith('naive+https://') ||
