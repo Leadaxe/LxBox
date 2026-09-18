@@ -81,7 +81,7 @@ URI-раннер корпуса (`test/contract/contract_test.dart`) сверя�
 
 > **СХЛОПНУТА** шагом 1 фичи
 > [472](../features/472%20unified-parse-pipeline/spec.md) (18.09.2026,
-> `ecb1a616`): путь от `rawSource` к `NodeSpec.warnings` проложен, санитайзер
+> `7bc56ea2`): путь от `rawSource` к `NodeSpec.warnings` проложен, санитайзер
 > идёт по дословной карте в самом разборе, и раннер читает один источник —
 > `node.warnings`. `_allWarningsOf` и `_rawBodyOf` из
 > `body_contract_test.dart` удалены; ожидания корпуса не менялись ни на кейс,
