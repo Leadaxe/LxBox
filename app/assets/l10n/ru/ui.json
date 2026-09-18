@@ -2802,6 +2802,9 @@
   "No source URI for this node": {
     "value": "У этого узла нет исходного URI"
   },
+  "This node holds a private key — sharing it as a link would expose the key": {
+    "value": "У этого узла закрытый ключ — ссылка раскрыла бы его"
+  },
   "No source provided": {
     "value": "Источник не указан"
   },

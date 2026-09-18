@@ -73,11 +73,13 @@ void main() {
       }
     });
 
-    test('без поля — эмит прежний (enabled, public_key, short_id)', () {
+    test('без поля — эмит без key_share; пустой short_id не пишется', () {
+      // §463 / контракт §24.6 — пустой short_id ядру эквивалентен
+      // отсутствующему ключу, и корпус нормирует именно опущенный. Фикстура
+      // `short_id` не задаёт, поэтому ключа в эмите быть не должно.
       final spec = parseSingboxEntry(_vlessEntry(const {}))! as VlessSpec;
       expect(spec.tls.reality!.keyShare, isNull);
-      expect(_emittedReality(spec).keys.toList(),
-          ['enabled', 'public_key', 'short_id']);
+      expect(_emittedReality(spec).keys.toList(), ['enabled', 'public_key']);
     });
 
     test('hysteria2 с reality — reality срезан, как и раньше (§282)', () {

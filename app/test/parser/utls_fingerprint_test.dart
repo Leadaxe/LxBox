@@ -43,9 +43,14 @@ void main() {
         'helloqq_auto': 'qq',
         'helloios_auto': 'ios',
         'helloandroid_11_okhttp': 'android',
-        'hellorandomized': 'randomized',
-        'hellorandomizedalpn': 'randomized',
-        'hellorandomizednoalpn': 'randomized',
+        // §463 / контракт §24.2 п. 7.1 — весь префикс `hellorandom*` даёт
+        // `random`: подписка просила случайный отпечаток, и подменять его
+        // фиксированным (раньше голый `hellorandom` уезжал в `chrome`)
+        // значило вернуть ту самую узнаваемую сигнатуру, от которой уходили.
+        'hellorandom': 'random',
+        'hellorandomized': 'random',
+        'hellorandomizedalpn': 'random',
+        'hellorandomizednoalpn': 'random',
       };
       cases.forEach((raw, want) {
         final n = normalizeUtlsFingerprintValue(raw);

@@ -18,7 +18,7 @@
 library;
 
 import '../../models/node_warning.dart';
-import '../parser/uri_utils.dart' show normalizeSingboxDuration;
+import '../parser/uri_utils.dart' show normalizeSingboxDuration, urlPathOk;
 import 'registry.dart';
 
 /// Результат санитайзинга одной записи.
@@ -679,6 +679,11 @@ bool _formatOk(Object? v, String format) {
       return v is String && v.isNotEmpty && !v.contains(' ');
     case 'ipv4':
       return v is String && _ipv4Ok(v);
+    // §463 / контракт §24.6 — новый формат W2c: ядро разбирает путь
+    // транспорта через `url.Parse`, и битое percent-кодирование («%zz») роняет
+    // ВЕСЬ config.json («ws: parse path: invalid URL escape»), а не один узел.
+    case 'url_path':
+      return v is String && urlPathOk(v);
     case 'cidr':
       if (v is! String) return false;
       final parts = v.split('/');

@@ -49,11 +49,25 @@ void main() {
       expect(spec.awg, isNull);
     });
 
-    test('битое число (jc=abc) → поле пропущено, парс не падает', () {
+    test('битое число (jc=abc) → поле пропущено; одинокий jmin снят (§24.6)',
+        () {
+      // §463 — `jmin` без `jmax` снимается правилом `requires` реестра:
+      // отсутствующий `jmax` ядро читает как 0 и валит ВЕСЬ конфиг
+      // («amneziawg: jmin (50) must be <= jmax (0)»). Раньше `jmin=50`
+      // оставался в теле и ронял всё.
       final spec = parseWireguardUri(
           'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32&jc=abc&jmin=50')!;
-      expect(spec.awg!.fields.containsKey('jc'), false);
+      expect(spec.awg, isNull, reason: 'оба AWG-поля сняты — набор пуст');
+      // Узел при этом остаётся AmneziaWG: ссылка просила AWG, и кламп MTU
+      // 1280 — свойство запрошенного протокола, а не уцелевших полей.
+      expect(spec.mtu, 1280);
+    });
+
+    test('пара jmin+jmax переживает разбор (§24.6 — requires выполнен)', () {
+      final spec = parseWireguardUri(
+          'wireguard://$_testPriv@h:51820?publickey=$_testPub&address=10.0.0.2/32&jmin=50&jmax=100')!;
       expect(spec.awg!.fields['jmin'], 50);
+      expect(spec.awg!.fields['jmax'], 100);
     });
   });
 
@@ -215,7 +229,11 @@ void main() {
           'Address = 10.0.0.2/32\n'
           'MTU = 1408\n'
           'Jc = 10\n'
+          // §463 — `Jmin` без `Jmax` снял бы себя правилом `requires`
+          // реестра (одинокий jmin роняет весь конфиг), поэтому в фикстуре
+          // задана пара: тест проверяет разбор полей, а не это правило.
           'Jmin = 50\n'
+          'Jmax = 1000\n'
           'S1 = 20\n'
           'H1 = 1234567890\n'
           'I1 = $i1\n'

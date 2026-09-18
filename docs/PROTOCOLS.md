@@ -153,7 +153,7 @@ vless://UUID@host:port?query_params#label
 | Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → 32 bytes); garbage falls back to plain TLS plus a warning (§169) |
 | Short ID | `sid` | REALITY short ID (hex, max 16 chars) |
 | REALITY key share | `key_share` | `hybrid` \| `classical` (sing-box `tls.reality.key_share`, §457). Read only together with a valid `pbk`; anything outside the enum is dropped silently — the core rejects an unknown value along with the whole config. Requires the core pin `v1.14.1-lx.4` or newer |
-| Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp`, `raw` |
+| Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp` (`splithttp` is the same thing under its older Xray name, §463), `raw` |
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
 | Service name | `serviceName` or `service_name` | gRPC service name |
@@ -425,6 +425,12 @@ Both formats are auto-detected. The base64 part before `@` is decoded first; if 
 
 ### Supported Methods
 
+The set is the core's own 18 methods (`sing-shadowsocks2 v0.2.1`
+`method_registry`); anything outside it is a `CreateMethod` error on the whole
+config, so such a node is dropped.
+
+AEAD (recommended):
+
 - `2022-blake3-aes-128-gcm`
 - `2022-blake3-aes-256-gcm`
 - `2022-blake3-chacha20-poly1305`
@@ -434,6 +440,19 @@ Both formats are auto-detected. The base64 part before `@` is decoded first; if 
 - `aes-256-gcm`
 - `chacha20-ietf-poly1305`
 - `xchacha20-ietf-poly1305`
+
+Legacy stream ciphers (accepted since §463; the node lives and carries the
+info code `ss_method_legacy`). They predate AEAD, so the traffic is encrypted
+but **not authenticated** — an attacker in the path can alter it undetected.
+They are accepted because the core accepts them and because dropping a working
+node without explanation is worse: the user simply saw nodes disappear from the
+subscription.
+
+- `aes-128-ctr`, `aes-192-ctr`, `aes-256-ctr`
+- `aes-128-cfb`, `aes-192-cfb`, `aes-256-cfb`
+- `rc4-md5`
+- `chacha20-ietf`
+- `xchacha20`
 
 ### SIP003 Plugins
 
@@ -584,6 +603,7 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 ### Behaviour Notes
 
 - TLS is **always** enabled — `tls.enabled = true`, `tls.server_name = host`. NaïveProxy without TLS is meaningless.
+- An **empty host rejects the node** (§463, contract §24.6). Up to that point `naive+https://` stayed a live node with `server: ""`, on the premise that the Go side only validates a non-empty hostname for vless/trojan/ssh/tuic/anytls. The premise was wrong: the core answers an empty server address with a fatal for the *whole* config (`invalid server address`), so a single such node in a subscription left the user with no VPN at all.
 - The naive outbound in sing-box rejects `alpn`, `insecure`, `disable_sni`, `utls`, `reality`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment`, `kernel_*`. The parser deliberately leaves them unset. What naive **does** accept on top of `enabled`/`server_name` is `certificate` (PEM, string or array — its own trusted root, fed to cronet) and `certificate_path`; both survive the JSON round-trip since §454 (issue #140). The pin `certificate_public_key_sha256` is silently ignored by naive and therefore dropped.
 - `network`/`udp_over_tcp`/`quic` fields are **not** emitted in v1 — the URI standard does not carry them and naive QUIC mode is deferred (see spec 037 §10).
 - `extra_headers` keys are sorted lexicographically when emitted to JSON or back to URI form, for deterministic round-trip.
@@ -622,7 +642,7 @@ accepts the de-facto Trojan-style form used by Karing / v2rayN mods.
 | userinfo `password` | Auth credential | required (empty → parse fails) |
 | `host` | Server address (FQDN or IP, IPv6 in brackets) | required |
 | `port` | TCP port | `443` |
-| Query: `sni` / `peer` / `host` | TLS server name | `host` |
+| Query: `sni` / `peer` / `host` | TLS server name. Since §463 a value that cannot be a host name — no `.` and no `:` in it, e.g. `🔒` — falls back to the server address: `sing-box check` passes such a node, but the handshake is dead because the server is sent an SNI it does not know (contract §24.2 item 7.5) | `host` |
 | Query: `fp` | uTLS fingerprint | `random` |
 | Query: `pbk` / `sid` | REALITY public key / short ID (valid X25519 → REALITY, else plain TLS, §169) | none |
 | Query: `key_share` | REALITY key share `hybrid` \| `classical` (§457, core lx.4+); read only with a valid `pbk`, outside the enum dropped | none |
@@ -1121,8 +1141,8 @@ tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
 
 | Key | Value |
 |------|---------|
-| `congestion_control` | `bbr` \| `cubic` \| `new_reno` (default `cubic`) |
-| `udp_relay_mode` | `native` \| `quic` (default `native`) |
+| `congestion_control` | `bbr` \| `cubic` \| `new_reno` (the core's default is `cubic`; a value outside the set is dropped with `tuic_congestion_invalid` rather than coerced) |
+| `udp_relay_mode` | `native` \| `quic` (the core's default is `native`). Since §463 a value outside the set is **dropped** with `tuic_udp_relay_mode_invalid` — it used to be coerced to `native`, which hid the loss of the subscription's intent, and core `lx.6` refuses to load such a config anyway |
 | `alpn` | A CSV list (`h3`, `h3-29`) |
 | `sni` | The SNI for TLS |
 | `allow_insecure` / `insecure` | `1` \| `true` — skip certificate verification |
@@ -1684,6 +1704,12 @@ Suitability cannot be checked before connecting: `public_name` is only visible a
 - the URI query — `parseTransport` in [`lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart); keys are read in both forms, camelCase (the Xray URI style) and snake_case (sing-box);
 - sing-box JSON (`transport.type = "xhttp"`) — `parseSingboxEntry`;
 - Xray JSON (`streamSettings.network = "xhttp"` plus `xhttpSettings`) — see section 11.
+
+Since §463 the older name **`splithttp`** is accepted as an alias of `xhttp` on
+all three inputs (in Xray JSON its settings object `splithttpSettings` is read
+alongside `xhttpSettings`). Before that the name was not recognised at all and
+such a node reached the config with **no transport** — a plain TCP dial to a
+port expecting HTTP, dead without a single message. Contract §24.2 item 7.13.
 
 Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 002 v2): beyond the six basic fields there are configurable session/seq/uplink placements, their keys, the upload method, the X-Padding obfuscation mode and packet-up tuning. In a URI these come from flat query parameters **and** from the `extra` parameter (URL-encoded JSON, see below).
 

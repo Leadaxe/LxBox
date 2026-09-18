@@ -140,7 +140,17 @@ Three channels, and they are not interchangeable.
 | Duration given as a bare number (`"30"`) | `s` suffix appended | silent | `uri_utils.dart:385-389` | `badoption.Duration` rejects it with `time: missing unit in duration` and drops the whole config | D-024 |
 | VMess `security` empty / `null` / `undefined` | default `auto` | silent | `uri_utils.dart:394` | — | — |
 | VMess `security` outside the 6-value whitelist | replaced with `auto` | silent | `uri_utils.dart:396-407` | normalise to the sing-box vocabulary | — |
-| Shadowsocks method outside the 9-value whitelist | **node rejected** | silent | `uri_utils.dart:411-424` | core will not accept an unknown method | — |
+| Shadowsocks method outside the 18 core methods | **node rejected** | silent | `uri_utils.dart:537`, applied `shadowsocks_parser.dart:50` | an unknown method is a `CreateMethod` error on the whole config | §463 / §24.2 7.10 |
+| Shadowsocks legacy stream cipher (`aes-*-ctr`, `aes-*-cfb`, `rc4-md5`, `chacha20-ietf`, `xchacha20`) | **accepted** — node lives | `RegistryWarning(ss_method_legacy)` (info) | list `uri_utils.dart:521`, applied `shadowsocks_parser.dart:95-98` | the core accepts them; both clients used to drop working nodes with no explanation. No AEAD, so the traffic is unauthenticated — the info code says so | §463 / §24.2 7.10 |
+| uTLS fingerprint `hellorandom*` (Xray spelling) | canonicalised to `random` | silent | `utls_fingerprint.dart:101` | the subscription asked for a *random* hello; substituting a fixed `chrome` restored the very signature it was avoiding | §463 / §24.2 7.1 |
+| Transport `path` with broken percent-encoding (`%zz`) | field dropped, node lives | `RegistryWarning(type_invalid, path=transport.path)` | predicate `uri_utils.dart:410`, guard `transport.dart:156`, applied at `transport.dart:29, 50, 89, 103, 119` | the core parses the path with `url.Parse`; a bad escape is a fatal for the **whole** config.json, not one node | §463 / §24.6 |
+| TUIC `udp_relay_mode` outside `{native, quic}` | field dropped | `RegistryWarning(tuic_udp_relay_mode_invalid)` | `tuic_parser.dart:40, 69-74, 116` | coercing to `native` hid the loss of the subscription's intent; core lx.6 rejects the junk outright | §463 / §24.2 7.8 |
+| anytls SNI without `.` or `:` (`🔒`) | replaced with the server address | silent | `anytls_parser.dart:44-47` | `sing-box check` passes and the handshake is dead — the server gets an SNI it does not know | §463 / §24.2 7.5 |
+| AWG `jmin` without `jmax` | `jmin` dropped (registry `requires`) | `RegistryWarning(awg_header_invalid, path=jmin)` | rule `node_spec.dart:981`, applied `node_spec.dart:964, 1025` and `wireguard_parser.dart:153` | a missing `jmax` reads as 0 and the core fails the whole config with `jmin (50) must be <= jmax (0)` | §463 / §24.6 |
+| All AWG fields removed by guards | node still counts as AmneziaWG (MTU clamp kept) | silent | `wireguard_parser.dart:139-144` | the link asked for AWG; otherwise dropping the last field silently restored plain-WireGuard MTU | §463 |
+| naive with an empty host | **node rejected** | silent | `naive_parser.dart:40` | the core rejects an empty server address fatally for the whole config, so one such node left the user with no VPN at all | §463 / §24.6 |
+| Xray transport `splithttp` | treated as `xhttp` (alias; `splithttpSettings` read too) | silent | `transport.dart:129`, `json_parsers.dart:979, 1595` | unrecognised, the node reached the config with **no transport** — plain TCP to an HTTP port, dead without a message | §463 / §24.2 7.13 |
+| Empty `reality.short_id` | key omitted from the body | silent | `tls_spec.dart:264-271` | equivalent to the core's own `omitempty`; writing `""` diverged from the launcher for nothing | §463 / §24.6 |
 | `insecure` in 5 spellings | normalised to bool | (produces `InsecureTlsWarning`) | `uri_utils.dart:220-232` | — | — |
 | Label contains `🇪🇳` | replaced with `🇬🇧` | silent | `uri_utils.dart:181` | **purpose unclear** — the comment says "leftover artefact from v1" and does not name a core error or observable behaviour | — |
 
@@ -333,7 +343,9 @@ placed at this layer cannot be bypassed by adding a new source.
 | XHTTP `session_placement`, `uplink_http_method` | **pure passthrough, no guard by design** | silent | `transport_spec.dart:254-260, 303-309` | principle 2: the core rejects one node on these, not the file. The canon is Go's behaviour ("normalization is left to the core") | SPEC 103 |
 | XHTTP empty `xmux` sub-object | not emitted | silent | `transport_spec.dart:305-317` | `{"xmux":{}}` would read as configured-but-zero | §127 |
 | uTLS **and** REALITY over QUIC (hysteria2/tuic) | both blocks stripped from the emit; `server_name`/`alpn`/`insecure` kept | silent | `tls_spec.dart:35-40`, applied `node_spec_emit.dart:339, 457` | their `STDConfig()` returns an error and the QUIC path falls back to exactly that — both blocks on QUIC mean a dead node, and `fp` on hy2/tuic is xray-subscription noise | §282 |
-| VLESS `flow` other than exactly `xtls-rprx-vision` on bare TLS | field not written (plain VLESS) | silent | `node_spec_emit.dart:54, 79` | the core accepts exactly two values; a universal net over all paths (URI/Xray/raw JSON/manual) | §115 |
+| VLESS `flow` other than exactly `xtls-rprx-vision` on bare TLS | field not written (plain VLESS) | `DeprecatedFlowWarning` from the URI parser (`vless_parser.dart:63-65`) | `node_spec_emit.dart:54, 79` | the core accepts exactly two values; a universal net over all paths (URI/Xray/raw JSON/manual). The drop used to be silent: the user saw a node with no flow and no hint that the subscription had asked for a deprecated one | §115, §463 |
+| socks with a password but **no** username | userinfo written as `:pass@` | silent | `node_spec_emit.dart:596-607` | an empty username dropped the userinfo wholesale and the password was lost on the next re-save — a node's storage form *is* its link | §463 / §24.2 7.15 |
+| ssh node with an inline `private_key`, "copy link" action | copy **refused**, nothing put on the clipboard | explanatory snackbar | `node_actions.dart:168-185` | a private key in a shared link is a different trust boundary than local state. It is not stripped from `toUri()`, because that same text is the storage form (`parseUri(spec.toUri()) ≈ spec`) and stripping would destroy the key on reload — so, like the launcher's `ErrShareURINotSupported`, the refusal is stated instead | §463 / §24.2 7.16 |
 | hysteria2 obfs type not `salamander`/`gecko` at emit | `obfs` object not written | silent | `node_spec_emit.dart:326` | second line after the parser: only what the core accepts gets through | §358 |
 | MASQUE legacy `network`/`sni` names | never written | silent | `node_spec_emit.dart:678-681` | still accepted but deprecation-warned per outbound, and writing old and new names with different values is fatal | §393 |
 | Default-valued fields (`path='/'`, absent ints) | not emitted | silent | `transport_spec.dart:222-227` | the constructor default is for the UI, not the wire; emitting it breaks canon and identity hashes | SPEC 103 CANON §2.4 |
@@ -587,9 +599,9 @@ produces zero nodes loses all its warnings — there is no node to carry them
 `parse_all.dart:151-158`). Compensated by the "skipped" counter in the import
 dialog (§368 §8) and the contract's `dropped[]` envelope (D-088).
 
-**8. `xhttp_uplink_header_placement_reset` is a red contract case.** The §416
-guard diverges from the Go reference, which still passes the placement through.
-The shared corpus expectation lives in the launcher repository and
-`app/contract/` is a vendored, lock-checked copy, so the divergence surfaces as
-a failing test until the launcher side accepts a class-A override. See
+**8. `xhttp_uplink_header_placement_reset` — resolved.** The §416 guard used to
+diverge from the Go reference, which passed the placement through, and the case
+stayed red in the shared corpus. The launcher adopted the guard in its W2c wave:
+the expectation now reads `transport: {mode: stream-up, type: xhttp}` with
+`xhttp_param_reset`, and the case is green on both sides (§463). See
 [`spec/tasks/416-xhttp-packet-up-guard.md`](spec/tasks/416-xhttp-packet-up-guard.md).

@@ -26,7 +26,7 @@ TransportSpec? parseTransport(
   final headerType = (q['headerType'] ?? '').toLowerCase().trim();
 
   if ((typ == 'raw' || typ == 'tcp') && headerType == 'http') {
-    final path = q['path'] ?? '/';
+    final path = _guardUrlPath(q['path'] ?? '/', warnings);
     final host = q['host'] ?? '';
     return HttpTransport(
       path: path,
@@ -46,7 +46,8 @@ TransportSpec? parseTransport(
       final pathParamPresent = q.containsKey('path');
       final (splitPath, edFromPath) =
           splitEarlyDataPath(decodeResidualPercent(q['path'] ?? ''));
-      final path = pathParamPresent ? splitPath : '';
+      final path =
+          pathParamPresent ? _guardUrlPath(splitPath, warnings) : '';
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       if (host.isEmpty) host = (q['obfsParam'] ?? '').trim();
@@ -85,7 +86,7 @@ TransportSpec? parseTransport(
       final sn = (q['serviceName'] ?? q['service_name'] ?? q['path'] ?? '').trim();
       return GrpcTransport(serviceName: sn);
     case 'http':
-      final path = q['path'] ?? '/';
+      final path = _guardUrlPath(q['path'] ?? '/', warnings);
       final host = (q['host'] ?? '').trim();
       return HttpTransport(
         path: path,
@@ -99,7 +100,7 @@ TransportSpec? parseTransport(
       // share-URI Go не распознаёт вовсе (uriTransportFromQuery — нет кейса
       // "h2", падает в default → транспорт не эмитится); тут — то же самое.
       if (networkOverride == null) return null;
-      final path = q['path'] ?? '/';
+      final path = _guardUrlPath(q['path'] ?? '/', warnings);
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       if (host.isEmpty && defaultHost != null) host = defaultHost;
@@ -115,12 +116,17 @@ TransportSpec? parseTransport(
       final hasPathParam = q.containsKey('path');
       final (splitPath, _) =
           splitEarlyDataPath(decodeResidualPercent(q['path'] ?? ''));
-      final path = hasPathParam ? splitPath : '';
+      final path = hasPathParam ? _guardUrlPath(splitPath, warnings) : '';
       // §103 D-016(в) — Go НЕ подставляет sni как фолбэк host для httpupgrade
       // (node_parser_transport.go:183-185, в отличие от ws): только явный
       // `host=`. Фолбэк давал разные конфиги/identity-хеши на пустом host.
       final host = (q['host'] ?? '').trim();
       return HttpUpgradeTransport(path: path, host: host);
+    // §463 / контракт §24.2 п. 7.13 — `splithttp` = прежнее имя `xhttp` в
+    // Xray. Раньше оно не распознавалось, и узел уезжал в конфиг ВООБЩЕ БЕЗ
+    // транспорта: соединение шло голым TCP на порт, который ждёт HTTP, —
+    // узел мёртв без единого сообщения.
+    case 'splithttp':
     case 'xhttp':
       // §097/§127 — нативный xhttp + расширенные поля Xray splithttp (SPEC 002
       // v2). Ключи читаем в обеих формах: camelCase (Xray URI) и snake_case
@@ -134,6 +140,27 @@ TransportSpec? parseTransport(
     default:
       return null;
   }
+}
+
+/// §463 / контракт §24.6 (`format: url_path` в `registry/transports.json`) —
+/// путь с битым percent-кодированием снимается, узел живёт.
+///
+/// Ядро разбирает путь транспорта через `url.Parse`, и «%zz» роняет ВЕСЬ
+/// config.json («ws: parse path: invalid URL escape», проверено на
+/// 1.14.0-lx.39; то же у httpupgrade и http). То есть один такой узел из
+/// подписки оставлял человека без VPN целиком — вердикт B. Раньше путь
+/// проходил в тело как есть: разбор-то не падал.
+///
+/// Код ставится на РАЗБОРЕ, где сырое значение ещё известно: после снятия
+/// поля санитайзер его уже не увидит.
+String _guardUrlPath(String path, List<NodeWarning>? warnings) {
+  if (path.isEmpty || urlPathOk(path)) return path;
+  warnings?.add(RegistryWarning(
+    code: 'type_invalid',
+    path: 'transport.path',
+    value: path,
+  ));
+  return '';
 }
 
 /// §303 — разделить Xray-путь вида `/api/v2/channel?ed=2560` на чистый путь и

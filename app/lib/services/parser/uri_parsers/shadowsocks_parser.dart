@@ -1,4 +1,5 @@
 import '../../../models/node_spec.dart';
+import '../../../models/node_warning.dart';
 import '../tcp_keep_alive.dart';
 import '../uri_utils.dart';
 
@@ -88,6 +89,13 @@ ShadowsocksSpec? parseShadowsocks(String uri) {
     pluginOpts: _ssPluginOpts(q['plugin']) ?? (q['plugin_opts'] ?? ''),
     // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
     tcpKeepAlive: tcpKeepAliveFromQuery(q),
+    // §463 / контракт §24.2 п. 7.10 — stream-шифр без AEAD: ядро его
+    // принимает, узел живёт, человек видит info-код.
+    warnings: [
+      if (isLegacyShadowsocksMethod(method))
+        RegistryWarning(
+            code: 'ss_method_legacy', path: 'method', value: method),
+    ],
   );
 }
 

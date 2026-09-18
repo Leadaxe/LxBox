@@ -165,6 +165,25 @@ void copyNodeUri(
     }
     return;
   }
+  // §463 / контракт §24.2 п. 7.16 — ссылка с inline-ключом SSH не отдаётся.
+  //
+  // Приватный ключ в буфере обмена — другая граница доверия, чем локальное
+  // хранение: ссылку пересылают. `toUri()` у нас ОДНОВРЕМЕННО и формат
+  // хранения (`rawBody`, инвариант `parseUri(spec.toUri()) ≈ spec`), поэтому
+  // молча вырезать ключ из неё нельзя — он потерялся бы при перезагрузке
+  // узла. Поэтому, как и у лаунчера (`ErrShareURINotSupported`), отказ
+  // объявляется, а не подменяется урезанной ссылкой.
+  if (node is SshSpec && node.privateKey.isNotEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(getLocalText
+                .s("This node holds a private key — sharing it as a link "
+                    "would expose the key"))),
+      );
+    }
+    return;
+  }
   final uri = node.toUri();
   if (uri.isEmpty) return;
   Clipboard.setData(ClipboardData(text: uri));

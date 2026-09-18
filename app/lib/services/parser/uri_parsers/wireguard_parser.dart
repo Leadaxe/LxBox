@@ -111,8 +111,12 @@ WireguardSpec? parseWireguardUri(String uri) {
   final awgQuery = headerKeyRaw == null
       ? q
       : <String, String>{...q, headerKeyParam: headerKeyRaw};
-  final awg =
-      Awg.fromQuery(awgQuery, badHeaders: badHeaders, badAwg3: badAwg3);
+  // §463 — пути полей, снятых правилом `requires` реестра (одинокий `jmin`).
+  final droppedRequires = <String>[];
+  final awg = Awg.fromQuery(awgQuery,
+      badHeaders: badHeaders,
+      badAwg3: badAwg3,
+      droppedRequires: droppedRequires);
   // §421 — узел с битым ключом защиты / коротким паддингом выбрасывается:
   // ядро отвергло бы конфиг целиком (SPEC 123 §2). Причина — в debug-лог.
   if (awg != null) {
@@ -128,7 +132,15 @@ WireguardSpec? parseWireguardUri(String uri) {
   // же: экспорт Amnezia несёт mtu 1376, но у владельца на нём данные не шли,
   // а на 1280 туннель заработал (решение 2026-09-05, SPEC 123 / Go
   // hasAWGParams).
-  final isAwg = awg != null || Awg.hasAwg3Params(q);
+  // §463 — узел остаётся AmneziaWG и когда ВСЕ его поля сняты санитайзером
+  // (битый `jc` + одинокий `jmin`): ссылка просила AWG, и кламп MTU 1280 —
+  // свойство запрошенного протокола, а не уцелевших полей. Иначе снятие
+  // последнего поля молча возвращало узлу MTU обычного WireGuard.
+  final isAwg = awg != null ||
+      Awg.hasAwg3Params(q) ||
+      badHeaders.isNotEmpty ||
+      badAwg3.isNotEmpty ||
+      droppedRequires.isNotEmpty;
   final mtu = isAwg ? awgClampMtu(rawMtu, tag) : rawMtu;
 
   return WireguardSpec(
@@ -136,6 +148,10 @@ WireguardSpec? parseWireguardUri(String uri) {
     warnings: [
       for (final (field, value) in badHeaders)
         AwgHeaderInvalidWarning(field, value),
+      // §463 — код с путём: снятие по `requires` реестра, а не битое
+      // значение (у `jmin` оно как раз корректное — не хватает пары).
+      for (final field in droppedRequires)
+        RegistryWarning(code: 'awg_header_invalid', path: field),
       for (final (field, value) in badAwg3)
         Awg3FieldInvalidWarning(field, value),
       if (awg != null && awg.randomTrailersWithWideHeaders)
