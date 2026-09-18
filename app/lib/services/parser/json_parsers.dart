@@ -1239,6 +1239,17 @@ NodeSpec? parseSingboxEntry(
         // (fatal всего конфига). Зеркало naive_parser: срезаем блок.
         tls: _naiveTlsFromSingbox(entry['tls'], server),
         extraHeaders: extraHeaders,
+        // §472 шаг 6 — поле ЧИТАЕТСЯ из тела. `emitNaive` его пишет
+        // (`quic: true` + `quic_congestion_control: bbr`), а эта ветка не
+        // читала вовсе: узел `naive+quic://`, пересохранённый через JSON или
+        // отредактированный во вкладке JSON, молча возвращался к HTTP/2 и
+        // соединения не поднимал. Тот же класс, что `encryption` у vless
+        // (шаг 3) и `plugin` у shadowsocks (шаг 4).
+        //
+        // `quic_congestion_control` обратно в модель не идёт: у `NaiveSpec`
+        // такого поля нет, значение у ядра одно (`bbr`), и эмиттер ставит его
+        // сам по `quic`. Читать его было бы нечем и некуда.
+        quic: entry['quic'] == true,
         tcpKeepAlive: ka,
       );
     case 'tuic':

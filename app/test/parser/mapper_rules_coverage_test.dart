@@ -93,6 +93,12 @@ const Map<String, String> _covered = {
   // §472 шаг 6 — правило, которое добавил переезд anytls.
   'sni_heuristic_falls_back_to_server@anytls':
       'anytls: sni без точки/двоеточия и 🔒 уступают адресу сервера',
+  // §472 шаг 6 — правила, которые добавил переезд naive. `applies_to` у них
+  // нет (правила лежат в `protocols/naive.json` и относятся к схеме целиком),
+  // и страж их не спрашивает, — но исполняет их маппер, и тесты написаны.
+  'tls_block_kept_minimal': 'naive: в блоке TLS только enabled + server_name',
+  'broken_header_pair_skipped':
+      'naive: битая пара extra-headers пропускается, остальные живут',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -413,6 +419,26 @@ void main() {
       expect(tls['alpn'], ['h2', 'http/1.1']);
       expect(tls.containsKey('ech'), isFalse);
       expect(spec.warnings.whereType<EchIgnoredWarning>(), isNotEmpty);
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (naive)', () {
+    test('naive: в блоке TLS только enabled + server_name', () {
+      // `tls_block_kept_minimal` — naive-outbound ядра отвергает остальные
+      // опции TLS при создании (fatal всего конфига). Диалект ссылки их и не
+      // знает: у схемы всего два query-параметра.
+      final spec = parseUri('naive+https://u:p@h.example:443#n')!;
+      expect(spec.emit(TemplateVars.empty).map['tls'],
+          {'enabled': true, 'server_name': 'h.example'});
+    }, skip: skip);
+
+    test('naive: битая пара extra-headers пропускается, остальные живут', () {
+      // `broken_header_pair_skipped` — одна битая пара не стоит узлу
+      // остальных заголовков.
+      final spec = parseUri('naive+https://u:p@h.example'
+          '?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok#n')!;
+      expect(spec.emit(TemplateVars.empty).map['extra_headers'],
+          {'X-Good': 'ok'});
     }, skip: skip);
   });
 

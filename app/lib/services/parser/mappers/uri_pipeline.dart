@@ -35,6 +35,7 @@ import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'anytls_mapper.dart';
 import 'hysteria2_mapper.dart';
+import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'trojan_mapper.dart';
 import 'tuic_mapper.dart';
@@ -64,6 +65,10 @@ const kPipelineSchemes = <String>{
   'hy2',
   'tuic',
   'anytls',
+  // §472 шаг 6 — у naive схема НЕСЁТ ТРАНСПОРТ: `naive+quic` это не алиас
+  // написания, а другое тело (`quic: true`). Обе записи ведут в свой маппер.
+  'naive+https',
+  'naive+quic',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -76,6 +81,8 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'hy2': mapHysteria2Uri,
   'tuic': mapTuicUri,
   'anytls': mapAnyTlsUri,
+  'naive+https': mapNaiveHttpsUri,
+  'naive+quic': mapNaiveQuicUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё

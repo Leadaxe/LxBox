@@ -1,115 +1,30 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
-import '../../../models/tls_spec.dart';
 import '../../app_log.dart';
-import '../tcp_keep_alive.dart';
+import '../mappers/uri_pipeline.dart';
 import '../uri_utils.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // NaïveProxy — see spec 037.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Известные query-keys; всё остальное — log warning + ignore.
-// §453 — dial-поля keep-alive в этом списке, иначе naive-узел с ними
-// получал бы ложное «unknown query param … ignoring» в логе на каждом разборе.
-const _naiveKnownQueryKeys = <String>{
-  'extra-headers',
-  'padding',
-  'disable_tcp_keep_alive',
-  'tcp_keep_alive',
-  'tcp_keep_alive_interval',
-};
-
-/// §103 §9.B1 — `naive+quic://` (в дополнение к `naive+https://`): суффикс
-/// схемы задаёт транспорт (HTTP/2 vs QUIC), Go запоминает его в
-/// `node.Query["quic"]` только по префиксу исходной схемы (не по
-/// query-параметру). Диспетчер (uri_parsers.dart) режет префикс перед
-/// вызовом и передаёт `isQuic` явно.
-NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
-  // §463 / контракт §24.6 — `naive+https://` с ПУСТЫМ host отбраковывается.
-  //
-  // Раньше здесь стояло обратное правило (зеркало Go: непустой hostname
-  // проверялся только у vless/trojan/ssh/tuic/anytls), и узел оставался
-  // живым с `server: ""`. Посылка оказалась неверной: ядро на пустом адресе
-  // валит ВЕСЬ конфиг («invalid server address», `sing-box check` на
-  // 1.14.0-lx.39), то есть один такой узел из подписки оставлял человека
-  // вообще без VPN. Обязательное строковое поле пустым быть не может —
-  // CANON §3.2.
-  final p = Uri.tryParse(uri);
-  if (p == null) return null;
-  if (p.host.isEmpty) return null;
-
-  // §465 / контракт §24.2 п. 7.3 — userinfo БЕЗ `:` это password, username
-  // пуст. Раньше здесь стояло обратное (SPEC 103 п. 6, зеркало Go
-  // url.User.Username()/Password()): текст до опционального `:` считался
-  // username. Правило отменено обеими сторонами, потому что расходилось с
-  // собственным эмиттером — ссылка вида `password@host` (конвенция
-  // DuckSoft/hysteria2, так пишет и Go shareuri_naive.go, и наш toUriNaive)
-  // читалась обратно с паролем в слоте имени, и узел не авторизовался.
-  //
-  // `user:pass` — split как обычно. `user:` (двоеточие есть, пароль пуст) —
-  // username=user, как и раньше: наличие `:` и отличает форму «только имя».
-  String username = '';
-  String password = '';
-  if (p.userInfo.isNotEmpty) {
-    final colon = p.userInfo.indexOf(':');
-    if (colon < 0) {
-      password = Uri.decodeComponent(p.userInfo);
-    } else {
-      username = Uri.decodeComponent(p.userInfo.substring(0, colon));
-      password = Uri.decodeComponent(p.userInfo.substring(colon + 1));
-    }
-  }
-
-  final server = p.host;
-  final port = p.hasPort ? p.port : 443;
-  final q = Map<String, String>.from(p.queryParameters);
-  final label = decodeFragment(p.fragment);
-  final tag = tagFromLabel(label, 'naive', server, port);
-
-  // padding не имеет соответствия в sing-box — дропаем.
-  // SPEC 103 `naive_padding_ignored` (Go: node_parser_core.go:384) — раньше
-  // только лог; пользователь не узнавал, что параметр его подписки отброшен.
-  final warnings = <NodeWarning>[];
-  if (q.containsKey('padding')) {
-    AppLog.I.warning(
-      "naive: 'padding' parameter has no sing-box equivalent, ignoring",
-    );
-    warnings.add(NaivePaddingIgnoredWarning(q['padding'] ?? ''));
-  }
-
-  // Незнакомые query — лог + игнор.
-  for (final key in q.keys) {
-    if (!_naiveKnownQueryKeys.contains(key)) {
-      AppLog.I.warning("naive: unknown query param '$key', ignoring");
-    }
-  }
-
-  // extra-headers: уже URL-decoded внутри queryParameters.
-  final headers =
-      parseNaiveExtraHeaders(q['extra-headers'] ?? '', warnings: warnings);
-
-  // Naive accepts ТОЛЬКО enabled/server_name/cert/ECH в TLS-блоке.
-  // Никаких alpn/utls/insecure/reality — sing-box валидатор отклонит.
-  final tls = TlsSpec(enabled: true, serverName: server);
-
-  return NaiveSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: uri,
-    username: username,
-    password: password,
-    tls: tls,
-    extraHeaders: headers,
-    quic: isQuic,
-    warnings: warnings,
-    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
-    tcpKeepAlive: tcpKeepAliveFromQuery(q),
-  );
-}
+/// §472 шаг 6 — naive разбирается КОНВЕЙЕРОМ: маппер переводит ссылку в сырую
+/// карту sing-box, санитайзер реестра судит значения, `parseSingboxEntry`
+/// строит модель (`mappers/uri_pipeline.dart`).
+///
+/// Своего разбора у этой функции больше нет — осталось имя, под которым её
+/// зовут `parseUri` и тесты. Схема у naive НЕСЁТ ТРАНСПОРТ, поэтому [isQuic]
+/// выбирает запись таблицы конвейера, а не аргумент маппера.
+///
+/// Рукописных правил ЗНАЧЕНИЯ у naive не было ни одного — судить в этой схеме
+/// нечего: собственных query-параметров всего два (`extra-headers`,
+/// `padding`), и оба про структуру. TLS-allowlist (§454/§270) реестр держит
+/// правилом `forbidden_for: ["naive"]` с кодом `tls_field_unsupported_naive`,
+/// и исполняет его санитайзер на входе ТЕЛА — со ссылки таким полям взяться
+/// неоткуда.
+NaiveSpec? parseNaive(String uri, {bool isQuic = false}) =>
+    parseUriViaPipeline(uri, isQuic ? 'naive+quic' : 'naive+https')
+        as NaiveSpec?;
 
 /// Парсит уже-URL-decoded строку `Header1: Value1\r\nHeader2: Value2`.
 /// Невалидные пары (нет `:`, имя нарушает charset, пустое имя) — drop с warn.
