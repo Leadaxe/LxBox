@@ -553,6 +553,15 @@ contract/                    # §460 the contract registry inside the app (contr
   registry_warning.dart      #   the render side of RegistryWarning (the class itself lives in models/node_warning.dart,
                              #   because NodeWarning is sealed): title_<lang>/text_<lang> from the registry, ru for a
                              #   Russian UI and en otherwise, {path}/{value}/{param} substitution, severity by code
+  parse_warnings.dart        #   §460 W2a annotateAllWithRegistry — the SECOND sanitiser pass, at PARSE time: it runs
+                             #   over emit() of an already built NodeSpec and appends RegistryWarning(path, value) to
+                             #   node.warnings, so the ⚠ on a subscription row names the field. The body is NOT touched
+                             #   here (the copy the sanitiser returns is discarded — cleaning stays with the build gate),
+                             #   the core gates are off (applyCoreGates: false — min_core/platform judge a build against
+                             #   a running core, not a parse), and a code a hand-written NodeWarning already carries is
+                             #   not added twice. Called from parseAll, the one funnel every input goes through
+  warning_codes.dart         #   kWarningCodes: hand-written NodeWarning class → contract code, plus warningCodeOf().
+                             #   Lives in lib because both the conformance runners and the parse-time dedup read it
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   registry_gate.dart         #   §460 applyRegistryGate — the registry sanitiser over every node entry after

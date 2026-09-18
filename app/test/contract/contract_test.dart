@@ -6,6 +6,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 // Конформанс-раннер общего корпуса контракта (SPEC 103, фаза 1), сторона
@@ -91,61 +92,12 @@ const _canonScheme = <String, String>{
   'shadowsocks': 'ss',
 };
 
-/// Коды warnings из registry/warnings.json — по runtimeType Dart-класса
-/// (CANON §6: коды, не отрендеренный текст). Список — зеркало
-/// contract/registry/warnings.json (поле "dart"); классы без соответствия
-/// в реестре в корпусе сейчас не встречаются.
-const _warningCodes = <Type, String>{
-  UnsupportedTransportWarning: 'transport_unsupported',
-  UnsupportedProtocolWarning: 'protocol_unsupported',
-  MissingFieldWarning: 'field_missing',
-  DeprecatedFlowWarning: 'flow_deprecated',
-  VisionWithTransportWarning: 'vision_with_transport',
-  InsecureTlsWarning: 'tls_insecure',
-  NaiveBuildTagWarning: 'naive_unavailable',
-  UnknownFingerprintWarning: 'utls_fp_unknown',
-  // D-119 (заменил D-104) — REALITY с явным отпечатком не из chrome-семейства
-  // (SPEC 083 ядра); отпечаток не подменяется, только код на узле.
-  RealityFingerprintWarning: 'reality_fp_not_chrome',
-  XhttpParamResetWarning: 'xhttp_param_reset',
-  // §416 — header-placement без режима: дописан mode: packet-up.
-  XhttpModeForcedPacketUpWarning: 'xhttp_mode_forced_packet_up',
-  EchIgnoredWarning: 'ech_ignored',
-  UnknownObfsWarning: 'obfs_unknown',
-  MissingObfsPasswordWarning: 'obfs_password_missing',
-  DetourCycleBrokenWarning: 'detour_cycle_broken',
-  DetourTargetMissingWarning: 'detour_target_missing',
-  DetourToGroupWarning: 'detour_to_group',
-  DetourChainTooDeepWarning: 'detour_chain_too_deep',
-  SelectorAsAutoWarning: 'selector_as_auto',
-  GroupMemberMissingWarning: 'group_member_missing',
-  WsEarlyDataConvertedWarning: 'ws_early_data_converted',
-  RealityShortIdInvalidWarning: 'reality_short_id_invalid',
-  NaivePaddingIgnoredWarning: 'naive_padding_ignored',
-  // D-105 — отброшенная пара naive extra-headers.
-  NaiveExtraHeadersInvalidWarning: 'naive_extra_headers_invalid',
-  TuicCongestionInvalidWarning: 'tuic_congestion_invalid',
-  AwgHeaderInvalidWarning: 'awg_header_invalid',
-  // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла
-  // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.
-  Awg3FieldInvalidWarning: 'awg3_field_invalid',
-  Awg3HeaderKeyInvalidWarning: 'awg3_header_key_invalid',
-  Awg3PaddingTooShortWarning: 'awg3_padding_too_short',
-  Awg3RandomTrailersWideHeadersWarning: 'awg3_random_trailers_wide_headers',
-  MasqueVhttpInvalidWarning: 'masque_vhttp_invalid',
-  AnyTlsMinIdleInvalidWarning: 'anytls_min_idle_invalid',
-  PacketEncodingUnknownWarning: 'packet_encoding_unknown',
-  // §404 / D-085 — недостижимый `dialerProxy` роняет владельца целиком;
-  // причина уезжает в `dropped[]` конверта (corpus/README, D-088).
-  DialerProxyUnusableWarning: 'dialer_proxy_unusable',
-};
-
-/// Код warning'а — общий для URI- и body-раннеров.
-///
-/// §460 — предупреждения санитайзера реестра несут код ПОЛЕМ, а не типом
-/// класса: класс на все коды реестра один.
-String? warningCodeOf(NodeWarning w) =>
-    w is RegistryWarning ? w.code : _warningCodes[w.runtimeType];
+// §460 W2a — таблица «класс → код» и `warningCodeOf` переехали в lib
+// (`services/contract/warning_codes.dart`): второй их потребитель — дедуп
+// предупреждений реестра при разборе, и держать две копии значило бы
+// разойтись на первом же новом классе. Раннеры (этот и body-) импортируют
+// имя оттуда. Предупреждения санитайзера несут код ПОЛЕМ, а не типом класса:
+// класс на все коды реестра один.
 
 /// Путь поля для рукописных классов — ТОЛЬКО там, где поле класса и есть
 /// путь (CANON §6: `path` обязателен у кодов уровня поля).

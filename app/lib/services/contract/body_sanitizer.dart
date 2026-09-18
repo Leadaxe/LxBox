@@ -56,11 +56,19 @@ final class RegistrySanitizer {
   ///
   /// Реестр не загружен либо схемы для [scheme] нет — тело возвращается как
   /// есть: неизвестный тип не повод выкидывать запись пользователя.
+  ///
+  /// §460 W2a — [applyCoreGates] `false` выключает гейты `min_core` и
+  /// `platform`: они зависят от ЗАПУЩЕННОГО ядра, а `entry` узла от него не
+  /// зависит (24.1.6). При разборе узла ядра ещё нет (и версия его к моменту
+  /// сборки может стать другой), поэтому поле, которое ядро «пока не знает»,
+  /// при разборе не снимается и о нём не сообщается — это работа гарда
+  /// сборки.
   static SanitizeResult sanitize(
     Map<String, dynamic> body, {
     required String scheme,
     required String coreVersion,
     String platform = 'android',
+    bool applyCoreGates = true,
   }) {
     final schema = ContractRegistry.I.schemaFor(scheme);
     if (schema == null) return SanitizeResult(body, const []);
@@ -69,6 +77,7 @@ final class RegistrySanitizer {
       scheme: scheme,
       coreVersion: coreVersion,
       platform: platform,
+      applyCoreGates: applyCoreGates,
       root: body,
     );
     final out = ctx.sanitizeObject(body, schema.order, schema.fields, '');
@@ -85,12 +94,17 @@ final class _Ctx {
     required this.scheme,
     required this.coreVersion,
     required this.platform,
+    required this.applyCoreGates,
     required this.root,
   });
 
   final String scheme;
   final String coreVersion;
   final String platform;
+
+  /// §460 W2a — считать ли гейты, зависящие от запущенного ядра
+  /// (`min_core`, `platform`). При разборе — нет (24.1.6).
+  final bool applyCoreGates;
   final Map<String, dynamic> root;
 
   final warnings = <RegistryWarning>[];
@@ -235,6 +249,7 @@ final class _Ctx {
     // `min_core` — гейт СБОРКИ (24.1.6): ключ, неизвестный запущенному ядру,
     // эмиттер опускает. Кода нет намеренно — узел жив и в порядке, причина
     // уходит в лог сборки, а не в ⚠ пользователю.
+    if (!applyCoreGates) return false;
     final minCore = f.minCore;
     if (minCore != null && !coreAtLeast(coreVersion, minCore)) return true;
     // `platform` — то же самое: kTLS вне Linux валит весь конфиг.

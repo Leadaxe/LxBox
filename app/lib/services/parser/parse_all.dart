@@ -1,5 +1,6 @@
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
+import '../contract/parse_warnings.dart';
 import 'body_decoder.dart';
 import 'ini_parser.dart';
 import 'json_parsers.dart';
@@ -24,7 +25,24 @@ import 'uri_parsers.dart';
 /// `nodes.first.warnings`. Параметр не меняет поведения ни одного текущего
 /// вызывающего (все передают его `null`) и нужен конформанс-раннеру корпуса:
 /// конверт контракта несёт `dropped[]` наравне с `nodes[]`.
+///
+/// §460 W2a — узкая общая воронка разбора: ЧЕРЕЗ НЕЁ проходят все входы
+/// (тела подписок, URI-строки, sing-box/Xray JSON, INI, серверы и члены
+/// папок — `ServerList`, `SourceRecord`, контроллер подписок), и здесь же
+/// узел получает предупреждения реестра контракта
+/// ([annotateAllWithRegistry]). Тело узла при этом не меняется — чистит
+/// по-прежнему гард сборки.
 List<NodeSpec> parseAll(
+  DecodedBody decoded, {
+  String? nameHint,
+  List<NodeWarning>? dropped,
+}) {
+  final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
+  annotateAllWithRegistry(nodes);
+  return nodes;
+}
+
+List<NodeSpec> _parseAll(
   DecodedBody decoded, {
   String? nameHint,
   List<NodeWarning>? dropped,

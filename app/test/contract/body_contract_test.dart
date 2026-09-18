@@ -6,10 +6,9 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
-
-import 'contract_test.dart' show warningCodeOf;
 
 // Конформанс-раннер корпуса ТЕЛ подписки (SPEC 103, фаза 2), сторона LxBox.
 // Аналог core/config/contract_body_test.go — гоняет тот же

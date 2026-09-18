@@ -197,6 +197,11 @@ final class ContractRegistry {
   final Map<String, Map<String, dynamic>> _protocols = {};
   final Map<String, Map<String, dynamic>> _shared = {};
   final Map<String, WarningText> _warnings = {};
+
+  /// Кэш раскрытых схем ([schemaFor]). Слот-обёртка, а не `BodySchema?`:
+  /// «схемы нет» — тоже результат, и хранить его надо, иначе чужой тип
+  /// (`direct`, `selector`) раскрывался бы заново на каждом узле.
+  final Map<String, _SchemaSlot> _schemaCache = {};
   bool _loaded = false;
 
   bool get isLoaded => _loaded;
@@ -260,6 +265,11 @@ final class ContractRegistry {
       );
     }
 
+    // Перезагрузка (тесты грузят реестр не один раз) обязана сбросить кэш
+    // раскрытых схем: иначе второй `load()` отдавал бы схемы первого.
+    _schemaCache.clear();
+    _transportCache.clear();
+
     _loaded = true;
   }
 
@@ -269,17 +279,34 @@ final class ContractRegistry {
   ///
   /// `null` — схемы нет (реестр не загружен либо тип чужой): санитайзер
   /// такую запись не трогает.
+  /// §460 W2a — результат кэшируется по `singbox_type`: разбор раскрывает
+  /// `ref`-ы (tls + dialer + multiplex) на КАЖДЫЙ узел, а на подписке в 2000
+  /// узлов это 2000 одинаковых разворотов одной и той же схемы. Реестр
+  /// иммутабелен после `load()`, схема из него — тоже, поэтому кэш безопасен.
   BodySchema? schemaFor(String singboxType) {
+    final cached = _schemaCache[singboxType];
+    if (cached != null) return cached.schema;
     final proto = _protocols[singboxType];
-    if (proto == null) return null;
-    final body = (proto['body'] as Map?)?.cast<String, dynamic>();
-    if (body == null) return null;
-    return _expand(body);
+    Map<String, dynamic>? body;
+    if (proto != null) body = (proto['body'] as Map?)?.cast<String, dynamic>();
+    final schema = body == null ? null : _expand(body);
+    _schemaCache[singboxType] = _SchemaSlot(schema);
+    return schema;
   }
 
   /// Вариант транспорта по значению дискриминатора (`transport.type`).
   /// `null` — тип неизвестен реестру.
   BodySchema? transportVariant(String type) {
+    final cached = _transportCache[type];
+    if (cached != null) return cached.schema;
+    final schema = _transportVariant(type);
+    _transportCache[type] = _SchemaSlot(schema);
+    return schema;
+  }
+
+  final Map<String, _SchemaSlot> _transportCache = {};
+
+  BodySchema? _transportVariant(String type) {
     final body =
         (_shared['transports.json']?['body'] as Map?)?.cast<String, dynamic>();
     if (body == null) return null;
@@ -362,6 +389,13 @@ final class ContractRegistry {
         e.key as String: FieldSchema((e.value as Map).cast<String, dynamic>()),
     };
   }
+}
+
+/// Слот кэша схем: отличает «ещё не считали» от «схемы нет».
+final class _SchemaSlot {
+  const _SchemaSlot(this.schema);
+
+  final BodySchema? schema;
 }
 
 /// Файлы `registry/protocols/` — перечислены поимённо: `rootBundle` каталог
