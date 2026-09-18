@@ -52,6 +52,42 @@ String registryText(
   return _substitute(raw, path: path, value: value, params: params);
 }
 
+/// §460 W2b — «почему так вышло» (блок `Why` карточки). Пусто/`null` —
+/// блока в карточке нет: кода нет в реестре либо причина у него не описана,
+/// и это норма (`cause_*` завёл §467, заполняются они постепенно).
+String? registryCause(
+  String code,
+  RegistryLang lang, {
+  String? path,
+  String? value,
+  Map<String, String> params = const {},
+}) {
+  final text = ContractRegistry.I.textFor(code);
+  if (text == null) return null;
+  final raw = lang == RegistryLang.ru ? text.causeRu : text.causeEn;
+  if (raw == null || raw.isEmpty) return null;
+  return _substitute(raw, path: path, value: value, params: params);
+}
+
+/// §460 W2b — «что сделать» (блок `What to do`), шагами. Пустой список —
+/// блока нет.
+List<String> registryFix(
+  String code,
+  RegistryLang lang, {
+  String? path,
+  String? value,
+  Map<String, String> params = const {},
+}) {
+  final text = ContractRegistry.I.textFor(code);
+  if (text == null) return const [];
+  final raw = lang == RegistryLang.ru ? text.fixRu : text.fixEn;
+  return [
+    for (final step in raw)
+      if (step.isNotEmpty)
+        _substitute(step, path: path, value: value, params: params),
+  ];
+}
+
 /// Severity кода из реестра; кода нет — `warning` (не глушить незнакомое).
 WarningSeverity registrySeverity(String code) {
   switch (ContractRegistry.I.textFor(code)?.severity) {

@@ -562,6 +562,9 @@ contract/                    # §460 the contract registry inside the app (contr
                              #   not added twice. Called from parseAll, the one funnel every input goes through
   warning_codes.dart         #   kWarningCodes: hand-written NodeWarning class → contract code, plus warningCodeOf().
                              #   Lives in lib because both the conformance runners and the parse-time dedup read it
+  contract_docs.dart         #   §460 W2b contractWarningDocUrl(code) — the address of the page about a warning
+                             #   code in OUR mirror of the contract docs (docs/contract/warnings.md#<code>, branch
+                             #   main). The anchor is the code verbatim: gendocs emits an explicit <a id="<code>"></a>
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   registry_gate.dart         #   §460 applyRegistryGate — the registry sanitiser over every node entry after
@@ -905,6 +908,23 @@ away before the config reaches libbox, and the warnings carry the registry's own
 language. Direction groups and the template's service outbounds are not node bodies and are not
 touched. A valid config comes out byte-identical — the gate removes, it does not rewrite or
 reorder.
+
+**The documentation mirror (`docs/contract/`, §460 W2b).** The same script lays down a second
+mirror — the pages `contract/docs/generated/**`, byte for byte, into the committed `docs/contract/`
+at the repo root. These pages are written by the launcher's `tools/gendocs` generator out of the
+registry; we do not keep a generator of our own, because the registry here is the same one under
+the same `contract.lock`. The mirror exists so that the "Learn more" link on a warning card points
+into our repository: the release APK matches `main`, and the launcher's own pages run ahead of the
+contract the installed build was compiled against. The pages do **not** go into the APK — the text,
+the cause and the remedy already live in the registry and are shown offline; the link is for
+someone who wants the whole page. `docs/contract/README.md` is the only file the script writes
+itself (contract version, the `contract.lock` sha, "do not edit by hand"); the pages carry no added
+header, or they would not be byte-identical. `contractWarningDocUrl(code)`
+(`services/contract/contract_docs.dart`) builds the address; the anchor is the code itself, since
+gendocs emits an explicit `<a id="<code>"></a>` before each section. Two guards watch the mirror:
+`tool/check_contract_lock.dart` compares it file-by-file with the copy, and
+`test/contract/docs_mirror_test.dart` checks that every registry code still has an anchor and that
+the README names the version that ships in the APK.
 
 #### The user state (on the device)
 

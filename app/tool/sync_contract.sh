@@ -12,6 +12,15 @@
 # файлы, которые читает ContractRegistry, лежат в git как обычные assets.
 # Зеркало РОВНО копия — руками не правят, обновляется только этим скриптом.
 #
+# §460 W2b — и второе зеркало: docs/generated/** копии едет в закоммиченный
+# docs/contract/ в корне репозитория. Карточка предупреждения даёт ссылку
+# «Learn more» на страницу кода, и ведёт она в НАШ репозиторий, а не в
+# лаунчерский: релизный APK соответствует main, и страница обязана лежать
+# там же. Свой генератор не заводится — страницы собирает gendocs лаунчера,
+# сюда они приезжают байт в байт. Шапку скрипт в сами страницы не дописывает
+# (иначе байт в байт бы не вышло) — происхождение названо в docs/contract/
+# README.md, который скрипт генерирует.
+#
 # Источник настраивается через LX_CONTRACT_SRC (дефолт — сосед-репозиторий
 # singbox-launcher рядом с LxBox).
 #
@@ -31,6 +40,9 @@ DEST_DIR="$APP_DIR/contract"
 LOCK_FILE="$APP_DIR/contract.lock"
 # §460 — бандлируемое зеркало реестра (в git, читается через rootBundle).
 ASSETS_DIR="$APP_DIR/assets/contract"
+# §460 W2b — зеркало страниц документации (в git, в APK не едет).
+REPO_DIR="$(cd "$APP_DIR/.." && pwd)"
+DOCS_DIR="$REPO_DIR/docs/contract"
 
 if [ ! -d "$LX_CONTRACT_SRC" ]; then
   echo "sync_contract: источник не найден: $LX_CONTRACT_SRC" >&2
@@ -77,5 +89,40 @@ source=$LX_CONTRACT_SRC
 synced_at=$SYNCED_AT
 sha256=$TREE_HASH
 EOF
+
+# §460 W2b — зеркало страниц документации. Полная пересборка, как у зеркала
+# реестра: удалённая в источнике страница обязана исчезнуть и здесь, иначе
+# ссылка «Learn more» вела бы на страницу, которой контракт уже не знает.
+# README.md пишется ПОСЛЕ копирования — он не из источника, а про источник.
+CONTRACT_VERSION="$(cat "$DEST_DIR/VERSION")"
+if [ -d "$DEST_DIR/docs/generated" ]; then
+  echo "sync_contract: зеркало документации -> $DOCS_DIR"
+  rm -rf "$DOCS_DIR"
+  mkdir -p "$DOCS_DIR"
+  cp -R "$DEST_DIR/docs/generated/." "$DOCS_DIR/"
+  cat > "$DOCS_DIR/README.md" <<EOF
+# Contract documentation (mirror)
+
+Эти страницы — копия \`contract/docs/generated/**\` из репозитория лаунчера,
+байт в байт. Их собирает генератор \`contract/tools/gendocs\` по реестру
+контракта; здесь они лежат для того, чтобы ссылка «Learn more» из карточки
+предупреждения вела в наш репозиторий, а не в чужой.
+
+| | |
+|---|---|
+| Версия контракта | \`$CONTRACT_VERSION\` |
+| sha256 копии (\`app/contract.lock\`) | \`$TREE_HASH\` |
+| Синхронизировано | \`$SYNCED_AT\` |
+
+**Руками не править.** Правится реестр у лаунчера, сюда изменение приезжает
+синхронизацией: \`bash app/tool/sync_contract.sh\`. Ручная правка потеряется на
+следующем прогоне, а тест-страж (\`app/test/contract/docs_mirror_test.dart\`)
+поймает рассинхрон зеркала с реестром раньше.
+
+Точка входа — [index.md](index.md); коды предупреждений — [warnings.md](warnings.md).
+EOF
+else
+  echo "sync_contract: docs/generated в источнике нет — зеркало документации пропущено" >&2
+fi
 
 echo "sync_contract: готово, sha256=$TREE_HASH"

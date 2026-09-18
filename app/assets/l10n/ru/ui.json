@@ -2467,6 +2467,9 @@
   "Lazy sleep": {
     "value": "Ленивый сон"
   },
+  "Learn more": {
+    "value": "Подробнее"
+  },
   "Leave IP empty to use the server from registration. HTTP/3 only works on a few Cloudflare addresses, HTTP/2 works across the whole block.": {
     "value": "Оставьте IP пустым, чтобы использовать сервер из регистрации. HTTP/3 работает лишь на нескольких адресах Cloudflare, HTTP/2 — на всём блоке."
   },
@@ -4530,11 +4533,17 @@
   "WARP+ adds Argo Smart Routing (lower latency). Privacy is the same as free. Leave empty for free WARP.": {
     "value": "WARP+ добавляет Argo Smart Routing (меньше задержка). Приватность та же, что и у бесплатного. Оставьте пустым для бесплатного WARP."
   },
+  "Warnings": {
+    "value": "Предупреждения"
+  },
   "Web page": {
     "value": "Сайт"
   },
   "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
     "value": "Ранние данные WebSocket «?ed=%d» перенесены из пути в отдельное поле, как требует ядро. Узел работает, но путь в конфиге отличается от указанного в ссылке."
+  },
+  "What to do": {
+    "value": "Что сделать"
   },
   "Where to get L×Box": {
     "value": "Где взять L×Box"
@@ -4556,6 +4565,9 @@
   },
   "Whole-node replace needs a pattern to find": {
     "value": "Замене по всему узлу нужен паттерн поиска"
+  },
+  "Why": {
+    "value": "Почему"
   },
   "Wi-Fi rules need permissions": {
     "value": "Правилам Wi-Fi нужны разрешения"
