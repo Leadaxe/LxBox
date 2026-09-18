@@ -1,0 +1,67 @@
+{
+  "_note": "§480 — секция-маппер вида источника xray у shadowsocks. Списано с xray_mapper.dart (_shadowsocks). Своего транспорта у ss нет, но sockopt лежит в streamSettings — оттуда и keep-alive (§453). Данные: движок W1 вид источника xray сегодня не исполняет.",
+  "mappers": {
+    "xray": {
+      "body_source": "xray",
+      "detect": {
+        "json": { "value_in": { "protocol": ["shadowsocks", "ss"] } }
+      },
+      "type_synonyms": { "shadowsocks": "ss" },
+      "forms": [
+        {
+          "id": "servers",
+          "detect": { "json": { "type_of": { "settings.servers": "array" } } },
+          "space": "json",
+          "base": "settings.servers.0"
+        }
+      ],
+      "defaults": { "type": "shadowsocks" },
+      "label": {
+        "source": "json.remarks",
+        "normalize": ["strip_control", "trim"],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "as_written"
+        },
+        "_desc_ru": "У Xray-входа имя схемы для фолбэка не равно типу тела: 'ss' при 'shadowsocks' (tagScheme в XrayMapping). Тег И ЕСТЬ identity, поэтому as_written здесь нормативен."
+      },
+      "params": {
+        "address": {
+          "source": "json.$base.address",
+          "maps_to": "server",
+          "required": true
+        },
+        "port": {
+          "source": "json.$base.port",
+          "maps_to": "server_port",
+          "type": "int",
+          "required": true,
+          "desc_ru": "Порт ОБЯЗАТЕЛЕН и ненулевой: port==0 даёт null (записи нет). Дефолта у этого входа нет, в отличие от ссылки."
+        },
+        "method": {
+          "source": "json.$base.method",
+          "maps_to": "method",
+          "required": true
+        },
+        "password": {
+          "source": "json.$base.password",
+          "maps_to": "password",
+          "empty": "significant",
+          "desc_ru": "Пишется даже пустым (прежняя ветка клала ''), в отличие от ссылки, где пустой пароль снимает узел."
+        },
+        "$extra_servers": {
+          "source": "json.settings.servers",
+          "maps_to": null,
+          "on_len_gt": {
+            "n": 1,
+            "action": "note",
+            "code": "xray_extra_entries_dropped"
+          }
+        }
+      },
+      "include": ["dialer.keep_alive#xray"],
+      "unknown_key": { "action": "drop", "code": "json_field_unknown" },
+      "emit": null
+    }
+  }
+}
