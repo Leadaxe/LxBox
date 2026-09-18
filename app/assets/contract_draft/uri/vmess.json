@@ -37,7 +37,7 @@
             }
           ],
           "space": "url",
-          "impl": "legacy cleartext 'method:uuid@host:port?type=ws&tls=1'. IPv6 в скобках снимается лексером движка — delta480: было (ручной lastIndexOf(':')) — '[2001:db8::1]:443' давал server '[2001:db8::1]', стало — '2001:db8::1'."
+          "impl": "legacy cleartext 'method:uuid@host:port?type=ws&tls=1'. IPv6 в скобках снимается лексером движка — delta480 D133-13: было (ручной lastIndexOf(':') в vmess_mapper.dart:197) — '[2001:db8::1]:443' давал server '[2001:db8::1]', стало — '2001:db8::1'. ВНИМАНИЕ, дельта касается ТОЛЬКО этой формы: у формы v2rayN адрес приходит готовым ключом json.add, скобки в нём — часть значения, и фикстура b480 legacy_ipv6_authority (несмотря на имя, это JSON-форма) ждёт server '[::1]' СО скобками. Снятие скобок там сдвинуло бы identity."
         }
       ],
       "userinfo": {
@@ -151,13 +151,30 @@
           "impl": "У cleartext-формы транспорт зовётся 'type', а не 'net' (uri.query.net.aliases). net=h2 включает TLS ПРИНУДИТЕЛЬНО (uri.query.tls.impl, оба проекта) — sets на значении селектора, без отдельной ветки."
         },
         "tls": {
-          "source": {
-            "v2rayn": "json.tls",
-            "legacy": "query.tls"
-          },
+          "source": "json.tls",
           "selector": true,
           "maps_to": null,
           "normalize": "trim_lower",
+          "when": {
+            "$form": "v2rayn"
+          },
+          "sets": {
+            "tls": {
+              "tls.enabled": true
+            },
+            "": {},
+            "none": {}
+          },
+          "impl": "ФОРМА v2rayN: истина ровно одна — строка 'tls' (cfg['tls']=='tls', vmess_mapper.dart:130). Значения '1' и 'true' истиной ЗДЕСЬ НЕ являются, и это проверено фикстурами b480 legacy_tls_1 и legacy_tls_true: обе несут JSON с tls:\"1\"/\"true\" и дают тело БЕЗ блока tls. Разведение по формам — не украшение: одна общая таблица завела бы этим узлам TLS и сдвинула их тела и identity."
+        },
+        "tls_legacy": {
+          "source": "query.tls",
+          "selector": true,
+          "maps_to": null,
+          "normalize": "trim_lower",
+          "when": {
+            "$form": "legacy"
+          },
           "sets": {
             "tls": {
               "tls.enabled": true
@@ -171,7 +188,7 @@
             "": {},
             "none": {}
           },
-          "impl": "ТРИ разных правила истинности сведены к одной таблице. У JSON-формы истина ровно одна — строка 'tls' (cfg['tls']=='tls'); у legacy-формы семейство '1|true|tls' (uri.query.tls.impl). Значения '1'/'true' у JSON-формы истиной сегодня НЕ являются — если корпус это подтвердит, таблица разводится по формам."
+          "impl": "ФОРМА legacy cleartext: семейство истины '1|true|tls' (uri.query.tls.impl, vmess_mapper.dart:228). Отдельная запись, потому что у формы v2rayN набор УЖЕ (см. параметр tls)."
         },
         "mode": {
           "source": {
