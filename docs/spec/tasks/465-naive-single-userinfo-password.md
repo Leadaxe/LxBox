@@ -61,3 +61,17 @@ Override `password_only_userinfo.expected.lxbox.json` живёт в репо л�
   username, оба.
 - `flutter analyze` всего проекта чистый, `flutter test` — «All tests passed».
 - CHANGELOG, PROTOCOLS.md (раздел naive) обновлены.
+
+## Сделано
+
+Парсер, эмиттер, раннер корпуса, тесты (`test/parser/uri_naive_test.dart`,
+`test/models/naive_emit_test.dart` — три round-trip'а), CHANGELOG (Fixed),
+`docs/PROTOCOLS.md` §5.5 (таблица userinfo, пример `onlyuser:@`, заметка
+про конвенцию эмиттеров). `flutter analyze` чист, `flutter test` — 4989
+passed, 15 skipped.
+
+## Коммиты
+
+| Коммит | Что |
+|---|---|
+| `5de12fe9` | одиночный userinfo = password; `user:@` на эмиссии; кейс корпуса переведён на общую базу |
