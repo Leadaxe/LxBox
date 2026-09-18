@@ -459,7 +459,14 @@ Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
 }
 
 String toUriNaive(NaiveSpec s) {
-  // userinfo: оба пусто → нет; только password → password@; оба → user:pass@.
+  // userinfo: оба пусто → нет; только password → password@; только username →
+  // user:@; оба → user:pass@.
+  //
+  // §465 / контракт §24.2 п. 7.3 — двоеточие в форме «только username»
+  // обязательно: одиночный userinfo парсер теперь читает как password, и без
+  // `:` узел, отданный нами же, вернулся бы с именем в слоте пароля
+  // (round-trip `parseUri(spec.toUri()) ≈ spec` ломался бы). Форма «только
+  // password» пишется без двоеточия — конвенция DuckSoft/hysteria2.
   final hasUser = s.username.isNotEmpty;
   final hasPass = s.password.isNotEmpty;
   final ui = !hasUser && !hasPass
@@ -467,7 +474,7 @@ String toUriNaive(NaiveSpec s) {
       : (!hasUser
           ? '${encodeParam(s.password)}@'
           : (!hasPass
-              ? '${encodeParam(s.username)}@'
+              ? '${encodeParam(s.username)}:@'
               : '${encodeParam(s.username)}:${encodeParam(s.password)}@'));
 
   final q = <String, String>{};

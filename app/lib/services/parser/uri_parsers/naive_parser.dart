@@ -39,16 +39,22 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) {
   if (p == null) return null;
   if (p.host.isEmpty) return null;
 
-  // SPEC 103 п.6 — userinfo без `:` это username, ПУСТОЙ password (зеркало
-  // Go: url.User.Username()/Password(), node_parser_core.go:378-386 —
-  // текст до опционального `:` всегда username; password появляется, только
-  // когда `:` реально был в userinfo). user:pass → split как обычно.
+  // §465 / контракт §24.2 п. 7.3 — userinfo БЕЗ `:` это password, username
+  // пуст. Раньше здесь стояло обратное (SPEC 103 п. 6, зеркало Go
+  // url.User.Username()/Password()): текст до опционального `:` считался
+  // username. Правило отменено обеими сторонами, потому что расходилось с
+  // собственным эмиттером — ссылка вида `password@host` (конвенция
+  // DuckSoft/hysteria2, так пишет и Go shareuri_naive.go, и наш toUriNaive)
+  // читалась обратно с паролем в слоте имени, и узел не авторизовался.
+  //
+  // `user:pass` — split как обычно. `user:` (двоеточие есть, пароль пуст) —
+  // username=user, как и раньше: наличие `:` и отличает форму «только имя».
   String username = '';
   String password = '';
   if (p.userInfo.isNotEmpty) {
     final colon = p.userInfo.indexOf(':');
     if (colon < 0) {
-      username = Uri.decodeComponent(p.userInfo);
+      password = Uri.decodeComponent(p.userInfo);
     } else {
       username = Uri.decodeComponent(p.userInfo.substring(0, colon));
       password = Uri.decodeComponent(p.userInfo.substring(colon + 1));

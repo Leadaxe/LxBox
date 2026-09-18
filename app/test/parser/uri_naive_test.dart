@@ -39,14 +39,22 @@ void main() {
       expect(spec.password, '');
     });
 
-    // SPEC 103 п.6 — canon = Go (url.User.Username()/Password(),
-    // node_parser_core.go:378-386): текст без `:` в userinfo это username,
-    // не password. Было закреплено обратное (password-only) — неканоничное
-    // поведение, тест обновлён.
-    test('username-only userinfo (no colon)', () {
+    // §465 / контракт §24.2 п. 7.3 — одиночный userinfo это PASSWORD.
+    // Прежнее правило (SPEC 103 п. 6, зеркало Go: текст без `:` = username)
+    // отменено обеими сторонами: оно расходилось с эмиттерами, которые пишут
+    // пароль в user-слот (DuckSoft/hysteria2), и узел не авторизовался.
+    test('password-only userinfo (no colon)', () {
       final spec = parseNaive('naive+https://onlypass@server.example.com');
       expect(spec, isNotNull);
-      expect(spec!.username, 'onlypass');
+      expect(spec!.username, '');
+      expect(spec.password, 'onlypass');
+    });
+
+    // Двоеточие и отличает «только имя» от «только пароль».
+    test('username-only userinfo keeps the colon (user:)', () {
+      final spec = parseNaive('naive+https://onlyuser:@server.example.com');
+      expect(spec, isNotNull);
+      expect(spec!.username, 'onlyuser');
       expect(spec.password, '');
     });
 

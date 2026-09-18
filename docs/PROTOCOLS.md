@@ -571,7 +571,8 @@ Following the [DuckSoft 2020 de-facto specification](https://gist.github.com/Duc
 | `host` | Server address (FQDN or IP, IPv6 in brackets) | required |
 | `port` | TCP port | `443` |
 | userinfo: `user:pass` | HTTP Basic credentials | optional |
-| userinfo: `pass` (no colon) | Treated as **password-only** auth | optional |
+| userinfo: `pass` (no colon) | Treated as **password-only** auth — username stays empty (§465) | optional |
+| userinfo: `user:` (trailing colon) | Username only, empty password | optional |
 | Query: `extra-headers=<urlencoded>` | `Header1: Value1\r\nHeader2: Value2` after URL-decoding (`\r\n` → `%0D%0A`, `:` → `%3A`) | empty |
 | Query: `padding=true\|false` | **Ignored with log warning** — no sing-box equivalent | n/a |
 | Fragment `#label` | Display name (UTF-8, URL-decoded) | derived from `host:port` |
@@ -582,6 +583,7 @@ Following the [DuckSoft 2020 de-facto specification](https://gist.github.com/Duc
 naive+https://user:pass@server.example.com:443/?padding=false#JP-01
 naive+https://server.example.com:8443                                      # anonymous
 naive+https://onlypass@server.example.com                                  # password-only
+naive+https://onlyuser:@server.example.com                                 # username-only
 naive+https://u:p@host?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz
 naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20DE
 ```
@@ -607,6 +609,7 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 - An **empty host rejects the node** (§463, contract §24.6). Up to that point `naive+https://` stayed a live node with `server: ""`, on the premise that the Go side only validates a non-empty hostname for vless/trojan/ssh/tuic/anytls. The premise was wrong: the core answers an empty server address with a fatal for the *whole* config (`invalid server address`), so a single such node in a subscription left the user with no VPN at all.
 - The naive outbound in sing-box rejects `alpn`, `insecure`, `disable_sni`, `utls`, `reality`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment`, `kernel_*`. The parser deliberately leaves them unset. What naive **does** accept on top of `enabled`/`server_name` is `certificate` (PEM, string or array — its own trusted root, fed to cronet) and `certificate_path`; both survive the JSON round-trip since §454 (issue #140). The pin `certificate_public_key_sha256` is silently ignored by naive and therefore dropped.
 - `network`/`udp_over_tcp`/`quic` fields are **not** emitted in v1 — the URI standard does not carry them and naive QUIC mode is deferred (see spec 037 §10).
+- **A single userinfo without a colon is the password**, not the username (§465, contract §24.2 item 7.3). Until then the rule was the opposite (SPEC 103 item 6, mirroring Go's `url.User.Username()`), and it contradicted every emitter in sight: NekoBox, NaiveGUI and the Go share-URI writer all put the password in that slot, as does `toUriNaive` here — so a link the app handed out came back with the password read as a login, and the node authenticated with none. The colon is what tells the two apart: `pass@host` is password-only, `user:@host` is username-only, `user:pass@host` is both. The emitter keeps that colon for the username-only form, so `parseUri(spec.toUri())` returns the same credentials for all three.
 - `extra_headers` keys are sorted lexicographically when emitted to JSON or back to URI form, for deterministic round-trip.
 - `padding` is silently dropped because sing-box has no corresponding option.
 

@@ -115,6 +115,19 @@ void main() {
       expect(s.toUri(), 'naive+https://p@h:8443#t');
     });
 
+    // §465 — одиночный userinfo читается как password, поэтому форма «только
+    // username» обязана нести двоеточие, иначе собственная ссылка вернулась
+    // бы с именем в слоте пароля.
+    test('username without password → user:@', () {
+      final s = NaiveSpec(
+        id: 'id', tag: 't', label: 't',
+        server: 'h', port: 443, rawSource: '',
+        username: 'u',
+        tls: const TlsSpec(enabled: true, serverName: 'h'),
+      );
+      expect(s.toUri(), 'naive+https://u:@h#t');
+    });
+
     test('anonymous → no userinfo in URI', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
@@ -180,14 +193,33 @@ void main() {
       expect(s2.label, original.label);
     });
 
-    // SPEC 103 п.6 — canon = Go: userinfo без `:` это username. Было
-    // закреплено обратное (password-only) — неканоничное поведение, тест
-    // обновлён.
-    test('round-trip preserves username-only auth (no colon)', () {
+    // §465 / контракт §24.2 п. 7.3 — три формы userinfo держат round-trip
+    // `parseUri(toUri(spec)) ≈ spec`. Раньше форма «только пароль» после
+    // своего же эмита возвращалась именем пользователя.
+    test('round-trip preserves password-only auth (no colon)', () {
       final original = parseNaive('naive+https://onlypass@host.example.com')!;
+      expect(original.username, '');
+      expect(original.password, 'onlypass');
       final s2 = parseUri(original.toUri()) as NaiveSpec;
-      expect(s2.username, 'onlypass');
+      expect(s2.username, '');
+      expect(s2.password, 'onlypass');
+    });
+
+    test('round-trip preserves username-only auth (user:)', () {
+      final original = parseNaive('naive+https://onlyuser:@host.example.com')!;
+      expect(original.username, 'onlyuser');
+      expect(original.password, '');
+      expect(original.toUri(), 'naive+https://onlyuser:@host.example.com');
+      final s2 = parseUri(original.toUri()) as NaiveSpec;
+      expect(s2.username, 'onlyuser');
       expect(s2.password, '');
+    });
+
+    test('round-trip preserves user+pass', () {
+      final original = parseNaive('naive+https://u:p@host.example.com')!;
+      final s2 = parseUri(original.toUri()) as NaiveSpec;
+      expect(s2.username, 'u');
+      expect(s2.password, 'p');
     });
 
     test('round-trip preserves extra-headers (sorted)', () {
