@@ -1142,6 +1142,14 @@ NodeSpec? parseSingboxEntry(
         rawSource: src,
         method: entry['method']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
+        // §472 шаг 4 — поля SIP003 читались ТОЛЬКО URI-парсером, а из карты
+        // sing-box терялись молча: узел, вставленный JSON-объектом или
+        // отредактированный во вкладке JSON, уезжал в ядро без плагина и
+        // соединения не поднимал (эмиссия их пишет — `emitShadowsocks`).
+        // Обнаружено переездом URI-ветки на конвейер: через эту карту теперь
+        // идёт и ссылка. Тот же класс, что `encryption` у vless на шаге 3.
+        plugin: entry['plugin']?.toString() ?? '',
+        pluginOpts: entry['plugin_opts']?.toString() ?? '',
         tcpKeepAlive: ka,
       );
     case 'hysteria2':

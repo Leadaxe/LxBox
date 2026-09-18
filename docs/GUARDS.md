@@ -117,14 +117,16 @@ Three channels, and they are not interchangeable.
 
 ### 1.0 Schemes that no longer have layer-1 value rules (spec 472)
 
-`trojan` (step 2) and `vless` (step 3) reach the model through the unified
-pipeline — mapper → registry sanitiser → `parseSingboxEntry` — so the value
-rules listed in §§1.1–1.5 below **no longer run for them**. The rules
-themselves did not disappear: the same judgement is now made once, by the
-registry, for every input the node can arrive through. What the mapper still
-does is translate the *spelling* (aliases, uTLS hello names, `?ed=N` in the
-path, `flow=xtls-rprx-vision-udp443` splitting into two fields) — translation
-is not judgement, and the registry writes it down in its `mapper` section.
+`trojan` (step 2), `vless` (step 3), `vmess` and `shadowsocks` (step 4) reach
+the model through the unified pipeline — mapper → registry sanitiser →
+`parseSingboxEntry` — so the value rules listed in §§1.1–1.5 below **no longer
+run for them**. The rules themselves did not disappear: the same judgement is
+now made once, by the registry, for every input the node can arrive through.
+What the mapper still does is translate the *spelling* (aliases, uTLS hello
+names, `?ed=N` in the path, `flow=xtls-rprx-vision-udp443` splitting into two
+fields, base64 containers, `plugin=name;opts` splitting into two body fields) —
+translation is not judgement, and the registry writes it down in its `mapper`
+section.
 
 | Rule, as §§1.2–1.5 describe it | Registry field that judges it now | Code |
 |---|---|---|
@@ -137,19 +139,29 @@ is not judgement, and the registry writes it down in its `mapper` section.
 | VLESS `packetEncoding` outside the core's set | `protocols/vless.json` → `packet_encoding`, enum + `on_invalid: drop` | `packet_encoding_unknown` |
 | Transport path with broken percent-encoding | `transports.json` → `path`, `format: url_path` | `type_invalid` |
 | XHTTP `mode` / `session_placement` outside the enum | `transports.json` → `xhttp.*`, enum + `on_invalid: drop` | `xhttp_param_reset` |
+| Shadowsocks method outside the core's eighteen → **node dropped** | `protocols/shadowsocks.json` → `method`, enum + `on_invalid: drop_node` | `ss_method_invalid` |
+| Shadowsocks stream cipher (the nine shadowstream ones) | `protocols/shadowsocks.json` → `method`, `advisory` (D-122) | `ss_method_legacy` |
 
 Every one of those codes now carries a `path` and the value **as the link's
 author wrote it** — the pipeline's sanitiser sees the raw map, before any
 normalisation.
 
-Two value rules stayed hand-written on the vless path because the registry
-cannot express them yet; both are requests to the launcher, written up in
-spec 472 §9.2. `vision_with_transport` — the registry's `flow.conflicts` rule
-drops the *younger* field by `body.order`, and `flow` is older than
-`transport`, so as written it removes neither. `tls_insecure` — `tls.insecure`
-is a plain `bool` with no `advisory`, so the sanitiser says nothing about it.
+Three value rules stayed hand-written, each a request to the launcher.
+Two are on the vless path, written up in spec 472 §9.2:
+`vision_with_transport` — the registry's `flow.conflicts` rule drops the
+*younger* field by `body.order`, and `flow` is older than `transport`, so as
+written it removes neither; `tls_insecure` — `tls.insecure` is a plain `bool`
+with no `advisory`, so the sanitiser says nothing about it. The third arrived
+with vmess (spec 472 §10.2): the registry does judge `security`
+(enum + `on_invalid: coerce auto`, code `type_invalid`), but the corpus expects
+that substitution to stay **silent** (`vmess/vmess_security_ctr`), so the
+mapper still folds a junk `scy` to `auto` itself.
 
-The remaining eleven schemes still run every rule below.
+Shadowsocks is the first scheme with **no** hand-written value rule left at
+all: both of its judgements — the eighteen-method allowlist and the nine
+legacy stream ciphers — are registry fields.
+
+The remaining nine schemes still run every rule below.
 
 ### 1.1 Shared helpers (`uri_utils.dart`)
 
@@ -177,8 +189,8 @@ The remaining eleven schemes still run every rule below.
 | Duration given as a bare number (`"30"`) | `s` suffix appended | silent | `uri_utils.dart:385-389` | `badoption.Duration` rejects it with `time: missing unit in duration` and drops the whole config | D-024 |
 | VMess `security` empty / `null` / `undefined` | default `auto` | silent | `uri_utils.dart:394` | — | — |
 | VMess `security` outside the 6-value whitelist | replaced with `auto` | silent | `uri_utils.dart:396-407` | normalise to the sing-box vocabulary | — |
-| Shadowsocks method outside the 18 core methods | **node rejected** | silent | `uri_utils.dart:537`, applied `shadowsocks_parser.dart:50` | an unknown method is a `CreateMethod` error on the whole config | §463 / §24.2 7.10 |
-| Shadowsocks legacy stream cipher (`aes-*-ctr`, `aes-*-cfb`, `rc4-md5`, `chacha20-ietf`, `xchacha20`) | **accepted** — node lives | `RegistryWarning(ss_method_legacy)` (info) | list `uri_utils.dart:521`, applied `shadowsocks_parser.dart:95-98` | the core accepts them; both clients used to drop working nodes with no explanation. No AEAD, so the traffic is unauthenticated — the info code says so | §463 / §24.2 7.10 |
+| Shadowsocks method outside the 18 core methods | **node rejected** | `ss_method_invalid` in the envelope's `dropped[]` | *moved to the registry, §1.0* — was `uri_utils.dart` `isValidShadowsocksMethod` | an unknown method is a `CreateMethod` error on the whole config | §463 / §24.2 7.10, §472 step 4 |
+| Shadowsocks legacy stream cipher (`aes-*-ctr`, `aes-*-cfb`, `rc4-md5`, `chacha20-ietf`, `xchacha20`) | **accepted** — node lives | `ss_method_legacy` (info) | *moved to the registry, §1.0* — was `isLegacyShadowsocksMethod` + a hand-written `RegistryWarning` | the core accepts them; both clients used to drop working nodes with no explanation. No AEAD, so the traffic is unauthenticated — the info code says so | §463 / §24.2 7.10, §472 step 4 |
 | uTLS fingerprint `hellorandom*` (Xray spelling) | canonicalised to `random` | silent | `utls_fingerprint.dart:101` | the subscription asked for a *random* hello; substituting a fixed `chrome` restored the very signature it was avoiding | §463 / §24.2 7.1 |
 | Transport `path` with broken percent-encoding (`%zz`) | field dropped, node lives | `RegistryWarning(type_invalid, path=transport.path)` | predicate `uri_utils.dart:410`, guard `transport.dart:156`, applied at `transport.dart:29, 50, 89, 103, 119` | the core parses the path with `url.Parse`; a bad escape is a fatal for the **whole** config.json, not one node | §463 / §24.6 |
 | TUIC `udp_relay_mode` outside `{native, quic}` | field dropped | `RegistryWarning(tuic_udp_relay_mode_invalid)` | `tuic_parser.dart:40, 69-74, 116` | coercing to `native` hid the loss of the subscription's intent; core lx.6 rejects the junk outright | §463 / §24.2 7.8 |
@@ -242,10 +254,13 @@ The remaining eleven schemes still run every rule below.
 ### 1.5 Per-protocol URI parsers
 
 Rejection of a node for a missing host, empty userinfo, empty password or
-unparsable key is the common case across `vless_parser.dart:13`,
-`trojan_parser.dart:12,17`, `ssh_parser.dart:10,17`, `socks_parser.dart:10`,
+unparsable key is the common case across `mappers/vless_mapper.dart`,
+`mappers/trojan_mapper.dart`, `mappers/vmess_mapper.dart`,
+`mappers/shadowsocks_mapper.dart` (the four schemes on the pipeline — a mapper
+answering `null` is exactly the old parser's `null`),
+`ssh_parser.dart:10,17`, `socks_parser.dart:10`,
 `tuic_parser.dart:12-18`, `anytls_parser.dart:16,22`,
-`shadowsocks_parser.dart:29-49`, `masque_parser.dart:25-47`,
+`masque_parser.dart:25-47`,
 `wireguard_parser.dart:12-36`, `ini_parser.dart:82` — all silent. Port defaults
 (443 / 1080 / 22 / 8388 / 51820) likewise. The rows below are the guards that do
 something more than reject or default.
@@ -255,9 +270,9 @@ something more than reject or default.
 | VLESS `flow=xtls-rprx-vision` with any transport | flow suppressed (`''`) | `VisionWithTransportWarning` (info) | `vless_parser.dart:41-44` | vision is valid only on bare TLS; with ws/grpc/xhttp the core will not bring the config up. The link is the source of truth — not guessed from REALITY | §115 |
 | VLESS `flow=xtls-rprx-vision-udp443` | replaced with `xtls-rprx-vision` + `packetEncoding=xudp`; **the node's port is not touched** | silent | `vless_parser.dart:32-36` | v1 quirk. The port is a property of the node: rewriting it to 443 (as the Xray-JSON branch used to) made a `…:8443` node unreachable | §459 (contract §24.2 item 7.4) |
 | VLESS `encryption` (post-quantum) | taken verbatim, **deliberately not validated** | silent | `vless_parser.dart:55-59` | base64url up to ~1600 chars; any corruption the core rejects itself | §335 |
-| VMess body not base64 / empty / no `add` or `id` | node rejected | silent | `vmess_parser.dart:23-43` | — | — |
-| VMess malformed UTF-8 | `utf8Lossy` (`allowMalformed`) | silent | `vmess_parser.dart:25` | — | — |
-| VMess `scy` outside the core's enum (`aes-128-ctr`, garbage) / empty / `null` / `undefined` | coerced to `auto`; `chacha20-ietf-poly1305` → `chacha20-poly1305`; `trim`+`lower` | silent (AppLog only) | `uri_utils.dart` `normalizeVmessSecurity`, called `vmess_parser.dart:55,175` | `sing-vmess@v0.2.8` `client.go:42-54` accepts exactly `auto, none, zero, aes-128-cfb, aes-128-gcm, chacha20-poly1305` and answers anything else with `ErrUnsupportedSecurityType` — a fatal on the **whole** config. Before §459 `aes-128-ctr` was let through (unknown to the core) and a working `aes-128-cfb` collapsed into `auto` | §459 (contract §24.2 item 7.11) |
+| VMess body not base64 / empty / no `add` or `id` | node rejected | silent | `mappers/vmess_mapper.dart` | — | §472 step 4 |
+| VMess malformed UTF-8 | `utf8Lossy` (`allowMalformed`) | silent | `mappers/vmess_mapper.dart` | — | §472 step 4 |
+| VMess `scy` outside the core's enum (`aes-128-ctr`, garbage) / empty / `null` / `undefined` | coerced to `auto`; `chacha20-ietf-poly1305` → `chacha20-poly1305`; `trim`+`lower` | silent | `mappers/vmess_mapper.dart` `_securitySpelling` (the alias translation) plus the core's set from `uri_utils.dart` — the last hand-written value rule of the scheme, §1.0 | `sing-vmess@v0.2.8` `client.go:42-54` accepts exactly `auto, none, zero, aes-128-cfb, aes-128-gcm, chacha20-poly1305` and answers anything else with `ErrUnsupportedSecurityType` — a fatal on the **whole** config. Before §459 `aes-128-ctr` was let through (unknown to the core) and a working `aes-128-cfb` collapsed into `auto` | §459 (contract §24.2 item 7.11) |
 | SSH empty elements in `host_key` / `host_key_algorithms` | dropped from the list | silent | `ssh_parser.dart:25-38` | — | — |
 | Bare `http(s)://` as a proxy link | only the custom schemes `proxy-http(s)` / `proxy+http(s)` accepted | silent | `http_parser.dart:13-16` | plain URLs are caught earlier as subscriptions; promo links inside bodies would otherwise become "nodes" | §222/§268 |
 | Hysteria2 multi-port authority (`host:443,20000-30000`) | authority rebuilt on the first numeric port, rest → `server_ports` | silent | `hysteria2_parser.dart:48-56, 179-235` | Dart's `Uri.parse` cannot digest `,`/`-` in the port position | §103 §9.B2 |

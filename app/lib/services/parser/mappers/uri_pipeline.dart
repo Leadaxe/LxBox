@@ -33,6 +33,7 @@ import '../../contract/body_sanitizer.dart';
 import '../../contract/registry.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
+import 'shadowsocks_mapper.dart';
 import 'trojan_mapper.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
@@ -46,13 +47,14 @@ const _kParseTimeCore = '0.0.0';
 /// Схемы, переехавшие на конвейер. Растёт по шагу за протокол; список
 /// нормативен для стража покрытия mapper-правил
 /// (`test/parser/mapper_rules_coverage_test.dart`).
-const kPipelineSchemes = <String>{'trojan', 'vless', 'vmess'};
+const kPipelineSchemes = <String>{'trojan', 'vless', 'vmess', 'ss'};
 
 /// Мапперы переехавших схем, по схеме ссылки.
 const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'trojan': mapTrojanUri,
   'vless': mapVlessUri,
   'vmess': mapVmessUri,
+  'ss': mapShadowsocksUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё
@@ -98,9 +100,17 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
   // Имя узла: `tag` вычисляется из фрагмента общим правилом, как раньше.
   // `parseSingboxEntry` читает `label` из `tag`, поэтому тег кладётся в карту
   // перед вызовом — и снимается санитайзером он не может (ключ сборки).
+  //
+  // §472 шаг 4 — тег-фолбэк строится по ИМЕНИ ТИПА ТЕЛА, а не по схеме
+  // ссылки. У первых трёх схем они совпадали, у shadowsocks нет: ссылка
+  // зовётся `ss://`, тело — `shadowsocks`, и старый парсер подставлял в
+  // фолбэк второе. Возьми конвейер имя схемы — безымянный узел получил бы
+  // тег `ss-host-8388` вместо `shadowsocks-host-8388`, то есть у живых узлов
+  // сменилась бы identity (она и есть сырой тег, `node_hash.dart`).
   final server = body['server']?.toString() ?? '';
   final port = (body['server_port'] as num?)?.toInt() ?? 0;
-  body['tag'] = tagFromLabel(mapping.label, scheme, server, port);
+  body['tag'] =
+      tagFromLabel(mapping.label, body['type'] as String, server, port);
 
   // §454 — `rawSource` узла из ссылки это САМА ССЫЛКА, а не карта.
   // `label` — текст фрагмента, а не тег: ссылка без `#` даёт тег-фолбэк, и

@@ -291,9 +291,17 @@ JSON / Xray ───┘                  │
   dropped with `unknown_key`, and these keys are ones the core knows and the
   user typed. The gap closes when the registry describes them as fields.
 
-Migrated so far: **trojan**, **vless** (`kPipelineSchemes`). The remaining
-eleven schemes keep their parsers, and `transport.dart` still serves them — it
-was not touched (`parseVlessTls` in particular is still what anytls reads).
+Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**
+(`kPipelineSchemes`). The remaining nine schemes keep their parsers, and
+`transport.dart` still serves them — it was not touched (`parseVlessTls` in
+particular is still what anytls reads).
+
+A mapper takes the link's **raw text**, not a `Uri`: for vmess and shadowsocks
+the link is not a URI at all — `vmess://` carries base64 where a URI keeps its
+authority, and `Uri` lower-cases authority, which destroys the payload. The two
+URI-shaped schemes call `Uri.tryParse` in their own first line. For the same
+reason the tag fallback for a nameless link is built from the **body type**
+(`shadowsocks`), not from the scheme (`ss`) — the tag is the node's identity.
 
 ---
 
