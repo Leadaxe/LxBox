@@ -6,7 +6,7 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
-import '../contract/registry.dart' show awgMtuByRegistry;
+import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
 import 'tcp_keep_alive.dart';
@@ -1442,7 +1442,7 @@ NodeSpec? parseSingboxEntry(
         // (ключ корня или диапазонный keepalive) делает узел AmneziaWG
         // наравне с AWG2-полями.
         mtu: awg != null || Awg.hasAwg3Json(entry)
-            ? (rawMtu ?? awgMtuByRegistry(null))
+            ? (rawMtu ?? awgMtuCeilingByRegistry())
             : rawMtu,
         awg: awg,
       );

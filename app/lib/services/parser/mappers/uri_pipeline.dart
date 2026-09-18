@@ -46,6 +46,7 @@ import 'tuic_mapper.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
 import 'vmess_mapper.dart';
+import 'wireguard_mapper.dart';
 
 /// Версия ядра, которую санитайзер видит при разборе: гейты, которым она
 /// нужна (`min_core`), здесь выключены. То же значение, что в
@@ -87,6 +88,17 @@ const kPipelineSchemes = <String>{
   'ssh',
   // §472 шаг 7 — masque (§130). Алиасов схема не имеет.
   'masque',
+  // §472 шаг 7 — wireguard и оба его алиаса (`wireguard.json` → `aliases`).
+  // `awg://` это АЛИАС НАПИСАНИЯ, а не другое тело: AWG-поля промоутятся в
+  // корень endpoint'а одинаково, откуда бы ссылка ни пришла.
+  //
+  // Маршрутизация сюда НЕ заводится: `parseUri` по-прежнему зовёт
+  // `parseWireguardUri`, потому что у схемы есть ВТОРАЯ ФОРМА
+  // (`awg://<base64 .conf>`, §450), которую надо распознать до конвейера —
+  // её payload не URI. Список нужен стражу покрытия mapper-правил.
+  'wireguard',
+  'wg',
+  'awg',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -109,6 +121,9 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'socks5': mapSocksUri,
   'ssh': mapSshUri,
   'masque': mapMasqueUri,
+  'wireguard': mapWireguardUri,
+  'wg': mapWireguardUri,
+  'awg': mapWireguardUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё
@@ -159,6 +174,46 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
     warnings.addAll(res.warnings);
   }
 
+  // §463/§473 — ПОТОЛОК `mtu` там, где санитайзер до значения не дотянулся.
+  //
+  // Правило реестра (`wireguard.body.fields.mtu`: `default_when`/`max_when`)
+  // исполняет САНИТАЙЗЕР, по телу, на всех входах — это и есть закрытый долг
+  // §473. Остаются ровно два случая, до которых он не достаёт, и оба
+  // опасны молчанием: AWG-узел без потолка поднимает туннель, по которому не
+  // идут данные.
+  //
+  // 1. **Узел ПРОСИЛ AmneziaWG, но не донёс ни одного годного AWG-поля** —
+  //    `jc=abc` вместе с одиноким `jmin` (корпус: `awg_bad_numeric_skipped`,
+  //    `awg_jc_invalid_dropped`). Условие `when.any_set` судит наличие ключа
+  //    в ТЕЛЕ, а там не осталось ничего; род узла знает только маппер
+  //    ([UriMapping.kindIsAwg], §463).
+  // 2. **Реестр не загружен** — санитайзер не работал вовсе. Здесь
+  //    [awgMtuCeilingByRegistry] отвечает запасным числом, и это намеренно:
+  //    молчание тут не безопасно.
+  //
+  // Число в Dart не вписывается: и потолок, и его код называет реестр.
+  if (mapping.kindIsAwg) {
+    final ceiling = awgMtuCeilingByRegistry();
+    if (ceiling != null) {
+      final written = body['mtu'];
+      if (written == null) {
+        // Дефолт: подстановка недостающего — не замена, кода за неё нет
+        // (`default_when` реестра его и не объявляет).
+        body['mtu'] = ceiling;
+      } else if (written is num && written > ceiling) {
+        // Замена написанного — с кодом и ИСХОДНЫМ значением: человеку нужно
+        // видеть, что он написал. Дубля с санитайзером тут быть не может: он
+        // этот узел AmneziaWG-узлом не считал и молчал.
+        warnings.add(RegistryWarning(
+          code: awgMtuClampCodeByRegistry() ?? 'awg_mtu_clamped',
+          path: 'mtu',
+          value: RegistrySanitizer.renderWarningValue(written),
+        ));
+        body['mtu'] = ceiling;
+      }
+    }
+  }
+
   // Имя узла: `tag` вычисляется из фрагмента общим правилом, как раньше.
   // `parseSingboxEntry` читает `label` из `tag`, поэтому тег кладётся в карту
   // перед вызовом — и снимается санитайзером он не может (ключ сборки).
@@ -169,8 +224,17 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
   // фолбэк второе. Возьми конвейер имя схемы — безымянный узел получил бы
   // тег `ss-host-8388` вместо `shadowsocks-host-8388`, то есть у живых узлов
   // сменилась бы identity (она и есть сырой тег, `node_hash.dart`).
-  final server = body['server']?.toString() ?? '';
-  final port = (body['server_port'] as num?)?.toInt() ?? 0;
+  //
+  // §472 шаг 7 — у ENDPOINT-схем (wireguard/AWG) корневых `server`/
+  // `server_port` не бывает: адрес пира лежит в `peers[]`, и `emitWireguard`
+  // в корень его не пишет. Маппер такой схемы называет адрес сам
+  // ([UriMapping.tagAddress]); прочие схемы поля не ставят, и адрес берётся
+  // из корня тела, как прежде.
+  final (server, port) = mapping.tagAddress ??
+      (
+        body['server']?.toString() ?? '',
+        (body['server_port'] as num?)?.toInt() ?? 0,
+      );
   body['tag'] =
       tagFromLabel(mapping.label, body['type'] as String, server, port);
 

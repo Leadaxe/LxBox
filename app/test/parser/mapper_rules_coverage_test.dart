@@ -124,6 +124,10 @@ const Map<String, String> _covered = {
   'vhttp_empty_defaults_to_h3': 'masque: без vhttp= → явный h3, а не auto ядра',
   'singbox_flat_fields_stripped':
       'masque: плоские network/sni/skip_cert_verify не переносятся',
+  // §472 шаг 7 — единственное mapper-правило wireguard. `applies_to` у него
+  // нет (лежит в `protocols/wireguard.json` и относится к схеме целиком).
+  'bare_ip_gets_prefix':
+      'wireguard: bare IP в address/allowed_ips получает /32 или /128',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -537,6 +541,27 @@ void main() {
           bare.replaceAll('#n', '&sni=a.example&disable_sni=1#n'))!;
       expect(spec.emit(TemplateVars.empty).map['tls'],
           {'server_name': 'a.example', 'disable_sni': true});
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (wireguard)', () {
+    const priv = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=';
+    const pub = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=';
+
+    test('wireguard: bare IP в address/allowed_ips получает /32 или /128', () {
+      // `bare_ip_gets_prefix` — файлы wg-quick пишут одиночные адреса без
+      // длины префикса, а поле ядра это CIDR.
+      final spec = parseUri('wireguard://$priv@h.example:51820'
+          '?publickey=$pub&address=10.0.0.2,fd00::2'
+          '&allowedips=192.168.1.1,2001:db8::1#n')!;
+      final body = spec.emit(TemplateVars.empty).map;
+      expect(body['address'], ['10.0.0.2/32', 'fd00::2/128']);
+      expect((body['peers'] as List).first['allowed_ips'],
+          ['192.168.1.1/32', '2001:db8::1/128']);
+      // Уже-с-префиксом не трогается.
+      final kept = parseUri('wireguard://$priv@h.example:51820'
+          '?publickey=$pub&address=10.0.0.0/8#n')!;
+      expect(kept.emit(TemplateVars.empty).map['address'], ['10.0.0.0/8']);
     }, skip: skip);
   });
 

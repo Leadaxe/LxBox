@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart' show kAwgMtuFallback;
 import 'package:lxbox/services/parser/ini_parser.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -28,6 +29,41 @@ void main() {
       '&h1=1234567890&h2=1234567891&h3=1234567892&h4=1234567893'
       '&i1=${Uri.encodeQueryComponent(i1)}'
       '&i3=${Uri.encodeQueryComponent(i3)}#awg-server';
+
+  // §472 шаг 7 / §473 — ЭТОТ ФАЙЛ РЕЕСТР НЕ ГРУЖАЕТ, и это здесь не
+  // упущение, а предмет проверки: реестр не обязательное условие работы
+  // приложения (§460 — не загрузился, живём как до него), но AWG-узел без
+  // потолка MTU поднимает туннель, по которому не идут данные. Санитайзер без
+  // реестра не работает вовсе, поэтому потолок обязан поставить конвейер сам —
+  // запасным числом `kAwgMtuFallback`.
+  group('§473 — потолок MTU без загруженного реестра', () {
+    String wg(String extra) => 'wireguard://$_testPriv@h.example:51820'
+        '?publickey=$_testPub&address=10.0.0.2/32$extra#n';
+
+    test('AWG с mtu=1420 заклампится и БЕЗ реестра', () {
+      final spec = parseWireguardUri(wg('&jc=4&mtu=1420'))!;
+      expect(spec.mtu, kAwgMtuFallback,
+          reason: 'без потолка узел уехал бы в ядро с 1420: туннель '
+              'поднимается, данные не идут');
+      expect(spec.emit(TemplateVars.empty).map['mtu'], kAwgMtuFallback);
+      // Замена не молчит и без реестра: имя кода — константа контракта, и
+      // выдумкой она не является (реестр объявляет тот же `awg_mtu_clamped`).
+      expect(spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
+          contains('awg_mtu_clamped'));
+    });
+
+    test('AWG без mtu получает потолок дефолтом, кодов нет', () {
+      final spec = parseWireguardUri(wg('&jc=4'))!;
+      expect(spec.mtu, kAwgMtuFallback);
+      expect(spec.warnings, isEmpty, reason: 'подстановка — не замена');
+    });
+
+    test('обычный WG без реестра не трогается вовсе', () {
+      expect(parseWireguardUri(wg('&mtu=1420'))!.mtu, 1420);
+      expect(parseWireguardUri(wg(''))!.mtu, isNull,
+          reason: 'ядро берёт свой 1408; наш дефолт ломал бы identity');
+    });
+  });
 
   group('Фаза 1 — parse URI', () {
     test('все AWG-поля: числа int, i* регистр сохранён, i2/i4/i5 отсутствуют', () {
@@ -417,7 +453,12 @@ void main() {
       expect(f['h1'], 1); // H1–H4 = 1..4 нормальны при защите заголовка
       expect(spec.mtu, 1280); // AWG3 клампится как AWG2 (решение 2026-09-05)
       expect(spec.peers.single.persistentKeepalive, '25-35');
-      expect(spec.warnings, isEmpty);
+      // §473 — замена потолком БОЛЬШЕ НЕ МОЛЧИТ: человек написал 1376 и
+      // обязан узнать, что уехало 1280. Код один, и он про `mtu`; прочих
+      // предупреждений у полного набора нет.
+      expect(spec.warnings.map((w) => w is RegistryWarning ? w.code : '$w'),
+          ['awg_mtu_clamped']);
+      expect((spec.warnings.single as RegistryWarning).value, '1376');
       final map = spec.emit(TemplateVars.empty).map;
       expect(map['random_trailers'], true);
       expect(map['rekey_timeout'], '3-7');

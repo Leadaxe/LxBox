@@ -1008,19 +1008,15 @@ class Awg {
   /// `"N"`/`"N-M"` (§112, контракт ядра lx.6); `i*`: непустые `String`.
   static Awg? fromJson(Map<String, dynamic> m) {
     final f = <String, Object>{};
-    for (final k in numKeys) {
-      final v = m[k];
-      if (v is num) {
-        f[k] = v.toInt();
-      } else if (v is String && headerKeys.contains(k)) {
-        final h = _parseHeader(v.trim());
-        if (h != null) f[k] = h;
-      }
-    }
-    for (final k in strKeys) {
-      final v = m[k];
-      if (v is String && v.isNotEmpty) f[k] = v;
-    }
+    // §472 шаг 7 — ПОРЯДОК ТОТ ЖЕ, ЧТО У [fromQuery]: сначала AWG 3.x, потом
+    // числовые AWG2 и строковые `i*`. Порядок вставки в `fields` становится
+    // порядком ключей в теле узла (`writeInto` — это `addAll`), а тело
+    // сравнивается БАЙТ В БАЙТ golden-эталонами (`avd_v0.config.json`).
+    // Пока ссылка шла своим парсером, обе воронки жили порознь и разный
+    // порядок был не виден; на конвейере ссылка идёт через
+    // `parseSingboxEntry`, то есть через ЭТОТ разбор, и расхождение стало бы
+    // сдвигом эталона на ровном месте. Значения и identity от порядка не
+    // зависят (`legacyNodeIdentityHash` сортирует ключи), но эталон — да.
     // §421 — AWG3: тайминги числом или строкой-диапазоном, булевы только
     // `true`, ключ защиты — непустая строка (валидация — awg3NodeError).
     final hk = m[headerKey];
@@ -1037,6 +1033,19 @@ class Awg {
     }
     for (final k in awg3BoolKeys) {
       if (m[k] == true) f[k] = true;
+    }
+    for (final k in numKeys) {
+      final v = m[k];
+      if (v is num) {
+        f[k] = v.toInt();
+      } else if (v is String && headerKeys.contains(k)) {
+        final h = _parseHeader(v.trim());
+        if (h != null) f[k] = h;
+      }
+    }
+    for (final k in strKeys) {
+      final v = m[k];
+      if (v is String && v.isNotEmpty) f[k] = v;
     }
     // §463 — то же правило `requires`, что и на URI-пути: одинокий `jmin`
     // роняет весь конфиг независимо от того, откуда тело пришло.

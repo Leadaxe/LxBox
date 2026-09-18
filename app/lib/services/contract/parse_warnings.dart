@@ -39,64 +39,6 @@ import 'body_sanitizer.dart';
 import 'registry.dart';
 import 'warning_codes.dart';
 
-/// §473 — потолок `mtu` у AmneziaWG и его коды ИЗ РЕЕСТРА
-/// (`wireguard.body.fields.mtu.max_when`).
-///
-/// Правило живёт в реестре целиком: и потолок (1280), и оба кода. В Dart
-/// остаётся только вызов — второй копии правила не заводится, иначе она
-/// разошлась бы с контрактом на первом же бампе. То же основание было у
-/// `forbiddenTlsBlockWarnings` (§469), которую §472 шаг 7 снял целиком:
-/// вызывающих у неё не осталось ни на одном пути.
-///
-/// Почему код ставит ПАРСЕР, а не санитайзер разбора. Санитайзер при разборе
-/// смотрит на `emit()` уже построенной модели, а `mtu` модели к этому моменту
-/// уже приведён к потолку: тело узла из ссылки нормировано корпусом и обязано
-/// остаться прежним (эталоны `uri/wireguard/*`), поэтому кламп на входе
-/// снимать нельзя, а после него правило реестра видит законные 1280 и молчит.
-/// Ровно та же граница, что у `forbidden_for` на QUIC-схемах (§469, W2a).
-/// Снимется сама, когда конвейер 472 доведёт разбор ссылок до санитайзера
-/// (шаг 7) и потолок начнёт исполнять он.
-///
-/// [isAwg] — род узла по ЗАПРОСУ ссылки, а не по уцелевшим полям (§463):
-/// ссылка просила AmneziaWG, и потолок — свойство запрошенного протокола.
-/// Условие `when.any_set` реестра судит то же самое по телу; здесь тела ещё
-/// нет, и решает вызывающий.
-///
-/// [rawMtu] — значение, как его написал автор ссылки. `null` (поля нет) кода
-/// не даёт: подстановка дефолта — не замена.
-///
-/// [source] — вход узла. На [BodySource.singbox] значение сохраняется и код
-/// info-шный; вызывают отсюда только входы ссылки и INI, но параметр явный:
-/// умолчание «вход тот, что обычно» — это ровно та неявность, из-за которой
-/// исключение теряется от перезапуска.
-///
-/// Реестр не загружен — пустой список: молчание лучше выдуманного кода.
-List<NodeWarning> awgMtuWarnings(
-  int? rawMtu, {
-  required bool isAwg,
-  BodySource source = BodySource.other,
-}) {
-  final out = <NodeWarning>[];
-  if (!isAwg || rawMtu == null) return out;
-  final rule = ContractRegistry.I.schemaFor('wireguard')?.fields['mtu']?.maxWhen;
-  if (rule == null) return out;
-  final ceiling = rule['max'];
-  if (ceiling is! num || rawMtu <= ceiling) return out;
-
-  final excepted = ((rule['except_sources'] as List?) ?? const [])
-      .map((e) => '$e')
-      .contains(source.registryName);
-  final code =
-      (excepted ? rule['note_code'] : rule['code']) as String?;
-  if (code == null) return out;
-  out.add(RegistryWarning(
-    code: code,
-    path: 'mtu',
-    value: RegistrySanitizer.renderWarningValue(rawMtu),
-  ));
-  return out;
-}
-
 /// Версия ядра, которую санитайзер видит при разборе.
 ///
 /// Значения у неё нет: гейты, которым версия нужна (`min_core`), при разборе

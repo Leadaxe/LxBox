@@ -32,6 +32,11 @@ export 'uri_parsers/vless_parser.dart';
 export 'uri_parsers/vmess_parser.dart';
 export 'uri_parsers/wireguard_parser.dart';
 
+/// §472 шаг 7 — схемы, у которых конвейер вызывает НЕ `parseUri`, а сам
+/// парсер схемы: у wireguard две формы записи, и вторая
+/// (`awg://<base64 .conf>`, §450) не URI.
+const _kWireguardSchemes = <String>{'wireguard', 'wg', 'awg'};
+
 /// Диспетчер по схеме URI. Возвращает NodeSpec или null (skip).
 /// Ошибки структуры (отсутствие host, uuid) — null, не throw.
 NodeSpec? parseUri(String uri) {
@@ -46,7 +51,12 @@ NodeSpec? parseUri(String uri) {
     // §472 шаг 2 — схемы, переехавшие на конвейер «маппер → санитайзер по
     // реестру → модель», идут им; остальные пока своим парсером. Список
     // растёт по шагу за протокол (спека 472, раздел 4).
-    if (kPipelineSchemes.contains(scheme)) {
+    //
+    // §472 шаг 7 — wireguard и его алиасы в списке ЕСТЬ (страж покрытия
+    // mapper-правил читает его), но маршрутизируются они по-прежнему через
+    // `parseWireguardUri`: у схемы есть ВТОРАЯ ФОРМА `awg://<base64 .conf>`
+    // (§450), и распознать её надо ДО конвейера — её payload не URI вовсе.
+    if (kPipelineSchemes.contains(scheme) && !_kWireguardSchemes.contains(scheme)) {
       return parseUriViaPipeline(t, scheme);
     }
     switch (scheme) {
