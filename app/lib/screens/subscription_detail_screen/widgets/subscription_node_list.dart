@@ -5,6 +5,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
 import '../../../services/probe/probe_runner.dart';
+import '../../../widgets/banner_palette.dart';
 import '../../../widgets/probe_badge.dart';
 import 'node_warning_row.dart';
 import '../node_inspect_screen.dart';
@@ -108,21 +109,24 @@ class SubscriptionNodeList extends StatelessWidget {
         .where((n) => n.warnings
             .any((w) => w.severity != WarningSeverity.info))
         .length;
+    // §471 — цвет полосы берётся из общей палитры уровней (был плоский
+    // `Colors.orange`, не считавшийся с темой).
+    final warnColor = warningSeverityColor(context, WarningSeverity.warning);
     return Column(
       children: [
         if (actionableCount > 0)
           Container(
             width: double.infinity,
-            color: Colors.orange.withValues(alpha: 0.15),
+            color: warnColor.withValues(alpha: 0.15),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.warning_amber, size: 16, color: Colors.orange),
+                Icon(Icons.warning_amber, size: 16, color: warnColor),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     getLocalText.plural("%d nodes with warnings (XHTTP fallback etc.)", actionableCount),
-                    style: const TextStyle(fontSize: 12, color: Colors.orange),
+                    style: TextStyle(fontSize: 12, color: warnColor),
                   ),
                 ),
               ],
@@ -196,7 +200,9 @@ class SubscriptionNodeList extends StatelessWidget {
                 '${node.protocol}  ${node.server}:${node.port}',
                 style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
               ),
-              if (node.warnings.isNotEmpty) NodeWarningRow(node.warnings),
+              // §471 — компактный режим: info только значком, без текста.
+              if (node.warnings.isNotEmpty)
+                NodeWarningRow(node.warnings, compact: true),
             ],
           ),
           // §339 — бейдж результата теста; тап по err — текст ошибки.

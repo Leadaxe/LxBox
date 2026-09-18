@@ -8,6 +8,7 @@ import '../../../services/contract/warning_codes.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../services/url_launcher.dart' as ul;
 import '../../../widgets/app_bottom_sheet.dart';
+import '../../../widgets/banner_palette.dart';
 
 /// §460 W2b — карточка предупреждений узла.
 ///
@@ -86,14 +87,9 @@ class _WarningCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     // Значок и цвет — те же, что у строки под узлом: одно событие в двух
-    // местах не должно выглядеть двумя разными.
-    final (color, icon) = switch (warning.severity) {
-      WarningSeverity.error => (cs.error, Icons.error_outline),
-      WarningSeverity.warning => (Colors.orange, Icons.warning_amber),
-      WarningSeverity.info => (cs.onSurfaceVariant, Icons.info_outline),
-    };
+    // местах не должно выглядеть двумя разными (§471 — общая палитра).
+    final (color, icon) = warningSeverityStyle(context, warning.severity);
 
     final code = warningCodeOf(warning);
     // Код есть у класса, а текстов может не быть: реестр не синхронизирован,

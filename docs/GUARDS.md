@@ -105,7 +105,7 @@ Three channels, and they are not interchangeable.
 
 | Channel | Type | Surface | Notes |
 |---|---|---|---|
-| `NodeWarning` | sealed subclass, `models/node_warning.dart` | Inline line under the node in the subscription screen, coloured by `severity` (`node_warning_row.dart:19-22`) | Deduped by type + data, not by rendered text (§279). Reaches `emitWarnings` as `'<tag>: <renderEn()>'` (`build_config.dart:282-285`) |
+| `NodeWarning` | sealed subclass, `models/node_warning.dart` | Inline line under the node in the subscription screen, coloured by `severity` (`node_warning_row.dart`). Colour and icon per level come from one place — `warningSeverityStyle` in `widgets/banner_palette.dart` (§471): `error` red (`colorScheme.error`, `error_outline`), `warning` amber (`warning_amber`), `info` blue (`info_outline`). In the node list only `error`/`warning` get text; `info` is the icon alone, and the "+N more" counter ignores it | Deduped by type + data, not by rendered text (§279). Reaches `emitWarnings` as `'<tag>: <renderEn()>'` (`build_config.dart:282-285`) |
 | `emitWarnings` | `List<String>`, EN text, `BuildResult` | SnackBar (§105) + AppLog | Builder-layer channel. Free text, mostly without machine codes — the chain degradations are the exception (`chain_unsupported_by_core`, `chain_invalid`, `chain_hop_missing`, `chain_nested_position`, `chain_cycle_through_direction`) |
 | `ValidationIssue` | sealed, `models/validation.dart`, all `Severity.fatal` | Blocks the build: `FatalValidationException`, config is neither saved nor sent to the core (§141 P0.1) | Last line of defence, not the first — the graph sanitiser unties what it can *before* this |
 

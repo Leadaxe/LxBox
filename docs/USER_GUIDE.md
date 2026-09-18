@@ -260,14 +260,21 @@ Tapping a subscription opens its screen with these tabs:
   clears accumulated state at once. A short tap on a node opens its
   **breakdown**: the JSON tab — how the node goes into the config, and the
   Source tab — the original subscription fragment it was built from.
-- **A ⚠ under a node** means the app found something in it worth telling you
+- **A mark under a node** means the app found something in it worth telling you
   about: a field the core does not know, a value outside the allowed range, a
-  setting that was cleaned up or dropped. The line has room for one warning and
-  a "+N more" counter — **tap it** and a sheet opens with all of them. Each one
-  gets, where the contract has it, **Why** it happened and **What to do** about
-  it; **Learn more** opens the full page about that warning in a browser. Most
-  warnings do not mean the node is broken: many describe a setting that was
-  quietly dropped because the core would have refused the whole config over it.
+  setting that was cleaned up or dropped. Three levels, told apart by colour:
+  red ✖ — an error, the node will most likely not work as it came; yellow ⚠ —
+  something was cleaned up or substituted, worth a look; blue ⓘ — information
+  only, nothing to do. In the node list only red and yellow get text (the
+  topmost one plus a "+N more" counter that counts red and yellow alone), and
+  information is shown as a blue icon with no text — otherwise the lines that
+  do need attention drown in the ones that do not. **Tap the line or the icon**
+  and a sheet opens with all of them, text and all. Each one gets, where the
+  contract has it, **Why** it happened and **What to do** about it; **Learn
+  more** opens the full page about that warning in a browser. On the node's own
+  screen every level is shown with its text. Most warnings do not mean the node
+  is broken: many describe a setting that was quietly dropped because the core
+  would have refused the whole config over it.
 - **Filters** — node processing rules; applied on import and on every update. A
   rule = conditions + an action. A condition is `path operator value` (contains
   / equals / regex, Not and Case-sensitive checkboxes, several conditions
