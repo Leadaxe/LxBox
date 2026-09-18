@@ -117,4 +117,4 @@ URI-раннер корпуса (`test/contract/contract_test.dart`) сверя�
 
 | Коммит | Что |
 |---|---|
-| (см. ниже) | общий компаратор `corpus_warnings.dart`, сверка `warnings[]` в body-раннере, `value` у `unknown_key`, юниты |
+| `1e929d78` | общий компаратор `corpus_warnings.dart`, сверка `warnings[]` в body-раннере, `value` у `unknown_key`, юниты |
