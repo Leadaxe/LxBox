@@ -112,7 +112,12 @@ void main() {
       expect(h.tls.fingerprint, 'chrome');
       expect(h.tls.alpn, ['h2', 'http/1.1']);
       expect(h.tls.insecure, isTrue);
-      expect(h.warnings.whereType<InsecureTlsWarning>(), isNotEmpty);
+      // §472 шаг 6 — код за `insecure` ставит РЕЕСТР (`tls.json` → `insecure`,
+      // `advisory`), а не рукописный `InsecureTlsWarning`. Этот файл реестра
+      // не грузит, поэтому проверка кода живёт там, где он есть:
+      // `http_pipeline_invariants_test.dart` («insecure и мусорный fp судит
+      // реестр»). Здесь остаётся разбор TLS-параметров по trojan-конвенциям.
+      expect(h.warnings.whereType<InsecureTlsWarning>(), isEmpty);
     });
 
     test('sni default = server, insecure default = false', () {

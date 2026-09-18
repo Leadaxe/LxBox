@@ -35,6 +35,7 @@ import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'anytls_mapper.dart';
 import 'hysteria2_mapper.dart';
+import 'http_mapper.dart';
 import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'trojan_mapper.dart';
@@ -69,6 +70,13 @@ const kPipelineSchemes = <String>{
   // написания, а другое тело (`quic: true`). Обе записи ведут в свой маппер.
   'naive+https',
   'naive+quic',
+  // §472 шаг 6 — http(s) CONNECT-прокси (§222) и его плюс-алиасы (§268).
+  // Суффикс схемы это TLS-дискриминатор, поэтому каждая запись своя, как у
+  // naive: тело у `-http` и `-https` разное.
+  'proxy-http',
+  'proxy-https',
+  'proxy+http',
+  'proxy+https',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -83,6 +91,10 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'anytls': mapAnyTlsUri,
   'naive+https': mapNaiveHttpsUri,
   'naive+quic': mapNaiveQuicUri,
+  'proxy-http': mapHttpProxyUri,
+  'proxy-https': mapHttpProxyUri,
+  'proxy+http': mapHttpProxyUri,
+  'proxy+https': mapHttpProxyUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё

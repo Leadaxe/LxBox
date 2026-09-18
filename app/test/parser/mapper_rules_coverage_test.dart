@@ -99,6 +99,13 @@ const Map<String, String> _covered = {
   'tls_block_kept_minimal': 'naive: в блоке TLS только enabled + server_name',
   'broken_header_pair_skipped':
       'naive: битая пара extra-headers пропускается, остальные живут',
+  // §472 шаг 6 — правила http(s)-прокси. Оба уже покрыты общими записями
+  // выше (`security_none_no_tls`, `utls_xray_hello_names` — без суффикса
+  // схемы), но у http они проверяются на СВОЕЙ ссылке: у схемы TLS включает
+  // суффикс схемы, а не параметр `security`.
+  'security_none_no_tls@http':
+      'http: security=none гасит TLS даже на https-схеме',
+  'utls_xray_hello_names@http': 'http: fp в написании uTLS → имя семейства',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -439,6 +446,29 @@ void main() {
           '?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok#n')!;
       expect(spec.emit(TemplateVars.empty).map['extra_headers'],
           {'X-Good': 'ok'});
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (http)', () {
+    test('http: security=none гасит TLS даже на https-схеме', () {
+      final off = parseUri('proxy-https://u@h.example:443?security=none#n')!;
+      expect(off.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
+      // Без параметра https-схема блок даёт.
+      final on = parseUri('proxy-https://u@h.example:443#n')!;
+      expect((on.emit(TemplateVars.empty).map['tls'] as Map)['enabled'],
+          isTrue);
+    }, skip: skip);
+
+    test('http: fp в написании uTLS → имя семейства', () {
+      final spec = parseUri(
+          'proxy-https://u@h.example:443?sni=a.b&fp=hellofirefox_auto#n')!;
+      final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+      expect((tls['utls'] as Map)['fingerprint'], 'firefox');
+      // Перевод написания — не деградация: кода за него нет.
+      expect(
+        spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
+        isNot(contains('utls_fp_unknown')),
+      );
     }, skip: skip);
   });
 
