@@ -408,12 +408,15 @@ void main() {
         'type': 'wireguard',
         'tag': 'wg1',
         'address': ['10.0.0.2/32'],
-        'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ1Ng==',
+        // §464 — ключи ровно 32 байта после декода (format base64_32):
+        // прежние 34/35-байтовые ядро отвергало фаталом на весь конфиг, и
+        // санитайзер теперь снимает узел целиком, не дойдя до junk_key.
+        'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ=',
         'peers': [
           {
             'address': '1.2.3.4',
             'port': 51820,
-            'public_key': 'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU2Nzg=',
+            'public_key': 'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU=',
             'allowed_ips': ['0.0.0.0/0'],
             'junk_key': 'x',
           }
@@ -435,6 +438,264 @@ void main() {
       expect(t['path'], '/x');
       expect(t.containsKey('bogus'), isFalse);
       expect(_byCode(r, 'unknown_key').path, 'transport.bogus');
+    }, skip: skip);
+  });
+
+  // §464 — выражения реестра, приехавшие с W2d лаунчера. По кейсу на
+  // выражение: реестр нормативен для обеих сторон, и «санитайзер молча не
+  // знает правила» неотличимо от «правила нет».
+  group('RegistrySanitizer — выражения W2d (§464)', () {
+    test('format base64_32: ключ не 32 байта после декода — REALITY снят', () {
+      // `enabled` — валидный base64 на 5 байт: прежний format base64 его
+      // пропускал, и ядро отвечало «invalid public_key» на ВЕСЬ конфиг.
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'reality': {'enabled': true, 'public_key': 'enabled'},
+        }
+      }));
+      expect(_byCode(r, 'reality_pbk_invalid').path, 'tls.reality.public_key');
+      expect(_byCode(r, 'reality_pbk_invalid').value, 'enabled');
+      final reality = (r.body!['tls'] as Map)['reality'] as Map;
+      expect(reality.containsKey('public_key'), isFalse);
+    }, skip: skip);
+
+    test('format base64_32: ровно 32 байта проходят в любом написании', () {
+      // Одни и те же 32 байта: base64url без паддинга и base64 std с ним.
+      for (final key in const [
+        'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw',
+        'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU=',
+      ]) {
+        final r = _san(_vless({
+          'tls': {
+            'enabled': true,
+            'reality': {'enabled': true, 'public_key': key},
+          }
+        }));
+        expect(_codes(r), isNot(contains('reality_pbk_invalid')),
+            reason: '$key — 32 байта после декода');
+      }
+    }, skip: skip);
+
+    test('normalize hex_only + normalize_code: 0x1a2 чистится с кодом', () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'reality': {
+            'enabled': true,
+            'public_key': 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw',
+            'short_id': '0x1a2',
+          },
+        }
+      }));
+      final reality = (r.body!['tls'] as Map)['reality'] as Map;
+      // Не-hex руны сняты, регистр опущен: `0x1a2` → `01a2`.
+      expect(reality['short_id'], '01a2');
+      // Код — на ИСХОДНОМ значении: человеку нужно видеть, что он написал.
+      final w = _byCode(r, 'reality_short_id_invalid');
+      expect(w.path, 'tls.reality.short_id');
+      expect(w.value, '0x1a2');
+    }, skip: skip);
+
+    test('normalize hex_only: значение без потерь кода не даёт', () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'reality': {
+            'enabled': true,
+            'public_key': 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw',
+            'short_id': '48ab12',
+          },
+        }
+      }));
+      expect(_codes(r), isNot(contains('reality_short_id_invalid')));
+    }, skip: skip);
+
+    test('advisory except+when: fp вне гибридных — код только при REALITY',
+        () {
+      Map<String, dynamic> tls({required bool reality}) => {
+            'enabled': true,
+            'utls': {'enabled': true, 'fingerprint': 'qq'},
+            if (reality)
+              'reality': {
+                'enabled': true,
+                'public_key': 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw',
+              },
+          };
+      final withReality = _san(_vless({'tls': tls(reality: true)}));
+      final w = _byCode(withReality, 'reality_fp_not_chrome');
+      expect(w.path, 'tls.utls.fingerprint');
+      expect(w.value, 'qq');
+      // Поле НЕ меняется: выбор автора ссылки уезжает в конфиг как есть.
+      expect(
+          ((withReality.body!['tls'] as Map)['utls'] as Map)['fingerprint'],
+          'qq');
+
+      // `when` не выполнен — REALITY на узле нет, и код про него бессмыслен.
+      final plain = _san(_vless({'tls': tls(reality: false)}));
+      expect(_codes(plain), isNot(contains('reality_fp_not_chrome')));
+    }, skip: skip);
+
+    test('advisory except: гибридный отпечаток кода не получает', () {
+      for (final fp in const ['chrome', 'firefox', 'safari', 'random']) {
+        final r = _san(_vless({
+          'tls': {
+            'enabled': true,
+            'utls': {'enabled': true, 'fingerprint': fp},
+            'reality': {
+              'enabled': true,
+              'public_key': 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw',
+            },
+          }
+        }));
+        expect(_codes(r), isNot(contains('reality_fp_not_chrome')),
+            reason: '$fp несёт гибридный key share');
+      }
+    }, skip: skip);
+
+    test('requires equals: gecko-размеры на salamander снимаются', () {
+      final r = _san({
+        'type': 'hysteria2',
+        'tag': 'h1',
+        'server': 'example.com',
+        'server_port': 443,
+        'password': 'p',
+        'tls': {'enabled': true},
+        'obfs': {
+          'type': 'salamander',
+          'password': 'x',
+          'min_packet_size': 100,
+        },
+      }, scheme: 'hysteria2');
+      expect(_byCode(r, 'field_requires').path, 'obfs.min_packet_size');
+      final obfs = r.body!['obfs'] as Map;
+      expect(obfs.containsKey('min_packet_size'), isFalse);
+      // Сама обфускация цела — снято только поле не своего типа.
+      expect(obfs['type'], 'salamander');
+    }, skip: skip);
+
+    test('requires equals: на gecko те же размеры остаются', () {
+      final r = _san({
+        'type': 'hysteria2',
+        'tag': 'h1',
+        'server': 'example.com',
+        'server_port': 443,
+        'password': 'p',
+        'tls': {'enabled': true},
+        'obfs': {'type': 'gecko', 'password': 'x', 'min_packet_size': 100},
+      }, scheme: 'hysteria2');
+      expect(_codes(r), isNot(contains('field_requires')));
+      expect((r.body!['obfs'] as Map)['min_packet_size'], 100);
+    }, skip: skip);
+
+    test('default_when: полоса hysteria v1 материализуется без кода', () {
+      // Без up_mbps ядро отвечает «missing upload speed» и не поднимает
+      // outbound — фатал на ВЕСЬ конфиг, а ссылки v1 полосу не несут.
+      final r = _san({
+        'type': 'hysteria',
+        'tag': 'h1',
+        'server': 'example.com',
+        'server_port': 443,
+        'tls': {'enabled': true},
+      }, scheme: 'hysteria');
+      expect(r.body!['up_mbps'], 100);
+      expect(r.body!['down_mbps'], 100);
+      expect(_codes(r), isEmpty, reason: 'узел жив и в порядке — кода нет');
+    }, skip: skip);
+
+    test('default_when не перебивает заданное значение', () {
+      final r = _san({
+        'type': 'hysteria',
+        'tag': 'h1',
+        'server': 'example.com',
+        'server_port': 443,
+        'up_mbps': 50,
+        'tls': {'enabled': true},
+      }, scheme: 'hysteria');
+      expect(r.body!['up_mbps'], 50);
+      expect(r.body!['down_mbps'], 100);
+    }, skip: skip);
+
+    test('normalize grpc_service_name: Xray-форма /<сервис>/Tun сводится', () {
+      final r = _san(_vless({
+        'transport': {'type': 'grpc', 'service_name': '/abcde/Tun'}
+      }));
+      expect((r.body!['transport'] as Map)['service_name'], 'abcde');
+    }, skip: skip);
+
+    test('normalize grpc_service_name: обычное имя не трогается', () {
+      // Ни ведущего «/», ни хвоста «/Tun» — это имя сервиса как есть.
+      for (final pair in const [
+        ('abcde', 'abcde'),
+        ('/abcde', '/abcde'),
+        ('/a/b/Tun', 'a/b'),
+        ('/abcde/Tun|multi', 'abcde'),
+      ]) {
+        final r = _san(_vless({
+          'transport': {'type': 'grpc', 'service_name': pair.$1}
+        }));
+        expect((r.body!['transport'] as Map)['service_name'], pair.$2,
+            reason: pair.$1);
+      }
+    }, skip: skip);
+
+    test('type awg_range: число и диапазон проходят, мусор снят', () {
+      final r = _san({
+        'type': 'wireguard',
+        'tag': 'wg1',
+        'address': ['10.0.0.2/32'],
+        'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ=',
+        'h1': '5-10',
+        'h2': 7,
+        'h3': 'junk',
+        'peers': [
+          {
+            'address': '1.2.3.4',
+            'port': 51820,
+            'public_key': 'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU=',
+            'allowed_ips': ['0.0.0.0/0'],
+          }
+        ],
+      }, scheme: 'wireguard', core: '1.14.0-lx.40');
+      // Форма прибытия законна ОБЕ и не подменяется: `"5-10"` осталось
+      // строкой, `7` — числом.
+      expect(r.body!['h1'], '5-10');
+      expect(r.body!['h2'], 7);
+      expect(r.body!.containsKey('h3'), isFalse);
+      expect(_byCode(r, 'type_invalid').path, 'h3');
+    }, skip: skip);
+
+    test('type int_array: reserved из трёх чисел цел, мусор снят', () {
+      Map<String, dynamic> wg(Object? reserved) => {
+            'type': 'wireguard',
+            'tag': 'wg1',
+            'address': ['10.0.0.2/32'],
+            'private_key': 'cHJpdmF0ZUtleUJhc2U2NEV4YW1wbGVWYWx1ZTEyMzQ=',
+            'peers': [
+              {
+                'address': '1.2.3.4',
+                'port': 51820,
+                'public_key': 'cHVibGljS2V5QmFzZTY0RXhhbXBsZVZhbHVlMTIzNDU=',
+                'allowed_ips': ['0.0.0.0/0'],
+                'reserved': reserved,
+              }
+            ],
+          };
+      final ok = _san(wg([1, 2, 3]), scheme: 'wireguard');
+      expect(((ok.body!['peers'] as List).first as Map)['reserved'],
+          [1, 2, 3]);
+
+      final bad = _san(wg(['a', 'b', 'c']), scheme: 'wireguard');
+      final peer = (bad.body!['peers'] as List).first as Map;
+      expect(peer.containsKey('reserved'), isFalse);
+    }, skip: skip);
+
+    test('неизвестное выражение реестра не роняет и не портит значение', () {
+      // Контракт может уехать вперёд кода: выражение, которого санитайзер не
+      // знает, обязано остаться незамеченным, а не съесть поле.
+      expect(normalizeGrpcServiceName('/abcde/Tun'), 'abcde');
+      final r = _san(_vless({'transport': {'type': 'ws', 'path': '/x'}}));
+      expect((r.body!['transport'] as Map)['path'], '/x');
     }, skip: skip);
   });
 

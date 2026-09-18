@@ -18,7 +18,9 @@
 library;
 
 import '../../models/node_warning.dart';
-import '../parser/uri_utils.dart' show normalizeSingboxDuration, urlPathOk;
+import '../app_log.dart';
+import '../parser/uri_utils.dart'
+    show decodeBase64Safe, normalizeSingboxDuration, urlPathOk;
 import 'registry.dart';
 
 /// Результат санитайзинга одной записи.
@@ -150,11 +152,21 @@ final class _Ctx {
       final f = fields[key];
       if (f == null) continue;
       if (!src.containsKey(key)) {
+        // §464 (W2d) — `default_when`: дефолт, без которого ядро не поднимает
+        // outbound вовсе (полоса hysteria v1 — «missing upload speed» фаталом
+        // на ВЕСЬ конфиг). В отличие от `default` (CANON §2.4 — не пишется),
+        // такой дефолт материализуется явно, и кода на него нет: узел жив и в
+        // порядке.
+        final dw = f.defaultWhen;
+        if (dw != null && dw['absent'] == true) {
+          kept[key] = dw['value'];
+          continue;
+        }
         // `required` без поля — запись уходит целиком (24.1.7): ядро такую
         // не принимает и роняет весь конфиг.
         if (f.required) {
           dropNode = true;
-          warn('field_missing', params: {'field': _join(prefix, key)});
+          warn(f.code ?? 'field_missing', params: {'field': _join(prefix, key)});
         }
         continue;
       }
@@ -349,25 +361,25 @@ final class _Ctx {
     // case-sensitive и обе стороны нормализуют.
     final norm = f.normalize;
     if (norm != null && v is String) {
-      v = switch (norm) {
-        'trim' => v.trim(),
-        'lower' => v.toLowerCase(),
-        _ => v.trim().toLowerCase(),
-      };
+      v = _normalizeString(v, norm);
     }
     // `listable_string` нормализуется поэлементно.
     if (norm != null && v is List) {
       v = [
         for (final e in v)
-          if (e is String)
-            switch (norm) {
-              'trim' => e.trim(),
-              'lower' => e.toLowerCase(),
-              _ => e.trim().toLowerCase(),
-            }
-          else
-            e,
+          if (e is String) _normalizeString(e, norm) else e,
       ];
+    }
+
+    // §464 (W2d) — `normalize_code`: нормализация, которая ЗАБРАЛА часть
+    // значения, обязана объявить потерю. `0x1a2` → `01a2` — другой short_id,
+    // и молчать о нём нельзя ни на одном из входов (DRIFT §2(b)).
+    //
+    // Код ставится на исходном значении: человеку нужно видеть, что он
+    // написал, а не что из этого осталось.
+    final normCode = f.normalizeCode;
+    if (normCode != null && v != coerced.value) {
+      warn(normCode, path: path, value: coerced.value, secret: f.secret);
     }
 
     // `values` — закрытый набор. У `listable_string` проверяется каждый
@@ -388,11 +400,25 @@ final class _Ctx {
 
     // `advisory` — ядро значение принимает, но узел получает info-код.
     // Поле НЕ меняется.
+    //
+    // Две формы отбора (§464, W2d):
+    //   `values` — перечислено, на чём код ставится (ss legacy-шифры);
+    //   `except` — перечислено, на чём НЕ ставится (reality_fp_not_chrome:
+    //   отпечатков у ядра три десятка, а гибридный шар есть у девяти).
+    // `when` — дополнительное условие по другому полю тела: код про REALITY
+    // не имеет смысла на узле без REALITY.
     for (final a in f.advisory) {
-      final vals = (a['values'] as List?) ?? const [];
-      if (!vals.contains(v)) continue;
       final code = a['code'] as String?;
       if (code == null) continue;
+      final vals = (a['values'] as List?)?.cast<Object?>();
+      final except = (a['except'] as List?)?.cast<Object?>();
+      if (vals != null && !vals.contains(v)) continue;
+      // Пустое значение под `except` не попадает по определению: «не задано»
+      // — не выбор автора ссылки (tls.json, impl у fingerprint).
+      if (except != null && (except.contains(v) || v == null || v == '')) {
+        continue;
+      }
+      if (!_advisoryWhen(a['when'])) continue;
       warn(code,
           path: path,
           value: v,
@@ -497,6 +523,11 @@ final class _Ctx {
     }
 
     // `requires`: нет требуемого — поле снимается, само по себе не влияет.
+    //
+    // §464 (W2d) — `equals`: требуется не наличие соседа, а его КОНКРЕТНОЕ
+    // значение (`obfs.min_packet_size` осмыслен только при
+    // `obfs.type = gecko`). Без этого поле gecko переживало salamander и
+    // расходилось с тем же узлом, пришедшим другим входом.
     for (final key in order) {
       if (!kept.containsKey(key)) continue;
       final f = fields[key];
@@ -504,13 +535,45 @@ final class _Ctx {
       for (final rel in f.requires) {
         final need = rel['path'] as String?;
         if (need == null) continue;
-        if (_present(need, kept, prefix)) continue;
+        final ok = rel.containsKey('equals')
+            ? _valueAt(need, kept, prefix) == rel['equals']
+            : _present(need, kept, prefix);
+        if (ok) continue;
         kept.remove(key);
         warn(rel['code'] as String? ?? 'field_requires',
             path: _join(prefix, key), params: {'requires': need});
         break;
       }
     }
+  }
+
+  /// Значение по пути связи — для `requires` с `equals`.
+  ///
+  /// Пути `equals`-правил реестра записаны от корня тела (`obfs.type`), но
+  /// само правило лежит внутри того же объекта (`obfs.min_packet_size`), так
+  /// что сосед по последнему сегменту находится раньше снимка: он проверен в
+  /// этом же проходе и в `kept` уже есть.
+  Object? _valueAt(String path, Map<String, Object?> siblings, String prefix) {
+    final last = path.split('.').last;
+    if (siblings.containsKey(last)) return siblings[last];
+    if (sanitized.containsKey(path)) return sanitized[path];
+    Object? cur = root;
+    for (final seg in path.split('.')) {
+      if (cur is! Map || !cur.containsKey(seg)) return null;
+      cur = cur[seg];
+    }
+    return cur;
+  }
+
+  /// Условие `when` у `advisory`: `{path, present: true}` — правило работает
+  /// только когда поле по пути задано и осмысленно.
+  bool _advisoryWhen(Object? when) {
+    if (when == null) return true;
+    if (when is! Map) return true;
+    final path = when['path'] as String?;
+    if (path == null) return true;
+    final present = _present(path, const {}, '');
+    return when['present'] == false ? !present : present;
   }
 
   /// Есть ли поле по пути связи — по состоянию ПОСЛЕ санитайзинга.
@@ -599,6 +662,80 @@ final class _Ctx {
 
 String _join(String prefix, String key) => prefix.isEmpty ? key : '$prefix.$key';
 
+/// Нормализации реестра (`normalize`). Неизвестная — значение НЕ трогается:
+/// выражение из будущей версии контракта не повод портить рабочее поле.
+String _normalizeString(String v, String norm) {
+  switch (norm) {
+    case 'trim':
+      return v.trim();
+    case 'lower':
+      return v.toLowerCase();
+    case 'trim_lower':
+      return v.trim().toLowerCase();
+    // §464 (W2d) — `hex_only`: чистка не-hex рун (моджибейк U+00C2, NBSP,
+    // пробелы, префикс `0x`) с приведением к нижнему регистру. Правило жило
+    // в URI-парсере (§343), теперь одно на все входы.
+    case 'hex_only':
+      final b = StringBuffer();
+      for (final r in v.runes) {
+        final c = String.fromCharCode(r);
+        if (_reHexRune.hasMatch(c)) b.write(c.toLowerCase());
+      }
+      return b.toString();
+    // §464 (W2d) — `grpc_service_name`: Xray-форма «абсолютного пути»
+    // `/service/Tun`, где последний сегмент называет ПОТОК, а не сервис.
+    // Ядро имя потока не настраивает (всегда `Tun`), поэтому ведущий `/` и
+    // хвост `/Tun` снимаются — путь на проводе сохраняется. Всё, что на
+    // `/Tun` не кончается, — обычное имя сервиса и не трогается.
+    case 'grpc_service_name':
+      return normalizeGrpcServiceName(v);
+    default:
+      _logUnknownExpression('normalize', norm);
+      return v;
+  }
+}
+
+/// §464 (W2d, правило реестра `normalize: grpc_service_name`, issue #130) —
+/// имя gRPC-сервиса из Xray-формы «абсолютного пути».
+///
+/// `/abcde/Tun` → `abcde`; `/a/b/Tun` → `a/b`; `/abcde/Tun|multi` → `abcde`.
+/// Всё, что не начинается с `/` или не кончается сегментом `Tun`, — обычное
+/// имя сервиса и не трогается.
+///
+/// Публичная: тем же правилом обязаны читать имя парсеры ссылок и Xray-JSON
+/// (§24.7), а два разных «почти одинаковых» алгоритма нормализации — ровно
+/// то, что W2d из парсеров и выносил.
+///
+/// Хвост `|multi` — флаг мультиплекса в диалекте Xray: он висит на сегменте
+/// потока, а не на имени сервиса, и на решение «это Xray-форма» не влияет.
+String normalizeGrpcServiceName(String v) {
+  if (!v.startsWith('/')) return v;
+  final bar = v.indexOf('|');
+  final head = bar < 0 ? v : v.substring(0, bar);
+  final slash = head.lastIndexOf('/');
+  if (slash < 0) return v;
+  // Последний сегмент обязан быть именно `Tun`: иначе это не поток Xray, а
+  // имя сервиса, начинающееся со слэша, и резать его нечего.
+  if (head.substring(slash + 1) != 'Tun') return v;
+  return head.substring(1, slash);
+}
+
+final _reHexRune = RegExp(r'^[0-9a-fA-F]$');
+
+/// Выражения реестра, о которых санитайзер уже сказал в лог. Один раз на
+/// процесс: незнакомое выражение — это бамп контракта впереди кода, и
+/// повторять о нём на каждом узле подписки бессмысленно.
+final _seenUnknownExpressions = <String>{};
+
+/// Неизвестное выражение реестра не роняет загрузку и не трогает значение
+/// (24.1: реестр впереди кода — рабочее состояние, а не ошибка).
+void _logUnknownExpression(String kind, String name) {
+  if (!_seenUnknownExpressions.add('$kind:$name')) return;
+  AppLog.I.warning(
+      'RegistrySanitizer: неизвестное выражение реестра $kind=$name — '
+      'значение оставлено как есть (контракт новее кода)');
+}
+
 /// Приведение к типу реестра. `null` — не приводится (→ `on_invalid`).
 ///
 /// Приведение пробуется сначала (`"443"`→443, `"true"`→true, float без
@@ -658,10 +795,46 @@ String _join(String prefix, String key) => prefix.isEmpty ? key : '$prefix.$key'
       // Набор проверяется отдельно; здесь только форма значения.
       if (value is String || value is int) return (value: value);
       return null;
+    // §464 (W2d) — типы, которых словарь SPEC 131 §4 не выражал.
+    //
+    // `awg_range` — поле AWG, принимающее и число, и диапазон «N-M» строкой
+    // (h1..h4, таймеры lx.32). Форма прибытия законна ОБЕ, и подмена одной
+    // на другую меняла бы конфиг на ровном месте, поэтому значение идёт как
+    // есть; мусор вне этих двух форм снимается.
+    case 'awg_range':
+      if (value is int) return (value: value);
+      if (value is double && value == value.roundToDouble()) {
+        return (value: value.toInt());
+      }
+      if (value is String && _reAwgRange.hasMatch(value.trim())) {
+        return (value: value.trim());
+      }
+      return null;
+    // `int_array` — массив целых (`peers[].reserved`: ровно три). Число
+    // строкой приводится по общему правилу подписок.
+    case 'int_array':
+      if (value is! List) return null;
+      final out = <int>[];
+      for (final e in value) {
+        if (e is int) {
+          out.add(e);
+        } else if (e is double && e == e.roundToDouble()) {
+          out.add(e.toInt());
+        } else if (e is String && int.tryParse(e.trim()) != null) {
+          out.add(int.parse(e.trim()));
+        } else {
+          return null;
+        }
+      }
+      return (value: out);
     default:
+      _logUnknownExpression('type', type);
       return (value: value);
   }
 }
+
+/// Форма `awg_range`: голое число либо диапазон «N-M».
+final _reAwgRange = RegExp(r'^\d+(-\d+)?$');
 
 bool _formatOk(Object? v, String format) {
   if (v is List) return v.every((e) => _formatOk(e, format));
@@ -675,6 +848,12 @@ bool _formatOk(Object? v, String format) {
       return v is String && _reHex.hasMatch(v);
     case 'base64':
       return v is String && _reBase64.hasMatch(v);
+    // §464 (W2d) — ключ ровно 32 байта ПОСЛЕ декода (REALITY `pbk`, ключи
+    // WireGuard). Длина строки не годится: `enabled` — валидный base64 на
+    // 5 байт, `true` — на 3, и прежний `base64` их пропускал, после чего
+    // ядро отвечало «invalid public_key» фаталом на ВЕСЬ конфиг.
+    case 'base64_32':
+      return v is String && _base64Bytes(v) == 32;
     case 'host':
       return v is String && v.isNotEmpty && !v.contains(' ');
     case 'ipv4':
@@ -692,9 +871,17 @@ bool _formatOk(Object? v, String format) {
       if (bits == null || bits < 0 || bits > 128) return false;
       return _ipv4Ok(parts[0]) || parts[0].contains(':');
     default:
+      _logUnknownExpression('format', format);
       return true;
   }
 }
+
+/// Длина ключа в байтах после декода base64 — любое из четырёх написаний
+/// (std/url, с паддингом и без). `null` — строка не декодируется вовсе.
+///
+/// Декодер общий с §169 (`isValidRealityPublicKey`): расходиться в том, что
+/// считать валидным base64, двум гардам одного и того же ключа нельзя.
+int? _base64Bytes(String v) => decodeBase64Safe(v.trim())?.length;
 
 bool _ipv4Ok(String v) {
   final parts = v.split('.');

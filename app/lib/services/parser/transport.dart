@@ -4,6 +4,7 @@ import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import '../app_log.dart';
+import '../contract/body_sanitizer.dart' show normalizeGrpcServiceName;
 import 'uri_utils.dart';
 
 /// Разбор query-параметров URI в `TransportSpec?`.
@@ -83,8 +84,13 @@ TransportSpec? parseTransport(
         earlyDataHeaderName: eh,
       );
     case 'grpc':
+      // §464 (контракт W2d, issue #130) — Xray-форма «/<сервис>/Tun»
+      // сводится к имени сервиса правилом реестра: ведущий «/» означает у
+      // Xray не часть имени, а другую форму записи, где последний сегмент
+      // называет ПОТОК. Ядро поток не настраивает (всегда «Tun»), так что
+      // путь на проводе сохраняется.
       final sn = (q['serviceName'] ?? q['service_name'] ?? q['path'] ?? '').trim();
-      return GrpcTransport(serviceName: sn);
+      return GrpcTransport(serviceName: normalizeGrpcServiceName(sn));
     case 'http':
       final path = _guardUrlPath(q['path'] ?? '/', warnings);
       final host = (q['host'] ?? '').trim();
@@ -550,6 +556,21 @@ TlsSpec parseVlessTls(
       insecure: isTlsInsecure(q),
       alpn: alpnFromQuery(q),
       );
+  }
+
+  // §464 (контракт W2d, DRIFT §2(b2)) — снятый REALITY объявляется кодом на
+  // ВСЕХ входах. Прежде URI-ветка деградировала до plain TLS молча (только
+  // debuglog), а импорт JSON ставил код: один и тот же узел, пришедший
+  // ссылкой и телом, нёс разные наборы кодов.
+  //
+  // Условие — `pbk=` В ССЫЛКЕ ЕСТЬ, но ключ негоден: пустой `pbk` значит
+  // «REALITY не просили», и кода не заслуживает.
+  if (warnings != null && pbk.isNotEmpty) {
+    warnings.add(RegistryWarning(
+      code: 'reality_pbk_invalid',
+      path: 'tls.reality.public_key',
+      value: pbk,
+    ));
   }
 
   if (sec == 'reality') {

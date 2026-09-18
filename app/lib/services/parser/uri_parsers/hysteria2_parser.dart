@@ -120,14 +120,43 @@ Hysteria2Spec? parseHysteria2(String uri) {
   );
 
   // §084 H3 / SPEC 103 — bandwidth hint'ы для round-trip с toUriHysteria2.
-  // Канон — ключ `upmbps`/`downmbps` БЕЗ подчёркивания: это единственная
-  // форма, которую читает Go (node_parser_hysteria2.go: node.Query.Get
-  // ("upmbps"), точное совпадение без queryGetFold) и пишет обратно в URI
-  // (shareuri_hysteria2.go). `up_mbps`/`down_mbps` — ключ ТОЛЬКО JSON-поля
-  // sing-box outbound (см. emitHysteria2 ниже), не query-параметр share-URI;
-  // читать его здесь значило бы понимать URI, который Go не понимает.
-  final upMbps = int.tryParse(q['upmbps'] ?? '');
-  final downMbps = int.tryParse(q['downmbps'] ?? '');
+  //
+  // §464 (контракт W2d, DRIFT §2(l)) — НА ВХОДЕ ЧИТАЮТСЯ ОБА НАПИСАНИЯ.
+  // Раньше здесь был канон «только `upmbps`, без подчёркивания»: Go читал
+  // ровно его. В W2d лаунчер завёл `up_mbps`/`down_mbps` алиасами реестра
+  // (`hysteria2.json uri.query.upmbps.aliases`) и стал принимать оба — а
+  // подписки пишут и то, и другое написание. Ссылка с `up_mbps=` теряла
+  // полосу молча.
+  //
+  // ЭМИТ не меняется (`node_spec_emit.dart` пишет `upmbps`): канон share-URI
+  // один, иначе round-trip перестал бы совпадать побайтно с лаунчером.
+  final upMbps = int.tryParse(q['upmbps'] ?? q['up_mbps'] ?? '');
+  final downMbps = int.tryParse(q['downmbps'] ?? q['down_mbps'] ?? '');
+
+  // §464 (контракт W2d) — размеры пакетов осмыслены ТОЛЬКО у gecko
+  // (реестр `hysteria2.json`: `requires` с `equals: gecko`). Эмиттер и
+  // раньше не писал их для salamander, но делал это молча — тот же узел,
+  // пришедший телом, санитайзер чистил с кодом. Теперь код на обоих входах.
+  var obfsMin = int.tryParse(q['obfs-min-packet-size'] ?? '');
+  var obfsMax = int.tryParse(q['obfs-max-packet-size'] ?? '');
+  if (obfs.type != 'gecko') {
+    if (obfsMin != null) {
+      warnings.add(const RegistryWarning(
+        code: 'field_requires',
+        path: 'obfs.min_packet_size',
+        params: {'requires': 'obfs.type'},
+      ));
+      obfsMin = null;
+    }
+    if (obfsMax != null) {
+      warnings.add(const RegistryWarning(
+        code: 'field_requires',
+        path: 'obfs.max_packet_size',
+        params: {'requires': 'obfs.type'},
+      ));
+      obfsMax = null;
+    }
+  }
 
   return Hysteria2Spec(
     id: newUuidV4(),
@@ -139,8 +168,8 @@ Hysteria2Spec? parseHysteria2(String uri) {
     password: password,
     obfs: obfs.type,
     obfsPassword: obfs.password,
-    obfsMinPacketSize: int.tryParse(q['obfs-min-packet-size'] ?? ''),
-    obfsMaxPacketSize: int.tryParse(q['obfs-max-packet-size'] ?? ''),
+    obfsMinPacketSize: obfsMin,
+    obfsMaxPacketSize: obfsMax,
     tls: tls,
     upMbps: upMbps,
     downMbps: downMbps,

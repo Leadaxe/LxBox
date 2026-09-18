@@ -150,13 +150,13 @@ vless://UUID@host:port?query_params#label
 | SNI | `sni` or `peer` | TLS server name |
 | Fingerprint | `fp` or `fingerprint` | UTLS fingerprint (defaults to `random`) |
 | ALPN | `alpn` | Comma-separated ALPN values |
-| Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → 32 bytes); garbage falls back to plain TLS plus a warning (§169) |
+| Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → exactly 32 bytes after decode); garbage falls back to plain TLS and now carries the `reality_pbk_invalid` code on every input — URI, sing-box JSON, Xray JSON (§169, code added in §464) |
 | Short ID | `sid` | REALITY short ID (hex, max 16 chars) |
 | REALITY key share | `key_share` | `hybrid` \| `classical` (sing-box `tls.reality.key_share`, §457). Read only together with a valid `pbk`; anything outside the enum is dropped silently — the core rejects an unknown value along with the whole config. Requires the core pin `v1.14.1-lx.4` or newer |
 | Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp` (`splithttp` is the same thing under its older Xray name, §463), `raw` |
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
-| Service name | `serviceName` or `service_name` | gRPC service name |
+| Service name | `serviceName` or `service_name` | gRPC service name. The Xray absolute-path form `/<service>/Tun` is reduced to `<service>` (§464, issue #130): in Xray the leading `/` marks a different notation where the last segment names the *stream*, and sing-box never configures the stream (always `Tun`), so the wire path is preserved. A `\|multi` tail on the stream segment is ignored. Core limitation: an inner `/` still reaches the wire as `%2F`, so a multi-segment name will not match the server |
 | Header type | `headerType` | When `http` with `type=tcp`/`raw`, creates HTTP transport |
 | Packet encoding | `packetEncoding` (case-insensitive) | An allow-list of `xudp` / `packetaddr`. The xray-style `none`, and any garbage, is dropped silently — sing-box `NewOutbound` accepts only those two values, and anything else panics inside libbox. |
 | Insecure | `insecure`, `allowInsecure` | Skip certificate verification |
@@ -213,7 +213,7 @@ vless://UUID@host:port?query_params#label
 
 ### TLS Behavior
 
-- If `pbk` is present **and is a valid X25519 public key** (base64/base64url, decodes to exactly 32 bytes): REALITY TLS is enabled. An invalid `pbk` (e.g. `pbk=enabled`/`true` from broken subscriptions) falls back to **plain TLS** with a parse warning instead of emitting a REALITY block the core rejects — before §169 one broken node used to poison the whole `config.json` at startup.
+- If `pbk` is present **and is a valid X25519 public key** (base64/base64url, decodes to exactly 32 bytes): REALITY TLS is enabled. An invalid `pbk` (e.g. `pbk=enabled`/`true` from broken subscriptions — both are legal base64, 5 and 3 bytes long, which is why the length is counted *after* the decode) falls back to **plain TLS** with the `reality_pbk_invalid` code instead of emitting a REALITY block the core rejects — before §169 one broken node used to poison the whole `config.json` at startup. §464 made the code appear on all three inputs: the URI branch used to degrade silently while the JSON import reported it, so the same node arriving two ways carried two different code sets.
 - **REALITY `key_share` (§457, core `v1.14.1-lx.4`+).** `tls.reality.key_share` picks the key share of the REALITY ClientHello: `hybrid` demands `X25519MLKEM768` (~1.5–1.9 KB, two TCP segments — what Xray ≥ v26.9.8 requires), `classical` strips the hybrid out of `key_share` and `supported_groups` (~0.5 KB, one segment — for older servers and networks that drop the large hello). Absent means whatever the fingerprint carries. It arrives from sing-box JSON (`tls.reality.key_share`) and from the share URI (`key_share=`, the same name as the core key, §453); in the URI it is read only when the REALITY block is actually built, i.e. `pbk` is a valid X25519 key. Any value outside `{hybrid, classical}` — including a different case such as `Hybrid`, a number, or an empty string — is **dropped silently**, and the node stays alive: the core answers an unknown value with `unknown reality key_share` and refuses to create the outbound, which takes the whole config down. This is not `reality_fp_not_chrome` (§451): that warning is about the fingerprint, not about `key_share`, and its logic is untouched.
 - `flow` is **never** auto-derived from REALITY (§115): it is taken verbatim from the link. Historically bare-TCP+REALITY without `flow` got a forced Vision, breaking valid `none` setups.
 - `xtls-rprx-vision` is valid only on bare TLS. If a transport (ws/grpc/xhttp/http/httpupgrade) is present, the explicit `flow` is dropped with a `VisionWithTransportWarning` (the core would not bring up that combination). `emit()` writes `flow` only when it is exactly `xtls-rprx-vision` with no transport.
@@ -546,7 +546,8 @@ Both `hysteria2://` and `hy2://` schemes are supported (the latter is normalized
 
 - TLS is always enabled (Hysteria2 runs over QUIC).
 - Port hopping (`mport`/`ports` → `server_ports`) is **not** implemented — the parser does not read those keys and `server_ports` is never emitted.
-- `up_mbps`/`down_mbps` are parsed and round-tripped (URI/JSON), emitted only when present.
+- `up_mbps`/`down_mbps` are parsed and round-tripped (URI/JSON), emitted only when present. Both URI spellings are read — `upmbps`/`downmbps` **and** `up_mbps`/`down_mbps` (registry aliases, §464); emission keeps the canonical `upmbps`/`downmbps`.
+- `obfs-min-packet-size`/`obfs-max-packet-size` are gecko-only. With `obfs=salamander` they are dropped with `field_requires` instead of disappearing silently (§464, registry `requires` + `equals`).
 - Invalid SNI values (e.g. emoji-only) are replaced with the server address.
 
 ### Reference

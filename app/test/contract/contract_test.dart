@@ -147,15 +147,40 @@ String? warningCodeOf(NodeWarning w) =>
 /// сообщения человеку), а конверт по контракту несёт одну запись без пути
 /// (`awg_ranged_h_broken_dropped`: лаунчер зовёт `AddWarning` без поля).
 /// Приписать здесь путь значило бы разбить одну запись на четыре.
+/// §464 (W2d) — путей стало больше: вынеся правила значений в реестр, лаунчер
+/// узнал адрес каждого поля, и ожидания корпуса теперь называют `path`+`value`
+/// у пятнадцати кодов. У нас правила остаются в парсерах (реестр — второй
+/// эшелон, §460 W1), поэтому путь приписывается здесь — но по тому же
+/// правилу: только классам, у которых поле класса И ЕСТЬ этот путь, один и
+/// тот же на все свои случаи.
 String? _legacyWarningPath(NodeWarning w) => switch (w) {
       // Код уровня поля `flow`: путь назван в ожиданиях корпуса.
       DeprecatedFlowWarning() => 'flow',
+      AnyTlsMinIdleInvalidWarning() => 'min_idle_session',
+      TuicCongestionInvalidWarning() => 'congestion_control',
+      PacketEncodingUnknownWarning() => 'packet_encoding',
+      UnknownFingerprintWarning() => 'tls.utls.fingerprint',
+      RealityFingerprintWarning() => 'tls.utls.fingerprint',
+      RealityShortIdInvalidWarning() => 'tls.reality.short_id',
+      UnknownObfsWarning() => 'obfs.type',
+      MissingObfsPasswordWarning() => 'obfs.password',
       _ => null,
     };
 
 /// Значение, вызвавшее код, — по той же логике, что и [_legacyWarningPath].
+///
+/// `MissingObfsPasswordWarning` сюда НЕ попадает: его поле — тип обфускации,
+/// а код про пароль, и значением он не является (ожидание корпуса `value`
+/// у него не называет).
 String? _legacyWarningValue(NodeWarning w) => switch (w) {
       DeprecatedFlowWarning(:final flow) => flow,
+      AnyTlsMinIdleInvalidWarning(:final value) => value,
+      TuicCongestionInvalidWarning(:final value) => value,
+      PacketEncodingUnknownWarning(:final value) => value,
+      UnknownFingerprintWarning(:final value) => value,
+      RealityFingerprintWarning(:final value) => value,
+      RealityShortIdInvalidWarning(:final value) => value,
+      UnknownObfsWarning(:final value) => value,
       _ => null,
     };
 
@@ -205,6 +230,56 @@ String? _readCorpusUri(File file) {
   return uri;
 }
 
+/// §464 — ранг пути в `body.order` схемы протокола: по нему сортируется
+/// `warnings[]` конверта (§24.7 п. 6).
+///
+/// Порядок читается ИЗ РЕЕСТРА, а не из таблицы в тесте: он нормативен для
+/// обеих сторон, и своя копия разошлась бы с ним на первом же бампе
+/// контракта. Файлы те же, что грузит `ContractRegistry`, но читаются здесь
+/// напрямую — раннеру нужен один список ключей, а не биндинг Flutter.
+///
+/// Ключ сортировки — ПЕРВЫЙ сегмент пути (`tls.reality.short_id` → `tls`):
+/// он и решает место кода в теле, а внутри одной ветки порядок разбора у
+/// обеих сторон и так совпадает. Код без пути и путь вне схемы уходят в
+/// конец — детерминированно и без выдумывания рангов.
+final _bodyOrderCache = <String, List<String>>{};
+
+List<String> _bodyOrderFor(String scheme) => _bodyOrderCache.putIfAbsent(
+      scheme,
+      () {
+        final f = File('$_contractRoot/registry/protocols/$scheme.json');
+        if (!f.existsSync()) return const <String>[];
+        final data = json.decode(f.readAsStringSync()) as Map<String, dynamic>;
+        final body = data['body'];
+        if (body is! Map) return const <String>[];
+        return ((body['order'] as List?) ?? const []).cast<String>();
+      },
+    );
+
+void _sortWarningsByBodyOrder(
+    List<Map<String, dynamic>> warnings, String scheme) {
+  if (warnings.length < 2) return;
+  final order = _bodyOrderFor(scheme);
+  if (order.isEmpty) return;
+  int rank(Map<String, dynamic> w) {
+    final path = w['path'];
+    if (path is! String || path.isEmpty) return 1 << 20;
+    final i = order.indexOf(path.split('.').first);
+    return i < 0 ? 1 << 20 : i;
+  }
+
+  // Устойчивая сортировка: коды одной ветки остаются в порядке разбора.
+  final indexed = [
+    for (var i = 0; i < warnings.length; i++) (i, warnings[i]),
+  ]..sort((a, b) {
+      final d = rank(a.$2).compareTo(rank(b.$2));
+      return d != 0 ? d : a.$1.compareTo(b.$1);
+    });
+  warnings
+    ..clear()
+    ..addAll(indexed.map((e) => e.$2));
+}
+
 /// Канонизирует один узел в форму contract/schema/node.schema.json (CANON §1-2).
 Map<String, dynamic> _canonNode(NodeSpec spec) {
   final entry = _canonEntryMap(spec);
@@ -229,6 +304,13 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
   // (configtypes/types.go:548), который отбрасывает повтор. Dart-предупреждения
   // при этом остаются пофакторными (два битых AWG-заголовка = два разных
   // сообщения пользователю), но запись конверта у них одна на путь.
+  //
+  // §464 (контракт W2d, §24.7 п. 6) — ПОРЯДОК списка = `body.order` реестра,
+  // а не порядок разбора: только так коды сравнимы поэлементно, а не как
+  // множество. У лаунчера он такой потому, что правила теперь ставит
+  // санитайзер, идущий по схеме; у нас коды по-прежнему ставят парсеры (§460
+  // W1 — реестр второй эшелон), и порядок восстанавливается здесь, по тому
+  // же самому `order`.
   final warnings = <Map<String, dynamic>>[];
   final seen = <String>{};
   for (final w in spec.warnings) {
@@ -237,6 +319,8 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
     if (!seen.add('${rec['code']} ${rec['path'] ?? ''}')) continue;
     warnings.add(rec);
   }
+  _sortWarningsByBodyOrder(
+      warnings, _canonScheme[spec.protocol] ?? spec.protocol);
   if (warnings.isNotEmpty) node['warnings'] = warnings;
 
   return node;

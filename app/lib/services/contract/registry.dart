@@ -56,8 +56,22 @@ final class FieldSchema {
 
   bool get allOrNothing => raw['all_or_nothing'] == true;
 
-  /// `trim` | `lower` | `trim_lower` — нормализация ДО проверки enum/format.
+  /// `trim` | `lower` | `trim_lower` | `hex_only` | `grpc_service_name` —
+  /// нормализация ДО проверки enum/format.
   String? get normalize => raw['normalize'] as String?;
+
+  /// §464 (W2d) — код, который ставится, если [normalize] ИЗМЕНИЛА значение.
+  /// Нормализация без него молчалива (`trim_lower` у enum'ов), с ним —
+  /// объявляет потерю: `0x1a2` → `01a2` это ДРУГОЙ short_id.
+  String? get normalizeCode => raw['normalize_code'] as String?;
+
+  /// §464 (W2d) — дефолт, который ядру НУЖЕН: без поля outbound не
+  /// поднимается вовсе (полоса hysteria v1 — «missing upload speed» фаталом
+  /// на весь конфиг). В отличие от `default`, материализуется явно.
+  ///
+  /// Форма реестра: `{"absent": true, "value": 100}`.
+  Map<String, dynamic>? get defaultWhen =>
+      (raw['default_when'] as Map?)?.cast<String, dynamic>();
 
   String? get format => raw['format'] as String?;
 
