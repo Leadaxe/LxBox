@@ -36,6 +36,7 @@ import '../uri_utils.dart';
 import 'anytls_mapper.dart';
 import 'hysteria2_mapper.dart';
 import 'http_mapper.dart';
+import 'masque_mapper.dart';
 import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'socks_mapper.dart';
@@ -84,6 +85,8 @@ const kPipelineSchemes = <String>{
   'socks5',
   // §472 шаг 6 — ssh.
   'ssh',
+  // §472 шаг 7 — masque (§130). Алиасов схема не имеет.
+  'masque',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -105,6 +108,7 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'socks': mapSocksUri,
   'socks5': mapSocksUri,
   'ssh': mapSshUri,
+  'masque': mapMasqueUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё

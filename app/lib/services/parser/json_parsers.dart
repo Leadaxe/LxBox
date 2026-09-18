@@ -6,7 +6,6 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
-import '../contract/parse_warnings.dart';
 import '../contract/registry.dart' show awgMtuByRegistry;
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
@@ -1478,12 +1477,15 @@ NodeSpec? parseSingboxEntry(
           : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ?? '';
       return MasqueSpec(
-        // §469 — MASQUE тоже QUIC: `tls.utls`/`tls.reality` ядро на нём не
-        // построит. Ссылка их не несёт, а рукописное тело — вполне, и там
-        // блок пропадал молча: `MasqueSpec` таких полей не знает вовсе.
-        // Правило то же и из того же места, что у hysteria2/tuic.
-        warnings: forbiddenTlsBlockWarnings(
-            'masque', tlsBlocksOfBody(masqueTls)),
+        // §472 шаг 7 — рукописного прохода по запрещённым на QUIC блокам
+        // (`tls.utls`/`tls.reality`, §469) здесь БОЛЬШЕ НЕТ, и снят он не как
+        // дубль, а как лишний ПРОИЗВОДИТЕЛЬ: с шага 1 у JSON-узла есть проход
+        // по ДОСЛОВНОЙ карте (`annotateFromRawBody`), и правило
+        // `forbidden_for` санитайзер исполняет по тому же телу, которое читала
+        // эта ветка, с тем же `value`. Дедуп по `(code, path)` дубль снимал,
+        // поэтому видно ничего не было. Ровно так же шаг 5 снял его у
+        // hysteria2 и tuic (спека 472, 11.8); masque был последним
+        // вызывающим, и вместе с ним ушла сама функция.
         id: newUuidV4(),
         tag: tag.isEmpty ? 'masque-$server-$port' : tag,
         label: label0,

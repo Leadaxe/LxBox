@@ -65,6 +65,18 @@ const Map<String, String> _knownGaps = {
       'у anytls tls обязателен (C.ErrTLSRequired), security=none снимается '
           'до чтения блока; корпус нормирует security_none_params_kept '
           '(спека 472, шаг 6)',
+  // §472 шаг 7 — у masque эвристики нет НИ ОДНОЙ её половины: прежний парсер
+  // читал `sni` как есть и на адрес сервера пустое значение не откатывал. Это
+  // не упущение, а свойство схемы: пустой `sni` у masque значит «дефолт
+  // ПРОФИЛЯ ядра» (для cloudflare это `www.cloudflare.com`, lx.25-rc.4), а не
+  // «имя не задано». Подставь маппер адрес сервера — узел поехал бы с SNI,
+  // равным IP data-plane Cloudflare, то есть перестал бы подключаться; а у
+  // WARP-узлов, которых больше всего, `sni` пуст ровно поэтому. Заодно
+  // сдвинулись бы тела и identity всех живых MASQUE-узлов.
+  'sni_heuristic_falls_back_to_server@masque':
+      'у masque пустой sni означает дефолт ПРОФИЛЯ ядра, а не отсутствие '
+          'имени: откат на адрес сервера дал бы SNI = IP и сломал бы узлы '
+          'WARP; не реализовано ни на одном входе masque (спека 472, шаг 7)',
 };
 
 /// Правила, покрытые тестами этого файла: id → имя теста.
@@ -106,6 +118,12 @@ const Map<String, String> _covered = {
   'security_none_no_tls@http':
       'http: security=none гасит TLS даже на https-схеме',
   'utls_xray_hello_names@http': 'http: fp в написании uTLS → имя семейства',
+  // §472 шаг 7 — правила masque. `applies_to` у них нет (лежат в
+  // `protocols/masque.json` и относятся к схеме целиком), и страж их не
+  // спрашивает, — но исполняет их маппер, и тесты написаны.
+  'vhttp_empty_defaults_to_h3': 'masque: без vhttp= → явный h3, а не auto ядра',
+  'singbox_flat_fields_stripped':
+      'masque: плоские network/sni/skip_cert_verify не переносятся',
 };
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
@@ -469,6 +487,56 @@ void main() {
         spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
         isNot(contains('utls_fp_unknown')),
       );
+    }, skip: skip);
+  });
+
+  group('§472 — правила mapper на живых ссылках (masque)', () {
+    /// Канонический masque-узел корпуса, без `vhttp`.
+    const bare = 'masque://PRIVDER%3D%3D@192.0.2.44:443'
+        '?publickey=PUBDER%3D%3D&address=172.16.0.2%2F32#n';
+
+    test('masque: без vhttp= → явный h3, а не auto ядра', () {
+      // `vhttp_empty_defaults_to_h3` — КОНВЕНЦИЯ обеих сторон, не дефолт
+      // ядра (у ядра `auto`). Значение входит в identity живых MASQUE-узлов,
+      // поэтому маппер пишет его явно, а не полагается на `default` реестра
+      // (тот по CANON §2.4 в тело не материализуется).
+      final spec = parseUri(bare)!;
+      expect(spec.emit(TemplateVars.empty).map['vhttp'], 'h3');
+      // Явный `auto` при этом уезжает как написан: «нет параметра» и «оператор
+      // выбрал auto» — не одно и то же.
+      final auto = parseUri(bare.replaceAll('#n', '&vhttp=auto#n'))!;
+      expect(auto.emit(TemplateVars.empty).map['vhttp'], 'auto');
+      expect(auto.warnings, isEmpty);
+    }, skip: skip);
+
+    test('masque: плоские network/sni/skip_cert_verify не переносятся', () {
+      // `singbox_flat_fields_stripped` — чужой диалект. Плоский `sni` рядом с
+      // `tls.server_name` роняет ядро fail-fast'ом на весь конфиг, поэтому
+      // ключи снимаются БЕЗ переноса значений (контракт 0.8.0, D-078).
+      final spec = parseUri(bare.replaceAll(
+          '#n', '&network=h2&server_name=legacy.example&skip_cert_verify=1#n'))!;
+      final body = spec.emit(TemplateVars.empty).map;
+      expect(body['vhttp'], 'h3', reason: 'legacy network= не влияет ни на что');
+      expect(body.containsKey('network'), isFalse);
+      expect(body.containsKey('sni'), isFalse);
+      expect(body.containsKey('skip_cert_verify'), isFalse);
+      expect(body.containsKey('tls'), isFalse,
+          reason: 'legacy server_name= не создаёт блок tls');
+    }, skip: skip);
+
+    test('masque: address списком → пара ip/ipv6, bare IP получает префикс', () {
+      final spec = parseUri(bare.replaceAll(
+          'address=172.16.0.2%2F32', 'address=172.16.0.2%2C2001%3Adb8%3A%3A2'))!;
+      final body = spec.emit(TemplateVars.empty).map;
+      expect(body['ip'], '172.16.0.2/32');
+      expect(body['ipv6'], '2001:db8::2/128');
+    }, skip: skip);
+
+    test('masque: sni и disable_sni уезжают во вложенный tls{}', () {
+      final spec = parseUri(
+          bare.replaceAll('#n', '&sni=a.example&disable_sni=1#n'))!;
+      expect(spec.emit(TemplateVars.empty).map['tls'],
+          {'server_name': 'a.example', 'disable_sni': true});
     }, skip: skip);
   });
 

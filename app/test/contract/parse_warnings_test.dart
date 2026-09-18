@@ -8,9 +8,11 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/app_log.dart';
+import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
 /// §460 W2a — предупреждения реестра на узле при РАЗБОРЕ.
@@ -147,37 +149,67 @@ void main() {
   });
 
   group('§460 W2a — дедуп с рукописными кодами', () {
-    // Пример живёт на схеме, которая ЕЩЁ НЕ переехала: дедуп нужен ровно там,
-    // где рукописное правило и правило реестра говорят об одном поле, а у
-    // переехавшей схемы источник кода по определению один.
+    // §472 шаг 7 — пример стоит на ИСКУССТВЕННОМ производителе, и это не
+    // упрощение, а единственный оставшийся способ.
     //
     // История переездов: vless (был здесь до шага 3) → tuic (шаги 3–4) →
-    // anytls (шаг 5) → masque. Шаг 6 увёл anytls на конвейер, и пример
-    // переехал на masque — единственную схему, у которой рукописный класс и
-    // правило реестра по-прежнему говорят об ОДНОМ поле: `vhttp` судит
-    // рукописный `MasqueVhttpInvalidWarning` (`masque_parser.dart`), а реестр
-    // объявляет на том же поле тот же код `masque_vhttp_invalid`
-    // (`protocols/masque.json` → `body.fields.vhttp.on_invalid`). Кейс взят из
-    // корпуса (`uri/masque/vhttp_invalid_forced_h3`).
-    //
-    // masque переезжает шагом 7, и других кандидатов после него не остаётся:
+    // anytls (шаг 5) → masque (шаг 6). Каждый раз пример искали на схеме,
+    // которая ЕЩЁ НЕ переехала: дедуп нужен ровно там, где рукописное правило
+    // и правило реестра говорят об одном поле, а у переехавшей схемы источник
+    // кода по определению один. Шаг 7 увёл masque, и кандидатов не осталось —
     // у wireguard/AWG рукописные коды (`awg_*`) реестр дублем не объявляет.
-    // Когда переедет masque, пример придётся строить на искусственном
-    // производителе, а не искать схему.
-    test('рукописный класс перебивает код реестра на том же коде', () {
-      final n = _one(
-        'masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCC'
-        'qGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKK'
-        'iuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443'
-        '?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnM'
-        'hgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZ'
-        'EWw%3D%3D&address=172.16.0.2%2F32&vhttp=tcp#x',
-      );
-      final hand = n.warnings.whereType<MasqueVhttpInvalidWarning>().toList();
-      expect(hand, isNotEmpty, reason: 'рукописное предупреждение на месте');
-      // Реестр тот же код вторым сообщением не дублирует.
-      expect(_registry(n).map((w) => w.code),
-          isNot(contains('masque_vhttp_invalid')));
+    //
+    // Поэтому производителя ставим руками: узел из sing-box-ТЕЛА конвейером не
+    // разбирается (`isPipelineParsed` на нём ложь), значит `annotateWithRegistry`
+    // по нему идёт и даёт код реестра. Дописываем на тот же узел рукописный
+    // класс с той же парой `(code, path)` — и проверяем, что запись остаётся
+    // ОДНА. Смысл прежний: два производителя, одна пара, один результат, и
+    // путь у него есть.
+    test('рукописный + реестровый с одной парой (code, path) → одна запись',
+        () {
+      // Производитель искусственный: узел строится из ТЕЛА (конвейер его не
+      // касается, `isPipelineParsed` на нём ложь), поэтому `annotateWithRegistry`
+      // по нему идёт и даёт `anytls_min_idle_invalid` на `min_idle_session`.
+      // Рукописный класс с той же парой существует и сегодня —
+      // `AnyTlsMinIdleInvalidWarning` объявляет тот же путь таблицей
+      // `handwrittenWarningPath`; с пути ССЫЛКИ его снял шаг 6, а на узел мы
+      // ставим его руками.
+      //
+      // `annotateWithRegistry` зовём сами, поэтому берём узел напрямую, а не
+      // через `parseAll`: воронка позвала бы аннотацию до нашей подсадки.
+      NodeSpec build() => parseSingboxEntry({
+            'type': 'anytls',
+            'tag': 'a',
+            'server': 'e.example',
+            'server_port': 443,
+            'password': 'p',
+            'min_idle_session': -5,
+            'tls': {'enabled': true, 'server_name': 'a.example'},
+          }, rawSource: 'не-JSON: дословной карты у узла нет')!;
+
+      const code = 'anytls_min_idle_invalid';
+      const path = 'min_idle_session';
+      // Путь рукописного класса нормативен: дедуп считается по ПАРЕ.
+      expect(handwrittenWarningPath(const AnyTlsMinIdleInvalidWarning('-5')), path);
+
+      // Контроль: без рукописного класса код реестра приходит, с путём.
+      final plain = build();
+      annotateWithRegistry(plain);
+      final fromRegistry = _registry(plain).where((w) => w.code == code).toList();
+      expect(fromRegistry, hasLength(1),
+          reason: 'реестр судит min_idle_session по `min: 0` + `on_invalid: drop`');
+      expect(fromRegistry.single.path, path);
+
+      // А теперь тот же узел с рукописным классом на том же поле: остаётся
+      // ОДНА запись, и это рукописная — у неё человеческий текст.
+      final seeded = build()
+        ..warnings.add(const AnyTlsMinIdleInvalidWarning('-5'));
+      annotateWithRegistry(seeded);
+      expect(seeded.warnings.whereType<AnyTlsMinIdleInvalidWarning>(),
+          hasLength(1),
+          reason: 'рукописное предупреждение на месте');
+      expect(_registry(seeded).map((w) => w.code), isNot(contains(code)),
+          reason: 'реестр тот же код вторым сообщением не дублирует');
     }, skip: skip);
 
     // §472 шаг 3 — а у переехавшей схемы источник кода РОВНО один: реестр.

@@ -1,12 +1,29 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §130 — MasqueSpec emit (Outbound-схема ядра) + URI round-trip.
+///
+/// §472 шаг 7 — masque разбирается конвейером, и значения судит реестр.
+/// Поэтому файлу понадобился реестр, а значит и ГЕЙТ: `app/contract/`
+/// вендорится локально и на CI его нет (спека 472, 9.3).
+const _contractRoot = 'contract';
+
 void main() {
+  final synced = Directory('$_contractRoot/registry').existsSync();
+  final skip = synced ? null : 'контракт не синхронизирован';
+
+  setUpAll(() async {
+    if (!synced) return;
+    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+  });
+
   MasqueSpec spec() => MasqueSpec(
         id: 'id1',
         tag: '🔥🎭 WARP (MASQUE)',
@@ -149,13 +166,22 @@ void main() {
       expect(parseMasqueUri(noParam)!.vhttp, 'h3');
     });
 
-    test('мусорное значение → форс h3 + warning (SPEC 103 п.5)', () {
+    test('мусорное значение → форс h3 + код реестра (SPEC 103 п.5)', () {
+      // §472 шаг 7 — форс делает САНИТАЙЗЕР по правилу
+      // `masque.body.fields.vhttp` (enum + `on_invalid: coerce h3`), и код
+      // приходит из реестра — с путём и значением, которых у рукописного
+      // `MasqueVhttpInvalidWarning` не было.
       final parsed = parseMasqueUri(
           spec().toUri().replaceAll('vhttp=h3', 'vhttp=h9'))!;
       expect(parsed.vhttp, 'h3', reason: 'форсится дефолт, а не едет как есть');
-      expect(parsed.warnings.whereType<MasqueVhttpInvalidWarning>(), hasLength(1),
+      final w = parsed.warnings
+          .whereType<RegistryWarning>()
+          .firstWhere((w) => w.code == 'masque_vhttp_invalid',
+              orElse: () => fail('нет кода: ${parsed.warnings}'));
+      expect(w.path, 'vhttp');
+      expect(w.value, 'h9',
           reason: 'форс обязан быть виден пользователю, а не только в логе');
-    });
+    }, skip: skip);
 
     test('h2 остаётся валидным (тройка контракта целиком)', () {
       expect(
