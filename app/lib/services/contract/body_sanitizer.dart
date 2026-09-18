@@ -44,6 +44,10 @@ const _kBuildManagedKeys = {'type', 'tag', 'detour'};
 /// пишется (SPEC 131 §3.2).
 const _kDefaultInvalidCode = 'type_invalid';
 
+/// §469 — предел длины `value` предупреждения в рунах (CANON §6,
+/// `WarningValueMax` контракта).
+const _kWarningValueMax = 64;
+
 /// Санитайзер тела записи по схеме реестра.
 final class RegistrySanitizer {
   const RegistrySanitizer._();
@@ -84,6 +88,49 @@ final class RegistrySanitizer {
     if (ctx.dropNode) return SanitizeResult(null, ctx.warnings);
     return SanitizeResult(out, ctx.warnings);
   }
+
+  /// Значение для `value` предупреждения: у `secret`-полей — `***`, длинное
+  /// обрезается до 64 РУН (24.1.4, CANON §6).
+  ///
+  /// §469 — форма нормирована КОРПУСОМ, не языком: карта печатается
+  /// `map[ключ:значение ключ:значение]` с ключами по возрастанию, список —
+  /// `[a b c]`, обрезка — 64 руны плюс `…`. Раньше здесь стоял `toString()`
+  /// Dart (`{enabled: true, …}`) и обрезка 61+`...`, и `value` объектных
+  /// полей расходился с ожиданиями корпуса (`tls_field_unsupported_naive` на
+  /// `tls.utls`, `tls_not_applicable_quic` на QUIC) на одном лишь способе
+  /// печати. Своего смысла у формы нет — это канон записи, и держать его надо
+  /// одинаковым с обеих сторон.
+  ///
+  /// Публичный, потому что у `value` появился второй производитель: коды,
+  /// которые при разборе ставит парсер, а не санитайзер
+  /// (`forbiddenTlsBlockWarnings`, `parse_warnings.dart`).
+  static String renderWarningValue(Object value, {bool secret = false}) {
+    if (secret) return '***';
+    return _truncateWarningValue(_renderWarningScalar(value));
+  }
+}
+
+/// Печать значения по канону корпуса (см. [RegistrySanitizer.renderWarningValue]).
+String _renderWarningScalar(Object? value) {
+  if (value is Map) {
+    final keys = value.keys.map((k) => '$k').toList()..sort();
+    return 'map[${[
+      for (final k in keys) '$k:${_renderWarningScalar(value[k])}',
+    ].join(' ')}]';
+  }
+  if (value is List) {
+    return '[${[for (final e in value) _renderWarningScalar(e)].join(' ')}]';
+  }
+  return value is String ? value : '$value';
+}
+
+/// Обрезка до [_kWarningValueMax] РУН (не кодовых единиц: значение вправе
+/// нести не-ASCII) с многоточием-символом — зеркало `TruncateWarningValue`
+/// контракта.
+String _truncateWarningValue(String s) {
+  final runes = s.runes.toList(growable: false);
+  if (runes.length <= _kWarningValueMax) return s;
+  return '${String.fromCharCodes(runes.take(_kWarningValueMax))}…';
 }
 
 /// Состояние одного прогона: накопитель warnings, флаг `drop_node` и корень
@@ -128,17 +175,11 @@ final class _Ctx {
     warnings.add(RegistryWarning(
       code: code,
       path: path,
-      value: value == null ? null : _renderValue(value, secret: secret),
+      value: value == null
+          ? null
+          : RegistrySanitizer.renderWarningValue(value, secret: secret),
       params: params,
     ));
-  }
-
-  /// Значение для текста предупреждения: у `secret`-полей — `***`, длинное
-  /// обрезается до 64 символов (24.1.4).
-  static String _renderValue(Object value, {bool secret = false}) {
-    if (secret) return '***';
-    final s = value is String ? value : value.toString();
-    return s.length <= 64 ? s : '${s.substring(0, 61)}...';
   }
 
   /// Обход объекта по схеме. [prefix] — путь от корня тела (пустой у корня),
@@ -232,18 +273,32 @@ final class _Ctx {
     return out;
   }
 
-  /// Гейты уровня поля, не зависящие от значения. `true` — поле снято.
-  bool _gated(FieldSchema f, String path) {
+  /// Гейты уровня поля: годность значения они не проверяют, но само значение
+  /// им нужно — контракт требует его в `value` предупреждения (CANON §6:
+  /// «исходное значение до деградации»). `true` — поле снято.
+  bool _gated(FieldSchema f, String path, Object? value) {
     // `forbidden_for` / `allowed_for` — по схеме записи. Код обязателен по
     // схеме реестра; если его всё же нет, код типа лучше молчания.
+    //
+    // §469 (контракт 1.1.4) — код берётся через `forbidden_codes`: один и тот
+    // же запрет у разных схем даёт разный исход, и словарь «схема → код» это
+    // выражает (`tls.utls` на naive — потерянная настройка, на QUIC —
+    // снятая бессмыслица).
+    //
+    // Значение снятого блока идёт в `value` предупреждения: контракт зовёт
+    // его «исходным значением до деградации» (CANON §6), и для объекта это
+    // сам объект. Секрета в `utls`/`reality` нет, `secret` у полей стоит
+    // точечно и проверяется тем же `f.secret`.
     final forbidden = f.forbiddenFor;
     if (forbidden != null && forbidden.contains(scheme)) {
-      warn(f.code ?? _kDefaultInvalidCode, path: path);
+      warn(f.forbiddenCodeFor(scheme) ?? _kDefaultInvalidCode,
+          path: path, value: value, secret: f.secret);
       return true;
     }
     final allowed = f.allowedFor;
     if (allowed != null && !allowed.contains(scheme)) {
-      warn(f.code ?? _kDefaultInvalidCode, path: path);
+      warn(f.code ?? _kDefaultInvalidCode,
+          path: path, value: value, secret: f.secret);
       return true;
     }
     // `min_core` — гейт СБОРКИ (24.1.6): ключ, неизвестный запущенному ядру,
@@ -259,7 +314,7 @@ final class _Ctx {
   }
 
   _Value _sanitizeValue(Object? value, FieldSchema f, String path) {
-    if (_gated(f, path)) return const _Value.drop();
+    if (_gated(f, path, value)) return const _Value.drop();
 
     // `ref` — спуск в общую суб-схему (tls / multiplex / transports).
     final ref = f.ref;

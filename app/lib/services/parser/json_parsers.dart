@@ -6,6 +6,7 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
+import '../contract/parse_warnings.dart';
 import '../node_hash.dart';
 import 'hysteria2_obfs.dart';
 import 'tcp_keep_alive.dart';
@@ -1109,15 +1110,27 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       if (server.isEmpty || port == 0) return null;
       // §219 — кастуем entry['obfs'] один раз (было дважды).
       final obfs = entry['obfs'] as Map?;
-      // §358 — тип/пароль канонизируются молча: у parseSingboxEntry нет
-      // warnings-аккумулятора (тот же power-user путь, что у fp выше), а
-      // отдать ядру неизвестный тип нельзя — это fatal всего конфига.
+      // §469 п. 6 (зеркало находки лаунчера в `371448da`) — коды обфускации
+      // ДОХОДЯТ ДО УЗЛА и на JSON-входе тоже.
+      //
+      // Раньше сюда передавался `null` («у parseSingboxEntry нет
+      // warnings-аккумулятора»), и `obfs_unknown`/`obfs_password_missing`
+      // пропадали: один и тот же узел, пришедший ссылкой и телом, нёс разные
+      // наборы кодов, хотя тело у него выходило одинаковым. Аккумулятор
+      // есть — это `NodeSpec.warnings`, куда их кладёт сам spec.
+      final hy2Warnings = <NodeWarning>[];
       final obfsNorm = normalizeHysteria2Obfs(
         obfs?['type']?.toString() ?? '',
         obfs?['password']?.toString() ?? '',
-        null,
+        hy2Warnings,
       );
+      // §469 — uTLS/REALITY на QUIC: блок снимает эмит (`toSingboxForQuic`),
+      // код ставит разбор. Правило — из реестра, см.
+      // `forbiddenTlsBlockWarnings`.
+      hy2Warnings.addAll(forbiddenTlsBlockWarnings(
+          'hysteria2', tlsBlocksOfBody(entry['tls'])));
       return Hysteria2Spec(
+        warnings: hy2Warnings,
         id: newUuidV4(),
         tag: tag.isEmpty ? 'hy2-$server-$port' : tag,
         label: label,
@@ -1171,6 +1184,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
     case 'tuic':
       if (server.isEmpty || port == 0) return null;
       return TuicSpec(
+        // §469 — то же, что у hysteria2: uTLS на QUIC снимается эмитом, код
+        // ставит разбор по правилу реестра.
+        warnings: forbiddenTlsBlockWarnings(
+            'tuic', tlsBlocksOfBody(entry['tls'])),
         id: newUuidV4(),
         tag: tag.isEmpty ? 'tuic-$server-$port' : tag,
         label: label,
@@ -1369,6 +1386,12 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
           : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ?? '';
       return MasqueSpec(
+        // §469 — MASQUE тоже QUIC: `tls.utls`/`tls.reality` ядро на нём не
+        // построит. Ссылка их не несёт, а рукописное тело — вполне, и там
+        // блок пропадал молча: `MasqueSpec` таких полей не знает вовсе.
+        // Правило то же и из того же места, что у hysteria2/tuic.
+        warnings: forbiddenTlsBlockWarnings(
+            'masque', tlsBlocksOfBody(masqueTls)),
         id: newUuidV4(),
         tag: tag.isEmpty ? 'masque-$server-$port' : tag,
         label: label,

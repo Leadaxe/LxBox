@@ -6,6 +6,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -116,6 +117,9 @@ String? _legacyWarningPath(NodeWarning w) => switch (w) {
       RealityShortIdInvalidWarning() => 'tls.reality.short_id',
       UnknownObfsWarning() => 'obfs.type',
       MissingObfsPasswordWarning() => 'obfs.password',
+      // §469 — контракт 1.1.4 назвал путь и значение и у `masque_vhttp_invalid`
+      // (`vhttp` = `tcp`). Поле класса и есть этот путь, один на все случаи.
+      MasqueVhttpInvalidWarning() => 'vhttp',
       // §467 — `field` класса это ИМЯ КЛЮЧА, под которым значение уезжает в
       // `transport` (его ставит тот же `putEnum`, что и предупреждение),
       // поэтому путь выводится из него, а не перечисляется вариантами:
@@ -138,6 +142,8 @@ String? _legacyWarningValue(NodeWarning w) => switch (w) {
       RealityFingerprintWarning(:final value) => value,
       RealityShortIdInvalidWarning(:final value) => value,
       UnknownObfsWarning(:final value) => value,
+      // §469 — исходное `vhttp` до подмены на `h3`.
+      MasqueVhttpInvalidWarning(:final value) => value,
       // §467 — у `placementRequiresPacketUp` значение пустое (код про
       // сочетание, не про значение), и пустое в конверт не пишется.
       XhttpParamResetWarning(:final value) => value,
@@ -510,6 +516,17 @@ void main() {
   final foreign = _foreignExtensionSchemes();
 
   group('Contract corpus (URI)', () {
+    // §469 — реестр грузится и здесь. Правила, которые парсер берёт ИЗ
+    // РЕЕСТРА (какие TLS-блоки схема запрещает и с каким кодом —
+    // `forbiddenTlsBlockWarnings`), без него молчат, и раннер проверял бы
+    // поведение, которого в приложении не бывает: `main()` грузит реестр до
+    // `runApp`, то есть любой разбор в проде идёт с загруженным реестром.
+    setUpAll(() async {
+      if (Directory('$_contractRoot/registry').existsSync()) {
+        await ContractRegistry.I.loadFromDirectory(_contractRoot);
+      }
+    });
+
     for (final file in cases) {
       final rel = file.path
           .substring(root.path.length)

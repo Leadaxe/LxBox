@@ -103,6 +103,23 @@ final class FieldSchema {
   /// Код для `allowed_for`/`forbidden_for`.
   String? get code => raw['code'] as String?;
 
+  /// §469 (контракт 1.1.4) — словарь «схема → код» поверх общего [code] у
+  /// `forbidden_for`. Понадобился ровно потому, что один запрет даёт разный
+  /// ИСХОД у разных схем: у naive снятый `tls.utls` это потерянная настройка
+  /// (`tls_field_unsupported_naive`, severity warning), а на QUIC-схемах
+  /// (hysteria, hysteria2, tuic, masque) uTLS и REALITY не применились бы в
+  /// принципе — снята бессмыслица, узел ничего не теряет
+  /// (`tls_not_applicable_quic`, severity info).
+  ///
+  /// Схема без записи в словаре берёт общий [code].
+  Map<String, String>? get forbiddenCodes =>
+      (raw['forbidden_codes'] as Map?)?.map((k, v) => MapEntry('$k', '$v'));
+
+  /// §469 — код запрета для [scheme]: точечный из [forbiddenCodes], иначе
+  /// общий [code]. `null` — кода реестр не назвал.
+  String? forbiddenCodeFor(String scheme) =>
+      forbiddenCodes?[scheme] ?? code;
+
   List<Map<String, dynamic>> get conflicts => _relations('conflicts');
 
   List<Map<String, dynamic>> get requires => _relations('requires');

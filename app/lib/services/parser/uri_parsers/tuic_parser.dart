@@ -1,7 +1,9 @@
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
+import '../../contract/parse_warnings.dart';
 import '../uri_utils.dart';
+import '../utls_fingerprint.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // TUIC v5 — новый протокол в v2.
@@ -74,6 +76,28 @@ TuicSpec? parseTuic(String uri) {
     ));
   }
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
+
+  // §469 (контракт 1.1.4) — `fp` на tuic прежде не читался ВОВСЕ («uTLS на
+  // QUIC не применяется»), и подписка, выдавшая отпечаток, теряла его молча.
+  // Читаем — но только ради кода: ядро строит TLS QUIC-протоколов через
+  // `STDConfig()`, которого uTLS не даёт, и блок всё равно срезается на эмите
+  // (`toSingboxForQuic`). В модель отпечаток не кладётся: узлу он ничего не
+  // даёт, а равенство и identity-хеш затронул бы.
+  //
+  // Какие схемы и какой код — из реестра (`tls.json` → `forbidden_for` +
+  // `forbidden_codes`), второго списка схем в Dart нет.
+  //
+  // Значение канонизируется тем же словарём, что у прочих схем: xray-алиас
+  // (`hellofirefox_auto`) и `Firefox` — то же самое, что `firefox`, и
+  // печатать в коде надо одно. Неопознанное значение печатается КАК ПРИШЛО
+  // (а не подменой на `chrome`, которую делает нормализация): `value` кода
+  // это «исходное значение до деградации» (CANON §6). Кода `utls_fp_unknown`
+  // здесь нет намеренно — отпечаток, который в принципе не применяется, ядру
+  // неизвестным быть не может, и корпус его у QUIC-схем не ждёт.
+  final fpRaw = (q['fp'] ?? q['fingerprint'] ?? '').trim();
+  final fp = normalizeUtlsFingerprintValue(fpRaw);
+  warnings.addAll(forbiddenTlsBlockWarnings(
+      'tuic', utlsBlockOf(fp.junk ? fpRaw : fp.value)));
 
   // §103 D-024 — heartbeat: голое число (секунды) → duration-строка с
   // суффиксом `s`; параметра не было в URI вовсе → null (не эмитим).

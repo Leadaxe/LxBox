@@ -263,4 +263,126 @@ void main() {
       }
     }, skip: skip);
   });
+
+  // §469 (контракт 1.1.4) — uTLS/REALITY на QUIC снимаются правилом реестра,
+  // и узел обязан получить код на ОБОИХ входах. Особенность против остальных
+  // правил: до санитайзера блок не доезжает (`toSingboxForQuic` срезает его
+  // на эмите, а санитайзер разбора смотрит именно на `emit()`), поэтому код
+  // ставит парсер — но по реестру, а не по своему списку схем.
+  group('§469 — uTLS/REALITY на QUIC', () {
+    test('hysteria2 из ссылки: fp снят с кодом, тело без utls', () {
+      final n = _one(
+        'hysteria2://pass123@example-1.com:443'
+        '?sni=x.example.com&fp=chrome#hy2',
+      );
+      final w = _byCode(n, 'tls_not_applicable_quic');
+      expect(w.path, 'tls.utls');
+      expect(w.value, 'map[enabled:true fingerprint:chrome]');
+      expect(w.severity, WarningSeverity.info,
+          reason: 'снята настройка, которой на QUIC и не было бы — узел '
+              'ничего не теряет');
+      final tls = n.emit(TemplateVars.empty).map['tls'] as Map;
+      expect(tls.containsKey('utls'), isFalse);
+      expect(tls['server_name'], 'x.example.com',
+          reason: 'остальной TLS цел');
+    }, skip: skip);
+
+    test('hysteria2 из ссылки: REALITY — один код на блок', () {
+      final n = _one(
+        'hysteria2://pass123@example-1.com:443?sni=x.example.com&fp=chrome'
+        '&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ab#hy2',
+      );
+      expect(
+        _registry(n)
+            .where((w) => w.code == 'tls_not_applicable_quic')
+            .map((w) => w.path)
+            .toList(),
+        ['tls.utls', 'tls.reality'],
+        reason: 'по коду на блок, в порядке схемы TLS; short_id своего '
+            'кода не даёт',
+      );
+      expect((n.emit(TemplateVars.empty).map['tls'] as Map)
+          .containsKey('reality'), isFalse);
+    }, skip: skip);
+
+    test('tuic из ссылки: fp читается ради кода и в тело не едет', () {
+      final n = _one(
+        'tuic://11111111-1111-1111-1111-111111111111:pass123@'
+        'tuic.example-1.com:443/?congestion_control=bbr&fp=firefox'
+        '&sni=tuic.example-1.com#tuic',
+      );
+      final w = _byCode(n, 'tls_not_applicable_quic');
+      expect(w.path, 'tls.utls');
+      expect(w.value, 'map[enabled:true fingerprint:firefox]');
+      expect((n.emit(TemplateVars.empty).map['tls'] as Map)
+          .containsKey('utls'), isFalse);
+    }, skip: skip);
+
+    test('hysteria2 из тела: те же коды, что у ссылки', () {
+      final n = _one('''
+{"type":"hysteria2","tag":"hy2","server":"example-1.com","server_port":443,
+ "password":"pass123","tls":{"enabled":true,"server_name":"x.example.com",
+ "utls":{"enabled":true,"fingerprint":"chrome"},
+ "reality":{"enabled":true,
+  "public_key":"AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw","short_id":"ab"}}}
+''');
+      expect(
+        _registry(n)
+            .where((w) => w.code == 'tls_not_applicable_quic')
+            .map((w) => '${w.path}|${w.value}')
+            .toList(),
+        [
+          'tls.utls|map[enabled:true fingerprint:chrome]',
+          'tls.reality|map[enabled:true public_key:'
+              'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5…',
+        ],
+      );
+    }, skip: skip);
+
+    test('vless+reality — без изменений: своих кодов QUIC-правило не даёт', () {
+      final n = _one(
+        'vless://11111111-1111-1111-1111-111111111111@example.com:443'
+        '?security=reality&encryption=none&sni=a.example'
+        '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
+        '&sid=ab&fp=chrome&type=tcp#node',
+      );
+      expect(_registry(n).map((w) => w.code),
+          isNot(contains('tls_not_applicable_quic')));
+      final tls = n.emit(TemplateVars.empty).map['tls'] as Map;
+      expect((tls['reality'] as Map)['public_key'],
+          'jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0');
+      expect(tls.containsKey('utls'), isTrue);
+    }, skip: skip);
+
+    test('masque из тела: правило то же (ссылка fp/pbk не несёт)', () {
+      final n = _one('''
+{"type":"masque","tag":"m","server":"192.0.2.44","server_port":443,
+ "profile":"cloudflare","vhttp":"h3","private_key":"k","public_key":"k",
+ "ip":"172.16.0.2/32","tls":{"server_name":"w.example.com",
+ "utls":{"enabled":true,"fingerprint":"safari"}}}
+''');
+      final w = _byCode(n, 'tls_not_applicable_quic');
+      expect(w.path, 'tls.utls');
+      expect(w.value, 'map[enabled:true fingerprint:safari]');
+      // `MasqueSpec` таких полей не знает — тело и без правила было бы чистым;
+      // правило добавляет ровно слово о потере.
+      expect((n.emit(TemplateVars.empty).map['tls'] as Map?)
+          ?.containsKey('utls'), isNot(isTrue));
+    }, skip: skip);
+
+    test('§469 п. 6 — obfs-коды hysteria2 доходят до узла и из тела', () {
+      final unknown = _one('''
+{"type":"hysteria2","tag":"n","server":"example-1.com","server_port":443,
+ "password":"p","obfs":{"type":"wat","password":"x"}}
+''');
+      expect(unknown.warnings.whereType<UnknownObfsWarning>(), hasLength(1));
+
+      final noPass = _one('''
+{"type":"hysteria2","tag":"n","server":"example-1.com","server_port":443,
+ "password":"p","obfs":{"type":"salamander"}}
+''');
+      expect(noPass.warnings.whereType<MissingObfsPasswordWarning>(),
+          hasLength(1));
+    }, skip: skip);
+  });
 }

@@ -536,11 +536,35 @@ Both `hysteria2://` and `hy2://` schemes are supported (the latter is normalized
     "enabled": true,
     "server_name": "<sni>",
     "insecure": false,
-    "utls": { "enabled": true, "fingerprint": "<fp>" },
     "alpn": ["h3"]
   }
 }
 ```
+
+No `utls` and no `reality` — see "TLS over QUIC" below. The mapping table above
+used to show a `utls` block; it never reached the config.
+
+### TLS over QUIC (§469, contract 1.1.4)
+
+Hysteria2 runs over QUIC, and the core builds QUIC's TLS through the standard
+engine (`aTLS.Config.STDConfig()`). Neither a uTLS fingerprint nor REALITY can
+be provided that way — `STDConfig()` on those configs returns an error and the
+outbound does not start at all. So `tls.utls` and `tls.reality` are stripped
+whole, and `fp=`/`pbk=`/`sid=` in a link have no effect on the connection.
+
+The same holds for **tuic**, **masque** and **hysteria v1**: one rule, four
+schemes, stated once in the contract registry (`tls.json`,
+`body.fields.utls/reality` → `forbidden_for` + `forbidden_codes`).
+
+Since 1.1.4 the strip is no longer silent: the node gets
+`tls_not_applicable_quic` (severity `info` — the setting would not have applied
+anyway, so nothing is lost), **one code per block**. A stripped REALITY counts
+as one: `short_id` and `key_share` inside it produce no codes of their own.
+The node's body is unchanged by this — the blocks never reached the config.
+
+Everything else in the TLS block is fine over QUIC and is kept:
+`server_name`, `alpn`, `insecure`, `certificate_public_key_sha256` (the
+`pinSHA256=` pin), certificates and TLS versions.
 
 ### Notes
 
@@ -1152,6 +1176,7 @@ tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
 | `allow_insecure` / `insecure` | `1` \| `true` — skip certificate verification |
 | `disable_sni` | `1` — do not send an SNI |
 | `reduce_rtt` | `1` — enable 0-RTT / early data |
+| `fp` / `fingerprint` | Read since §469 — **but only to report the loss**. TUIC runs over QUIC, where a uTLS fingerprint does not apply (see "TLS over QUIC" under Hysteria2); the value goes nowhere and the node gets `tls_not_applicable_quic` (`info`). Before 1.1.4 the parameter was not read at all and vanished without a word |
 
 ### sing-box outbound (emit)
 
@@ -1174,6 +1199,9 @@ tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
   }
 }
 ```
+
+`tls.utls` and `tls.reality` never appear here: see "TLS over QUIC" under
+Hysteria2 — the same rule covers hysteria, hysteria2, tuic and masque.
 
 ### Reference
 
@@ -1243,6 +1271,11 @@ It is emitted as an **Outbound** (not an Endpoint, unlike WireGuard). `ip` and
 
 The core's schema (§393, kernel SPEC 062): the HTTP version under the `vhttp`
 key, and the TLS options in a nested `tls{}`.
+
+MASQUE is a QUIC protocol, so `tls.utls` and `tls.reality` do not apply to it
+either — see "TLS over QUIC" under Hysteria2. The MASQUE link format carries no
+`fp`/`pbk`, so the rule shows up only on a hand-written body: it gets
+`tls_not_applicable_quic` from the registry guard, and the block is stripped.
 
 ```json
 {

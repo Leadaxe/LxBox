@@ -3,7 +3,9 @@ import 'dart:convert';
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/tls_spec.dart';
+import '../../contract/parse_warnings.dart';
 import '../hysteria2_obfs.dart';
+import '../transport.dart' show realityKeyShareFromQuery;
 import '../uri_utils.dart';
 import '../utls_fingerprint.dart';
 
@@ -110,6 +112,31 @@ Hysteria2Spec? parseHysteria2(String uri) {
   );
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
+
+  // §469 (контракт 1.1.4) — uTLS и REALITY поверх QUIC ядро не строит вовсе
+  // (`STDConfig()` у обоих возвращает ошибку), и блоки срезаются на эмите
+  // (`toSingboxForQuic`). Раньше срез был МОЛЧАЛИВЫМ: подписка выдала `fp=`,
+  // параметр не действовал, и узел об этом не сообщал.
+  //
+  // Правило — из реестра (`tls.json` → `forbidden_for`/`forbidden_codes`), а
+  // не список схем в Dart. Ставит его здесь парсер, а не санитайзер, ровно
+  // потому, что до санитайзера блок не доезжает: он смотрит на `emit()`, где
+  // среза уже нет (граница W2a, `parse_warnings.dart`).
+  //
+  // `pbk`/`sid` читаются ТОЛЬКО ради кода и в модель не кладутся: REALITY на
+  // hysteria2 неприменим, а в `TlsSpec` он потянул бы за собой равенство,
+  // identity-хеш и правила `normalizeTlsFingerprint` (там REALITY заводит
+  // свои коды — `reality_fp_not_chrome` на узле, где REALITY не работает).
+  //
+  // Неопознанный отпечаток печатается КАК ПРИШЁЛ: `tls.fingerprint` к этому
+  // месту уже подменён на `chrome` (§281), а `value` кода — «исходное
+  // значение до деградации» (CANON §6). Сама подмена объявлена своим кодом
+  // `utls_fp_unknown` выше.
+  warnings.addAll(forbiddenTlsBlockWarnings('hysteria2', {
+    ...utlsBlockOf(
+        normalizeUtlsFingerprintValue(fp).junk ? fp : tls.fingerprint),
+    ...?_realityBlockOf(q),
+  }));
 
   // §358 — тип вне enum ядра или obfs без пароля = fatal всего конфига;
   // нормализуем здесь, чтобы в спеку попало только принимаемое ядром.
@@ -312,4 +339,24 @@ int? _firstNumericPortFromSpec(String portSpec) {
   final p = int.tryParse(seg);
   if (p == null || p < 1 || p > 65535) return null;
   return p;
+}
+
+/// §469 — блок `tls.reality` из `pbk`/`sid` ссылки, в форме sing-box; `null`
+/// — REALITY в ссылке нет либо ключ негоден.
+///
+/// Нужен ТОЛЬКО для `value` предупреждения `tls_not_applicable_quic`: на
+/// hysteria2 REALITY неприменим, в модель и в тело узла он не попадает.
+/// Требование к ключу то же, что у vless (§169, [isValidRealityPublicKey]):
+/// на мусорном `pbk=true` подписка REALITY не просила, и кода такой узел не
+/// заслуживает.
+Map<String, Map<String, dynamic>>? _realityBlockOf(Map<String, String> q) {
+  final pbk = (q['pbk'] ?? '').trim();
+  if (!isValidRealityPublicKey(pbk)) return null;
+  return {
+    'reality': RealitySpec(
+      publicKey: pbk,
+      shortId: normalizeRealityShortId(q['sid'] ?? ''),
+      keyShare: realityKeyShareFromQuery((q['key_share'] ?? '').trim()),
+    ).toSingbox(),
+  };
 }

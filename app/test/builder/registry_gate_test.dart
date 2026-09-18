@@ -65,10 +65,13 @@ void main() {
       expect(report.warnings.length, 2, reason: report.warnings.join('\n'));
       final joined = report.warnings.join('\n');
       expect(joined, contains('naive-json: '));
-      // Путь есть у обоих; значения нет — код уровня поля («это поле здесь
-      // запрещено») к значению не относится.
+      // Путь есть у обоих. §469 — у запрета (`forbidden_for`) появилось и
+      // ЗНАЧЕНИЕ: ожидания корпуса его называют
+      // (`singbox/outbound_array_tls_fields` → `tls.insecure` = `true`), а
+      // гейт до этого ставил код без него. `unknown_key` значения по-прежнему
+      // не несёт — там снят сам ключ, и говорить про него нечего.
       expect(joined, contains('[foo]'));
-      expect(joined, contains('[tls.insecure]'));
+      expect(joined, contains('[tls.insecure=true]'));
       // Текст из warnings.json, а не голый код.
       expect(joined, isNot(contains('unknown_key')));
       expect(joined, isNot(contains('tls_field_unsupported_naive')));
