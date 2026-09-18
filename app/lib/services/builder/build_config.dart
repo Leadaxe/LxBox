@@ -47,6 +47,17 @@ class BuildResult {
   /// direct/block по include-галкам). UI показывает по ним транзиентный
   /// SnackBar; фактический исход — в тексте [emitWarnings]/AppLog.
   final List<String> directionsWithoutNodes;
+
+  /// Фича 478 / CANON §9.3 — обратное отображение «финальный тег собранного
+  /// конфига → исходный узел». Строит его та же сборка, которая теги и
+  /// выдала, поэтому производные записи (хоп цепочки, узел папки, префикс
+  /// подписки, WARP) ведут к своему ИСХОДНОМУ узлу.
+  ///
+  /// Карта НЕ полная: узлы, отсеянные гейтами и разбором, в ней не лежат, а
+  /// служебные записи приложения (direct, block, группы, Направления) своего
+  /// узла не имеют вовсе. Тег без узла сопоставленным не считается —
+  /// автоматики нет (§9.3).
+  final Map<String, NodeSpec> nodeByEmittedTag;
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -54,6 +65,7 @@ class BuildResult {
     required this.emitWarnings,
     required this.generatedVars,
     this.directionsWithoutNodes = const [],
+    this.nodeByEmittedTag = const {},
   });
 }
 
@@ -745,6 +757,9 @@ Future<BuildResult> buildConfig({
     emitWarnings: emitWarnings,
     generatedVars: generatedVars,
     directionsWithoutNodes: directionsWithoutNodes,
+    nodeByEmittedTag: {
+      for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
+    },
   );
 }
 
