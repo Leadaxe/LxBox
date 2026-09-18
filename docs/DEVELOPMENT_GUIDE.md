@@ -235,21 +235,32 @@ thread — one native sink per channel, with fan-out through a broadcast.
 7. **DNS settings**: change the servers → restart the VPN → DNS resolves
 8. **App routing**: create a group → add applications → their traffic goes through the outbound
 
-#### Pre-commit gates
+#### Where the tests run: locally the affected ones, in full on CI
 
-Before every commit:
+Maintainer's decision, 2026-09-18: **a full `flutter test` is never run locally.**
+Not while working, not before a commit, not in the release pre-flight. The whole
+suite belongs to CI — the `checks` job on every push to `develop` and on every
+tag.
+
+Locally, before a commit:
+
 ```bash
-cd app && flutter analyze
-cd app && flutter test
+cd app && flutter analyze                 # the whole project, no path argument
+cd app && flutter test test/<the files this task wrote or changed>
 ```
+
+Only the test files this task actually touched, plus the handful of cases that
+bear directly on the change. Not a whole `test/` directory, not the whole
+contract corpus, not all the goldens — those are CI's job. A full local run is
+~5100 tests and ~20 minutes, and on a loaded machine it starts inventing
+`TimeoutException`s that say nothing about the code.
 
 ⚠ Run `flutter analyze` **without a path argument**, exactly as CI does.
 Narrowing it to `flutter analyze lib/ test/` skips files outside those
-directories and lets errors through that CI will then catch.
+directories and lets errors through that CI will then catch. Analyze is fast and
+covers `test/` as well, so it stays a local gate in full.
 
-`flutter analyze` and `flutter test` are **not** the whole gate: the `checks` job
-also runs the four l10n checkers with `--strict`, and warnings there are fatal.
-Run them too before pushing:
+The fast checkers also stay local — they take seconds:
 
 ```bash
 cd app && dart run tool/l10n/ui_check.dart --strict
@@ -257,13 +268,40 @@ cd app && dart run tool/l10n/template_check.dart --strict
 cd app && dart run tool/l10n/hardcoded_check.dart --strict
 cd app && dart run tool/l10n/kotlin_check.dart --strict
 cd app && dart run tool/docs/parity_check.dart --strict
+cd app && dart run tool/check_contract_lock.dart   # when the contract copy is involved
 ```
 
-**0 issues** in analyze, **all tests green** and **zero failures in the checkers**
-are all mandatory.
+**0 issues** in analyze, **green on your own tests** and **zero failures in the
+checkers** are all mandatory before pushing.
 
-There are roughly 3000 test cases across 227 files (the count moves as tests are
-added; the source of truth is the `flutter test` summary):
+#### After the push: the CI result is not optional
+
+A push is not done until its run is green. Wait for the run on your `head_sha`
+and read the verdict through the API:
+
+```bash
+HEAD_SHA=$(git rev-parse HEAD)
+gh api "repos/Leadaxe/LxBox/actions/runs?head_sha=$HEAD_SHA" \
+  -q '.workflow_runs[] | "\(.id) \(.status) \(.conclusion)"'
+gh api repos/Leadaxe/LxBox/actions/runs/<id> -q '"\(.status) \(.conclusion) \(.head_sha)"'
+```
+
+⚠ `gh run list` and `gh run watch` hand back a stale run often enough to burn an
+hour — the API call above, with the `head_sha` checked against your commit, is
+the answer. A red run is fixed straight away, as its own commit.
+
+When several agents are working: the one who made the change pushes and does
+**not** sit waiting for CI; a separate agent on duty (in a worktree) watches the
+runs and fixes what goes red, and the next task starts without waiting.
+
+⚠ **The `app/contract/` trap.** `app/contract/` is gitignored — on CI it does not
+exist. A test that reads the contract copy or its corpus without an `existsSync`
+gate is green on your machine and red on CI, and you find out after the push. A
+test that needs the registry loads it from the committed mirror
+`app/assets/contract`, not from `app/contract/`.
+
+There are roughly 5100 test cases (the count moves as tests are added; the source
+of truth is the `flutter test` summary in the CI log):
 - `test/models/` — sealed hierarchies (NodeSpec, NodeWarning, ServerList JSON, CustomRule)
 - `test/parser/` — URI/JSON/INI parsers plus round-trips (parseUri → toUri → parseUri)
 - `test/builder/` — build_config, validator, mixed-case SNI, preset_expand, applyCustomDns, dns_rules_resolver

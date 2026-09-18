@@ -65,10 +65,12 @@ After every release, `main` is merged back into `develop` (§2.6); otherwise the
    - in `app/android/app/build.gradle.kts` the dependency is `implementation(files("libs/libbox.aar"))`, with **no** active Maven line `com.github.singbox-android:libbox`;
    - `ci.yml` (job `android`) has the step `Fetch sing-box-lx core (libbox.aar)`, and the pin `app/android/libbox.version` is the version the local smoke test ran on (step 4) — the pin is shared by local builds and CI, so they have nothing to diverge over;
    - the stock 1.13.11 core rejects configs carrying AWG fields (`jc`/`jmin`/…) and `type:"xhttp"` — a release built on it is defective.
-1. Everything is green on `develop`:
+1. Everything is green on `develop`. **The test run that counts is CI's, not a
+   local one** — see “The tests: the green CI run is the gate” below in this
+   step. Locally run only the fast things:
    ```bash
    cd app
-   flutter analyze && flutter test
+   flutter analyze
    dart run tool/l10n/template_check.dart --strict
    dart run tool/l10n/ui_check.dart --strict
    dart run tool/l10n/hardcoded_check.dart --strict
@@ -80,6 +82,33 @@ After every release, `main` is merged back into `develop` (§2.6); otherwise the
    ⚠ The l10n checkers are **not optional**: the `checks` job runs them as the “L10n checks” step, and any failure kills the release exactly like a failing test. On v2.17.0 the tag had to be re-issued because of `hardcoded_check`: two `hintText` examples in §302 (`tls.utls.fingerprint`, `chrome`). Technical identifiers in the UI (JSON paths, protocol field values) are not translatable — the cure is not “add a key to the dictionary” but a `// l10n-exempt: <reason>` annotation at the end of the line (see [l10n.md](l10n.md)).
 
    ⚠ `parity_check` guards the six RU/EN pairs (README, USER_GUIDE, DONATE, PRIVACY_POLICY, SECURITY, AUTOMATION). A section added to one language only fails the “Docs parity” step.
+
+   **The tests: the green CI run is the gate.**
+   The pre-flight test gate is **a green `checks` run on the head of `develop`**,
+   re-checked through the API. A full `flutter test` is never run locally, not
+   here and not during development (maintainer's decision, 2026-09-18 — the rule
+   itself is in [DEVELOPMENT_GUIDE.md → Testing](DEVELOPMENT_GUIDE.md#testing)).
+
+   ```bash
+   HEAD_SHA=$(git rev-parse origin/develop)
+   gh api "repos/Leadaxe/LxBox/actions/runs?head_sha=$HEAD_SHA" \
+     -q '.workflow_runs[] | "\(.id) \(.status) \(.conclusion)"'
+   # then, by the run id from that list:
+   gh api repos/Leadaxe/LxBox/actions/runs/<id> -q '"\(.status) \(.conclusion) \(.head_sha)"'
+   # → "completed success <the same sha as origin/develop>"
+   ```
+
+   ⚠ Check it through `gh api`, not `gh run list` / `gh run watch`: those two
+   hand back a stale run often enough to matter, and “green” for a run whose
+   `head_sha` is not the commit you are about to tag proves nothing.
+
+   Why CI and not the local machine: the full run is ~5100 tests and ~20 minutes,
+   and on a loaded machine it invents `TimeoutException`s that have nothing to do
+   with the code. CI does the same run in a clean checkout and **without**
+   `app/contract/` — which is exactly the environment the released build ships
+   from, so it catches more, not less (see the `app/contract/` trap in the
+   development guide).
+
 2. `develop` is a direct descendant of the last stable tag:
    ```bash
    git fetch --tags
@@ -473,7 +502,7 @@ debug build without a clean reinstall.
 
 ### Stable vX.Y.Z
 
-- [ ] `develop` is green (`cd app && flutter analyze && flutter test` **plus the four `dart run tool/l10n/*_check.dart --strict` and `parity_check`** — CI runs them as the “L10n checks” and “Docs parity” steps, see §2.1 step 1) and a descendant of the previous stable tag.
+- [ ] `develop` is green and a descendant of the previous stable tag. Green = **the `checks` run on the head of `develop` finished `success`**, verified with `gh api repos/Leadaxe/LxBox/actions/runs/<id>` and matching `head_sha` (not `gh run list`/`gh run watch`); locally only `cd app && flutter analyze` plus the four `dart run tool/l10n/*_check.dart --strict` and `parity_check`. No local full `flutter test` — see §2.1 step 1.
 - [ ] **The core:** `app/android/app/build.gradle.kts` → `implementation(files("libs/libbox.aar"))` (no active Maven line for the stock libbox); `ci.yml` job `android` has the `Fetch sing-box-lx core` step; the pin `app/android/libbox.version` is the version of the local smoke test. The stock 1.13.11 rejects AWG/XHTTP configs — do not ship such a release.
 - [ ] The release docs are in sync: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (if affected), `README.md` + `README.ru.md` (if features are user-visible), specs → `status: released`.
 - [ ] `app/pubspec.yaml` in `develop` is **untouched** — the real version goes in on the merge commit into `main` (§2.4/§379), and the tag lands on that commit.
