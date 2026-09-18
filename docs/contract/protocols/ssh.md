@@ -133,10 +133,25 @@ The node body itself — the sing-box JSON kept in the launcher state. The path 
 - <a id="body-tcp-fast-open"></a>**`tcp_fast_open`** — Use TCP Fast Open.
   - Type: bool
   - Default: `false`
+- <a id="body-disable-tcp-keep-alive"></a>**`disable_tcp_keep_alive`** — Disable TCP keepalive on this connection.
+  - Type: bool
+  - Default: `false`
+- <a id="body-tcp-keep-alive"></a>**`tcp_keep_alive`** — Idle time before the first TCP keepalive probe.
+  - Type: duration
+- <a id="body-tcp-keep-alive-interval"></a>**`tcp_keep_alive_interval`** — Interval between TCP keepalive probes.
+  - Type: duration
 - <a id="body-udp-fragment"></a>**`udp_fragment`** — Allow fragmenting UDP packets.
   - Type: bool, tristate
 - <a id="body-domain-resolver"></a>**`domain_resolver`** — DNS server tag used to resolve the server domain.
   - Type: string
+- <a id="body-network-strategy"></a>**`network_strategy`** — Strategy for picking the outbound network interface. The core judges the value: the launcher passes it through unchecked.
+  - Type: string
+- <a id="body-network-type"></a>**`network_type`** — Interface types allowed for this connection. The core judges the values.
+  - Type: listable_string
+- <a id="body-fallback-network-type"></a>**`fallback_network_type`** — Interface types used when the primary ones are unavailable. The core judges the values.
+  - Type: listable_string
+- <a id="body-fallback-delay"></a>**`fallback_delay`** — Delay before falling back to the secondary network type.
+  - Type: duration
 
 ## Diagnosed problems
 

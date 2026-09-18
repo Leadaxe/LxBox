@@ -505,15 +505,25 @@ const kVmessSecurityMethods = <String>{
 /// Нормализация VMess security/cipher к словарю ядра
 /// ([kVmessSecurityMethods]).
 ///
-/// §459 — единственная воронка для всех трёх входов (URI v2rayN `scy`,
-/// sing-box JSON, Xray JSON `users[].security`). Реестр
-/// `protocols/vmess.json` → `body.fields.security`: `normalize: trim_lower`,
-/// `on_invalid: {action: coerce, value: auto, code: type_invalid}`.
+/// §474 (контракт 1.1.7) — воронка осталась только у ДВУХ входов: sing-box
+/// JSON и Xray JSON. Вход URI её больше не зовёт.
+///
+/// На конвейере суждение о значении делает реестр
+/// (`protocols/vmess.json` → `body.fields.security`: enum + `on_invalid:
+/// coerce auto`, код `vmess_security_unknown`), и подмена перестала быть
+/// молчаливой: человек видит, что узел уедет не на том шифре, который просила
+/// подписка. Маппер оставил себе только перевод диалекта и подстановку на
+/// пустом — см. `mappers/vmess_mapper.dart` → `_securitySpelling`.
+///
+/// Здесь сведение ОСТАЁТСЯ намеренно. Ветки JSON санитайзер по телу не
+/// проходят: `annotateAllWithRegistry` судит уже собранный `emit()` модели, и
+/// сними эту воронку сейчас — в модель лёг бы шифр, которого ядро не знает
+/// (`aes-128-ctr` роняет ВЕСЬ конфиг, а не один узел), кода при этом всё
+/// равно не появилось бы. Уйдёт вместе с переездом JSON-входа на конвейер
+/// (шаг 8 фичи 472); до тех пор подмена на этих двух входах пишется в лог.
 ///
 /// Раньше пропускался `aes-128-ctr` (ядро его не знает — фатал всего
 /// конфига), а рабочий `aes-128-cfb` схлопывался в `auto`.
-/// Класс `NodeWarning` под код `type_invalid` появится с фичей реестра —
-/// пока подмена пишется в лог.
 String normalizeVmessSecurity(String raw) {
   final s = raw.trim().toLowerCase();
   if (s.isEmpty || s == 'null' || s == 'undefined') return 'auto';

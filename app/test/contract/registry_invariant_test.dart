@@ -192,6 +192,59 @@ void main() {
               'контракт откатили, либо линтер смотрит не туда');
     }, skip: synced ? null : 'контракт не синхронизирован');
 
+    // §474 (контракт 1.1.7) — `coerce` с общим `type_invalid` это ошибка.
+    //
+    // Текст `type_invalid` говорит «поле снято: неверный тип». При `coerce`
+    // поле НЕ снимается, а подменяется, и тип значения обычно ни при чём:
+    // узел уезжает на другом шифре (`vmess.security`), другом отпечатке
+    // (`tls.utls.fingerprint`), другой версии HTTP (`masque.vhttp`). Общий код
+    // врал бы о происходящем, и человек читал бы про потерю поля там, где
+    // поле на месте — с чужим значением.
+    //
+    // Ровно на этом контракт 1.1.7 и поймал `vmess.security`: он был
+    // ПОСЛЕДНИМ коэрсингом с общим кодом. Линтер держит границу дальше.
+    test('coerce несёт свой код, а не общий type_invalid', () {
+      var checked = 0;
+      for (final file in registryDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.json'))) {
+        final rel = file.path.substring(registryDir.path.length + 1);
+        if (rel == 'warnings.json') continue;
+        final data = jsonDecode(file.readAsStringSync());
+
+        void walk(Object? node, String path) {
+          if (node is Map) {
+            final oi = node['on_invalid'];
+            if (oi is Map && oi['action'] == 'coerce') {
+              checked++;
+              expect(oi['code'], isNotNull,
+                  reason: '$rel $path: coerce без кода — подмена значения '
+                      'прошла бы молча');
+              expect(oi['code'], isNot('type_invalid'),
+                  reason: '$rel $path: coerce с общим type_invalid. Текст '
+                      'кода описывает СНЯТИЕ поля, а coerce его подменяет — '
+                      'заведите свой код у лаунчера');
+            }
+            for (final e in node.entries) {
+              walk(e.value, path.isEmpty ? '${e.key}' : '$path.${e.key}');
+            }
+          } else if (node is List) {
+            for (final e in node) {
+              walk(e, path);
+            }
+          }
+        }
+
+        walk(data, '');
+      }
+      // Коэрсингов в реестре три (masque.vhttp, tls.utls.fingerprint,
+      // vmess.security). Ноль означал бы, что линтер смотрит не туда.
+      expect(checked, greaterThanOrEqualTo(3),
+          reason: 'on_invalid.coerce в реестре почти не встречается — '
+              'проверьте, не разъехался ли обход с формой реестра');
+    }, skip: synced ? null : 'контракт не синхронизирован');
+
     test('санитайзер берёт код из forbidden_codes, а не общий', () {
       // `tls.utls` запрещён и naive, и QUIC-схемам — но исход разный, и код
       // тоже: у naive потерянная настройка, на QUIC снятая бессмыслица.

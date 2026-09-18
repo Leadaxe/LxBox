@@ -26,11 +26,12 @@ import '../mappers/uri_pipeline.dart';
 /// | `_normalizeAlpn` — drop элемента, не похожего на ALPN-id | `tls.json` → `alpn`, `listable_string` | — (значение проходит) |
 /// | `TlsSpec.disabled` → `tls:{enabled:false}` в эмиссии | маппер блока не кладёт вовсе | — (`security_none_no_tls`, SPEC 045) |
 ///
-/// Рукописным осталось ОДНО правило значения — гашение `flow=xtls-rprx-vision`
-/// при живом транспорте (`VisionWithTransportWarning`). Правило в реестре
-/// есть (`flow.conflicts` → `transport`), но как записано, оно не срабатывает:
-/// конфликт снимает МЛАДШЕЕ поле по `body.order`, а `flow` идёт раньше
-/// `transport` — уцелели бы оба, и ядро такой узел не поднимет. См. запрос к
-/// лаунчеру в спеке 472, раздел «Что вышло: шаг 3».
+/// | `VisionWithTransportWarning` — гашение `flow` при живом транспорте | `protocols/vless.json` → `flow`, `conflicts` со своим кодом | `vision_with_transport` (§474, контракт 1.1.6) |
+///
+/// Правил значения рукописными у схемы не осталось: последнее — гашение
+/// vision — уехало в реестр вместе с прочтением `conflicts` (снимается
+/// ДЕКЛАРАНТ, а не младшее по `body.order`, §474). Рукописным остаётся только
+/// ПЕРЕВОД написания: он по определению работа маппера, и реестр описывает
+/// его секцией `mapper`, а не правилами значений.
 VlessSpec? parseVless(String uri) =>
     parseUriViaPipeline(uri, 'vless') as VlessSpec?;

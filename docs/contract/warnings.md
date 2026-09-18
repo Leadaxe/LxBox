@@ -78,6 +78,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`uri_too_long`](#uri_too_long) · `error` — Link too long: {length} characters
 - [`utls_fp_unknown`](#utls_fp_unknown) · `warning` — Unknown uTLS fingerprint replaced
 - [`vision_with_transport`](#vision_with_transport) · `info` — flow removed: incompatible with transport
+- [`vmess_security_unknown`](#vmess_security_unknown) · `warning` — VMess: unknown cipher replaced with auto
 - [`ws_early_data_converted`](#ws_early_data_converted) · `info` — WebSocket: early data converted
 - [`xhttp_mode_forced_packet_up`](#xhttp_mode_forced_packet_up) · `warning` — XHTTP mode set to packet-up
 - [`xhttp_param_reset`](#xhttp_param_reset) · `warning` — XHTTP: field {field} removed
@@ -575,8 +576,6 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`xhttp.xmux.max_concurrency`](protocols/_transports.md#body-xhttp-xmux-max-concurrency) — conflicts with `transport.xmux.max_connections` → removed
 - [`tuic`](protocols/tuic.md)
   - [`udp_relay_mode`](protocols/tuic.md#body-udp-relay-mode) — conflicts with `udp_over_stream` → removed
-- [`vless`](protocols/vless.md)
-  - [`flow`](protocols/vless.md#body-flow) — conflicts with `transport` → removed
 - [`wireguard`](protocols/wireguard.md)
   - [`i1`](protocols/wireguard.md#body-i1) — conflicts with `ib` → removed
   - [`i1`](protocols/wireguard.md#body-i1) — conflicts with `id` → removed
@@ -1204,7 +1203,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 <a id="tls_insecure"></a>
 ### tls_insecure
 
-**severity:** `info`
+**severity:** `info` · **params:** `path`, `value`
 
 **Certificate verification disabled**
 
@@ -1216,7 +1215,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **Where it comes from:**
 
-- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+- [`tls`](protocols/_tls.md)
+  - [`insecure`](protocols/_tls.md#body-insecure) — the value is `true` → kept with a notice
 
 <a id="tls_not_applicable_quic"></a>
 ### tls_not_applicable_quic
@@ -1372,7 +1372,6 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`uuid`](protocols/tuic.md#body-uuid) — the value does not fit the field → removed
 - [`vmess`](protocols/vmess.md)
   - [`alter_id`](protocols/vmess.md#body-alter-id) — the value does not fit the field → removed
-  - [`security`](protocols/vmess.md#body-security) — the value does not fit the field → replaced with `auto`
 - [`wireguard`](protocols/wireguard.md)
   - [`address`](protocols/wireguard.md#body-address) — the value does not fit the field → removed
   - [`listen_port`](protocols/wireguard.md#body-listen-port) — the value does not fit the field → removed
@@ -1439,18 +1438,37 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 <a id="vision_with_transport"></a>
 ### vision_with_transport
 
-**severity:** `info` · **params:** `transport`
+**severity:** `info` · **params:** `path`, `with`
 
 **flow removed: incompatible with transport**
 
-- **What happened:** xtls-rprx-vision works only over bare TLS, but the node uses the {transport} transport. The flow field at {path} was removed, because the value has no effect here; the node keeps working.
+- **What happened:** xtls-rprx-vision works only over bare TLS, but the node has {with} set. The flow field at {path} was removed, because the value has no effect here; the node keeps working.
 - **Why it happens:** The panel put flow=xtls-rprx-vision into every link it generates, without looking at whether the node uses a transport. Vision only exists over bare TLS, so on a WebSocket, gRPC or HTTP node it is simply left over.
 - **What you can do:**
   - Nothing to do: the node works, and the removed value had no effect on this transport.
 
 **Where it comes from:**
 
-- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+- [`vless`](protocols/vless.md)
+  - [`flow`](protocols/vless.md#body-flow) — conflicts with `transport` → removed
+
+<a id="vmess_security_unknown"></a>
+### vmess_security_unknown
+
+**severity:** `warning` · **params:** `path`, `value`
+
+**VMess: unknown cipher replaced with auto**
+
+- **What happened:** The VMess cipher {value} at {path} is not one the core knows. It was replaced with auto, because the core rejects such a value and would refuse to start the whole config. The node works, but on the cipher the server picks, not the one the subscription asked for.
+- **Why it happens:** The core knows only auto, none, zero, aes-128-cfb, aes-128-gcm and chacha20-poly1305 here. Another word means a typo in the link, a cipher retired from the core (aes-128-ctr), or a name borrowed from another client, where the same ciphers are spelled differently.
+- **What you can do:**
+  - Nothing to do in most cases: with auto the server picks the cipher itself and the node connects.
+  - If the node does not connect, ask the provider for a link with a cipher sing-box knows.
+
+**Where it comes from:**
+
+- [`vmess`](protocols/vmess.md)
+  - [`security`](protocols/vmess.md#body-security) — the value does not fit the field → replaced with `auto`
 
 <a id="ws_early_data_converted"></a>
 ### ws_early_data_converted

@@ -75,10 +75,23 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
 
   final warnings = <NodeWarning>[...mapping.warnings];
 
+  // §474 — dial-поля идут В САНИТАЙЗЕР, вместе со всем телом.
+  //
+  // До контракта 1.1.6 они дописывались ПОСЛЕ него и мимо него: реестр
+  // числил их строками `skipped`, и санитайзер снял бы их как `unknown_key`
+  // — то есть повесил бы код о «неизвестном ключе» на поле, которое ядро
+  // принимает, а человек написал сам. Теперь `dialer.json` описывает их
+  // полями (`tcp_keep_alive`, `tcp_keep_alive_interval` — `duration`,
+  // `disable_tcp_keep_alive` — `bool`), и обходить судью больше незачем:
+  // значения судятся наравне с прочими.
+  var body = mapping.body;
+  if (mapping.extensionFields.isNotEmpty) {
+    body = {...body, ...mapping.extensionFields};
+  }
+
   // Санитайзер по реестру — единственный судья значений. Гейты `min_core`/
   // `platform` выключены: они зависят от ЗАПУЩЕННОГО ядра, а узел от него не
   // зависит (24.1.6, та же граница, что у W2a и шага 1).
-  var body = mapping.body;
   if (ContractRegistry.I.isLoaded) {
     final res = RegistrySanitizer.sanitize(
       body,
@@ -91,11 +104,6 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme) {
     body = res.body!;
     warnings.addAll(res.warnings);
   }
-
-  // §453 — поля, которых реестр не описывает (`dialer.json` → `skipped`),
-  // дописываются ПОСЛЕ санитайзера: он снял бы их как `unknown_key` вместе с
-  // настройкой человека. Обоснование границы — [UriMapping.extensionFields].
-  body.addAll(mapping.extensionFields);
 
   // Имя узла: `tag` вычисляется из фрагмента общим правилом, как раньше.
   // `parseSingboxEntry` читает `label` из `tag`, поэтому тег кладётся в карту

@@ -80,18 +80,14 @@ UriMapping? mapVlessUri(String uri) {
 
   final transport = transportMapFromQuery(q, warnings: warnings);
 
-  // §115 / корпус `flow_vision_*_suppressed` — vision несовместим с
-  // транспортом, и flow гасится. Правило реестра (`flow.conflicts.transport`)
-  // этого НЕ делает: `flow` идёт раньше `transport` в `body.order`, а
-  // конфликт снимает МЛАДШЕЕ поле, то есть уцелели бы оба. Пока правило
-  // реестра так записано, решение остаётся здесь — с рукописным кодом
-  // `vision_with_transport`, которого корпус и ждёт от LxBox
-  // (`flow_vision_ws_suppressed.expected.lxbox.json`). См. отчёт шага 3:
-  // это первый пункт запроса к лаунчеру.
-  if (flow == _kVision && transport.map != null) {
-    warnings.add(VisionWithTransportWarning(q['type'] ?? 'transport'));
-    flow = '';
-  }
+  // §474 — гашение vision при транспорте уехало в реестр целиком.
+  //
+  // Правило `flow.conflicts.with = transport` со своим кодом
+  // `vision_with_transport` (info) исполняет санитайзер: конфликт снимает
+  // ДЕКЛАРАНТА, то есть `flow`, а соседа видит и в исходном теле — поэтому
+  // `transport` (order 9) замечен, хотя `flow` (order 3) разбирается раньше.
+  // Прежнее прочтение «снимается младшее по order» оставляло оба поля, из-за
+  // чего правило и жило здесь рукописным.
 
   // §335 — постквантовый слой: значение как есть, `none` = слой выключен
   // (`vless.json` → `uri.query.encryption`). Закрытого enum у поля нет.
@@ -120,14 +116,10 @@ UriMapping? mapVlessUri(String uri) {
   );
   if (tls != null) body['tls'] = tls;
 
-  // `tls_insecure` — правила значения у реестра НЕТ: `tls.insecure` в
-  // `tls.json` объявлен обычным `bool` без `advisory`, и санитайзер на нём
-  // молчит. Код info-шный (узел работает, но защита от MITM снята), корпус
-  // его ждёт (`reality_vision_full.expected.lxbox.json`), поэтому ставит его
-  // по-прежнему разбор. Второй пункт запроса к лаунчеру: правило `advisory`
-  // на `tls.insecure`, как у `utls.fingerprint`. Так же осталось и у trojan
-  // после шага 2 — снимется у обеих схем разом.
-  if (tls?['insecure'] == true) warnings.add(const InsecureTlsWarning());
+  // §474 — `tls_insecure` тоже уехал в реестр: `tls.json` → `insecure`,
+  // `advisory` на значении `true` (контракт 1.1.6). Код тот же и той же
+  // тяжести (info), но теперь приезжает с путём и значением, как всякий код
+  // санитайзера.
 
   if (transport.map != null) body['transport'] = transport.map;
 
@@ -135,7 +127,8 @@ UriMapping? mapVlessUri(String uri) {
     body: body,
     label: decodeFragment(p.fragment),
     warnings: warnings,
-    // §453 — dial-поля мимо санитайзера: см. `UriMapping.extensionFields`.
+    // §453 — dial-поля keep-alive; §474 — судятся санитайзером (реестр их
+    // описывает). См. `UriMapping.extensionFields`.
     extensionFields: tcpKeepAliveMapFromQuery(q),
     wsEarlyDataHeaderImplicit: transport.wsEarlyDataHeaderImplicit,
   );

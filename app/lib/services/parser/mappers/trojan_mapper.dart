@@ -60,12 +60,8 @@ UriMapping? mapTrojanUri(String uri) {
     body: body,
     label: decodeFragment(p.fragment),
     warnings: warnings,
-    // §472 шаг 3 — dial-поля §453 уехали из `body` в [extensionFields]: там
-    // они лежат до санитайзера, а не после. Реестр их не описывает (лаунчер
-    // не пишет, `dialer.json` → `skipped`), и в теле санитайзер снимал их как
-    // `unknown_key` — узел терял настройку человека МОЛЧА, а шаг 2 этого не
-    // заметил: `tcp_keep_alive_test.dart` реестра не грузит, и санитайзер там
-    // не работал вовсе.
+    // §453 — dial-поля keep-alive; §474 — судятся санитайзером наравне с
+    // прочими (`dialer.json` описал их полями). См. [extensionFields].
     extensionFields: tcpKeepAliveMapFromQuery(q),
     wsEarlyDataHeaderImplicit: transport.wsEarlyDataHeaderImplicit,
   );

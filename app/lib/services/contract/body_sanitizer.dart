@@ -317,7 +317,7 @@ final class _Ctx {
     }
 
     // 3. Связи между полями — когда состав уже известен: `requires` смотрит
-    // на соседей, `conflicts` снимает младшее по `order`.
+    // на соседей, `conflicts` снимает декларанта (§474).
     _applyRelations(kept, order, fields, prefix);
 
     // Связи могли что-то снять — синхронизируем снимок.
@@ -557,6 +557,12 @@ final class _Ctx {
     //   отпечатков у ядра три десятка, а гибридный шар есть у девяти).
     // `when` — дополнительное условие по другому полю тела: код про REALITY
     // не имеет смысла на узле без REALITY.
+    //
+    // §474 (контракт 1.1.6) — `values` принимает и BOOLEAN: `tls.insecure:
+    // true` даёт info-код `tls_insecure`, значение сохраняется. Отбор именно
+    // по значению, а не `except`: у bool «не задано» и `false` неразличимы, и
+    // код обязан стоять ровно на `true`. Сравнение `vals.contains(v)` работает
+    // на bool как есть — отдельной ветки тип не требует.
     for (final a in f.advisory) {
       final code = a['code'] as String?;
       if (code == null) continue;
@@ -573,10 +579,31 @@ final class _Ctx {
           path: path,
           value: v,
           secret: f.secret,
-          params: {'method': v is String ? v : '$v'});
+          params: _advisoryParams(code, v));
     }
 
     return _Value.keep(v);
+  }
+
+  /// §474 — подстановки advisory-кода ПО ЕГО ОБЪЯВЛЕНИЮ в `warnings.json`.
+  ///
+  /// `path` и `value` подставляются всегда (`text_params_implicit`) и сюда не
+  /// попадают — их несут одноимённые поля warning'а. Остаётся то, что код
+  /// объявил сам, и единственная осмысленная подстановка для правила значения
+  /// — само значение: `ss_method_legacy` зовёт его `{method}`.
+  ///
+  /// Раньше `{method}` ставился безусловно. Коду, который его не объявлял,
+  /// лишний параметр не мешал, но и не помогал: `tls_insecure` объявляет
+  /// `path` и `value`, и заполняются они сами. Явный разбор нужен, чтобы
+  /// новый advisory-код со своим именем параметра не потребовал правки здесь
+  /// — тест рендера всех кодов реестра поймает незаполненный `{…}` сразу.
+  Map<String, String> _advisoryParams(String code, Object? v) {
+    final declared = ContractRegistry.I.textFor(code)?.params ?? const [];
+    final text = v is String ? v : '$v';
+    return {
+      for (final p in declared)
+        if (p != 'path' && p != 'value') p: text,
+    };
   }
 
   /// §473 — условный потолок `max_when`. Возвращает значение, которое
@@ -732,13 +759,22 @@ final class _Ctx {
     Map<String, FieldSchema> fields,
     String prefix,
   ) {
-    // `conflicts`: оба заданы → снимается младшее по `order`. Порядок
-    // реестра = порядок структуры ядра, и «младшее» одинаково у обеих сторон.
+    // `conflicts`: снимается ДЕКЛАРАНТ — поле, у которого правило записано.
     //
-    // Правило конфликта записано у ОБОИХ участников (`tls.ech.enabled` ↔
-    // `tls.reality.enabled`), поэтому решение принимается один раз — по
-    // сравнению путей, а не по тому, чьё правило разбирается сейчас: иначе
-    // сняло бы оба поля и узел потерял бы обе настройки.
+    // §474 (контракт 1.1.6). Раньше здесь снималось «младшее по `order`», и
+    // это было ошибкой прочтения: формулировка описывала типичный случай, а
+    // не контракт. Уступает всегда сторона-декларант, а соседа видно и в
+    // ИСХОДНОМ теле — потому правило работает и тогда, когда сосед стоит по
+    // `body.order` позже. Ровно так судит лаунчер
+    // (`nodeflow/sanitize.go` → `relationsOK`), и по всем 22 записям реестра
+    // противоположная сторона не нужна ни разу.
+    //
+    // Разница видна на `vless.flow ↔ transport`: `flow` (order 3) идёт раньше
+    // `transport` (order 9), и прежнее «младшее» оставляло оба поля — из-за
+    // чего гашение vision жило рукописным правилом в маппере. Симметричные
+    // пары (`tls.ech.enabled` ↔ `tls.reality.enabled`) записаны у ОБОИХ
+    // участников, и снятие декларанта их не ломает: первый по обходу уходит
+    // сам, второй перестаёт видеть соседа и остаётся.
     for (final key in order) {
       if (!kept.containsKey(key)) continue;
       final f = fields[key];
@@ -747,12 +783,13 @@ final class _Ctx {
       for (final rel in f.conflicts) {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
-        if (!_present(with0, kept, prefix)) continue;
-        // Старший путь остаётся: он идёт раньше в порядке эмиссии.
-        if (_pathBefore(myPath, with0)) continue;
+        if (!_presentInSource(with0, kept, prefix)) continue;
         kept.remove(key);
         warn(rel['code'] as String? ?? 'field_conflict',
             path: myPath, params: {'with': with0});
+        // §474 — поле снято и причина названа: зависимым от него второго кода
+        // не полагается (та же граница, что у `requires`).
+        explainedDrops.add(myPath);
         break;
       }
     }
@@ -841,6 +878,49 @@ final class _Ctx {
     return _meaningful(cur);
   }
 
+  /// §474 — сосед для `conflicts`: виден и в ИСХОДНОМ теле.
+  ///
+  /// Отличие от [_present] ровно одно и оно намеренное. `requires` судит
+  /// состояние ПОСЛЕ санитайзинга: поле, снятое как негодное, для зависимых
+  /// от него отсутствует — иначе `short_id` пережил бы мусорный `public_key`.
+  /// `conflicts` судит иначе: он отвечает на вопрос «что автор написал в
+  /// теле», и ответ не зависит от того, дошёл ли обход до соседа. `flow`
+  /// (order 3) обязан увидеть `transport` (order 9), которого в снимке ещё
+  /// нет вовсе; лаунчерский `pathPresent` читает `srcRoot` по той же
+  /// причине.
+  ///
+  /// Снятое санитайзером поле соседом всё же не считается ([explainedDrops] и
+  /// снимок проверяются первыми): конфликтовать с тем, чего в теле уже не
+  /// будет, нечему.
+  bool _presentInSource(String path, Map<String, Object?> siblings, String prefix) {
+    if (!path.contains('.')) {
+      // Сосед по тому же объекту: обход идёт по `order`, и поле, стоящее
+      // позже, в `siblings` ещё не лежит — читаем исходную карту объекта.
+      if (siblings.containsKey(path)) return _meaningful(siblings[path]);
+      final abs = _join(prefix, path);
+      if (explainedDrops.contains(abs)) return false;
+      if (sanitized.containsKey(abs)) return _meaningful(sanitized[abs]);
+      return _meaningful(_rawAt(abs));
+    }
+    if (explainedDrops.contains(path)) return false;
+    if (sanitized.containsKey(path)) return _meaningful(sanitized[path]);
+    final parent = path.substring(0, path.lastIndexOf('.'));
+    // Ветку уже разобрали, а ключа в снимке нет — поле снято проверкой
+    // значения, и для конфликта его нет.
+    if (sanitized.containsKey(parent) || _branchDone(parent)) return false;
+    return _meaningful(_rawAt(path));
+  }
+
+  /// Значение по абсолютному пути в ИСХОДНОМ теле; `null` — пути нет.
+  Object? _rawAt(String path) {
+    Object? cur = root;
+    for (final seg in path.split('.')) {
+      if (cur is! Map || !cur.containsKey(seg)) return null;
+      cur = cur[seg];
+    }
+    return cur;
+  }
+
   /// Разобрана ли уже ветка [prefix] — есть ли в снимке хоть один её ключ.
   bool _branchDone(String prefix) =>
       sanitized.keys.any((k) => k.startsWith('$prefix.'));
@@ -888,49 +968,6 @@ final class _Ctx {
     return sawDigit;
   }
 
-  /// Идёт ли [a] раньше [b] в порядке эмиссии тела. Пути конфликтов реестра
-  /// абсолютны от корня (`tls.reality.enabled`), поэтому сравниваются
-  /// посегментно по `order` схемы: посегментное сравнение — это и есть
-  /// порядок, в котором эмиттер пишет ключи.
-  bool _pathBefore(String a, String b) {
-    if (a == b) return false;
-    final sa = a.split('.');
-    final sb = b.split('.');
-    final ranks = _pathRanks(sa, sb);
-    for (var i = 0; i < ranks.$1.length && i < ranks.$2.length; i++) {
-      if (ranks.$1[i] != ranks.$2[i]) return ranks.$1[i] < ranks.$2[i];
-    }
-    // Один путь — префикс другого: родитель раньше потомка.
-    return sa.length < sb.length;
-  }
-
-  /// Ранги сегментов обоих путей в схеме записи. Сегмент, которого схема не
-  /// знает, получает ранг «в конец» — сравнение всё равно детерминировано.
-  (List<int>, List<int>) _pathRanks(List<String> a, List<String> b) =>
-      (_ranksOf(a), _ranksOf(b));
-
-  List<int> _ranksOf(List<String> segments) {
-    final out = <int>[];
-    var schema = ContractRegistry.I.schemaFor(scheme);
-    var order = schema?.order ?? const <String>[];
-    var fields = schema?.fields ?? const <String, FieldSchema>{};
-    for (final seg in segments) {
-      final i = order.indexOf(seg);
-      out.add(i < 0 ? 1 << 20 : i);
-      final f = fields[seg];
-      if (f == null) break;
-      final ref = f.ref;
-      if (f.type == 'ref' && ref != null && ref != 'transports') {
-        schema = ContractRegistry.I.sharedSchema(ref);
-        order = schema?.order ?? const [];
-        fields = schema?.fields ?? const {};
-        continue;
-      }
-      order = f.order ?? const [];
-      fields = f.fields ?? const {};
-    }
-    return out;
-  }
 }
 
 String _join(String prefix, String key) => prefix.isEmpty ? key : '$prefix.$key';

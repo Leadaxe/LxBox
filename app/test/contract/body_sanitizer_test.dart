@@ -222,7 +222,7 @@ void main() {
       expect(w.value, '***');
     }, skip: skip);
 
-    test('conflicts: ech.enabled + reality.enabled — младшее снято', () {
+    test('conflicts: ech.enabled + reality.enabled — снят декларант', () {
       final r = _san(_vless({
         'tls': {
           'enabled': true,
@@ -235,15 +235,24 @@ void main() {
         }
       }));
       final tls = r.body!['tls'] as Map;
-      // «Младшее по order» — ech в порядке tls идёт раньше reality (25 против
-      // 27), значит старший он, а снимается reality.enabled. Решение
-      // принимается ОДИН раз: правило записано у обоих участников, и наивный
-      // обход снял бы оба поля.
-      expect((tls['ech'] as Map)['enabled'], isTrue);
-      expect((tls['reality'] as Map).containsKey('enabled'), isFalse);
+      // §474 (контракт 1.1.6) — снимается ДЕКЛАРАНТ, то есть поле, у которого
+      // правило записано. Пара симметричная: `conflicts` есть у обоих, обход
+      // идёт по `order`, и первым разбирается `ech` (25) — он и уступает.
+      // `reality` (27) к своей очереди соседа уже не видит и остаётся.
+      //
+      // До §474 тут снималось «младшее по order» — то есть `reality`, — и это
+      // было ошибкой прочтения контракта: лаунчер (`nodeflow/sanitize.go` →
+      // `relationsOK`) всегда снимал сторону-декларанта. Тело узла от смены
+      // не пострадало ни в корпусе, ни в golden: пар, где заданы обе стороны,
+      // там нет вовсе — единственный `field_conflict` корпуса
+      // (`certificate_public_key_sha256`) обе семантики решают одинаково.
+      expect((tls['ech'] as Map).containsKey('enabled'), isFalse);
+      expect((tls['reality'] as Map)['enabled'], isTrue);
+      // Код ровно ОДИН: снятый декларант перестаёт быть соседом, и второй
+      // участник пары своего правила не исполняет.
       expect(r.warnings.where((w) => w.code == 'field_conflict').length, 1);
-      expect(_byCode(r, 'field_conflict').path, 'tls.reality.enabled');
-      expect(_byCode(r, 'field_conflict').params['with'], 'tls.ech.enabled');
+      expect(_byCode(r, 'field_conflict').path, 'tls.ech.enabled');
+      expect(_byCode(r, 'field_conflict').params['with'], 'tls.reality.enabled');
     }, skip: skip);
 
     test('requires: key_share при невалидном public_key снимается МОЛЧА', () {

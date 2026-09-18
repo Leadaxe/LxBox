@@ -144,7 +144,8 @@ UriMapping? mapShadowsocksUri(String uri) {
   return UriMapping(
     body: body,
     label: decodeFragment(fragment),
-    // §453 — dial-поля мимо санитайзера: см. `UriMapping.extensionFields`.
+    // §453 — dial-поля keep-alive; §474 — судятся санитайзером (реестр их
+    // описывает). См. `UriMapping.extensionFields`.
     // До переезда они лежали в теле, и санитайзер снимал их как `unknown_key`
     // (тот же дефект, что шаг 3 нашёл у trojan).
     extensionFields: tcpKeepAliveMapFromQuery(q),

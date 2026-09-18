@@ -143,11 +143,32 @@ final class FieldSchema {
   /// Значения, которые ядро принимает, но узел получает info-код.
   List<Map<String, dynamic>> get advisory => _relations('advisory');
 
-  List<Map<String, dynamic>> _relations(String key) =>
-      ((raw[key] as List?) ?? const [])
-          .whereType<Map>()
-          .map((e) => e.cast<String, dynamic>())
-          .toList(growable: false);
+  /// §474 (контракт 1.1.6) — элемент связи читается в ДВУХ формах: объект
+  /// `{with, code}` и голая строка.
+  ///
+  /// Объект — единственная форма, которую реестр пишет сегодня (схема требует
+  /// `code` у каждой записи), и по ней у `vless.flow ↔ transport` появился
+  /// свой код `vision_with_transport` вместо общего `field_conflict`: ядро эту
+  /// пару ПРИНИМАЕТ, снимается бессмыслица, и severity у неё info, а не
+  /// warning.
+  ///
+  /// Строка читается как `{with: <строка>}` без кода — на случай, если реестр
+  /// поедет впереди клиента сокращённой записью. Дороже она нам ничего не
+  /// стоит, а выкинутый молча элемент означал бы неисполненное правило связи.
+  List<Map<String, dynamic>> _relations(String key) {
+    final raw0 = (raw[key] as List?) ?? const [];
+    final out = <Map<String, dynamic>>[];
+    for (final e in raw0) {
+      if (e is Map) {
+        out.add(e.cast<String, dynamic>());
+      } else if (e is String && e.isNotEmpty) {
+        // У `conflicts` сосед зовётся `with`, у `requires` — `path`; строкой
+        // записывается ровно тот ключ, который читает эта связь.
+        out.add(key == 'requires' ? {'path': e} : {'with': e});
+      }
+    }
+    return List.unmodifiable(out);
+  }
 
   Object? get defaultValue => raw['default'];
 

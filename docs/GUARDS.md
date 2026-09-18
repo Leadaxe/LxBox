@@ -146,16 +146,39 @@ Every one of those codes now carries a `path` and the value **as the link's
 author wrote it** — the pipeline's sanitiser sees the raw map, before any
 normalisation.
 
-Three value rules stayed hand-written, each a request to the launcher.
-Two are on the vless path, written up in spec 472 §9.2:
-`vision_with_transport` — the registry's `flow.conflicts` rule drops the
-*younger* field by `body.order`, and `flow` is older than `transport`, so as
-written it removes neither; `tls_insecure` — `tls.insecure` is a plain `bool`
-with no `advisory`, so the sanitiser says nothing about it. The third arrived
-with vmess (spec 472 §10.2): the registry does judge `security`
-(enum + `on_invalid: coerce auto`, code `type_invalid`), but the corpus expects
-that substitution to stay **silent** (`vmess/vmess_security_ctr`), so the
-mapper still folds a junk `scy` to `auto` itself.
+Three value rules used to stay hand-written, each a request to the launcher.
+**All three are gone** — the launcher answered with contracts 1.1.6 and 1.1.7
+(spec [§474](spec/tasks/474-contract-116-conflicts-declarant-advisory-bool-dialer.md)):
+
+| Rule that was hand-written | Registry field that judges it now | Code |
+|---|---|---|
+| VLESS `flow=xtls-rprx-vision` with a live transport → `flow` dropped | `protocols/vless.json` → `flow.conflicts` with its own code | `vision_with_transport` (info) |
+| `tls.insecure: true` → certificate checking is off | `tls.json` → `insecure`, `advisory` on the value `true` | `tls_insecure` (info) |
+| VMess `scy` outside the core's enum → folded to `auto` **silently** | `protocols/vmess.json` → `security`, enum + `on_invalid: coerce auto` | `vmess_security_unknown` (warning) |
+
+Two of those needed the contract to change, not just the client.
+`conflicts` turned out to drop the **declarant** — the field the rule is
+written on — and to look for the neighbour in the **original** body as well,
+which is why `flow` (order 3) sees `transport` (order 9) at all; this file's
+own reading of "the younger field by `body.order`" was wrong, and so was the
+sanitiser's. And `advisory` learned to accept booleans, so a `bool` field can
+carry a code on the value `true`.
+
+`vmess.security` was the last `on_invalid: coerce` in the registry still
+carrying the generic `type_invalid`, whose text describes a field being
+*removed*. Coercion does not remove the field, it **replaces** it — the node
+travels on a different cipher than the subscription asked for — so the code is
+now its own, and the substitution is no longer silent on any pipeline input.
+A registry linter keeps the boundary: `coerce` with `type_invalid` fails the
+test.
+
+One hand-written funnel is left on purpose, and it is not on the pipeline:
+`normalizeVmessSecurity` (`uri_utils.dart`) still folds `security` for the
+**sing-box JSON and Xray JSON** inputs. Those do not pass a body through the
+sanitiser (`annotateAllWithRegistry` judges the model's assembled `emit()`),
+so removing it today would put a cipher the core rejects into the model —
+`aes-128-ctr` is fatal for the whole config — without producing a code either.
+It goes when the JSON input moves to the pipeline (spec 472, step 8).
 
 Shadowsocks is the first scheme with **no** hand-written value rule left at
 all: both of its judgements — the eighteen-method allowlist and the nine
@@ -272,7 +295,8 @@ something more than reject or default.
 | VLESS `encryption` (post-quantum) | taken verbatim, **deliberately not validated** | silent | `vless_parser.dart:55-59` | base64url up to ~1600 chars; any corruption the core rejects itself | §335 |
 | VMess body not base64 / empty / no `add` or `id` | node rejected | silent | `mappers/vmess_mapper.dart` | — | §472 step 4 |
 | VMess malformed UTF-8 | `utf8Lossy` (`allowMalformed`) | silent | `mappers/vmess_mapper.dart` | — | §472 step 4 |
-| VMess `scy` outside the core's enum (`aes-128-ctr`, garbage) / empty / `null` / `undefined` | coerced to `auto`; `chacha20-ietf-poly1305` → `chacha20-poly1305`; `trim`+`lower` | silent | `mappers/vmess_mapper.dart` `_securitySpelling` (the alias translation) plus the core's set from `uri_utils.dart` — the last hand-written value rule of the scheme, §1.0 | `sing-vmess@v0.2.8` `client.go:42-54` accepts exactly `auto, none, zero, aes-128-cfb, aes-128-gcm, chacha20-poly1305` and answers anything else with `ErrUnsupportedSecurityType` — a fatal on the **whole** config. Before §459 `aes-128-ctr` was let through (unknown to the core) and a working `aes-128-cfb` collapsed into `auto` | §459 (contract §24.2 item 7.11) |
+| VMess `scy` outside the core's enum (`aes-128-ctr`, garbage) | coerced to `auto`, value kept in the warning | `vmess_security_unknown` (warning) — the node travels on a cipher the server picks, not the one the subscription asked for | *moved to the registry, §1.0* — `protocols/vmess.json` → `security`, enum + `on_invalid: coerce auto`. Still hand-written for the **JSON inputs** (`uri_utils.dart` `normalizeVmessSecurity`): they do not pass a body through the sanitiser, so folding has to happen there until spec 472 step 8 | `sing-vmess@v0.2.8` `client.go:42-54` accepts exactly `auto, none, zero, aes-128-cfb, aes-128-gcm, chacha20-poly1305` and answers anything else with `ErrUnsupportedSecurityType` — a fatal on the **whole** config. Before §459 `aes-128-ctr` was let through (unknown to the core) and a working `aes-128-cfb` collapsed into `auto`; before §474 the substitution was silent on the URI and Xray inputs and only the body input reported it, as `type_invalid` | §459 (contract §24.2 item 7.11), §474 (contract 1.1.7) |
+| VMess `scy` empty / `null` / `undefined`, or `chacha20-ietf-poly1305` | `auto` substituted / translated to `chacha20-poly1305`; the `security` key is always written | silent — "not set" is not the author's choice, and an alias is spelling, not judgement | `mappers/vmess_mapper.dart` `_securitySpelling` | the core's field has no `omitempty` and the schema marks it `required`, while a registry `default` does not materialise into the body — an omitted key would drop the node with `field_missing` | §474 (contract 1.1.7 §24.16) |
 | SSH empty elements in `host_key` / `host_key_algorithms` | dropped from the list | silent | `ssh_parser.dart:25-38` | — | — |
 | Bare `http(s)://` as a proxy link | only the custom schemes `proxy-http(s)` / `proxy+http(s)` accepted | silent | `http_parser.dart:13-16` | plain URLs are caught earlier as subscriptions; promo links inside bodies would otherwise become "nodes" | §222/§268 |
 | Hysteria2 multi-port authority (`host:443,20000-30000`) | authority rebuilt on the first numeric port, rest → `server_ports` | silent | `hysteria2_parser.dart:48-56, 179-235` | Dart's `Uri.parse` cannot digest `,`/`-` in the port position | §103 §9.B2 |
