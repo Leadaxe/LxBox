@@ -48,6 +48,7 @@ final class MapperForm {
     this.space = 'url',
     this.base,
     this.level,
+    this.emit,
   });
 
   factory MapperForm.fromJson(Map<String, dynamic> j) => MapperForm(
@@ -57,6 +58,7 @@ final class MapperForm {
         space: j['space'] as String? ?? 'url',
         base: j['base'] as String?,
         level: j['level'] as String?,
+        emit: (j['emit'] as Map?)?.cast<String, dynamic>(),
       );
 
   final String id;
@@ -74,6 +76,19 @@ final class MapperForm {
 
   /// Уровень документа sing-box: `outbound` | `endpoint`.
   final String? level;
+
+  /// **Обратный ход ЭТОЙ формы.** Перекрывает одноимённые ключи `emit`
+  /// секции, пока форма выбрана.
+  ///
+  /// Зачем форме своё написание. Секция объявляет ОДИН набор источников на
+  /// все формы, а написания у форм законно разные: у записи с фолбэком
+  /// источников (`serviceName ∥ service_name ∥ path`) канон зовётся первым
+  /// источником, а форма-КОНТЕЙНЕР знает только последний. Выбор «по первому
+  /// источнику» уводил такую запись в ключ, которого чужой клиент не читает,
+  /// и поле терялось на круге. Различие принадлежит ФОРМЕ, а не записи:
+  /// переставить цепочку у записи нельзя — это меняет её набор `source`, и по
+  /// норме §7.1 реестровая запись перестаёт изыматься оверлеем.
+  final Map<String, dynamic>? emit;
 }
 
 /// Наложенное пространство источников (FROZEN `overlays[]`, контракт 1.1.15).

@@ -978,6 +978,28 @@ final class _Emit {
         p, template, (g) => '${from[g] ?? g}', omitEmpty);
   }
 
+  /// Обращение `extract` С ОДНОЙ содержательной группой, у записи без
+  /// `maps_to` и без `compose`.
+  ///
+  /// Такая запись — это `maps_to`, записанный регуляркой: группа одна, путь у
+  /// неё один, и обратный ход у неё ровно тот же — взять значение пути. Хвост
+  /// регулярки при этом ОТБРАСЫВАЕТСЯ намеренно (у xhttp `?…` срезается
+  /// целиком, SPEC 002 §4.1): восстанавливать его не из чего, тело его не
+  /// несёт. Запись с НЕСКОЛЬКИМИ группами сюда не попадает — там хвост
+  /// значим, и собрать его обязан объявленный `compose`.
+  String? _extractSingle(MapperParam p) {
+    if (p.compose != null || p.raw[EmitNames.compose] != null) return null;
+    final into = p.extract?.into;
+    if (into == null || into.length != 1) return null;
+    final spec = into.values.first;
+    final path = spec is Map ? spec['path'] : spec;
+    if (path is! String) return null;
+    final v = _read(path);
+    if (v == null) return null;
+    _consumed.add(path);
+    return _serializeValue(p, v);
+  }
+
   /// Засчитать пути, которые ПОДРАЗУМЕВАЕТ написанная группа `compose`.
   ///
   /// Группа адресуется и именем, и путём: строковый шаблон пишет путь,
@@ -1177,9 +1199,32 @@ final class _Emit {
   /// Написание вне набора линтер секций называет ошибкой, а эмит молча
   /// откатывается к канону.
   String _nameOf(MapperParam p) {
-    final want = (emit[EmitNames.names] as Map?)?[p.name];
-    if (want is String && readableNames(p).contains(want)) return want;
+    final want = _declaredName(p);
+    if (want != null) return want;
     return p.spellings.first;
+  }
+
+  /// Объявленное написание записи [p], если оно есть и ЗАКОННО.
+  ///
+  /// Два места объявления, конкретное сильнее общего: `forms[].emit.names`
+  /// текущей формы бьёт `emit.names` секции. Написание вне набора, который
+  /// запись ЧИТАЕТ, не берётся: линтер секций зовёт это ошибкой, а эмит молча
+  /// откатывается к канону — своя ссылка обязана разобраться обратно.
+  String? _declaredName(MapperParam p) {
+    for (final src in [_formEmit()?[EmitNames.names], emit[EmitNames.names]]) {
+      final want = (src as Map?)?[p.name];
+      if (want is String && readableNames(p).contains(want)) return want;
+    }
+    return null;
+  }
+
+  /// Блок `emit` ТЕКУЩЕЙ формы из `forms[]`, если он объявлен.
+  Map<String, dynamic>? _formEmit() {
+    final id = _form();
+    for (final f in section.forms) {
+      if (f.id == id) return f.emit;
+    }
+    return null;
   }
 
   void _add(MapperParam p, String value) {
@@ -1300,7 +1345,32 @@ final class _Emit {
         continue;
       }
       _consumed.add(e.value);
-      map[e.key] = v is String ? v : '$v';
+      // Текст значения — ТЕМ ЖЕ правилом, что и в query (`_serializeValue`):
+      // написание значения принадлежит ЗАПИСИ (`emit_as`, `list.sep`), а не
+      // месту вывода. Через `'$v'` список уезжал в контейнер дословным
+      // `[cdn.example.com]`, и круг читал имя хоста вместе со скобками.
+      final p = _jsonOwners[e.key];
+      final text = p == null ? '$v' : _serializeValue(p, v);
+      if (text == null) continue;
+      map[e.key] = text;
+    }
+
+    // Записи, СОБИРАЮЩИЕ значение из нескольких путей (`compose`, обращение
+    // `extract`). Своего `maps_to` у них нет, и в карту ключей они не попали,
+    // а в контейнер уехать обязаны: у ws путь лежит ровно в такой записи
+    // (`{transport.path}?ed={…}`). Пока ключ `path` держала безусловная
+    // запись http, значение доезжало ЧУЖОЙ записью — и вместе с ним молча
+    // терялся хвост `?ed=`. Порядок тот же, что у query: первая запись,
+    // подтверждённая телом, занимает ключ.
+    for (final p in section.params.values) {
+      if (p.isService || p.mapsTo != null || _roundTripOff(p)) continue;
+      if (!_whenAgreesWithBody(p.when)) continue;
+      final key = _jsonKeyOf(p);
+      if (key == null || map.containsKey(key)) continue;
+      final composed = _compose(p) ?? _extractSingle(p);
+      if (composed == null) continue;
+      if (_omitted(p, key, composed)) continue;
+      map[key] = composed;
     }
 
     // Записи-СЕЛЕКТОРЫ контейнера: своего `maps_to` у них нет, значение
@@ -1395,8 +1465,25 @@ final class _Emit {
   ///
   /// Имя ключа — КАНОН записи (первое в `aliases`), а не написание источника:
   /// `source` у блочной записи один на все схемы, а канон объявлен ею самой.
+  ///
+  /// **Объявленное написание сильнее первого источника.** У записи с ФОЛБЭКОМ
+  /// источников первый из них — канон РАЗБОРА, и контейнеру он может быть
+  /// неизвестен: цепочка `serviceName ∥ service_name ∥ path` читается вся, а
+  /// v2rayN пишет только `path`. Выбор по первому источнику уводил поле в
+  /// ключ, которого чужой клиент не читает, и круг его терял. Написание,
+  /// названное формой (`forms[].emit.names`) или секцией (`emit.names`),
+  /// берётся ВПЕРЁД источников — оно и есть выбор написания по форме.
   String? _jsonKeyOf(MapperParam p) {
     final sources = p.sourceByForm[_form()] ?? p.source;
+    final declared = _declaredName(p);
+    // Объявленное написание действует, только если запись вообще читается в
+    // этой форме плоским слоем имён: у записи, чей источник тут `json.<путь>`,
+    // ключ задан путём, и подменять его именем нельзя.
+    if (declared != null &&
+        sources.any((s) => s.startsWith('query.')) &&
+        !sources.any((s) => s.startsWith('json.'))) {
+      return declared;
+    }
     for (final s in sources) {
       if (s.startsWith('json.')) return s.substring('json.'.length);
       if (s.startsWith('query.')) {
@@ -1417,15 +1504,57 @@ final class _Emit {
       };
     }
     final out = <String, String>{};
+    _jsonOwners.clear();
     for (final p in section.params.values) {
       if (p.isService || _roundTripOff(p)) continue;
+      // Запись, чьё условие ТЕЛО ОПРОВЕРГАЕТ, ключ не занимает. Ключ
+      // контейнера бывает общим у нескольких записей, разведённых `when` по
+      // роду транспорта: `path` читают и запись ws (`transport.path`), и
+      // запись grpc (`transport.service_name`). Тело подтверждает ровно одну
+      // из них, и без этой проверки ключ доставался первой по обходу — у
+      // grpc-узла в контейнер уезжал пустой `transport.path`, а имя сервиса
+      // терялось. Разбор такие записи различает (`_whenHolds`), обратный ход
+      // обязан различать так же.
+      if (!_whenAgreesWithBody(p.when)) continue;
       final path = p.mapsTo;
       if (path == null) continue;
       final key = _jsonKeyOf(p);
       if (key == null) continue;
-      out.putIfAbsent(key, () => path);
+      if (out.containsKey(key)) continue;
+      out[key] = path;
+      _jsonOwners[key] = p;
     }
     return out;
+  }
+
+  /// Запись, ЗАНЯВШАЯ ключ контейнера, — чтобы значение писалось её правилом
+  /// написания. Заполняется [_jsonMap] и живёт ровно столько же.
+  final Map<String, MapperParam> _jsonOwners = {};
+
+  /// Не противоречит ли [when] телу.
+  ///
+  /// Судятся ТОЛЬКО условия по путям тела: на обратном ходе тело и есть вход,
+  /// а условий по источнику (`query.…`, `$form`) ещё не из чего проверять —
+  /// они молча считаются выполненными, чтобы не срезать записи по незнанию.
+  /// Проза с `$`-префиксом предикатом не является (соглашение §0.7).
+  bool _whenAgreesWithBody(Map<String, dynamic> when) {
+    if (when.isEmpty) return true;
+    for (final e in when.entries) {
+      final key = e.key;
+      if (key.startsWith(r'$') ||
+          key == 'any_set' ||
+          key.startsWith('query.') ||
+          key.startsWith('json.') ||
+          key.startsWith('ini.')) {
+        continue;
+      }
+      // Путь, которого тело не несёт вовсе, условие не опровергает: значение
+      // могло не доехать по другой причине, и терять из-за этого ключ хуже.
+      final actual = _read(key);
+      if (actual == null) continue;
+      if (!_matches(actual, e.value)) return false;
+    }
+    return true;
   }
 
   // ───────────────────────────── потери ─────────────────────────────

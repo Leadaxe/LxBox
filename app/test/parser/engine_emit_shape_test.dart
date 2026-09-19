@@ -69,15 +69,6 @@ void main() {
           'которого в теле нет. Новый эмит пишет только то, что несёт тело.',
     },
     'vmess': {
-      'grpc_tls': 'ключ `path` контейнера у gRPC несёт имя канала '
-          '(transport.service_name). Пишется он теперь записью `serviceName` '
-          'под написанием `path` (emit.names), и отдельная запись `path` тот '
-          'же ключ уже не занимает — у узла с gRPC его и не бывает.',
-      'json_net_h2_http_transport': 'ПОЧИНКА ПОТЕРИ: transport.host тела у '
-          'http-транспорта в контейнер не уезжал.',
-      'json_net_xhttp': 'ПОЧИНКА ПОТЕРИ: transport.host тела у '
-          'xhttp-транспорта в контейнер не уезжал.',
-      'xhttp_fallback_httpupgrade': 'то же: transport.host тела.',
       'legacy_cleartext_userinfo': 'headers.Host тела (ws) равен адресу узла, '
           'и рукописный эмит писал ключ `host` пустым — поле тела терялось.',
     },
