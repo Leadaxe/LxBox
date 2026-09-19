@@ -1,4 +1,4 @@
-// Страж dart-ссылок реестра контракта (§484).
+// Страж dart-ссылок реестра контракта (§491).
 //
 // У записей реестра поле `refs.dart` указывает на файлы LxBox, где живёт
 // правило. После снятия рукописных мапперов (фича 480) часть ссылок
@@ -97,7 +97,7 @@ void main() {
   final synced = Directory(_registryRoot).existsSync();
   final skip = synced ? null : 'зеркало реестра отсутствует';
 
-  group('§484 — dart-ссылки реестра', () {
+  group('§491 — dart-ссылки реестра', () {
     test('refs.dart указывают на существующие файлы или в allowlist', () {
       final refs = collectRegistryDartRefs(_registryRoot);
       expect(refs, isNotEmpty, reason: 'в реестре нет refs.dart');
@@ -130,7 +130,7 @@ void main() {
         isEmpty,
         reason: 'новые протухшие dart-ссылки вне allowlist — добавьте в '
             'registry_dart_refs_known_stale.txt и передайте лаунчеру '
-            '(docs/spec/tasks/484-registry-dart-refs.md): $unexpected',
+            '(docs/spec/tasks/491-registry-dart-refs.md): $unexpected',
       );
 
       final resolved = knownStale
