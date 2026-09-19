@@ -79,7 +79,7 @@ final class MapperSections {
       var text = await _readDraft('$rel.json');
       var key = rel;
       if (text == null && !name.contains('/')) {
-        // Файл КОРНЯ черновика (реестр видов документа): он не принадлежит
+        // Файл КОРНЯ черновика (реестр видов источника): он не принадлежит
         // ни одному виду источника, поэтому каталога у него нет.
         text = await _readDraft('$name.json');
         key = name;
@@ -147,17 +147,24 @@ final class MapperSections {
   bool has(String kind, String singboxType) =>
       sectionFor(kind, singboxType) != null;
 
-  /// §480 W6 — РЕЕСТР ВИДОВ ДОКУМЕНТА; `null` — реестра нет, и опознание
+  /// §480 W6 — РЕЕСТР ВИДОВ ИСТОЧНИКА; `null` — реестра нет, и опознание
   /// идёт прежним рукописным путём.
   ///
-  /// Черновик лежит в корне (`documents.json`), без каталога вида источника:
-  /// он не принадлежит ни одному виду, он их ВЫБИРАЕТ.
+  /// Черновик лежит в корне (`source_kinds.json`), без каталога вида
+  /// источника: он не принадлежит ни одному виду, он их ВЫБИРАЕТ.
+  ///
+  /// Имя файла реестра пробуется в двух написаниях: `source_kinds.json` —
+  /// то, к которому идут обе стороны (решение владельца 19.09.2026), а
+  /// `sources.json` остаётся читаемым, пока лаунчер не переименовал свой.
+  /// Слово `source` без `kind` в этой кампании означает ПОДПИСКУ, и держать
+  /// его именем вида источника значило бы путать два разных предмета.
   DocumentRegistry? get documents {
     if (_documents != null) return _documents;
     if (!_draftLoaded) _loadDraftsFromDiskSync();
-    final raw = ContractRegistry.I.rawShared('sources.json') ??
-        _draft['documents'] ??
-        _draft['uri/documents'];
+    final raw = ContractRegistry.I.rawShared('source_kinds.json') ??
+        ContractRegistry.I.rawShared('sources.json') ??
+        _draft['source_kinds'] ??
+        _draft['uri/source_kinds'];
     if (raw == null) return null;
     return _documents = DocumentRegistry.fromJson(raw);
   }

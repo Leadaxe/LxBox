@@ -8,7 +8,7 @@ import 'package:lxbox/services/parser/engine/document.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 
-/// §480 W6 — ОПОЗНАНИЕ ВИДА ДОКУМЕНТА объявлено данными.
+/// §480 W6 — ОПОЗНАНИЕ ВИДА ИСТОЧНИКА объявлено данными.
 ///
 /// Два инварианта, ради которых волна и затеяна:
 ///
@@ -78,7 +78,7 @@ void main() {
     await MapperSections.I.loadDrafts(dir: _draftRoot, files: kDraftFiles);
   });
 
-  test('реестр видов документа загружен и ветка default ровно одна', () {
+  test('реестр видов источника загружен и ветка default ровно одна', () {
     final reg = MapperSections.I.documents;
     expect(reg, isNotNull, reason: 'без реестра опознание осталось бы в коде');
     final defaults = reg!.sources.where((s) => s.isDefault).toList();

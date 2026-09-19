@@ -101,7 +101,7 @@ const Set<String> _types = {
 /// Файл `registry_mapper.schema.json` — это САМА JSON-схема грамматики, а не
 /// секция: он лежит рядом копией, и проверять его как секцию бессмысленно.
 ///
-/// §480 W6 — `documents.json` это ТРЕТЬЯ форма: реестр ВИДОВ ДОКУМЕНТА
+/// §480 W6 — `source_kinds.json` это ТРЕТЬЯ форма: реестр ВИДОВ ИСТОЧНИКА
 /// (корень несёт `sources`). Он не секция и не общий блок — он выбирает, чем
 /// читать вход, до того как секция вообще понадобится, и записей с `source`
 /// в нём нет. Его форму судит свой тест (`document_registry_test.dart`), а
@@ -116,7 +116,7 @@ List<File> _sections() {
       .whereType<File>()
       .where((f) => f.path.endsWith('.json'))
       .where((f) => !f.path.endsWith('registry_mapper.schema.json'))
-      .where((f) => !f.path.endsWith('documents.json'))
+      .where((f) => !f.path.endsWith('source_kinds.json'))
       .toList()
     ..sort((a, b) => a.path.compareTo(b.path));
 }

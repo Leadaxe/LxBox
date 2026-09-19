@@ -724,7 +724,7 @@ final class MapperSection {
   final String unknownKeyAction;
   final String? unknownKeyCode;
 
-  /// `unknown_key.ignore` — ключи УРОВНЯ ДОКУМЕНТА, которые полем узла не
+  /// `unknown_key.ignore` — ключи ВИДА ИСТОЧНИКА, которые полем узла не
   /// являются и неизвестными не считаются: бухгалтерия элемента
   /// (`protocol`/`type` — по ним элемент и опознан, `tag`, `remarks` — имя,
   /// которое читает сборка документа, а не маппер одного узла).
