@@ -7,6 +7,7 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -172,24 +173,39 @@ void main() {
   });
 
   group('§24.2 п. 7.13 — splithttp = алиас xhttp', () {
-    // РАСХОЖДЕНИЕ СТОРОН, передано лаунчеру (синк 1.1.35). Контракт 1.1.35
-    // называет алиас выраженным данными, но выражен он только в диалекте
-    // XRAY: `blocks.xray.$selector.network.value_map` несёт
-    // `splithttp → xhttp`, а `blocks.uri.$selector.type` держит закрытый
-    // набор написаний, в котором `splithttp` не значится, и `when.in`
-    // подавляет запись целиком. Корпус ссылок такого кейса не несёт —
-    // нормирован только вход Xray (`body/xray/vless_splithttp`).
+    // РАСХОЖДЕНИЕ СТОРОН, передано лаунчеру (синк 1.1.35). Контракт называет
+    // алиас выраженным данными, но выражен он только в диалекте XRAY:
+    // `blocks.xray.$selector.network.value_map` несёт `splithttp → xhttp`, а
+    // `blocks.uri.$selector.type` держит закрытый набор написаний, в котором
+    // `splithttp` не значится, и `when.in` подавляет запись целиком. Корпус
+    // ссылок такого кейса не несёт — нормирован только вход Xray
+    // (`body/xray/vless_splithttp`).
     //
-    // У нас же ссылка с `type=splithttp` транспорт получала: рукописный
-    // маппер знал алиас (`transport.dart`), и после перевода vless на движок
-    // узел стал уезжать в конфиг БЕЗ транспорта — голый TCP на порт, который
-    // ждёт HTTP, молча. Чинится не оверлеем: набор `type` нормативен, и
-    // угадывать за лаунчера его состав нельзя.
+    // У нас ссылка с `type=splithttp` транспорт получала: рукописный маппер
+    // знал алиас (`transport.dart`, `case 'splithttp':` рядом с `xhttp`), и
+    // после перевода vless на движок узел стал уезжать в конфиг БЕЗ
+    // транспорта — голый TCP на порт, который ждёт HTTP, и молча. Закрыто
+    // ДАННЫМИ: оверлей `uri/transports.json`, запись `$selector.type`.
     test('URI type=splithttp даёт транспорт xhttp', () {
       final spec = parseVless(
           'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&type=splithttp&path=%2Fv1#n');
       expect(spec!.transport, isA<XhttpTransport>());
-    }, skip: skip ?? 'расхождение сторон: алиас объявлен только у входа Xray');
+    }, skip: skip);
+
+    test('splithttp и xhttp дают одно тело и одну identity', () {
+      const base =
+          'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&path=%2Fx&host=h';
+      final alias = parseVless('$base&type=splithttp#n');
+      final canon = parseVless('$base&type=xhttp#n');
+      expect(alias, isNotNull);
+      expect(canon, isNotNull);
+      final aliasBody = alias!.emit(TemplateVars.empty).map;
+      expect((aliasBody['transport'] as Map?)?['type'], 'xhttp');
+      expect(jsonEncode(aliasBody),
+          jsonEncode(canon!.emit(TemplateVars.empty).map));
+      // Алиас не должен разводить один узел на два в дедупе подписки.
+      expect(legacyNodeIdentityHash(alias), legacyNodeIdentityHash(canon));
+    }, skip: skip);
 
     test('sing-box JSON transport.type=splithttp', () {
       final spec = parseSingboxEntry({
