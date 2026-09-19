@@ -5,10 +5,16 @@ import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/transport.dart';
 
+import 'engine_test_setup.dart';
+
 /// §303 — WebSocket early data. Xray задаёт её хвостом пути (`/x?ed=2560`),
 /// sing-box — полем `max_early_data`. Раньше хвост уезжал в `transport.path`
 /// дословно и сервер отвечал 404.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('splitEarlyDataPath', () {
     test('путь с ed → разделён', () {
       expect(splitEarlyDataPath('/api/v2/channel?ed=2560'),
