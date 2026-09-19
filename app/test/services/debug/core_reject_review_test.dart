@@ -98,7 +98,7 @@ void main() {
       );
       await controller.generateConfig();
       final emitted = controller.lastEmittedTagMap.keys.single;
-      expect(await controller.disableNodeByCoreTag(emitted, 'bad'), isTrue);
+      expect(await controller.disableNodeByCoreTag(emitted, 'bad'), isNotNull);
 
       final reset = asMap(await coreRejectHandler(
         req('POST', '/core_reject/reset'),
@@ -163,7 +163,7 @@ void main() {
       final emitted = TagResolver.displayTag('🇩🇪', node.tag);
       expect(
         await controller.disableNodeByCoreTag(emitted, 'bad key'),
-        isTrue,
+        isNotNull,
       );
 
       final body = asMap(await coreRejectHandler(

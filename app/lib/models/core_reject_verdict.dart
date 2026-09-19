@@ -27,6 +27,51 @@ const kCoreRejectedCode = 'core_rejected';
 /// Имя подстановки текста реестра.
 const kCoreRejectedReasonParam = 'reason';
 
+/// §503 — id источника (`ServerList.id`) в момент выключения страховкой.
+const kCoreRejectedSourceParam = 'source_id';
+
+/// §503 — ключ узла внутри источника: идентичность подписки, bare-тег
+/// одиночного сервера / члена папки.
+const kCoreRejectedNodeKeyParam = 'node_key';
+
+/// Идентичность узла, сохранённая в вердикте страховки (§503).
+final class CoreRejectNodeRef {
+  const CoreRejectNodeRef({required this.sourceId, required this.nodeKey});
+
+  final String sourceId;
+  final String nodeKey;
+
+  static CoreRejectNodeRef? fromParams(Map<String, String> params) {
+    final sourceId = params[kCoreRejectedSourceParam];
+    final nodeKey = params[kCoreRejectedNodeKeyParam];
+    if (sourceId == null ||
+        sourceId.isEmpty ||
+        nodeKey == null ||
+        nodeKey.isEmpty) {
+      return null;
+    }
+    return CoreRejectNodeRef(sourceId: sourceId, nodeKey: nodeKey);
+  }
+
+  Map<String, String> toParams() => {
+        kCoreRejectedSourceParam: sourceId,
+        kCoreRejectedNodeKeyParam: nodeKey,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CoreRejectNodeRef &&
+          sourceId == other.sourceId &&
+          nodeKey == other.nodeKey);
+
+  @override
+  int get hashCode => Object.hash(sourceId, nodeKey);
+
+  @override
+  String toString() => 'CoreRejectNodeRef($sourceId, $nodeKey)';
+}
+
 /// Одна хранимая запись предупреждения. Форма лаунчера: `code` + `params`,
 /// без `path` и без severity (она из реестра).
 final class StoredWarning {
@@ -41,10 +86,23 @@ final class StoredWarning {
   bool get isCoreRejected => code == kCoreRejectedCode;
 
   /// Вердикт по тексту ядра (без префикса `initialize …[tag]: `).
-  factory StoredWarning.coreRejected(String reason) => StoredWarning(
+  ///
+  /// [ref] — источник и ключ узла в хранилище (§503); без него старые
+  /// вердикты ищутся по тегу среди выключенных узлов.
+  factory StoredWarning.coreRejected(
+    String reason, {
+    CoreRejectNodeRef? ref,
+  }) =>
+      StoredWarning(
         code: kCoreRejectedCode,
-        params: {kCoreRejectedReasonParam: reason},
+        params: {
+          kCoreRejectedReasonParam: reason,
+          if (ref != null) ...ref.toParams(),
+        },
       );
+
+  /// Идентичность узла из params вердикта; `null` у старых записей.
+  CoreRejectNodeRef? get coreRejectRef => CoreRejectNodeRef.fromParams(params);
 
   /// Запись → предупреждение узла. Severity берётся реестром по коду.
   RegistryWarning toWarning() =>

@@ -11,6 +11,7 @@ library;
 
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
+import '../../models/core_reject_verdict.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../app_log.dart';
 import 'core_reject_guard.dart';
@@ -75,12 +76,12 @@ class AppCoreRejectHost implements CoreRejectHost {
   }
 
   @override
-  Future<bool> disableNode(String tag, String reason) async {
-    final ok = await sub.disableNodeByCoreTag(tag, reason);
-    AppLog.I.warning(ok
+  Future<CoreRejectNodeRef?> disableNode(String tag, String reason) async {
+    final ref = await sub.disableNodeByCoreTag(tag, reason);
+    AppLog.I.warning(ref != null
         ? 'core rejected node "$tag", disabled: $reason'
         : 'core rejected tag "$tag" with no matching node, no automation');
-    return ok;
+    return ref;
   }
 
   @override

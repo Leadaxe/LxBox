@@ -29,6 +29,7 @@
 /// поэтому его целиком закрывают юниты на поддельном клиенте.
 library;
 
+import '../../models/core_reject_verdict.dart';
 import 'core_error_parse.dart';
 
 /// Предел кругов, после которого автомат спрашивает человека (решение
@@ -85,7 +86,11 @@ enum CoreRejectOutcome {
 
 /// Один выключенный узел прогона — для плашки и Debug API.
 final class DisabledNode {
-  const DisabledNode({required this.tag, required this.reason});
+  const DisabledNode({
+    required this.tag,
+    required this.reason,
+    this.ref,
+  });
 
   /// Финальный тег собранного конфига, который назвало ядро.
   final String tag;
@@ -93,7 +98,14 @@ final class DisabledNode {
   /// Дословный текст ядра без префикса — он же `params.reason` вердикта.
   final String reason;
 
-  Map<String, dynamic> toJson() => {'tag': tag, 'reason': reason};
+  /// Источник и ключ узла в хранилище (§503); `null` у старых прогонов.
+  final CoreRejectNodeRef? ref;
+
+  Map<String, dynamic> toJson() => {
+        'tag': tag,
+        'reason': reason,
+        if (ref != null) ...ref!.toParams(),
+      };
 
   @override
   String toString() => 'DisabledNode($tag: $reason)';
@@ -172,9 +184,9 @@ abstract interface class CoreRejectHost {
   Future<CoreAttempt> check(String configJson);
 
   /// Выключить узел с тегом [tag] и записать рядом вердикт [reason].
-  /// `false` — узла по этому тегу нет (служебная запись приложения) либо
+  /// `null` — узла по этому тегу нет (служебная запись приложения) либо
   /// выключить его нечем: автоматики нет, цикл прерывается.
-  Future<bool> disableNode(String tag, String reason);
+  Future<CoreRejectNodeRef?> disableNode(String tag, String reason);
 
   /// Спросить человека после предела кругов. Реализация без UI (§428,
   /// сторож, плитка QS) возвращает [CoreRejectPrompt.stop] — диалога там
@@ -315,8 +327,9 @@ final class CoreRejectGuard {
     final hit = parseCoreRejection(error, built);
     if (hit == null) return null;
     if (!_seenTags.add(hit.tag)) return null; // тот же тег повторно
-    if (!await _host.disableNode(hit.tag, hit.reason)) return null;
-    final d = DisabledNode(tag: hit.tag, reason: hit.reason);
+    final ref = await _host.disableNode(hit.tag, hit.reason);
+    if (ref == null) return null;
+    final d = DisabledNode(tag: hit.tag, reason: hit.reason, ref: ref);
     _disabled.add(d);
     _host.onProgress(_phase, _round,
         disabledNodes: List.unmodifiable(_disabled));

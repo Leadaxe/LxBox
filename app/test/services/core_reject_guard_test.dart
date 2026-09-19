@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/core_reject_verdict.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 
 /// Поддельное ядро: список узлов с тегами, каждый — годный либо негодный.
@@ -72,11 +73,11 @@ class FakeCore implements CoreRejectHost {
   }
 
   @override
-  Future<bool> disableNode(String tag, String reason) async {
-    if (!tags.contains(tag)) return false;
+  Future<CoreRejectNodeRef?> disableNode(String tag, String reason) async {
+    if (!tags.contains(tag)) return null;
     disabledTags.add(tag);
     reasons[tag] = reason;
-    return true;
+    return CoreRejectNodeRef(sourceId: 'test', nodeKey: tag);
   }
 
   @override
@@ -358,9 +359,9 @@ class _DeferredCheckCore implements CoreRejectHost {
   }
 
   @override
-  Future<bool> disableNode(String tag, String reason) async {
+  Future<CoreRejectNodeRef?> disableNode(String tag, String reason) async {
     disabledTags.add(tag);
-    return true;
+    return CoreRejectNodeRef(sourceId: 'test', nodeKey: tag);
   }
 
   @override
@@ -403,9 +404,9 @@ class _ScriptedCore implements CoreRejectHost {
   }
 
   @override
-  Future<bool> disableNode(String tag, String reason) async {
+  Future<CoreRejectNodeRef?> disableNode(String tag, String reason) async {
     disabledTags.add(tag);
-    return true;
+    return CoreRejectNodeRef(sourceId: 'test', nodeKey: tag);
   }
 
   @override
@@ -441,9 +442,9 @@ class _StubbornCore implements CoreRejectHost {
   }
 
   @override
-  Future<bool> disableNode(String tag, String reason) async {
+  Future<CoreRejectNodeRef?> disableNode(String tag, String reason) async {
     disabledTags.add(tag);
-    return true;
+    return CoreRejectNodeRef(sourceId: 'test', nodeKey: tag);
   }
 
   @override

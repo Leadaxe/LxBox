@@ -7,8 +7,10 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/home/core_reject_ui.dart';
 import 'package:lxbox/screens/home/widgets/app_banner.dart';
+import 'package:lxbox/screens/node_settings_screen.dart';
 import 'package:lxbox/screens/subscription_detail_screen/node_inspect_screen.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_notifications_view.dart';
+import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 import 'package:lxbox/services/core_reject/core_reject_state.dart';
@@ -59,9 +61,13 @@ void main() {
         ],
       );
 
-  SubscriptionController subWithNode(VlessSpec node,
-      {required String emittedTag}) {
+  SubscriptionController subWithNode(
+    VlessSpec node, {
+    String? emittedTag,
+    bool disabled = true,
+  }) {
     final sub = SubscriptionController();
+    final hash = sourceNodeIdentities([node])[node]!;
     sub.debugSetEntries([
       SubscriptionEntry(
         list: SubscriptionServers(
@@ -72,10 +78,26 @@ void main() {
           detourPolicy: DetourPolicy.defaults,
           url: 'https://example.com/sub',
           nodes: [node],
+          disabledHashes: disabled
+              ? {hash: DateTime.utc(2026, 9, 19)}
+              : const {},
+          nodeWarnings: disabled
+              ? {
+                  hash: [
+                    StoredWarning.coreRejected(
+                      'parse encryption: bad',
+                      ref: CoreRejectNodeRef(
+                          sourceId: 'sub-1', nodeKey: hash),
+                    ),
+                  ],
+                }
+              : const {},
         ),
       ),
     ]);
-    sub.debugSetLastEmittedTagMap({emittedTag: node});
+    if (emittedTag != null) {
+      sub.debugSetLastEmittedTagMap({emittedTag: node});
+    }
     return sub;
   }
 
@@ -326,8 +348,24 @@ void main() {
     testWidgets('тап по строке открывает детали на вкладке Diagnostics',
         (tester) async {
       final node = inspectNode();
-      final sub = subWithNode(node, emittedTag: 'Frankfurt');
-      await pumpList(tester, const [one], sub);
+      final hash = sourceNodeIdentities([node])[node]!;
+      final sub = subWithNode(node);
+      await pumpList(
+        tester,
+        [
+          DisabledNode(
+            tag: 'Frankfurt',
+            reason: 'parse encryption: bad',
+            ref: CoreRejectNodeRef(sourceId: 'sub-1', nodeKey: hash),
+          ),
+        ],
+        sub,
+      );
+
+      final tile =
+          tester.widget<ListTile>(find.widgetWithText(ListTile, 'Frankfurt'));
+      expect(tile.enabled, isTrue);
+      expect(tile.trailing, isA<Text>());
 
       await tester.tap(find.widgetWithText(ListTile, 'Frankfurt'));
       await tester.pumpAndSettle();
@@ -335,6 +373,106 @@ void main() {
       expect(find.byType(NodeInspectScreen), findsOneWidget);
       expect(find.byType(NodeNotificationsView), findsOneWidget);
       expect(find.text('The core rejected this server'), findsOneWidget);
+    });
+
+    testWidgets(
+        'одиночный сервер без карты сборки — строка активна, открывает Servers',
+        (tester) async {
+      final node = inspectNode(tag: 'bad-ss2022');
+      final sub = SubscriptionController();
+      sub.debugSetEntries([
+        SubscriptionEntry(
+          list: UserServer(
+            id: 'srv-1',
+            name: '',
+            enabled: false,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            rawBody: '{"type":"shadowsocks","tag":"bad-ss2022"}',
+            warnings: [
+              StoredWarning.coreRejected(
+                'bad key length, required 32, got 5',
+                ref: CoreRejectNodeRef(
+                    sourceId: 'srv-1', nodeKey: 'bad-ss2022'),
+              ),
+            ],
+            nodes: [node],
+          ),
+        ),
+      ]);
+      sub.debugSetLastEmittedTagMap(const {});
+      await pumpList(
+        tester,
+        const [
+          DisabledNode(
+            tag: 'bad-ss2022',
+            reason: 'bad key length, required 32, got 5',
+            ref: CoreRejectNodeRef(
+                sourceId: 'srv-1', nodeKey: 'bad-ss2022'),
+          ),
+        ],
+        sub,
+      );
+
+      final tile =
+          tester.widget<ListTile>(find.widgetWithText(ListTile, 'bad-ss2022'));
+      expect(tile.enabled, isTrue);
+      expect(find.text('›'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ListTile, 'bad-ss2022'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NodeSettingsScreen), findsOneWidget);
+      expect(find.byType(NodeNotificationsView), findsOneWidget);
+    });
+
+    testWidgets('член папки — активная строка, NodeSettingsScreen',
+        (tester) async {
+      final member = inspectNode(tag: 'folder-node');
+      final sub = SubscriptionController();
+      sub.debugSetEntries([
+        SubscriptionEntry(
+          list: FolderServers(
+            id: 'f-1',
+            name: 'folder',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            createdAt: DateTime.utc(2026, 9, 19),
+            members: [
+              FolderMember(
+                raw: 'uri',
+                enabled: false,
+                warnings: [
+                  StoredWarning.coreRejected(
+                    'parse encryption: bad',
+                    ref: CoreRejectNodeRef(
+                        sourceId: 'f-1', nodeKey: 'folder-node'),
+                  ),
+                ],
+                node: member,
+              ),
+            ],
+          ),
+        ),
+      ]);
+      await pumpList(
+        tester,
+        const [
+          DisabledNode(
+            tag: 'folder-node',
+            reason: 'parse encryption: bad',
+            ref: CoreRejectNodeRef(sourceId: 'f-1', nodeKey: 'folder-node'),
+          ),
+        ],
+        sub,
+      );
+
+      await tester.tap(find.widgetWithText(ListTile, 'folder-node'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NodeSettingsScreen), findsOneWidget);
+      expect(find.byType(NodeNotificationsView), findsOneWidget);
     });
 
     testWidgets('удалённый узел — строка неактивна, без шеврона', (tester) async {
@@ -368,6 +506,7 @@ void main() {
         (tester) async {
       final hop = inspectNode(tag: 'hop-link');
       final owner = withChained(inspectNode(tag: 'Main'), hop);
+      final hash = sourceNodeIdentities([owner])[owner]!;
       final sub = SubscriptionController();
       sub.debugSetEntries([
         SubscriptionEntry(
@@ -379,13 +518,27 @@ void main() {
             detourPolicy: DetourPolicy.defaults,
             url: 'https://example.com/sub',
             nodes: [owner],
+            disabledHashes: {hash: DateTime.utc(2026, 9, 19)},
+            nodeWarnings: {
+              hash: [
+                StoredWarning.coreRejected(
+                  'parse encryption: bad',
+                  ref: CoreRejectNodeRef(sourceId: 'sub-1', nodeKey: hash),
+                ),
+              ],
+            },
           ),
         ),
       ]);
-      sub.debugSetLastEmittedTagMap({'hop-link': hop});
       await pumpList(
         tester,
-        const [DisabledNode(tag: 'hop-link', reason: 'parse encryption: bad')],
+        [
+          DisabledNode(
+            tag: 'hop-link',
+            reason: 'parse encryption: bad',
+            ref: CoreRejectNodeRef(sourceId: 'sub-1', nodeKey: hash),
+          ),
+        ],
         sub,
       );
 

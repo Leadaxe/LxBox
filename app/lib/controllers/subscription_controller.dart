@@ -21,6 +21,7 @@ import '../models/tunnel_status.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
 import 'subscription_controller/core_reject_ops.dart';
+import '../services/core_reject/core_reject_guard.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
@@ -2318,23 +2319,38 @@ class SubscriptionController extends ChangeNotifier {
   ///
   /// `false` — тегу не нашлось узла (служебная запись приложения) либо
   /// выключить его нечем: автоматики нет, цикл страховки прерывается.
-  Future<bool> disableNodeByCoreTag(String tag, String reason) async {
+  Future<CoreRejectNodeRef?> disableNodeByCoreTag(String tag, String reason) async {
     final node = _lastTagMap[tag];
-    if (node == null) return false;
+    if (node == null) return null;
     for (var i = 0; i < _entries.length; i++) {
-      final applied = applyVerdict(_entries[i].list, node, reason);
+      final list = _entries[i].list;
+      final ref = nodeRefFor(list, node);
+      final applied = applyVerdict(list, node, reason);
       if (!applied.changed) continue;
       _entries[i]._replaceList(applied.list);
       _entries[i].nodeCount = _entries[i].list.nodes.length;
       // Список узлов и вкладка Notifications читают `NodeSpec.warnings`;
       // без штампа вердикт жил бы только в хранилище до следующего разбора.
-      stampNodeWarnings(node, [StoredWarning.coreRejected(reason)]);
+      stampNodeWarnings(
+          node, [StoredWarning.coreRejected(reason, ref: ref)]);
       await _persist();
       notifyListeners();
-      return true;
+      return ref;
     }
-    return false;
+    return null;
   }
+
+  /// §503 — узел из листа страховки по идентичности вердикта, не по карте
+  /// текущей сборки (выключенный узел из сборки исключён).
+  CoreRejectNavigationTarget? resolveCoreRejectNavigation(DisabledNode disabled) =>
+      resolveCoreRejectNode(
+        [
+          for (var i = 0; i < _entries.length; i++)
+            (i, _entries[i].id, _entries[i].list),
+        ],
+        disabled,
+        emittedTagMap: _lastTagMap,
+      );
 
   /// Фича 478 — все вердикты, стоящие сейчас: тег-идентичность → причина.
   /// Отдаёт их Debug API и плашка.

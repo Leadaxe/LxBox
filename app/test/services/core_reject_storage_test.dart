@@ -170,7 +170,12 @@ void main() {
       final next = out.list as SubscriptionServers;
       final id = sourceNodeIdentities(sub.nodes)[sub.nodes[1]]!;
       expect(next.disabledHashes.containsKey(id), true);
-      expect(next.nodeWarnings[id]!.single.reason, 'bad b');
+      final verdict = next.nodeWarnings[id]!.single;
+      expect(verdict.reason, 'bad b');
+      expect(
+        verdict.coreRejectRef,
+        CoreRejectNodeRef(sourceId: sub.id, nodeKey: id),
+      );
     });
 
     test('чужой узел — changed:false, автоматики нет', () {

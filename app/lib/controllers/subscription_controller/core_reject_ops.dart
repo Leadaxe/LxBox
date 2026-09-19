@@ -18,7 +18,9 @@ import '../../models/node_warning.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/template_vars.dart';
+import '../../services/core_reject/core_reject_guard.dart';
 import '../../services/node_hash.dart';
+import '../../services/tag_resolver.dart';
 
 /// Каноническая форма тела узла для сравнения «то же тело / другое тело».
 ///
@@ -49,11 +51,297 @@ Object? _sortKeys(Object? v) {
 /// Результат применения вердикта к источнику.
 typedef VerdictApply = ({ServerList list, bool changed});
 
+/// §503 — цель навигации из листа страховки.
+typedef CoreRejectNavigationTarget = ({
+  int entryIndex,
+  int? memberIndex,
+  NodeSpec node,
+  NodeSpec source,
+  ServerList list,
+});
+
+/// §503 — источник и ключ узла для вердикта / [DisabledNode].
+CoreRejectNodeRef? nodeRefFor(ServerList list, NodeSpec node) {
+  final key = nodeKeyFor(list, node);
+  if (key == null) return null;
+  return CoreRejectNodeRef(sourceId: list.id, nodeKey: key);
+}
+
+/// Ключ узла внутри источника: идентичность подписки, bare-тег сервера/члена.
+String? nodeKeyFor(ServerList list, NodeSpec node) {
+  switch (list) {
+    case SubscriptionServers():
+      return sourceNodeIdentities(list.nodes)[node];
+    case FolderServers():
+      for (final m in list.members) {
+        if (identical(m.node, node)) {
+          return m.node?.tag ?? m.nameHint;
+        }
+      }
+      return null;
+    case UserServer():
+      if (list.nodes.any((n) => identical(n, node))) return node.tag;
+      return null;
+  }
+}
+
+bool _nodeOrHop(NodeSpec owner, NodeSpec node) {
+  if (identical(owner, node)) return true;
+  for (var hop = owner.chained; hop != null; hop = hop.chained) {
+    if (identical(hop, node)) return true;
+  }
+  return false;
+}
+
+NodeSpec? _sourceNodeOf(NodeSpec node, ServerList list) {
+  switch (list) {
+    case FolderServers():
+      for (final m in list.members) {
+        final n = m.node;
+        if (n != null && _nodeOrHop(n, node)) return n;
+      }
+    case SubscriptionServers():
+    case UserServer():
+      for (final n in list.nodes) {
+        if (_nodeOrHop(n, node)) return n;
+      }
+  }
+  return null;
+}
+
+/// §503 — найти узел в хранилище по идентичности вердикта, не по карте
+/// текущей сборки. [entries] — `(index, id, list)` из контроллера.
+CoreRejectNavigationTarget? resolveCoreRejectNode(
+  List<(int index, String id, ServerList list)> entries,
+  DisabledNode disabled, {
+  Map<String, NodeSpec>? emittedTagMap,
+}) {
+  var ref = disabled.ref ?? _refFromStoredVerdict(entries, disabled);
+  if (ref != null) {
+    final byRef = _resolveByRef(entries, ref);
+    if (byRef != null) return byRef;
+  }
+
+  final mapped = emittedTagMap?[disabled.tag];
+  if (mapped != null) {
+    final fromMap = _resolveByNode(entries, mapped);
+    if (fromMap != null) return fromMap;
+  }
+
+  return _resolveByTagAmongDisabled(entries, disabled.tag);
+}
+
+CoreRejectNodeRef? _refFromStoredVerdict(
+  List<(int index, String id, ServerList list)> entries,
+  DisabledNode disabled,
+) {
+  for (final (_, _, list) in entries) {
+    switch (list) {
+      case SubscriptionServers():
+        for (final e in list.nodeWarnings.entries) {
+          for (final w in e.value) {
+            if (!w.isCoreRejected || w.reason != disabled.reason) continue;
+            final ref = w.coreRejectRef;
+            if (ref != null) return ref;
+          }
+        }
+      case FolderServers():
+        for (final m in list.members) {
+          for (final w in m.warnings) {
+            if (!w.isCoreRejected || w.reason != disabled.reason) continue;
+            final ref = w.coreRejectRef;
+            if (ref != null) return ref;
+          }
+        }
+      case UserServer():
+        for (final w in list.warnings) {
+          if (!w.isCoreRejected || w.reason != disabled.reason) continue;
+          final ref = w.coreRejectRef;
+          if (ref != null) return ref;
+        }
+    }
+  }
+  return null;
+}
+
+CoreRejectNavigationTarget? _resolveByRef(
+  List<(int index, String id, ServerList list)> entries,
+  CoreRejectNodeRef ref,
+) {
+  for (final (index, id, list) in entries) {
+    if (id != ref.sourceId) continue;
+    switch (list) {
+      case SubscriptionServers():
+        for (final n in list.nodes) {
+          if (sourceNodeIdentities(list.nodes)[n] == ref.nodeKey) {
+            return (
+              entryIndex: index,
+              memberIndex: null,
+              node: n,
+              source: n,
+              list: list,
+            );
+          }
+        }
+      case FolderServers():
+        for (var mi = 0; mi < list.members.length; mi++) {
+          final m = list.members[mi];
+          final key = m.node?.tag ?? m.nameHint;
+          if (key == ref.nodeKey && m.node != null) {
+            return (
+              entryIndex: index,
+              memberIndex: mi,
+              node: m.node!,
+              source: m.node!,
+              list: list,
+            );
+          }
+        }
+      case UserServer():
+        for (final n in list.nodes) {
+          if (n.tag == ref.nodeKey) {
+            return (
+              entryIndex: index,
+              memberIndex: null,
+              node: n,
+              source: n,
+              list: list,
+            );
+          }
+        }
+    }
+  }
+  return null;
+}
+
+CoreRejectNavigationTarget? _resolveByNode(
+  List<(int index, String id, ServerList list)> entries,
+  NodeSpec node,
+) {
+  for (final (index, _, list) in entries) {
+    switch (list) {
+      case FolderServers():
+        for (var mi = 0; mi < list.members.length; mi++) {
+          final n = list.members[mi].node;
+          if (n != null && _nodeOrHop(n, node)) {
+            return (
+              entryIndex: index,
+              memberIndex: mi,
+              node: node,
+              source: n,
+              list: list,
+            );
+          }
+        }
+      case SubscriptionServers():
+      case UserServer():
+        if (list.nodes.any((n) => _nodeOrHop(n, node))) {
+          final source = _sourceNodeOf(node, list) ?? node;
+          return (
+            entryIndex: index,
+            memberIndex: null,
+            node: node,
+            source: source,
+            list: list,
+          );
+        }
+    }
+  }
+  return null;
+}
+
+CoreRejectNavigationTarget? _resolveByTagAmongDisabled(
+  List<(int index, String id, ServerList list)> entries,
+  String tag,
+) {
+  final candidates = <String>[tag];
+  final m = RegExp(r'^(.*)-\d+$').firstMatch(tag);
+  if (m != null) candidates.add(m.group(1)!);
+
+  for (final cand in candidates) {
+    for (final (index, _, list) in entries) {
+      switch (list) {
+        case SubscriptionServers():
+          for (final n in list.nodes) {
+            final identity = sourceNodeIdentities(list.nodes)[n];
+            if (identity == null) continue;
+            final hasVerdict = list.nodeWarnings[identity]
+                    ?.any((w) => w.isCoreRejected) ==
+                true;
+            if (!hasVerdict && !list.disabledHashes.containsKey(identity)) {
+              continue;
+            }
+            final bare = n.tag;
+            final display =
+                list.tagPrefix.isEmpty ? bare : TagResolver.displayTag(list.tagPrefix, bare);
+            if (bare == cand || display == cand || identity == cand) {
+              return (
+                entryIndex: index,
+                memberIndex: null,
+                node: n,
+                source: n,
+                list: list,
+              );
+            }
+            for (var hop = n.chained; hop != null; hop = hop.chained) {
+              final hopDisplay = list.tagPrefix.isEmpty
+                  ? hop.tag
+                  : TagResolver.displayTag(list.tagPrefix, hop.tag);
+              if (hop.tag == cand || hopDisplay == cand) {
+                return (
+                  entryIndex: index,
+                  memberIndex: null,
+                  node: n,
+                  source: n,
+                  list: list,
+                );
+              }
+            }
+          }
+        case FolderServers():
+          for (var mi = 0; mi < list.members.length; mi++) {
+            final m = list.members[mi];
+            if (!m.warnings.any((w) => w.isCoreRejected) && m.enabled) {
+              continue;
+            }
+            final key = m.node?.tag ?? m.nameHint;
+            if (key == cand && m.node != null) {
+              return (
+                entryIndex: index,
+                memberIndex: mi,
+                node: m.node!,
+                source: m.node!,
+                list: list,
+              );
+            }
+          }
+        case UserServer():
+          if (!list.warnings.any((w) => w.isCoreRejected) && list.enabled) {
+            continue;
+          }
+          for (final n in list.nodes) {
+            if (n.tag == cand) {
+              return (
+                entryIndex: index,
+                memberIndex: null,
+                node: n,
+                source: n,
+                list: list,
+              );
+            }
+          }
+      }
+    }
+  }
+  return null;
+}
+
 /// Выключить узел [node] источника [list] и записать рядом вердикт
 /// [reason]. `changed: false` — узла в источнике нет либо выключить его
 /// нечем (служебная запись): автоматики нет.
 VerdictApply applyVerdict(ServerList list, NodeSpec node, String reason) {
-  final verdict = StoredWarning.coreRejected(reason);
+  final verdict =
+      StoredWarning.coreRejected(reason, ref: nodeRefFor(list, node));
   switch (list) {
     case SubscriptionServers():
       final hash = sourceNodeIdentities(list.nodes)[node];

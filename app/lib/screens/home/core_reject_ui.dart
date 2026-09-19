@@ -17,7 +17,6 @@ import '../../services/node_hash.dart';
 import '../../widgets/app_bottom_sheet.dart';
 import '../node_settings_screen.dart';
 import '../subscription_detail_screen/node_inspect_screen.dart';
-import 'source_lookup.dart';
 
 /// Имён в тексте плашки — до трёх, остальные уходят в хвост «+%d more».
 const _kNamesInBanner = 3;
@@ -87,22 +86,19 @@ Future<CoreRejectPrompt> showCoreRejectPrompt(
   return answer ?? CoreRejectPrompt.stop;
 }
 
-/// §498/§501 — экран деталей узла на вкладке Diagnostics (тот же путь, что
-/// тап по узлу в списке). Узел ищется по [lastEmittedTagMap], не по
-/// отображаемым строкам; хоп цепочки ведёт к владельцу.
+/// §498/§501/§503 — экран деталей узла на вкладке Diagnostics. Узел ищется по
+/// идентичности вердикта в хранилище, не по карте текущей сборки.
 Future<void> openCoreRejectNodeDetails(
   BuildContext context, {
   required SubscriptionController subController,
   required DisabledNode disabled,
 }) async {
-  final mapped = subController.lastEmittedTagMap[disabled.tag];
-  if (mapped == null) return;
-  final owner = ownerOfNode(mapped, subController.entries);
-  if (owner == null) return;
+  final target = subController.resolveCoreRejectNavigation(disabled);
+  if (target == null) return;
 
-  final entry = subController.entries[owner.entryIndex];
-  final list = entry.list;
-  final source = sourceNodeOf(mapped, list) ?? mapped;
+  final entry = subController.entries[target.entryIndex];
+  final list = target.list;
+  final source = target.source;
   _stampStoredForInspect(list, source);
 
   await Navigator.of(context).push<void>(
@@ -111,9 +107,9 @@ Future<void> openCoreRejectNodeDetails(
         if (list is FolderServers || list is UserServer) {
           return NodeSettingsScreen(
             entry: entry,
-            index: owner.entryIndex,
+            index: target.entryIndex,
             subController: subController,
-            memberIndex: owner.memberIndex,
+            memberIndex: target.memberIndex,
             initialTab: NodeSettingsScreen.diagnosticsTabIndex,
           );
         }
@@ -176,17 +172,27 @@ Future<void> showCoreRejectList(
             for (final d in nodes)
               Builder(
                 builder: (tileCtx) {
-                  final mapped = subController.lastEmittedTagMap[d.tag];
-                  final canOpen = mapped != null &&
-                      ownerOfNode(mapped, subController.entries) != null;
+                  final canOpen =
+                      subController.resolveCoreRejectNavigation(d) != null;
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     enabled: canOpen,
                     title: Text(d.tag),
                     subtitle: Text(d.reason,
                         maxLines: 3, overflow: TextOverflow.ellipsis),
-                    trailing:
-                        canOpen ? const Icon(Icons.chevron_right) : null,
+                    trailing: canOpen
+                        ? Text(
+                            '›',
+                            style: Theme.of(tileCtx)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: Theme.of(tileCtx)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          )
+                        : null,
                     onTap: canOpen
                         ? () async {
                             Navigator.pop(sheetCtx);
