@@ -36,7 +36,6 @@ import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'anytls_mapper.dart';
 import 'http_mapper.dart';
-import 'masque_mapper.dart';
 import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'ssh_mapper.dart';
@@ -123,6 +122,7 @@ const Map<String, String> _kSchemeToType = <String, String>{
   'tuic': 'tuic',
   'hysteria2': 'hysteria2',
   'hy2': 'hysteria2',
+  'masque': 'masque',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -138,7 +138,6 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'proxy+http': mapHttpProxyUri,
   'proxy+https': mapHttpProxyUri,
   'ssh': mapSshUri,
-  'masque': mapMasqueUri,
   'wireguard': mapWireguardUri,
   'wg': mapWireguardUri,
   'awg': mapWireguardUri,

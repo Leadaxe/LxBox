@@ -439,10 +439,19 @@ final class _Run {
     // Обязательные записи: их отсутствие — это «узла нет».
     for (final p in ordered) {
       if (!p.required) continue;
-      final path = p.mapsTo;
-      if (path == null) continue;
-      final v = _read(path);
-      if (v == null || (v is String && v.isEmpty)) return null;
+      // Пути, которые запись обязана наполнить. Обычно один (`maps_to`), но у
+      // записи со `split_into` целевых путей несколько, и `maps_to` у неё
+      // может не быть вовсе: «адрес обязателен» значит «хоть одно семейство
+      // доехало», а не «оба».
+      final paths = p.splitInto.isNotEmpty
+          ? p.splitInto.keys.toList()
+          : (p.mapsTo == null ? const <String>[] : [p.mapsTo!]);
+      if (paths.isEmpty) continue;
+      final any = paths.any((path) {
+        final v = _read(path);
+        return v != null && !(v is String && v.isEmpty);
+      });
+      if (!any) return null;
     }
 
     // 7. Неизвестные параметры источника.
@@ -718,6 +727,17 @@ final class _Run {
       typed = _normalizeList(typed, norm);
     }
 
+    // `split_into` — один список РАЗБРАСЫВАЕТСЯ по нескольким путям по
+    // предикату на элементе: ядро держит адреса туннеля двумя отдельными
+    // полями, по одному на семейство, а ссылка пишет их одним списком.
+    // `maps_to` у такой записи может не быть вовсе — целевые пути называет
+    // сам `split_into`.
+    if (p.splitInto.isNotEmpty && typed is List) {
+      _applySplitInto(p, typed);
+      _applyImplies(p);
+      return;
+    }
+
     if (p.mapsTo != null) {
       _write(p.mapsTo!, typed, p);
     } else if (!hadSets && p.mapsToPresent) {
@@ -860,6 +880,27 @@ final class _Run {
       }
     }
     warnings.add(NodeWarning.byCode(code, path: p.name, value: shown));
+  }
+
+  /// `split_into` — разбросать элементы списка по путям тела.
+  ///
+  /// Ключ — путь тела, значение — `{when: {item: <предикат>}, take: "first"}`.
+  /// `take: "first"` берёт первый подошедший элемент, иначе в путь едет весь
+  /// подсписок. Предикат смотрит на ЭЛЕМЕНТ, а не на тело: семейство адреса
+  /// видно по самому адресу.
+  void _applySplitInto(MapperParam p, List<dynamic> items) {
+    for (final e in p.splitInto.entries) {
+      final spec = (e.value as Map?)?.cast<String, dynamic>();
+      if (spec == null) continue;
+      final cond = (spec['when'] as Map?)?.cast<String, dynamic>();
+      final probe = cond == null ? null : cond['item'];
+      final hits = [
+        for (final it in items)
+          if (probe == null || _matches(it, probe)) it,
+      ];
+      if (hits.isEmpty) continue;
+      _write(e.key, spec['take'] == 'first' ? hits.first : hits, p);
+    }
   }
 
   /// `on_invalid` — значение не приводится к объявленной форме.

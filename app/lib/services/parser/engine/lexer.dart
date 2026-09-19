@@ -66,8 +66,19 @@ SourceSpace? lexUri(String text, {String formId = 'url'}) {
   }
 
   // 4. Путь — от первого `/` ПОСЛЕ authority.
+  //
+  // «После authority» тут не украшение: сырой `/` бывает ВНУТРИ userinfo —
+  // base64 его содержит (ключи masque и WireGuard, §106), и резать по первому
+  // `/` во всей строке значило бы обрубить ключ на первом же символе `/`.
+  // Платформенный парсер ровно поэтому и не годится: у лаунчера то же место
+  // обходится percent-энкодом ДО разбора, у нас его нет — лексер режет
+  // правильно с первого раза.
+  //
+  // Граница authority — последний `@`; `/` ищется от него. Если `@` нет,
+  // ищем с начала, как и раньше.
   var path = '';
-  final slash = rest.indexOf('/');
+  final atInRest = rest.lastIndexOf('@');
+  final slash = rest.indexOf('/', atInRest + 1);
   if (slash >= 0) {
     path = rest.substring(slash);
     rest = rest.substring(0, slash);

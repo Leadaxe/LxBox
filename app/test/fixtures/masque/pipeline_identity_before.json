@@ -266,7 +266,7 @@
     },
     "b480:publickey_raw_plus": {
       "uri": "masque://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@192.0.2.44:443?publickey=+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=&address=172.16.0.2%2F32#mq-pub-plus",
-      "identity": "02f845111ac0b895107695f8a42008d05d40230415a0f85ecac6ea3d06f8196c",
+      "identity": "e09e956cc3a55d23d036059738e27278d7883cc2dab68b94dad6f708f5ef2dcc",
       "tag": "mq-pub-plus",
       "body": {
         "type": "masque",
@@ -276,10 +276,27 @@
         "profile": "cloudflare",
         "vhttp": "h3",
         "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
-        "public_key": "gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+        "public_key": "+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
         "ip": "172.16.0.2/32",
         "mtu": 1280
-      }
+      },
+      "_before480": {
+        "identity": "02f845111ac0b895107695f8a42008d05d40230415a0f85ecac6ea3d06f8196c",
+        "tag": "mq-pub-plus",
+        "body": {
+          "type": "masque",
+          "tag": "mq-pub-plus",
+          "server": "192.0.2.44",
+          "server_port": 443,
+          "profile": "cloudflare",
+          "vhttp": "h3",
+          "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+          "public_key": "gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+          "ip": "172.16.0.2/32",
+          "mtu": 1280
+        }
+      },
+      "_delta480": "delta480-2 (D133-7): поле base64-формата читает сырой «+» буквально. Было — «+» становился пробелом, ключ терял первый символ и узел молча ехал с чужим public_key. Стало — ключ как в ссылке."
     }
   }
 }

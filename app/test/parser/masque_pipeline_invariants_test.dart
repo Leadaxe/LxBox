@@ -7,13 +7,18 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/warp/masque_account.dart';
 
 /// §472 шаг 7, раздел 3 спеки — инварианты переезда masque на конвейер.
-const _contractRoot = 'contract';
+/// §480 W4 — РЕЕСТР из ЗЕРКАЛА: вендоренной копии на CI нет, и под её гейтом
+/// файл пропускался бы целиком. КОРПУС остаётся за копией — в зеркале его нет.
+const _contractRoot = 'assets/contract';
+const _corpusRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026). В нём и
 /// корпус, и ссылки `app/test`, и узлы, которые строит фабрика WARP
@@ -29,7 +34,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/masque')
+  final files = Directory('$_corpusRoot/corpus/uri/masque')
       .listSync()
       .whereType<File>()
       .toList()
@@ -70,11 +75,15 @@ MasqueAccount _warpAccount() => MasqueAccount(
 
 void main() {
   final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final skip = synced ? null : 'зеркало реестра не найдено';
+  final hasCorpus = Directory('$_corpusRoot/corpus/uri/masque').existsSync();
+  final skipCorpus = hasCorpus ? skip : 'корпус не синхронизирован';
 
   setUpAll(() async {
     if (!synced) return;
     await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
 
   group('§472 инвариант 4 — identity masque не меняется', () {
@@ -136,7 +145,7 @@ void main() {
       }
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, 6);
-    }, skip: skip);
+    }, skip: skipCorpus);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
