@@ -7,8 +7,14 @@ import 'package:lxbox/services/warp/masquerade_params.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 import 'package:lxbox/services/warp/warp_client.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §126 — WARP + AmneziaWG 1.5 обфускация: preset, .conf round-trip, persist.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   // client_id «AQID» = base64([1,2,3]).
   final clientId = base64.encode([1, 2, 3]);
 

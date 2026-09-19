@@ -6,9 +6,15 @@ import 'package:lxbox/services/warp/scan/scan_models.dart';
 import 'package:lxbox/services/warp/scan/scan_node_builder.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 
+import '../../parser/engine_test_setup.dart';
+
 /// §284 — сборка URI-узла кандидата из WARP-аккаунта (переиспользование кредов
 /// одной регистрации на любом IP:port).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   WarpAccount warp() => const WarpAccount(
         privKey: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=',
         peerPub: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=',
