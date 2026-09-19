@@ -10,6 +10,7 @@
 library;
 
 import '../../../models/node_warning.dart';
+import '../../contract/body_sanitizer.dart' show BodySource;
 import '../mappers/uri_mapper.dart';
 import 'interpreter.dart';
 import 'section_loader.dart';
@@ -33,6 +34,9 @@ UriMapping? mapViaEngine(String uri, String singboxType) {
     extensionFields: res.extensionFields,
     wsEarlyDataHeaderImplicit: res.wsEarlyDataHeaderImplicit,
     tagAddress: res.tagAddress,
+    // §480 — вход НАЗЫВАЕТ СЕБЯ САМ: секция объявила `body_source`, и
+    // санитайзер судит по нему `except_sources`.
+    bodySource: BodySource.byRegistryName(res.bodySource),
   );
 }
 

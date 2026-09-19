@@ -41,6 +41,7 @@ final class EngineResult {
     this.wsEarlyDataHeaderImplicit = false,
     this.tagAddress,
     this.tagScheme,
+    this.bodySource = '',
   });
 
   /// Сырая карта тела в ключах sing-box.
@@ -57,6 +58,15 @@ final class EngineResult {
   /// Написание имени в теге-фолбэке, объявленное секцией (`label.fallback
   /// .scheme`): `null` — фолбэк строится по типу тела, как у всех прочих.
   final String? tagScheme;
+
+  /// §480 — ВХОД, которым тело приехало, как его назвала секция
+  /// (`body_source`).
+  ///
+  /// Санитайзер судит по нему `max_when.except_sources` — единственное место
+  /// контракта, где вход влияет на РЕЗУЛЬТАТ, а не только на разбор. До
+  /// этого конвейер передавал туда заглушку на всех входах, кроме
+  /// sing-box-JSON, и правило работало вслепую.
+  final String bodySource;
 }
 
 /// Исполнить секцию на тексте источника.
@@ -471,6 +481,7 @@ final class _Run {
       extensionFields: extensionFields,
       wsEarlyDataHeaderImplicit: _wsEarlyDataHeaderImplicit,
       tagScheme: section.label.fallbackScheme,
+      bodySource: section.bodySource,
     );
   }
 

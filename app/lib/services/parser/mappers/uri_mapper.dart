@@ -24,6 +24,7 @@
 library;
 
 import '../../../models/node_warning.dart';
+import '../../contract/body_sanitizer.dart' show BodySource;
 
 /// Результат перевода одной ссылки.
 final class UriMapping {
@@ -35,6 +36,7 @@ final class UriMapping {
     this.wsEarlyDataHeaderImplicit = false,
     this.tagAddress,
     this.kindIsAwg = false,
+    this.bodySource = BodySource.other,
   });
 
   /// Сырая карта sing-box: то, что ссылка сказала, в ключах тела. Ещё не
@@ -107,6 +109,20 @@ final class UriMapping {
   /// параметр, которого в ней не было. Знает об этом только маппер: он один
   /// видел исходную форму.
   final bool wsEarlyDataHeaderImplicit;
+
+  /// §480 — ВХОД, которым тело приехало, названный самой секцией-маппером
+  /// (`body_source`).
+  ///
+  /// Санитайзер судит по нему `max_when.except_sources` — единственное
+  /// место контракта, где вход влияет на РЕЗУЛЬТАТ, а не только на разбор.
+  /// До этого конвейер передавал туда заглушку [BodySource.other] на всех
+  /// входах, кроме sing-box-JSON: правило работало вслепую, и стоило реестру
+  /// перечислить в исключениях любой другой вход, как тела у нас и у
+  /// лаунчера разошлись бы молча.
+  ///
+  /// [BodySource.other] по умолчанию — для рукописных мапперов, за которыми
+  /// секции ещё нет: там вход себя не называет, и поведение остаётся прежним.
+  final BodySource bodySource;
 }
 
 /// Перевод ссылки одной схемы. `null` — ссылка не разбирается вовсе
