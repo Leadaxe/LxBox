@@ -39,7 +39,10 @@ void main() {
     'hysteria2': 'assets/contract/registry/protocols/hysteria2.json',
     'tuic': 'assets/contract/registry/protocols/tuic.json',
     'masque': 'assets/contract/registry/protocols/masque.json',
-    'wireguard': 'assets/contract_draft/uri/wireguard.json',
+    // Секция wireguard приехала РЕЕСТРОМ (контракт 1.1.23+), и форму
+    // проверяем у него: наш черновик стал тонким оверлеем и обязательных
+    // атрибутов секции не несёт — он их и не должен нести.
+    'wireguard': 'assets/contract/registry/protocols/wireguard.json',
   };
 
   group('§480 W4 — форма секций uri', () {
@@ -107,9 +110,23 @@ void main() {
 
     test('эмит: param_order — ПРАВИЛО (алфавит), а не перечень', () {
       for (final e in uriSections.entries) {
-        final emit = (section(e.value, 'uri')['emit'] as Map);
-        expect(emit['param_order'], 'alphabetical', reason: e.key);
+        // Обратный ход объявляет не каждая секция: у wireguard реестр несёт
+        // `emit: null` (share-URI собирает только LxBox), и правило порядка
+        // лежит в НАШЕМ оверлее. Секция без эмита здесь не судится — её
+        // оверлей проверяет отдельный кейс ниже.
+        final emit = section(e.value, 'uri')['emit'];
+        if (emit == null) continue;
+        expect((emit as Map)['param_order'], 'alphabetical', reason: e.key);
       }
+    });
+
+    test('эмит wireguard — в нашем оверлее, порядок тот же (алфавит)', () {
+      final emit = (section('assets/contract_draft/uri/wireguard.json', 'uri')[
+          'emit'] as Map);
+      expect(emit['param_order'], 'alphabetical');
+      // Написание схемы — сегодняшнее: узел с awg-полями уезжает
+      // `wireguard://`, как ждёт `emit_before480.json`.
+      expect(((emit['form_from'] as Map)['any_set'] as Map)['*'], 'wireguard');
     });
 
     test('общие блоки берутся у лаунчера через include, своих копий нет', () {
@@ -194,8 +211,16 @@ void main() {
         final params = (section(uriSections[e.key]!, 'uri')['params'] as Map)
             .cast<String, dynamic>();
         for (final f in e.value) {
-          final de = (params[f] as Map)['decode_extra'] as Map?;
-          expect(de?['plus_literal'], isTrue, reason: '${e.key}.$f');
+          final p = params[f] as Map;
+          // Норма D133-7 — буквальный «+» выводится ИЗ `format: base64*`;
+          // явный `decode_extra.plus_literal` только записывает то же самое
+          // вторым способом. Годится любой из них: у части записей реестра
+          // стоит флаг, у части — один лишь формат.
+          final de = (p['decode_extra'] as Map?)?['plus_literal'] == true;
+          final byFormat = '${p['format']}'.startsWith('base64');
+          expect(de || byFormat, isTrue,
+              reason: '${e.key}.$f: ни decode_extra.plus_literal, ни '
+                  'format base64*');
         }
       }
     });
@@ -241,7 +266,10 @@ void main() {
   });
 
   group('§480 W4 — форма секции conf (INI)', () {
-    const path = 'assets/contract_draft/conf/wireguard.json';
+    // Секция `mappers.conf` приехала РЕЕСТРОМ (контракт 1.1.23+); наш
+    // черновик стал тонким оверлеем и форму секции больше не несёт.
+    const path = 'assets/contract/registry/protocols/wireguard.json';
+    const overlayPath = 'assets/contract_draft/conf/wireguard.json';
 
     test('секция объявляет источник тела wgconf и опознаётся по [Interface]', () {
       final s = section(path, 'conf');
@@ -255,8 +283,13 @@ void main() {
       final params = (section(path, 'conf')['params'] as Map).cast<String, dynamic>();
       for (final p in params.entries) {
         final src = (p.value as Map)['source'];
-        expect(src, isA<String>(), reason: p.key);
-        expect((src as String).startsWith('ini.'), isTrue, reason: p.key);
+        // Источников у записи бывает НЕСКОЛЬКО (`reserved` читается и из
+        // `Peer.Reserved`, и из `Peer.ClientId`) — пространство у всех одно.
+        final all = src is List ? src : [src];
+        for (final s in all) {
+          expect(s, isA<String>(), reason: p.key);
+          expect((s as String).startsWith('ini.'), isTrue, reason: p.key);
+        }
       }
     });
 
@@ -275,7 +308,10 @@ void main() {
     });
 
     test('читается только ПЕРВАЯ [Peer]; код повтора ждёт корпуса', () {
-      final dialect = section(path, 'conf')['ini_dialect'] as Map;
+      // `ini_dialect` — НАШ оверлей: секция реестра диалект INI не объявляет
+      // вовсе (у Go правила чтения зашиты в ридер). Передано лаунчеру,
+      // держится под `_awaitingContractSync` до его контракта.
+      final dialect = section(overlayPath, 'conf')['ini_dialect'] as Map;
       final peer = (dialect['sections'] as Map)['Peer'] as Map;
       expect(peer['repeat'], 'first_only');
       final onExtra = peer['on_extra'] as Map;
@@ -293,24 +329,31 @@ void main() {
     });
 
     // §480 — потеря `Interface.DNS` осознанная (у endpoint'а sing-box поля
-    // DNS нет вовсе). Контракт 1.1.22 привёз ТЕКСТ кода, но корпус его не
-    // ждёт: `wgconf/ini_basic.body` требует пустой список warnings, и ни один
-    // кейс `contract/corpus/**` не несёт `wgconf_*`. Имя ждёт под
-    // `$code_pending` правки корпуса. Запись обязана остаться в любом случае
-    // — без неё `DNS` уехал бы в `uri_param_unknown`.
-    test('Interface.DNS — лоссы by design; код ждёт корпуса', () {
+    // DNS нет вовсе). Контракт 1.1.23+ код ВКЛЮЧИЛ: корпус его теперь ждёт
+    // (`wgconf/ini_basic.expected.json` несёт `wgconf_dns_ignored`
+    // единственным warning), и `$code_pending` снят. Запись обязана остаться
+    // в любом случае — без неё `DNS` уехал бы в `uri_param_unknown`.
+    test('Interface.DNS — лоссы by design, потеря названа кодом', () {
       final dns = ((section(path, 'conf')['params'] as Map)['dns'] as Map);
       expect(dns['maps_to'], isNull);
       final onPresent = dns['on_present'] as Map;
-      expect(onPresent['code'], isNull, reason: 'корпус кода не ждёт');
-      expect(onPresent[r'$code_pending'], 'wgconf_dns_ignored');
+      expect(onPresent['code'], 'wgconf_dns_ignored');
     });
 
-    test('delta480-4 — алиас preshared_key читается (сегодня теряется молча)',
-        () {
-      final psk =
+    test('delta480-4 — алиас preshared_key читается ССЫЛОЧНОЙ формой', () {
+      // D133-23 — алиас с подчёркиванием живёт у формы `url` секции `uri`
+      // (`query.preshared_key` вторым написанием). У INI написание ключа одно
+      // — `PresharedKey`, регистр снимает диалект (`key_case: lower`), и
+      // второго пути записи не нужно.
+      final uriPsk = ((section(
+          'assets/contract/registry/protocols/wireguard.json',
+          'uri')['params'] as Map)['presharedkey'] as Map);
+      final url = (uriPsk['source'] as Map)['url'];
+      expect((url as List).map((e) => '$e'), contains('query.preshared_key'));
+
+      final confPsk =
           ((section(path, 'conf')['params'] as Map)['presharedkey'] as Map);
-      expect((psk['aliases'] as List), contains('preshared_key'));
+      expect('${confPsk['source']}'.toLowerCase(), contains('presharedkey'));
     });
   });
 
