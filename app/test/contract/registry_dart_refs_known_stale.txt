@@ -1,0 +1,6 @@
+# Протухшие refs.dart из зеркала assets/contract/registry.
+# Одна ссылка на строку — дословно, как в JSON реестра.
+# Список самоочищается: тест падает, если запись устарела (файл появился
+# или ссылку убрали из реестра) — тогда строку удалить.
+lib/screens/add_server_wizard/tailscale_bundle.dart
+app/lib/services/parser/uri_parsers/auto_group_parser.dart:11
