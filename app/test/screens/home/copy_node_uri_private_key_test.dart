@@ -6,10 +6,16 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/home/node_actions.dart';
 
+import '../../parser/engine_test_setup.dart';
+
 /// §466 — «Copy URI» у узла, чья ссылка несёт приватный ключ, спрашивает
 /// подтверждение (§463 здесь отказывал наотрез). Проверяем обе ветки диалога,
 /// какие узлы его вызывают и что у остальных копирование как было.
 void main() {
+  // §480 W7 — эмит ссылки исполняет секции реестра; рукописного `toUri` у
+  // схем не осталось.
+  setUpAll(loadEngineSections);
+
   late String? clipboard;
 
   setUp(() {

@@ -3,6 +3,8 @@ import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §331 — отпечаток «состава» подписки: то и только то, от чего зависит
 /// собранный конфиг. Одинаковый отпечаток ⇒ пересобирать нечего ⇒ синюю плашку
 /// «Settings changed» поднимать не за что.
@@ -18,10 +20,15 @@ String _key(List<NodeSpec> nodes, [Iterable<String> disabled = const []]) =>
     SubscriptionController.compositionKeyForTesting(nodes, disabled);
 
 void main() {
-  // Разные узлы: отличаются host'ом → разные identity-хеши.
-  final a = _node('vless://11111111-1111-1111-1111-111111111111@a.example.com:443?type=tcp&security=tls#A');
-  final b = _node('vless://22222222-2222-2222-2222-222222222222@b.example.com:443?type=tcp&security=tls#B');
-  final c = _node('vless://33333333-3333-3333-3333-333333333333@c.example.com:443?type=tcp&security=tls#C');
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
+  // Разные узлы: отличаются host'ом → разные identity-хеши. `late` обязателен:
+  // разбор обязан случиться ПОСЛЕ загрузки секций, а не на входе в `main()`.
+  late final a = _node('vless://11111111-1111-1111-1111-111111111111@a.example.com:443?type=tcp&security=tls#A');
+  late final b = _node('vless://22222222-2222-2222-2222-222222222222@b.example.com:443?type=tcp&security=tls#B');
+  late final c = _node('vless://33333333-3333-3333-3333-333333333333@c.example.com:443?type=tcp&security=tls#C');
 
   group('§331 состав: список узлов', () {
     test('тот же список → тот же ключ', () {

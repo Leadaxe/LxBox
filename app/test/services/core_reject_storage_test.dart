@@ -10,6 +10,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 SubscriptionServers _sub({
   required List<String> uris,
   Map<String, DateTime> disabled = const {},
@@ -28,6 +30,10 @@ SubscriptionServers _sub({
     );
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('запись вердикта', () {
     test('форма лаунчера: code + params, без path и severity', () {
       final w = StoredWarning.coreRejected('parse encryption: bad');
@@ -77,7 +83,7 @@ void main() {
   group('кодек записи источника', () {
     test('подписка: warnings рядом с disabled, round-trip', () {
       final sub = _sub(
-        uris: ['vless://u@h1:443?type=ws&security=tls#A'],
+        uris: ['vless://11111111-1111-1111-1111-111111111111@h1:443?type=ws&security=tls#A'],
         disabled: {'A': DateTime.utc(2026, 9, 19)},
         warnings: {
           'A': [StoredWarning.coreRejected('parse encryption: bad')]
@@ -99,7 +105,7 @@ void main() {
     });
 
     test('пустой оверлей ключа не пишет', () {
-      final rec = sourceToRecord(_sub(uris: ['vless://u@h:443#A']));
+      final rec = sourceToRecord(_sub(uris: ['vless://11111111-1111-1111-1111-111111111111@h:443#A']));
       expect(rec.containsKey('warnings'), false);
     });
 
@@ -110,7 +116,7 @@ void main() {
         enabled: false,
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
-        rawBody: 'vless://u@h:443?type=ws&security=tls#S',
+        rawBody: 'vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls#S',
         warnings: [StoredWarning.coreRejected('bad')],
       );
       final rec = sourceToRecord(srv);
@@ -131,7 +137,7 @@ void main() {
         createdAt: DateTime.utc(2026, 9, 19),
         members: [
           FolderMember(
-            raw: 'vless://u@h:443?type=ws&security=tls#M',
+            raw: 'vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls#M',
             enabled: false,
             warnings: [StoredWarning.coreRejected('bad m')],
           ),
@@ -145,7 +151,7 @@ void main() {
 
     test('ключ warnings в allowlist — не попадает в unknown', () {
       final rec = sourceToRecord(_sub(
-        uris: ['vless://u@h:443#A'],
+        uris: ['vless://11111111-1111-1111-1111-111111111111@h:443#A'],
         warnings: {'A': [StoredWarning.coreRejected('x')]},
       ));
       final read = sourceFromRecord(rec);
@@ -156,8 +162,8 @@ void main() {
   group('применение вердикта', () {
     test('узел подписки: выключен + вердикт', () {
       final sub = _sub(uris: [
-        'vless://u@h1:443?type=ws&security=tls#A',
-        'vless://u@h2:443?type=ws&security=tls#B',
+        'vless://11111111-1111-1111-1111-111111111111@h1:443?type=ws&security=tls#A',
+        'vless://11111111-1111-1111-1111-111111111111@h2:443?type=ws&security=tls#B',
       ]);
       final out = applyVerdict(sub, sub.nodes[1], 'bad b');
       expect(out.changed, true);
@@ -168,20 +174,20 @@ void main() {
     });
 
     test('чужой узел — changed:false, автоматики нет', () {
-      final sub = _sub(uris: ['vless://u@h1:443#A']);
-      final alien = parseUri('vless://u@h9:443#Z')!;
+      final sub = _sub(uris: ['vless://11111111-1111-1111-1111-111111111111@h1:443#A']);
+      final alien = parseUri('vless://11111111-1111-1111-1111-111111111111@h9:443#Z')!;
       expect(applyVerdict(sub, alien, 'bad').changed, false);
     });
 
     test('ручной сервер выключается своим выключателем', () {
-      final node = parseUri('vless://u@h:443?type=ws&security=tls#S')!;
+      final node = parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls#S')!;
       final srv = UserServer(
         id: 'u1',
         name: '',
         enabled: true,
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
-        rawBody: 'vless://u@h:443?type=ws&security=tls#S',
+        rawBody: 'vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls#S',
         nodes: [node],
       );
       final out = applyVerdict(srv, node, 'bad s');
@@ -271,14 +277,16 @@ void main() {
 
   group('снятие вердикта ручной правкой узла (CANON §9.4 п. 1)', () {
     final verdict = [StoredWarning.coreRejected('bad')];
-    final a = parseUri('vless://u@h:443?type=ws&security=tls&sni=x#A')!;
+    // `late`: разбор обязан случиться ПОСЛЕ загрузки секций, а объявление
+    // группы исполняется до `setUpAll`.
+    late final a = parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=x#A')!;
 
     test('тело изменилось → вердикт снимается', () {
       expect(
         verdictDroppedByEdit(
           warnings: verdict,
           before: a,
-          after: parseUri('vless://u@h:443?type=ws&security=tls&sni=y#A')!,
+          after: parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=y#A')!,
         ),
         true,
       );
@@ -290,7 +298,7 @@ void main() {
           warnings: verdict,
           before: a,
           // Другой порядок параметров — то же тело после нормализации.
-          after: parseUri('vless://u@h:443?security=tls&sni=x&type=ws#A')!,
+          after: parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?security=tls&sni=x&type=ws#A')!,
         ),
         false,
       );
@@ -301,7 +309,7 @@ void main() {
         verdictDroppedByEdit(
           warnings: verdict,
           before: a,
-          after: parseUri('vless://u@h:443?type=ws&security=tls&sni=x#B')!,
+          after: parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=x#B')!,
         ),
         true,
         reason: 'та же функция, что на refetch; лишняя проверка ядром дешевле '
@@ -314,7 +322,7 @@ void main() {
         verdictDroppedByEdit(
           warnings: const [StoredWarning(code: 'tls_insecure')],
           before: a,
-          after: parseUri('vless://u@h:443?type=ws&security=tls&sni=y#A')!,
+          after: parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=y#A')!,
         ),
         false,
       );
@@ -329,8 +337,8 @@ void main() {
   group('вердикт на разобранном узле (§479)', () {
     test('хранимая запись дописывается в warnings узла первой', () {
       final nodes = [
-        parseUri('vless://u@h1:443?type=ws&security=tls#A')!,
-        parseUri('vless://u@h2:443?type=ws&security=tls#B')!,
+        parseUri('vless://11111111-1111-1111-1111-111111111111@h1:443?type=ws&security=tls#A')!,
+        parseUri('vless://11111111-1111-1111-1111-111111111111@h2:443?type=ws&security=tls#B')!,
       ];
       stampStoredVerdicts(nodes, {
         'B': [StoredWarning.coreRejected('parse encryption: bad')]
@@ -343,7 +351,7 @@ void main() {
     });
 
     test('повторное проставление не плодит дублей', () {
-      final nodes = [parseUri('vless://u@h:443?type=ws&security=tls#A')!];
+      final nodes = [parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls#A')!];
       final stored = {'A': [StoredWarning.coreRejected('bad')]};
       stampStoredVerdicts(nodes, stored);
       stampStoredVerdicts(nodes, stored);
@@ -356,7 +364,7 @@ void main() {
     });
 
     test('пустой оверлей узлы не трогает', () {
-      final nodes = [parseUri('vless://u@h:443?type=ws&security=tls#A')!];
+      final nodes = [parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls#A')!];
       final before = nodes.single.warnings.length;
       stampStoredVerdicts(nodes, const {});
       expect(nodes.single.warnings.length, before);
@@ -365,9 +373,9 @@ void main() {
 
   group('каноническое тело', () {
     test('одинаковые узлы дают одинаковую форму, разные — разную', () {
-      final a = parseUri('vless://u@h:443?type=ws&security=tls&sni=x#A')!;
-      final b = parseUri('vless://u@h:443?type=ws&security=tls&sni=x#A')!;
-      final c = parseUri('vless://u@h:443?type=ws&security=tls&sni=y#A')!;
+      final a = parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=x#A')!;
+      final b = parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=x#A')!;
+      final c = parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=y#A')!;
       expect(canonicalNodeBody(a), canonicalNodeBody(b));
       expect(canonicalNodeBody(a), isNot(canonicalNodeBody(c)),
           reason: 'SNI видна каноническому телу, в отличие от идентичности');
@@ -375,8 +383,8 @@ void main() {
 
     test('тела набора по идентичности', () {
       final nodes = [
-        parseUri('vless://u@h1:443?type=ws&security=tls#A')!,
-        parseUri('vless://u@h2:443?type=ws&security=tls#B')!,
+        parseUri('vless://11111111-1111-1111-1111-111111111111@h1:443?type=ws&security=tls#A')!,
+        parseUri('vless://11111111-1111-1111-1111-111111111111@h2:443?type=ws&security=tls#B')!,
       ];
       final m = bodiesByIdentity(nodes);
       expect(m.keys.toSet(), {'A', 'B'});
