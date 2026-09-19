@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 5 — заглушки `u` и `aaaa-bbbb` в ссылках заменены настоящими
@@ -17,14 +19,20 @@ void main() {
   // §472 шаг 5 — схема переехала на конвейер, и значения судит РЕЕСТР. Без
   // него санитайзер не работает вовсе, то есть тест проверял бы разбор,
   // которого в приложении не бывает (`main()` грузит реестр до `runApp`).
-  // Гейт — как во всём `test/contract`: `app/contract/` вендорится локально
-  // и на CI его нет (§460).
-  final synced = Directory('contract/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  //
+  // §480 W4 — гейт переставлен с вендоренной копии `app/contract/` на ЗЕРКАЛО
+  // `assets/contract`. Копии на CI нет вовсе (она в `.gitignore`), и под её
+  // гейтом тест молча пропускался бы именно там, где нужен. Заодно грузятся
+  // секции-мапперы: с переездом схемы на движок разбор без них не работает —
+  // рукописного запасного пути у tuic больше нет.
+  final mirrored = Directory('assets/contract/registry').existsSync();
+  final skip = mirrored ? null : 'зеркало реестра не найдено';
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory('contract');
+    if (!mirrored) return;
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
 
   group('TUIC v5 — new in v2', () {

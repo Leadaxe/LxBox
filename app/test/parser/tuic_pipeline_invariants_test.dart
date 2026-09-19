@@ -7,6 +7,8 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -17,7 +19,16 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `test/contract/`, эталоны конфигов — `test/builder/` и
 /// `test/storage_migration/`. Здесь то, что специфично для переезда
 /// протокола: identity, round-trip, цена и коды из реестра.
-const _contractRoot = 'contract';
+/// §480 W4 — РЕЕСТР берётся из ЗЕРКАЛА (`assets/contract`), а не из
+/// вендоренной копии: копии на CI нет вовсе (она в `.gitignore`), и под её
+/// гейтом весь файл молча пропускался бы именно там, где нужен. Зеркало лежит
+/// в git и едет в APK.
+///
+/// КОРПУС остаётся за вендоренной копией — в зеркале его нет, оно несёт
+/// только `registry/`. Поэтому гейта два: тесты по фикстурам идут всегда,
+/// тесты по корпусу — только локально после синка.
+const _contractRoot = 'assets/contract';
+const _corpusRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/tuic/pipeline_identity_before.json';
@@ -32,7 +43,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все tuic-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/tuic')
+  final files = Directory('$_corpusRoot/corpus/uri/tuic')
       .listSync()
       .whereType<File>()
       .toList()
@@ -53,11 +64,16 @@ List<RegistryWarning> _registry(NodeSpec n) =>
 
 void main() {
   final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final skip = synced ? null : 'зеркало реестра не найдено';
+  // Корпус живёт только в вендоренной копии — на CI его нет.
+  final hasCorpus = Directory('$_corpusRoot/corpus/uri/tuic').existsSync();
+  final skipCorpus = hasCorpus ? skip : 'корпус не синхронизирован';
 
   setUpAll(() async {
     if (!synced) return;
     await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
 
   group('§472 инвариант 4 — identity tuic не меняется', () {
@@ -122,7 +138,7 @@ void main() {
       }
       // У tuic круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(11));
-    }, skip: skip);
+    }, skip: skipCorpus);
   });
 
   group('§472 инвариант 5 — цена разбора', () {

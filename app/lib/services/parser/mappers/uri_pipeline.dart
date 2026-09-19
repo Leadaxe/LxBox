@@ -41,7 +41,6 @@ import 'masque_mapper.dart';
 import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
 import 'ssh_mapper.dart';
-import 'tuic_mapper.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
 import 'vmess_mapper.dart';
@@ -122,6 +121,7 @@ const Map<String, String> _kSchemeToType = <String, String>{
   'socks5': 'socks',
   'socks4': 'socks',
   'socks4a': 'socks',
+  'tuic': 'tuic',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -131,7 +131,6 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'ss': mapShadowsocksUri,
   'hysteria2': mapHysteria2Uri,
   'hy2': mapHysteria2Uri,
-  'tuic': mapTuicUri,
   'anytls': mapAnyTlsUri,
   'naive+https': mapNaiveHttpsUri,
   'naive+quic': mapNaiveQuicUri,

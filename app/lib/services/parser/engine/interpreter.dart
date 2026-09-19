@@ -719,6 +719,15 @@ final class _Run {
         final list = (m['in'] as List).map(_fold).toSet();
         return list.contains(_fold(actual ?? ''));
       }
+      // `not_in` — НЕ синоним `not: {in: […]}`: по НЕСУЩЕСТВУЮЩЕМУ адресу он
+      // ИСТИНЕН (PRIMITIVES §0.9). Условие «значение не из набора» обязано
+      // держаться и когда значения нет вовсе — иначе запись, зависящая от
+      // отсутствия чужого параметра, молча не применялась бы.
+      if (m.containsKey('not_in')) {
+        if (actual == null) return true;
+        final list = (m['not_in'] as List).map(_fold).toSet();
+        return !list.contains(_fold(actual));
+      }
       if (m.containsKey('not')) return !_matches(actual, m['not']);
       if (m.containsKey('present')) {
         return (actual != null) == (m['present'] == true);
