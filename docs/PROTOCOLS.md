@@ -1841,7 +1841,9 @@ catch it: only the Xray input is normalised there (`body/xray/vless_splithttp`).
 It is closed in **data** — the `$selector.type` entry of our overlay
 `assets/contract_draft/uri/transports.json`, a verbatim copy of the registry
 entry plus `splithttp` in both `when.in` and `value_map` (delta `delta480-8`).
-The overlay goes away once the launcher adds the spelling to the registry set.
+Contract **1.1.37** then added the spelling to the registry set itself, so the
+overlay is redundant and is removed with that sync — the behaviour and the
+node bodies do not move, the registry entry says the same thing.
 
 Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 002 v2): beyond the six basic fields there are configurable session/seq/uplink placements, their keys, the upload method, the X-Padding obfuscation mode and packet-up tuning. In a URI these come from flat query parameters **and** from the `extra` parameter (URL-encoded JSON, see below).
 
