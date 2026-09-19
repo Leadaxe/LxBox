@@ -35,7 +35,6 @@ import '../../../services/parser/engine/engine_mapper.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'uri_mapper.dart';
-import 'vless_mapper.dart';
 import 'vmess_mapper.dart';
 
 /// Версия ядра, которую санитайзер видит при разборе: гейты, которым она
@@ -106,6 +105,10 @@ const kPipelineSchemes = <String>{
 /// и так есть ([_kMappers] ниже строится по нему же).
 const Map<String, String> _kSchemeToType = <String, String>{
   'trojan': 'trojan',
+  // §480 W2 — самое широкое покрытие примитивов: REALITY отдельным блоком
+  // (`tls#uri_reality`), flow против packetEncoding по priority, encryption
+  // с регистрозначимым `value_map`.
+  'vless': 'vless',
   // §480 W4 — socks. Все четыре написания ведут в ОДИН тип тела: версию
   // протокола несёт схема, и переводит её `scheme_sets` секции, а не эта
   // таблица (§475 socks_scheme_is_version).
@@ -140,7 +143,6 @@ const Map<String, String> _kSchemeToType = <String, String>{
 /// Мапперы переехавших схем, по схеме ссылки.
 const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'vmess': mapVmessUri,
-  'vless': mapVlessUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё

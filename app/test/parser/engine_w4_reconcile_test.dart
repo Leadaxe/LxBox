@@ -31,6 +31,7 @@ const _registryRoot = 'assets/contract';
 /// Схемы, переключённые на движок волной W4, и число кейсов их снимка.
 /// Счётчик — страж от «снимок тихо похудел».
 const Map<String, int> _switched = {
+  'vless': 99,
   'socks': 17,
   'ssh': 13,
   'anytls': 13,
@@ -58,7 +59,7 @@ const Map<String, int> _switched = {
 /// Снять отсюда сразу, как синк доедет, — правки на нашей стороне не нужно.
 /// Чинить подменой черновика нельзя: загрузчик предпочитает реестр, и
 /// черновик этих схем сегодня не читается вовсе.
-const Set<String> _awaitingContractSync = {'anytls', 'http', 'naive'};
+const Set<String> _awaitingContractSync = <String>{};
 
 Map<String, Map<String, dynamic>> _cases(String scheme) {
   final raw = jsonDecode(
@@ -118,6 +119,23 @@ void main() {
             final wantBody = jsonEncode(e.value['body']);
             if (body != wantBody) {
               red.add('${e.key}: тело\n  наше: $body\n  эталон: $wantBody');
+            }
+
+            // Пометка дельты ДВУСТОРОННЯЯ: кейс с сознательно изменённым
+            // поведением обязан нести и новое ожидание, и прежнее, а тело —
+            // совпасть с новым И отличаться от прежнего. Односторонняя
+            // пометка протухает молча и с этого момента прикрывает регрессию
+            // ровно там, где за поведением следят пристальнее всего.
+            final delta = e.value['_delta480'] as String?;
+            if (delta != null) {
+              final before = e.value['_before480'] as Map?;
+              if (before == null) {
+                red.add('${e.key}: помечен дельтой, но прежних значений рядом '
+                    'нет — «было → стало» обязано быть записано ($delta)');
+              } else if (jsonEncode(before['body']) == body) {
+                red.add('${e.key}: помечен дельтой, но тело не изменилось — '
+                    'пометка протухла ($delta)');
+              }
             }
           }
         }

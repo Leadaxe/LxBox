@@ -5,6 +5,8 @@ import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import 'engine_test_setup.dart';
+
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 
@@ -30,6 +32,10 @@ Map<String, dynamic> _emittedReality(NodeSpec n) =>
 /// Неизвестное значение ядро не понимает и отвергает outbound целиком, а с
 /// ним и весь конфиг — поэтому вне enum поле молча отбрасывается, узел жив.
 void main() {
+  // §480 W2 — vless переехала на ДВИЖОК СЕКЦИЙ: без реестра и секций-мапперов
+  // ссылка не разбирается вовсе, рукописного запасного пути не осталось.
+  setUpAll(loadEngineSections);
+
   group('§457 sing-box JSON', () {
     test('key_share: hybrid — в модели и в эмите', () {
       final spec = parseSingboxEntry(_vlessEntry({'key_share': 'hybrid'}))!

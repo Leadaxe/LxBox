@@ -8,6 +8,8 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -17,7 +19,16 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Инварианты 1 и 2 (корпус и golden) держат свои тесты: корпус URI —
 /// `test/contract/`, эталоны конфигов — `test/builder/`. Здесь то, что
 /// специфично для переезда протокола: identity, round-trip и цена.
-const _contractRoot = 'contract';
+/// §480 W2 — РЕЕСТР берётся из зеркала, а не из вендоренной копии
+/// `app/contract`: второй на CI нет вовсе, и под её гейтом тест молча
+/// пропускался бы ровно там, где он нужен. Схема переехала на движок, и без
+/// секций реестра она не разбирается совсем.
+const _registryRoot = 'assets/contract';
+
+/// КОРПУС лежит только в вендоренной копии — в зеркало едет один `registry/`
+/// (оно бандлится в APK, и корпусу там делать нечего). Поэтому гейт у тестов
+/// корпуса свой: корпуса нет — пропускаем именно их, а не разбор.
+const _corpusRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 ///
@@ -42,7 +53,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все vless-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/vless')
+  final files = Directory('$_corpusRoot/corpus/uri/vless')
       .listSync()
       .whereType<File>()
       .toList()
@@ -59,12 +70,19 @@ List<String> _corpusUris() {
 }
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
+  final synced = Directory('$_registryRoot/registry').existsSync();
   final skip = synced ? null : 'контракт не синхронизирован';
+  // Корпуса в зеркале нет: тесты, читающие его, пропускаются отдельно от
+  // тестов разбора — иначе отсутствие корпуса на CI молча гасило бы и их.
+  final corpusSkip = Directory('$_corpusRoot/corpus/uri/vless').existsSync()
+      ? skip
+      : 'корпус не синхронизирован (есть только в app/contract)';
 
   setUpAll(() async {
     if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await ContractRegistry.I.loadFromDirectory(_registryRoot);
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
 
   group('§472 инвариант 4 — identity vless не меняется', () {
@@ -102,7 +120,7 @@ void main() {
       expect(nodes, isNotEmpty);
       // Идентичность = сырой тег: у узла с именем она есть всегда.
       expect(sourceNodeIdentities(nodes).length, nodes.length);
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -159,7 +177,7 @@ void main() {
       }
       // Страж от «список исключений съел корпус».
       expect(checked, greaterThan(75));
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {

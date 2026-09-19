@@ -4,6 +4,8 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта) для тестов.
@@ -11,6 +13,13 @@ import 'package:lxbox/services/parser/uri_utils.dart';
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 
 void main() {
+  // §480 W2 — vless переехала на ДВИЖОК СЕКЦИЙ, и рукописного запасного пути
+  // у неё не осталось: без реестра (секция `vless`, общие блоки `tls#uri`,
+  // `tls#uri_reality`, `transports#uri`) ссылка не разбирается вовсе. Гейта
+  // здесь нет намеренно — зеркало `assets/contract` лежит в репозитории и
+  // едет в APK, его отсутствие это поломка сборки, а не повод пропустить тест.
+  setUpAll(loadEngineSections);
+
   // §115 — эталонная матрица брифа: эмитим flow ТОЛЬКО если (а) явно есть во
   // входе И (б) нет транспорта. Проверяем именно сгенерированный outbound.
   group('§115 flow-эмиссия (эталонная матрица)', () {

@@ -7,6 +7,8 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/mappers/uri_pipeline.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -23,7 +25,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// падает, когда для уже переехавшей схемы в реестре появилось mapper-правило,
 /// которого нет ни в тестах ниже, ни в списке известных расхождений. Это и
 /// просили на шаге 2: без фанатизма, но без тихого расхождения.
-const _contractRoot = 'contract';
+/// §480 W2 — ЗЕРКАЛО реестра, а не вендоренная копия `app/contract`: второй
+/// на CI нет вовсе, и под её гейтом тест молча пропускался бы ровно там, где
+/// он нужен. Схема переехала на движок, и без секций она не разбирается.
+const _contractRoot = 'assets/contract';
 
 /// Правила, которые LxBox сегодня НЕ исполняет, с причиной. Пустая причина
 /// недопустима: молчаливое расхождение и есть то, что страж ловит.
@@ -169,6 +174,8 @@ void main() {
   setUpAll(() async {
     if (!synced) return;
     await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
 
   group('§472 — секция mapper реестра покрыта для переехавших схем', () {

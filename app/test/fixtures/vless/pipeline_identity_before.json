@@ -359,7 +359,7 @@
     },
     "b480:path_encoded_slash_raw_plus": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=ws&path=%2Fa+b&security=tls&sni=example-1.com#path-plus-enc",
-      "identity": "7057ac94ccf39e77bc5850bb7b98968596b7a630a5862f8a80868822b0dc98f4",
+      "identity": "69cee512339a6057320a65016735cec34ed4d374d6f1869575e284281dae7fbf",
       "tag": "path-plus-enc",
       "body": {
         "type": "vless",
@@ -369,7 +369,7 @@
         "uuid": "11111111-1111-1111-1111-111111111111",
         "transport": {
           "type": "ws",
-          "path": "/a b",
+          "path": "/a+b",
           "headers": {
             "Host": "example-1.com"
           }
@@ -382,11 +382,38 @@
             "fingerprint": "random"
           }
         }
+      },
+      "_delta480": "delta480 D133-14: то же — было \"/a b\", стало \"/a+b\".",
+      "_before480": {
+        "identity": "7057ac94ccf39e77bc5850bb7b98968596b7a630a5862f8a80868822b0dc98f4",
+        "tag": "path-plus-enc",
+        "body": {
+          "type": "vless",
+          "tag": "path-plus-enc",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "transport": {
+            "type": "ws",
+            "path": "/a b",
+            "headers": {
+              "Host": "example-1.com"
+            }
+          },
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
+          }
+        }
       }
     },
     "b480:path_raw_plus": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=ws&path=/a+b&security=tls&sni=example-1.com#path-plus",
-      "identity": "7057ac94ccf39e77bc5850bb7b98968596b7a630a5862f8a80868822b0dc98f4",
+      "identity": "69cee512339a6057320a65016735cec34ed4d374d6f1869575e284281dae7fbf",
       "tag": "path-plus",
       "body": {
         "type": "vless",
@@ -396,7 +423,7 @@
         "uuid": "11111111-1111-1111-1111-111111111111",
         "transport": {
           "type": "ws",
-          "path": "/a b",
+          "path": "/a+b",
           "headers": {
             "Host": "example-1.com"
           }
@@ -407,6 +434,33 @@
           "utls": {
             "enabled": true,
             "fingerprint": "random"
+          }
+        }
+      },
+      "_delta480": "delta480 D133-14: path-семантика на ОБОИХ проходах, «+» в пути литерален. Было: \"/a b\" (сервер отвечал 404). Стало: \"/a+b\". Чинится у обеих сторон.",
+      "_before480": {
+        "identity": "7057ac94ccf39e77bc5850bb7b98968596b7a630a5862f8a80868822b0dc98f4",
+        "tag": "path-plus",
+        "body": {
+          "type": "vless",
+          "tag": "path-plus",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "transport": {
+            "type": "ws",
+            "path": "/a b",
+            "headers": {
+              "Host": "example-1.com"
+            }
+          },
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
           }
         }
       }
@@ -438,7 +492,7 @@
     },
     "b480:pbk_raw_plus": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com#pbk-plus",
-      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+      "identity": "ade520d1e9c558b07dffa3d6b7d273787f869b400c8153dcfee25dc5963b1955",
       "tag": "pbk-plus",
       "body": {
         "type": "vless",
@@ -452,6 +506,31 @@
           "utls": {
             "enabled": true,
             "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      },
+      "_delta480": "delta480 D133-7: поле format base64, сырой «+» в нём читается БУКВАЛЬНО. Было: «+» становился пробелом, ключ не проходил санитайзер и блок reality пропадал целиком. Стало: reality.public_key читается, блок на месте.",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "pbk-plus",
+        "body": {
+          "type": "vless",
+          "tag": "pbk-plus",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
           }
         }
       }
@@ -479,7 +558,7 @@
     },
     "b480:upper_alpn": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&ALPN=h2&sni=example-1.com#up-alpn",
-      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+      "identity": "161a6af2a3207f116e5c2d6ff78df5f4afda7c51b086bb44caecc1718dd3994e",
       "tag": "up-alpn",
       "body": {
         "type": "vless",
@@ -490,16 +569,39 @@
         "tls": {
           "enabled": true,
           "server_name": "example-1.com",
+          "alpn": [
+            "h2"
+          ],
           "utls": {
             "enabled": true,
             "fingerprint": "random"
+          }
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо. Было: ALPN=h2 не читался. Стало: tls.alpn=[\"h2\"].",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "up-alpn",
+        "body": {
+          "type": "vless",
+          "tag": "up-alpn",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
           }
         }
       }
     },
     "b480:upper_fp": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&Fp=chrome&sni=example-1.com#up-fp",
-      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+      "identity": "98ac797d63c5ccd37aa09335b6ff8a0e52b6418878e7958dcc5a5cffed502d17",
       "tag": "up-fp",
       "body": {
         "type": "vless",
@@ -512,7 +614,27 @@
           "server_name": "example-1.com",
           "utls": {
             "enabled": true,
-            "fingerprint": "random"
+            "fingerprint": "chrome"
+          }
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо. Было: Fp=chrome не читался, отпечаток оставался дефолтным. Стало: tls.utls.fingerprint=chrome.",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "up-fp",
+        "body": {
+          "type": "vless",
+          "tag": "up-fp",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
           }
         }
       }
@@ -559,7 +681,7 @@
     },
     "b480:upper_type_ws": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?Type=ws&path=%2Fws&security=tls&sni=example-1.com#up-type",
-      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+      "identity": "41f76ceba61e234f2ea3a3eab068799a5505963b2d8f911b09fbf58f3bd36ad8",
       "tag": "up-type",
       "body": {
         "type": "vless",
@@ -567,12 +689,39 @@
         "server": "example-1.com",
         "server_port": 443,
         "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
         "tls": {
           "enabled": true,
           "server_name": "example-1.com",
           "utls": {
             "enabled": true,
             "fingerprint": "random"
+          }
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо (§0.6 FROZEN). Было: Type=ws не читался — транспорт терялся молча. Стало: transport ws.",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "up-type",
+        "body": {
+          "type": "vless",
+          "tag": "up-type",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
           }
         }
       }
