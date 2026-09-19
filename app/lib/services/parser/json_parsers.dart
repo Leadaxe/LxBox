@@ -557,10 +557,19 @@ String? _xrayIdentity(Map<String, dynamic> o) {
       if (vnext == null || vnext.isEmpty) return null;
       final v = vnext.first;
       server = v['address']?.toString() ?? '';
-      port = (v['port'] as num?)?.toInt() ?? 443;
+      // §480, дельта `vless_default_port` — БЕЗ дефолта 443: элемент без
+      // порта узла не даёт вовсе (запись `port` секции объявлена
+      // `required`), и синоним тега обязан это зеркалить. Иначе балансировщик
+      // держал бы ключ `vless|host|443|id` на узел, которого в подписке нет:
+      // §322 резолвит по нему состав пула, и тег молча уезжал бы в пустоту
+      // либо, хуже, цеплялся к ЧУЖОМУ узлу, у которого порт 443 настоящий.
+      // Это ровно тот инвариант, что объявлен в шапке функции.
+      final rawPort = (v['port'] as num?)?.toInt();
+      if (rawPort == null || rawPort <= 0) return null;
+      port = rawPort;
       final users = (v['users'] as List?)?.cast<Map>() ?? const [];
       cred = users.isEmpty ? '' : (users.first['id']?.toString() ?? '');
-      // §459 (контракт §24.2 п. 7.4) — зеркало _xrayVlessToSpec: порт узла
+      // §459 (контракт §24.2 п. 7.4) — зеркало конвертера: порт узла
       // `-udp443` больше не переписывает, значит и ключ identity строится по
       // исходному порту. Прежний код ставил здесь 443.
     case 'trojan':
@@ -569,9 +578,15 @@ String? _xrayIdentity(Map<String, dynamic> o) {
       if (servers == null || servers.isEmpty) return null;
       final v = servers.first;
       server = v['address']?.toString() ?? '';
-      // ss без порта конвертер отбрасывает (port == 0 → null) — ключ с |0|
-      // просто ни с чем не совпадёт, как и узла нет.
-      port = (v['port'] as num?)?.toInt() ?? (protocol == 'trojan' ? 443 : 0);
+      // §480 — ни у trojan, ни у ss дефолта порта НЕТ: элемент без порта
+      // узла не даёт (запись `port` обеих секций `required`), и синоним тега
+      // это зеркалит. У ss так было и раньше — конвертер отбрасывал его сам
+      // (port == 0 → null); у trojan стоял дефолт 443, снятый этой же
+      // дельтой. Сам Xray здесь отбраковывает элемент ЯВНО и первым делом
+      // (infra/conf/trojan.go:67-69 «Invalid Trojan port.»).
+      final rawPort = (v['port'] as num?)?.toInt();
+      if (rawPort == null || rawPort <= 0) return null;
+      port = rawPort;
       cred = v['password']?.toString() ?? '';
     case 'hysteria':
       // Конвертер отдаёт Hysteria2Spec → protocol в ключе 'hysteria2'.

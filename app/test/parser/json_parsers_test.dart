@@ -737,7 +737,16 @@ void main() {
       expect(syn, nodeIdentityKeyRaw(hy));
     });
 
-    test('vless без порта и с vision-udp443 → порт ключа как у конвертера',
+    // §480, дельта `vless_default_port` (19.09.2026): элемент БЕЗ порта
+    // больше не даёт узла. Дефолта порта нет и у самого Xray — `trojan` и
+    // `shadowsocks` отбраковывают такой элемент явно (infra/conf/trojan.go:
+    // 67-69), а `vless` порт не проверяет вовсе (infra/conf/vless.go:274-283)
+    // и собирает узел с нулём, падающий при первом дозвоне. Прежний дефолт
+    // 443 был единственным поведением, придумывавшим рабочий узел.
+    //
+    // Второй половине теста (§459 — `vision-udp443` порт узла НЕ трогает)
+    // дельта не касается, и она остаётся дословно прежней.
+    test('vless без порта отбракован, vision-udp443 порт узла не трогает',
         () {
       final nodes = parseXrayElement({
         'remarks': 'V',
@@ -780,9 +789,13 @@ void main() {
       final byServer = {
         for (final n in nodes.whereType<VlessSpec>()) n.server: n,
       };
-      expect(auto.tagSynonyms['no-port'],
-          nodeIdentityKeyRaw(byServer['a.example']!),
-          reason: 'дефолт порта — 443, как в _xrayVlessToSpec');
+      expect(byServer['a.example'], isNull,
+          reason: 'delta480: элемент без порта больше не даёт узла — дефолт '
+              '443 снят по арбитру Xray, у которого дефолта порта нет ни у '
+              'одного outbound-протокола');
+      expect(auto.tagSynonyms['no-port'], isNull,
+          reason: 'синонима у тега нет: узла, на который он указывал бы, '
+              'не существует');
       expect(auto.tagSynonyms['udp443'],
           nodeIdentityKeyRaw(byServer['b.example']!),
           reason: '§459 — vision-udp443 порт узла не трогает (8443), '

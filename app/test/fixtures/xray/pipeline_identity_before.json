@@ -258,6 +258,7 @@
   ]
  },
  "vless_default_port": {
+  "_delta480": "delta480: дефолт порта 443 на Xray-входе СНЯТ по арбитру — исходникам XTLS/Xray-core (решение владельца 19.09.2026). Дефолта порта у Xray нет ни у одного outbound-протокола: trojan и shadowsocks отбраковывают элемент явно (infra/conf/trojan.go:67-69 «Invalid Trojan port.», infra/conf/shadowsocks.go:223-224,247-248), а vless/vmess/socks/http порт не проверяют вовсе (infra/conf/vless.go:274-283) и собирают узел с нулём, который падает при первом дозвоне. Рабочего узла из элемента без порта Xray не делает НИ В ОДНОЙ ветке. БЫЛО (значения ниже, сняты старым кодом): один узел, server_port 443, identity bef94847…, нуль отбраковок. СТАЛО: ноль узлов и одна отбраковка с причиной `server port is missing or out of range` — той же записью `port` реестра и тем же текстом, что у лаунчера. Значения ниже НЕ переписаны намеренно: файл — снимок «до переезда», а дельта объявлена парно в _expectedChanges теста engine_xray_pilot_test.",
   "dropped": 0,
   "input_json": "[{\"remarks\": \"defport\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
   "nodes": [
