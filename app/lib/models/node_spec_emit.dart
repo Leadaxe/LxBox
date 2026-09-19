@@ -3,12 +3,9 @@ import 'dart:convert';
 import '../services/parser/engine/emitter.dart';
 import '../services/parser/engine/section_loader.dart';
 import '../services/parser/tcp_keep_alive.dart';
-import '../services/parser/transport.dart';
-import '../services/parser/uri_utils.dart';
 import 'node_spec.dart';
 import 'singbox_entry.dart';
 import 'template_vars.dart';
-import 'transport_spec.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // §480 W7 — СБОРКА ССЫЛКИ ОТ ТАБЛИЦЫ
@@ -144,56 +141,6 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
   return Outbound(out);
 }
 
-String toUriVless(VlessSpec s) {
-  final q = <String, String>{};
-  // §115 — share-URI несёт flow только если он валиден: ровно vision на
-  // bare TLS (см. emitVless). Прочее (none/deprecated/мусор) опускаем.
-  if (s.flow == 'xtls-rprx-vision' && s.transport == null) q['flow'] = s.flow;
-  if (s.packetEncoding.isNotEmpty) q['packetEncoding'] = s.packetEncoding;
-  // §335 — без обратной записи поле теряется на round-trip (§302-правила и
-  // ручное редактирование ходят через эмит-URI), и узел снова становится
-  // мёртвым — уже без внешней причины.
-  if (s.encryption.isNotEmpty && s.encryption != 'none') {
-    q['encryption'] = s.encryption;
-  }
-
-  if (s.transport != null) {
-    q.addAll(transportToQuery(s.transport!));
-  }
-
-  if (s.tls.enabled) {
-    if (s.tls.reality != null) {
-      q['security'] = 'reality';
-      q['pbk'] = s.tls.reality!.publicKey;
-      if (s.tls.reality!.shortId.isNotEmpty) {
-        q['sid'] = s.tls.reality!.shortId;
-      }
-      // §457 — key_share только при заданном значении: узлы без поля дают
-      // прежний URI байт в байт.
-      if (s.tls.reality!.keyShare != null) {
-        q['key_share'] = s.tls.reality!.keyShare!;
-      }
-    } else {
-      q['security'] = 'tls';
-    }
-    if (s.tls.serverName != null && s.tls.serverName!.isNotEmpty) {
-      q['sni'] = s.tls.serverName!;
-    }
-    if (s.tls.fingerprint != null && s.tls.fingerprint!.isNotEmpty) {
-      q['fp'] = s.tls.fingerprint!;
-    }
-    if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
-    if (s.tls.insecure) q['allowInsecure'] = '1';
-  } else {
-    q['security'] = 'none';
-  }
-
-  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
-  // пересохранении узла через toUri() (хранение узла — текст).
-  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  return _buildUri('vless', s.uuid, s.server, s.port, q, s.label);
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // VMess
 // ════════════════════════════════════════════════════════════════════════════
@@ -218,66 +165,6 @@ Outbound emitVmess(VmessSpec s, TemplateVars vars) {
   _addDialFields(out, s);
   return Outbound(out);
 }
-
-String toUriVmess(VmessSpec s) {
-  // VMess v2rayN: base64(JSON).
-  final json = <String, dynamic>{
-    'v': '2',
-    'ps': s.label,
-    'add': s.server,
-    'port': s.port.toString(),
-    'id': s.uuid,
-    'aid': s.alterId.toString(),
-    'scy': s.security,
-    'net': _vmessNetFromTransport(s.transport),
-    'type': 'none',
-    'host': _vmessHostFromTransport(s.transport),
-    'path': _vmessPathFromTransport(s.transport),
-    'tls': s.tls.enabled ? 'tls' : '',
-    if (s.tls.serverName != null) 'sni': s.tls.serverName,
-    if (s.tls.fingerprint != null) 'fp': s.tls.fingerprint,
-    if (s.tls.alpn.isNotEmpty) 'alpn': s.tls.alpn.join(','),
-    // §453 — dial-поля ключами того же v2rayN-объекта, под именами sing-box;
-    // только непустые, иначе URI старых узлов изменился бы.
-    if (s.tcpKeepAlive?.disabled == true) 'disable_tcp_keep_alive': true,
-    if (s.tcpKeepAlive != null && s.tcpKeepAlive!.idle.isNotEmpty)
-      'tcp_keep_alive': s.tcpKeepAlive!.idle,
-    if (s.tcpKeepAlive != null && s.tcpKeepAlive!.interval.isNotEmpty)
-      'tcp_keep_alive_interval': s.tcpKeepAlive!.interval,
-  };
-  final cleaned = Map<String, dynamic>.fromEntries(
-      json.entries.where((e) => e.value != null));
-  final bytes = utf8.encode(jsonEncode(cleaned));
-  return 'vmess://${base64.encode(bytes).replaceAll('=', '')}';
-}
-
-String _vmessNetFromTransport(TransportSpec? t) {
-  return switch (t) {
-    null => 'tcp',
-    WsTransport() => 'ws',
-    GrpcTransport() => 'grpc',
-    HttpTransport() => 'http',
-    HttpUpgradeTransport() => 'httpupgrade',
-    XhttpTransport() => 'xhttp',
-  };
-}
-
-String _vmessHostFromTransport(TransportSpec? t) => switch (t) {
-      WsTransport(host: final h) => h,
-      HttpTransport(hosts: final hs) => hs.isEmpty ? '' : hs.first,
-      HttpUpgradeTransport(host: final h) => h,
-      XhttpTransport(host: final h) => h,
-      _ => '',
-    };
-
-String _vmessPathFromTransport(TransportSpec? t) => switch (t) {
-      WsTransport(path: final p) => p,
-      HttpTransport(path: final p) => p,
-      HttpUpgradeTransport(path: final p) => p,
-      XhttpTransport(path: final p) => p,
-      GrpcTransport(serviceName: final sn) => sn,
-      _ => '',
-    };
 
 // ════════════════════════════════════════════════════════════════════════════
 // Trojan
@@ -520,36 +407,6 @@ Endpoint emitWireguard(WireguardSpec s, TemplateVars vars) {
   return Endpoint(map);
 }
 
-String toUriWireguard(WireguardSpec s) {
-  final peer = s.peers.isEmpty ? null : s.peers.first;
-  final q = <String, String>{
-    if (peer != null) 'publickey': peer.publicKey,
-    if (s.localAddresses.isNotEmpty) 'address': s.localAddresses.join(','),
-  };
-  if (peer != null && peer.allowedIps.isNotEmpty) {
-    q['allowedips'] = peer.allowedIps.join(',');
-  }
-  if (s.mtu != null) q['mtu'] = s.mtu.toString();
-  if (peer != null && peer.preSharedKey.isNotEmpty) {
-    q['presharedkey'] = peer.preSharedKey;
-  }
-  if (peer?.persistentKeepalive != null) {
-    q['keepalive'] = peer!.persistentKeepalive.toString();
-  }
-  // §025 — WARP client_id round-trip (десятичный `b0,b1,b2`; parseReserved
-  // принимает его обратно).
-  if (peer?.reserved != null && peer!.reserved!.isNotEmpty) {
-    q['reserved'] = peer.reserved!.join(',');
-  }
-  // §097 — AmneziaWG2 query-params (round-trip); buildQuery эскейпит i*.
-  s.awg?.writeQuery(q);
-  final userinfo = encodeParam(s.privateKey);
-  final host = _wrapIpv6(s.server);
-  final qs = buildQuery(q);
-  final frag = encodeFragment(s.label);
-  return 'wireguard://$userinfo@$host:${s.port}${qs.isEmpty ? '' : '?$qs'}${frag.isEmpty ? '' : '#$frag'}';
-}
-
 // ─── §130 MASQUE ────────────────────────────────────────────────────────────
 
 /// §130 — MASQUE эмитится как **Outbound** (не Endpoint). Плоская структура
@@ -594,21 +451,3 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
 // ════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════════════
-
-String _buildUri(
-  String scheme,
-  String userinfo,
-  String server,
-  int port,
-  Map<String, String> q,
-  String label,
-) {
-  final ui = encodeParam(userinfo);
-  final host = _wrapIpv6(server);
-  final qs = buildQuery(q);
-  final frag = encodeFragment(label);
-  return '$scheme://$ui@$host:$port${qs.isEmpty ? '' : '?$qs'}${frag.isEmpty ? '' : '#$frag'}';
-}
-
-String _wrapIpv6(String host) =>
-    host.contains(':') && !host.startsWith('[') ? '[$host]' : host;

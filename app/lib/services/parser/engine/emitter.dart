@@ -258,9 +258,14 @@ final class _Emit {
     _collectLost();
 
     final form = _form();
-    if (form == _kFormV2rayn) return EmitResult(uri: _emitJson(scheme), lost: _lost);
+    // Форма-КОНТЕЙНЕР узнаётся по ПРОСТРАНСТВУ ИСТОЧНИКОВ, объявленному у неё
+    // же в `forms[]` (`space: json`), а не по своему имени: имена форм —
+    // данные, и знать их движку не положено ровно так же, как имена схем.
+    if (_spaceOf(form) == 'json') {
+      return EmitResult(uri: _emitJson(scheme), lost: _lost);
+    }
 
-    final host = _wrapIpv6(_str(_read('server')) ?? '');
+    final host = _wrapIpv6(_str(_readSourcePath('host')) ?? '');
     final portPart = _portPart();
     final qs = _serializeQuery();
     final frag = label.isEmpty ? '' : '#${_encodeFragment(label)}';
@@ -273,8 +278,19 @@ final class _Emit {
     );
   }
 
-  static const _kFormV2rayn = 'v2rayn';
-  static const _kFormSip002 = 'sip002';
+  /// Пространство источников формы по её id — из `forms[]` секции.
+  /// Форма, которой в `forms[]` нет, считается обычной url-ссылкой.
+  String _spaceOf(String id) {
+    for (final f in section.forms) {
+      if (f.id == id) return f.space;
+    }
+    return 'url';
+  }
+
+  /// Читает ли userinfo формы base64: у формы, чей разбор его декодирует
+  /// (`userinfo.decode` содержит base64), обратный ход обязан кодировать.
+  bool get _userinfoDecodesBase64 =>
+      section.userinfo?.decode.any((d) => d.startsWith('base64')) ?? false;
 
   // ───────────────────────────── схема ─────────────────────────────
 
@@ -342,11 +358,37 @@ final class _Emit {
   }
 
   String _portPart() {
-    final port = _read('server_port');
+    final port = _readSourcePath('port');
     if (port == null) return '';
     final omit = emit[EmitNames.omitPort];
     if (omit != null && '$omit' == '$port') return '';
     return ':$port';
+  }
+
+  /// Значение для МЕСТА ССЫЛКИ (`host`, `port`) — по записи, которая это место
+  /// читает.
+  ///
+  /// Путь тела здесь не зашит: у части схем адрес узла лежит не в `server`, а
+  /// глубже (адрес пира у туннельных схем), и таблица это объявляет обычным
+  /// `source: "host"` с собственным `maps_to`. Зашей мы `server` — у таких
+  /// схем authority собиралась бы пустой, и ссылка теряла бы адрес.
+  ///
+  /// Записи перебираются в порядке объявления; берётся первая, чьё значение
+  /// тело несёт.
+  dynamic _readSourcePath(String place) {
+    for (final p in section.params.values) {
+      if (p.isService) continue;
+      final path = p.mapsTo;
+      if (path == null) continue;
+      final sources = [
+        ...p.source,
+        for (final v in p.sourceByForm.values) ...v,
+      ];
+      if (!sources.contains(place)) continue;
+      final v = _read(path);
+      if (v != null) return v;
+    }
+    return null;
   }
 
   // ──────────────────────────── userinfo ────────────────────────────
@@ -423,7 +465,8 @@ final class _Emit {
   }
 
   /// Форма userinfo на выходе. Короткое написание — строка, полное — объект
-  /// `{form, padding}`; не объявлено — выводится из формы секции.
+  /// `{form, padding}`; не объявлено — выводится из РАЗБОРА: userinfo, который
+  /// разбор декодирует из base64, обратный ход обязан кодировать.
   String _userinfoForm() {
     final raw = emit[EmitNames.userinfo];
     if (raw is String) return raw;
@@ -431,7 +474,7 @@ final class _Emit {
       final f = raw[EmitNames.userinfoForm];
       if (f is String) return f;
     }
-    return _form() == _kFormSip002
+    return _userinfoDecodesBase64
         ? EmitNames.userinfoBase64
         : EmitNames.userinfoRaw;
   }
@@ -1010,26 +1053,119 @@ final class _Emit {
         .join('&');
   }
 
-  /// Форма `v2rayn`: base64(JSON) без паддинга.
+  /// Форма-КОНТЕЙНЕР: base64(JSON) вместо query-ссылки.
+  ///
+  /// Карта «ключ JSON → путь тела» берётся из `emit.json_map`, если секция её
+  /// объявила, а иначе ВЫВОДИТСЯ ИЗ ТАБЛИЦЫ: запись, читающая в этой форме
+  /// `json.<ключ>`, этим и называет свой ключ контейнера. Вывод предпочтён
+  /// объявлению по той же причине, по какой вся волна затеяна: объявленная
+  /// отдельно карта — второй источник правды, и разъезжается она на первом же
+  /// новом поле.
+  ///
+  /// `json_always` остаётся объявленным: «клиент ждёт ключ даже пустым» из
+  /// таблицы разбора не выводится никак — читать пустое и писать пустое это
+  /// разные утверждения.
   String _emitJson(String scheme) {
     final map = <String, dynamic>{};
     final always = ((emit[EmitNames.jsonAlways] as List?) ?? const [])
         .map((e) => '$e')
         .toSet();
-    final jsonMap =
-        (emit[EmitNames.jsonMap] as Map?)?.cast<String, dynamic>() ??
-            const {};
-    for (final e in jsonMap.entries) {
-      final v = _read('${e.value}');
+
+    for (final e in _jsonMap().entries) {
+      final v = _read(e.value);
       if (v == null) {
         if (always.contains(e.key)) map[e.key] = '';
         continue;
       }
-      _consumed.add('${e.value}');
+      _consumed.add(e.value);
       map[e.key] = v is String ? v : '$v';
     }
+
+    // Записи-СЕЛЕКТОРЫ контейнера: своего `maps_to` у них нет, значение
+    // восстанавливается веткой `sets`, которую подтверждает тело. В query они
+    // проходят общим обходом; здесь обход свой, и пропустить их значило бы
+    // потерять, например, признак шифрования — ключ, который в контейнере
+    // лежит наравне с прочими.
+    for (final p in section.params.values) {
+      if (p.isService || p.mapsTo != null || p.sets.isEmpty) continue;
+      if (_roundTripOff(p)) continue;
+      final key = _jsonKeyOf(p);
+      if (key == null || map.containsKey(key)) continue;
+      final back = _valueFromSets(p);
+      if (back != null && !_omitted(p, key, back)) map[key] = back;
+    }
+    // **МЕТКА** у формы-контейнера живёт не во фрагменте, а СВОИМ КЛЮЧОМ:
+    // куда именно, объявляет `label.source` той же формы (`json.ps`).
+    // Фрагмента у такой ссылки нет вовсе, и не положи мы метку сюда — имя
+    // узла терялось бы на круге, а метка ВХОДИТ В IDENTITY.
+    final labelKey = _labelJsonKey();
+    if (labelKey != null && label.isNotEmpty) map[labelKey] = label;
+
+    for (final k in always) {
+      map.putIfAbsent(k, () => '');
+    }
+
     final bytes = utf8.encode(jsonEncode(map));
-    return '$scheme://${base64.encode(bytes).replaceAll('=', '')}';
+    final encoded = base64.encode(bytes);
+    return '$scheme://${_userinfoPadding() ? encoded : encoded.replaceAll('=', '')}';
+  }
+
+  /// Ключ контейнера, в который уезжает МЕТКА, по `label.source` текущей
+  /// формы. `null` — метка этой формой в контейнер не кладётся.
+  String? _labelJsonKey() {
+    final form = _form();
+    final sources = section.label.sourceByForm[form] ?? section.label.source;
+    for (final s in sources) {
+      if (s.startsWith('json.')) return s.substring('json.'.length);
+    }
+    return null;
+  }
+
+  /// Ключ контейнера, который читает запись в ТЕКУЩЕЙ форме.
+  ///
+  /// Канон — ПЕРВЫЙ источник формы, тем же правилом, что и канон имени
+  /// параметра. `null` — в этой форме запись контейнер не читает.
+  ///
+  /// Два написания источника, и оба законны: явное `json.<ключ>` и обычное
+  /// `query.<имя>`. Второе работает потому, что КОНТЕЙНЕР РАСКЛАДЫВАЕТСЯ
+  /// ПЛОСКИМ СЛОЕМ ИМЁН — ту же запись блока, что читает `?path=` у ссылки,
+  /// разбор применяет к ключу `path` контейнера. Обратный ход обязан
+  /// повторить это ровно так же, иначе поля общих блоков (транспорт, TLS) в
+  /// контейнер не попадали бы, хотя ИЗ него читаются.
+  ///
+  /// Имя ключа — КАНОН записи (первое в `aliases`), а не написание источника:
+  /// `source` у блочной записи один на все схемы, а канон объявлен ею самой.
+  String? _jsonKeyOf(MapperParam p) {
+    final sources = p.sourceByForm[_form()] ?? p.source;
+    for (final s in sources) {
+      if (s.startsWith('json.')) return s.substring('json.'.length);
+      if (s.startsWith('query.')) {
+        final name = s.substring('query.'.length);
+        return name == p.name ? p.spellings.first : name;
+      }
+    }
+    return null;
+  }
+
+  /// Карта «ключ контейнера → путь тела»: объявленная либо выведенная из
+  /// источников записей ТЕКУЩЕЙ формы.
+  Map<String, String> _jsonMap() {
+    final declared = emit[EmitNames.jsonMap];
+    if (declared is Map) {
+      return {
+        for (final e in declared.entries) '${e.key}': '${e.value}',
+      };
+    }
+    final out = <String, String>{};
+    for (final p in section.params.values) {
+      if (p.isService || _roundTripOff(p)) continue;
+      final path = p.mapsTo;
+      if (path == null) continue;
+      final key = _jsonKeyOf(p);
+      if (key == null) continue;
+      out.putIfAbsent(key, () => path);
+    }
+    return out;
   }
 
   // ───────────────────────────── потери ─────────────────────────────
@@ -1056,12 +1192,24 @@ final class _Emit {
     return false;
   }
 
+  /// Все листовые пути тела, в ТОЙ ЖЕ записи, какой их адресуют записи
+  /// таблицы: массив объектов даёт сегмент `имя[]`.
+  ///
+  /// Нужно для учёта потерь: путь `peers[].public_key` объявлен записью
+  /// именно так, и не совпади написание — уехавшее в ссылку поле числилось бы
+  /// потерянным.
   static Iterable<String> _paths(Map<String, dynamic> m, String prefix) sync* {
     for (final e in m.entries) {
       final p = prefix.isEmpty ? e.key : '$prefix.${e.key}';
       final v = e.value;
       if (v is Map<String, dynamic> && v.isNotEmpty) {
         yield* _paths(v, p);
+      } else if (v is List && v.isNotEmpty && v.first is Map<String, dynamic>) {
+        // Массив ОБЪЕКТОВ — элементы адресуются `имя[]`; массив скаляров
+        // (alpn, address) сам по себе лист.
+        for (final item in v) {
+          if (item is Map<String, dynamic>) yield* _paths(item, '$p[]');
+        }
       } else {
         yield p;
       }
@@ -1070,9 +1218,24 @@ final class _Emit {
 
   // ───────────────────────────── мелочь ─────────────────────────────
 
+  /// Чтение по точечному пути. Сегмент `имя[]` адресует МАССИВ, и читается из
+  /// него ПЕРВЫЙ элемент.
+  ///
+  /// Первый, а не все: ссылка несёт один набор параметров, и запись
+  /// `peers[].public_key` на входе наполняет ровно один элемент — разбор
+  /// ссылки второго и не создаёт. Тело с несколькими элементами приходит
+  /// только из JSON-входов, и лишние объявлены потерей (`_collectLost`
+  /// увидит их пути), а не молча склеены в один параметр.
   dynamic _read(String path) {
     dynamic cur = body;
     for (final seg in path.split('.')) {
+      if (seg.endsWith('[]')) {
+        if (cur is! Map) return null;
+        final list = cur[seg.substring(0, seg.length - 2)];
+        if (list is! List || list.isEmpty) return null;
+        cur = list.first;
+        continue;
+      }
       if (cur is! Map) return null;
       cur = cur[seg];
       if (cur == null) return null;
@@ -1101,15 +1264,23 @@ final class _Emit {
       Uri.encodeComponent(s).replaceAll('+', '%20');
 }
 
-/// **`value_map⁻¹` с проверкой ИНЪЕКТИВНОСТИ.**
+/// **`value_map⁻¹`.**
 ///
-/// Таблица, в которой два написания ведут в одно значение тела, обратного хода
-/// не имеет: выбирать между ними эмиттеру нечем, и тихий выбор первого
-/// переписывал бы ссылки живых узлов. Такая таблица возвращает `null`, и
-/// значение уезжает в ссылку как есть.
+/// Таблица перевода написаний ссылки в значения тела; обратный ход берёт из
+/// неё написание по значению.
+///
+/// **Неинъективность — норма, а не ошибка.** У живой записи в одно значение
+/// тела ведут несколько написаний (`on`, `true`, `1` — всё это «включено»), и
+/// обратный ход обязан выбрать одно. Выбирается ПЕРВОЕ ОБЪЯВЛЕННОЕ — тем же
+/// правилом, что и каноническое имя параметра (первое в `aliases`, §0.6):
+/// канон объявлен порядком, и менять его можно только перестановкой в секции
+/// со строкой в `DELTAS.md`, а не молча в коде.
 ///
 /// Ветка со значением `null` (`{random: null}`) из обращения ВЫПАДАЕТ: она
 /// означает «поле не ставится», а не «значение такое».
+///
+/// `null` в ответе — обратного хода нет вовсе: таблица пуста либо её ветки не
+/// переводят значение, а ставят пути (это `sets`, не `value_map`).
 Map<String, String>? invertValueMap(Map<String, dynamic> vm) {
   if (vm.isEmpty) return null;
   final out = <String, String>{};
@@ -1117,9 +1288,11 @@ Map<String, String>? invertValueMap(Map<String, dynamic> vm) {
     if (e.value == null) continue;
     // Ветка-объект — это `sets`, а не перевод значения.
     if (e.value is Map || e.value is List) return null;
+    // Пустой ключ — «параметра не было»: писать его обратно нельзя.
+    if (e.key.isEmpty) continue;
     final key = '${e.value}'.trim().toLowerCase();
-    if (out.containsKey(key)) return null; // не инъективна
-    out[key] = e.key;
+    // Первое объявленное написание побеждает; последующие — алиасы входа.
+    out.putIfAbsent(key, () => e.key);
   }
   return out.isEmpty ? null : out;
 }

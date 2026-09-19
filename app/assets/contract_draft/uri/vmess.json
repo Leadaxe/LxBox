@@ -38,6 +38,42 @@
             "": null
           },
           "impl": "Пара к записи `type` выше и по той же причине: блочная запись читает `headerType` из плоского слоя, а у контейнера этого ключа нет вовсе — обфускацию он зовёт `type`. Источник по формам оставляет запись только форме legacy."
+        },
+        "tcp_keep_alive": {
+          "source": {
+            "v2rayn": "json.tcp_keep_alive",
+            "legacy": "query.tcp_keep_alive"
+          },
+          "aliases": [
+            "tcpKeepAlive"
+          ],
+          "maps_to": "tcp_keep_alive",
+          "type": "duration",
+          "impl": "§480 W7 — ПЕРЕОПРЕДЕЛЯЕТ одноимённую запись блока dialer#uri, добавляя источник формы-КОНТЕЙНЕРА. Блочная запись читает только `query.*`, а у формы v2rayn query нет вовсе: ключи лежат в JSON контейнера. Рукописный эмит писал их туда РУКАМИ (node_spec_emit.dart, §453), то есть знание о месте жило в коде и на разборе не работало — поле, попав в контейнер, обратно не читалось. Теперь место объявлено, и оба хода пользуются одной записью."
+        },
+        "tcp_keep_alive_interval": {
+          "source": {
+            "v2rayn": "json.tcp_keep_alive_interval",
+            "legacy": "query.tcp_keep_alive_interval"
+          },
+          "aliases": [
+            "tcpKeepAliveInterval"
+          ],
+          "maps_to": "tcp_keep_alive_interval",
+          "type": "duration",
+          "impl": "Пара к `tcp_keep_alive` выше, по той же причине."
+        },
+        "disable_tcp_keep_alive": {
+          "source": {
+            "v2rayn": "json.disable_tcp_keep_alive",
+            "legacy": "query.disable_tcp_keep_alive"
+          },
+          "aliases": [
+            "disableTcpKeepAlive"
+          ],
+          "maps_to": "disable_tcp_keep_alive",
+          "type": "bool_spelled",
+          "impl": "Пара к `tcp_keep_alive` выше, по той же причине. Значение в контейнере булево (true), а не строка: `bool_spelled` читает оба написания."
         }
       }
     }

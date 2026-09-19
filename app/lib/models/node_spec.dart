@@ -248,7 +248,7 @@ final class VlessSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitVless(this, vars);
 
   @override
-  String toUri() => e.toUriVless(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -288,7 +288,7 @@ final class VmessSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitVmess(this, vars);
 
   @override
-  String toUri() => e.toUriVmess(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1146,7 +1146,7 @@ final class WireguardSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitWireguard(this, vars);
 
   @override
-  String toUri() => e.toUriWireguard(this);
+  String toUri() => e.uriViaEngineRequired(this);
 
   /// §466 — приватный ключ интерфейса уходит в userinfo ссылки. AWG (`awg`
   /// != null) — тот же класс, тот же эмиттер, потому отдельной ветки нет.

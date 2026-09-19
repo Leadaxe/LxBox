@@ -37,6 +37,9 @@ const _types = <String, String>{
   'shadowsocks': 'shadowsocks',
   'http': 'http',
   'naive': 'naive',
+  'vless': 'vless',
+  'vmess': 'vmess',
+  'wireguard': 'wireguard',
 };
 
 Map<String, Map<String, dynamic>> _cases(String scheme, String file) {
