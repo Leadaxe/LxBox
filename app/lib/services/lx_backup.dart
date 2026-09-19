@@ -3346,6 +3346,10 @@ const Set<String> _node10Keys = {
   'service',
   'reason',
   'sections',
+  // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
+  // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
+  // срезает санитизация §489.
+  'warnings',
 };
 
 /// Запись `sources[]` любого вида: объединение ключей, как у лаунчера — ключ,
@@ -3363,7 +3367,6 @@ const Set<String> _source10Keys = {
   'max_nodes',
   'update',
   'disabled',
-  'warnings',
   'fold',
   'fold_tag',
 };
@@ -3609,8 +3612,15 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
         for (final e in sub.disabled.entries)
           if (!existing.disabledHashes.containsKey(e.key)) e.key: at(e.value),
       };
+      // Как у disabled: ключа, которого у нас нет, добавляем. core_rejected
+      // сюда не доезжает — санитизация §489 срезает его до кодека.
+      final addW = <String, List<StoredWarning>>{
+        for (final e in sub.nodeWarnings.entries)
+          if (!existing.nodeWarnings.containsKey(e.key)) e.key: e.value,
+      };
       merged[idx] = existing.copyWith(
         disabledHashes: {...existing.disabledHashes, ...add},
+        nodeWarnings: {...existing.nodeWarnings, ...addW},
         // Пустое имя в файле именем не является — своё не затираем.
         name: sub.label.isNotEmpty ? sub.label : null,
         tagPrefix: sub.tagPrefix,

@@ -515,8 +515,9 @@ chains (`saveServerLists`), `settings_storage/chains.dart` the chain part
                                               // matching node's identity or is dropped.
   "warnings": {                               // feature 478 — the core's verdict on a node, an
     "NL-42": [                                // overlay keyed exactly as `disabled` (the node's
-      { "code": "core_rejected",              // identity), so the two travel together. Not written
-        "params": {                           // when empty. See "warnings (shared)" below
+      { "code": "core_rejected",              // identity) in local storage. Not written when empty.
+        "params": {                           // The backup file strips the verdict (§489). See
+                                              // "warnings (shared)" below
           "reason": "parse encryption: unknown encryption appearance"
         } }
     ]

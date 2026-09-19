@@ -1,11 +1,12 @@
 // §489 — вердикт страховки в бэкап не едет; локальное хранилище не трогаем.
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/core_reject_verdict.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/core_reject/core_reject_backup.dart';
+import 'package:lxbox/services/core_reject/core_reject_guard.dart';
+import 'package:lxbox/services/core_reject/core_reject_state.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
@@ -80,6 +81,7 @@ void main() {
         ),
       ]);
       expect(out.warnings, isEmpty);
+      expect(out.json.contains('core_rejected'), isFalse);
       final sub = _source(out.json, 'subscription');
       expect(sub.containsKey('warnings'), false);
       expect(sub.containsKey('disabled'), false);
@@ -386,16 +388,73 @@ void main() {
       expect(memberWith('example-2.com').warnings, isEmpty);
       expect(memberWith('example-3.com').enabled, false);
     });
+
+    test('старый файл папки с вердиктом: импорт без ошибок, узел включён',
+        () async {
+      final json = jsonEncode({
+        'lx_backup': 2,
+        'exported_by': {'app': 'test', 'version': '0'},
+        'exported_at': '2026-09-19T00:00:00Z',
+        'sources': [
+          {
+            'kind': 'folder',
+            'id': 'fold-old',
+            'name': 'EU',
+            'enabled': true,
+            'nodes': [
+              {
+                'kind': 'server',
+                'tag': 'Tokyo',
+                'enabled': false,
+                'warnings': [
+                  {
+                    'code': 'core_rejected',
+                    'params': {'reason': 'из старого файла'},
+                  },
+                ],
+                'origin': {'kind': 'uri', 'raw': _uri},
+              },
+              {
+                'kind': 'server',
+                'tag': 'Osaka',
+                'enabled': false,
+                'origin': {'kind': 'uri', 'raw': other},
+              },
+            ],
+          },
+        ],
+      });
+      final plan = planLxBackupImport(
+        json,
+        LxImportReceiver(lists: const [], receiverTargets: const {'vpn-1'}),
+      );
+      expect(plan.file.warnings, isEmpty);
+      final got = plan.lists.whereType<FolderServers>().single;
+      FolderMember memberWith(String hay) =>
+          got.members.firstWhere((m) => m.raw.contains(hay));
+      expect(memberWith('example-2.com').enabled, true);
+      expect(memberWith('example-2.com').warnings, isEmpty);
+      expect(memberWith('example-3.com').enabled, false);
+    });
   });
 
   group('плашка после перезапуска', () {
-    test('CoreRejectState не пишет плашку на диск', () {
-      final src = File('lib/services/core_reject/core_reject_state.dart')
-          .readAsStringSync();
-      expect(src.contains('SharedPreferences'), isFalse);
-      expect(src.contains('path_provider'), isFalse);
-      expect(src.contains('writeAsString'), isFalse);
-      expect(src.contains('Hive'), isFalse);
+    tearDown(CoreRejectState.I.resetForTest);
+
+    test('плашка живёт в памяти процесса и после сброса состояния не видна', () {
+      CoreRejectState.I.resetForTest();
+      CoreRejectState.I.finish(const CoreRejectRun(
+        outcome: CoreRejectOutcome.startedWithDisabled,
+        disabled: [DisabledNode(tag: 'n1', reason: 'bad')],
+      ));
+      expect(CoreRejectState.I.bannerVisible, isTrue);
+      expect(CoreRejectState.I.bannerNodes, isNotEmpty);
+
+      // Перезапуск приложения = новый процесс: синглтон создаётся заново.
+      // В тесте это [CoreRejectState.resetForTest] — персиста у плашки нет.
+      CoreRejectState.I.resetForTest();
+      expect(CoreRejectState.I.bannerVisible, isFalse);
+      expect(CoreRejectState.I.bannerNodes, isEmpty);
     });
   });
 }
