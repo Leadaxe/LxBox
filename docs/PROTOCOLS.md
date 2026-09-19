@@ -908,7 +908,7 @@ and **443** respectively.
 | Password | userinfo (after `:`) | Basic-auth password |
 | Path | `path` | The sing-box `path` (a query parameter rather than a URI path — it round-trips more easily) |
 | Headers | `headers` | Serialized like naive `extra-headers`: `Header1: V1\r\nHeader2: V2`, URL-encoded |
-| SNI | `sni` / `peer` / `host` | `proxy-https://` only; the default is the host (the trojan convention, `mappers/http_mapper.dart`) |
+| SNI | `sni` / `peer` / `host` | `proxy-https://` only; the default is the host (the trojan convention, `registry/tls.json` → `blocks.uri_with_host.sni`, included by `registry/protocols/http.json` → `mappers.uri`) |
 | Fingerprint | `fp` | The uTLS fingerprint (`proxy-https://` only) |
 | ALPN | `alpn` | Comma-separated (`proxy-https://` only) |
 | Insecure | `allowInsecure` and its aliases | `tls.insecure` → `InsecureTlsWarning` |

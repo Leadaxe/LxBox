@@ -349,18 +349,26 @@ Step 7 brought over the last two schemes — **masque** and **wireguard/AWG** �
 and with them the **second input of the same scheme, the INI text**
 (`wg-quick`). A mapper takes the source text, so an INI mapper differs from a
 link mapper only in how it reads the input: the output is the same sing-box
-map (`mappers/wireguard_mapper.dart` → `mapWireguardIni`, entry point
-`parseIniViaPipeline`). The synthetic `wg://` URI that used to stand between
+map. After §480 the table itself is the registry section for the `conf` source
+kind (`registry/protocols/wireguard.json` → `mappers.conf`, our divergences in
+the overlay `contract_draft/conf/wireguard.json`); the engine executes it
+through the bridge `engine/engine_mapper.dart` → `mapIniViaEngine`, entry point
+`parseIniViaPipeline`. The synthetic `wg://` URI that used to stand between
 the INI and the parser is gone; `rawSource` stays the INI text byte for byte
 (§456). Amnezia's `vpn://` is not a third input but a **container**: it unpacks
 the profile into ready INI texts and hands each to the same mapper.
 
 Step 8 brought over the **Xray-JSON** input, and with it the last path that
 carried its own value rules. It is the one input whose source dialect is an
-**object**, not text: the mapper takes a `Map` (`mappers/xray_mapper.dart` →
-`mapXrayOutbound`), so it has its own pair of types and its own entry point
-(`parseXrayViaPipeline`) while the pipeline body stays shared. Three things
-differ, all of them from the shape of the input:
+**object**, not text: the mapper takes a `Map`, so it has its own pair of types
+and its own entry point (`parseXrayViaPipeline`) while the pipeline body stays
+shared. After §480 the per-scheme table is the registry section for the `xray`
+source kind (`registry/protocols/<scheme>.json` → `mappers.xray`, our
+divergences in the overlays `contract_draft/xray/<scheme>.json`), executed
+through the bridge `engine/engine_mapper.dart` → `mapJsonViaEngine`; the
+section's own `detect` picks the record, so there is no dispatcher by protocol
+name left in the code. Three things differ, all of them from the shape of the
+input:
 
 1. The mapper runs **outside** the pipeline — parsing a subscription element
    (node order §321, dedup §404, `dialerProxy` chains, names §310/§322) belongs
@@ -686,11 +694,23 @@ parser/                      # Parser v2 (text → NodeSpec)
   amnezia_link.dart          #   an Amnezia vpn:// link → WG/AWG INI texts (base64url plus qCompress, §110)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
-  uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque)
+  uri_parsers/<proto>.dart   #   per-protocol entry points: each one only names the pipeline table for its scheme
+                             #   (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque) — since §480 they hold
+                             #   no rules of their own
+  mappers/uri_pipeline.dart  #   §472: the shared pipeline (mapper → RegistrySanitizer → parseSingboxEntry) and its
+                             #   entry points parseUriViaPipeline / parseIniViaPipeline / parseXrayViaPipeline
+  mappers/uri_mapper.dart    #   UriMapping — what a mapper hands the pipeline
+  mappers/draft_sections.dart#   §480: which draft/overlay sections the loader reads (Flutter assets cannot be listed)
+  engine/                    #   §480: the mapper ENGINE — it executes the registry's mapper sections, so a scheme's
+                             #   rule is data (registry/protocols/<scheme>.json → mappers.<source kind>, our
+                             #   divergences in assets/contract_draft/), not Dart. engine_mapper.dart is the bridge
+                             #   (mapViaEngine / mapIniViaEngine / mapJsonViaEngine); section_loader + section read
+                             #   the sections, lexer/decoders/document/source_space parse the input, interpreter
+                             #   executes the records, emitter writes a link back
   json_parsers.dart          #   parseXrayElement + parseSingboxEntry (round-trip)
   singbox_config.dart        #   §368: a sing-box config or an array of them → nodes, groups and detours
                              #   (at parity with the Xray branch: two passes, dedup, synonyms)
-  ini_parser.dart            #   §472 step 7: WireGuard INI → mapWireguardIni → the same pipeline
+  ini_parser.dart            #   §472 step 7: WireGuard INI → the `conf` section of the registry → the same pipeline
                              #   (the synthetic wg:// URI is gone; rawSource stays the INI text, §456)
   transport.dart             #   parseTransport (query→TransportSpec) only — §480 W7/W8: the reverse
                              #   direction (body→URI) is the mapper section inverting the same table,
