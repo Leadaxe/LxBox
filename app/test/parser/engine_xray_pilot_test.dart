@@ -14,8 +14,9 @@ import 'package:lxbox/services/parser/parse_all.dart';
 
 /// §480 W5 — ВХОД-ДОКУМЕНТ Xray-JSON на движке секций.
 ///
-/// Снимок `pipeline_identity_before.json` (45 входов) снят СТАРЫМ путём —
-/// рукописным `xray_mapper.dart`, которого после этой волны нет. Сверка идёт
+/// Снимок `pipeline_identity_before.json` снят СТАРЫМ путём — рукописным
+/// `xray_mapper.dart`, которого после этой волны нет; пополняется он тем же
+/// способом, временным worktree на коммите до удаления. Сверка идёт
 /// ПОСЛЕ САНИТАЙЗЕРА: снимок снят с готовых узлов, и движок без судьи их не
 /// воспроизводит по построению (значения судит реестр, а не маппер).
 ///
@@ -32,6 +33,28 @@ const _identityFixture = 'test/fixtures/xray/pipeline_identity_before.json';
 const Map<String, String> _expectedChanges = {
   'vless_ws_path_junk': 'битый путь снят с тела (format url_path), узел жив',
   'vless_encryption_junk': 'узел отбракован при разборе (drop_node §477)',
+};
+
+/// §480 — ДВУСТОРОННЯЯ ПОМЕТКА: кейсы, добавленные ЭТОЙ правкой, и чем их
+/// «до» отличается от «стало».
+///
+/// Все четыре про одно: прежний рукописный путь терял вложенный `xmux` из
+/// `extra`, потому что разворачивал его только в одной из двух форм записи.
+/// Снимок «до» этих кейсов не содержал вовсе — фикстура из 45 входов
+/// расширенных полей XHTTP не несла, и расхождение прошло мимо сверки
+/// байт в байт. Значения в фикстуре — НОВЫЕ (то есть верные); строка ниже
+/// называет, что стояло там у старого кода, чтобы дельта была видна обеим
+/// сторонам и не воспринималась как молчаливая переподгонка эталона.
+const Map<String, String> _newCaseDeltas = {
+  'b480_xhttp_full_field_set':
+      'старый код терял transport.xmux целиком (5 полей из extra)',
+  'b480_xhttp_snake_case_extra':
+      'старый код терял transport.xmux (max_concurrency, h_keep_alive_period)',
+  'b480_xhttp_splithttp_alias_full':
+      'старый код терял transport.xmux (max_concurrency) под именем splithttp',
+  'b480_xhttp_empty_extra_member_keeps_flat':
+      'старый код терял transport.xmux; пустой член extra.xmux по-прежнему '
+          'не затирает плоское значение',
 };
 
 Map<String, dynamic> _fixture() =>
@@ -92,10 +115,26 @@ void main() {
         reason: 'элемент обязан опознаваться РОВНО одной секцией');
   }, skip: skip);
 
-  test('45 входов снимка: identity, тег, имя, rawSource и тело байт в байт',
-      () {
+  test('входы снимка: identity, тег, имя, rawSource и тело байт в байт', () {
     final before = _fixture();
-    expect(before, hasLength(45));
+    // Порог, а не точное число: снимок ПОПОЛНЯЕТСЯ, и каждое пополнение
+    // снято старым кодом во временном worktree (§480, случай XHTTP: 45
+    // входов сошлись байт в байт, а 25 полей терялись — фикстура их просто
+    // не несла). Точное равенство делало бы красным само пополнение, то
+    // есть ровно то, чем дыра и закрывается; порог ловит противоположное —
+    // молча срезанный набор.
+    expect(before, hasLength(greaterThanOrEqualTo(45)));
+
+    // Кейсы с объявленной дельтой обязаны быть В СНИМКЕ и нести то, ради
+    // чего заведены: без этой проверки пометка разъехалась бы с фикстурой
+    // молча — а именно молчание и есть то, что чинит эта правка.
+    for (final e in _newCaseDeltas.entries) {
+      final c = before[e.key];
+      expect(c, isNotNull, reason: 'кейс ${e.key} пропал из снимка: ${e.value}');
+      final body = ((c! as Map)['nodes'] as List).first as Map;
+      expect(body['body_json'], contains('"xmux"'),
+          reason: '${e.key}: ${e.value}');
+    }
 
     final diffs = <String>[];
     for (final e in before.entries) {
