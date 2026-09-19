@@ -177,6 +177,22 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         // куски ссылки в разных формах (только userinfo либо весь authority),
         // а метка `#…` в обеих формах остаётся открытым текстом снаружи —
         // декодер «на весь текст» ломает и ту, и другую.
+        // Область `authority` у ссылочной формы накрывает ВЕСЬ пэйлоад, и
+        // раскрыть её обязан декодер ДО лексера: сам base64 законно несёт
+        // `?` и `/` (алфавит std), а лексер, увидев их в ещё закрытом тексте,
+        // отрезал бы по ним путь и query — «хвост» уехал бы в никуда, а
+        // authority пришёл бы обрезанным. Так устроена всякая форма, где под
+        // оболочкой лежит ссылка с параметрами (`…@host:port?a=1&b=2`).
+        //
+        // `userinfo` так раскрыть нельзя: там декодируется КУСОК внутри
+        // authority, и границы его знает только лексер — эта ветка ниже.
+        final unwrapped = _applyScopedDecodeToPayload(form, decoded);
+        if (unwrapped == null) continue;
+        if (unwrapped != decoded) {
+          final relexed = lexUri(unwrapped, formId: form.id);
+          if (relexed != null) return relexed;
+          continue;
+        }
         final scoped = _applyScopedDecode(form, space);
         if (scoped != null) return scoped;
       case 'json':
@@ -314,14 +330,20 @@ String? _applyFormDecode(MapperForm form, String text) {
   return '${split.scheme}://$payload$fragment';
 }
 
-/// Декодер формы с ОБЛАСТЬЮ для ОБЪЕКТНОГО пространства (`space: "json"`).
+/// Декодер формы с областью `authority` — НАД ПЭЙЛОАДОМ, до лексера.
 ///
-/// У формы-контейнера под оболочкой лежит не ссылка, а объект: ни userinfo,
-/// ни хоста, ни порта в декодированном тексте нет, и звать лексер незачем.
-/// Область при этом названа (`authority`) не ради куска, а ради ГРАНИЦЫ —
-/// схема и метка обязаны остаться снаружи декодера, иначе оболочка не
-/// раскроется. Ровно это и делает [_applyFormDecode], снимая схему и
-/// фрагмент, поэтому здесь остаётся применить сам декодер к пэйлоаду.
+/// `authority` у формы, чья оболочка накрывает всё после схемы, — это не
+/// «кусок ссылки», а ГРАНИЦА: схема и метка обязаны остаться снаружи
+/// декодера, иначе оболочка не раскроется. Ровно это и делает
+/// [_applyFormDecode], снимая схему и фрагмент, поэтому здесь остаётся
+/// применить сам декодер к пэйлоаду.
+///
+/// Раскрывать ДО лексера обязательно в обоих пространствах:
+///
+/// - `json` — под оболочкой лежит объект, и лексеру там делать нечего;
+/// - `url` — под оболочкой лежит ссылка, но сам base64 законно несёт `?` и
+///   `/`, и лексер, увидев их в ещё закрытом тексте, отрезал бы по ним путь
+///   и query.
 ///
 /// `null` — обязательный декодер не отработал, и форма не отвечает.
 String? _applyScopedDecodeToPayload(MapperForm form, String text) {
@@ -336,8 +358,10 @@ String? _applyScopedDecodeToPayload(MapperForm form, String text) {
   }
   for (final step in form.decode) {
     if (step is! Map) continue;
-    final scope = step['scope'];
-    if (scope == null || scope == 'all') continue;
+    // Только `authority`: она и есть «весь пэйлоад». `userinfo` — кусок
+    // ВНУТРИ authority, его границы знает лексер, и раскрывается он
+    // [_applyScopedDecode] после разбора.
+    if (step['scope'] != 'authority') continue;
     final decoder = step['decoder'];
     if (decoder == 'percent') {
       payload = percentDecodeOnce(payload, mode: DecodeMode.path);

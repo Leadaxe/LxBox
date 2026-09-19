@@ -80,7 +80,7 @@
             "repeat": "first_only",
             "on_extra": {
               "$code_pending": "wgconf_extra_peer_dropped",
-              "$impl": "Тот же случай, что у dns: код объявлен вперёд текста, в warnings.json контракта его нет, и сегодняшнюю тишину он не отменяет (спека §8, «не дельты»)."
+              "$impl": "Тот же случай, что у dns: контракт 1.1.22 привёз ТЕКСТ кода (warnings.json, severity warning), но корпус его не ждёт, а `desc` самого кода говорит «сегодня Go делает это молча» (parseWGConfSections). Включать раньше корпуса значит расходиться с лаунчером на живых узлах."
             }
           }
         },
@@ -138,7 +138,7 @@
             "action": "note",
             "$code_pending": "wgconf_dns_ignored"
           },
-          "impl": "У sing-box endpoint dns-поля нет — лоссы by design (wireguard.json uri.query.dns.impl). Код НЕ ставится: `wgconf_dns_ignored` объявлен секцией вперёд текста, а в `warnings.json` контракта его нет — человек увидел бы предупреждение с пустым текстом там, где сегодня законная тишина. Имя лежит под `$code_pending`, чтобы вернуть его одной правкой, когда текст приедет синком; `$`-ключ движок не читает (служебная запись). Запись при этом обязана остаться: без неё DNS уехал бы в `uri_param_unknown`."
+          "impl": "У sing-box endpoint dns-поля нет — лоссы by design (wireguard.json uri.query.dns.impl). Контракт 1.1.22 привёз ТЕКСТ кода (warnings.json, severity info), но КОРПУС его не ждёт: ни один кейс `contract/corpus/**` не несёт `wgconf_*`, а `wgconf/ini_basic.body` ждёт пустой список warnings. Сам реестр секции `mappers.conf` ещё не объявил (поле `go` кода ссылается на неё вперёд), и `desc` кода говорит «сегодня Go делает это молча». Включить код у себя значит разойтись с лаунчером на живых узлах — поэтому имя остаётся под `$code_pending` до правки корпуса. `$`-ключ движок не читает (служебная запись). Запись обязана остаться в любом случае: без неё DNS уехал бы в `uri_param_unknown`."
         },
         "publickey": {
           "source": "ini.Peer.PublicKey",

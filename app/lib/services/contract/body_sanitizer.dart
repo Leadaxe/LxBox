@@ -17,6 +17,8 @@
 /// эмиттер, поэтому и список warnings детерминирован.
 library;
 
+import 'dart:convert' show base64;
+
 import '../../models/node_warning.dart';
 import '../app_log.dart';
 import '../parser/uri_utils.dart'
@@ -160,6 +162,12 @@ final class RegistrySanitizer {
   /// санитайзера нет и не будет — оно разошлось бы с телом на первом же
   /// параллельном разборе. Дефолт [BodySource.other] — консервативный: он
   /// означает «вход неизвестен», и правило применяется как прежде, заменой.
+  ///
+  /// Контракт 1.1.22 — [kinds] РОД узла, объявленный входом (`kind_when`
+  /// маппера), рядом с [source]: его читает оператор `when.source_kind`. У нас
+  /// узел хранится ИСТОЧНИКОМ, и род восстанавливается перепарсом всегда, так
+  /// что хранить его отдельно не нужно (MAPPER_ENGINE.md). Пусто — род
+  /// неизвестен, и правило судит тело прежним `any_set`.
   static SanitizeResult sanitize(
     Map<String, dynamic> body, {
     required String scheme,
@@ -167,6 +175,7 @@ final class RegistrySanitizer {
     String platform = 'android',
     bool applyCoreGates = true,
     BodySource source = BodySource.other,
+    Set<String> kinds = const {},
   }) {
     final schema = ContractRegistry.I.schemaFor(scheme);
     if (schema == null) return SanitizeResult(body, const []);
@@ -177,6 +186,7 @@ final class RegistrySanitizer {
       platform: platform,
       applyCoreGates: applyCoreGates,
       source: source,
+      kinds: kinds,
       root: body,
     );
     final out = ctx.sanitizeObject(body, schema.order, schema.fields, '');
@@ -251,6 +261,7 @@ final class _Ctx {
     required this.platform,
     required this.applyCoreGates,
     required this.source,
+    required this.kinds,
     required this.root,
   });
 
@@ -260,6 +271,20 @@ final class _Ctx {
 
   /// §473 — вход тела; читает его только `max_when.except_sources`.
   final BodySource source;
+
+  /// Контракт 1.1.22 — РОД узла внутри одной схемы, объявленный ВХОДОМ
+  /// (`kind_when` маппера), рядом с [source]. Читает его оператор
+  /// `when.source_kind`.
+  ///
+  /// Род нельзя вывести из тела: негодные значения снимает правило поля, и к
+  /// проверке потолка тело становится неотличимо от обычного узла, хотя
+  /// протокол автор просил другой. Поэтому род едет контекстом, а не ключом
+  /// тела — в тело он не пишется (MAPPER_ENGINE.md, «Контекст санитайзера:
+  /// body_source + kind»).
+  ///
+  /// Пусто — род неизвестен (тело приехало без разбора источника); условие
+  /// `source_kind` тогда ложно, и правило судит тело прежним `any_set`.
+  final Set<String> kinds;
 
   /// §460 W2a — считать ли гейты, зависящие от запущенного ядра
   /// (`min_core`, `platform`). При разборе — нет (24.1.6).
@@ -919,10 +944,17 @@ final class _Ctx {
 
   /// §481 (контракт 1.1.11) — связи секции `body.relations`.
   ///
-  /// Единственный вид сегодня — `ranges_disjoint`: диапазоны перечисленных
-  /// полей не должны пересекаться. Свойство НАБОРА, а не пары «поле и сосед»,
-  /// поэтому `conflicts`/`requires` его не выражают — виноват может быть любой
+  /// Видов два. `ranges_disjoint`: диапазоны перечисленных полей не должны
+  /// пересекаться. Свойство НАБОРА, а не пары «поле и сосед», поэтому
+  /// `conflicts`/`requires` его не выражают — виноват может быть любой
   /// из четырёх `h1`–`h4`, и снятие одного пару не развело бы.
+  ///
+  /// `cooccurrence` (контракт 1.1.22): свойство СОЧЕТАНИЯ настроек, ни одна
+  /// из которых не битая. Узел живёт и менять в нём нечего — человеку
+  /// сообщается цена сочетания, поэтому ни `on_invalid`, ни `conflicts` тут
+  /// не подходят. Условие разнородное (булев флаг рядом с шириной диапазона),
+  /// и читается оно оператором `$range_width` наравне с обычным сравнением
+  /// значения.
   ///
   /// `defaults` обязателен по смыслу: незаданный заголовок участвует своим
   /// типом сообщения WireGuard (`h1=1 … h4=4`), и «поля нет» тут не значит
@@ -934,6 +966,10 @@ final class _Ctx {
       Map<String, dynamic> clean, List<Map<String, dynamic>> relations) {
     for (final rel in relations) {
       final kind = rel['kind'];
+      if (kind == 'cooccurrence') {
+        _applyCooccurrence(clean, rel);
+        continue;
+      }
       if (kind != 'ranges_disjoint') {
         _logUnknownExpression('relation', '$kind');
         continue;
@@ -973,6 +1009,65 @@ final class _Ctx {
         }
       }
     }
+  }
+
+  /// Связь `cooccurrence` (контракт 1.1.22) — цена СОЧЕТАНИЯ настроек.
+  ///
+  /// Условие — карта «путь → ожидание», и совпасть обязаны ВСЕ её записи:
+  /// перечисление это «и». Ожидание бывает двух видов:
+  ///
+  /// - скаляр — сравнение по ПЕЧАТНОЙ ФОРМЕ, как у `absent_when`: тело
+  ///   приезжает и разбором JSON, и от маппера, где булев флаг бывает строкой;
+  /// - `$range_width` — ширина диапазона у ЛЮБОГО из перечисленных путей
+  ///   (`gt`/`lt`, операторы строгие). Диапазоном считается только запись вида
+  ///   «lo-hi»: заголовок-ЧИСЛО ширины не имеет и условие не выполняет.
+  ///
+  /// Код адресуется ПЕРВОМУ пути связи: он называет настройку, с которой
+  /// человек начнёт разбираться. Повтор одного кода по одному пути снимается —
+  /// связей с общим кодом в реестре бывает несколько, а сообщение об одной и
+  /// той же цене человеку нужно один раз.
+  void _applyCooccurrence(Map<String, dynamic> clean, Map<String, dynamic> rel) {
+    final when = rel['when'];
+    if (when is! Map) return;
+    for (final e in when.entries) {
+      final key = '${e.key}';
+      if (key == r'$range_width') {
+        if (!_rangeWidthHolds(clean, e.value)) return;
+        continue;
+      }
+      if (!clean.containsKey(key)) return;
+      if ('${clean[key]}' != '${e.value}') return;
+    }
+    final code = rel['code'] as String?;
+    if (code == null) return;
+    final paths = ((rel['paths'] as List?) ?? const []).map((e) => '$e');
+    final path = paths.isEmpty ? null : paths.first;
+    if (!_cooccurrenceSeen.add('$code $path')) return;
+    if (rel['action'] == 'drop_node') {
+      dropNode = true;
+      explicitDropNode = true;
+    }
+    warn(code, path: path);
+  }
+
+  /// Уже поставленные коды `cooccurrence`: `<код> <путь>`.
+  final Set<String> _cooccurrenceSeen = <String>{};
+
+  /// Оператор `$range_width`: ширина диапазона хотя бы у одного из путей
+  /// удовлетворяет `gt`/`lt`.
+  static bool _rangeWidthHolds(Map<String, dynamic> clean, Object? spec) {
+    if (spec is! Map) return false;
+    final paths = ((spec['paths'] as List?) ?? const []).map((e) => '$e');
+    final gt = spec['gt'];
+    final lt = spec['lt'];
+    for (final p in paths) {
+      final span = _rangeSpan(clean[p]);
+      if (span == null) continue;
+      final width = span.$2 - span.$1;
+      if (gt is num && width > gt) return true;
+      if (lt is num && width < lt) return true;
+    }
+    return false;
   }
 
   /// §481 (контракт 1.1.11) — условный порог снизу `min_when`.
@@ -1046,12 +1141,32 @@ final class _Ctx {
   /// как «не выполнено»: правило значения, чьё условие непонятно, применять
   /// наугад нельзя (в отличие от незнакомого `normalize`, который просто
   /// ничего не делает).
+  /// Условие правила (`max_when`/`min_when`/`default_when`).
+  ///
+  /// Операторы соединяются ИЛИ, а не И, и это нормативно: род узла читается
+  /// ДВУМЯ способами, потому что ни один не полон. `source_kind` знает род от
+  /// ВХОДА и работает там, где в теле не осталось ни одного опорного ключа
+  /// (негодные значения снял судья поля). `any_set` судит тело и остаётся
+  /// навсегда: у входа в собственной форме ядра рода от входа нет вовсе.
+  /// Потребуй оба — правило перестало бы срабатывать в обоих случаях сразу.
   bool _conditionHolds(Object? when, Map<String, dynamic> body) {
     if (when == null) return true;
     if (when is! Map) return true;
+    var known = false;
+
+    final sourceKind = (when['source_kind'] as List?)?.map((e) => '$e');
+    if (sourceKind != null) {
+      known = true;
+      if (sourceKind.any(kinds.contains)) return true;
+    }
+
     final anySet = (when['any_set'] as List?)?.map((e) => '$e');
-    if (anySet != null) return _anySetInBody(anySet, body);
-    _logUnknownExpression('when', when.keys.join(','));
+    if (anySet != null) {
+      known = true;
+      if (_anySetInBody(anySet, body)) return true;
+    }
+
+    if (!known) _logUnknownExpression('when', when.keys.join(','));
     return false;
   }
 
@@ -1404,6 +1519,26 @@ String _normalizeString(String v, String norm) {
       final hi = int.tryParse(s.substring(dash + 1));
       if (lo == null || hi == null || lo <= hi) return v;
       return '$hi-$lo';
+    // D133-22 (контракт 1.1.22) — `base64_std` и `cidr_prefix` переехали из
+    // маппера в `body.fields`: правило написания обязано действовать на ВСЕХ
+    // входах, а не только там, где значение пришло ссылкой.
+    //
+    // `base64_std`: url-safe алфавит и отсутствие паддинга приводятся к
+    // канону (std с паддингом). Это нормализация, а не суждение: `…ccC=` и
+    // `…ccA=` декодируют в одни и те же байты, но уезжают в конфиг
+    // по-разному, то есть одна нода давала бы два identity-хеша (D-030).
+    // Годность (длину) судит `format` поля, поэтому здесь не проверяется
+    // ничего: не-base64 возвращается как пришёл и снимается правилом реестра.
+    case 'base64_std':
+      final decoded = decodeBase64Safe(v.trim());
+      return decoded == null ? v : base64.encode(decoded);
+    // `cidr_prefix`: голый адрес получает префикс — `/32` у v4, `/128` у v6.
+    // Применяется поэлементно: поле-список нормализуется вызывающим по
+    // элементам, и скаляр с той же записью ведёт себя так же.
+    case 'cidr_prefix':
+      final a = v.trim();
+      if (a.isEmpty || a.contains('/')) return v;
+      return a.contains(':') ? '$a/128' : '$a/32';
     default:
       _logUnknownExpression('normalize', norm);
       return v;
