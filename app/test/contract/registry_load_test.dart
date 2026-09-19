@@ -25,9 +25,9 @@ void main() {
       await ContractRegistry.I.loadFromDirectory(_contractRoot);
     });
 
-    test('реестр 1.1.28 грузится', () {
+    test('реестр 1.1.33 грузится', () {
       expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, '1.1.28');
+      expect(ContractRegistry.I.version, '1.1.33');
     }, skip: synced ? null : 'контракт не синхронизирован');
 
     // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
@@ -125,7 +125,7 @@ void main() {
       // санитайзер в APK работал бы по другой схеме, чем тесты.
       final mirror = ContractRegistry.I;
       await mirror.loadFromDirectory('assets/contract');
-      expect(mirror.version, '1.1.28');
+      expect(mirror.version, '1.1.33');
       expect(mirror.schemaFor('vless'), isNotNull);
       // Вернуть загрузку с копии — остальные тесты файла уже отработали, но
       // порядок в группе не нормирован.
