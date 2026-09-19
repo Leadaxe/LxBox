@@ -2904,9 +2904,6 @@
   "Notifications": {
     "value": "通知"
   },
-  "No notifications for this server": {
-    "value": "此服务器没有通知"
-  },
   "Number of nodes": {
     "value": "节点数量"
   },

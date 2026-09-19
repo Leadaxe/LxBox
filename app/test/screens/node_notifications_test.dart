@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/screens/subscription_detail_screen/node_inspect_screen.dart';
+import 'package:lxbox/widgets/node_diagnostics_tab.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_notifications_view.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'package:lxbox/screens/subscription_detail_screen/widgets/node_warnings_sheet.dart';
@@ -604,7 +605,9 @@ void main() {
     });
   });
 
-  group('§497 — вкладка Notifications в деталях узла', () {
+  group('§501 — уведомления во вкладке Diagnostics', () {
+    setUp(() => LocaleController.I.setting = 'en');
+
     NodeSpec inspectNode(List<NodeWarning> warnings) => VlessSpec(
           id: 'n1',
           tag: 'n1',
@@ -621,29 +624,73 @@ void main() {
           home: NodeInspectScreen(node: node),
         ));
 
-    Future<void> openNotificationsTab(WidgetTester tester) async {
-      await tester.tap(find.text('Notifications'));
+    Future<void> openDiagnosticsTab(WidgetTester tester) async {
+      await tester.tap(find.text('Diagnostics'));
       await tester.pumpAndSettle();
     }
 
-    testWidgets('узел с info uri_param_unknown — счётчик и заголовок реестра',
-        (tester) async {
-      await pumpInspect(tester, inspectNode(const [_infoUriParam]));
+    Finder tabDot() => find.byKey(const Key('diagnostics_tab_dot'));
 
-      final tabBar = find.byType(TabBar);
+    testWidgets('вкладки Notifications нет; warning — жёлтая точка и секция',
+        (tester) async {
+      await pumpInspect(tester, inspectNode(const [_warnTransport]));
+
+      expect(find.text('Notifications'), findsNothing);
+
+      final ctx = tester.element(find.byType(TabBar));
+      expect(tabDot(), findsOneWidget);
+      final dot = tester.widget<Container>(tabDot());
+      final decoration = dot.decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        warningSeverityColor(ctx, WarningSeverity.warning),
+      );
+
+      await openDiagnosticsTab(tester);
+
+      expect(find.byType(NodeDiagnosticsTab), findsOneWidget);
       expect(
         find.descendant(
-          of: tabBar,
-          matching: find.byIcon(Icons.info_outline),
+          of: find.byType(NodeDiagnosticsTab),
+          matching: find.text('Notifications'),
         ),
         findsOneWidget,
       );
+      expect(find.byType(NodeNotificationsView), findsOneWidget);
+      final raw = ContractRegistry.I.textFor('transport_unsupported')!;
       expect(
-        find.descendant(of: tabBar, matching: find.text('1')),
+        find.text(raw.titleEn
+            .replaceAll('{transport}', 'quic')
+            .replaceAll('{fallback}', 'ws')),
         findsOneWidget,
       );
+    });
 
-      await openNotificationsTab(tester);
+    testWidgets('error — красная точка', (tester) async {
+      await pumpInspect(tester, inspectNode(const [_errFieldMissing]));
+
+      final ctx = tester.element(find.byType(TabBar));
+      final dot = tester.widget<Container>(tabDot());
+      final decoration = dot.decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        warningSeverityColor(ctx, WarningSeverity.error),
+      );
+    });
+
+    testWidgets('info uri_param_unknown — жёлтая точка и заголовок реестра',
+        (tester) async {
+      await pumpInspect(tester, inspectNode(const [_infoUriParam]));
+
+      final ctx = tester.element(find.byType(TabBar));
+      expect(tabDot(), findsOneWidget);
+      final dot = tester.widget<Container>(tabDot());
+      expect(
+        (dot.decoration! as BoxDecoration).color,
+        warningSeverityColor(ctx, WarningSeverity.warning),
+      );
+
+      await openDiagnosticsTab(tester);
 
       final raw = ContractRegistry.I.textFor('uri_param_unknown')!;
       expect(
@@ -653,26 +700,24 @@ void main() {
       expect(find.byType(NodeNotificationsView), findsOneWidget);
     });
 
-    testWidgets('узел без уведомлений — вкладка есть, пустое состояние',
+    testWidgets('без уведомлений — точки и секции Notifications нет',
         (tester) async {
       await pumpInspect(tester, inspectNode(const []));
 
-      expect(find.text('Notifications'), findsOneWidget);
+      expect(find.text('Diagnostics'), findsOneWidget);
+      expect(tabDot(), findsNothing);
+
+      await openDiagnosticsTab(tester);
+
+      expect(find.byType(NodeDiagnosticsTab), findsOneWidget);
+      expect(find.byType(NodeNotificationsView), findsNothing);
       expect(
         find.descendant(
-          of: find.byType(TabBar),
-          matching: find.byIcon(Icons.info_outline),
+          of: find.byType(NodeDiagnosticsTab),
+          matching: find.text('Notifications'),
         ),
         findsNothing,
       );
-
-      await openNotificationsTab(tester);
-
-      expect(
-        find.text('No notifications for this server'),
-        findsOneWidget,
-      );
-      expect(find.byType(NodeNotificationsView), findsNothing);
     });
   });
 

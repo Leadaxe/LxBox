@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/node_spec.dart';
+import '../models/node_warning.dart';
+import '../screens/subscription_detail_screen/widgets/node_notifications_view.dart';
 import '../services/diagnostics/diagnostic_check.dart';
 import '../services/diagnostics/node_diagnostics_runner.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
+import 'banner_palette.dart';
+import 'safe_bottom.dart';
 
 /// §392 — вкладка Diagnostics: выпадающий список предопределённых чекеров,
 /// кнопка запуска и СЫРОЙ ответ в поле ниже.
@@ -26,16 +30,21 @@ import '../services/l10n/locale_controller.dart';
 ///
 /// [liveTag] — тег узла в БОЕВОМ конфиге (с префиксом списка). По нему ядро
 /// адресует узел, не переключая активный selector.
+///
+/// [warnings] — уведомления узла (§501): при непустом списке сверху секция
+/// Notifications, иначе секция не показывается.
 class NodeDiagnosticsTab extends StatefulWidget {
   const NodeDiagnosticsTab({
     super.key,
     required this.liveTag,
     this.node,
     this.header,
+    this.warnings = const [],
   });
 
   final NodeSpec? node;
   final String liveTag;
+  final List<NodeWarning> warnings;
 
   /// §394 — блок, специфичный для ЭТОГО вида узла, над общей секцией «Check».
   /// Сейчас единственный такой блок — послойная проба цепочки (её показывает
@@ -111,16 +120,24 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final outcome = _outcome;
+    final warnings = widget.warnings;
     return ListView(
-      padding: EdgeInsets.fromLTRB(
-          16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24).withSafeBottom(context),
       children: [
+        if (warnings.isNotEmpty) ...[
+          _sectionHeader(getLocalText.s("Notifications"), theme),
+          NodeNotificationsView(warnings),
+          const SizedBox(height: 24),
+        ],
         if (widget.header != null) ...[
           widget.header!,
           const SizedBox(height: 24),
         ],
-        _sectionHeader(getLocalText.s("Check"),
-            getLocalText.s("Request is sent through this node"), theme),
+        _sectionHeader(
+          getLocalText.s("Check"),
+          theme,
+          description: getLocalText.s("Request is sent through this node"),
+        ),
         DropdownButtonFormField<String>(
           initialValue: _check.id,
           isExpanded: true,
@@ -188,15 +205,14 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
         if (outcome != null) ...[
           const SizedBox(height: 16),
           _sectionHeader(
-              getLocalText.s("Response"),
-              // Через что реально шёл запрос: две ветки отвечают на РАЗНОЕ —
-              // «узел сам по себе» vs «узел в живом ядре».
-              outcome.source == DiagnosticSource.live
-                  ? getLocalText.s(
-                      "Through this node in the running core — not through your current route")
-                  : getLocalText
-                      .s("Through this node in a temporary core session"),
-              theme),
+            getLocalText.s("Response"),
+            theme,
+            description: outcome.source == DiagnosticSource.live
+                ? getLocalText.s(
+                    "Through this node in the running core — not through your current route")
+                : getLocalText
+                    .s("Through this node in a temporary core session"),
+          ),
           if (!outcome.ok)
             Text(
               outcome.result.error,
@@ -275,7 +291,11 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
     );
   }
 
-  Widget _sectionHeader(String title, String description, ThemeData theme) {
+  Widget _sectionHeader(
+    String title,
+    ThemeData theme, {
+    String? description,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -288,13 +308,58 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          Text(
-            description,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          if (description != null) ...[
+            Text(
+              description,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+          const Divider(),
+        ],
+      ),
+    );
+  }
+}
+
+/// §501 — подпись вкладки Diagnostics: текст + точка у правого верхнего края,
+/// если у узла есть уведомления (жёлтая, красная при error).
+class NodeDiagnosticsTabLabel extends StatelessWidget {
+  const NodeDiagnosticsTabLabel({super.key, required this.warnings});
+
+  final List<NodeWarning> warnings;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = getLocalText.s("Diagnostics");
+    if (warnings.isEmpty) return Tab(text: label);
+
+    final hasError =
+        warnings.any((w) => w.severity == WarningSeverity.error);
+    final dotColor = hasError
+        ? warningSeverityColor(context, WarningSeverity.error)
+        : warningSeverityColor(context, WarningSeverity.warning);
+
+    return Tab(
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Text(label),
+          Positioned(
+            right: -6,
+            top: -2,
+            child: Container(
+              key: const Key('diagnostics_tab_dot'),
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+              ),
             ),
           ),
-          const Divider(),
         ],
       ),
     );

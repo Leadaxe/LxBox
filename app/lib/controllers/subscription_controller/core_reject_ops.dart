@@ -302,7 +302,7 @@ void unstampCoreRejected(NodeSpec node) {
 /// Хранимые вердикты + предупреждения разбора без мутации [node].
 ///
 /// Та же логика, что [stampNodeWarnings], для отрисовки строк источников и
-/// вкладки Notifications у ручного сервера / члена папки.
+/// секции Notifications (вкладка Diagnostics) у ручного сервера / члена папки.
 List<NodeWarning> mergedNodeWarnings(
   NodeSpec node,
   List<StoredWarning> stored,

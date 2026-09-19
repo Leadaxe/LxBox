@@ -3094,9 +3094,6 @@
   "Notifications": {
     "value": "Уведомления"
   },
-  "No notifications for this server": {
-    "value": "У этого сервера нет уведомлений"
-  },
   "Number of nodes": {
     "value": "Количество узлов"
   },

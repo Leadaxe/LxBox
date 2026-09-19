@@ -20,7 +20,6 @@ import '../models/template_vars.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/node_diagnostics_tab.dart';
-import '../widgets/node_notifications_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
 
@@ -57,11 +56,11 @@ class NodeSettingsScreen extends StatefulWidget {
   /// §237 — индекс члена папки; null = одиночный сервер (старое поведение).
   final int? memberIndex;
 
-  /// §498 — начальная вкладка (страховка открывает Notifications = 3).
+  /// §498/§501 — начальная вкладка (страховка открывает Diagnostics = 3).
   final int initialTab;
 
-  /// Индекс вкладки Notifications: Settings, Source, JSON, Notifications, Diagnostics.
-  static const notificationsTabIndex = 3;
+  /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics.
+  static const diagnosticsTabIndex = 3;
 
   @override
   State<NodeSettingsScreen> createState() => _NodeSettingsScreenState();
@@ -96,8 +95,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// из него временный конфиг).
   NodeSpec? _node;
 
-  /// Разбор + хранимый вердикт (`core_rejected` и др.) для вкладки
-  /// Notifications.
+  /// Разбор + хранимый вердикт (`core_rejected` и др.) для секции
+  /// Notifications во вкладке Diagnostics.
   List<NodeWarning> _notifications = const [];
 
   @override
@@ -107,9 +106,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _jsonCtrl = TextEditingController();
     _sourceCtrl = TextEditingController();
     _tabs = TabController(
-      length: 5,
+      length: 4,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 4),
+      initialIndex: widget.initialTab.clamp(0, 3),
     );
     unawaited(_load());
   }
@@ -490,8 +489,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               Tab(text: getLocalText.s("Source")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
-              NodeNotificationsTabLabel(warnings: _notifications),
-              Tab(text: getLocalText.s("Diagnostics")),
+              NodeDiagnosticsTabLabel(warnings: _notifications),
             ],
           ),
         ),
@@ -503,13 +501,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   _buildSettingsTab(theme),
                   _buildSourceTab(theme),
                   _buildJsonTab(theme),
-                  NodeNotificationsTab(warnings: _notifications),
-                  // §392 — узел распарсен: доступны обе ветки (probe при
-                  // выключенном VPN, боевое ядро при включённом).
+                  // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
                     node: _node,
                     liveTag: TagResolver.displayTag(
                         widget.entry.list.tagPrefix, _originalTag),
+                    warnings: _notifications,
                   ),
                 ],
               ),

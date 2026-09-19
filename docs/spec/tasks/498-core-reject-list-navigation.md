@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | Реализовано |
+| **Статус** | Реализовано (вкладка объединена с Diagnostics задачей §501) |
 | **Дата** | 2026-09-19 |
 | **Источник** | решение владельца 19.09.2026: тап по строке листа «N servers disabled» должен открывать детали узла; плашка уходит после Stop |
 | **Связанные** | фича 478, §497 (вкладка Notifications), §479 |
@@ -21,15 +21,16 @@
 ## Что сделано
 
 1. **Навигация из листа.** Тап по активной строке закрывает лист и открывает
-   экран деталей **этого** узла на вкладке Notifications — тот же путь, что
-   тап по узлу в списке подписки (`NodeInspectScreen`) или настройки
-   одиночного/члена папки (`NodeSettingsScreen`). Узел ищется по
-   `lastEmittedTagMap` / `ownerOfNode` (идентичность объекта, как у
-   `disableNodeByCoreTag`); хоп цепочки ведёт к владельцу. Удалённый узел
-   (нет в карте или нет владельца) — строка неактивна, без шеврона.
-2. **Начальная вкладка.** `NodeInspectScreen` — параметр `initialTab`
-   (`NodeInspectTab.notifications`); `NodeSettingsScreen` — `initialTab`
-   (константа `notificationsTabIndex`).
+   экран деталей **этого** узла на вкладке Diagnostics (секция уведомлений
+   сверху) — тот же путь, что тап по узлу в списке подписки
+   (`NodeInspectScreen`) или настройки одиночного/члена папки
+   (`NodeSettingsScreen`). Узел ищется по `lastEmittedTagMap` / `ownerOfNode`
+   (идентичность объекта, как у `disableNodeByCoreTag`); хоп цепочки ведёт к
+   владельцу. Удалённый узел (нет в карте или нет владельца) — строка
+   неактивна, без шеврона.
+2. **Начальная вкладка.** `NodeInspectScreen` — `initialTab:
+   NodeInspectTab.diagnostics`; `NodeSettingsScreen` — `diagnosticsTabIndex`
+   (§501; раньше — вкладка Notifications).
 3. **Plural заголовка.** `coreRejectBannerTitle`: «1 server disabled» /
    «%d servers disabled» через `getLocalText.s` / `.plural`; ключи в ru/zh.
 4. **Жизнь плашки.** Скрывается при: ×, Stop/Disconnected (`HomeController`),
@@ -39,7 +40,7 @@
 
 ## Критерии приёмки
 
-- Тап по строке листа → детали узла на вкладке Notifications.
+- Тап по строке листа → детали узла на вкладке Diagnostics (уведомления сверху).
 - Удалённый узел в листе — неактивная строка, без шеврона.
 - Заголовок плашки и листа: «1 server disabled» / «2 servers disabled» (EN).
 - После `started_with_disabled` плашка видна → Disconnected → плашки нет,

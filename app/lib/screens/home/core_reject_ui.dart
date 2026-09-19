@@ -87,9 +87,9 @@ Future<CoreRejectPrompt> showCoreRejectPrompt(
   return answer ?? CoreRejectPrompt.stop;
 }
 
-/// §498 — экран деталей узла на вкладке Notifications (тот же путь, что тап
-/// по узлу в списке). Узел ищется по [lastEmittedTagMap], не по отображаемым
-/// строкам; хоп цепочки ведёт к владельцу.
+/// §498/§501 — экран деталей узла на вкладке Diagnostics (тот же путь, что
+/// тап по узлу в списке). Узел ищется по [lastEmittedTagMap], не по
+/// отображаемым строкам; хоп цепочки ведёт к владельцу.
 Future<void> openCoreRejectNodeDetails(
   BuildContext context, {
   required SubscriptionController subController,
@@ -114,21 +114,22 @@ Future<void> openCoreRejectNodeDetails(
             index: owner.entryIndex,
             subController: subController,
             memberIndex: owner.memberIndex,
-            initialTab: NodeSettingsScreen.notificationsTabIndex,
+            initialTab: NodeSettingsScreen.diagnosticsTabIndex,
           );
         }
         return NodeInspectScreen(
           node: source,
           tagPrefix: list.tagPrefix,
-          initialTab: NodeInspectTab.notifications,
+          initialTab: NodeInspectTab.diagnostics,
         );
       },
     ),
   );
 }
 
-/// Вкладка Notifications читает `NodeSpec.warnings`; вердикт страховки
-/// живёт в хранилище — дописываем его, как [stampStoredVerdicts] на разборе.
+/// Секция Notifications во вкладке Diagnostics читает `NodeSpec.warnings`;
+/// вердикт страховки живёт в хранилище — дописываем его, как
+/// [stampStoredVerdicts] на разборе.
 void _stampStoredForInspect(ServerList list, NodeSpec source) {
   switch (list) {
     case SubscriptionServers():
@@ -150,7 +151,7 @@ void _stampStoredForInspect(ServerList list, NodeSpec source) {
 }
 
 /// Кнопка Show: список выключенных этим прогоном; тап по строке — детали
-/// узла на вкладке Notifications (§498). Удалённый узел — строка неактивна.
+/// узла на вкладке Diagnostics (§498/§501). Удалённый узел — строка неактивна.
 Future<void> showCoreRejectList(
   BuildContext context,
   List<DisabledNode> nodes, {

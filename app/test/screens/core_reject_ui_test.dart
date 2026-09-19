@@ -323,7 +323,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('тап по строке открывает детали на вкладке Notifications',
+    testWidgets('тап по строке открывает детали на вкладке Diagnostics',
         (tester) async {
       final node = inspectNode();
       final sub = subWithNode(node, emittedTag: 'Frankfurt');
@@ -364,7 +364,7 @@ void main() {
       expect(find.text('2 servers disabled'), findsOneWidget);
     });
 
-    testWidgets('хоп цепочки открывает владельца на Notifications',
+    testWidgets('хоп цепочки открывает владельца на Diagnostics',
         (tester) async {
       final hop = inspectNode(tag: 'hop-link');
       final owner = withChained(inspectNode(tag: 'Main'), hop);
