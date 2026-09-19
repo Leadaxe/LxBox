@@ -220,7 +220,7 @@ List<NodeSpec> parseXrayElement(
       // не стартует НА ВСЁМ наборе (случай #147). Такой узел обязан исчезнуть
       // при разборе, а не дожить до гарда сборки, стоя в списке рабочим.
       final verdict = XrayDropVerdict();
-      final spec = _xrayToSpec(ob, label, dropped: verdict);
+      var spec = _xrayToSpec(ob, label, dropped: verdict);
       if (spec == null && verdict.explicit) {
         // Причина — код реестра с тегом записи: `dropped[].ref` контракта
         // называет именно тег outbound'а (D-088), как и у прочих отбраковок.
@@ -259,19 +259,28 @@ List<NodeSpec> parseXrayElement(
       final ref = dialerRefOf[ob];
       NodeSpec? chained;
       if (ref != null) {
-        chained = _xrayBuildChain(ob, byTag, ref);
-        // §404 / D-085 — недостижимая цель роняет ВЛАДЕЛЬЦА целиком. Узел с
-        // прямым путём тут был бы молчаливой деанонимизацией: провайдер
-        // завернул дозвон в релей именно потому, что прямой путь зарезан.
-        if (chained == null) {
-          // `ownerTag` — СОБСТВЕННЫЙ тег outbound'а: им контракт называет
-          // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
-          // не годится — он приходит из `remarks` элемента и на многоузловом
-          // элементе одинаков у всех узлов.
-          final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
-          dropped?.add(w);
-          rejected.add(w);
-          continue;
+        // §488 — цель `freedom` не хоп цепочки (anti-DPI fragment Xray, не
+        // релей). `_xrayBuildChain` любой служебный outbound считает
+        // негодным и роняет владельца — сюда не зовём.
+        final target = byTag[ref];
+        if (target != null &&
+            (target['protocol']?.toString() ?? '') == 'freedom') {
+          spec = _xrayApplyFreedomFragment(spec, target);
+        } else {
+          chained = _xrayBuildChain(ob, byTag, ref);
+          // §404 / D-085 — недостижимая цель роняет ВЛАДЕЛЬЦА целиком. Узел с
+          // прямым путём тут был бы молчаливой деанонимизацией: провайдер
+          // завернул дозвон в релей именно потому, что прямой путь зарезан.
+          if (chained == null) {
+            // `ownerTag` — СОБСТВЕННЫЙ тег outbound'а: им контракт называет
+            // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
+            // не годится — он приходит из `remarks` элемента и на многоузловом
+            // элементе одинаков у всех узлов.
+            final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
+            dropped?.add(w);
+            rejected.add(w);
+            continue;
+          }
         }
       }
 
@@ -664,6 +673,8 @@ NodeSpec? _xrayToSpec(
 ///
 /// Причины негодности: цели нет в элементе; цель — группа или служебный
 /// outbound; цель не конвертируется в узел; кольцо; глубже [kMaxDetourDepth].
+/// Цель `freedom` сюда не попадает: её разбирает [_xrayApplyFreedomFragment]
+/// (§488), до вызова.
 NodeSpec? _xrayBuildChain(
   Map<String, dynamic> owner,
   Map<String, Map<String, dynamic>> byTag,
@@ -688,7 +699,8 @@ NodeSpec? _xrayBuildChain(
     // Служебный outbound (`freedom`/`blackhole`/`dns`) звеном быть не может.
     // `dialerProxy: "direct"` в Xray встречается как «ходи напрямую» — но у
     // нас прямой выход не узел, а подменять релей прямым путём D-085
-    // запрещает: владелец отбраковывается.
+    // запрещает: владелец отбраковывается. Цель-freedom обрабатывается
+    // выше (§488); сюда она доходит только как звено СЕРЕДИНЫ цепочки.
     if (kXrayServiceProtocols.contains(protocol)) return null;
 
     visited.add(ref);
@@ -722,6 +734,82 @@ NodeSpec? _xrayBuildChain(
   }
 
   return build(firstRef, 0);
+}
+
+/// §488 — цель `dialerProxy` с `protocol: freedom`. Не хоп: узел прямой.
+/// При `settings.fragment` и включённом TLS — молча `tls.fragment: true`.
+/// `packets`/`length`/`interval` отбрасываются без кода. Freedom без
+/// fragment — ссылка игнорируется, узел как есть.
+NodeSpec _xrayApplyFreedomFragment(
+  NodeSpec spec,
+  Map<String, dynamic> freedom,
+) {
+  final settings = freedom['settings'];
+  if (settings is! Map || settings['fragment'] is! Map) return spec;
+  if (!_nodeTlsEnabled(spec)) return spec;
+  return _withTlsPassthroughBool(spec, 'fragment', true);
+}
+
+bool _nodeTlsEnabled(NodeSpec spec) => switch (spec) {
+      VlessSpec s => s.tls.enabled,
+      TrojanSpec s => s.tls.enabled,
+      VmessSpec s => s.tls.enabled,
+      _ => false,
+    };
+
+NodeSpec _withTlsPassthroughBool(NodeSpec spec, String key, bool value) {
+  TlsSpec patch(TlsSpec tls) =>
+      tls.copyWith(passthrough: {...tls.passthrough, key: value});
+  return switch (spec) {
+    VlessSpec s => VlessSpec(
+        id: s.id,
+        tag: s.tag,
+        label: s.label,
+        server: s.server,
+        port: s.port,
+        rawSource: s.rawSource,
+        uuid: s.uuid,
+        flow: s.flow,
+        tls: patch(s.tls),
+        transport: s.transport,
+        packetEncoding: s.packetEncoding,
+        encryption: s.encryption,
+        chained: s.chained,
+        tcpKeepAlive: s.tcpKeepAlive,
+        warnings: s.warnings,
+      ),
+    TrojanSpec s => TrojanSpec(
+        id: s.id,
+        tag: s.tag,
+        label: s.label,
+        server: s.server,
+        port: s.port,
+        rawSource: s.rawSource,
+        password: s.password,
+        tls: patch(s.tls),
+        transport: s.transport,
+        chained: s.chained,
+        tcpKeepAlive: s.tcpKeepAlive,
+        warnings: s.warnings,
+      ),
+    VmessSpec s => VmessSpec(
+        id: s.id,
+        tag: s.tag,
+        label: s.label,
+        server: s.server,
+        port: s.port,
+        rawSource: s.rawSource,
+        uuid: s.uuid,
+        alterId: s.alterId,
+        security: s.security,
+        tls: patch(s.tls),
+        transport: s.transport,
+        chained: s.chained,
+        tcpKeepAlive: s.tcpKeepAlive,
+        warnings: s.warnings,
+      ),
+    _ => spec,
+  };
 }
 
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).

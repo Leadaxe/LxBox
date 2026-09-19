@@ -489,14 +489,17 @@ void main() {
             'ghost');
       });
 
-      test('цель СЛУЖЕБНАЯ (freedom) — прямой выход под видом релея', () {
+      test('цель freedom БЕЗ fragment — dialerProxy молча игнорируется', () {
         final dropped = <NodeWarning>[];
         final nodes = parseWith(
             'direct', [
           {'tag': 'direct', 'protocol': 'freedom'},
         ],
             dropped: dropped);
-        expectDropped(nodes, dropped, 'direct');
+        expect(nodes, hasLength(1));
+        expect(nodes.single.server, 'main.example');
+        expect(nodes.single.chained, isNull);
+        expect(causes(nodes, dropped), isEmpty);
       });
 
       test('цель — blackhole', () {
@@ -587,6 +590,160 @@ void main() {
         expect(dropped, isEmpty,
             reason: 'носитель нашёлся — из подписочного списка причина ушла, '
                 'иначе пользователь увидел бы одно сообщение дважды');
+      });
+    });
+
+    group('§488 / контракт 1.1.45 — dialerProxy → freedom fragment', () {
+      final baseOutbounds = <Map<String, dynamic>>[
+        {
+          'protocol': 'freedom',
+          'tag': 'fragment',
+          'settings': {
+            'fragment': {
+              'packets': 'tlshello',
+              'length': '100-200',
+              'interval': '10-20',
+            },
+          },
+        },
+        {'protocol': 'freedom', 'tag': 'direct'},
+        {'protocol': 'blackhole', 'tag': 'block'},
+      ];
+
+      Map<String, dynamic> proxyWith(Map<String, dynamic> streamSettings) {
+        return {
+          'tag': 'proxy',
+          'protocol': 'vless',
+          'settings': {
+            'vnext': [
+              {
+                'address': 'node.example',
+                'port': 443,
+                'users': [
+                  {
+                    'id': '11111111-1111-1111-1111-111111111111',
+                    'encryption': 'none',
+                  },
+                ],
+              },
+            ],
+          },
+          'streamSettings': streamSettings,
+        };
+      }
+
+      List<NodeSpec> parseProxy(Map<String, dynamic> streamSettings) {
+        return parseXrayElement({
+          'remarks': 'frag-test',
+          'outbounds': [proxyWith(streamSettings), ...baseOutbounds],
+        });
+      }
+
+      test('TLS + fragment freedom → прямой узел, tls.fragment, без кода', () {
+        final nodes = parseProxy({
+          'network': 'tcp',
+          'security': 'tls',
+          'tlsSettings': {'serverName': 'sni.example'},
+          'sockopt': {'dialerProxy': 'fragment'},
+        });
+        expect(nodes, hasLength(1));
+        final spec = nodes.single as VlessSpec;
+        expect(spec.chained, isNull);
+        expect(spec.warnings, isEmpty);
+        final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+        expect(tls['fragment'], true);
+      });
+
+      test('REALITY + fragment freedom → tls.fragment', () {
+        final nodes = parseProxy({
+          'network': 'tcp',
+          'security': 'reality',
+          'realitySettings': {
+            'publicKey': 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+            'serverName': 'sni.example',
+            'shortId': '01',
+          },
+          'sockopt': {'dialerProxy': 'fragment'},
+        });
+        expect(nodes, hasLength(1));
+        expect(nodes.single.chained, isNull);
+        expect(nodes.single.warnings, isEmpty);
+        final tls =
+            (nodes.single as VlessSpec).emit(TemplateVars.empty).map['tls']
+                as Map;
+        expect(tls['fragment'], true);
+      });
+
+      test('корпус dialer_proxy_freedom_fragment', () {
+        final element = jsonDecode(
+          File('test/fixtures/xray/dialer_proxy_freedom_fragment.json')
+              .readAsStringSync(),
+        ) as Map<String, dynamic>;
+        final nodes = parseXrayElement(element);
+        expect(nodes, hasLength(1));
+        expect(nodes.single.label, 'frag-owner');
+        expect(nodes.single.server, 'example-1.com');
+        expect(nodes.single.chained, isNull);
+        final spec = nodes.single as VlessSpec;
+        final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
+        expect(tls['fragment'], true);
+        expect(spec.warnings, isEmpty);
+      });
+
+      test('freedom без fragment → dialerProxy молча игнорируется', () {
+        final nodes = parseXrayElement({
+          'remarks': 'direct-hop',
+          'outbounds': [
+            proxyWith({
+              'network': 'tcp',
+              'security': 'tls',
+              'tlsSettings': {'serverName': 'sni.example'},
+              'sockopt': {'dialerProxy': 'direct'},
+            }),
+            ...baseOutbounds,
+          ],
+        });
+        expect(nodes, hasLength(1));
+        expect(nodes.single.chained, isNull);
+        final tls =
+            (nodes.single as VlessSpec).emit(TemplateVars.empty).map['tls']
+                as Map;
+        expect(tls.containsKey('fragment'), isFalse);
+        expect(nodes.single.warnings, isEmpty);
+      });
+
+      test('security=none + fragment freedom → без tls.fragment и без кода',
+          () {
+        final nodes = parseProxy({
+          'network': 'tcp',
+          'security': 'none',
+          'sockopt': {'dialerProxy': 'fragment'},
+        });
+        expect(nodes, hasLength(1));
+        final spec = nodes.single as VlessSpec;
+        expect(spec.tls.enabled, isFalse);
+        expect(spec.warnings, isEmpty);
+      });
+
+      test('dialerProxy=block (blackhole) → узел отбракован', () {
+        final dropped = <NodeWarning>[];
+        final nodes = parseXrayElement(
+          {
+            'remarks': 'frag-test',
+            'outbounds': [
+              proxyWith({
+                'network': 'tcp',
+                'security': 'tls',
+                'tlsSettings': {'serverName': 'sni.example'},
+                'sockopt': {'dialerProxy': 'block'},
+              }),
+              ...baseOutbounds,
+            ],
+          },
+          dropped: dropped,
+        );
+        expect(nodes, isEmpty);
+        expect(dropped.whereType<DialerProxyUnusableWarning>(), hasLength(1));
       });
     });
 

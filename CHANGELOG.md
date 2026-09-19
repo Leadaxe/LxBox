@@ -341,6 +341,16 @@
 
 ### Fixed
 
+- **Xray-подписка с `dialerProxy` на freedom-фрагментацию больше не теряет
+  узел
+  ([§488](docs/spec/tasks/488-xray-dialer-proxy-freedom-fragment.md)).**
+  Провайдеры против DPI заворачивают TLS ClientHello через служебный
+  freedom-outbound с `settings.fragment` — это не релей-сервер. Раньше такой
+  узел отбраковывался целиком, как будто хоп цепочки непригоден. Теперь узел
+  остаётся прямым: при включённом TLS молча ставится `tls.fragment`, а
+  параметры `length`/`interval` из Xray не переносятся (sing-box их не
+  поддерживает).
+
 - **Негодный CIDR у WireGuard больше не роняет весь VPN
   ([фича 480](docs/spec/features/480%20registry-driven-mapper/spec.md)).**
   Адрес туннеля вроде `1.2.3.4/64` или мусорный IPv6 проходил проверку и
