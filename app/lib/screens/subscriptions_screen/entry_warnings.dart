@@ -8,6 +8,7 @@ import '../../models/node_warning.dart';
 import '../../models/server_list.dart';
 import '../../screens/home/source_lookup.dart';
 import '../../services/node_hash.dart';
+import '../../services/tag_resolver.dart';
 import '../../widgets/banner_palette.dart';
 
 /// Сводка actionable-предупреждений (error/warning) у записи списка
@@ -35,25 +36,44 @@ WarningSeverity? topWarningSeverity(List<NodeWarning> warnings) {
 }
 
 /// Все уведомления узла по эмитированному config-тегу. Паритет с Servers и
-/// Diagnostics: разбор + хранимый вердикт. [emittedTagMap] — карта последней
-/// сборки ([SubscriptionController.lastEmittedTagMap]); при холодном старте
-/// пуста — узел ищется через [nodeSpecForConfigTag] (§505).
+/// Diagnostics (§505): разбор + вердикт из хранилища + предупреждения сборки.
 List<NodeWarning> warningsForConfigTag(
   String emittedTag,
   List<SubscriptionEntry> entries, {
   Map<String, NodeSpec> emittedTagMap = const {},
+  Map<String, List<NodeWarning>>? buildWarningsByTag,
 }) {
-  final mapped = emittedTagMap[emittedTag];
-  if (mapped != null) {
-    return warningsForEmittedNode(mapped, entries);
+  final stored = storedNodeOfEmittedTag(emittedTag, entries);
+  final parseAndVerdict = stored == null
+      ? List<NodeWarning>.unmodifiable(
+          emittedTagMap[emittedTag]?.warnings ?? const [],
+        )
+      : mergedNodeWarnings(stored.node, stored.stored);
+  final build = buildWarningsByTag?[emittedTag];
+  if (build == null || build.isEmpty) return parseAndVerdict;
+  return _mergeBuildWarnings(parseAndVerdict, build);
+}
+
+List<NodeWarning> _mergeBuildWarnings(
+  List<NodeWarning> base,
+  List<NodeWarning> build,
+) {
+  final out = [...base];
+  for (final w in build) {
+    final dup = out.any(
+      (x) =>
+          x is RegistryWarning &&
+          w is RegistryWarning &&
+          x.code == w.code &&
+          x.path == w.path,
+    );
+    if (!dup) out.add(w);
   }
-  final node = nodeSpecForConfigTag(emittedTag, entries);
-  if (node == null) return const [];
-  return warningsForEmittedNode(node, entries);
+  return out;
 }
 
 /// Все уведомления узла по эмитированному [node]: разбор + хранимый вердикт
-/// страховки. Источник — тот же, что вкладка Notifications (§497).
+/// страховки. Предпочтительнее [warningsForConfigTag] по config-тегу (§505).
 List<NodeWarning> warningsForEmittedNode(
   NodeSpec node,
   List<SubscriptionEntry> entries,
@@ -88,10 +108,19 @@ String inlineWarningMessage(NodeWarning w) {
   return w.message();
 }
 
-/// Все предупреждения одиночного сервера: разбор + хранимый вердикт.
-List<NodeWarning> userServerWarnings(UserServer list) {
+/// Все предупреждения одиночного сервера: разбор + вердикт + сборка.
+List<NodeWarning> userServerWarnings(
+  UserServer list,
+  List<SubscriptionEntry> entries, {
+  Map<String, List<NodeWarning>>? buildWarningsByTag,
+}) {
   if (list.nodes.isEmpty) return const [];
-  return mergedNodeWarnings(list.nodes.first, list.warnings);
+  final tag = TagResolver.displayTag(list.tagPrefix, list.nodes.first.tag);
+  return warningsForConfigTag(
+    tag,
+    entries,
+    buildWarningsByTag: buildWarningsByTag,
+  );
 }
 
 /// Сводка actionable-предупреждений по записи (подписка / папка / одиночный).
@@ -125,7 +154,7 @@ EntryWarningSummary? entryWarningSummary(SubscriptionEntry entry) {
         consider(mergedNodeWarnings(n, m.warnings));
       }
     case UserServer us:
-      consider(userServerWarnings(us));
+      consider(userServerWarnings(us, [entry]));
   }
 
   if (actionable == 0 || top == null) return null;

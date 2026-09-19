@@ -155,24 +155,40 @@ void main() {
       expect(topWarningSeverity(ws), WarningSeverity.error);
     });
 
-    test('карта сборки приоритетнее lookup по тегу', () {
+    test('устаревшая карта сборки не перебивает хранилище', () {
       final stored = awgHomeNode();
-      final mapped = ssNode(tag: 'other');
+      final stale = ssNode(tag: 'other');
       final entries = [userServerEntry(stored)];
 
+      final ws = warningsForConfigTag(
+        '🏠 awg2-home',
+        entries,
+        emittedTagMap: {'🏠 awg2-home': stale},
+      );
+      expect(topWarningSeverity(ws), WarningSeverity.warning);
       expect(
-        topWarningSeverity(warningsForConfigTag('🏠 awg2-home', entries)),
-        WarningSeverity.warning,
+        ws.whereType<RegistryWarning>().any((w) => w.code == 'awg_mtu_clamped'),
+        isTrue,
+      );
+    });
+
+    test('предупреждение сборки по тегу', () {
+      final node = awgHomeNode();
+      final entries = [userServerEntry(node)];
+      const buildWarn = RegistryWarning(
+        code: 'awg_mtu_clamped',
+        path: 'mtu',
+        value: '1420',
       );
 
-      expect(
-        topWarningSeverity(warningsForConfigTag(
-          '🏠 awg2-home',
-          entries,
-          emittedTagMap: {'🏠 awg2-home': mapped},
-        )),
-        isNull,
+      final ws = warningsForConfigTag(
+        '🏠 awg2-home',
+        entries,
+        buildWarningsByTag: {
+          '🏠 awg2-home': [buildWarn],
+        },
       );
+      expect(topWarningSeverity(ws), WarningSeverity.warning);
     });
   });
 
@@ -249,6 +265,32 @@ void main() {
       final data = presenter.computeListData(state);
       expect(
         data.topWarningSeverityOf('🏠 awg2-home'),
+        WarningSeverity.warning,
+      );
+
+      filter.dispose();
+    });
+
+    test('устаревшая карта сборки — warning из хранилища', () {
+      final node = awgHomeNode();
+      final stale = ssNode(tag: 'stale');
+      final subController = SubscriptionController();
+      subController.debugSetEntries([userServerEntry(node)]);
+      subController.debugSetLastEmittedTagMap({'🏠 awg2-home': stale});
+
+      final filter = NodeFilterViewModel();
+      final presenter = NodeListPresenter(
+        controller: HomeController(),
+        subController: subController,
+        filter: filter,
+      );
+      final state = HomeState(
+        configRaw: '{}',
+        nodes: const ['🏠 awg2-home'],
+      );
+
+      expect(
+        presenter.computeListData(state).topWarningSeverityOf('🏠 awg2-home'),
         WarningSeverity.warning,
       );
 

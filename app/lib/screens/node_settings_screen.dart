@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
-import '../controllers/subscription_controller/core_reject_ops.dart';
 import '../models/codec/source_record.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/error_format.dart';
@@ -22,6 +21,7 @@ import '../widgets/emoji_picker_button.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
+import 'subscriptions_screen/entry_warnings.dart';
 
 /// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237).
 /// Вкладки: **Settings** (Protocol/Server/Tag + эмодзи-пикер + Detour),
@@ -156,11 +156,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     }
 
     _node = node; // §392 — источник probe-ветки диагностики
-    final stored = member?.warnings ??
-        (widget.entry.list is UserServer
-            ? (widget.entry.list as UserServer).warnings
-            : const []);
-    _notifications = mergedNodeWarnings(node, stored);
+    final emittedTag =
+        TagResolver.displayTag(widget.entry.list.tagPrefix, node.tag);
+    _notifications = warningsForConfigTag(
+      emittedTag,
+      widget.subController.entries,
+      emittedTagMap: widget.subController.lastEmittedTagMap,
+      buildWarningsByTag: widget.subController.lastBuildWarningsByTag,
+    );
 
     // §130 — AWG-детект: WireguardSpec с непустыми obfuscation-полями.
     _isAwg = node is WireguardSpec && node.awg != null;

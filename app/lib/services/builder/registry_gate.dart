@@ -19,13 +19,20 @@ import '../contract/registry.dart';
 
 /// Результат прогона гарда по одной сборке.
 final class RegistryGateReport {
-  const RegistryGateReport(this.warnings, this.dropped);
+  const RegistryGateReport(
+    this.warnings,
+    this.dropped, {
+    this.warningsByEmittedTag = const {},
+  });
 
   /// Строки для `emitWarnings` — как у прочих warnings сборки.
   final List<String> warnings;
 
   /// Записи, снятые целиком (`drop_node`): их надо убрать из конфига.
   final List<SingboxEntry> dropped;
+
+  /// §505 — предупреждения сборки по финальному config-тегу записи.
+  final Map<String, List<NodeWarning>> warningsByEmittedTag;
 }
 
 /// Прогнать санитайзер по записям узлов.
@@ -50,6 +57,7 @@ RegistryGateReport applyRegistryGate(
 }) {
   final warnings = <String>[];
   final dropped = <SingboxEntry>[];
+  final warningsByEmittedTag = <String, List<NodeWarning>>{};
 
   // Д-1 (эмулятор 19.09.2026) — СТРАХОВКА ТИПА, до и помимо реестра.
   // Запись без строкового непустого `type` — не тело sing-box, и в
@@ -79,7 +87,11 @@ RegistryGateReport applyRegistryGate(
   }
 
   if (!ContractRegistry.I.isLoaded) {
-    return RegistryGateReport(warnings, dropped);
+    return RegistryGateReport(
+      warnings,
+      dropped,
+      warningsByEmittedTag: warningsByEmittedTag,
+    );
   }
 
   for (final entry in entries) {
@@ -104,6 +116,7 @@ RegistryGateReport applyRegistryGate(
           : ' [${w.path}${w.value == null ? '' : '=${w.value}'}]';
       final line = '$tag: ${w.message()}$where';
       if (!warnings.contains(line)) warnings.add(line);
+      warningsByEmittedTag.putIfAbsent(tag, () => []).add(w);
     }
 
     if (res.body == null) {
@@ -118,5 +131,9 @@ RegistryGateReport applyRegistryGate(
       ..addAll(res.body!);
   }
 
-  return RegistryGateReport(warnings, dropped);
+  return RegistryGateReport(
+    warnings,
+    dropped,
+    warningsByEmittedTag: warningsByEmittedTag,
+  );
 }

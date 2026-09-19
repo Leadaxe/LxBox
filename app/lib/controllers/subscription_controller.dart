@@ -142,10 +142,20 @@ class SubscriptionController extends ChangeNotifier {
   Map<String, NodeSpec> _lastTagMap = const {};
   Map<String, NodeSpec> get lastEmittedTagMap => _lastTagMap;
 
+  /// §505 — предупреждения сборки по финальному config-тегу (гард реестра).
+  Map<String, List<NodeWarning>> _lastBuildWarningsByTag = const {};
+  Map<String, List<NodeWarning>> get lastBuildWarningsByTag =>
+      _lastBuildWarningsByTag;
+
   /// §498 — подмена обратной карты последней сборки в тестах навигации листа.
   @visibleForTesting
   void debugSetLastEmittedTagMap(Map<String, NodeSpec> map) {
     _lastTagMap = map;
+  }
+
+  @visibleForTesting
+  void debugSetLastBuildWarningsByTag(Map<String, List<NodeWarning>> map) {
+    _lastBuildWarningsByTag = map;
   }
 
   /// §274 — Направления, чей node_filter отсёк все ноды в последней УСПЕШНОЙ
@@ -2665,6 +2675,7 @@ class SubscriptionController extends ChangeNotifier {
 
     final result = await buildConfig(lists: lists, settings: settings);
     _lastTagMap = result.nodeByEmittedTag;
+    _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
 
     // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
     // первом запуске). GUI не обязано знать про этот механизм — достаточно

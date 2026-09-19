@@ -6,6 +6,7 @@ import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
 import '../../models/node_sections.dart';
 import '../../models/node_spec.dart' show NodeSpec;
+import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
@@ -58,6 +59,10 @@ class BuildResult {
   /// узла не имеют вовсе. Тег без узла сопоставленным не считается —
   /// автоматики нет (§9.3).
   final Map<String, NodeSpec> nodeByEmittedTag;
+
+  /// §505 — предупреждения сборки (гард реестра) по финальному config-тегу.
+  final Map<String, List<NodeWarning>> nodeBuildWarningsByEmittedTag;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -66,6 +71,7 @@ class BuildResult {
     required this.generatedVars,
     this.directionsWithoutNodes = const [],
     this.nodeByEmittedTag = const {},
+    this.nodeBuildWarningsByEmittedTag = const {},
   });
 }
 
@@ -761,6 +767,7 @@ Future<BuildResult> buildConfig({
       for (final e in ctx.emittedTagAliases.entries) e.key: e.value,
       for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
     },
+    nodeBuildWarningsByEmittedTag: registryReport.warningsByEmittedTag,
   );
 }
 

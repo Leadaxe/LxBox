@@ -1,6 +1,8 @@
 import '../../controllers/subscription_controller.dart';
+import '../../models/core_reject_verdict.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
+import '../../services/node_hash.dart';
 import '../../services/tag_resolver.dart';
 
 /// §091/§235 — какие ИСТОЧНИКИ (подписки + папки §234) «владеют» данным
@@ -128,6 +130,58 @@ bool _nodeOrHop(NodeSpec owner, NodeSpec node) {
     if (identical(hop, node)) return true;
   }
   return false;
+}
+
+/// §505 — узел в хранилище и вердикты страховки по финальному config-тегу.
+({NodeSpec node, List<StoredWarning> stored})? storedNodeOfEmittedTag(
+  String emittedTag,
+  List<SubscriptionEntry> entries,
+) {
+  final owner = ownerOfTag(emittedTag, entries);
+  if (owner == null) return null;
+  final list = entries[owner.entryIndex].list;
+  switch (list) {
+    case FolderServers f:
+      final mi = owner.memberIndex;
+      if (mi == null) return null;
+      final m = f.members[mi];
+      final n = m.node;
+      if (n == null) return null;
+      return (node: n, stored: m.warnings);
+    case SubscriptionServers sub:
+      final candidates = <String>[emittedTag];
+      final dedup = RegExp(r'^(.*)-\d+$').firstMatch(emittedTag);
+      if (dedup != null) candidates.add(dedup.group(1)!);
+      for (final cand in candidates) {
+        final bare = TagResolver.stripPrefix(cand, sub.tagPrefix);
+        for (final n in sub.nodes) {
+          if (n.tag == bare) {
+            final id = sourceNodeIdentities(sub.nodes)[n];
+            return (
+              node: n,
+              stored: id == null
+                  ? const <StoredWarning>[]
+                  : sub.nodeWarnings[id] ?? const <StoredWarning>[],
+            );
+          }
+          for (var hop = n.chained; hop != null; hop = hop.chained) {
+            if (hop.tag == bare) {
+              final id = sourceNodeIdentities(sub.nodes)[n];
+              return (
+                node: n,
+                stored: id == null
+                    ? const <StoredWarning>[]
+                    : sub.nodeWarnings[id] ?? const <StoredWarning>[],
+              );
+            }
+          }
+        }
+      }
+      return null;
+    case UserServer us:
+      if (us.nodes.isEmpty) return null;
+      return (node: us.nodes.first, stored: us.warnings);
+  }
 }
 
 TagOwner? ownerOfNode(NodeSpec node, List<SubscriptionEntry> entries) {

@@ -14,6 +14,7 @@ class SubscriptionEntryTile extends StatelessWidget {
   const SubscriptionEntryTile({
     super.key,
     required this.entry,
+    required this.subController,
     required this.dragIndex,
     required this.onToggle,
     required this.onLaunchUrl,
@@ -23,6 +24,7 @@ class SubscriptionEntryTile extends StatelessWidget {
   });
 
   final SubscriptionEntry entry;
+  final SubscriptionController subController;
 
   /// §504 — метка «New» у свежедобавленной записи (локальная подсветка экрана).
   final bool showNewBadge;
@@ -122,7 +124,7 @@ class SubscriptionEntryTile extends StatelessWidget {
             ),
         ],
       ),
-      subtitle: buildSubscriptionEntrySubtitle(context, entry),
+      subtitle: buildSubscriptionEntrySubtitle(context, entry, subController),
       trailing: _buildTrailing(context, entry),
       onLongPress: () => onLongPress(context),
       onTap: () => onTap(context),

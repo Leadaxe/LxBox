@@ -1103,6 +1103,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             child: SubscriptionEntryTile(
               dragIndex: i,
               entry: entry,
+              subController: widget.subController,
               showNewBadge: showNewBadge,
               onToggle: () {
                 _onUserInteractionDismissHighlight();

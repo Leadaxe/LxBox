@@ -86,19 +86,23 @@ void main() {
     );
   }
 
-  Future<void> pumpTile(WidgetTester tester, SubscriptionEntry entry) =>
-      tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: SubscriptionEntryTile(
-            entry: entry,
-            dragIndex: 0,
-            onToggle: () {},
-            onLaunchUrl: (_) {},
-            onLongPress: (_) {},
-            onTap: (_) {},
-          ),
+  Future<void> pumpTile(WidgetTester tester, SubscriptionEntry entry) {
+    final subController = SubscriptionController();
+    subController.debugSetEntries([entry]);
+    return tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SubscriptionEntryTile(
+          entry: entry,
+          subController: subController,
+          dragIndex: 0,
+          onToggle: () {},
+          onLaunchUrl: (_) {},
+          onLongPress: (_) {},
+          onTap: (_) {},
         ),
-      ));
+      ),
+    ));
+  }
 
   group('одиночный сервер в списке источников', () {
     testWidgets('с вердиктом — значок, причина вместо протокола, тап → карточка',

@@ -15,7 +15,10 @@ import '../entry_warnings.dart';
 /// Возвращает `null` если показывать нечего (как старый
 /// `_buildEntrySubtitle`).
 Widget? buildSubscriptionEntrySubtitle(
-    BuildContext context, SubscriptionEntry entry) {
+  BuildContext context,
+  SubscriptionEntry entry,
+  SubscriptionController subController,
+) {
   final scheme = Theme.of(context).colorScheme;
   final muted = entry.enabled ? scheme.onSurfaceVariant : scheme.onSurfaceVariant.withValues(alpha: 0.6);
   final parts = <Widget>[];
@@ -29,7 +32,11 @@ Widget? buildSubscriptionEntrySubtitle(
   var hideUserProtocol = false;
   if (isUser) {
     final user = entry.list as UserServer;
-    userWarnings = userServerWarnings(user);
+    userWarnings = userServerWarnings(
+      user,
+      subController.entries,
+      buildWarningsByTag: subController.lastBuildWarningsByTag,
+    );
     hideUserProtocol = userServerHasCoreRejected(user);
   }
 
