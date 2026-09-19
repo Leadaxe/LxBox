@@ -132,4 +132,54 @@ void main() {
     final err = await fut;
     expect(err, contains('bad key'));
   });
+
+  test('startVpnHeadless без старта сразу unavailable, без stale lastError',
+      () async {
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      if (call.method == 'startVPN') return false;
+      if (call.method == 'startVpnHeadless') {
+        return {'started': false, 'needs_consent': false};
+      }
+      return null;
+    });
+    await controller.start();
+
+    final sw = Stopwatch()..start();
+    final err = await controller.startAndAwaitVerdictHeadless(
+      timeout: const Duration(seconds: 45),
+    );
+    sw.stop();
+
+    expect(err, '');
+    expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+  });
+
+  test('startVpnHeadless=true ждёт core_error, не startVPN', () async {
+    var startVpn = 0;
+    var headless = 0;
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      if (call.method == 'startVPN') {
+        startVpn++;
+        return true;
+      }
+      if (call.method == 'startVpnHeadless') {
+        headless++;
+        return {'started': true, 'needs_consent': false};
+      }
+      return null;
+    });
+
+    final fut = controller.startAndAwaitVerdictHeadless(
+      timeout: const Duration(seconds: 2),
+    );
+    controller.debugHandleStatusEvent(event(
+      TunnelStatus.disconnected,
+      coreError: 'initialize outbound[0] vless[X]: bad key',
+    ));
+
+    final err = await fut;
+    expect(headless, 1);
+    expect(startVpn, 0);
+    expect(err, contains('bad key'));
+  });
 }

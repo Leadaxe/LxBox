@@ -977,7 +977,7 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 | `/core_reject/prompt` | GET | вопрос про предел кругов: `{pending, count, limit}` |
 | `/core_reject/prompt?answer=stop\|keep` | POST | ответить на него за человека; `keep` можно поставить в очередь заранее |
 | `/core_reject/cancel` | POST | отменить идущий прогон — то же, что нажатие кнопки в фазе цикла |
-| `/core_reject/reset` | POST | сбросить состояние прогона в памяти (`phase→idle`, `round→0`); вердикты в хранилище и плашка не трогаются |
+| `/core_reject/reset` | POST | сбросить состояние прогона в памяти (`phase→idle`, `round→0`); вердикты в хранилище и плашка не трогаются. 409 если прогон уже идёт |
 | `/core_reject/enable?tag=<tag>` | POST | снять вердикт руками (emitted-тег ядра или сырой тег идентичности) |
 | `/core_reject/notifications[?tag=<tag>]` | GET | что нарисуют строка и карточка узла: `[{code, severity, params, title_en, text_en}]` |
 

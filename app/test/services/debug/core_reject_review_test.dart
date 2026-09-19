@@ -10,6 +10,7 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 import 'package:lxbox/services/core_reject/core_reject_state.dart';
 import 'package:lxbox/services/debug/context.dart';
+import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
 import 'package:lxbox/services/debug/handlers/core_reject.dart';
 import 'package:lxbox/services/debug/handlers/nodes.dart';
@@ -114,6 +115,17 @@ void main() {
           .body as List;
       expect(nodes, hasLength(1));
       expect(nodes.first['source'], controller.entries.single.displayName);
+    });
+
+    test('идущий прогон → 409, фаза не сбрасывается', () async {
+      CoreRejectState.I.beginRun();
+      expect(CoreRejectState.I.guardActive, isTrue);
+      await expectLater(
+        coreRejectHandler(req('POST', '/core_reject/reset'), ctx()),
+        throwsA(isA<Conflict>()),
+      );
+      expect(CoreRejectState.I.phase, CoreRejectPhase.signalStart);
+      expect(CoreRejectState.I.round, 0);
     });
   });
 

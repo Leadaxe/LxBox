@@ -54,3 +54,12 @@
 - `POST /action/start-vpn` — `guard=false` через общий runner; Intent API без
   изменений (зафиксировано в спеке).
 - `flutter analyze` — без новых issues; затронутые тесты зелёные.
+
+## Ревью
+
+Публичный Intent API (§047) этот путь не зовёт: native `LxBoxIntentReceiver`
+и Locale-плагин идут в `BoxVpnService.start` напрямую, `automation_dispatcher`
+не роутит `start-vpn`. Поведение наружу не менялось.
+
+`POST /core_reject/reset` во время идущего прогона отвечает 409 — иначе
+отвяжется cancel, а автомат потом перезапишет фазу.

@@ -199,7 +199,7 @@ GET    /subs[?reveal=true]                     alias /state/subs. reveal=true �
 GET    /subs/{id}[?reveal=true][?warnings=true]  Single entry. reveal=true also returns `raw` for a single
                                                  UserServer (the node's own text, as folder members already do —
                                                  it carries credentials, hence reveal only).
-                                                 warnings=true adds origin_kind, source_kind (§455/§480) and
+                                                 warnings=true adds origin_kind, source_kind and
                                                  `warnings`: {tag: [{code, severity, path, value, params,
                                                  title_en, text_en}]} — parse warnings per node, pinned English.
                                                  Every node is present; nodes without warnings get [].
@@ -489,6 +489,7 @@ POST /core_reject/cancel                       Cancel the running guard — the 
 POST /core_reject/reset                        Reset in-memory run state (phase→idle, round→0).
                                                  Stored verdicts and the banner are NOT cleared.
                                                  → {ok:true, action:"core-reject-reset"}.
+                                                 409 if a run is in flight.
 POST /core_reject/enable?tag=<tag>             Re-enable a node by its core tag (same as the banner
                                                  button): the verdict is wiped, the node is checked
                                                  again. → {enabled, tag}; 404 when no node carries
@@ -774,7 +775,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/core_reject/prompt', 'description': 'Round-limit dialog: {pending, count, limit}. count is the number in the dialog text (the round LIMIT, not the disabled tally).'},
     {'method': 'POST', 'path': '/core_reject/prompt', 'params': {'answer': 'stop|keep'}, 'body': '{"answer":"stop|keep"} (alternative to the query param)', 'description': 'Answer the round-limit dialog in place of the user. keep = drop the limit until this Start ends — may be sent BEFORE pending (queued for the next ask); stop = end the run (VPN stays down, disabled nodes stay disabled). → {answered:true, answer} (keep early → queued:true). 409 for stop when nothing is pending.'},
     {'method': 'POST', 'path': '/core_reject/cancel', 'description': 'Cancel the running guard — the same as tapping the button while it says "Checking servers…". The current round finishes, the next one does not start; outcome = stopped_by_user (VPN stays down, disabled nodes stay disabled). → {cancelled:true, phase, round}. 409 when no run is in flight.'},
-    {'method': 'POST', 'path': '/core_reject/reset', 'description': 'Reset in-memory run state (phase→idle, round→0). Stored verdicts and the banner are NOT cleared. → {ok:true, action:"core-reject-reset"}.'},
+    {'method': 'POST', 'path': '/core_reject/reset', 'description': 'Reset in-memory run state (phase→idle, round→0). Stored verdicts and the banner are NOT cleared. → {ok:true, action:"core-reject-reset"}. 409 if a run is in flight.'},
     {'method': 'POST', 'path': '/core_reject/enable', 'params': {'tag': 'core tag of the node'}, 'body': '{"tag":"..."} (alternative to the query param)', 'description': 'Re-enable a node by its core tag — emitted tag (with subscription prefix) or raw identity tag (same lookup as disable). → {enabled, tag}; 404 when no node carries that tag.'},
     {'method': 'GET', 'path': '/core_reject/notifications', 'params': {'tag': 'core tag (omit for every node with stored warnings)'}, 'description': 'What the node row and card will render, without a screenshot: [{code, severity, params, title_en, text_en}]. Texts come from the contract registry, pinned English (a machine surface must not depend on the device locale). No tag → a map {tag: [...]}. 404 when the given tag has no stored warnings.'},
     // Wi-Fi history (saved networks for routing rule editor)

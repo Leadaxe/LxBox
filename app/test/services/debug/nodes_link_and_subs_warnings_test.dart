@@ -184,6 +184,8 @@ void main() {
 
       final plain = asMap(await subsHandler(req('GET', '/subs/$id'), ctx()));
       expect(plain.containsKey('warnings'), isFalse);
+      expect(plain.containsKey('origin_kind'), isFalse);
+      expect(plain.containsKey('source_kind'), isFalse);
 
       final withWarnings = asMap(await subsHandler(
         req('GET', '/subs/$id', query: {'warnings': 'true'}),

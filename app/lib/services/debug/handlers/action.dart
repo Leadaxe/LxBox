@@ -321,9 +321,16 @@ Future<DebugResponse> _startVpnHeadless(
 Future<DebugResponse> _checkConfig(DebugRequest req, DebugContext ctx) async {
   final home = ctx.requireHome();
   // §494 — тело запроса: проверить ЭТОТ JSON; без тела — собранный на диске.
-  final config = req.body.isEmpty
-      ? home.state.configRaw
-      : utf8.decode(req.body, allowMalformed: false);
+  final String config;
+  if (req.body.isEmpty) {
+    config = home.state.configRaw;
+  } else {
+    try {
+      config = utf8.decode(req.body, allowMalformed: false);
+    } on FormatException {
+      throw const BadRequest('body is not valid UTF-8');
+    }
+  }
   if (config.isEmpty) {
     throw const Conflict('no config built yet');
   }

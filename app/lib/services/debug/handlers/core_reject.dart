@@ -176,9 +176,16 @@ Future<DebugResponse> _answerPrompt(DebugRequest req, DebugContext ctx) async {
 
 /// `POST /core_reject/reset` — сбросить состояние прогона в памяти: phase→idle,
 /// round→0. Вердикты в хранилище и плашка не трогаются.
+///
+/// Идущий прогон — 409: иначе `_cancel` отвяжется, а автомат потом перезапишет
+/// фазу через `finish`.
 Future<DebugResponse> _reset(DebugRequest req, DebugContext ctx) async {
   _requirePost(req);
-  CoreRejectState.I.resetRunState();
+  final s = CoreRejectState.I;
+  if (s.guardActive) {
+    throw const Conflict('guard already running');
+  }
+  s.resetRunState();
   return JsonResponse({'ok': true, 'action': 'core-reject-reset'});
 }
 

@@ -755,7 +755,9 @@ class HomeController extends ChangeNotifier
     _startOutcome = c;
     final r = await _vpn.startVpnHeadless();
     if (!r.started) {
-      _settleStartOutcome(r.needsConsent ? '' : (_state.lastError?.renderEn() ?? ''));
+      // Сервис не стартовал — вердикта ядра нет. Пустая строка = unavailable
+      // (как needsConsent): не подставляем stale lastError прошлого старта.
+      _settleStartOutcome('');
       return c.future;
     }
     if (_state.tunnel == TunnelStatus.connected) {
