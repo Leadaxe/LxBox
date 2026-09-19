@@ -189,7 +189,15 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         // разобрать его можно только здесь: до `decode` текст ещё в оболочке.
         // Поэтому форма отсеивается в два приёма — текстовой частью выражения
         // выше и объектной здесь.
-        final doc = _decodeFormJson(form, decoded);
+        //
+        // Шаг с ОБЛАСТЬЮ у объектного пространства исполняется ЗДЕСЬ, а не
+        // лексером: разбирать оболочку как ссылку незачем — под ней лежит
+        // объект. Область у такой формы всегда накрывает пэйлоад целиком
+        // (`authority` контейнера — это и есть весь текст после схемы), и
+        // декодирование сводится к тому же шагу над пэйлоадом.
+        final unwrapped = _applyScopedDecodeToPayload(form, decoded);
+        if (unwrapped == null) continue;
+        final doc = _decodeFormJson(form, unwrapped);
         if (doc == null) continue;
         if (!detectMatchesJson(form.detect, doc)) continue;
         return SourceSpace(
@@ -302,6 +310,47 @@ String? _applyFormDecode(MapperForm form, String text) {
     // дело [_decodeFormJson], который работает над тем же результатом. Здесь
     // шаг пропускается, чтобы текст доехал до него целым.
     if (step == 'json') continue;
+  }
+  return '${split.scheme}://$payload$fragment';
+}
+
+/// Декодер формы с ОБЛАСТЬЮ для ОБЪЕКТНОГО пространства (`space: "json"`).
+///
+/// У формы-контейнера под оболочкой лежит не ссылка, а объект: ни userinfo,
+/// ни хоста, ни порта в декодированном тексте нет, и звать лексер незачем.
+/// Область при этом названа (`authority`) не ради куска, а ради ГРАНИЦЫ —
+/// схема и метка обязаны остаться снаружи декодера, иначе оболочка не
+/// раскроется. Ровно это и делает [_applyFormDecode], снимая схему и
+/// фрагмент, поэтому здесь остаётся применить сам декодер к пэйлоаду.
+///
+/// `null` — обязательный декодер не отработал, и форма не отвечает.
+String? _applyScopedDecodeToPayload(MapperForm form, String text) {
+  final split = _splitScheme(text);
+  if (split == null) return text;
+  var payload = split.payload;
+  var fragment = '';
+  final hash = payload.indexOf('#');
+  if (hash >= 0) {
+    fragment = payload.substring(hash);
+    payload = payload.substring(0, hash);
+  }
+  for (final step in form.decode) {
+    if (step is! Map) continue;
+    final scope = step['scope'];
+    if (scope == null || scope == 'all') continue;
+    final decoder = step['decoder'];
+    if (decoder == 'percent') {
+      payload = percentDecodeOnce(payload, mode: DecodeMode.path);
+      continue;
+    }
+    if (decoder == 'base64' || decoder == 'base64?' || decoder == 'base64url') {
+      final decoded = _RunDecode.base64(payload.trim());
+      if (decoded == null) {
+        if (decoder == 'base64') return null;
+        continue;
+      }
+      payload = decoded;
+    }
   }
   return '${split.scheme}://$payload$fragment';
 }
@@ -595,9 +644,9 @@ String? _firstIniSection(String text) {
 ///
 /// - `sections: [<Имя>…]` — все названные секции в документе есть;
 /// - `keys_any: [<Ключ>…]` — есть хотя бы ОДИН из названных ключей, в любой
-///   секции. Имя без секции потому, что признак рода («это AmneziaWG»)
-///   ставится ключом, а не его местом: один и тот же `Jc` опознаёт форму,
-///   где бы диалект его ни держал;
+///   секции. Имя без секции потому, что признак рода ставится КЛЮЧОМ, а не
+///   его местом: один и тот же ключ опознаёт форму, где бы диалект его ни
+///   держал;
 /// - `keys_all: [<Ключ>…]` — есть все названные.
 ///
 /// Имена регистронезависимы: пространство сложено в нижнем регистре, и
@@ -1043,6 +1092,14 @@ final class _Run {
     // 1. `scheme_sets` — написание схемы НЕСЁТ ТЕЛО: у части схем цифра или
     // суффикс в написании это дискриминатор версии либо транспорта, а не
     // алиас, и присваивания берутся прямо из него.
+    // Ключ `"*"` — присваивания, общие для ВСЕХ написаний схемы. Нужен там,
+    // где свойство безусловно и источника у него не будет вовсе: у QUIC-схем
+    // TLS включён всегда, параметра `security` в ссылке нет, и выразить это
+    // записью нечем. Общий набор кладётся ПЕРВЫМ, чтобы присваивания
+    // конкретного написания могли его переопределить.
+    final schemeAll = section.schemeSets['*'];
+    if (schemeAll is Map) _applySets(schemeAll.cast<String, dynamic>(), null);
+
     final schemeSet = _lookupFold(section.schemeSets, space.scheme);
     if (schemeSet is Map) _applySets(schemeSet.cast<String, dynamic>(), null);
 

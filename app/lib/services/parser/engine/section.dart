@@ -605,8 +605,19 @@ final class MapperSection {
   ) {
     final uk = (j['unknown_key'] as Map?)?.cast<String, dynamic>();
     final params = <String, MapperParam>{};
+    // Запись со значением `null` — ключ ОБЪЯВЛЕН, но телом не становится:
+    // «знаем и намеренно не переносим». Отличается от отсутствия записи тем,
+    // что при `unknown_key.action: keep` отсутствующая дала бы коду
+    // `uri_param_unknown` повод сработать, а объявленная — нет: сообщать не о
+    // чем, потеря осознанная. Значения у неё нет по построению, поэтому
+    // параметром она не заводится, а пополняет набор игнорируемых ключей.
+    final nullParams = <String>{};
     final rawParams = (j['params'] as Map?)?.cast<String, dynamic>() ?? const {};
     for (final e in rawParams.entries) {
+      if (e.value == null) {
+        nullParams.add(e.key);
+        continue;
+      }
       params[e.key] =
           MapperParam.fromJson(e.key, (e.value as Map).cast<String, dynamic>());
     }
@@ -636,8 +647,10 @@ final class MapperSection {
       defaults: ((j['defaults'] as Map?) ?? const {}).cast<String, dynamic>(),
       unknownKeyAction: uk?['action'] as String? ?? 'drop',
       unknownKeyCode: uk?['code'] as String?,
-      ignoredKeys:
-          ((uk?['ignore'] as List?) ?? const []).cast<String>().toSet(),
+      ignoredKeys: <String>{
+        ...((uk?['ignore'] as List?) ?? const []).cast<String>(),
+        ...nullParams,
+      },
       kindWhen: ((j['kind_when'] as Map?) ?? const {}).cast<String, dynamic>(),
       iniDialect: j[DraftNames.iniDialect] == null
           ? null

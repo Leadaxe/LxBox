@@ -1,147 +1,8 @@
 {
+  "_draft": "ОТСТУПЛЕНИЕ LxBox от секции tuic реестра (контракт 1.1.22, 4aeca7a7). Файл НЕ дублирует секцию: загрузчик накладывает эти ключи поверх реестровых.",
+  "_overlay": true,
   "mappers": {
     "uri": {
-      "detect": {
-        "scheme_in": [
-          "tuic"
-        ]
-      },
-      "body_source": "uri",
-      "forms": [
-        {
-          "id": "url",
-          "detect": {
-            "default": true
-          },
-          "decode": [
-            "url"
-          ],
-          "space": "url"
-        }
-      ],
-      "userinfo": {
-        "split": {
-          "sep": ":",
-          "limit": 2
-        },
-        "into": [
-          "uuid",
-          "password"
-        ],
-        "single_into": "uuid",
-        "impl": "userinfo = uuid:password, в отличие от hysteria2, где двоеточие часть пароля. Пароль — всё ПОСЛЕ первого ':' (limit:2), чтобы двоеточие внутри пароля не потерялось. single_into объявлен ЯВНО (GRAMMAR_SYNC §1 №15): одинокий userinfo — это uuid."
-      },
-      "label": {
-        "source": [
-          "fragment",
-          "path"
-        ],
-        "normalize": [
-          "strip_control",
-          "trim"
-        ],
-        "value_map": {
-          "🇪🇳": "🇬🇧"
-        },
-        "fallback": {
-          "template": "{scheme}-{server}-{server_port}",
-          "scheme_source": "singbox_type"
-        }
-      },
-      "defaults": {
-        "server_port": 443
-      },
-      "include": [
-        "tls#uri"
-      ],
-      "params": {
-        "server": {
-          "source": "host",
-          "maps_to": "server",
-          "required": true
-        },
-        "server_port": {
-          "source": "port",
-          "maps_to": "server_port",
-          "type": "int"
-        },
-        "uuid": {
-          "source": "userinfo.user",
-          "maps_to": "uuid",
-          "required": true
-        },
-        "password": {
-          "source": "userinfo.pass",
-          "maps_to": "password",
-          "required": true,
-          "impl": "Оба поля требуются непустыми — так же, как прежний парсер. Go мягче (пустой password даёт warning, узел живёт) — расхождение строгости, снимать его этой волной не уполномочены."
-        },
-        "congestion_control": {
-          "source": "query.congestion_control",
-          "maps_to": "congestion_control",
-          "impl": "§103 D-016(в) — ключа не было в ссылке ⇒ поле не задано, дефолт подставит ядро. Значение вне enum уезжает КАК ЕСТЬ: снимет реестр кодом tuic_congestion_invalid."
-        },
-        "udp_relay_mode": {
-          "source": "query.udp_relay_mode",
-          "maps_to": "udp_relay_mode"
-        },
-        "reduce_rtt": {
-          "source": [
-            "query.reduce_rtt",
-            "query.zero_rtt",
-            "query.zero_rtt_handshake"
-          ],
-          "type": "bool_spelled",
-          "maps_to": "zero_rtt_handshake",
-          "omit_default": false,
-          "impl": "Три написания 0-RTT; целевой набор контракта — объединение обоих проектов. false в тело не пишется."
-        },
-        "heartbeat": {
-          "source": "query.heartbeat",
-          "maps_to": "heartbeat",
-          "normalize": "duration_bare_seconds",
-          "impl": "heartbeat_bare_number: голое число это секунды (10 → '10s'), поле ядра — duration-строка."
-        },
-        "disable_sni": {
-          "source": "query.disable_sni",
-          "type": "bool_spelled",
-          "maps_to": "tls.disable_sni",
-          "sets": {
-            "true": {
-              "tls.server_name": null
-            }
-          },
-          "priority": 100,
-          "impl": "G2 / DELTAS D133-3 — sets с null СНИМАЕТ tls.server_name: расширение SNI не отправляется вовсе, значит имени сервера в теле быть не должно. Сам ключ disable_sni при этом в теле есть — его знает и ядро, и sing-box-вход; без него намерение автора не выражено ничем, и toUri() не мог вернуть disable_sni=1. priority: 100 обязателен — запись приходит из общего блока tls#uri и наследует его место в таблице, то есть исполнилась бы ДО sni, а та потом вернула бы server_name обратно (у tuic sni пишется всегда: при пустом параметре срабатывает default_from: host). Снятие пути должно быть последним."
-        },
-        "sni": {
-          "source": [
-            "query.sni",
-            "query.peer"
-          ],
-          "maps_to": "tls.server_name",
-          "default_from": "host",
-          "when": {
-            "query.disable_sni": {
-              "not_in": [
-                "1",
-                "true",
-                "yes"
-              ]
-            }
-          },
-          "impl": "Запись общего блока tls#uri переопределена ровно одним условием: при disable_sni имени сервера в теле быть не должно ВОВСЕ, а фолбэк default_from исполняется отдельной стадией ПОСЛЕ всех записей и вернул бы снятое значение обратно. Условие по ИСТОЧНИКУ (G1), потому что к моменту стадии дефолтов тело уже не помнит, снимали путь или его не было. Эвристики НАПИСАНИЯ SNI у tuic нет: реестр говорит только про ПУСТОЙ sni, и прежний парсер откатывался на сервер ровно на пустом — проверка точки и двоеточия сдвинула бы тела и identity живых узлов, как у trojan и vless."
-        }
-      },
-      "scheme_sets": {
-        "*": {
-          "tls.enabled": true
-        }
-      },
-      "unknown_key": {
-        "action": "keep",
-        "code": "uri_param_unknown"
-      },
       "emit": {
         "form": "url",
         "param_order": "alphabetical",
@@ -152,7 +13,8 @@
           "insecure": "allow_insecure"
         },
         "_why_names": "§480 W8 — `emit.names`: ВЫХОДНОЕ написание имени параметра у ЭТОЙ схемы. Признак «не проверять сертификат» читается всеми написаниями сразу (общий блок tls#uri перечисляет их source'ом), но ПИШЕТСЯ у каждой схемы своим — тем, которое читают её клиенты. Перестановка aliases общего блока навязала бы одно написание всем схемам разом и сменила бы вид ссылки там, где менять её нечем оправдать. У tuic де-факто написание — `allow_insecure` (snake_case диалекта tuic), и им же его писал рукописный эмит."
-      }
+      },
+      "_why_emit": "Контракт 1.1.22 забрал секцию в реестр исполняемой, и полная копия черновика стала бы вторым источником правды: загрузчик при исполняемой секции реестра берёт реестр, а копия протухала бы молча. От копии оставлен ОВЕРЛЕЙ на `emit`: обратного хода реестр для этой схемы ещё не объявил, и без него вид исходящей ссылки задавать нечем."
     }
   }
 }

@@ -28,19 +28,27 @@ void main() {
     return (mappers[kind] as Map).cast<String, dynamic>();
   }
 
-  /// Секции волны: путь файла → вид источника.
+  /// Секции волны: имя → файл секции.
+  ///
+  /// Контракт 1.1.22 забрал hysteria2, tuic и masque В РЕЕСТР, и черновых
+  /// копий у них больше нет: загрузчик при исполняемой секции реестра брал бы
+  /// реестр, а копия молча протухала бы вторым источником правды. Форму тех же
+  /// секций тест держит по ЗЕРКАЛУ реестра — проверять её не перестаём оттого,
+  /// что файл переехал. У wireguard секции в реестре нет, черновик остаётся.
   const uriSections = <String, String>{
-    'hysteria2': 'assets/contract_draft/uri/hysteria2.json',
-    'tuic': 'assets/contract_draft/uri/tuic.json',
-    'masque': 'assets/contract_draft/uri/masque.json',
+    'hysteria2': 'assets/contract/registry/protocols/hysteria2.json',
+    'tuic': 'assets/contract/registry/protocols/tuic.json',
+    'masque': 'assets/contract/registry/protocols/masque.json',
     'wireguard': 'assets/contract_draft/uri/wireguard.json',
   };
 
   group('§480 W4 — форма секций uri', () {
-    test('файлы читаются и несут ровно одну секцию mappers.uri', () {
+    test('файлы читаются и несут секцию mappers.uri', () {
       for (final e in uriSections.entries) {
         final mappers = (load(e.value)['mappers'] as Map).cast<String, dynamic>();
-        expect(mappers.keys, ['uri'], reason: e.key);
+        // У файла РЕЕСТРА видов источника бывает несколько (`xray`,
+        // `singbox`) — там это один файл на протокол; у черновика вид один.
+        expect(mappers.keys, contains('uri'), reason: e.key);
       }
     });
 
