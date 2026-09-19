@@ -82,7 +82,8 @@ abstract final class EmitNames {
   ///
   /// Зачем: `extract` режет одно значение регуляркой на несколько путей, и
   /// обратный ход регуляркой не выражается — шаблон объявляет его прямо.
-  /// Пример секции: `shadowsocks.params.plugin`, `http.params.headers`.
+  /// Примеры секций перечислены в спеке 480, раздел «Что вышло: W7»: имена
+  /// протоколов в пакете движка не живут.
   static const compose = 'compose';
 
   /// Шаблон сборки: `{<имя группы>}` подставляется значением.
@@ -120,20 +121,20 @@ abstract final class EmitNames {
   /// Написание имени параметра в ССЫЛКЕ, когда оно не равно канону разбора.
   ///
   /// Зачем: канон разбора — первое в `aliases`, и обычно он же уезжает в
-  /// ссылку. Но у части схем исторически пишется НЕ канон: hysteria2 читает
-  /// `up_mbps`, а пишет `upmbps`. Асимметрия становится данными вместо ветки
-  /// в коде. Пример секции: `hysteria2.params.up_mbps`.
+  /// ссылку. Но у части схем исторически пишется НЕ канон: запись читает имя
+  /// с подчёркиванием, а пишет слитное. Асимметрия становится данными вместо
+  /// ветки в коде.
   static const emitName = 'emit_name';
 
   /// Порт, который в ссылке ОПУСКАЕТСЯ, будучи равным этому значению.
   ///
   /// `"emit_omit_port": 443` в блоке `emit` секции.
   ///
-  /// Зачем: каноническая форма части схем порт по умолчанию не пишет
-  /// (naive/DuckSoft), а часть пишет всегда. Обращать `defaults.server_port`
-  /// напрямую нельзя: у схемы бывает дефолт разбора (подставить 443, если
-  /// порта нет) БЕЗ права опускать его на выходе — иначе ссылка перестала бы
-  /// читаться клиентами, которые дефолта не знают.
+  /// Зачем: каноническая форма части схем порт по умолчанию не пишет, а часть
+  /// пишет всегда. Обращать `defaults.server_port` напрямую нельзя: у схемы
+  /// бывает дефолт разбора (подставить порт, когда его нет) БЕЗ права
+  /// опускать его на выходе — иначе ссылка перестала бы читаться клиентами,
+  /// которые дефолта не знают.
   static const emitOmitPort = 'emit_omit_port';
 
   /// Кодирование userinfo на выходе: `"raw"` (percent) либо `"base64"`
@@ -253,9 +254,10 @@ final class _Emit {
 
   /// **`form_from`** — форма (и через неё написание схемы) выбирается ТЕЛОМ.
   ///
-  /// `scheme_sets⁻¹`: у схемы, где написание НЕСЁТ ТЕЛО (версия socks, TLS у
-  /// http-прокси, транспорт naive), обратный ход обязан вернуть то же
-  /// написание, иначе круг терял бы поле, которого в query нет вовсе.
+  /// `scheme_sets⁻¹`: у схемы, где написание НЕСЁТ ТЕЛО (версия протокола,
+  /// наличие TLS, вид транспорта — всё это бывает зашито в написание),
+  /// обратный ход обязан вернуть то же написание, иначе круг терял бы поле,
+  /// которого в query нет вовсе.
   String _scheme() {
     final ff = emit[EmitNames.formFrom];
     if (ff is Map) {
@@ -390,6 +392,26 @@ final class _Emit {
     // Запись, которая никуда не едет (`maps_to: null`), и обратно не едет.
     if (p.mapsToPresent && p.mapsTo == null && p.compose == null) return;
 
+    // **Запись читает НЕ query.** Её значение несёт сама ссылка — authority
+    // (`host`, `port`), userinfo, фрагмент, — и повторять его параметром
+    // нельзя: получилась бы ссылка вида `?server=…&server_port=…` рядом с тем
+    // же адресом в authority. Путь при этом СЧИТАЕТСЯ УЕХАВШИМ: он в ссылке
+    // есть, просто не в query.
+    if (!_readsQuery(p)) {
+      final path = p.mapsTo;
+      if (path != null && _read(path) != null) _consumed.add(path);
+      for (final t in p.splitInto.keys) {
+        _consumed.add(t);
+      }
+      return;
+    }
+
+    // Путь уже занят записью, прошедшей раньше: две записи в один путь — это
+    // конкуренция за ЧТЕНИЕ (`sni` схемы против `sni` общего блока), и на
+    // обратном ходе побеждает первая, иначе параметр ушёл бы в ссылку дважды.
+    final target = p.mapsTo;
+    if (target != null && _consumed.contains(target)) return;
+
     // `compose` — обращение `extract`: один параметр из нескольких путей.
     final composed = _compose(p);
     if (composed != null) {
@@ -397,8 +419,41 @@ final class _Emit {
       return;
     }
 
+    // **`extract` в ОБЪЕКТ (`$key`/`$value`) обращается САМ.** Новое имя тут
+    // не заводится: запись уже объявила и разделитель элементов (`list.sep`),
+    // и то, что элемент — пара «ключ: значение». Обратный ход из этого
+    // выводится однозначно, и объявлять его вторым способом значило бы
+    // завести второй источник правды ровно там, где кампания его убирает.
+    if (_extractsPairs(p)) {
+      final pairs = _joinPairs(p);
+      if (pairs != null) _add(p, pairs);
+      return;
+    }
+
+    // **`split_into⁻¹`** — запись разложила ОДИН список источника по
+    // нескольким путям тела (адреса по семействам); обратный ход собирает их
+    // назад в один список. Идёт раньше `maps_to`, потому что у такой записи
+    // его обычно нет вовсе.
+    if (p.splitInto.isNotEmpty) {
+      final joined = _joinSplit(p);
+      if (joined != null) _add(p, joined);
+      return;
+    }
+
     final path = p.mapsTo;
-    if (path == null) return;
+
+    // **Запись-СЕЛЕКТОР**: своего `maps_to` у неё нет, всё, что она делает, —
+    // развилка `sets` по значению. Обратный ход у такой записи единственно
+    // возможный: найти ветку, которую тело подтверждает, и вернуть её ключ.
+    // Идёт ПЕРВЫМ — иначе `security` (у которой `maps_to` нет вовсе) вышла бы
+    // из обхода раньше, чем дошла до своих веток, и блок `tls` остался бы
+    // необъяснённым.
+    if (path == null) {
+      if (p.sets.isEmpty) return;
+      final back = _valueFromSets(p);
+      if (back != null) _add(p, back);
+      return;
+    }
 
     var value = _read(path);
 
@@ -414,8 +469,8 @@ final class _Emit {
       }
     }
 
-    // `sets` по ЗНАЧЕНИЮ (`value_map`-подобная развилка): значение параметра
-    // восстанавливается по тому, какая ветка совпала с телом.
+    // `sets` по ЗНАЧЕНИЮ у записи, у которой `maps_to` ЕСТЬ, но тело его не
+    // несёт: значение восстанавливается веткой.
     if (value == null && p.sets.isNotEmpty) {
       final back = _valueFromSets(p);
       if (back != null) {
@@ -442,14 +497,95 @@ final class _Emit {
     _add(p, text);
   }
 
-  /// **`sets⁻¹` по ветке.** Запись вида `sets: {"<значение>": {<путь>: <v>}}`
-  /// пишет разные пути при разных значениях; обратный ход ищет ветку, чьи
-  /// присваивания тело подтверждает ЦЕЛИКОМ.
+  /// Раскладывает ли `extract` записи значение в ПАРЫ объекта — то есть
+  /// объявлены ли служебные цели `$key`/`$value`.
+  static bool _extractsPairs(MapperParam p) {
+    final into = p.extract?.into;
+    if (into == null) return false;
+    return into.values.any((v) => v == r'$key') &&
+        into.values.any((v) => v == r'$value');
+  }
+
+  /// Обращение `extract` в объект: пары тела обратно в одну строку.
+  ///
+  /// Разделитель ПАР — `list.sep` записи (у заголовков `\r\n`), разделитель
+  /// ключа и значения — `": "`, потому что именно его и требует регулярка
+  /// разбора (`k` до двоеточия, пробелы после него необязательны). Порядок —
+  /// по ключу при `sort_keys`, иначе порядок тела: тело у нас упорядочено, и
+  /// порядок ключей входит в identity.
+  String? _joinPairs(MapperParam p) {
+    final path = p.mapsTo;
+    if (path == null) return null;
+    final v = _read(path);
+    if (v is! Map || v.isEmpty) return null;
+    _consumed.add(path);
+    var keys = v.keys.map((e) => '$e').toList();
+    if (p.sortKeys) keys.sort();
+    final sep = p.list?.sep ?? '\r\n';
+    return keys.map((k) => '$k: ${v[k]}').join(sep);
+  }
+
+  /// **`split_into⁻¹`** — собрать разложенные по путям значения обратно в один
+  /// список источника.
+  ///
+  /// Порядок — порядок ОБЪЯВЛЕНИЯ путей в `split_into`, а не порядок в
+  /// исходной ссылке: восстановить второй нечем (запись развела значения по
+  /// признаку, а не по месту), а объявленный порядок детерминирован и
+  /// одинаков у обеих реализаций.
+  String? _joinSplit(MapperParam p) {
+    final items = <String>[];
+    for (final path in p.splitInto.keys) {
+      final v = _read(path);
+      if (v == null) continue;
+      _consumed.add(path);
+      if (v is List) {
+        items.addAll(v.map((e) => '$e'));
+      } else {
+        items.add('$v');
+      }
+    }
+    if (items.isEmpty) return null;
+    return items.join(p.list?.sep ?? ',');
+  }
+
+  /// **Читает ли запись query.** Значение записи, чей источник — authority,
+  /// userinfo или фрагмент, ссылка уже несёт своим МЕСТОМ, и параметром его
+  /// не повторяют.
+  static bool _readsQuery(MapperParam p) {
+    final sources = [
+      ...p.source,
+      for (final v in p.sourceByForm.values) ...v,
+    ];
+    if (sources.isEmpty) return false;
+    return sources.any((s) => s.startsWith('query.') || s == 'query');
+  }
+
+  /// **`sets⁻¹` по ветке.** Запись-СЕЛЕКТОР вида
+  /// `sets: {"<значение>": {<путь>: <v>}}` пишет разные пути при разных
+  /// значениях; обратный ход ищет ветку, чьи присваивания тело подтверждает
+  /// ЦЕЛИКОМ, и отдаёт её ключ значением параметра.
+  ///
+  /// Три тонкости, каждая — живой случай:
+  ///
+  /// - ветка `{path: null}` означает «путь СНЯТ», и подтверждается она
+  ///   ОТСУТСТВИЕМ пути (`security=none` убирает блок `tls` целиком);
+  /// - ветка с ПУСТЫМ ключом (`""`) — это «параметра не было»: она
+  ///   описывает умолчание, и писать её обратно нельзя, иначе у каждого узла
+  ///   появился бы пустой параметр;
+  /// - ветки перебираются в порядке объявления, и первая совпавшая
+  ///   побеждает — при двух ветках с одинаковыми присваиваниями (`tls` и
+  ///   `""` обе дают `tls.enabled: true`) канон объявлен первым.
   String? _valueFromSets(MapperParam p) {
+    String? best;
+    var bestScore = -1;
     for (final e in p.sets.entries) {
       final branch = e.value;
       if (branch is! Map || branch.isEmpty) continue;
       var all = true;
+      // Вес ветки — сколько ПОЛОЖИТЕЛЬНЫХ присваиваний она подтвердила.
+      // Нужен, чтобы `reality` (две записи) побеждал `tls` (одна), когда тело
+      // подтверждает обе: у более конкретной ветки присваиваний больше.
+      var score = 0;
       for (final s in branch.entries) {
         final k = '${s.key}';
         if (k.startsWith(DraftNames.serviceParamPrefix)) continue;
@@ -457,15 +593,49 @@ final class _Emit {
           all = false;
           break;
         }
+        if (s.value != null) score++;
       }
       if (!all) continue;
-      for (final s in branch.entries) {
-        final k = '${s.key}';
-        if (!k.startsWith(DraftNames.serviceParamPrefix)) _consumed.add(k);
+      // Пустой ключ описывает УМОЛЧАНИЕ, а не значение: обратного хода у него
+      // нет — параметра в ссылке не будет. Но пути ветка ОБЪЯСНЯЕТ, и
+      // засчитать их обязана, иначе они попали бы в «потеряно молча», хотя
+      // разбор восстановит их сам, той же веткой умолчания.
+      if (e.key.isEmpty) {
+        _consumeBranch(branch);
+        // Умолчание СИЛЬНЕЕ ветки-отрицания (см. ниже): когда тело
+        // подтверждает обе, писать параметр не нужно вовсе.
+        if (bestScore <= 0) {
+          bestScore = 0;
+          best = null;
+        }
+        continue;
       }
-      return e.key;
+      // Ветка, которая ТОЛЬКО СНИМАЕТ пути (`none` → `tls: null`), веса не
+      // набирает: подтверждается она отсутствием, а отсутствие подтверждает
+      // и всякая другая ветка, чьих путей в теле нет. Но обратный ход у неё
+      // ЕСТЬ, и он обязателен: не напиши мы `security=none`, разбор поднял бы
+      // TLS веткой умолчания, и узел без шифрования стал бы узлом с ним.
+      if (score == 0 && bestScore < 0) {
+        bestScore = 0;
+        best = e.key;
+        continue;
+      }
+      if (score <= bestScore) continue;
+      bestScore = score;
+      best = e.key;
+      _consumeBranch(branch);
     }
-    return null;
+    return best;
+  }
+
+  void _consumeBranch(Map branch) {
+    for (final s in branch.entries) {
+      final k = '${s.key}';
+      if (k.startsWith(DraftNames.serviceParamPrefix)) continue;
+      // Ветка, СНИМАЮЩАЯ путь, ничего не занимает: снимать нечего.
+      if (s.value == null) continue;
+      _consumed.add(k);
+    }
   }
 
   /// **`compose`** — обращение `extract`: собрать одно значение из нескольких
@@ -575,18 +745,67 @@ final class _Emit {
 
   void _add(MapperParam p, String value) {
     final name = _nameOf(p);
-    if (_omitted(name, value)) return;
+    if (_omitted(p, name, value)) return;
     _query.add((name, value));
   }
 
-  /// `omit_default` — значение, равное умолчанию, не пишется;
-  /// `emit_when: always` это правило снимает.
-  bool _omitted(String name, String value) {
+  /// **`omit_default`** — параметр не пишется, КОГДА ЕГО ЗНАЧЕНИЕ РАВНО
+  /// УМОЛЧАНИЮ. Не «не пишется никогда»: селектор вида TLS попадает в
+  /// `omit_default` потому, что включённый TLS подразумевается, — а значение
+  /// «шифрования нет» обязано уехать в ссылку, иначе разбор поднимет TLS
+  /// веткой умолчания и узел без шифрования станет узлом с ним.
+  ///
+  /// Умолчание берётся у самой записи: это ветка `sets` с ПУСТЫМ ключом
+  /// («параметра не было»). Значение, дающее те же присваивания, что и она, и
+  /// есть значение по умолчанию.
+  ///
+  /// `emit_when: always` правило снимает целиком.
+  bool _omitted(MapperParam p, String name, String value) {
+    // Правило У САМОЙ ЗАПИСИ сильнее правила секции: секция говорит за все
+    // записи разом, запись — за себя, и конкретное побеждает.
+    final ownWhen = _paramEmitAttr(p, EmitNames.emitWhen);
+    if (ownWhen == EmitNames.emitWhenAlways) return false;
+    final ownOmit = _paramEmitAttr(p, EmitNames.omitDefault);
+    if (ownOmit == false) return false;
+    if (ownOmit == true) return _isDefaultValue(p, value);
+
     final always = (emit[EmitNames.emitWhen] as Map?)?[name];
     if (always == EmitNames.emitWhenAlways) return false;
     final omit = emit[EmitNames.omitDefault];
-    if (omit is List && omit.map((e) => '$e').contains(name)) return true;
-    return false;
+    if (omit is! List || !omit.map((e) => '$e').contains(name)) return false;
+    return _isDefaultValue(p, value);
+  }
+
+  /// Равно ли [value] умолчанию записи.
+  ///
+  /// Два источника умолчания, в порядке убывания точности:
+  ///
+  /// 1. ветка `sets` с пустым ключом — её присваивания И ЕСТЬ «как если бы
+  ///    параметра не было»; значение, дающее те же, — умолчание;
+  /// 2. `defaults` секции по пути `maps_to` — для записи без развилки.
+  ///
+  /// Не нашлось ни того, ни другого — значение умолчанием не считается и
+  /// уезжает в ссылку: молчаливая потеря хуже лишнего параметра.
+  bool _isDefaultValue(MapperParam p, String value) {
+    final fallback = p.sets[''];
+    if (fallback is Map) {
+      final mine = p.sets[value];
+      if (mine is Map) {
+        return jsonEncode(_sorted(mine)) == jsonEncode(_sorted(fallback));
+      }
+      // Развилка есть, а ветки под этим значением нет: значение умолчанием
+      // быть не может.
+      return false;
+    }
+    final path = p.mapsTo;
+    if (path == null) return false;
+    final d = section.defaults[path];
+    return d != null && _fold(d) == _fold(value);
+  }
+
+  static Map<String, dynamic> _sorted(Map m) {
+    final keys = m.keys.map((e) => '$e').toList()..sort();
+    return {for (final k in keys) k: m[k]};
   }
 
   /// Сериализация query по норме: **порядок алфавитный, пробел `%20`, `+` в
@@ -639,11 +858,22 @@ final class _Emit {
   /// false`) — не ошибка; НЕобъявленная означает, что круг рвётся молча.
   void _collectLost() {
     for (final path in _paths(body, '')) {
-      if (_consumed.contains(path)) continue;
       // Служебные ключи тела, ссылке не принадлежащие.
       if (path == 'type' || path == 'tag') continue;
+      // Путь засчитан САМ либо засчитан его предок: запись, забравшая
+      // `headers` целиком, забрала и каждый заголовок внутри — перечислять
+      // их по одному она не обязана и не может (имена приходят от данных).
+      if (_consumedWithAncestors(path)) continue;
       _lost.add(path);
     }
+  }
+
+  bool _consumedWithAncestors(String path) {
+    if (_consumed.contains(path)) return true;
+    for (var i = path.indexOf('.'); i >= 0; i = path.indexOf('.', i + 1)) {
+      if (_consumed.contains(path.substring(0, i))) return true;
+    }
+    return false;
   }
 
   static Iterable<String> _paths(Map<String, dynamic> m, String prefix) sync* {

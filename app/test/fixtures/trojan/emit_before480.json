@@ -14,7 +14,19 @@
           "insecure": true
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#ai-camel"
+      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#ai-camel",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "ai-camel",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
     },
     "allow_insecure_lower": {
       "body": {
@@ -29,7 +41,19 @@
           "insecure": true
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#ai-lower"
+      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#ai-lower",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "ai-lower",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
     },
     "allow_insecure_true": {
       "body": {
@@ -44,7 +68,19 @@
           "insecure": true
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#ai-true"
+      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#ai-true",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "ai-true",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
     },
     "allow_insecure_zero": {
       "body": {
@@ -58,7 +94,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#ai-zero"
+      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#ai-zero",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "ai-zero",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "alpn_double_encoded": {
       "body": {
@@ -81,7 +128,27 @@
           ]
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?alpn=http%2F1.1&host=example-1.com&security=tls&sni=example-1.com&type=ws#alpn-dbl"
+      "uri_before": "trojan://pass123@example-1.com:443?alpn=http%2F1.1&host=example-1.com&security=tls&sni=example-1.com&type=ws#alpn-dbl",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "alpn-dbl",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "http/1.1"
+          ]
+        }
+      }
     },
     "alpn_pair": {
       "body": {
@@ -99,7 +166,22 @@
           ]
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?alpn=h2%2Chttp%2F1.1&security=tls&sni=example-1.com#alpn-pair"
+      "uri_before": "trojan://pass123@example-1.com:443?alpn=h2%2Chttp%2F1.1&security=tls&sni=example-1.com#alpn-pair",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "alpn-pair",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "h2",
+            "http/1.1"
+          ]
+        }
+      }
     },
     "alpn_triple_encoded": {
       "body": {
@@ -116,7 +198,21 @@
           ]
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?alpn=http%2F1.1&security=tls&sni=example-1.com#alpn-tri"
+      "uri_before": "trojan://pass123@example-1.com:443?alpn=http%2F1.1&security=tls&sni=example-1.com#alpn-tri",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "alpn-tri",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "http/1.1"
+          ]
+        }
+      }
     },
     "fp_bogus": {
       "body": {
@@ -134,7 +230,22 @@
           }
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#fp-bogus"
+      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#fp-bogus",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "fp-bogus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
     },
     "fp_hellochrome_alias": {
       "body": {
@@ -152,7 +263,22 @@
           }
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#fp-ch"
+      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#fp-ch",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "fp-ch",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
     },
     "fp_hellofirefox_alias": {
       "body": {
@@ -170,7 +296,22 @@
           }
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?fp=firefox&security=tls&sni=example-1.com#fp-ff"
+      "uri_before": "trojan://pass123@example-1.com:443?fp=firefox&security=tls&sni=example-1.com#fp-ff",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "fp-ff",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "firefox"
+          }
+        }
+      }
     },
     "grpc_tls": {
       "body": {
@@ -188,7 +329,22 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?security=tls&serviceName=gsvc&sni=example-1.com&type=grpc#grpc"
+      "uri_before": "trojan://pass123@example-1.com:443?security=tls&serviceName=gsvc&sni=example-1.com&type=grpc#grpc",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "grpc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "grpc",
+          "service_name": "gsvc"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "httpupgrade_tls": {
       "body": {
@@ -207,7 +363,23 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fhu&security=tls&sni=example-1.com&type=httpupgrade#hu"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fhu&security=tls&sni=example-1.com&type=httpupgrade#hu",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "hu",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "httpupgrade",
+          "path": "/hu",
+          "host": "example-1.com"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "no_fragment_fallback": {
       "body": {
@@ -221,7 +393,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com"
+      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "trojan-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "password_encoded_plus_userinfo": {
       "body": {
@@ -235,7 +418,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pa%2Bss123@example-1.com:443?security=tls&sni=example-1.com#pw-plus-enc"
+      "uri_before": "trojan://pa%2Bss123@example-1.com:443?security=tls&sni=example-1.com#pw-plus-enc",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "pw-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pa+ss123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "password_percent_encoded": {
       "body": {
@@ -249,7 +443,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://p%40ss%2F123@example-1.com:443?security=tls&sni=example-1.com#pw-pct"
+      "uri_before": "trojan://p%40ss%2F123@example-1.com:443?security=tls&sni=example-1.com#pw-pct",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "pw-pct",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "p@ss/123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "password_raw_plus_userinfo": {
       "body": {
@@ -263,7 +468,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pa%2Bss123@example-1.com:443?security=tls&sni=example-1.com#pw-plus"
+      "uri_before": "trojan://pa%2Bss123@example-1.com:443?security=tls&sni=example-1.com#pw-plus",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "pw-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pa+ss123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "password_with_colon": {
       "body": {
@@ -277,7 +493,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pa%3Ass%3A123@example-1.com:443?security=tls&sni=example-1.com#pw-colon"
+      "uri_before": "trojan://pa%3Ass%3A123@example-1.com:443?security=tls&sni=example-1.com#pw-colon",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "pw-colon",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pa:ss:123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "path_encoded_plus_pct": {
       "body": {
@@ -298,7 +525,25 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fa%2Bb&security=tls&sni=example-1.com&type=ws#path-plus-pct"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fa%2Bb&security=tls&sni=example-1.com&type=ws#path-plus-pct",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "path-plus-pct",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/a+b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "path_encoded_slash_raw_plus": {
       "body": {
@@ -319,7 +564,25 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fa%2Bb&security=tls&sni=example-1.com&type=ws#path-plus-enc"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fa%2Bb&security=tls&sni=example-1.com&type=ws#path-plus-enc",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "path-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/a+b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "path_raw_plus": {
       "body": {
@@ -340,7 +603,25 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fa%2Bb&security=tls&sni=example-1.com&type=ws#path-plus"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fa%2Bb&security=tls&sni=example-1.com&type=ws#path-plus",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "path-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/a+b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "plaintext_port_80": {
       "body": {
@@ -354,7 +635,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:80?security=tls&sni=example-1.com#plain-80"
+      "uri_before": "trojan://pass123@example-1.com:80?security=tls&sni=example-1.com#plain-80",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "plain-80",
+        "server": "example-1.com",
+        "server_port": 80,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "reality_bad_pbk": {
       "body": {
@@ -368,7 +660,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#reality-bad"
+      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#reality-bad",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "reality-bad",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "reality_full": {
       "body": {
@@ -386,7 +689,22 @@
           }
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#reality"
+      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#reality",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "reality",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
     },
     "security_none": {
       "body": {
@@ -396,7 +714,14 @@
         "server_port": 80,
         "password": "pass123"
       },
-      "uri_before": "trojan://pass123@example-1.com:80?security=none#sec-none"
+      "uri_before": "trojan://pass123@example-1.com:80?security=none#sec-none",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "sec-none",
+        "server": "example-1.com",
+        "server_port": 80,
+        "password": "pass123"
+      }
     },
     "skip_cert_verify": {
       "body": {
@@ -411,7 +736,19 @@
           "insecure": true
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#scv"
+      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#scv",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "scv",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
     },
     "tls_tcp": {
       "body": {
@@ -425,7 +762,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#tls-tcp"
+      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#tls-tcp",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "tls-tcp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "upper_allow_insecure": {
       "body": {
@@ -440,7 +788,19 @@
           "insecure": true
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#up-ai"
+      "uri_before": "trojan://pass123@example-1.com:443?allowInsecure=1&security=tls&sni=example-1.com#up-ai",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "up-ai",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true
+        }
+      }
     },
     "upper_alpn": {
       "body": {
@@ -457,7 +817,21 @@
           ]
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?alpn=h2&security=tls&sni=example-1.com#up-alpn"
+      "uri_before": "trojan://pass123@example-1.com:443?alpn=h2&security=tls&sni=example-1.com#up-alpn",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "up-alpn",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "h2"
+          ]
+        }
+      }
     },
     "upper_fp": {
       "body": {
@@ -475,7 +849,22 @@
           }
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#up-fp"
+      "uri_before": "trojan://pass123@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#up-fp",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "up-fp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
     },
     "upper_security": {
       "body": {
@@ -489,7 +878,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#up-sec"
+      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#up-sec",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "up-sec",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "upper_sni": {
       "body": {
@@ -503,7 +903,18 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#up-sni"
+      "uri_before": "trojan://pass123@example-1.com:443?security=tls&sni=example-1.com#up-sni",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "up-sni",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "upper_type_ws": {
       "body": {
@@ -524,7 +935,25 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fws&security=tls&sni=example-1.com&type=ws#up-type"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fws&security=tls&sni=example-1.com&type=ws#up-type",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "up-type",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "ws_ed_path_tail": {
       "body": {
@@ -547,7 +976,27 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fx%3Fed%3D2560&security=tls&sni=example-1.com&type=ws#ed-path"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fx%3Fed%3D2560&security=tls&sni=example-1.com&type=ws#ed-path",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "ed-path",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/x",
+          "headers": {
+            "Host": "example-1.com"
+          },
+          "max_early_data": 2560,
+          "early_data_header_name": "Sec-WebSocket-Protocol"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "ws_ed_query_param": {
       "body": {
@@ -569,7 +1018,27 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fws%3Fed%3D2048&security=tls&sni=example-1.com&type=ws#ed-q"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fws%3Fed%3D2048&security=tls&sni=example-1.com&type=ws#ed-q",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "ed-q",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          },
+          "max_early_data": 2048,
+          "early_data_header_name": "Sec-WebSocket-Protocol"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "ws_tls": {
       "body": {
@@ -590,7 +1059,25 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fws&security=tls&sni=example-1.com&type=ws#ws"
+      "uri_before": "trojan://pass123@example-1.com:443?host=example-1.com&path=%2Fws&security=tls&sni=example-1.com&type=ws#ws",
+      "body_of_old_uri": {
+        "type": "trojan",
+        "tag": "ws",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     }
   }
 }

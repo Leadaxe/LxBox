@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
@@ -45,10 +46,20 @@ void main() {
         if (uri == null) continue;
         final spec = parseUri(uri);
         if (spec == null) continue;
+        // Ссылка, которую отдавал РУКОПИСНЫЙ эмит на этом теле.
+        final oldUri = spec.toUri();
+        // И тело, в которое ЭТА ССЫЛКА читалась. Именно оно эталон: между
+        // ним и `body` лежит потеря рукописного эмита (он не умел писать
+        // `plugin`, `pinSHA256`, `disable_sni`, ронял `?ed=` в хвосте пути),
+        // и требовать от новой волны восстановить то, чего в тексте ссылки
+        // нет, было бы требованием невозможного.
+        final reread = parseUri(oldUri);
         out[e.key] = {
           'body': jsonDecode(jsonEncode(c['body'])),
-          // Ссылка, которую отдавал РУКОПИСНЫЙ эмит на этом теле.
-          'uri_before': spec.toUri(),
+          'uri_before': oldUri,
+          'body_of_old_uri': reread == null
+              ? null
+              : jsonDecode(jsonEncode(reread.emit(TemplateVars.empty).map)),
         };
       }
       if (out.isEmpty) continue;

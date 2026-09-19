@@ -3,43 +3,215 @@
   "cases": {
     "basic_password_host_port": {
       "body": null,
-      "uri_before": "anytls://pass123@srv.example-1.com:8443?fp=random&security=tls&sni=srv.example-1.com#AT-01"
+      "uri_before": "anytls://pass123@srv.example-1.com:8443?fp=random&security=tls&sni=srv.example-1.com#AT-01",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "AT-01",
+        "server": "srv.example-1.com",
+        "server_port": 8443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "srv.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
     },
     "fp_alias_hellochrome_131": {
       "body": null,
-      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&security=tls&sni=x.example.com#at-fp"
+      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&security=tls&sni=x.example.com#at-fp",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-fp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "x.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
     },
     "idle_session_fields": {
       "body": null,
-      "uri_before": "anytls://pass123@example-1.com:8443?fp=random&idle_session_check_interval=15s&idle_session_timeout=45s&min_idle_session=3&security=tls&sni=example-1.com#at-idle"
+      "uri_before": "anytls://pass123@example-1.com:8443?fp=random&idle_session_check_interval=15s&idle_session_timeout=45s&min_idle_session=3&security=tls&sni=example-1.com#at-idle",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-idle",
+        "server": "example-1.com",
+        "server_port": 8443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        },
+        "idle_session_check_interval": "15s",
+        "idle_session_timeout": "45s",
+        "min_idle_session": 3
+      }
     },
     "ipv6_host": {
       "body": null,
-      "uri_before": "anytls://pass123@[2001:db8::1]:8443?fp=random&security=tls&sni=2001%3Adb8%3A%3A1#at-v6"
+      "uri_before": "anytls://pass123@[2001:db8::1]:8443?fp=random&security=tls&sni=2001%3Adb8%3A%3A1#at-v6",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-v6",
+        "server": "2001:db8::1",
+        "server_port": 8443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "2001:db8::1",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
     },
     "min_idle_session_invalid": {
       "body": null,
-      "uri_before": "anytls://pass123@example-1.com:443?fp=random&security=tls&sni=example-1.com#at-bad-idle"
+      "uri_before": "anytls://pass123@example-1.com:443?fp=random&security=tls&sni=example-1.com#at-bad-idle",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-bad-idle",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
     },
     "percent_encoded_password": {
       "body": null,
-      "uri_before": "anytls://p%40ss%3Aword@example-1.com:443?fp=random&security=tls&sni=example-1.com#at-pct"
+      "uri_before": "anytls://p%40ss%3Aword@example-1.com:443?fp=random&security=tls&sni=example-1.com#at-pct",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-pct",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "p@ss:word",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
     },
     "reality_key_share_hybrid": {
       "body": null,
-      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&key_share=hybrid&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=cdn.example-1.com#at-ks-hybrid"
+      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&key_share=hybrid&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=cdn.example-1.com#at-ks-hybrid",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-ks-hybrid",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "cdn.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd",
+            "key_share": "hybrid"
+          }
+        }
+      }
     },
     "reality_pbk_sid": {
       "body": null,
-      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=cdn.example-1.com#at-reality"
+      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=cdn.example-1.com#at-reality",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-reality",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "cdn.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
     },
     "security_none_params_kept": {
       "body": null,
-      "uri_before": "anytls://pass123@example-1.com:8443?allowInsecure=1&alpn=h2%2Chttp%2F1.1&fp=chrome&security=tls&sni=cdn.example-1.com#at-none"
+      "uri_before": "anytls://pass123@example-1.com:8443?allowInsecure=1&alpn=h2%2Chttp%2F1.1&fp=chrome&security=tls&sni=cdn.example-1.com#at-none",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "at-none",
+        "server": "example-1.com",
+        "server_port": 8443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "cdn.example-1.com",
+          "alpn": [
+            "h2",
+            "http/1.1"
+          ],
+          "insecure": true,
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
     },
     "session_fields": {
       "body": null,
-      "uri_before": "anytls://pass123@any.example-1.com:443?allowInsecure=1&fp=chrome&idle_session_timeout=30s&min_idle_session=2&security=tls&sni=cover.example-1.com#node"
+      "uri_before": "anytls://pass123@any.example-1.com:443?allowInsecure=1&fp=chrome&idle_session_timeout=30s&min_idle_session=2&security=tls&sni=cover.example-1.com#node",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "node",
+        "server": "any.example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "cover.example-1.com",
+          "insecure": true,
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        },
+        "idle_session_timeout": "30s",
+        "min_idle_session": 2
+      }
     },
     "b480:no_fragment": {
       "body": {
@@ -57,7 +229,22 @@
           }
         }
       },
-      "uri_before": "anytls://pass123@example-1.com:443?fp=random&security=tls&sni=example-1.com"
+      "uri_before": "anytls://pass123@example-1.com:443?fp=random&security=tls&sni=example-1.com",
+      "body_of_old_uri": {
+        "type": "anytls",
+        "tag": "anytls-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
     }
   }
 }

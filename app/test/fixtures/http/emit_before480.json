@@ -3,43 +3,137 @@
   "cases": {
     "proxy_http_default_port_80": {
       "body": null,
-      "uri_before": "proxy-http://p.example-1.com:80"
+      "uri_before": "proxy-http://p.example-1.com:80",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "http-p.example-1.com-80",
+        "server": "p.example-1.com",
+        "server_port": 80
+      }
     },
     "proxy_http_ipv6": {
       "body": null,
-      "uri_before": "proxy-http://user1@[2001:db8::1]:8080#http-v6"
+      "uri_before": "proxy-http://user1@[2001:db8::1]:8080#http-v6",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "http-v6",
+        "server": "2001:db8::1",
+        "server_port": 8080,
+        "username": "user1"
+      }
     },
     "proxy_http_pass_only_userinfo": {
       "body": null,
-      "uri_before": "proxy-http://:pass123@h.example-1.com:3128#pass-only"
+      "uri_before": "proxy-http://:pass123@h.example-1.com:3128#pass-only",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "pass-only",
+        "server": "h.example-1.com",
+        "server_port": 3128,
+        "password": "pass123"
+      }
     },
     "proxy_http_path_headers": {
       "body": null,
-      "uri_before": "proxy-http://h.example-1.com:8080?headers=User-Agent%3A%20curl%0D%0AX-Token%3A%20abc&path=%2Ftunnel#hdrs"
+      "uri_before": "proxy-http://h.example-1.com:8080?headers=User-Agent%3A%20curl%0D%0AX-Token%3A%20abc&path=%2Ftunnel#hdrs",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "hdrs",
+        "server": "h.example-1.com",
+        "server_port": 8080,
+        "path": "/tunnel",
+        "headers": {
+          "User-Agent": "curl",
+          "X-Token": "abc"
+        }
+      }
     },
     "proxy_http_percent_userinfo": {
       "body": null,
-      "uri_before": "proxy-http://user%40dom:p%3Ass@h.example-1.com:8080#pct-userinfo"
+      "uri_before": "proxy-http://user%40dom:p%3Ass@h.example-1.com:8080#pct-userinfo",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "pct-userinfo",
+        "server": "h.example-1.com",
+        "server_port": 8080,
+        "username": "user@dom",
+        "password": "p:ss"
+      }
     },
     "proxy_http_plain_basic": {
       "body": null,
-      "uri_before": "proxy-http://10.0.0.1:8080#Corp%20proxy"
+      "uri_before": "proxy-http://10.0.0.1:8080#Corp%20proxy",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "Corp proxy",
+        "server": "10.0.0.1",
+        "server_port": 8080
+      }
     },
     "proxy_https_default_port_443": {
       "body": null,
-      "uri_before": "proxy-https://p.example-1.com:443?sni=p.example-1.com"
+      "uri_before": "proxy-https://p.example-1.com:443?sni=p.example-1.com",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "http-p.example-1.com-443",
+        "server": "p.example-1.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "p.example-1.com"
+        }
+      }
     },
     "proxy_https_full_tls": {
       "body": null,
-      "uri_before": "proxy-https://h.example-1.com:8443?allowInsecure=1&alpn=h2%2Chttp%2F1.1&fp=chrome&sni=proxy.example-corp.com#full-tls"
+      "uri_before": "proxy-https://h.example-1.com:8443?allowInsecure=1&alpn=h2%2Chttp%2F1.1&fp=chrome&sni=proxy.example-corp.com#full-tls",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "full-tls",
+        "server": "h.example-1.com",
+        "server_port": 8443,
+        "tls": {
+          "enabled": true,
+          "server_name": "proxy.example-corp.com",
+          "alpn": [
+            "h2",
+            "http/1.1"
+          ],
+          "insecure": true,
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
     },
     "proxy_plus_http_alias": {
       "body": null,
-      "uri_before": "proxy-http://alice:pass123@h.example-1.com:8080#plus-http"
+      "uri_before": "proxy-http://alice:pass123@h.example-1.com:8080#plus-http",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "plus-http",
+        "server": "h.example-1.com",
+        "server_port": 8080,
+        "username": "alice",
+        "password": "pass123"
+      }
     },
     "proxy_plus_https_alias": {
       "body": null,
-      "uri_before": "proxy-https://alice:pass123@h.example-1.com:8443?sni=proxy.example-corp.com#plus-https"
+      "uri_before": "proxy-https://alice:pass123@h.example-1.com:8443?sni=proxy.example-corp.com#plus-https",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "plus-https",
+        "server": "h.example-1.com",
+        "server_port": 8443,
+        "username": "alice",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "proxy.example-corp.com"
+        }
+      }
     },
     "b480:extra_headers_https": {
       "body": {
@@ -59,7 +153,24 @@
           "server_name": "example-1.com"
         }
       },
-      "uri_before": "proxy-https://user1:pass123@example-1.com:8443?headers=Alpha%3A%202%0D%0AMid%3A%203%0D%0AZed%3A%201&sni=example-1.com#https-hdr"
+      "uri_before": "proxy-https://user1:pass123@example-1.com:8443?headers=Alpha%3A%202%0D%0AMid%3A%203%0D%0AZed%3A%201&sni=example-1.com#https-hdr",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "https-hdr",
+        "server": "example-1.com",
+        "server_port": 8443,
+        "username": "user1",
+        "password": "pass123",
+        "headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
     },
     "b480:extra_headers_unsorted": {
       "body": {
@@ -75,7 +186,20 @@
           "Zed": "1"
         }
       },
-      "uri_before": "proxy-http://user1:pass123@example-1.com:8080?headers=Alpha%3A%202%0D%0AMid%3A%203%0D%0AZed%3A%201#http-hdr"
+      "uri_before": "proxy-http://user1:pass123@example-1.com:8080?headers=Alpha%3A%202%0D%0AMid%3A%203%0D%0AZed%3A%201#http-hdr",
+      "body_of_old_uri": {
+        "type": "http",
+        "tag": "http-hdr",
+        "server": "example-1.com",
+        "server_port": 8080,
+        "username": "user1",
+        "password": "pass123",
+        "headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        }
+      }
     }
   }
 }
