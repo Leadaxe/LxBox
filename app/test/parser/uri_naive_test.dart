@@ -1,9 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 void main() {
+  // §480 W4 — схема переехала на ДВИЖОК СЕКЦИЙ, и рукописного запасного пути
+  // у неё больше нет: без реестра (общие блоки `tls#uri`, `dialer#uri`) и без
+  // самих секций разбор не работает вовсе. Гейта здесь НЕТ намеренно: зеркало
+  // `assets/contract` лежит в репозитории и едет в APK, и его отсутствие —
+  // поломка сборки, а не повод молча пропустить тест.
+  setUpAll(() async {
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   group('NaïveProxy URI parser (spec 037)', () {
     test('canonical with user+pass+port+label', () {
       final spec = parseNaive(
