@@ -722,7 +722,31 @@ void main() {
         expect(nodes, hasLength(1));
         final spec = nodes.single as VlessSpec;
         expect(spec.tls.enabled, isFalse);
+        expect(spec.tls.passthrough.containsKey('fragment'), isFalse);
         expect(spec.warnings, isEmpty);
+        expect(spec.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
+      });
+
+      test('dialerProxy=dns → узел отбракован как раньше', () {
+        final dropped = <NodeWarning>[];
+        final nodes = parseXrayElement(
+          {
+            'remarks': 'frag-test',
+            'outbounds': [
+              proxyWith({
+                'network': 'tcp',
+                'security': 'tls',
+                'tlsSettings': {'serverName': 'sni.example'},
+                'sockopt': {'dialerProxy': 'dns-out'},
+              }),
+              {'protocol': 'dns', 'tag': 'dns-out'},
+              ...baseOutbounds,
+            ],
+          },
+          dropped: dropped,
+        );
+        expect(nodes, isEmpty);
+        expect(dropped.whereType<DialerProxyUnusableWarning>(), hasLength(1));
       });
 
       test('dialerProxy=block (blackhole) → узел отбракован', () {

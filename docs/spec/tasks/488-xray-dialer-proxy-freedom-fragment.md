@@ -49,6 +49,6 @@
   true`, без цепочки, без предупреждений.
 - Freedom без fragment → узел без `tls.fragment`, без кодов.
 - `security=none` + dialerProxy=fragment → узел без `tls.fragment`.
-- `dialerProxy=block` (blackhole) → узел отбракован.
+- `dialerProxy=block` (blackhole) и `dialerProxy` на `dns` → узел отбракован.
 - Регрессия §404: обычная цепочка dialerProxy зелёная.
 - `flutter analyze` — без новых issues; затронутые тесты зелёные.
