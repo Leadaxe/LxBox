@@ -17,7 +17,11 @@
 /// одна `default` на уровень.
 ///
 /// Имён схем и протоколов здесь нет (греп-страж): вид документа называет
-/// себя `id`-строкой из данных, а вид источника элемента — `element_kind`.
+/// себя `kind`-строкой из данных, а вид источника элемента — `mapper`.
+///
+/// Имена атрибутов сведены с лаунчером (GRAMMAR_SYNC 5d8adc80, TASKS_LXBOX
+/// §24.27) и совпадают с FROZEN-написанием обеих сторон: `kind`,
+/// `required_keys`, `redetect`, `mapper`, `elements`, `amnezia_vpn`.
 library;
 
 import 'dart:convert';
@@ -27,26 +31,26 @@ import 'interpreter.dart' show detectMatchesJson, formMatchesText;
 /// Одна ветка реестра видов документа.
 final class DocumentSource {
   const DocumentSource({
-    required this.id,
+    required this.kind,
     this.priority = 0,
     this.detect,
     this.unwrap,
-    this.reunwrap = false,
+    this.redetect = false,
     this.requiresAfterUnwrap,
-    this.elementKind,
+    this.mapper,
     this.elements,
     this.lineCommentPrefixes = const ['#', '//', ';'],
   });
 
   factory DocumentSource.fromJson(Map<String, dynamic> j) => DocumentSource(
-        id: j['id'] as String? ?? '',
+        kind: j['kind'] as String? ?? '',
         priority: (j['priority'] as num?)?.toInt() ?? 0,
         detect: (j['detect'] as Map?)?.cast<String, dynamic>(),
         unwrap: j['unwrap'] as String?,
-        reunwrap: j['reunwrap'] as bool? ?? false,
+        redetect: j['redetect'] as bool? ?? false,
         requiresAfterUnwrap:
             (j['requires_after_unwrap'] as Map?)?.cast<String, dynamic>(),
-        elementKind: j['element_kind'] as String?,
+        mapper: j['mapper'] as String?,
         elements: j['elements'] as String?,
         lineCommentPrefixes:
             ((j['line_comment_prefixes'] as List?) ?? const ['#', '//', ';'])
@@ -54,7 +58,7 @@ final class DocumentSource {
       );
 
   /// Имя вида — строка ДАННЫХ, не перечисление кода.
-  final String id;
+  final String kind;
   final int priority;
   final Map<String, dynamic>? detect;
 
@@ -64,18 +68,18 @@ final class DocumentSource {
   final String? unwrap;
 
   /// Распакованный текст судится ЗАНОВО, с самого начала.
-  final bool reunwrap;
+  final bool redetect;
 
   /// Проверка правдоподобия распакованного: без неё случайный текст из букв
   /// и цифр проходит алфавит base64 и вытесняет настоящий документ.
   final Map<String, dynamic>? requiresAfterUnwrap;
 
-  /// Вид источника ЭЛЕМЕНТА (`uri` | `xray` | `singbox` | `conf`); `null` —
-  /// вид документа узлов не даёт.
-  final String? elementKind;
+  /// Какая секция-маппер получит элемент (`uri` | `xray` | `singbox` |
+  /// `conf`); `null` — вид документа узлов не даёт.
+  final String? mapper;
 
   /// Откуда брать элементы: `lines`, `$self`, `[]`, `[].outbounds[]`,
-  /// `outbounds[]+endpoints[]`.
+  /// `outbounds[]+endpoints[]`, `ini_texts`.
   final String? elements;
 
   final List<String> lineCommentPrefixes;
@@ -218,7 +222,7 @@ final class DocumentRegistry {
       if (inner == null || inner.isEmpty) continue;
       if (!formMatchesText(s.requiresAfterUnwrap, inner)) continue;
 
-      if (!s.reunwrap) {
+      if (!s.redetect) {
         return DocumentMatch(source: s, text: inner, unwrapDepth: depth + 1);
       }
       // Распакованное судится ЗАНОВО, с потолком глубины: вложенная
@@ -239,6 +243,11 @@ final class DocumentRegistry {
 
   /// Нужен ли ветке разобранный JSON: выражение спрашивает `json`, либо его
   /// спрашивает вложенное выражение комбинатора.
+  ///
+  /// `not` обходится наравне с `any`/`all`: после сведения грамматики
+  /// (GRAMMAR_SYNC §1 №3) отрицание живёт на уровне `detect`, и ветка, у
+  /// которой JSON спрашивает ТОЛЬКО отрицаемое выражение, без этого обхода
+  /// осталась бы без разобранного документа и не сработала бы никогда.
   static bool _needsJson(Map<String, dynamic> d) {
     if (d.containsKey('json')) return true;
     for (final key in const ['any', 'all']) {
@@ -248,6 +257,8 @@ final class DocumentRegistry {
         if (s is Map && _needsJson(s.cast<String, dynamic>())) return true;
       }
     }
+    final not = d['not'];
+    if (not is Map && _needsJson(not.cast<String, dynamic>())) return true;
     return false;
   }
 

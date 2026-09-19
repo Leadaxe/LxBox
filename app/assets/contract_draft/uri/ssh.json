@@ -28,7 +28,9 @@
         "into": [
           "user",
           "password"
-        ]
+        ],
+        "single_into": "user",
+        "impl": "single_into объявлен ЯВНО (GRAMMAR_SYNC §1 №15): userinfo без ':' — это имя пользователя, пароль приходит отдельным параметром. Неявное умолчание «первое имя into» грамматика больше не разрешает."
       },
       "label": {
         "source": "fragment",

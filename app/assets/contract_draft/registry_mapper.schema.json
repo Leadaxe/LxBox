@@ -95,6 +95,10 @@
           "type": "array",
           "description": "Хотя бы один ключ присутствует. Так род узла (awg3 / awg / wg) объявляется данными, а не функцией hasAWGParams.",
           "items": { "type": "string" }
+        },
+        "first_section_fold": {
+          "type": "string",
+          "description": "Имя ПЕРВОЙ не-комментарной секции INI, fold-case. Отличается от sections (наличие в любом месте): .conf, у которого первой идёт [Peer], конфигом wg-quick не является. Комментарий над [Interface] законен и несёт имя узла (G7). PRIMITIVES §0.11."
         }
       }
     },
@@ -105,7 +109,15 @@
       "properties": {
         "prefix_fold": { "type": "string", "description": "Префикс текста, регистронезависимо." },
         "line_fold": { "type": "string", "description": "Строка целиком (после trim), регистронезависимо." },
-        "contains": { "type": "string" }
+        "contains": { "type": "string" },
+        "prefix_trim": {
+          "type": "string",
+          "description": "Первый НЕпробельный символ текста ({, [ после отступа) — в отличие от prefix_fold, который смотрит с позиции 0. PRIMITIVES §0.11."
+        },
+        "min_len": {
+          "type": "integer",
+          "description": "Длина текста >= n. Порог отсекает случайный текст, проходящий алфавит base64. PRIMITIVES §0.11."
+        }
       }
     },
 
@@ -443,10 +455,24 @@
           "type": "boolean",
           "description": "Результат распаковки отправляется на повторный детект (подписка base64 внутри base64)."
         },
+        "requires_after_unwrap": {
+          "$ref": "#/definitions/detect",
+          "description": "Предикат, которому обязан удовлетворять РАСПАКОВАННЫЙ текст. Страховка от ложного срабатывания base64-ветки: случайный текст из букв и цифр тоже проходит алфавит, и без проверки правдоподобия распакованный мусор вытеснил бы настоящий документ. PRIMITIVES §0.11."
+        },
+        "elements": {
+          "type": "string",
+          "description": "Где у документа лежат элементы: $self | lines | [] | outbounds[]+endpoints[] | [].outbounds[] | ini_texts. Упраздняет split: lines как частный случай (PRIMITIVES §0.11)."
+        },
+        "line_comment_prefixes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Префиксы строк-комментариев построчного документа (#, //, ;). Сегодня зашиты в код. PRIMITIVES §0.11."
+        },
         "split": {
           "enum": ["lines"],
-          "description": "Документ разбирается поэлементно."
+          "description": "УСТАРЕЛО в пользу elements: lines (PRIMITIVES §0.11). Читается, новые файлы не пишут."
         },
+        "impl": { "type": "string" },
         "desc_en": { "type": "string" },
         "desc_ru": { "type": "string" }
       }

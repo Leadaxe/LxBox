@@ -116,38 +116,48 @@ DecodedBody decode(String body) {
 /// ним не меняются, меняется ТОЛЬКО способ выбрать форму.
 DecodedBody _classifyByKind(DocumentMatch match) {
   final text = match.text;
-  switch (match.source.elementKind) {
+  switch (match.source.mapper) {
     case 'conf':
       return IniConfig(text);
     case 'xray':
     case 'singbox':
       final value = match.json ?? _tryJsonDecode(text);
       if (value == null) return _classifyLegacy(text);
-      return JsonConfig(value, _flavorOf(match.source.id));
+      return JsonConfig(value, _flavorOf(match.source.kind));
     case 'uri':
+      // Ветка «всё остальное» ловит и опознаваемый JSON, своей ветки в
+      // реестре не имеющий: такой документ узлов не даёт, но форму ответа
+      // обязан сохранить прежнюю — иначе «ноль узлов» подменяется на
+      // «список ссылок из одной строки JSON». Разбор формы остаётся за
+      // рукописным порядком до тех пор, пока `on_unrecognized` реестра не
+      // исполняется движком.
+      final head = text.trimLeft();
+      if (head.startsWith('{') || head.startsWith('[')) {
+        final value = _tryJsonDecode(text);
+        if (value != null) return JsonConfig(value, _detectFlavor(value));
+      }
       return _uriLines(text, match.source.lineCommentPrefixes);
     case null:
-      // Вид опознан, но узлов не даёт (Clash). Форма прежняя: разбор
-      // ответит нулём узлов, как и до волны.
+      // Вид опознан, но узлов не даёт. Форма прежняя: разбор ответит нулём
+      // узлов, как и до волны.
       final value = match.json ?? _tryJsonDecode(text);
       if (value == null) return _classifyLegacy(text);
-      return JsonConfig(value, JsonFlavor.clashYaml);
+      return JsonConfig(value, _detectFlavor(value));
     default:
       return _classifyLegacy(text);
   }
 }
 
-/// `id` ветки реестра → [JsonFlavor].
+/// `kind` ветки реестра → [JsonFlavor].
 ///
 /// Перевод, а не решение: формы JSON перечислены в `parse_all` и уровню
-/// документа не принадлежат. Один незнакомый `id` — `unknown`, как и было.
-JsonFlavor _flavorOf(String id) => switch (id) {
+/// документа не принадлежат. Один незнакомый `kind` — `unknown`, как и было.
+JsonFlavor _flavorOf(String kind) => switch (kind) {
       'xray_config_array' => JsonFlavor.xrayArray,
       'singbox_config_array' => JsonFlavor.singboxMulti,
       'singbox_outbound_array' => JsonFlavor.singboxArray,
       'singbox_outbound' => JsonFlavor.singboxOutbound,
       'singbox_config' => JsonFlavor.singboxConfig,
-      'clash_yaml' => JsonFlavor.clashYaml,
       _ => JsonFlavor.unknown,
     };
 
@@ -159,8 +169,9 @@ Object? _tryJsonDecode(String text) {
   }
 }
 
-/// Имя распаковщика Amnezia в реестре видов документа.
-const _kAmneziaUnwrap = 'amnezia_vpn_link';
+/// Имя распаковщика Amnezia в реестре видов документа (FROZEN-написание
+/// обеих сторон после сведения грамматики — GRAMMAR_SYNC §4 №11).
+const _kAmneziaUnwrap = 'amnezia_vpn';
 
 /// Именованные распаковщики оболочки: `unwrap` реестра → функция.
 final Map<String, Unwrapper> _kUnwrappers = {

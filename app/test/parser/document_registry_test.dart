@@ -107,7 +107,7 @@ void main() {
       final winners = hits.where((s) => s.priority == best).toList();
       if (winners.length > 1) {
         bad.add('${e.key}: ничья priority=$best между '
-            '${winners.map((s) => s.id).join(", ")}');
+            '${winners.map((s) => s.kind).join(", ")}');
       }
     }
     expect(bad, isEmpty,

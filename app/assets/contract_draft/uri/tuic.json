@@ -9,7 +9,8 @@
       "userinfo": {
         "split": {"sep": ":", "limit": 2},
         "into": ["uuid", "password"],
-        "impl": "userinfo = uuid:password, в отличие от hysteria2, где двоеточие часть пароля. Пароль — всё ПОСЛЕ первого ':' (limit:2), чтобы двоеточие внутри пароля не потерялось."
+        "single_into": "uuid",
+        "impl": "userinfo = uuid:password, в отличие от hysteria2, где двоеточие часть пароля. Пароль — всё ПОСЛЕ первого ':' (limit:2), чтобы двоеточие внутри пароля не потерялось. single_into объявлен ЯВНО (GRAMMAR_SYNC §1 №15): одинокий userinfo — это uuid."
       },
       "label": {
         "source": ["fragment", "path"],

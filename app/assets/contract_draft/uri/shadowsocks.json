@@ -49,7 +49,8 @@
           "method",
           "password"
         ],
-        "impl": "percent ДО base64 — панели экранируют '='-паддинг как %3D (корпус sip002_escaped_padding). 'base64?' — try-decode с фолбэком «не base64 → как есть»: delta480, открытый SS2022 'method:key@host' теперь читается (было — уходил в безусловный base64 и давал мусор). limit:2 — пароль это ВСЁ после первого ':': у SS2022 он бывает составным (k1:k2)."
+        "single_into": "method",
+        "impl": "percent ДО base64 — панели экранируют '='-паддинг как %3D (корпус sip002_escaped_padding). 'base64?' — try-decode с фолбэком «не base64 → как есть»: delta480, открытый SS2022 'method:key@host' теперь читается (было — уходил в безусловный base64 и давал мусор). limit:2 — пароль это ВСЁ после первого ':': у SS2022 он бывает составным (k1:k2). single_into объявлен ЯВНО (GRAMMAR_SYNC §1 №15): userinfo без ':' — это метод, и опираться на неявное «первое имя into» грамматика больше не разрешает."
       },
       "label": {
         "source": "fragment",

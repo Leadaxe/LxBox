@@ -35,7 +35,7 @@ bool isDirectLink(String input) {
   return kPipelineSchemes.contains(t.substring(0, sep).toLowerCase());
 }
 
-/// §480 W6 — вид документа по РЕЕСТРУ: `id` ветки, опознавшей ввод, либо
+/// §480 W6 — вид документа по РЕЕСТРУ: `kind` ветки, опознавшей ввод, либо
 /// `null` (реестра нет — запасной путь у каждого вызывающего свой).
 ///
 /// Классификаторы ниже спрашивают реестр, а не считают признак заново:
@@ -49,12 +49,12 @@ String? documentKindOf(String input) {
   // распаковщики живут у декодера тела. `matchAll` отвечает предикатами,
   // победитель — с меньшим `priority` (норма §2).
   final hits = reg.matchAll(input);
-  if (hits.isEmpty) return reg.defaultSource?.id;
+  if (hits.isEmpty) return reg.defaultSource?.kind;
   var best = hits.first;
   for (final s in hits) {
     if (s.priority < best.priority) best = s;
   }
-  return best.id;
+  return best.kind;
 }
 
 bool isWireGuardConfig(String input) {
