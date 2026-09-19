@@ -1,5 +1,5 @@
 {
-  "_draft": "ОТСТУПЛЕНИЯ LxBox от секций реестра (контракт 1.1.15, 963dc6d6). Файл НЕ дублирует блок целиком: загрузчик накладывает эти записи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Каждая запись — красный кейс, переданный лаунчеру: в DELTAS.md его секции дельты на это нет, а тело РАБОЧЕГО узла меняется. Снятие отступления — отдельной дельтой с правкой identity-фикстуры.",
+  "_draft": "ОТСТУПЛЕНИЯ LxBox от секций реестра. Файл НЕ дублирует блок целиком: загрузчик накладывает эти записи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Каждая запись — красный кейс, переданный лаунчеру. Снятие отступления — отдельной дельтой с правкой identity-фикстуры. Синк 1.1.28 (Q133-54): сняты ЗЕРКАЛЬНЫЕ записи — ws.eh, ws.host, httpupgrade.path, http.path, http.host, grpc.serviceName, xhttp.mode, xhttp.path, xhttp.host. Реестр несёт их сам, а по норме MAPPER_ENGINE §7.1 запись БЛОКА изымается из плана только при совпадении имени И ПОЛНОГО набора source; совпадавшее зеркало ничего не меняло, а разошедшееся вставало рядом с реестровой и решало спор за путь своим priority. У ws.eh (priority 0 против реестровых 30) и ws.ed (-1 против 5) это ПЕРЕВОРАЧИВАЛО норму «хвост пути сильнее плоской пары»: ?ed= из query бил ?ed= из хвоста, хотя хвост адресует ОДИН путь, а пара — всю ссылку. У xhttp.path зеркало было вдобавок СЛАБЕЕ реестрового — теряло срезание '?'-хвоста (SPEC 002 §4.1). ws.ed оставлена, но приведена к реестровому priority и набору source: её единственное отличие — отсутствие implies (см. _why записи).",
   "_overlay": true,
   "blocks": {
     "uri": {
@@ -8,119 +8,14 @@
           "source": "query.ed",
           "maps_to": "transport.max_early_data",
           "type": "int",
+          "priority": 5,
           "when": {
             "transport.type": "ws"
           },
-          "priority": -1,
-          "impl": "РАСШИРЕНИЕ LxBox (в секции лаунчера записи нет): плоская форма ?ed=N параметром ссылки. Сегодня её читают оба наших входа; без записи узел молча терял max_early_data. Хвост пути СИЛЬНЕЕ: он адресует конкретный путь, а не ссылку целиком, и пишется записью ws.path с merge overwrite. Дефолтного заголовка плоская форма НЕ подразумевает — его даёт только форма ?ed= в хвосте пути (implicit).",
-          "merge": "keep_first"
-        },
-        "host": {
-          "source": [
-            "query.host",
-            "query.sni",
-            "query.obfsParam"
-          ],
-          "maps_to": "transport.headers.Host",
-          "when": {
-            "transport.type": "ws"
-          },
-          "impl": "Фолбэк-цепочка host → sni → obfsParam; сегодня живёт прозой в aliases."
-        },
-        "eh": {
-          "source": "query.eh",
-          "maps_to": "transport.early_data_header_name",
-          "when": {
-            "transport.type": "ws",
-            "transport.max_early_data": {
-              "present": true
-            }
-          },
-          "priority": 0,
-          "merge": "overwrite",
-          "impl": "РАСШИРЕНИЕ LxBox: явное имя заголовка early data. 'eh' без 'ed' — ничто: режим включает max_early_data > 0, поэтому when проверяет уже построенное тело, и запись идёт ПОСЛЕ ed. Явный заголовок побеждает конвенционный (implicit)."
-        }
-      },
-      "httpupgrade": {
-        "path": {
-          "source": "query.path",
-          "decode_extra": {
-            "mode": "path",
-            "passes": 2
-          },
-          "extract": {
-            "re": "^(?P<path>[^?]*)(?:\\?ed=\\d+)?$",
-            "into": {
-              "path": "transport.path"
-            }
-          },
-          "when": {
-            "transport.type": "httpupgrade"
-          },
-          "impl": "Тот же extract, но без группы ed: у httpupgrade хвост срезается, значение отбрасывается."
-        }
-      },
-      "http": {
-        "path": {
-          "source": "query.path",
-          "maps_to": "transport.path",
-          "when": {
-            "transport.type": "http"
-          }
-        },
-        "host": {
-          "source": [
-            "query.host",
-            "query.sni"
-          ],
-          "maps_to": "transport.host",
-          "list": {
-            "sep": ",",
-            "coerce_scalar": true
-          },
-          "when": {
-            "transport.type": "http"
-          },
-          "impl": "У http host — СПИСОК."
-        }
-      },
-      "grpc": {
-        "serviceName": {
-          "source": [
-            "query.serviceName",
-            "query.service_name",
-            "query.path"
-          ],
-          "maps_to": "transport.service_name",
-          "when": {
-            "transport.type": "grpc"
-          },
-          "impl": "Фолбэк на path — живая форма подписок. normalize снят целиком контрактом 1.1.3 (TASKS_LXBOX §24.12), поэтому его здесь нет."
+          "_why": "§103 D-008 — ЕДИНСТВЕННОЕ отличие от реестровой записи: у той есть `implies` на `Sec-WebSocket-Protocol`, у нас его нет. Плоская пара `?ed=N` имени заголовка НЕ подразумевает: конвенцию даёт только форма `?ed=` в ХВОСТЕ ПУТИ, где она стоит с пометкой `implicit`. Расхождение зафиксировано per-app override'ами корпуса (`ws_ed_flat_no_eh`, `ws_ed_invalid_dropped`) и парным `.expected.launcher.json` — лаунчер заголовок дописывает. `priority: 5` и набор `source` — реестровые ДОСЛОВНО: запись переопределяет реестровую по норме MAPPER_ENGINE §7.1 (имя + полный набор source), то есть та изымается из плана, а не спорит с этой за путь. До синка 1.1.28 здесь стоял `priority: -1`, и пока реестр записи `ed` не нёс вовсе, это работало; с её приездом зеркало перевернуло норму «хвост пути сильнее плоской пары»."
         }
       },
       "xhttp": {
-        "mode": {
-          "source": "query.mode",
-          "maps_to": "transport.mode",
-          "when": {
-            "transport.type": "xhttp"
-          },
-          "impl": "mode/path/host у xhttp читаются ТОЛЬКО из плоского слоя; extra — вложенный слой чужого диалекта, и одноимённые ключи в нём игнорируются (D-097). Поэтому source из одного элемента."
-        },
-        "path": {
-          "source": "query.path",
-          "maps_to": "transport.path",
-          "when": {
-            "transport.type": "xhttp"
-          }
-        },
-        "host": {
-          "source": "query.host",
-          "maps_to": "transport.host",
-          "when": {
-            "transport.type": "xhttp"
-          }
-        },
         "noGRPCHeader": {
           "source": [
             "extra.noGRPCHeader",

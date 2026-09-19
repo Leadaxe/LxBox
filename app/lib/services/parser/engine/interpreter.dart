@@ -3012,6 +3012,19 @@ final class _Run {
         }
       }
     }
+    // Параметр, НЕСУЩИЙ наложенный слой, объявлен самим слоем: `overlays[]`
+    // называет его своим `source`, и читают его записи под именем слоя
+    // (`extra.mode`), а не плоским `query.extra`. Без этой ветки набор видел
+    // только адресатов, а носитель оставался «никем не объявленным» и уезжал
+    // в `uri_param_unknown` — у корпуса это все шесть кейсов `xhttp_extra_*`,
+    // включая тот, где слой битый и записей не даёт вовсе.
+    for (final o in section.overlays) {
+      for (final src in o.source) {
+        if (src.startsWith('query.')) {
+          out.add(src.substring('query.'.length).toLowerCase());
+        }
+      }
+    }
     return out;
   }();
 

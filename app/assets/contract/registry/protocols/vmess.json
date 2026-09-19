@@ -307,7 +307,7 @@
       "core/config/subscription/node_parser_vmess.go:43-58",
       "core/config/subscription/node_parser_vmess.go:92-169",
       "core/config/subscription/node_parser_vmess.go:176-319",
-      "core/config/subscription/xray_protocols.go:134-179",
+      "core/config/subscription/xray_element_engine.go",
       "core/config/subscription/shareuri_vmess.go:12-108"
     ],
     "dart": [
@@ -731,11 +731,37 @@
         {
           "id": "vnext",
           "detect": {
-            "default": true
+            "all": [
+              {
+                "json": {
+                  "type_of": {
+                    "settings": "object"
+                  }
+                }
+              },
+              {
+                "any": [
+                  {
+                    "json": {
+                      "type_of": {
+                        "streamSettings": "object"
+                      }
+                    }
+                  },
+                  {
+                    "json": {
+                      "key_absent": [
+                        "streamSettings"
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "space": "json",
           "base": "settings.vnext.0",
-          "impl": "Единственная форма — ветка default: элемент Xray уже опознан detect секции (protocol), и разбирать его иначе не из чего. Так же записана форма servers у trojan в живом реестре лаунчера (контракт 1.1.13)."
+          "impl": "ФОРМУ ОПОЗНАЁТ ТИП КОНТЕЙНЕРА, а не ветка default: мусорный ТИП поля (streamSettings: \"none\", settings: []) означает БИТУЮ ЗАПИСЬ, а не «транспорта нет». Прежняя сноска «разбирать его иначе не из чего» верна для ЦЕЛОГО элемента, но не для битого. Отсутствие streamSettings при этом законно (plain-TCP) — развёрнуто у vless."
         }
       ],
       "defaults": {
@@ -745,19 +771,22 @@
         "address": {
           "source": "json.$base.address",
           "maps_to": "server",
-          "required": true
+          "required": true,
+          "desc_en": "empty server address"
         },
         "port": {
           "source": "json.$base.port",
           "maps_to": "server_port",
           "type": "int",
           "required": true,
+          "desc_en": "server port is missing or out of range",
           "impl": "БЕЗ дефолта 443: xray_protocols.go:133-136 отбраковывает узел при port <= 0 || port > 65535, фолбэка на этом входе нет. Черновик LxBox нёс materialize_default:true — поведение Dart."
         },
         "id": {
           "source": "json.$base.users.0.id",
           "maps_to": "uuid",
-          "required": true
+          "required": true,
+          "desc_en": "empty user id — the server returned a placeholder, subscription may be expired"
         },
         "security": {
           "source": "json.$base.users.0.security",
@@ -806,7 +835,18 @@
       ],
       "unknown_key": {
         "action": "drop",
-        "code": "json_field_unknown"
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ],
+        "impl": "Ключи уровня документа плюс контейнеры, чьи листья читают записи таблицы. Список дословно равен списку LxBox и остальных xray-секций — см. развёрнутую сноску у vless."
       },
       "emit": null
     }

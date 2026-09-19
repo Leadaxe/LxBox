@@ -13,6 +13,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // Конформанс-раннер корпуса НАПРАВЛЕНИЙ (SPEC 104, §393 A5), сторона LxBox.
 // Тот же корпус гоняет лаунчер — `core/config/contract_direction_test.go`.
 //
@@ -151,6 +153,12 @@ void main() {
   }
 
   group('contract corpus: Directions', () {
+    // Узлы кейса раннер строит `parseUri`-ссылкой (`_sourceFor`), а схема,
+    // переехавшая на движок (§480), без секций реестра не разбирается вовсе:
+    // без загрузки кейс падал не расхождением модели Направления, а пустым
+    // составом группы.
+    setUpAll(loadEngineSections);
+
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
       // §393 C — `chain_*` больше не скипаются: цепочки реализованы

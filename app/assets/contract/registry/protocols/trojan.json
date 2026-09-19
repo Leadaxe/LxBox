@@ -151,7 +151,7 @@
       "core/config/subscription/node_parser_core.go:366-374",
       "core/config/subscription/node_parser_core.go:759-766",
       "core/config/subscription/node_parser_transport.go:714-744",
-      "core/config/subscription/xray_protocols.go:182-219",
+      "core/config/subscription/xray_element_engine.go",
       "core/config/subscription/shareuri_trojan.go:10-59"
     ],
     "dart": [
@@ -339,32 +339,63 @@
         {
           "id": "servers",
           "detect": {
-            "default": true
+            "all": [
+              {
+                "json": {
+                  "type_of": {
+                    "settings": "object"
+                  }
+                }
+              },
+              {
+                "any": [
+                  {
+                    "json": {
+                      "type_of": {
+                        "streamSettings": "object"
+                      }
+                    }
+                  },
+                  {
+                    "json": {
+                      "key_absent": [
+                        "streamSettings"
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "space": "json",
-          "base": "settings.servers.0"
+          "base": "settings.servers.0",
+          "impl": "ФОРМУ ОПОЗНАЁТ ТИП КОНТЕЙНЕРА, а не ветка default: мусорный ТИП поля (streamSettings: \"none\", settings: []) означает БИТУЮ ЗАПИСЬ, а не «транспорта нет». Отсутствие streamSettings при этом законно (plain-TCP) — развёрнуто у vless."
         }
       ],
       "include": [
         "transports#xray",
-        "tls#xray"
+        "tls#xray",
+        "dialer#xray"
       ],
       "params": {
         "address": {
           "source": "json.$base.address",
           "maps_to": "server",
-          "required": true
+          "required": true,
+          "desc_en": "empty server address"
         },
         "port": {
           "source": "json.$base.port",
           "maps_to": "server_port",
           "type": "int",
-          "required": true
+          "required": true,
+          "desc_en": "server port is missing or out of range"
         },
         "password": {
           "source": "json.$base.password",
           "maps_to": "password",
-          "required": true
+          "required": true,
+          "desc_en": "empty password — the server returned a placeholder, subscription may be expired"
         },
         "$extra_servers": {
           "source": "json.settings.servers",
@@ -379,7 +410,18 @@
       },
       "unknown_key": {
         "action": "drop",
-        "code": "json_field_unknown"
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ],
+        "impl": "Ключи уровня документа плюс контейнеры, чьи листья читают записи таблицы. Список дословно равен списку LxBox и остальных xray-секций — см. развёрнутую сноску у vless."
       },
       "emit": null
     },

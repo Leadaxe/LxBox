@@ -93,7 +93,7 @@
       "core/config/subscription/node_parser_core.go:581-583",
       "core/config/subscription/node_parser_core.go:767-773",
       "core/config/subscription/node_parser_ss.go:6-21",
-      "core/config/subscription/xray_protocols.go:222-256",
+      "core/config/subscription/xray_element_engine.go",
       "core/config/subscription/shareuri_ss.go:11-33"
     ],
     "dart": [
@@ -411,11 +411,15 @@
         {
           "id": "servers",
           "detect": {
-            "default": true
+            "json": {
+              "type_of": {
+                "settings": "object"
+              }
+            }
           },
           "space": "json",
           "base": "settings.servers.0",
-          "impl": "Единственная форма — ветка default: элемент Xray уже опознан detect секции (protocol), и разбирать его иначе не из чего. Так же записана форма servers у trojan в живом реестре лаунчера (контракт 1.1.13)."
+          "impl": "ФОРМУ ОПОЗНАЁТ ТИП КОНТЕЙНЕРА, а не ветка default: мусорный ТИП поля означает БИТУЮ ЗАПИСЬ, а не «транспорта нет». См. развёрнутую запись у vless. ЗДЕСЬ ПРОВЕРЯЕТСЯ ТОЛЬКО settings, без streamSettings: транспорта у plain-SS в Xray не бывает, include этой секции несёт один dialer#xray, и элемент БЕЗ streamSettings — норма, а не битая запись (кейс корпуса ss_basic; требование объекта отняло бы у него узел). Условие называет контейнеры, которые секция ЧИТАЕТ, — у vless/vmess/trojan их два, здесь один."
         }
       ],
       "defaults": {
@@ -437,13 +441,15 @@
         "address": {
           "source": "json.$base.address",
           "maps_to": "server",
-          "required": true
+          "required": true,
+          "desc_en": "empty server address"
         },
         "port": {
           "source": "json.$base.port",
           "maps_to": "server_port",
           "type": "int",
           "required": true,
+          "desc_en": "server port is missing or out of range",
           "impl": "Порт ОБЯЗАТЕЛЕН и ненулевой: port==0 даёт null (записи нет). Дефолта у этого входа нет, в отличие от ссылки."
         },
         "method": {
@@ -455,7 +461,8 @@
           "source": "json.$base.password",
           "maps_to": "password",
           "impl": "required, а НЕ empty:significant: xray_protocols.go:284-286 отбраковывает узел при пустом method ИЛИ password. Это рубеж против плейсхолдеров просроченной подписки — «пишется даже пустым» из черновика его бы снесло.",
-          "required": true
+          "required": true,
+          "desc_en": "empty password — the server returned a placeholder, subscription may be expired"
         },
         "$extra_servers": {
           "source": "json.settings.servers",

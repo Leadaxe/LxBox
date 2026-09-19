@@ -164,7 +164,7 @@
       "core/config/subscription/node_parser_core.go:439",
       "core/config/subscription/node_parser_core.go:593-627",
       "core/config/subscription/node_parser_transport.go:625-701",
-      "core/config/subscription/xray_outbound_convert.go:103-186",
+      "core/config/subscription/xray_element_engine.go",
       "core/config/subscription/singbox_sanitize.go:221-263",
       "core/config/subscription/shareuri_vless.go:64-97"
     ],
@@ -510,32 +510,63 @@
         {
           "id": "vnext",
           "detect": {
-            "default": true
+            "all": [
+              {
+                "json": {
+                  "type_of": {
+                    "settings": "object"
+                  }
+                }
+              },
+              {
+                "any": [
+                  {
+                    "json": {
+                      "type_of": {
+                        "streamSettings": "object"
+                      }
+                    }
+                  },
+                  {
+                    "json": {
+                      "key_absent": [
+                        "streamSettings"
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "space": "json",
-          "base": "settings.vnext.0"
+          "base": "settings.vnext.0",
+          "impl": "ФОРМУ ОПОЗНАЁТ ТИП КОНТЕЙНЕРА, а не ветка default. Мусорный ТИП поля (streamSettings: \"none\", settings: []) означает БИТУЮ ЗАПИСЬ, а не «транспорта нет»: ветка default собирала из неё РАБОЧИЙ plain-TCP узел без транспорта и TLS (xray_outbound_convert.go:148-153 давал nil-карту) — узел, которого провайдер не присылал. Кейс корпуса malformed_stream; дельты нет, это починка дефекта. ОТСУТСТВИЕ streamSettings — НЕ битая запись, а plain-TCP без транспорта: старый конвертер строил из такого элемента рабочий узел (network по умолчанию tcp, та же :148-153), и голое `type_of` его бы отняло, потому что отсутствующий ключ предикат не проходит. Поэтому «объект ИЛИ ключа нет» — через any/key_absent, новых примитивов не требуется. Контейнер settings при этом обязан быть объектом всегда: без него нет ни адреса, ни users."
         }
       ],
       "include": [
         "transports#xray",
-        "tls#xray"
+        "tls#xray",
+        "dialer#xray"
       ],
       "params": {
         "address": {
           "source": "json.$base.address",
           "maps_to": "server",
-          "required": true
+          "required": true,
+          "desc_en": "empty server address"
         },
         "port": {
           "source": "json.$base.port",
           "maps_to": "server_port",
           "type": "int",
-          "required": true
+          "required": true,
+          "desc_en": "server port is missing or out of range"
         },
         "id": {
           "source": "json.$base.users.0.id",
           "maps_to": "uuid",
-          "required": true
+          "required": true,
+          "desc_en": "empty user id — the server returned a placeholder, subscription may be expired"
         },
         "flow": {
           "source": "json.$base.users.0.flow",
@@ -580,7 +611,18 @@
       },
       "unknown_key": {
         "action": "drop",
-        "code": "json_field_unknown"
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ],
+        "impl": "Ключи УРОВНЯ ДОКУМЕНТА, полем узла не являющиеся: бухгалтерия элемента (protocol — по нему элемент и опознан, tag/remarks — имя, которое читает сборка документа) ПЛЮС контейнеры, чьи листья читают записи таблицы. Без контейнеров каждый узел получал бы json_field_unknown на ключ, который секция читает своими записями. Список дословно равен списку LxBox — общий, не наш."
       },
       "emit": null
     },
