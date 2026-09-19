@@ -76,9 +76,8 @@ flutter:
     # отличие (дефолтный порт пира) сняла ветка `endpoint.on_no_match`.
     - assets/contract_draft/xray/
     - assets/contract_draft/singbox/
-    # §480 W6 — реестр ВИДОВ ИСТОЧНИКА лежит в корне: он не принадлежит ни
-    # одному виду источника, он их выбирает.
-    - assets/contract_draft/source_kinds.json
+    # §480 W6 — реестр ВИДОВ ИСТОЧНИКА приехал нормой (контракт 1.1.41,
+    # `assets/contract/registry/source_kinds.json`), черновик снят.
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)
 

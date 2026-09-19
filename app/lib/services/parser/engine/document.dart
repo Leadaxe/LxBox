@@ -43,7 +43,11 @@ final class DocumentSource {
   });
 
   factory DocumentSource.fromJson(Map<String, dynamic> j) => DocumentSource(
-        kind: j['kind'] as String? ?? '',
+        // Контракт 1.1.41 — ключ записи называется `source_kind`. `kind`
+        // читается ради уже написанного черновика: у лаунчера это слово
+        // занято видом источника СЕКЦИИ (`mappers.<kind>`), и одно слово на
+        // два уровня читалось бы как одно понятие.
+        kind: (j['source_kind'] ?? j['kind']) as String? ?? '',
         priority: (j['priority'] as num?)?.toInt() ?? 0,
         detect: (j['detect'] as Map?)?.cast<String, dynamic>(),
         unwrap: j['unwrap'] as String?,
@@ -117,7 +121,15 @@ final class DocumentRegistry {
   DocumentRegistry(this.sources, {this.maxUnwrapDepth = 2});
 
   factory DocumentRegistry.fromJson(Map<String, dynamic> j) {
-    final list = ((j['sources'] as List?) ?? const [])
+    // Контракт 1.1.41 — записи лежат в `source_kinds.kinds`, а общие
+    // настройки (`max_unwrap_depth`) — рядом с ними, внутри того же узла.
+    // Плоское `sources` в корне читается ради уже написанного черновика:
+    // внутри `source_kinds` слово `sources` означало бы источники, а не их
+    // виды.
+    final envelope =
+        (j['source_kinds'] as Map?)?.cast<String, dynamic>() ?? j;
+    final list = ((envelope['kinds'] ?? envelope['sources']) as List? ??
+            const [])
         .whereType<Map>()
         .map((e) => DocumentSource.fromJson(e.cast<String, dynamic>()))
         .toList();
@@ -127,7 +139,10 @@ final class DocumentRegistry {
       ..sort((a, b) => a.priority.compareTo(b.priority));
     return DocumentRegistry(
       ordered,
-      maxUnwrapDepth: (j['max_unwrap_depth'] as num?)?.toInt() ?? 2,
+      maxUnwrapDepth:
+          ((envelope['max_unwrap_depth'] ?? j['max_unwrap_depth']) as num?)
+                  ?.toInt() ??
+              2,
     );
   }
 

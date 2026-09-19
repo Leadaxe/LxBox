@@ -34,6 +34,10 @@ const _kSharedRefs = <String, String>{
   'dialer.common': 'dialer.json',
 };
 
+/// Общие файлы реестра БЕЗ цели `ref`: тело узла в них не спускается, их
+/// читают другие слои по имени файла ([ContractRegistry.rawShared]).
+const _kStandaloneShared = <String>['source_kinds.json'];
+
 /// Описание поля тела — обёртка над картой реестра.
 ///
 /// Атрибуты не копируются в поля класса: их 30+, читает их санитайзер
@@ -399,6 +403,24 @@ final class ContractRegistry {
       if (_shared.containsKey(entry.value)) continue;
       _shared[entry.value] =
           jsonDecode(await read('registry/${entry.value}')) as Map<String, dynamic>;
+    }
+
+    // Контракт 1.1.41 — `source_kinds.json` цели `ref` не имеет: тело узла в
+    // него не спускается, его читает опознание ИСТОЧНИКА (`documents`
+    // загрузчика секций). Поэтому он грузится отдельно, а не вместе с
+    // разворотом `ref`.
+    //
+    // Отсутствие файла — рабочее состояние, а не поломка: контракт старше
+    // 1.1.41 его не несёт, и опознание тогда идёт прежним путём. Ронять на
+    // нём загрузку всего реестра нельзя.
+    for (final name in _kStandaloneShared) {
+      if (_shared.containsKey(name)) continue;
+      try {
+        _shared[name] =
+            jsonDecode(await read('registry/$name')) as Map<String, dynamic>;
+      } catch (_) {
+        // Нет файла (или он не читается) — ветки просто нет.
+      }
     }
 
     for (final scheme in _kProtocolFiles) {
