@@ -42,6 +42,7 @@ final class EngineResult {
     this.wsEarlyDataHeaderImplicit = false,
     this.tagAddress,
     this.tagScheme,
+    this.kinds = const {},
     this.bodySource = '',
   });
 
@@ -55,6 +56,10 @@ final class EngineResult {
   final Map<String, dynamic> extensionFields;
   final bool wsEarlyDataHeaderImplicit;
   final (String, int)? tagAddress;
+
+  /// Рода узла, объявленные ВХОДОМ (`kind_when`): их судит не тело, а
+  /// источник.
+  final Set<String> kinds;
 
   /// Написание имени в теге-фолбэке, объявленное секцией (`label.fallback
   /// .scheme`): `null` — фолбэк строится по типу тела, как у всех прочих.
@@ -796,7 +801,23 @@ final class _Run {
       tagScheme: section.label.fallbackScheme,
       bodySource: section.bodySource,
       tagAddress: _tagAddress(),
+      kinds: _kinds(),
     );
+  }
+
+  /// Рода узла, объявленные ВХОДОМ (`kind_when`, G1).
+  ///
+  /// Предикат судится по источникам, а не по телу: вход мог попросить подвид
+  /// протокола и не донести ни одного годного поля — тело такого узла от
+  /// базового неотличимо, а правило рода от этого не отменяется.
+  Set<String> _kinds() {
+    if (section.kindWhen.isEmpty) return const {};
+    final out = <String>{};
+    for (final e in section.kindWhen.entries) {
+      final cond = (e.value as Map?)?.cast<String, dynamic>();
+      if (cond != null && _whenHolds(cond)) out.add(e.key);
+    }
+    return out;
   }
 
   /// Адрес для тега-фолбэка, когда он лежит НЕ в корне тела.
@@ -1156,6 +1177,15 @@ final class _Run {
           return;
         }
         value = mapped.value;
+      } else if (p.sets.isEmpty && p.onNoMatch.isNotEmpty) {
+        // Значение не попало ни в одно написание таблицы. У записи БЕЗ `sets`
+        // (там `on_no_match` уже занят, см. ниже) это «мусор»: закрытый набор
+        // написаний тем и отличается от свободного значения, что всё вне его —
+        // ошибка автора ссылки, и молчать о ней нельзя.
+        if (p.onNoMatch['action'] == 'drop_node') return;
+        _applyOnNoMatch(p, value);
+        _applyImplies(p);
+        return;
       }
     }
 
@@ -1524,6 +1554,13 @@ final class _Run {
     }
   }
 
+  /// `on_no_match` — значение не нашлось в закрытом наборе написаний.
+  void _applyOnNoMatch(MapperParam p, String raw) {
+    final code = p.onNoMatch['code'] as String?;
+    if (code == null) return;
+    warnings.add(NodeWarning.byCode(code, path: p.name, value: raw.trim()));
+  }
+
   /// `on_invalid` — значение не приводится к объявленной форме.
   ///
   /// Само СНЯТИЕ уже случилось (значение не записано); здесь только код, и
@@ -1574,12 +1611,17 @@ final class _Run {
         return space.scheme;
       case 'authority':
         return space.authority;
+      // userinfo percent-декодируется ПО ПРАВИЛАМ ЗАПИСИ, как и query: у поля
+      // base64-формата `+` обязан остаться собой. Иначе `%2F`-энкоденный ключ
+      // с плюсом внутри терял плюс, а ключ — 32 байта, и узел пропадал.
       case 'userinfo':
-        return space.userinfo;
+        return _decodeQueryValue(space.userinfo, p);
       case 'userinfo.user':
-        return space.userinfoUser;
+        final u = space.userinfoUser;
+        return u == null ? null : _decodeQueryValue(u, p);
       case 'userinfo.pass':
-        return space.userinfoPass;
+        final pw = space.userinfoPass;
+        return pw == null ? null : _decodeQueryValue(pw, p);
       case 'host':
         return space.host;
       case 'port':
@@ -1734,6 +1776,21 @@ final class _Run {
     if (when.isEmpty) return true;
     for (final e in when.entries) {
       final key = e.key;
+      // `any_set` — ДИЗЪЮНКЦИЯ по источникам: держится, если ХОТЯ БЫ ОДИН из
+      // перечисленных адресов что-то несёт. Имя взято у существующего
+      // атрибута реестра (`when.any_set` в правилах тела), чтобы у одного
+      // смысла не завелось второго написания; остальные ключи `when`
+      // по-прежнему конъюнкция.
+      // `$impl` и прочая проза с `$`-префиксом — не предикат, а пояснение
+      // рядом с условием (DRAFT-соглашение §0.7: `$` помечает запись, которая
+      // в исполнение не идёт). `$type` и `$form` — исключения, они разобраны
+      // ниже по именам.
+      if (key.startsWith(r'$') && key != r'$type' && key != r'$form') continue;
+      if (key == 'any_set') {
+        final names = (e.value as List?)?.cast<String>() ?? const <String>[];
+        if (!names.any((n) => _readSourceBare(n) != null)) return false;
+        continue;
+      }
       dynamic actual;
       if (key == r'$type') {
         actual = section.singboxType;

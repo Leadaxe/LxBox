@@ -354,7 +354,11 @@ NodeSpec? _runPipeline(
   //    молчание тут не безопасно.
   //
   // Число в Dart не вписывается: и потолок, и его код называет реестр.
-  if (mapping.kindIsAwg) {
+  // §480 — род читается из ДВУХ мест: рукописный маппер ставит флаг, движок
+  // отдаёт имена из `kind_when` секции. Толкование имени — здесь: движок
+  // имён схем не знает (греп-страж).
+  if (mapping.kindIsAwg || mapping.kinds.contains('awg') ||
+      mapping.kinds.contains('awg3')) {
     final ceiling = awgMtuCeilingByRegistry();
     if (ceiling != null) {
       final written = body['mtu'];

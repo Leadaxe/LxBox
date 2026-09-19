@@ -407,28 +407,40 @@
         "randomtrailers": {
           "source": "query.randomtrailers",
           "maps_to": "random_trailers",
-          "type": "bool_spelled",
           "omit_default": false,
           "impl": "§421 AWG 3.1 — у этих флагов СВОЙ набор написаний: ядро и .conf пишут on/off, которых в общем bool_spelled (1|true|yes) нет. Написание переводится value_map записи, а общий тип не трогается: добавь мы on в него, включёнными стали бы флаги всех схем, где автор написал on по ошибке. Выключенное = ключа НЕТ вовсе (никогда false: лишний ключ менял бы identity-хеш).",
           "value_map": {
             "on": "true",
+            "true": "true",
+            "1": "true",
             "off": null,
             "false": null,
-            "0": null
+            "0": null,
+            "": null
+          },
+          "on_no_match": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
           }
         },
         "disablecookies": {
           "source": "query.disablecookies",
           "maps_to": "disable_cookies",
-          "type": "bool_spelled",
           "omit_default": false,
           "value_map": {
             "on": "true",
+            "true": "true",
+            "1": "true",
             "off": null,
             "false": null,
-            "0": null
+            "0": null,
+            "": null
           },
-          "impl": "§421 AWG 3.1 — у этих флагов СВОЙ набор написаний: ядро и .conf пишут on/off, которых в общем bool_spelled (1|true|yes) нет. Написание переводится value_map записи, а общий тип не трогается: добавь мы on в него, включёнными стали бы флаги всех схем, где автор написал on по ошибке. Выключенное = ключа НЕТ вовсе (никогда false: лишний ключ менял бы identity-хеш)."
+          "impl": "§421 AWG 3.1 — у этих флагов СВОЙ набор написаний: ядро и .conf пишут on/off, которых в общем bool_spelled (1|true|yes) нет. Написание переводится value_map записи, а общий тип не трогается: добавь мы on в него, включёнными стали бы флаги всех схем, где автор написал on по ошибке. Выключенное = ключа НЕТ вовсе (никогда false: лишний ключ менял бы identity-хеш).",
+          "on_no_match": {
+            "action": "drop",
+            "code": "awg3_field_invalid"
+          }
         }
       },
       "scheme_sets": {
@@ -446,6 +458,47 @@
         "omit_default": [
           "server_port"
         ]
+      },
+      "kind_when": {
+        "awg": {
+          "any_set": [
+            "query.jc",
+            "query.jmin",
+            "query.jmax",
+            "query.s1",
+            "query.s2",
+            "query.s3",
+            "query.s4",
+            "query.h1",
+            "query.h2",
+            "query.h3",
+            "query.h4",
+            "query.i1",
+            "query.i2",
+            "query.i3",
+            "query.i4",
+            "query.i5",
+            "query.id",
+            "query.ip",
+            "query.ib",
+            "query.headerprotectionkey",
+            "query.contentpaddingaddition",
+            "query.rekeyaftertime",
+            "query.rekeytimeout",
+            "query.rejectaftertime",
+            "query.keepalivetimeout",
+            "query.maxhandshakeattempts",
+            "query.randomtrailers",
+            "query.disablecookies"
+          ],
+          "$impl": "G1 — род узла объявляет ВХОД, а не уцелевшие поля тела. Правило реестра (body.fields.mtu max_when/default_when) судит тело условием any_set, но вход может попросить AmneziaWG и не донести НИ ОДНОГО годного поля (jc=abc вместе с одиноким jmin, кейсы корпуса awg_bad_numeric_skipped и awg_jc_invalid_dropped). Тело такого узла от обычного WireGuard неотличимо, а потолок MTU — свойство ЗАПРОШЕННОГО протокола: без него туннель поднимается, но данные по нему не идут."
+        },
+        "awg3": {
+          "query.keepalive": {
+            "matches": "-"
+          },
+          "$impl": "§421 — диапазонный keepalive (25-35) сам по себе маркер AWG 3.x, даже когда прочих AWG-полей в ссылке нет."
+        }
       }
     }
   }

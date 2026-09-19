@@ -36,6 +36,7 @@ final class UriMapping {
     this.wsEarlyDataHeaderImplicit = false,
     this.tagAddress,
     this.kindIsAwg = false,
+    this.kinds = const {},
     this.bodySource = BodySource.other,
   });
 
@@ -98,6 +99,13 @@ final class UriMapping {
   /// Знает об этом только маппер: до санитайзера значения уже разобраны, а в
   /// теле следа не осталось. Само число берёт конвейер из реестра.
   final bool kindIsAwg;
+
+  /// §480 — рода узла, объявленные ВХОДОМ (`kind_when` секции реестра).
+  ///
+  /// То же, что [kindIsAwg], но именами ИЗ ДАННЫХ: движок имён схем не знает
+  /// и отдаёт строки как есть, а толкует их вызывающий. Рукописные мапперы
+  /// ставят [kindIsAwg] напрямую и это поле не заполняют.
+  final Set<String> kinds;
 
   /// §103 D-008 — заголовок early data подставлен САМОЙ формой записи
   /// (`?ed=N` хвостом пути), а не написан автором ссылки.

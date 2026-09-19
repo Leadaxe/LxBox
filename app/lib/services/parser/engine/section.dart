@@ -499,6 +499,7 @@ final class MapperSection {
     this.unknownKeyAction = 'drop',
     this.unknownKeyCode,
     this.ignoredKeys = const {},
+    this.kindWhen = const {},
     this.emit,
   });
 
@@ -542,9 +543,22 @@ final class MapperSection {
       unknownKeyCode: uk?['code'] as String?,
       ignoredKeys:
           ((uk?['ignore'] as List?) ?? const []).cast<String>().toSet(),
+      kindWhen: ((j['kind_when'] as Map?) ?? const {}).cast<String, dynamic>(),
       emit: (j['emit'] as Map?)?.cast<String, dynamic>(),
     );
   }
+
+  /// РОД узла, объявленный ВХОДОМ, а не уцелевшими полями тела (G1).
+  ///
+  /// Карта «имя рода → предикат по источнику». Нужна там, где правило реестра
+  /// судит тело условием `any_set`, а вход мог попросить подвид протокола и не
+  /// донести НИ ОДНОГО годного поля: тело такого узла от базового протокола
+  /// неотличимо, а правило (например, потолок MTU) — свойство ЗАПРОШЕННОГО
+  /// протокола, и без него туннель поднимается, но данные по нему не идут.
+  ///
+  /// Предикат смотрит на ИСТОЧНИК, потому что к моменту суда тело уже не
+  /// помнит, что в нём было.
+  final Map<String, dynamic> kindWhen;
 
   /// Вид источника: `uri` | `xray` | `singbox` | `conf`.
   final String kind;

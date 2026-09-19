@@ -34,6 +34,10 @@ UriMapping? mapViaEngine(String uri, String singboxType) {
     extensionFields: res.extensionFields,
     wsEarlyDataHeaderImplicit: res.wsEarlyDataHeaderImplicit,
     tagAddress: res.tagAddress,
+    // Рода, объявленные ВХОДОМ (`kind_when` секции): правило реестра судит
+    // тело, а вход мог попросить подвид протокола и не донести ни одного
+    // годного поля. Имя рода — строка ИЗ ДАННЫХ, движок его не толкует.
+    kinds: res.kinds,
     // §480 — вход НАЗЫВАЕТ СЕБЯ САМ: секция объявила `body_source`, и
     // санитайзер судит по нему `except_sources`.
     bodySource: BodySource.byRegistryName(res.bodySource),

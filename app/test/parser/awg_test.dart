@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/services/contract/registry.dart' show kAwgMtuFallback;
+import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -20,6 +23,17 @@ const _testPub = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=';
 const _testPsk = 'ccccccccccccccccccccccccccccccccccccccccccA=';
 
 void main() {
+  // §480 W4 — гейт на ЗЕРКАЛО реестра: wireguard разбирает движок, и без
+  // секций у схемы запасного пути не осталось.
+  final mirrored = Directory('assets/contract/registry').existsSync();
+
+  setUpAll(() async {
+    if (!mirrored) return;
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   const i1 = '<b 0x000100002112a442><r 12>';
   const i3 = '<r 24>';
   final fullUri = 'wireguard://$_testPriv@host.example.com:51821'
@@ -30,35 +44,41 @@ void main() {
       '&i1=${Uri.encodeQueryComponent(i1)}'
       '&i3=${Uri.encodeQueryComponent(i3)}#awg-server';
 
-  // §472 шаг 7 / §473 — ЭТОТ ФАЙЛ РЕЕСТР НЕ ГРУЖАЕТ, и это здесь не
-  // упущение, а предмет проверки: реестр не обязательное условие работы
-  // приложения (§460 — не загрузился, живём как до него), но AWG-узел без
-  // потолка MTU поднимает туннель, по которому не идут данные. Санитайзер без
-  // реестра не работает вовсе, поэтому потолок обязан поставить конвейер сам —
-  // запасным числом `kAwgMtuFallback`.
-  group('§473 — потолок MTU без загруженного реестра', () {
+  // §480 W4 — ФАЙЛ ТЕПЕРЬ ГРУЗИТ РЕЕСТР И СЕКЦИИ, и это смена предмета
+  // проверки, а не правка под зелёный.
+  //
+  // Прежняя редакция намеренно проверяла работу БЕЗ реестра: запасное число
+  // `kAwgMtuFallback` ставил конвейер сам, потому что реестр не был
+  // обязательным условием работы приложения (§460 — не загрузился, живём как
+  // до него). Фича 480 это отменила критерием 7 спеки: «движок без реестра не
+  // работает вовсе, рукописного запасного пути не остаётся, отсутствие
+  // реестра в сборке — ошибка сборки». Запасного пути у wireguard больше нет,
+  // и проверять его поведение стало нечем.
+  //
+  // Потолок MTU при этом никуда не делся — его ставит САНИТАЙЗЕР по
+  // `body.fields.mtu` (`max_when`, §473), и ровно это группа ниже и проверяет.
+  group('§473 — потолок MTU по реестру', () {
     String wg(String extra) => 'wireguard://$_testPriv@h.example:51820'
         '?publickey=$_testPub&address=10.0.0.2/32$extra#n';
 
-    test('AWG с mtu=1420 заклампится и БЕЗ реестра', () {
+    test('AWG с mtu=1420 заклампится потолком реестра', () {
       final spec = parseWireguardUri(wg('&jc=4&mtu=1420'))!;
       expect(spec.mtu, kAwgMtuFallback,
           reason: 'без потолка узел уехал бы в ядро с 1420: туннель '
               'поднимается, данные не идут');
       expect(spec.emit(TemplateVars.empty).map['mtu'], kAwgMtuFallback);
-      // Замена не молчит и без реестра: имя кода — константа контракта, и
-      // выдумкой она не является (реестр объявляет тот же `awg_mtu_clamped`).
+      // Замена не молчит: код объявлен реестром (`awg_mtu_clamped`).
       expect(spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
           contains('awg_mtu_clamped'));
     });
 
-    test('AWG без mtu получает потолок дефолтом, кодов нет', () {
+    test('AWG без mtu получает потолок дефолтом реестра, кодов нет', () {
       final spec = parseWireguardUri(wg('&jc=4'))!;
       expect(spec.mtu, kAwgMtuFallback);
       expect(spec.warnings, isEmpty, reason: 'подстановка — не замена');
     });
 
-    test('обычный WG без реестра не трогается вовсе', () {
+    test('обычный WG потолка не получает вовсе', () {
       expect(parseWireguardUri(wg('&mtu=1420'))!.mtu, 1420);
       expect(parseWireguardUri(wg(''))!.mtu, isNull,
           reason: 'ядро берёт свой 1408; наш дефолт ломал бы identity');
@@ -542,33 +562,43 @@ void main() {
     // §481 (контракт 1.1.11) — рукописный `awg3NodeError` СНЯТ: узел роняет
     // реестр (`awg3_header_key_invalid` / `awg3_padding_too_short`, оба
     // `drop_node`), и роняет С КОДОМ и на входе sing-box тоже, чего рукописная
-    // проверка не умела вовсе. Реестр здесь не загружен — значит, узел живёт;
-    // отбраковку по правилу проверяет `body_sanitizer_test.dart`.
-    test('битый ключ защиты БЕЗ реестра доезжает: судить его некому', () {
+    // проверка не умела вовсе.
+    //
+    // §480 W4 — ожидание ПЕРЕВЁРНУТО. Прежняя редакция ждала, что узел ЖИВЁТ:
+    // реестр в этом файле не грузился, и судить значение было некому. Фича 480
+    // отменила такой прогон критерием 7 («движок без реестра не работает
+    // вовсе»), реестр здесь теперь загружен — и правило отрабатывает.
+    test('битый ключ защиты роняет узел правилом реестра', () {
       const zero = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
       for (final bad in ['not-base64!', 'AQIDBAUGBwgJCgsMDQ4PEA==', zero]) {
-        expect(parseWireguardUri(uri('$s&headerprotectionkey=$bad')), isNotNull,
+        expect(parseWireguardUri(uri('$s&headerprotectionkey=$bad')), isNull,
             reason: bad);
       }
     });
 
-    test('короткий паддинг БЕЗ реестра доезжает; без ключа защиты он легален '
-        'и при реестре (AWG2-поведение)', () {
+    test('короткий паддинг при ключе защиты роняет узел; без ключа он легален '
+        '(AWG2-поведение)', () {
       expect(
           parseWireguardUri(
               uri('&s1=55&s2=42&s3=40&s4=11&headerprotectionkey=$hkQ')),
-          isNotNull);
-      expect(parseWireguardUri(uri('&s1=5&s4=0')), isNotNull);
+          isNull,
+          reason: 'nonce шифра заголовка берётся из первых 12 байт паддинга');
+      expect(parseWireguardUri(uri('&s1=5&s4=0')), isNotNull,
+          reason: 'без ключа защиты короткий паддинг — обычный AWG2');
     });
 
-    test('random_trailers + широкий диапазон h → info, ничего не снято', () {
+    test('random_trailers + широкий диапазон h: поля на месте', () {
       final spec = parseWireguardUri(
           uri('$s&h1=1000-70000&randomtrailers=on'))!;
       expect(spec.awg!.fields['h1'], '1000-70000');
       expect(spec.awg!.fields['random_trailers'], true);
-      expect(spec.warnings,
-          contains(const Awg3RandomTrailersWideHeadersWarning()));
-      // Узкий диапазон — без info.
+      // §480 W4 — info-кода `awg3_random_trailers_wide_headers` здесь БОЛЬШЕ
+      // НЕТ, и это не потеря значения, а переезд СУЖДЕНИЯ. Он рождался в
+      // рукописном маппере (`Awg.randomTrailersWithWideHeaders`), а судит он
+      // ДВА поля разом — `random_trailers` и ширину `h1`–`h4`. Маппер значения
+      // не судит вовсе, а правило поверх пары полей умеет объявлять только
+      // реестр, и сегодня он его не объявляет: запись — запрос к лаунчеру
+      // (`body.fields`, условие по паре). До неё кода нет ни у одной стороны.
       final narrow = parseWireguardUri(
           uri('$s&h1=1000-2000&randomtrailers=on'))!;
       expect(narrow.warnings, isEmpty);
