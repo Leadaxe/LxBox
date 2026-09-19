@@ -1174,7 +1174,7 @@
     },
     "corpus:uri_psk_keepalive": {
       "uri": "wireguard://example-2.com:51820?privatekey=ccccccccccccccccccccccccccccccccccccccccccC%3D&publickey=ddddddddddddddddddddddddddddddddddddddddddD%3D&preshared_key=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE%3D&address=10.0.0.3%2F32,fd00%3A%3A2%2F128&keepalive=25&mtu=1280#WG%20PSK",
-      "identity": "f87253978dcdad75ae7fb808971f9754a131293a6d68b23aef2aca90beccd548",
+      "identity": "c9ca0848b92bbb4887c68e9ae737c3a9ac768419736ee3821e9f3e3e33c710b1",
       "tag": "WG PSK",
       "body": {
         "type": "wireguard",
@@ -1194,10 +1194,38 @@
               "0.0.0.0/0",
               "::/0"
             ],
+            "pre_shared_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=",
             "persistent_keepalive_interval": 25
           }
         ]
-      }
+      },
+      "_before480": {
+        "identity": "f87253978dcdad75ae7fb808971f9754a131293a6d68b23aef2aca90beccd548",
+        "tag": "WG PSK",
+        "body": {
+          "type": "wireguard",
+          "tag": "WG PSK",
+          "mtu": 1280,
+          "address": [
+            "10.0.0.3/32",
+            "fd00::2/128"
+          ],
+          "private_key": "ccccccccccccccccccccccccccccccccccccccccccA=",
+          "peers": [
+            {
+              "address": "example-2.com",
+              "port": 51820,
+              "public_key": "ddddddddddddddddddddddddddddddddddddddddddA=",
+              "allowed_ips": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "persistent_keepalive_interval": 25
+            }
+          ]
+        }
+      },
+      "_delta480": "delta480-7: алиас `preshared_key` у ССЫЛКИ. Было — ключ молча терялся: URI-путь читал только `presharedkey`, хотя реестр объявляет алиас (wireguard.json uri.query.presharedkey.aliases), и туннель к серверу с PSK не поднимался. Стало — читается, как у INI (delta480-4)."
     },
     "corpus:urlsafe_key_normalized": {
       "uri": "wireguard://JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL_GzdTb4unw9_4=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
@@ -2560,8 +2588,32 @@
     },
     "b480:presharedkey_raw_plus": {
       "uri": "wireguard://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&presharedkey=+QBFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUU=&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#psk-plus",
-      "identity": null,
-      "dropped": true
+      "identity": "f4642b4c4ac9e4bd2b45f7d363ce59c374e94f5dd16fe85c3712b92a99e86841",
+      "_before480": {
+        "identity": null,
+        "dropped": true
+      },
+      "_delta480": "delta480-3 (D133-7): поле base64-формата читает сырой «+» буквально. Было — УЗЛА НЕТ ВОВСЕ: «+» становился пробелом, ключ переставал быть base64, и узел молча пропадал из подписки. Стало — узел живёт с ключом как в ссылке.",
+      "tag": "psk-plus",
+      "body": {
+        "type": "wireguard",
+        "tag": "psk-plus",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ],
+            "pre_shared_key": "+QBFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUU="
+          }
+        ]
+      }
     },
     "b480:privatekey_encoded_plus_query": {
       "uri": "wg://example-1.com:51820?privatekey=%2BwBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE%3D&publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#priv-plus-q-enc",
@@ -2588,8 +2640,31 @@
     },
     "b480:privatekey_raw_plus_query": {
       "uri": "wg://example-1.com:51820?privatekey=+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=&publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#priv-plus-q",
-      "identity": null,
-      "dropped": true
+      "identity": "223acd6f63ee60d9a9dc692164c62dddceaeea8912bb75b30c8f119aa95b6176",
+      "_before480": {
+        "identity": null,
+        "dropped": true
+      },
+      "_delta480": "delta480-3 (D133-7): поле base64-формата читает сырой «+» буквально. Было — УЗЛА НЕТ ВОВСЕ: «+» становился пробелом, ключ переставал быть base64, и узел молча пропадал из подписки. Стало — узел живёт с ключом как в ссылке.",
+      "tag": "priv-plus-q",
+      "body": {
+        "type": "wireguard",
+        "tag": "priv-plus-q",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
     },
     "b480:privatekey_raw_plus_userinfo": {
       "uri": "wireguard://+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#priv-plus-ui",
@@ -2639,8 +2714,31 @@
     },
     "b480:publickey_raw_plus": {
       "uri": "wireguard://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#pub-plus",
-      "identity": null,
-      "dropped": true
+      "identity": "e9fdd0c7aa1094a223b03556858ce9a84a22195f07de321a9a543ad0523b2ced",
+      "_before480": {
+        "identity": null,
+        "dropped": true
+      },
+      "_delta480": "delta480-3 (D133-7): поле base64-формата читает сырой «+» буквально. Было — УЗЛА НЕТ ВОВСЕ: «+» становился пробелом, ключ переставал быть base64, и узел молча пропадал из подписки. Стало — узел живёт с ключом как в ссылке.",
+      "tag": "pub-plus",
+      "body": {
+        "type": "wireguard",
+        "tag": "pub-plus",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
     },
     "b480:awg_no_fragment": {
       "uri": "awg://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0&jc=4&jmin=40&jmax=70",

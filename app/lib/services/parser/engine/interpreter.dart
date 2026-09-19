@@ -296,6 +296,53 @@ SourceSpace? _applyScopedDecode(MapperForm form, SourceSpace space) {
 
 /// Декодеры оболочки формы. Отдельный тип, чтобы не тащить статику в `_Run`.
 abstract final class _RunDecode {
+  /// Байты из base64 в любом из четырёх написаний; `null` — не base64.
+  ///
+  /// Декодер СВОЙ и ленивый, как `encoding/base64` у Go: `dart:convert`
+  /// отвергает неканоническую форму (лишние биты в последнем символе,
+  /// `…ccC=`), а D-030 требует именно её принимать — иначе живой ключ
+  /// объявляется мусором. Канонизацию делает вызывающий, кодируя обратно.
+  static List<int>? bytes(String raw) {
+    final trimmed = raw.replaceAll(RegExp(r'=+$'), '');
+    if (trimmed.isEmpty) return null;
+    final values = <int>[];
+    for (final unit in trimmed.codeUnits) {
+      final v = _b64Value(unit);
+      if (v == null) return null;
+      values.add(v);
+    }
+    // Один остаточный символ кодирует меньше байта — это не base64.
+    final rem = values.length % 4;
+    if (rem == 1) return null;
+
+    final out = <int>[];
+    var i = 0;
+    while (i + 4 <= values.length) {
+      final n = (values[i] << 18) |
+          (values[i + 1] << 12) |
+          (values[i + 2] << 6) |
+          values[i + 3];
+      out..add((n >> 16) & 0xFF)..add((n >> 8) & 0xFF)..add(n & 0xFF);
+      i += 4;
+    }
+    if (rem == 2) {
+      out.add(((values[i] << 2) | (values[i + 1] >> 4)) & 0xFF);
+    } else if (rem == 3) {
+      final n = (values[i] << 10) | (values[i + 1] << 4) | (values[i + 2] >> 2);
+      out..add((n >> 8) & 0xFF)..add(n & 0xFF);
+    }
+    return out;
+  }
+
+  static int? _b64Value(int unit) {
+    if (unit >= 0x41 && unit <= 0x5A) return unit - 0x41; // A-Z
+    if (unit >= 0x61 && unit <= 0x7A) return unit - 0x61 + 26; // a-z
+    if (unit >= 0x30 && unit <= 0x39) return unit - 0x30 + 52; // 0-9
+    if (unit == 0x2B || unit == 0x2D) return 62; // + -
+    if (unit == 0x2F || unit == 0x5F) return 63; // / _
+    return null;
+  }
+
   static String? base64(String raw) {
     try {
       var s = raw.replaceAll('-', '+').replaceAll('_', '/');
@@ -568,6 +615,10 @@ dynamic jsonPathValue(dynamic root, String path) {
 /// по `list.sep`, а не над исходной строкой.
 const Set<String> _kListNormalizers = {'port_range_spec', 'cidr_prefix'};
 
+/// Беззнаковое целое: у диапазонных полей знака не бывает, а `int.tryParse`
+/// принял бы `-5` числом.
+final RegExp _kUintRe = RegExp(r'^\d+$');
+
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
   _Run(this.section, this.space, this._trace);
@@ -744,7 +795,22 @@ final class _Run {
       wsEarlyDataHeaderImplicit: _wsEarlyDataHeaderImplicit,
       tagScheme: section.label.fallbackScheme,
       bodySource: section.bodySource,
+      tagAddress: _tagAddress(),
     );
+  }
+
+  /// Адрес для тега-фолбэка, когда он лежит НЕ в корне тела.
+  ///
+  /// `null` — адрес там, где его ищут по умолчанию (`server`/`server_port`),
+  /// и вызывающему подсказывать нечего.
+  (String, int)? _tagAddress() {
+    final sPath = section.label.fallbackServerPath;
+    if (sPath == null) return null;
+    final server = _read(sPath);
+    if (server == null) return null;
+    final pPath = section.label.fallbackPortPath;
+    final port = pPath == null ? null : _read(pPath);
+    return ('$server', port is num ? port.toInt() : 0);
   }
 
   /// Записи в порядке исполнения: `priority` (меньше = раньше), при равенстве
@@ -1108,6 +1174,24 @@ final class _Run {
 
     // Приведение типа (`type`) — форма, а не суждение.
     var typed = _coerceType(p, value);
+
+    // `list.item: "int"`, а разрез числами не стал — ВТОРАЯ ФОРМА записи того
+    // же списка: байты в base64. Так WARP пишет `client_id` (три байта), а наш
+    // round-trip — десятичной тройкой; тело у обеих форм одно.
+    //
+    // Проверяется ДО отказа по `null`: у второй формы первый разрез не даёт
+    // ничего, и ранний выход съел бы её молча. Это разбор ФОРМЫ, а не
+    // суждение — длину списка и границы байтов судит санитайзер по `len` и
+    // `format` поля.
+    final lspec = p.list;
+    if (lspec != null && lspec.item == 'int' && raw is String) {
+      final gotInts = typed is List && typed.isNotEmpty;
+      if (!gotInts) {
+        final bytes = _RunDecode.bytes(raw.trim());
+        if (bytes != null && bytes.isNotEmpty) typed = bytes;
+      }
+    }
+
     if (typed == null) {
       // `on_invalid.action: "keep"` — значение к объявленной форме не
       // приводится, и запись ПРОСИТ пропустить его в тело КАК ПРИШЛО.
@@ -1128,6 +1212,7 @@ final class _Run {
     if (norm != null && _kListNormalizers.contains(norm) && typed is List) {
       typed = _normalizeList(typed, norm);
     }
+
 
     // `split_into` — один список РАЗБРАСЫВАЕТСЯ по нескольким путям по
     // предикату на элементе: ядро держит адреса туннеля двумя отдельными
@@ -1906,8 +1991,18 @@ final class _Run {
         return value.trim();
       case 'trim_lower':
         return value.trim().toLowerCase();
+      // Любой из четырёх вариантов base64 (std/url-safe × с паддингом и без)
+      // приводится к КАНОНУ — std с паддингом.
+      //
+      // Это нормализация, а не суждение, и снять её нельзя: `…ccC=` и `…ccA=`
+      // декодируют в одни и те же байты, но уезжают в конфиг по-разному, то
+      // есть одна нода даёт два identity-хеша (D-030). Годность (длину) судит
+      // санитайзер по `format` поля, поэтому здесь не проверяется ничего:
+      // не-base64 возвращается как пришёл и снимается правилом реестра.
       case 'base64_std':
-        return value.replaceAll('-', '+').replaceAll('_', '/');
+        final swapped = value.trim().replaceAll('-', '+').replaceAll('_', '/');
+        final decoded = _RunDecode.bytes(swapped);
+        return decoded == null ? value : _b64.encode(decoded);
       case 'duration_bare_seconds':
         final n = int.tryParse(value.trim());
         return n == null ? value : '${n}s';
@@ -1960,6 +2055,22 @@ final class _Run {
   static dynamic _normalizeRange(String value, {required bool swap}) {
     final v = value.trim();
     if (v.isEmpty) return null;
+    // Только цифры: знака у этих полей не бывает, а `int.tryParse` принял бы
+    // `-5` числом, и отрицательное значение уехало бы в тело — там его снял бы
+    // санитайзер, но уже ОБЩИМ кодом, потеряв имя поля.
+    if (!_kUintRe.hasMatch(v)) {
+      final dash = v.indexOf('-');
+      if (dash <= 0) return null;
+      final lo = _kUintRe.hasMatch(v.substring(0, dash).trim())
+          ? int.tryParse(v.substring(0, dash).trim())
+          : null;
+      final hi = _kUintRe.hasMatch(v.substring(dash + 1).trim())
+          ? int.tryParse(v.substring(dash + 1).trim())
+          : null;
+      if (lo == null || hi == null) return null;
+      if (hi < lo) return swap ? '$hi-$lo' : null;
+      return '$lo-$hi';
+    }
     final single = int.tryParse(v);
     if (single != null) return single;
     final dash = v.indexOf('-');
@@ -2043,7 +2154,15 @@ final class _Run {
     final segs = path.split('.');
     Map<String, dynamic>? cur = body;
     for (var i = 0; i < segs.length - 1; i++) {
-      final next = cur![segs[i]];
+      final seg = segs[i];
+      // `имя[]` — первый элемент массива (см. [_put]).
+      if (seg.endsWith('[]')) {
+        final list = cur![seg.substring(0, seg.length - 2)];
+        if (list is! List || list.isEmpty || list.first is! Map) return;
+        cur = (list.first as Map).cast<String, dynamic>();
+        continue;
+      }
+      final next = cur![seg];
       if (next is! Map) return;
       cur = next.cast<String, dynamic>();
     }
@@ -2059,12 +2178,31 @@ final class _Run {
     final segs = path.split('.');
     var cur = body;
     for (var i = 0; i < segs.length - 1; i++) {
-      final next = cur[segs[i]];
+      final seg = segs[i];
+      // Сегмент `имя[]` — ЭЛЕМЕНТ МАССИВА: так запись адресует поле вложенной
+      // записи у схем уровня `endpoint`, где адреса сервера в корне тела нет
+      // вовсе. Ссылка несёт строго один такой элемент (это свойство ФОРМЫ
+      // источника, а не схемы), поэтому массив заводится из одной карты и
+      // дальше наполняется ею же.
+      if (seg.endsWith('[]')) {
+        final key = seg.substring(0, seg.length - 2);
+        final existing = cur[key];
+        if (existing is List && existing.isNotEmpty &&
+            existing.first is Map<String, dynamic>) {
+          cur = existing.first as Map<String, dynamic>;
+        } else {
+          final fresh = <String, dynamic>{};
+          cur[key] = [fresh];
+          cur = fresh;
+        }
+        continue;
+      }
+      final next = cur[seg];
       if (next is Map<String, dynamic>) {
         cur = next;
       } else {
         final fresh = <String, dynamic>{};
-        cur[segs[i]] = fresh;
+        cur[seg] = fresh;
         cur = fresh;
       }
     }
@@ -2075,6 +2213,13 @@ final class _Run {
     dynamic cur = body;
     for (final seg in path.split('.')) {
       if (cur is! Map) return null;
+      // `имя[]` — первый элемент массива (см. [_put]).
+      if (seg.endsWith('[]')) {
+        final list = cur[seg.substring(0, seg.length - 2)];
+        if (list is! List || list.isEmpty) return null;
+        cur = list.first;
+        continue;
+      }
       cur = cur[seg];
       if (cur == null) return null;
     }

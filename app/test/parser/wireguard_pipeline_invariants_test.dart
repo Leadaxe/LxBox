@@ -7,6 +7,8 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
@@ -19,7 +21,10 @@ import 'package:lxbox/services/warp/warp_account.dart';
 /// .conf>`), текст INI и узлы, которые строит фабрика WARP
 /// (`WarpAccount.toWireguardUri` / `toWireguardConf`) — у пользователей они
 /// самые массовые.
-const _contractRoot = 'contract';
+/// §480 W4 — РЕЕСТР из ЗЕРКАЛА: вендоренной копии на CI нет, и под её гейтом
+/// файл пропускался бы целиком. КОРПУС остаётся за копией — в зеркале его нет.
+const _contractRoot = 'assets/contract';
+const _corpusRoot = 'contract';
 
 /// Снимок, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/wireguard/pipeline_identity_before.json';
@@ -36,7 +41,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/wireguard')
+  final files = Directory('$_corpusRoot/corpus/uri/wireguard')
       .listSync()
       .whereType<File>()
       .toList()
@@ -86,11 +91,16 @@ final _warpAwg = Awg(const {
 
 void main() {
   final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final skip = synced ? null : 'зеркало реестра не найдено';
+  final hasCorpus =
+      Directory('$_corpusRoot/corpus/uri/wireguard').existsSync();
+  final skipCorpus = hasCorpus ? skip : 'корпус не синхронизирован';
 
   setUpAll(() async {
     if (!synced) return;
     await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
 
   group('§472 инвариант 4 — identity wireguard/AWG не меняется', () {
@@ -200,7 +210,7 @@ void main() {
       }
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(35));
-    }, skip: skip);
+    }, skip: skipCorpus);
 
     test('INI переживает круг через toUri(), тело и identity те же', () {
       const ini = '[Interface]\nPrivateKey = $_priv\n'

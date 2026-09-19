@@ -45,6 +45,18 @@ sealed class NodeWarning {
         // вместе с ним — одной задачей на все три.
         'naive_padding_ignored' => NaivePaddingIgnoredWarning(value),
         'naive_extra_headers_invalid' => NaiveExtraHeadersInvalidWarning(value),
+        // §480 W4 — у этих двух кодов текст НЕ выразим шаблоном реестра: он
+        // называет и поле, и написанное значение, и объясняет последствие
+        // («ядро откатится на обычный заголовок WireGuard, и рукопожатие может
+        // не сойтись»). Шаблон `warnings.json` умеет подставлять только
+        // `{field}`, поэтому запись реестра даёт «field {field} removed» —
+        // человеку это не говорит ничего.
+        //
+        // Список тот же, что и у `ech_ignored`, и это тот же долг: текст живёт
+        // в коде вместо `warnings.json`. Снимается он не здесь, а когда у
+        // реестра появится подстановка значения (запрос к лаунчеру).
+        'awg_header_invalid' => AwgHeaderInvalidWarning(path, value),
+        'awg3_field_invalid' => Awg3FieldInvalidWarning(path, value),
         _ => RegistryWarning(code: code, path: path, value: value),
       };
 

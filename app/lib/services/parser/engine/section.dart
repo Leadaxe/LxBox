@@ -158,6 +158,8 @@ final class LabelSpec {
     this.fallbackTemplate,
     this.fallbackSchemeSource = 'singbox_type',
     this.fallbackScheme,
+    this.fallbackServerPath,
+    this.fallbackPortPath,
   });
 
   factory LabelSpec.fromJson(Map<String, dynamic> j) {
@@ -179,6 +181,13 @@ final class LabelSpec {
       // конвейер имя типа, у живых безымянных узлов слетели бы выбор,
       // отключения и цепочки.
       fallbackScheme: fb?['scheme'] as String?,
+      // Где в ТЕЛЕ лежит адрес, которым шаблон фолбэка заполняет `{server}` и
+      // `{server_port}`. По умолчанию корень (`server`/`server_port`), но у
+      // схем уровня `endpoint` корневого адреса не бывает вовсе — он лежит в
+      // элементе массива. Объявляется ДАННЫМИ: тег и есть identity, и
+      // «откуда брать адрес» — свойство формы тела, а не ветка в коде.
+      fallbackServerPath: fb?['server_path'] as String?,
+      fallbackPortPath: fb?['port_path'] as String?,
     );
   }
 
@@ -188,6 +197,8 @@ final class LabelSpec {
   final String? fallbackTemplate;
   final String fallbackSchemeSource;
   final String? fallbackScheme;
+  final String? fallbackServerPath;
+  final String? fallbackPortPath;
 }
 
 /// Правила списка (P9, FROZEN `list`).

@@ -79,40 +79,18 @@ const _kDefaultPort = 51820;
 /// нет. Оно же попадает в тег: INI тега не несёт.
 const _kIniFallbackName = 'WireGuard';
 
-/// `wireguard://<privKey>@<host>:<port>?…#label` → сырая карта sing-box.
-///
-/// `null` — ссылки нет: без хоста, приватного ключа, публичного ключа пира
-/// или адреса туннеля записи не построить. Сюда же уходит узел, который
-/// отбраковывает [awg3NodeError].
-///
-/// Вторая форма (`awg://<base64 .conf>`) сюда НЕ попадает: её распознаёт
-/// `wireguard_parser.dart` до вызова конвейера и уводит через INI-маппер —
-/// разбор там другой, а тело то же.
-UriMapping? mapWireguardUri(String uri) {
-  // §106 — сырой `/` в base64-ключе (userInfo) ломает `Uri.tryParse`.
-  final p = Uri.tryParse(encodeUserInfoSlashes(uri));
-  if (p == null || p.host.isEmpty) return null;
-
-  final q = Map<String, String>.from(p.queryParameters);
-
-  // Приватник: userinfo сильнее query-фолбэка (оба написания, D-021).
-  if (p.userInfo.isNotEmpty) {
-    q['privatekey'] = Uri.decodeComponent(p.userInfo);
-  }
-  // §421 — ключ защиты заголовка читаем с сохранением сырого `+`:
-  // `Uri.queryParameters` декодирует по правилам формы и превратил бы `+`
-  // base64 в пробел («not base64» и потерянный узел).
-  final headerKeyParam = Awg.awg3Param(Awg.headerKey);
-  final headerKeyRaw = queryParamPreservePlus(p, headerKeyParam);
-  if (headerKeyRaw != null) q[headerKeyParam] = headerKeyRaw;
-
-  return _mapWireguardParams(
-    q,
-    host: p.host,
-    port: p.hasPort ? p.port : _kDefaultPort,
-    label: decodeFragment(p.fragment),
-  );
-}
+// §480 W4 — РУКОПИСНОГО МАППЕРА ССЫЛКИ здесь больше нет: `wireguard://`,
+// `wg://` и `awg://` разбирает движок по секции `contract_draft/uri/
+// wireguard.json`. Вместе с ним ушли заплаты, которые секция выражает
+// данными: percent-энком `/` в userinfo (лексер режет authority сам),
+// `queryParamPreservePlus` у ключа защиты заголовка (`decode_extra
+// .plus_literal` у поля base64-формата) и ручной фолбэк приватника
+// userinfo → query (цепочка `source`).
+//
+// INI остался рукописным ОСОЗНАННО: движок сегодня исполняет пространства
+// `url` и `json`, а `ini` придёт своей волной вместе с видом источника
+// `conf`. Секция для него уже написана (`contract_draft/conf/wireguard.json`)
+// и ждёт движка — не наоборот.
 
 /// §472 шаг 7 / §456 — маппер ТЕКСТА INI (`wg-quick`).
 ///

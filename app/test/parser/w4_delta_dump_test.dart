@@ -36,6 +36,7 @@ void main() {
         'b480:publickey_raw_plus',
         'b480:privatekey_raw_plus_query',
         'b480:presharedkey_raw_plus',
+        'corpus:uri_psk_keepalive',
       ],
     };
     for (final e in targets.entries) {

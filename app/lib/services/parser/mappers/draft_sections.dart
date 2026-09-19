@@ -48,6 +48,7 @@ const kDraftFiles = <String>[
   'shadowsocks',
   'http',
   'naive',
+  'wireguard',
   // Общие блоки (`include`): их записи вмонтируются в секцию схемы. Блок
   // ОДИН на все диалекты (`blocks.uri`, `blocks.xray`), поэтому лежит в
   // каталоге того вида источника, с которого начался.

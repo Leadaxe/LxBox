@@ -37,7 +37,6 @@ import '../uri_utils.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
 import 'vmess_mapper.dart';
-import 'wireguard_mapper.dart';
 
 /// Версия ядра, которую санитайзер видит при разборе: гейты, которым она
 /// нужна (`min_core`), здесь выключены. То же значение, что в
@@ -131,15 +130,17 @@ const Map<String, String> _kSchemeToType = <String, String>{
   // §103 §9.B1 — у naive схема НЕСЁТ ТРАНСПОРТ; различает `scheme_sets`.
   'naive+https': 'naive',
   'naive+quic': 'naive',
+  // §480 W4 — wireguard/AWG. Все три написания ведут в один тип тела; `awg://`
+  // это алиас НАПИСАНИЯ, а не другое тело.
+  'wireguard': 'wireguard',
+  'wg': 'wireguard',
+  'awg': 'wireguard',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
 const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'vmess': mapVmessUri,
   'vless': mapVlessUri,
-  'wireguard': mapWireguardUri,
-  'wg': mapWireguardUri,
-  'awg': mapWireguardUri,
 };
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё

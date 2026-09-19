@@ -41,6 +41,10 @@ const Map<String, String> _delta480 = {
       'delta480-3: было — узла нет вовсе, стало — узел живёт с ключом "+wBB…"',
   'wireguard/b480:presharedkey_raw_plus':
       'delta480-3: было — узла нет вовсе, стало — узел живёт с psk "+QBF…"',
+  // delta480-7 — алиас `preshared_key` у ССЫЛКИ (у INI это delta480-4).
+  'wireguard/corpus:uri_psk_keepalive':
+      'delta480-7: `preshared_key` в ссылке молча терялся (читалось только '
+          '`presharedkey`), хотя реестр объявляет алиас; стало — читается',
 };
 
 Map<String, Map<String, dynamic>> _cases(String scheme) {
@@ -143,7 +147,20 @@ void main() {
       for (final e in _cases('wireguard').entries) {
         final ini = e.value['ini'] as String?;
         if (ini == null) continue;
-        final hint = e.value['name_hint'] as String?;
+        // INI тега не несёт, имя ему даёт вызывающий. Снимок хранит подсказку
+        // двумя способами, и оба надо прочитать:
+        //
+        // - кейсы `ini:<имя>/<подсказка>` — хвостом имени кейса (`nohint` =
+        //   подсказки не было). Так снимались прогоны, где проверяется САМА
+        //   цепочка имени;
+        // - прочие (`warp_conf:*`) — подсказка равна ожидаемому тегу: там
+        //   проверяется тело, а имя задаётся вызывающим и в снимке уже есть.
+        final slash = e.key.lastIndexOf('/');
+        final isIniCase = e.key.startsWith('ini:') && slash >= 0;
+        final tail = isIniCase ? e.key.substring(slash + 1) : '';
+        final hint = isIniCase
+            ? (tail.isEmpty || tail == 'nohint' ? null : tail)
+            : e.value['tag'] as String?;
         final spec = parseWireguardIni(ini, nameHint: hint);
         if (e.value['identity'] == null) {
           if (spec != null) diffs.add('${e.key}: был отбракован');

@@ -45,9 +45,7 @@
         }
       ],
       "userinfo": {
-        "into": [
-          "private_key"
-        ]
+        "impl": "`into` здесь НЕ объявляется намеренно. Приватник читает запись `privatekey` цепочкой source (userinfo → query), и ей же принадлежат normalize и decode_extra. Объяви мы `into: [private_key]`, userinfo уезжал бы в тело РАНЬШЕ записи и СЫРЫМ: запись потом не переписала бы занятый путь (keep_first), и ключ в неканоническом написании (`…ccC=`) остался бы как есть — то есть одна нода снова давала бы два identity-хеша (D-030). Одно значение — одна запись."
       },
       "label": {
         "source": [
@@ -63,11 +61,10 @@
         },
         "fallback": {
           "template": "{scheme}-{server}-{server_port}",
-          "scheme_source": "singbox_type"
+          "scheme_source": "singbox_type",
+          "server_path": "peers[].address",
+          "port_path": "peers[].port"
         }
-      },
-      "defaults": {
-        "server_port": 51820
       },
       "params": {
         "privatekey": {
@@ -149,7 +146,8 @@
             "absent": true,
             "value": 51820
           },
-          "materialize_default": true
+          "materialize_default": true,
+          "impl": "Порт по умолчанию объявлен У ЗАПИСИ, а не секцией: у схемы уровня endpoint корневого server_port не бывает вовсе, и defaults секции (они пишутся в КОРЕНЬ) завели бы в теле поле, которого у ядра нет."
         },
         "reserved": {
           "source": "query.reserved",
@@ -316,15 +314,33 @@
         },
         "id": {
           "source": "query.id",
-          "maps_to": "id"
+          "maps_to": "id",
+          "when": {
+            "query.i1": {
+              "present": false
+            }
+          },
+          "impl": "§143 — masquerade-сахар над i1: ядро само разворачивает его. ЯВНЫЙ i1 подавляет промоушен (D-023 masquerade_suppressed_by_i1): ядро отвергает оба сразу, поэтому при наличии i1 запись молчит."
         },
         "ip": {
           "source": "query.ip",
-          "maps_to": "ip"
+          "maps_to": "ip",
+          "when": {
+            "query.i1": {
+              "present": false
+            }
+          },
+          "impl": "§143 — masquerade-сахар над i1: ядро само разворачивает его. ЯВНЫЙ i1 подавляет промоушен (D-023 masquerade_suppressed_by_i1): ядро отвергает оба сразу, поэтому при наличии i1 запись молчит."
         },
         "ib": {
           "source": "query.ib",
-          "maps_to": "ib"
+          "maps_to": "ib",
+          "when": {
+            "query.i1": {
+              "present": false
+            }
+          },
+          "impl": "§143 — masquerade-сахар над i1: ядро само разворачивает его. ЯВНЫЙ i1 подавляет промоушен (D-023 masquerade_suppressed_by_i1): ядро отвергает оба сразу, поэтому при наличии i1 запись молчит."
         },
         "headerprotectionkey": {
           "source": "query.headerprotectionkey",
@@ -393,13 +409,26 @@
           "maps_to": "random_trailers",
           "type": "bool_spelled",
           "omit_default": false,
-          "impl": "on/true/1 → true; off/пусто → ключа НЕТ вовсе (никогда false: лишний ключ менял бы identity-хеш)."
+          "impl": "§421 AWG 3.1 — у этих флагов СВОЙ набор написаний: ядро и .conf пишут on/off, которых в общем bool_spelled (1|true|yes) нет. Написание переводится value_map записи, а общий тип не трогается: добавь мы on в него, включёнными стали бы флаги всех схем, где автор написал on по ошибке. Выключенное = ключа НЕТ вовсе (никогда false: лишний ключ менял бы identity-хеш).",
+          "value_map": {
+            "on": "true",
+            "off": null,
+            "false": null,
+            "0": null
+          }
         },
         "disablecookies": {
           "source": "query.disablecookies",
           "maps_to": "disable_cookies",
           "type": "bool_spelled",
-          "omit_default": false
+          "omit_default": false,
+          "value_map": {
+            "on": "true",
+            "off": null,
+            "false": null,
+            "0": null
+          },
+          "impl": "§421 AWG 3.1 — у этих флагов СВОЙ набор написаний: ядро и .conf пишут on/off, которых в общем bool_spelled (1|true|yes) нет. Написание переводится value_map записи, а общий тип не трогается: добавь мы on в него, включёнными стали бы флаги всех схем, где автор написал on по ошибке. Выключенное = ключа НЕТ вовсе (никогда false: лишний ключ менял бы identity-хеш)."
         }
       },
       "scheme_sets": {
