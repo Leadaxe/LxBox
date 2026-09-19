@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
+import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import 'engine_test_setup.dart';
 
@@ -132,6 +134,50 @@ void main() {
       expect(wrapped.contains('://'), isFalse);
       expect(decode(plain), isA<UriLines>());
       expect(plain.contains('://'), isTrue);
+    });
+  });
+
+  group('Д-2 — host-часть в mport не роняет конфиг', () {
+    // По реестру (`protocols/hysteria2.json`, запись mport) host в mport —
+    // ВОССТАНОВЛЕННАЯ authority: в `server_ports` едут только диапазоны, а
+    // одиночный порт authority принадлежит `server_port`. Форма ядра —
+    // "low:high"; всё, что не `N:M`, даёт фатал «bad port range» и роняет
+    // ВЕСЬ конфиг, а не одну ноду.
+    List<String>? portsOf(String uri) {
+      final spec = parseUri(uri);
+      return spec is Hysteria2Spec ? spec.serverPorts : null;
+    }
+
+    test('authority в mport не уезжает в server_ports', () {
+      final ports = portsOf(
+        'hysteria2://pass@198.51.100.24:443'
+        '?mport=198.51.100.24%3A443%2C20000-30000&sni=example.com#n',
+      );
+      expect(ports, isNotNull);
+      expect(ports, everyElement(matches(RegExp(r'^\d+:\d+$'))),
+          reason: 'элемент не вида N:M — ядро ответит «bad port range»');
+      expect(ports, contains('20000:30000'));
+    });
+
+    test('обычный mport читается как прежде', () {
+      expect(
+        portsOf('hysteria2://pass@198.51.100.24:443?mport=20000-30000#n'),
+        ['20000:30000'],
+      );
+    });
+
+    test('одиночный порт остаётся парой N:N', () {
+      expect(
+        portsOf('hysteria2://pass@198.51.100.24:443?mport=8443#n'),
+        ['8443:8443'],
+      );
+    });
+
+    test('мусор в списке не доезжает до тела', () {
+      final ports = portsOf(
+        'hysteria2://pass@198.51.100.24:443?mport=abc%2C20000-30000#n',
+      );
+      expect(ports, everyElement(matches(RegExp(r'^\d+:\d+$'))));
     });
   });
 }

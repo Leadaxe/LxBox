@@ -2643,13 +2643,34 @@ final class _Run {
     switch (name) {
       // `"1000-2000"` → `"1000:2000"`, одиночный порт → пара `"N:N"`. Ядру
       // нужно ДВОЕТОЧИЕ: дефис даёт фатал «bad port range».
+      //
+      // Элемент, который парой чисел НЕ является, выбрасывается, а не
+      // чинится: в списке бывает восстановленная authority (`host:443` —
+      // её порт принадлежит `server_port`, а не диапазонам) и просто мусор,
+      // и оба прежде уезжали в тело как есть (`abc` → `abc:abc`). Ядро на
+      // таком элементе отвечает фаталом «bad port range» и роняет ВЕСЬ
+      // конфиг, а не одну ноду, — цена пропуска здесь не «узел не работает»,
+      // а «не работает ничего».
+      //
+      // Форма записи, не суждение: имени схемы здесь нет, проверяется
+      // ФОРМА элемента списка портов — то же, что делает соседний
+      // `cidr_prefix` для адресов.
       case 'port_range_spec':
         return [
           for (final raw in items)
             if ('$raw'.trim().isNotEmpty)
-              () {
+              ...() {
                 final seg = '$raw'.trim().replaceAll('-', ':');
-                return seg.contains(':') ? seg : '$seg:$seg';
+                final i = seg.indexOf(':');
+                if (i < 0) {
+                  return _kUintRe.hasMatch(seg) ? ['$seg:$seg'] : const [];
+                }
+                final lo = seg.substring(0, i);
+                final hi = seg.substring(i + 1);
+                if (!_kUintRe.hasMatch(lo) || !_kUintRe.hasMatch(hi)) {
+                  return const <String>[];
+                }
+                return ['$lo:$hi'];
               }(),
         ];
       // Голый адрес получает префикс: `/32` у v4, `/128` у v6.
