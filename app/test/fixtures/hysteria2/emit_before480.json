@@ -1,0 +1,182 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "allowinsecure_alias": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@203.0.113.1:443?insecure=1&sni=hy.example-1.com#h"
+    },
+    "alpn_multiple": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?alpn=h3%2Ch2&sni=example-1.com#Test"
+    },
+    "authority_port_range": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:20000?sni=example-1.com#r"
+    },
+    "base64_payload_crlf": {
+      "body": null,
+      "uri_before": "hysteria2://11111111-1111-1111-1111-111111111111@hy2.example-8.com:27200?sni=hy2.example-8.com#%E5%89%A9%E4%BD%99%E6%B5%81%E9%87%8F%EF%BC%9A92.72%20GB"
+    },
+    "basic": {
+      "body": null,
+      "uri_before": "hysteria2://testpass123@example-1.com:443?sni=example-1.com#Hy2%20Basic"
+    },
+    "basic_sni": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com#Test%20Server"
+    },
+    "default_port_443": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com#Test"
+    },
+    "empty_password_warn": {
+      "body": null,
+      "uri_before": "hysteria2://@example-1.com:443?sni=example-1.com#Test"
+    },
+    "fp_present_no_utls_quic": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=x.example.com#hy2-fp"
+    },
+    "hy2_alias": {
+      "body": null,
+      "uri_before": "hysteria2://testpass123@example-3.com:8443?insecure=1&sni=example-3.com#Hy2%20Alias"
+    },
+    "hy2_scheme_alias": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com#Test%20Server"
+    },
+    "mport_authority_comma_recovery": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?insecure=1&sni=example-1.com#hop"
+    },
+    "mport_comma_list": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com#t"
+    },
+    "mport_range_alpn": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?alpn=h3&sni=example-1.com#Test"
+    },
+    "obfs_gecko_packet_sizes": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-2.com:443?obfs=gecko&obfs-max-packet-size=1200&obfs-min-packet-size=100&obfs-password=obfspass1&sni=example-2.com#hy2-gecko"
+    },
+    "obfs_no_password_dropped": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-2.com:443?sni=example-2.com#hy2-nopass"
+    },
+    "obfs_salamander": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-2.com:443?alpn=h3&obfs=salamander&obfs-password=obfspass1&sni=example-2.com#hy2-sala"
+    },
+    "obfs_unknown_dropped": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-2.com:443?sni=example-2.com#hy2-badobfs"
+    },
+    "ports_query_alias": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com#t"
+    },
+    "reality_fp_stripped_quic_pair": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=x.example.com#hy2-quic-pair"
+    },
+    "salamander_ignores_gecko_sizes": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-2.com:443?obfs=salamander&obfs-password=obfspass1&sni=example-2.com#hy2-mixed"
+    },
+    "up_down_mbps": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@example-2.com:443?downmbps=200&sni=example-2.com&upmbps=100#hy2-mbps"
+    },
+    "utls_fingerprint_pinsha256": {
+      "body": null,
+      "uri_before": "hysteria2://pass123@203.0.113.1:443?sni=hy.example-1.com#h"
+    },
+    "b480:no_fragment": {
+      "body": {
+        "type": "hysteria2",
+        "tag": "hysteria2-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      },
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com"
+    },
+    "b480:obfs_password_encoded_plus": {
+      "body": {
+        "type": "hysteria2",
+        "tag": "obfs-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "obfs": {
+          "type": "salamander",
+          "password": "ob+fs123"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      },
+      "uri_before": "hysteria2://pass123@example-1.com:443?obfs=salamander&obfs-password=ob%2Bfs123&sni=example-1.com#obfs-plus-enc"
+    },
+    "b480:obfs_password_raw_plus": {
+      "body": {
+        "type": "hysteria2",
+        "tag": "obfs-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "obfs": {
+          "type": "salamander",
+          "password": "ob fs123"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      },
+      "uri_before": "hysteria2://pass123@example-1.com:443?obfs=salamander&obfs-password=ob%20fs123&sni=example-1.com#obfs-plus"
+    },
+    "b480:pinsha256_lower": {
+      "body": {
+        "type": "hysteria2",
+        "tag": "pin-lower",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "certificate_public_key_sha256": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        }
+      },
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com#pin-lower"
+    },
+    "b480:pinsha256_pair": {
+      "body": {
+        "type": "hysteria2",
+        "tag": "pin-pair",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "certificate_public_key_sha256": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          ]
+        }
+      },
+      "uri_before": "hysteria2://pass123@example-1.com:443?sni=example-1.com#pin-pair"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "basic_password_host_port": {
+      "body": null,
+      "uri_before": "anytls://pass123@srv.example-1.com:8443?fp=random&security=tls&sni=srv.example-1.com#AT-01"
+    },
+    "fp_alias_hellochrome_131": {
+      "body": null,
+      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&security=tls&sni=x.example.com#at-fp"
+    },
+    "idle_session_fields": {
+      "body": null,
+      "uri_before": "anytls://pass123@example-1.com:8443?fp=random&idle_session_check_interval=15s&idle_session_timeout=45s&min_idle_session=3&security=tls&sni=example-1.com#at-idle"
+    },
+    "ipv6_host": {
+      "body": null,
+      "uri_before": "anytls://pass123@[2001:db8::1]:8443?fp=random&security=tls&sni=2001%3Adb8%3A%3A1#at-v6"
+    },
+    "min_idle_session_invalid": {
+      "body": null,
+      "uri_before": "anytls://pass123@example-1.com:443?fp=random&security=tls&sni=example-1.com#at-bad-idle"
+    },
+    "percent_encoded_password": {
+      "body": null,
+      "uri_before": "anytls://p%40ss%3Aword@example-1.com:443?fp=random&security=tls&sni=example-1.com#at-pct"
+    },
+    "reality_key_share_hybrid": {
+      "body": null,
+      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&key_share=hybrid&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=cdn.example-1.com#at-ks-hybrid"
+    },
+    "reality_pbk_sid": {
+      "body": null,
+      "uri_before": "anytls://pass123@example-1.com:443?fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=cdn.example-1.com#at-reality"
+    },
+    "security_none_params_kept": {
+      "body": null,
+      "uri_before": "anytls://pass123@example-1.com:8443?allowInsecure=1&alpn=h2%2Chttp%2F1.1&fp=chrome&security=tls&sni=cdn.example-1.com#at-none"
+    },
+    "session_fields": {
+      "body": null,
+      "uri_before": "anytls://pass123@any.example-1.com:443?allowInsecure=1&fp=chrome&idle_session_timeout=30s&min_idle_session=2&security=tls&sni=cover.example-1.com#node"
+    },
+    "b480:no_fragment": {
+      "body": {
+        "type": "anytls",
+        "tag": "anytls-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "anytls://pass123@example-1.com:443?fp=random&security=tls&sni=example-1.com"
+    }
+  }
+}

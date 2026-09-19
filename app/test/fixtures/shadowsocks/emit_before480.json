@@ -1,0 +1,153 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "base64_userinfo": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMzQ1@example-1.com:8388#ss-b64"
+    },
+    "legacy_base64": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-4.com:8388#SS%20Legacy"
+    },
+    "legacy_full_base64": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwYXNzMTIz@192.0.2.10:8388#LegacyTag"
+    },
+    "sip002_aead": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-1.com:8388#SS%20AEAD"
+    },
+    "sip002_base64_userinfo": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:443#Shadowsocks%20Server"
+    },
+    "sip002_chacha": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw@example-2.com:8388#SS%20Chacha"
+    },
+    "sip002_escaped_padding": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cHdk@203.0.113.5:990#EscapedPadding"
+    },
+    "ss2022_blake3": {
+      "body": null,
+      "uri_before": "ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0@example-3.com:8388#SS%202022"
+    },
+    "test:ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206dGVzdHBhc3MxMjNwYWRkaW5ncGFkZGluZ3BhZA==@example-3.com:8388#SS%202022": {
+      "body": null,
+      "uri_before": "ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206dGVzdHBhc3MxMjNwYWRkaW5ncGFkZGluZ3BhZA@example-3.com:8388#SS%202022"
+    },
+    "test:ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw==@example-2.com:8388#SS%20Chacha": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw@example-2.com:8388#SS%20Chacha"
+    },
+    "test:ss://YWVzLTEyOC1nY206cHc@h.example:8388#S": {
+      "body": null,
+      "uri_before": "ss://YWVzLTEyOC1nY206cHc@h.example:8388#S"
+    },
+    "test:ss://YWVzLTEyOC1nY206cHc@h.example:8388?tcp_keep_alive=30s#S": {
+      "body": null,
+      "uri_before": "ss://YWVzLTEyOC1nY206cHc@h.example:8388?tcp_keep_alive=30s#S"
+    },
+    "test:ss://YWVzLTI1Ni1nY206cGFzcw@ss.example:8388#SS": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzcw@ss.example:8388#SS"
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS"
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM=@example-1.com:8388#SS%20AEAD": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-1.com:8388#SS%20AEAD"
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjNAZXhhbXBsZS00LmNvbTo4Mzg4#SS%20Legacy": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-4.com:8388#SS%20Legacy"
+    },
+    "b480:no_fragment": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "shadowsocks-example-1.com-8388",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388"
+    },
+    "b480:password_with_colon": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "pw-colon",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pa:ss:123"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGE6c3M6MTIz@example-1.com:8388#pw-colon"
+    },
+    "b480:plugin_no_opts": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-bare",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug-bare"
+    },
+    "b480:plugin_obfs_local": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug"
+    },
+    "b480:plugin_opts_camel_alias": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-camel",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug-camel"
+    },
+    "b480:plugin_opts_separate": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-sep",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug-sep"
+    },
+    "b480:ss2022_cleartext_userinfo": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "ss2022-clear",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "AAAAAAAAAAAAAAAAAAAAAA=="
+      },
+      "uri_before": "ss://MjAyMi1ibGFrZTMtYWVzLTEyOC1nY206QUFBQUFBQUFBQUFBQUFBQUFBQUFBQT09@example-1.com:8388#ss2022-clear"
+    }
+  }
+}
