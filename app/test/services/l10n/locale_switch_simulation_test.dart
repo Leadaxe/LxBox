@@ -24,7 +24,7 @@ void main() {
 
   test('renderWith(ru) русеет, renderEn() неизменен', () {
     // Типизированные объекты, «сохранённые» до смены локали.
-    const warning = UnsupportedTransportWarning('xhttp', 'httpupgrade');
+    const warning = UnknownObfsWarning('salamander');
     const error = ErrMsg(ErrKey.failedToStartVpn);
 
     // Machine-рендер (AppLog / Debug API / automation) — всегда английский.
@@ -35,8 +35,7 @@ void main() {
     // wire-интерполяции (transport-имена) проходят verbatim.
     final warnRu = warning.messageWith(ru);
     expect(warnRu, contains(cyrillic));
-    expect(warnRu, contains('xhttp'));
-    expect(warnRu, contains('httpupgrade'));
+    expect(warnRu, contains('salamander'));
 
     final errRu = error.renderWith(ru);
     expect(errRu, contains(cyrillic));

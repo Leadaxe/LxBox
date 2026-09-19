@@ -3,7 +3,6 @@ import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -131,7 +130,6 @@ void main() {
       // не грузит, поэтому проверка кода живёт там, где он есть:
       // `http_pipeline_invariants_test.dart` («insecure и мусорный fp судит
       // реестр»). Здесь остаётся разбор TLS-параметров по trojan-конвенциям.
-      expect(h.warnings.whereType<InsecureTlsWarning>(), isEmpty);
     });
 
     test('sni default = server, insecure default = false', () {

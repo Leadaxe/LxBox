@@ -1923,9 +1923,6 @@
   "Fix body JSON first: %s": {
     "value": "请先修正 body JSON：%s"
   },
-  "Flow \"%s\" is deprecated.": {
-    "value": "Flow「%s」已废弃。"
-  },
   "Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.": {
     "value": "清空 FakeIP 分配与已缓存的 DNS 响应。若 VPN 正在运行会重新加载。"
   },
@@ -3302,9 +3299,6 @@
   "Quit & reopen app?": {
     "value": "退出并重新打开应用？"
   },
-  "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.": {
-    "value": "REALITY 短 ID「%s」不是合法的十六进制，已丢弃（保留会导致整份配置出错）。该节点将在没有短 ID 的情况下连接。"
-  },
   "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".": {
     "value": "REALITY 使用 uTLS fingerprint「%s」：v26.9.8 起的 Xray 服务器会拒绝这样的 ClientHello。若连接不上，请改用「chrome」。"
   },
@@ -3506,9 +3500,6 @@
   },
   "Request timed out — server slow or unreachable": {
     "value": "请求超时——服务器缓慢或不可达"
-  },
-  "Required field \"%s\" is missing.": {
-    "value": "缺少必填字段「%s」。"
   },
   "Required for LAN-exposed proxy (cannot be disabled).": {
     "value": "局域网内暴露代理时必需（无法关闭）。"
@@ -4138,9 +4129,6 @@
   "System-wide events (no owner detected) — %d": {
     "value": "系统级事件（未识别归属）——%d"
   },
-  "TLS certificate verification is disabled.": {
-    "value": "TLS 证书校验已关闭。"
-  },
   "TLS server name (SNI) — optional": {
     "value": "TLS 服务器名（SNI）——可选"
   },
@@ -4409,9 +4397,6 @@
   },
   "Transfer to desktop": {
     "value": "迁移到桌面端"
-  },
-  "Transport \"%1$s\" is not supported by sing-box; using \"%2$s\" fallback (node may fail to connect).": {
-    "value": "sing-box 不支持传输「%1$s」；已改用「%2$s」回退（节点可能无法连接）。"
   },
   "Tries HTTP/3 first, falls back to HTTP/2 where QUIC/UDP is blocked — best for hop chains.": {
     "value": "优先尝试 HTTP/3，QUIC/UDP 被封锁时回退 HTTP/2——最适合多跳链路。"

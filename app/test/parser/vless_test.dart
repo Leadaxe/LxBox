@@ -178,7 +178,10 @@ void main() {
       expect(tr['mode'], 'stream-one');
       expect(tr['x_padding_bytes'], '100-1000');
       expect(tr['no_grpc_header'], true);
-      expect(spec.warnings.whereType<UnsupportedTransportWarning>(), isEmpty);
+      expect(
+          spec.warnings.where(
+              (w) => w is RegistryWarning && w.code == 'transport_unsupported'),
+          isEmpty);
     });
   });
 

@@ -126,21 +126,8 @@ bool _propsEqual(List<Object?> a, List<Object?> b) {
   return true;
 }
 
-final class UnsupportedTransportWarning extends NodeWarning {
-  final String name;
-  final String fallback;
-  const UnsupportedTransportWarning(this.name, this.fallback);
-
-  @override
-  List<Object?> get props => [name, fallback];
-
-  @override
-  String messageWith(GetLocalText t) =>
-      t.s("Transport \"%1\$s\" is not supported by sing-box; using \"%2\$s\" fallback (node may fail to connect).", name, fallback);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
+// `transport_unsupported` — текст в реестре (`transports.json` → fallback
+// транспорта). Класс снят (§485): код ставит движок, не парсер.
 
 final class UnsupportedProtocolWarning extends NodeWarning {
   final String scheme;
@@ -156,33 +143,9 @@ final class UnsupportedProtocolWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.error;
 }
 
-final class MissingFieldWarning extends NodeWarning {
-  final String field;
-  const MissingFieldWarning(this.field);
-
-  @override
-  List<Object?> get props => [field];
-
-  @override
-  String messageWith(GetLocalText t) => t.s("Required field \"%s\" is missing.", field);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.error;
-}
-
-final class DeprecatedFlowWarning extends NodeWarning {
-  final String flow;
-  const DeprecatedFlowWarning(this.flow);
-
-  @override
-  List<Object?> get props => [flow];
-
-  @override
-  String messageWith(GetLocalText t) => t.s("Flow \"%s\" is deprecated.", flow);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `field_missing` — текст в реестре (санитайзер обязательных полей).
+// `flow_deprecated` — текст в реестре (`protocols/vless.json` → `flow`).
+// Классы сняты (§485).
 
 // §115 / §472 шаг 9 — `VisionWithTransportWarning` снят: гашение
 // `xtls-rprx-vision` при живом транспорте исполняет санитайзер по реестру
@@ -190,18 +153,8 @@ final class DeprecatedFlowWarning extends NodeWarning {
 // приходит с путём и значением. Производителей в lib/ не осталось после
 // переезда Xray-входа (шаг 8).
 
-final class InsecureTlsWarning extends NodeWarning {
-  const InsecureTlsWarning();
-
-  @override
-  String messageWith(GetLocalText t) => t.s("TLS certificate verification is disabled.");
-
-  /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
-  /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
-  /// honestly-warning'и. UI красит info серым.
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `tls_insecure` — текст в реестре (`tls.json` → `insecure`, advisory).
+// Класс снят (§485): severity `info` — данные контракта, не константа в коде.
 
 /// libbox без `with_naive_outbound` — выставляется defensively после первой
 /// runtime-ошибки старта sing-box на naive-узле. Точная upstream-строка:
@@ -570,25 +523,8 @@ final class GroupMemberMissingWarning extends NodeWarning {
 /// подгоняется: обрезка дала бы валидную форму с ЧУЖИМ идентификатором —
 /// тихая порча (сервер сверяет sid побайтово).
 ///
-/// Go-эталон: `realityShortIDWouldDegrade` (parse_warnings.go:72) —
-/// непустое сырое значение, чья нормализация не совпала с `lower(trim(raw))`.
-final class RealityShortIdInvalidWarning extends NodeWarning {
-  /// Значение, как его написал провайдер.
-  final String value;
-
-  const RealityShortIdInvalidWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `reality_short_id_invalid` — текст в реестре (`tls.json` →
+// `reality.short_id`). Класс снят (§485).
 
 // `naive_padding_ignored` и `naive_extra_headers_invalid` — текст в реестре
 // (`protocols/naive.json` → `mappers.uri.params.padding` / `extra-headers`).

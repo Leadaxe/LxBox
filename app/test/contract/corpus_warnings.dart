@@ -41,11 +41,9 @@ String? _legacyWarningPath(NodeWarning w) => handwrittenWarningPath(w);
 /// теперь ставит санитайзер реестра (`RegistryWarning`), а он несёт значение
 /// сам, веткой выше.
 String? _legacyWarningValue(NodeWarning w) => switch (w) {
-      DeprecatedFlowWarning(:final flow) => flow,
       PacketEncodingUnknownWarning(:final value) => value,
       UnknownFingerprintWarning(:final value) => value,
       RealityFingerprintWarning(:final value) => value,
-      RealityShortIdInvalidWarning(:final value) => value,
       UnknownObfsWarning(:final value) => value,
       // §467 — у `placementRequiresPacketUp` значение пустое (код про
       // сочетание, не про значение), и пустое в конверт не пишется.

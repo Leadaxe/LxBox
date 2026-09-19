@@ -138,7 +138,10 @@ void main() {
     test('insecure и мусорный fp судит реестр', () {
       final spec = parseUri('proxy-https://u:p@h.example:443'
           '?sni=a.example&fp=bogus&allowInsecure=1#n')!;
-      expect(spec.warnings.whereType<InsecureTlsWarning>(), isEmpty);
+      expect(
+          spec.warnings.where(
+              (w) => w is RegistryWarning && w.code == 'tls_insecure'),
+          isNotEmpty);
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
 
       final ins = _registry(spec).firstWhere((w) => w.code == 'tls_insecure');

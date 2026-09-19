@@ -222,7 +222,6 @@ void main() {
         '?security=tls&encryption=none&sni=a.example'
         '&flow=xtls-rprx-origin&type=tcp#node',
       );
-      expect(n.warnings.whereType<DeprecatedFlowWarning>(), isEmpty);
       final w = _registry(n).firstWhere((w) => w.code == 'flow_deprecated',
           orElse: () => fail('нет кода flow_deprecated: ${n.warnings}'));
       expect(w.path, 'flow');

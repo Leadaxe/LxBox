@@ -24,6 +24,29 @@ import 'package:lxbox/widgets/banner_palette.dart';
 /// касаются.
 const _registryRoot = 'assets/contract';
 
+// §485 — живые коды реестра вместо снятых рукописных классов-образцов.
+const _infoTls = RegistryWarning(
+  code: 'tls_insecure',
+  path: 'tls.insecure',
+  value: 'true',
+);
+const _warnTransport = RegistryWarning(
+  code: 'transport_unsupported',
+  path: 'transport.type',
+  params: {'transport': 'quic', 'fallback': 'ws'},
+);
+const _errFieldMissing = RegistryWarning(
+  code: 'field_missing',
+  path: 'sni',
+  params: {'field': 'sni'},
+);
+const _infoFlow = RegistryWarning(
+  code: 'flow_deprecated',
+  path: 'flow',
+  value: 'xtls-rprx-direct',
+  params: {'flow': 'xtls-rprx-direct'},
+);
+
 void main() {
   setUpAll(() async {
     await ContractRegistry.I.loadFromDirectory(_registryRoot);
@@ -65,7 +88,7 @@ void main() {
     testWidgets('тап по строке → шторка со всеми уведомлениями',
         (tester) async {
       await pumpRow(tester, const [
-        InsecureTlsWarning(),
+        _infoTls,
         SectionsConflictWarning(),
       ]);
       expect(find.text('Notifications'), findsNothing);
@@ -86,7 +109,8 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(NodeWarningsSheet),
-          matching: find.text('TLS certificate verification is disabled.'),
+          matching: find.text(
+              ContractRegistry.I.textFor('tls_insecure')!.titleEn),
         ),
         findsOneWidget,
       );
@@ -107,14 +131,16 @@ void main() {
 
     testWidgets('строка объявлена кнопкой для screen reader', (tester) async {
       final handle = tester.ensureSemantics();
-      await pumpRow(tester, const [UnsupportedTransportWarning('quic', 'ws')]);
+      await pumpRow(tester, const [_warnTransport]);
       expect(
         tester.getSemantics(find.byType(NodeWarningRow)),
         matchesSemantics(
           isButton: true,
           hasTapAction: true,
-          label: 'Transport "quic" is not supported by sing-box; using "ws" '
-              'fallback (node may fail to connect).',
+          label: ContractRegistry.I
+              .textFor('transport_unsupported')!
+              .titleEn
+              .replaceAll('{fallback}', 'ws'),
         ),
       );
       handle.dispose();
@@ -122,9 +148,9 @@ void main() {
   });
 
   group('§479 — уровни в строке под узлом', () {
-    const infoW = InsecureTlsWarning(); // info
-    const warnW = UnsupportedTransportWarning('quic', 'ws'); // warning
-    const errW = MissingFieldWarning('sni'); // error
+    const infoW = _infoTls; // info
+    const warnW = _warnTransport; // warning
+    const errW = _errFieldMissing; // error
 
     Iterable<Icon> icons(WidgetTester tester) => tester
         .widgetList<Icon>(find.descendant(
@@ -147,14 +173,14 @@ void main() {
       await pumpRow(tester, const [infoW, warnW]);
 
       // Текст — warning'а и без счётчика: actionable ровно одно.
-      expect(find.textContaining('is not supported by sing-box'),
-          findsOneWidget);
+      expect(find.textContaining('replaced with ws'), findsOneWidget);
       expect(find.textContaining('+1 more'), findsNothing);
       expect(
           find.descendant(
               of: find.byType(NodeWarningRow),
               matching:
-                  find.text('TLS certificate verification is disabled.')),
+                  find.text(
+                      ContractRegistry.I.textFor('tls_insecure')!.titleEn)),
           findsNothing);
 
       // §479: порядок значков — уровень, потом info.
@@ -170,7 +196,7 @@ void main() {
 
     testWidgets('«+N more» считает только error и warning', (tester) async {
       await pumpRow(
-          tester, const [infoW, warnW, errW, DeprecatedFlowWarning('x')]);
+          tester, const [infoW, warnW, errW, _infoFlow]);
       // Два actionable → «+1 more», два info — одним значком.
       expect(find.textContaining('(+1 more)'), findsOneWidget);
     });
@@ -186,7 +212,10 @@ void main() {
       final ctx = tester.element(find.byType(NodeWarningRow));
       expect(ico.single.color,
           warningSeverityColor(ctx, WarningSeverity.error));
-      expect(find.textContaining('Required field "sni" is missing.'),
+      expect(
+          find.textContaining(
+              ContractRegistry.I.textFor('field_missing')!.titleEn
+                  .replaceAll('{field}', 'sni')),
           findsOneWidget);
       expect(find.textContaining('(+1 more)'), findsOneWidget);
     });
@@ -242,7 +271,7 @@ void main() {
 
     testWidgets('только info — значок в строке протокола, имя чистое, '
         'третьей строки нет', (tester) async {
-      await pumpList(tester, [node('info-only', const [InsecureTlsWarning()])]);
+      await pumpList(tester, [node('info-only', const [_infoTls])]);
 
       // Значок есть — но не у имени.
       expect(find.byType(NodeInfoBadge), findsOneWidget);
@@ -259,12 +288,13 @@ void main() {
       );
       // Строки предупреждения под узлом нет вовсе.
       expect(find.byType(NodeWarningRow), findsNothing);
-      expect(find.text('TLS certificate verification is disabled.'),
+      expect(
+          find.text(ContractRegistry.I.textFor('tls_insecure')!.titleEn),
           findsNothing);
     });
 
     testWidgets('значок приглушён, а не синий', (tester) async {
-      await pumpList(tester, [node('info-only', const [InsecureTlsWarning()])]);
+      await pumpList(tester, [node('info-only', const [_infoTls])]);
       final ctx = tester.element(find.byType(NodeInfoBadge));
       final ico = tester.widget<Icon>(find.descendant(
           of: find.byType(NodeInfoBadge), matching: find.byType(Icon)));
@@ -277,7 +307,7 @@ void main() {
       // рекомендованного Material размера.
       await tester.pumpWidget(const MaterialApp(
         home: Scaffold(
-            body: Center(child: NodeInfoBadge([InsecureTlsWarning()]))),
+            body: Center(child: NodeInfoBadge([_infoTls]))),
       ));
       final size = tester.getSize(find.byType(NodeInfoBadge));
       expect(size.width, greaterThanOrEqualTo(24));
@@ -286,7 +316,7 @@ void main() {
 
     testWidgets('тап по значку открывает уведомления и не проваливается в '
         'разбор узла', (tester) async {
-      await pumpList(tester, [node('info-only', const [InsecureTlsWarning()])]);
+      await pumpList(tester, [node('info-only', const [_infoTls])]);
 
       await tester.tap(find.byType(NodeInfoBadge));
       await tester.pumpAndSettle();
@@ -299,8 +329,8 @@ void main() {
         'у имени его нет', (tester) async {
       await pumpList(tester, [
         node('mixed', const [
-          InsecureTlsWarning(),
-          UnsupportedTransportWarning('quic', 'ws'),
+          _infoTls,
+          _warnTransport,
         ]),
       ]);
 
@@ -330,8 +360,8 @@ void main() {
   group('§479 — шапка со счётчиками и подразделы', () {
     testWidgets('счётчики по уровням, нулевых нет', (tester) async {
       await pumpView(tester, const [
-        MissingFieldWarning('sni'), // error
-        UnsupportedTransportWarning('quic', 'ws'), // warning
+        _errFieldMissing, // error
+        _warnTransport, // warning
         UnknownObfsWarning('gecko'), // warning
       ]);
 
@@ -347,7 +377,7 @@ void main() {
 
     testWidgets('единственный уровень — подзаголовка нет', (tester) async {
       await pumpView(tester, const [
-        UnsupportedTransportWarning('quic', 'ws'),
+        _warnTransport,
         UnknownObfsWarning('gecko'),
       ]);
 
@@ -360,9 +390,9 @@ void main() {
     testWidgets('три уровня — три подзаголовка в порядке error → warning → '
         'info', (tester) async {
       await pumpView(tester, const [
-        InsecureTlsWarning(),
-        UnsupportedTransportWarning('quic', 'ws'),
-        MissingFieldWarning('sni'),
+        _infoTls,
+        _warnTransport,
+        _errFieldMissing,
       ]);
 
       final headers = tester
@@ -384,8 +414,8 @@ void main() {
     testWidgets('несколько записей — свёрнуты; тап разворачивает',
         (tester) async {
       await pumpView(tester, const [
-        InsecureTlsWarning(),
-        UnsupportedTransportWarning('quic', 'ws'),
+        _infoTls,
+        _warnTransport,
       ]);
 
       // Свёрнуто: разбор не построен.
@@ -393,7 +423,8 @@ void main() {
       expect(find.text('What you can do'), findsNothing);
       expect(find.text('Details'), findsNothing);
 
-      await tester.tap(find.text('TLS certificate verification is disabled.'));
+      await tester.tap(
+          find.text(ContractRegistry.I.textFor('tls_insecure')!.titleEn));
       await tester.pumpAndSettle();
 
       expect(find.text('Why it happens'), findsOneWidget);
@@ -407,7 +438,7 @@ void main() {
     });
 
     testWidgets('единственная запись развёрнута сразу', (tester) async {
-      await pumpView(tester, const [InsecureTlsWarning()]);
+      await pumpView(tester, const [_infoTls]);
 
       expect(find.text('Why it happens'), findsOneWidget);
       expect(find.text('What you can do'), findsOneWidget);
@@ -487,8 +518,8 @@ void main() {
 
     testWidgets('палитра уровней — общая', (tester) async {
       await pumpView(tester, const [
-        UnsupportedTransportWarning('quic', 'ws'),
-        DeprecatedFlowWarning('xtls-rprx-direct'),
+        _warnTransport,
+        _infoFlow,
       ]);
       final ctx = tester.element(find.byType(NodeNotificationsView));
       final ico = tester
@@ -509,7 +540,7 @@ void main() {
 
   group('§479 — шторка', () {
     testWidgets('заголовок шторки — Notifications', (tester) async {
-      await pumpSheet(tester, const [InsecureTlsWarning()]);
+      await pumpSheet(tester, const [_infoTls]);
       expect(
         find.descendant(
             of: find.byType(NodeWarningsSheet), matching: find.text('Notifications')),
@@ -519,7 +550,7 @@ void main() {
     });
 
     testWidgets('шторка показывает тот же компонент', (tester) async {
-      await pumpSheet(tester, const [InsecureTlsWarning()]);
+      await pumpSheet(tester, const [_infoTls]);
       expect(find.byType(NodeNotificationsView), findsOneWidget);
     });
   });
@@ -527,7 +558,7 @@ void main() {
   group('язык уведомлений', () {
     testWidgets('ru → русские тексты реестра', (tester) async {
       LocaleController.I.setting = 'ru';
-      await pumpView(tester, const [InsecureTlsWarning()]);
+      await pumpView(tester, const [_infoTls]);
 
       final text = ContractRegistry.I.textFor('tls_insecure')!;
       expect(find.text(text.causeRu!), findsOneWidget);
@@ -558,7 +589,7 @@ void main() {
     testWidgets('zh получает английский текст реестра', (tester) async {
       // В реестре два языка; всё, что не ru, читает en (спека §460 §2.3).
       LocaleController.I.setting = 'zh';
-      await pumpView(tester, const [InsecureTlsWarning()]);
+      await pumpView(tester, const [_infoTls]);
 
       final text = ContractRegistry.I.textFor('tls_insecure')!;
       expect(find.text(text.causeEn!), findsOneWidget);

@@ -82,7 +82,10 @@ void main() {
       // `anytls_pipeline_invariants_test.dart` («insecure даёт код реестра с
       // путём и значением»). Здесь остаётся то, ради чего тест писался, —
       // что `security=none` не затирает параметры.
-      expect(a.warnings.whereType<InsecureTlsWarning>(), isEmpty);
+      expect(
+          a.warnings.where(
+              (w) => w is RegistryWarning && w.code == 'tls_insecure'),
+          isNotEmpty);
     });
   });
 

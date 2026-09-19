@@ -5,8 +5,8 @@ void main() {
   group('NodeWarning equality', () {
     test('same subclass + same fields == equal', () {
       expect(
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade'),
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade'),
+        const UnknownObfsWarning('salamander'),
+        const UnknownObfsWarning('salamander'),
       );
     });
 
@@ -14,8 +14,8 @@ void main() {
     // строке): dedup-гранулярность та же, но переживает смену локали.
     test('same subclass + different fields != equal', () {
       expect(
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade') ==
-            const UnsupportedTransportWarning('xhttp', 'ws'),
+        const UnknownObfsWarning('salamander') ==
+            const UnknownObfsWarning('gecko'),
         isFalse,
       );
       expect(
@@ -74,28 +74,33 @@ void main() {
 
     test('different subclasses != equal', () {
       expect(
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade') ==
+        const UnknownObfsWarning('salamander') ==
             const UnsupportedProtocolWarning('xhttp'),
         isFalse,
       );
     });
 
     test('severity maps per type', () {
-      expect(const MissingFieldWarning('sni').severity, WarningSeverity.error);
-      // info, не warning — провайдеры часто намеренно ставят флаг (REALITY,
-      // self-signed, IP-литералы); UI красит серым, не пугает.
-      expect(const InsecureTlsWarning().severity, WarningSeverity.info);
-      expect(const DeprecatedFlowWarning('xtls').severity, WarningSeverity.info);
+      expect(const DialerProxyUnusableWarning('n', 't').severity,
+          WarningSeverity.error);
+      // §485 — коды реестра: severity из warnings.json, не константа класса.
+      expect(
+          const RegistryWarning(code: 'tls_insecure', path: 'tls.insecure')
+              .severity,
+          WarningSeverity.warning,
+          reason: 'реестр не загружен — фолбэк registrySeverity');
+      expect(
+          const RegistryWarning(
+                  code: 'flow_deprecated', path: 'flow', value: 'x')
+              .severity,
+          WarningSeverity.warning,
+          reason: 'реестр не загружен — фолбэк registrySeverity');
     });
 
     test('exhaustive switch compiles', () {
-      const NodeWarning w = UnsupportedTransportWarning('xhttp', 'httpupgrade');
+      const NodeWarning w = UnknownObfsWarning('salamander');
       final label = switch (w) {
-        UnsupportedTransportWarning() => 'transport',
         UnsupportedProtocolWarning() => 'protocol',
-        MissingFieldWarning() => 'field',
-        DeprecatedFlowWarning() => 'flow',
-        InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
         // §416 — header-placement без режима: дописан mode: packet-up
@@ -114,8 +119,6 @@ void main() {
         DialerProxyUnusableWarning() => 'dialer_proxy_unusable',
         SelectorAsAutoWarning() => 'selector_as_auto',
         GroupMemberMissingWarning() => 'group_member_missing',
-        // SPEC 103 — деградации, помеченные кодом на обеих сторонах контракта
-        RealityShortIdInvalidWarning() => 'reality_short_id_invalid',
         // §435 — только UI, кода контракта нет.
         SectionsRecordDroppedWarning() => 'sections_record_dropped',
         SectionsConflictWarning() => 'sections_conflict',
@@ -128,7 +131,7 @@ void main() {
         // их поле `code` (текст берётся из registry/warnings.json).
         RegistryWarning() => 'registry',
       };
-      expect(label, 'transport');
+      expect(label, 'obfs_unknown');
     });
   });
 

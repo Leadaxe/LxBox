@@ -171,7 +171,10 @@ void main() {
     test('insecure даёт код реестра с путём и значением', () {
       final spec =
           parseUri('anytls://pw@h.example:443?sni=a.example&insecure=1#n')!;
-      expect(spec.warnings.whereType<InsecureTlsWarning>(), isEmpty);
+      expect(
+          spec.warnings.where(
+              (w) => w is RegistryWarning && w.code == 'tls_insecure'),
+          isNotEmpty);
       final w = _registry(spec).firstWhere((w) => w.code == 'tls_insecure');
       expect(w.path, 'tls.insecure');
       expect(w.value, 'true');

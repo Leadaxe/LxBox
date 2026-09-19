@@ -39,9 +39,10 @@ void main() {
         rawSource: 'u',
         uuid: 'u',
       );
-      spec.warnings.add(const InsecureTlsWarning());
+      spec.warnings.add(const RegistryWarning(
+          code: 'tls_insecure', path: 'tls.insecure', value: 'true'));
       expect(spec.warnings, hasLength(1));
-      expect(spec.warnings.single, isA<InsecureTlsWarning>());
+      expect(spec.warnings.single, isA<RegistryWarning>());
     });
 
     test('§097 — XhttpTransport emits native xhttp (no fallback)', () {

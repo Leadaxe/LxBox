@@ -17,11 +17,7 @@ import '../../models/node_warning.dart';
 /// Код контракта по типу рукописного класса; класса нет в таблице —
 /// у кода нет соответствия в реестре (в корпусе такие не встречаются).
 const kWarningCodes = <Type, String>{
-  UnsupportedTransportWarning: 'transport_unsupported',
   UnsupportedProtocolWarning: 'protocol_unsupported',
-  MissingFieldWarning: 'field_missing',
-  DeprecatedFlowWarning: 'flow_deprecated',
-  InsecureTlsWarning: 'tls_insecure',
   NaiveBuildTagWarning: 'naive_unavailable',
   UnknownFingerprintWarning: 'utls_fp_unknown',
   // D-119 (заменил D-104) — REALITY с явным отпечатком не из chrome-семейства
@@ -38,7 +34,6 @@ const kWarningCodes = <Type, String>{
   DetourChainTooDeepWarning: 'detour_chain_too_deep',
   SelectorAsAutoWarning: 'selector_as_auto',
   GroupMemberMissingWarning: 'group_member_missing',
-  RealityShortIdInvalidWarning: 'reality_short_id_invalid',
   // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла
   // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.
   // `awg_header_invalid` и `awg3_field_invalid` здесь БОЛЬШЕ НЕТ: классы
@@ -76,11 +71,9 @@ String? warningCodeOf(NodeWarning w) =>
 /// Кодов AWG здесь нет с контракта 1.1.33: классы сняты, и путь у них теперь
 /// свой, реестровый, — `RegistryWarning` несёт его полем.
 String? handwrittenWarningPath(NodeWarning w) => switch (w) {
-      DeprecatedFlowWarning() => 'flow',
       PacketEncodingUnknownWarning() => 'packet_encoding',
       UnknownFingerprintWarning() => 'tls.utls.fingerprint',
       RealityFingerprintWarning() => 'tls.utls.fingerprint',
-      RealityShortIdInvalidWarning() => 'tls.reality.short_id',
       UnknownObfsWarning() => 'obfs.type',
       MissingObfsPasswordWarning() => 'obfs.password',
       // §467 — `field` класса это ИМЯ КЛЮЧА, под которым значение уезжает в

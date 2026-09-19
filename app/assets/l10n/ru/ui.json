@@ -2109,9 +2109,6 @@
   "Fix body JSON first: %s": {
     "value": "Сначала исправьте JSON тела: %s"
   },
-  "Flow \"%s\" is deprecated.": {
-    "value": "Flow «%s» устарел."
-  },
   "Flush FakeIP allocations and cached DNS responses. Reloads the VPN if running.": {
     "value": "Сбросить выделения FakeIP и закэшированные DNS-ответы. Перезагружает VPN, если он работает."
   },
@@ -3490,9 +3487,6 @@
   "Quit & reopen app?": {
     "value": "Закрыть и снова открыть приложение?"
   },
-  "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.": {
-    "value": "Короткий идентификатор REALITY «%s» — не корректный hex, поэтому отброшен (иначе сломался бы весь конфиг). Узел подключится без короткого идентификатора."
-  },
   "REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".": {
     "value": "REALITY с uTLS fingerprint «%s»: серверы Xray начиная с v26.9.8 отвергают такой ClientHello. Если соединение не устанавливается, попробуйте «chrome»."
   },
@@ -3700,9 +3694,6 @@
   },
   "Request timed out — server slow or unreachable": {
     "value": "Тайм-аут запроса — сервер медленный или недоступен"
-  },
-  "Required field \"%s\" is missing.": {
-    "value": "Отсутствует обязательное поле «%s»."
   },
   "Required for LAN-exposed proxy (cannot be disabled).": {
     "value": "Обязательно для прокси, доступного из локальной сети (нельзя отключить)."
@@ -4333,9 +4324,6 @@
   "System-wide events (no owner detected) — %d": {
     "value": "Общесистемные события (владелец не определён) — %d"
   },
-  "TLS certificate verification is disabled.": {
-    "value": "Проверка TLS-сертификата отключена."
-  },
   "TLS server name (SNI) — optional": {
     "value": "Имя сервера TLS (SNI) — необязательно"
   },
@@ -4607,9 +4595,6 @@
   },
   "Transfer to desktop": {
     "value": "Перенос на десктоп"
-  },
-  "Transport \"%1$s\" is not supported by sing-box; using \"%2$s\" fallback (node may fail to connect).": {
-    "value": "Транспорт «%1$s» не поддерживается sing-box; используется резервный «%2$s» (узел может не подключиться)."
   },
   "Tries HTTP/3 first, falls back to HTTP/2 where QUIC/UDP is blocked — best for hop chains.": {
     "value": "Сначала HTTP/3, при недоступности QUIC/UDP — откат на HTTP/2. Лучший выбор для цепочек хопов."

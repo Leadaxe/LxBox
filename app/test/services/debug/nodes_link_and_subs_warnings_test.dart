@@ -223,14 +223,13 @@ void main() {
     });
 
     test('класс приложения: кода нет, text_en есть', () {
-      final j = serializeNodeWarning(
-          const UnsupportedTransportWarning('xhttp', 'httpupgrade'));
+      final j = serializeNodeWarning(const SectionsConflictWarning());
       expect(j['code'], isNull);
       expect(j['path'], isNull);
       expect(j['value'], isNull);
       expect(j['title_en'], isNull);
       // Пиненный английский самого класса — ответ не зависит от локали.
-      expect(j['text_en'], contains('xhttp'));
+      expect(j['text_en'], contains('sections'));
       expect(j['severity'], 'warning');
     });
   });
