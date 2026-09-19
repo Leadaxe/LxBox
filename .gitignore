@@ -19,11 +19,12 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Secrets
+# Secrets (`.*` без слэша — паттерны с `/` на конце не накрывают симлинки)
 *.jks
 *.keystore
 .env
 .env.*
+.keys
 .keys/
 
 # Private research / competitor analysis — never commit
@@ -40,6 +41,8 @@ CLAUDE.md
 docs/night-reports/
 
 # §097 — local sing-box-lx core AAR (dev-only, not committed)
+# (без слэша тоже — в worktree это симлинк от tool/worktree_bootstrap.sh, §487)
+app/android/app/libs
 app/android/app/libs/
 
 # Отладочные логи probe/e2e (случайно закоммичены в §285, удалены)

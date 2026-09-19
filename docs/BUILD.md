@@ -60,6 +60,36 @@ the channel is determined at runtime from the installer. See
 
 Requires `git` and a JDK (for Gradle); the script downloads the core `app/android/app/libs/libbox.aar` itself.
 
+### Git worktree bootstrap
+
+Parallel agents often work in a separate `git worktree`. A fresh worktree has no
+gitignored artifacts from the main checkout: `app/android/app/libs/` (libbox AAR),
+release signing (`app/android/key.properties`, `upload-keystore.jks`),
+`app/android/local.properties`, the Play publisher `.keys/` directory, and the
+vendored contract copy `app/contract/`. Without them, a local release build may
+sign with the debug key (`INSTALL_FAILED_UPDATE_INCOMPATIBLE` on `adb install -r`),
+and corpus contract tests skip silently.
+
+From the repository root:
+
+```bash
+./tool/worktree_bootstrap.sh
+```
+
+| What it does | Mark |
+|--------------|------|
+| Symlinks `libs/`, signing files, `local.properties`, `.keys/` from the main tree (first entry in `git worktree list`, or `--main <path>`) | ✓ |
+| Restores `app/contract/` via `git archive <source_sha> contract` from the launcher repo (`~/projects/singbox-launcher`, or `LX_CONTRACT_REPO`) | ✓ when `source_sha=` is present in `app/contract.lock` |
+| Touches `app/assets/contract/`, `docs/contract/`, `app/contract.lock` | ✗ guarded — script exits and reverts if they change |
+| `--clean` removes symlinks and `app/contract/` | ✓ |
+
+⚠ Do **not** run `app/tool/sync_contract.sh` in a worktree without `LX_CONTRACT_SRC`
+set to the intended launcher tree — it will pull the wrong contract version and
+rewrite the committed mirrors.
+
+If `contract.lock` has no `source_sha=` field yet, bootstrap prints the manual
+`git archive` command; symlinks are still created.
+
 ##### ⚠ The build hangs (CPU≈0) — memory-starvation stall
 
 `app/android/gradle.properties` sets `org.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=4G …`. On a 16 GB machine the Gradle heap plus metaspace plus the Kotlin/dex workers do not fit, the process starts swapping, and `assembleRelease` hangs at CPU≈0 — a stall, not compilation.

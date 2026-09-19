@@ -300,6 +300,13 @@ gate is green on your machine and red on CI, and you find out after the push. A
 test that needs the registry loads it from the committed mirror
 `app/assets/contract`, not from `app/contract/`.
 
+⚠ **Git worktree checkout.** A fresh worktree has none of the gitignored build
+artifacts from the main tree (libbox AAR, release signing, `app/contract/`).
+Before local APK builds or corpus contract tests, run
+`./tool/worktree_bootstrap.sh` from the repo root (see [BUILD.md](BUILD.md) →
+“Git worktree bootstrap”). Do not run `app/tool/sync_contract.sh` without
+`LX_CONTRACT_SRC` — it rewrites the committed contract mirrors.
+
 There are roughly 5100 test cases (the count moves as tests are added; the source
 of truth is the `flutter test` summary in the CI log):
 - `test/models/` — sealed hierarchies (NodeSpec, NodeWarning, ServerList JSON, CustomRule)
