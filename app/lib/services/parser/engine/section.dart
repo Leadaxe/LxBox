@@ -153,6 +153,7 @@ final class UserinfoSpec {
 final class LabelSpec {
   const LabelSpec({
     this.source = const ['fragment'],
+    this.sourceByForm = const {},
     this.normalize = const [],
     this.valueMap = const {},
     this.fallbackTemplate,
@@ -164,8 +165,21 @@ final class LabelSpec {
 
   factory LabelSpec.fromJson(Map<String, dynamic> j) {
     final fb = (j['fallback'] as Map?)?.cast<String, dynamic>();
+    // §480 — `label.source` КАРТОЙ ПО ФОРМАМ, той же записью, что и
+    // `params[].source` (§0.10 PRIMITIVES): у входа с двумя формами имя узла
+    // лежит в разных местах — в ключе контейнера у одной и во фрагменте
+    // ссылки у другой. Плоским списком это не выражается: список пробует
+    // источники ПО ОЧЕРЕДИ, и форма, у которой фрагмент не читается вовсе,
+    // подхватила бы его как запасной.
+    final srcRaw = j['source'];
     return LabelSpec(
-      source: _stringList(j['source'], fallback: const ['fragment']),
+      source: srcRaw is Map
+          ? const []
+          : _stringList(srcRaw, fallback: const ['fragment']),
+      sourceByForm: srcRaw is Map
+          ? srcRaw.map((k, v) =>
+              MapEntry(k as String, _stringList(v, fallback: const [])))
+          : const {},
       normalize: ((j['normalize'] as List?) ?? const []).cast<String>(),
       valueMap: ((j['value_map'] as Map?) ?? const {}).cast<String, dynamic>(),
       fallbackTemplate: fb?['template'] as String?,
@@ -192,6 +206,10 @@ final class LabelSpec {
   }
 
   final List<String> source;
+
+  /// `id` формы → её источники метки. Непустая карта ОТМЕНЯЕТ [source]:
+  /// форма, которой в карте нет, метки не имеет вовсе.
+  final Map<String, List<String>> sourceByForm;
   final List<String> normalize;
   final Map<String, dynamic> valueMap;
   final String? fallbackTemplate;

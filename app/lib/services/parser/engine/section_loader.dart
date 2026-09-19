@@ -320,12 +320,11 @@ final class MapperSections {
   MapperSection _withIncludes(MapperSection section) {
     final merged = <String, MapperParam>{};
     final own = <String>{
-      for (final p in section.params.values) '${p.name} ${p.source.join(",")}',
+      for (final p in section.params.values) ..._overrideKeys(p),
     };
     for (final ref in section.include) {
       for (final e in _blockParams(ref).entries) {
-        final key = '${e.value.name} ${e.value.source.join(",")}';
-        if (own.contains(key)) continue;
+        if (_overrideKeys(e.value).any(own.contains)) continue;
         merged[e.key] = e.value;
       }
     }
@@ -333,6 +332,44 @@ final class MapperSections {
       merged[e.key] = e.value;
     }
     return section.withParams(merged);
+  }
+
+  /// Ключи, по которым запись СПОРИТ с одноимённой записью блока.
+  ///
+  /// Ключ — имя параметра плюс ОДИН источник, и ключей у записи столько,
+  /// сколько источников она объявила: спор решается по любому совпадению.
+  /// Запись с источниками ПО ФОРМАМ иначе не спорила бы вовсе — плоский
+  /// `source` у неё пуст, и ключ вырождался бы в одно имя.
+  ///
+  /// Живой случай: у схемы-контейнера `security` объявлен картой по формам
+  /// (`json.scy`/`json.security` у контейнера, `userinfo.user` у cleartext), а
+  /// у блока `tls` — как `query.security`. Контейнер раскладывается ПЛОСКИМ
+  /// СЛОЕМ, и `json.security` с `query.security` адресуют один и тот же ключ:
+  /// не сочти их спором — и запись блока включила бы узлу TLS по значению,
+  /// которое на деле шифр канала.
+  static Iterable<String> _overrideKeys(MapperParam p) sync* {
+    // `\u0000` СЕНТИНЕЛОМ, а не сырым байтом: NUL, попав в исходник
+    // литералом, делает файл бинарным для grep, и правка перестаёт
+    // находиться поиском.
+    const sep = '\u0000';
+    final all = <String>{
+      ...p.source,
+      for (final l in p.sourceByForm.values) ...l,
+    };
+    if (all.isEmpty) {
+      yield '${p.name}$sep';
+      return;
+    }
+    for (final src in all) {
+      // Пространство источника для спора НЕ различается: у формы-контейнера
+      // `json.<ключ>` и `query.<ключ>` — одно имя в одном плоском слое.
+      final bare = src.startsWith('json.')
+          ? src.substring('json.'.length)
+          : src.startsWith('query.')
+              ? src.substring('query.'.length)
+              : src;
+      yield '${p.name}$sep$bare';
+    }
   }
 
   /// Записи блока по ссылке `"<файл>#<диалект>"` (`"tls#uri"`,

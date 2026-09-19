@@ -35,7 +35,6 @@ import '../../../services/parser/engine/engine_mapper.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'uri_mapper.dart';
-import 'vmess_mapper.dart';
 
 /// Версия ядра, которую санитайзер видит при разборе: гейты, которым она
 /// нужна (`min_core`), здесь выключены. То же значение, что в
@@ -138,12 +137,19 @@ const Map<String, String> _kSchemeToType = <String, String>{
   'wireguard': 'wireguard',
   'wg': 'wireguard',
   'awg': 'wireguard',
+  // §480 — vmess. Секция несёт ДВЕ ФОРМЫ одного входа: контейнер v2rayN
+  // (base64 поверх JSON, `space: json`) и legacy cleartext (base64 поверх
+  // ссылки, `reparse: url`). Диспетчеру они не видны: форму выбирает `detect`
+  // секции, а не эта таблица.
+  'vmess': 'vmess',
 };
 
-/// Мапперы переехавших схем, по схеме ссылки.
-const Map<String, UriMapper> _kMappers = <String, UriMapper>{
-  'vmess': mapVmessUri,
-};
+/// Мапперы схем, ещё НЕ переехавших на движок, по схеме ссылки.
+///
+/// §480 — таблица ПУСТА: ссылочных схем, разбираемых рукописным маппером, не
+/// осталось. Ветка ниже сохранена как есть — она и есть «схема не переехала»,
+/// и снимать её стоит вместе со всей волной, а не попутно.
+const Map<String, UriMapper> _kMappers = <String, UriMapper>{};
 
 /// Разобрать ссылку конвейером, если её схема переехала. `null` — схема ещё
 /// идёт старым путём (вызывающий обязан обработать сам) ИЛИ ссылка не

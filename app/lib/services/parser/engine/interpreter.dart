@@ -136,10 +136,39 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         // декодер «на весь текст» ломает и ту, и другую.
         final scoped = _applyScopedDecode(form, space);
         if (scoped != null) return scoped;
+      case 'json':
+        // §480 — ТЕКСТОВАЯ форма с объектным пространством: оболочка формы
+        // (`decode`) раскрывает текст до JSON, и дальше запись адресует его
+        // json-путём, как у объектного входа. Без этого текстовый вход и
+        // объектный разошлись бы двумя ветками кода при одной грамматике.
+        //
+        // Предикат `detect.json` формы судится ПО РАЗОБРАННОМУ значению, а
+        // разобрать его можно только здесь: до `decode` текст ещё в оболочке.
+        // Поэтому форма отсеивается в два приёма — текстовой частью выражения
+        // выше и объектной здесь.
+        final doc = _decodeFormJson(form, decoded);
+        if (doc == null) continue;
+        if (!detectMatchesJson(form.detect, doc)) continue;
+        return SourceSpace(
+          formId: form.id,
+          scheme: _splitScheme(decoded)?.scheme ?? '',
+          json: doc,
+          jsonBase: form.base,
+          // ПЛОСКИЙ СЛОЙ контейнера (§0.10 НОРМЫ: «json — разбор объекта в
+          // плоский слой»). Ключи ВЕРХНЕГО уровня становятся тем же
+          // пространством имён, что query у ссылки, и общие блоки
+          // (`tls#uri`, `transports#uri`) читают `sni`, `alpn`, `fp`, `path`
+          // одним и тем же `source` на обеих формах.
+          //
+          // Иначе блок диалекта пришлось бы дублировать под каждый
+          // контейнер: записи у них совпали бы до буквы, потому что
+          // контейнер и назван так, чтобы повторять имена query.
+          query: _flattenContainer(doc),
+        );
       default:
-        // Текстовая форма с пространством json/ini разбирается своим входом
-        // ([runSectionOnJson]). Молча выдавать пустое тело нельзя — это был
-        // бы узел из ничего, поэтому форма просто не отвечает.
+        // Прочее пространство (`ini`) разбирается своим входом. Молча выдавать
+        // пустое тело нельзя — это был бы узел из ничего, поэтому форма просто
+        // не отвечает.
         continue;
     }
   }
@@ -226,6 +255,10 @@ String? _applyFormDecode(MapperForm form, String text) {
       continue;
     }
     if (step is Map && step['reparse'] != null) continue;
+    // Шаг `json` пространство не декодирует, а ОБЪЯВЛЯЕТ: разбор в объект —
+    // дело [_decodeFormJson], который работает над тем же результатом. Здесь
+    // шаг пропускается, чтобы текст доехал до него целым.
+    if (step == 'json') continue;
   }
   return '${split.scheme}://$payload$fragment';
 }
@@ -297,6 +330,51 @@ SourceSpace? _applyScopedDecode(MapperForm form, SourceSpace space) {
     result = relexed;
   }
   return result;
+}
+
+/// Ключи ВЕРХНЕГО уровня контейнера плоским слоем имён.
+///
+/// Скаляры только: вложенный объект и список адресуются `json.<путь>`, и
+/// строкой их не представить — `'$v'` дал бы `{a: 1}` Dart-написанием, чужим
+/// обеим сторонам.
+///
+/// `null` ключа и ОТСУТСТВИЕ ключа здесь неразличимы намеренно: панели шлют
+/// `"scy": null` в значении «не задано», и корпус требует читать это как
+/// отсутствие, а не как строку `null`.
+QueryPairs _flattenContainer(Map<String, dynamic> doc) => QueryPairs([
+      for (final e in doc.entries)
+        if (e.value != null && e.value is! Map && e.value is! List)
+          (e.key, '${e.value}'),
+    ]);
+
+/// §480 — разобрать результат `forms[].decode` текстовой формы с
+/// `space: json` в объект.
+///
+/// Работает над ПЭЙЛОАДОМ: схему [_applyFormDecode] возвращает на место ради
+/// `scheme_sets` и метки-фолбэка, но JSON-документу она чужая, и оставить её
+/// значило бы не разобрать ни одного узла.
+///
+/// `null` — шаг `json` формой не объявлен, текст не JSON либо это не объект.
+/// Во всех трёх случаях форма просто не отвечает.
+Map<String, dynamic>? _decodeFormJson(MapperForm form, String decoded) {
+  if (!form.decode.contains('json')) return null;
+  var payload = _splitScheme(decoded)?.payload ?? decoded;
+  // ФРАГМЕНТ отрезается: `_applyFormDecode` снял его перед декодером и вернул
+  // на место (имя узла пишется СНАРУЖИ оболочки), но документу он чужой —
+  // `{...}#MyNodeName` не JSON, и форма молча уступила бы место следующей.
+  //
+  // Значения он не теряет: у формы-контейнера имя узла лежит в самом объекте,
+  // и `label.source` этой формы фрагмент не читает.
+  final hash = payload.indexOf('#');
+  if (hash >= 0) payload = payload.substring(0, hash);
+  try {
+    final parsed = jsonDecode(payload.trim());
+    if (parsed is Map) return parsed.cast<String, dynamic>();
+  } catch (_) {
+    // Не JSON — пробуется следующая форма (у контейнерных схем она и есть
+    // объявленный откат на текстовую запись).
+  }
+  return null;
 }
 
 /// Декодеры оболочки формы. Отдельный тип, чтобы не тащить статику в `_Run`.
@@ -2290,18 +2368,35 @@ final class _Run {
   /// Метка ВХОДИТ В IDENTITY (тег и есть identity, `node_hash.dart`), поэтому
   /// её обработка объявлена, а не остаётся свойством кода.
   String _label() {
+    // Источники метки: карта по формам сильнее плоского списка (§480 — у
+    // входа с двумя формами имя лежит в разных местах). Формы, которой в
+    // карте нет, метка не положена вовсе, и это не умолчание, а объявление:
+    // фрагмент у контейнерной формы не читается ни одной записью.
+    final byForm = section.label.sourceByForm;
+    final sources = byForm.isNotEmpty
+        ? (byForm[space.formId] ?? const <String>[])
+        : section.label.source;
+
     var raw = '';
-    for (final src in section.label.source) {
+    var fromFragment = false;
+    for (final src in sources) {
       final v = _readSourceBare(src);
-      if (v is String && v.isNotEmpty) {
-        raw = v;
+      // Метка бывает НЕ СТРОКОЙ: в контейнере чужого диалекта `ps` приезжает
+      // числом ровно так же, как `port`. Отбрасывать её за это значило бы
+      // переименовать живой узел в фолбэк.
+      final s = v is String ? v : (v == null ? '' : '$v');
+      if (s.isNotEmpty) {
+        raw = s;
+        fromFragment = src == 'fragment';
         break;
       }
     }
     if (raw.isEmpty) return '';
-    // Фрагмент percent-декодируется с path-семантикой: `+` во фрагменте
-    // литерален (form-encoding во фрагменте не действует).
-    var label = percentDecodeOnce(raw, mode: DecodeMode.path);
+    // Percent снимается ТОЛЬКО с фрагмента: экранирование — свойство ссылки,
+    // а не значения. В контейнере `ps` лежит готовой строкой, и лишний проход
+    // съел бы у имени законный `%` (`50%25` стал бы `50%`).
+    var label =
+        fromFragment ? percentDecodeOnce(raw, mode: DecodeMode.path) : raw;
     for (final n in section.label.normalize) {
       switch (n) {
         case 'strip_control':
