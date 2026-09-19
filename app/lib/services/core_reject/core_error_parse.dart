@@ -20,6 +20,17 @@
 /// Ядра старше lx.7 пишут ту же строку БЕЗ ` <type>[<tag>]`
 /// (`initialize outbound[26]: unknown uTLS fingerprint`) — форма «без тега»,
 /// её разбор обязан распознать и вернуть `null`.
+///
+/// ## Обёртки (Д-1)
+///
+/// До Dart строка доходит не голой. Go оборачивает её своей цепочкой
+/// (`start or reload service: initialize outbound[33] …`), а Kotlin сверху
+/// кладёт ЛОКАЛИЗОВАННЫЙ шаблон `stop_alert_start_failed` — в ru префикс
+/// другой. Поэтому грамматика §9 ищется не с начала строки, а по вхождению
+/// `initialize ` где угодно после любых префиксов: разбор не знает ни одного
+/// текста обёртки и не ломается от перевода. Сырой `t.message` при этом всё
+/// равно приходит отдельным полем (`core_error` события статуса) — префиксы
+/// Kotlin он не несёт вовсе.
 library;
 
 /// Результат разбора: ошибка назвала узел и тег сопоставился с конфигом.
@@ -61,10 +72,28 @@ const _sep = ']: ';
 /// `null` — узел не назван: префикс не совпал (ошибка не про узел), формы
 /// «без тега», либо ни один кандидат не сопоставился с тегами конфига.
 /// Перебором виновника не ищем (CANON §9.3).
+///
+/// Строка приходит обёрнутой (Д-1): слева — цепочка префиксов Go и
+/// локализованный шаблон Kotlin. Поэтому `initialize ` ищется по ВСЕМ
+/// вхождениям слева направо, и первое, за которым грамматика §9 сходится
+/// целиком (включая сопоставление тега), побеждает. Слева направо — потому
+/// что настоящая запись ядра ровно одна и стоит после всех обёрток, а
+/// `initialize ` внутри ТЕГА обёрткой быть не может: тег читается уже
+/// внутри разбора, за своим `[`.
 CoreRejection? parseCoreRejection(String line, Set<String> configTags) {
   final raw = line.trim();
-  if (!raw.startsWith(_prefix)) return null;
-  var rest = raw.substring(_prefix.length);
+  var at = raw.indexOf(_prefix);
+  while (at >= 0) {
+    final hit = _parseAt(raw.substring(at + _prefix.length), configTags);
+    if (hit != null) return hit;
+    at = raw.indexOf(_prefix, at + 1);
+  }
+  return null;
+}
+
+/// Грамматика §9.1–§9.2 на остатке ПОСЛЕ префикса `initialize `.
+CoreRejection? _parseAt(String after, Set<String> configTags) {
+  var rest = after;
 
   // <outbound|endpoint>
   final String kind;

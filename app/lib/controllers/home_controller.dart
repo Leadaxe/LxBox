@@ -482,7 +482,14 @@ class HomeController extends ChangeNotifier
       // Фича 478 — отказ ядра: отдать его текст ждущей страховке. Берём
       // ДОСЛОВНЫЙ текст native-события, а не отрендеренную строку: разбор
       // CANON §9 работает по формату ядра, а не по обёртке приложения.
-      _settleStartOutcome(event.errorReason ?? '');
+      //
+      // Д-1 — сначала `coreError`: это сырой `t.message` ядра, без единой
+      // обёртки. `errorReason` рядом с ним — локализованный шаблон
+      // `stop_alert_start_failed` («Failed to start service: …», в ru
+      // префикс другой), и он остаётся запасным путём для native старше
+      // этого поля: разбор грамматику §9 находит в нём по вхождению, а не с
+      // начала строки.
+      _settleStartOutcome(event.coreError ?? event.errorReason ?? '');
       _emit(
         _state.copyWith(
           tunnel: tunnel,

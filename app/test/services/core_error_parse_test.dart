@@ -151,4 +151,97 @@ void main() {
       );
     });
   });
+
+  // Д-1 — до Dart строка доходит обёрнутой: Go кладёт свою цепочку, Kotlin
+  // сверху локализованный шаблон `stop_alert_start_failed`. Разбор не вправе
+  // знать ни один текст обёртки — иначе страховка молчит на ru.
+  group('Д-1 — обёртки перед грамматикой §9', () {
+    // Дословно то, что пришло с эмулятора.
+    const device = 'Failed to start service: start or reload service: '
+        'initialize outbound[33] shadowsocks[⚡ c-ss2022-badkey]: '
+        'bad key length, required 32, got 5';
+
+    test('обёрнутая en — как на устройстве', () {
+      final r = parseCoreRejection(device, {'⚡ c-ss2022-badkey'});
+      expect(r, isNotNull);
+      expect(r!.kind, 'outbound');
+      expect(r.index, 33);
+      expect(r.type, 'shadowsocks');
+      expect(r.tag, '⚡ c-ss2022-badkey');
+      expect(r.reason, 'bad key length, required 32, got 5');
+    });
+
+    test('обёрнутая ru — локализованный префикс Kotlin', () {
+      final r = parseCoreRejection(
+        'Не удалось запустить сервис: start or reload service: '
+        'initialize endpoint[4] wireguard[🇩🇪 wg]: bad key',
+        {'🇩🇪 wg'},
+      );
+      expect(r!.tag, '🇩🇪 wg');
+      expect(r.reason, 'bad key');
+    });
+
+    test('двойная Go-обёртка', () {
+      final r = parseCoreRejection(
+        'start service: start or reload service: create service: '
+        'initialize outbound[7] trojan[T]: bad password',
+        {'T'},
+      );
+      expect(r!.tag, 'T');
+      expect(r.index, 7);
+      expect(r.reason, 'bad password');
+    });
+
+    test('голая строка разбирается по-прежнему', () {
+      final r = parseCoreRejection(
+        'initialize outbound[3] vless[Frankfurt]: parse encryption: bad',
+        {'Frankfurt'},
+      );
+      expect(r!.tag, 'Frankfurt');
+      expect(r.reason, 'parse encryption: bad');
+    });
+
+    test('обёртка + `: ` и `]` внутри тега', () {
+      final r = parseCoreRejection(
+        'Failed to start service: start or reload service: '
+        'initialize outbound[0] vless[A]: B]]: c',
+        {'A]: B]'},
+      );
+      expect(r!.tag, 'A]: B]');
+      expect(r.reason, 'c');
+    });
+
+    test('слово initialize в обёртке не сбивает разбор', () {
+      final r = parseCoreRejection(
+        'initialize service: start or reload service: '
+        'initialize outbound[2] vmess[N]: boom',
+        {'N'},
+      );
+      expect(r!.tag, 'N');
+      expect(r.type, 'vmess');
+      expect(r.reason, 'boom');
+    });
+
+    test('обёрнутая форма без тега — узел по-прежнему не назван', () {
+      expect(
+        parseCoreRejection(
+          'Failed to start service: start or reload service: '
+          'initialize outbound[26]: unknown uTLS fingerprint',
+          {'A', 'B'},
+        ),
+        isNull,
+      );
+    });
+
+    test('обёрнутая ошибка не про узел — null', () {
+      expect(
+        parseCoreRejection(
+          'Failed to start service: start or reload service: '
+          'initialize inbound[0] tun: permission denied',
+          {'A'},
+        ),
+        isNull,
+      );
+    });
+  });
 }
