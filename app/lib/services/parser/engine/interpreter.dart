@@ -121,7 +121,16 @@ SourceSpace? _selectForm(MapperSection section, String text) {
     switch (form.space) {
       case 'url':
         final space = lexUri(decoded, formId: form.id);
-        if (space != null) return space;
+        if (space == null) continue;
+        // `forms[].decode` с ОБЛАСТЬЮ (§0.10 FROZEN) — декодер накрывает не
+        // весь текст, а названный кусок, и применяется ПОСЛЕ лексера: текст
+        // уже разложен на части, часть декодируется, части собираются назад.
+        // Область нужна потому, что base64 у одной схемы накрывает РАЗНЫЕ
+        // куски ссылки в разных формах (только userinfo либо весь authority),
+        // а метка `#…` в обеих формах остаётся открытым текстом снаружи —
+        // декодер «на весь текст» ломает и ту, и другую.
+        final scoped = _applyScopedDecode(form, space);
+        if (scoped != null) return scoped;
       default:
         // Текстовая форма с пространством json/ini разбирается своим входом
         // ([runSectionOnJson]). Молча выдавать пустое тело нельзя — это был
@@ -179,8 +188,27 @@ String? _applyFormDecode(MapperForm form, String text) {
   }
   for (final step in form.decode) {
     if (step == 'url') continue; // percent снимает сам лексер.
+    // Шаг с ОБЛАСТЬЮ здесь пропускается: он исполняется после лексера
+    // ([_applyScopedDecode]), когда известно, где кончается названный кусок.
+    if (step is Map && step['scope'] != null && step['scope'] != 'all') {
+      continue;
+    }
     if (step == 'percent') {
       payload = percentDecodeOnce(payload, mode: DecodeMode.path);
+      continue;
+    }
+    if (step is Map && step['decoder'] != null) {
+      final d = step['decoder'];
+      if (d == 'percent') {
+        payload = percentDecodeOnce(payload, mode: DecodeMode.path);
+      } else if (d == 'base64' || d == 'base64?' || d == 'base64url') {
+        final decoded = _RunDecode.base64(payload.trim());
+        if (decoded == null) {
+          if (d == 'base64') return null;
+          continue;
+        }
+        payload = decoded;
+      }
       continue;
     }
     if (step == 'base64' || step == 'base64?') {
@@ -195,6 +223,75 @@ String? _applyFormDecode(MapperForm form, String text) {
     if (step is Map && step['reparse'] != null) continue;
   }
   return '${split.scheme}://$payload$fragment';
+}
+
+/// Декодер формы с ОБЛАСТЬЮ (§0.10 FROZEN): `scope: userinfo|authority`.
+///
+/// Применяется ПОСЛЕ лексера и пересобирает ссылку с декодированным куском,
+/// после чего лексер проходит по ней ещё раз. Пересборка, а не правка полей
+/// пространства, потому что декодированный authority приносит СВОЮ структуру:
+/// `base64(method:password@host:port)` — это и userinfo, и хост, и порт
+/// разом, и разбирать его обязан тот же лексер, а не второе место с теми же
+/// правилами.
+///
+/// Query, path и fragment берутся из ВНЕШНЕГО текста: метка `#…` лежит
+/// открытым текстом снаружи в обеих формах.
+///
+/// `null` — обязательный декодер не отработал, и форма не отвечает.
+SourceSpace? _applyScopedDecode(MapperForm form, SourceSpace space) {
+  var result = space;
+  for (final step in form.decode) {
+    if (step is! Map) continue;
+    final scope = step['scope'];
+    if (scope == null || scope == 'all') continue;
+    final decoder = step['decoder'];
+    final optional = decoder == 'base64?' || decoder == 'percent';
+
+    String piece;
+    switch (scope) {
+      case 'userinfo':
+        piece = result.userinfo;
+      case 'authority':
+        piece = result.authority;
+      default:
+        continue;
+    }
+    if (piece.isEmpty) continue;
+
+    String? decoded;
+    switch (decoder) {
+      case 'base64':
+      case 'base64?':
+      case 'base64url':
+        decoded = _RunDecode.base64(piece.trim());
+      case 'percent':
+        decoded = percentDecodeOnce(piece, mode: DecodeMode.path);
+      default:
+        continue;
+    }
+    if (decoded == null) {
+      if (optional) continue;
+      return null;
+    }
+
+    // Пересборка: декодированный кусок встаёт на своё место, остальное —
+    // как было. Хвост (path/query/fragment) восстанавливается из полей
+    // пространства, потому что лексер уже отделил его от authority.
+    final tail = StringBuffer()
+      ..write(result.path)
+      ..write(result.query.pairs.isEmpty
+          ? ''
+          : '?${result.query.pairs.map((p) => '${p.$1}=${p.$2}').join('&')}')
+      ..write(result.fragment.isEmpty ? '' : '#${result.fragment}');
+    final authority = scope == 'userinfo'
+        ? '$decoded@${result.authority.substring(result.authority.lastIndexOf('@') + 1)}'
+        : decoded;
+    final relexed = lexUri('${result.scheme}://$authority$tail',
+        formId: result.formId);
+    if (relexed == null) return null;
+    result = relexed;
+  }
+  return result;
 }
 
 /// Декодеры оболочки формы. Отдельный тип, чтобы не тащить статику в `_Run`.
@@ -763,10 +860,13 @@ final class _Run {
       }
     }
 
-    if (raw.isEmpty && u.into.isNotEmpty) {
-      // Пустой userinfo у схемы, которая его требует, — это «узла нет».
-      // Решает `required` у записи; здесь только не пишем пустоту.
-      return true;
+    if (raw.isEmpty) {
+      // `required` у userinfo судит ОБОЛОЧКУ: ссылка без него — не узел этой
+      // схемы. Объявлен здесь, а не у записи, потому что поля, которые
+      // userinfo наполняет, приходят позициями `into`, и записи под ними у
+      // части схем нет вовсе.
+      if (u.required) return false;
+      if (u.into.isNotEmpty) return true;
     }
 
     final sep = u.splitSep;
@@ -837,6 +937,19 @@ final class _Run {
         act: TraceAct.skip,
         why: TraceWhy.whenFalse,
       );
+      // `on_when_false` — значение во входе БЫЛО, но структурное правило не
+      // дало ему доехать до тела. Спрашиваем источник ТОЛЬКО ради кода и
+      // только когда запись его назвала: иначе запись, чьё условие ложно на
+      // каждом втором узле, шумела бы впустую. Чтение — без отметки
+      // «прочитано» (§10.2): подавленный параметр остаётся тем, чем был.
+      final code = p.onWhenFalse['code'] as String?;
+      if (code != null) {
+        final probe = _valueOfBare(p);
+        if (probe != null && !(probe is String && probe.isEmpty)) {
+          warnings.add(NodeWarning.byCode(code,
+              path: p.name, value: probe is String ? probe.trim() : '$probe'));
+        }
+      }
       return;
     }
 
@@ -931,7 +1044,8 @@ final class _Run {
       // (`none`, пусто) переведено в «ничего нет», и кода за него быть не
       // должно — человек ничего не терял, он ничего и не просил.
       final off = value is String && p.valueMap.isNotEmpty
-          ? _mapValue(p.valueMap, value)
+          ? _mapValue(p.valueMap, value,
+              caseSensitive: p.valueMapCase == 'sensitive')
           : (matched: false, value: value);
       if (!(off.matched && off.value == null)) {
         _applyOnPresent(p, value is String ? value : '$value');
@@ -965,7 +1079,8 @@ final class _Run {
 
     // `value_map` — перевод значений диалекта. `null` = «ключа нет».
     if (p.valueMap.isNotEmpty && value is String) {
-      final mapped = _mapValue(p.valueMap, value);
+      final mapped = _mapValue(p.valueMap, value,
+          caseSensitive: p.valueMapCase == 'sensitive');
       if (mapped.matched) {
         if (mapped.value == null) {
           // Значение переведено в «ключа нет»: `sets` того же значения при
@@ -994,8 +1109,19 @@ final class _Run {
     // Приведение типа (`type`) — форма, а не суждение.
     var typed = _coerceType(p, value);
     if (typed == null) {
-      _applyImplies(p);
-      return;
+      // `on_invalid.action: "keep"` — значение к объявленной форме не
+      // приводится, и запись ПРОСИТ пропустить его в тело КАК ПРИШЛО.
+      // Снять его здесь значило бы судить: годность («неотрицательное целое»)
+      // объявлена у поля тела своим `on_invalid` с кодом, и санитайзер
+      // отбракует значение сам, назвав причину. Молчаливое снятие в маппере
+      // лишило бы узел и значения, и объяснения.
+      if (p.onInvalid['action'] == 'keep') {
+        typed = value;
+      } else {
+        _applyOnInvalid(p, raw is String ? raw : '$raw');
+        _applyImplies(p);
+        return;
+      }
     }
 
     // Списочные нормализаторы — над уже разрезанным списком.
@@ -1034,7 +1160,25 @@ final class _Run {
 
   void _applyImplies(MapperParam p) {
     if (p.implies.isEmpty) return;
+    // `on_implies_written` — код за то, что `implies` И ВПРАВДУ дописал
+    // значение, которого во входе не было. Это не то же, что «у записи есть
+    // implies»: при занятом пути присваивание проигрывает владельцу, и
+    // сообщать не о чем. Поэтому смотрим на тело ДО и ПОСЛЕ, а не на факт
+    // вызова.
+    final code = p.onImpliesWritten['code'] as String?;
+    final before = code == null
+        ? null
+        : {for (final k in p.implies.keys) k: _read(k)};
     _applySets(p.implies, p);
+    if (code != null) {
+      for (final e in before!.entries) {
+        final now = _read(e.key);
+        if (now != null && now != e.value) {
+          warnings.add(NodeWarning.byCode(code, path: e.key, value: '$now'));
+          break;
+        }
+      }
+    }
     if (p.implicit) _wsEarlyDataHeaderImplicit = true;
   }
 
@@ -1208,6 +1352,11 @@ final class _Run {
         // буквально, и это и есть «преобразование».
         converted = true;
         _convertedValue = '$typed';
+        // `code` у ЧЛЕНА `into` — код именно за этот разбор, а не за запись
+        // целиком: хвост пути разложился по двум полям, и сказать об этом
+        // может только тот член, который его поймал. Записи с `on_present`
+        // здесь не нужно: путь без хвоста кода не получает.
+        _memberCode ??= t['code'] as String?;
         final implies = (t['implies'] as Map?)?.cast<String, dynamic>();
         if (implies != null) {
           for (final i in implies.entries) {
@@ -1225,8 +1374,21 @@ final class _Run {
       }
     }
 
-    if (converted) _applyOnPresent(p, _convertedValue);
+    if (converted) {
+      final mc = _memberCode;
+      _memberCode = null;
+      if (mc != null) {
+        warnings
+            .add(NodeWarning.byCode(mc, path: p.name, value: _convertedValue));
+      } else {
+        _applyOnPresent(p, _convertedValue);
+      }
+    }
   }
+
+  /// Код, объявленный ЧЛЕНОМ `extract.into` текущего разбора.
+  String? _memberCode;
+
 
   /// Значение для кода преобразования: то, ЧТО получилось, а не что пришло.
   String _convertedValue = '';
@@ -1505,6 +1667,24 @@ final class _Run {
     return true;
   }
 
+  /// Значение записи по её `source`, БЕЗ отметки «прочитано».
+  ///
+  /// Нужно ровно там, где значение спрашивают ради КОДА, а не ради тела:
+  /// запись, подавленная условием, параметр не потребляет, и множество §8 от
+  /// такого вопроса меняться не должно (§10.2).
+  dynamic _valueOfBare(MapperParam p) {
+    final sources = p.sourceByForm.isNotEmpty
+        ? (p.sourceByForm[space.formId] ?? const <String>[])
+        : p.source;
+    for (final src in sources) {
+      final v = _readSourceBare(src);
+      if (v == null) continue;
+      if (v is String && v.isEmpty && p.empty != 'significant') continue;
+      return v;
+    }
+    return null;
+  }
+
   /// Чтение источника для условия: без записи в `_consumed` и без декода по
   /// правилам конкретной записи — условие не «читает» параметр, оно о нём
   /// спрашивает.
@@ -1608,8 +1788,9 @@ final class _Run {
 
   ({bool matched, dynamic value}) _mapValue(
     Map<String, dynamic> map,
-    String value,
-  ) {
+    String value, {
+    bool caseSensitive = false,
+  }) {
     // `prefix`/`strip` — режим перевода по началу имени (uTLS-идентификаторы
     // Xray: `HelloChrome_120` → `chrome`).
     final prefix = map['prefix'];
@@ -1631,6 +1812,12 @@ final class _Run {
       return (matched: false, value: value);
     }
     if (map.containsKey(value)) return (matched: true, value: map[value]);
+    // `value_map_case: "sensitive"` — регистр ЗНАЧИМ. Общее правило обратное
+    // (живые списки шлют `NONE`), но там, где ядро сравнивает свой литерал
+    // точно, регистронезависимое попадание проглатывало бы негодное значение
+    // как «ключа нет» и молча понижало защиту: значение обязано доехать до
+    // тела и быть отвергнутым санитайзером.
+    if (caseSensitive) return (matched: false, value: value);
     final folded = value.toLowerCase();
     for (final e in map.entries) {
       if (e.key.toLowerCase() == folded) return (matched: true, value: e.value);

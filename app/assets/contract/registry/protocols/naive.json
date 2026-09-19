@@ -214,6 +214,7 @@
   },
   "mappers": {
     "uri": {
+      "live": true,
       "body_source": "uri",
       "detect": {
         "scheme_in": [
@@ -276,8 +277,7 @@
         "server": {
           "source": "host",
           "maps_to": "server",
-          "required": true,
-          "impl": "§463 / контракт §24.6 — пустой host отбраковывается: ядро на пустом адресе валит ВЕСЬ конфиг, то есть один такой узел из подписки оставлял человека без VPN."
+          "impl": "§463 / контракт §24.6 — пустой host отбраковывается: ядро на пустом адресе валит ВЕСЬ конфиг, то есть один такой узел из подписки оставлял человека без VPN. Отбраковку делает САНИТАЙЗЕР (body.fields.server → field_missing), а не маппер, поэтому required здесь НЕ объявлен: прежний путь проверял hostname только у vless/trojan/ssh/tuic/anytls (node_parser_core.go:403-405), naive в том списке нет, и узел доезжал до санитайзера. Обе дороги роняют узел, но называют причину по-разному, а причина входит в контракт: корпус naive/empty_host_rejected ждёт emit_error + field_missing, а не parse_error. QUIRKS Q133-46."
         },
         "server_port": {
           "source": "port",
@@ -303,7 +303,7 @@
             "sep": "\r\n"
           },
           "extract": {
-            "re": "^(?P<k>[^:]+):\\s*(?P<v>.*)$",
+            "re": "^(?P<k>[!#$%&'*+.0-9A-Z\\\\^_`a-z|~-]+):[ \\t]*(?P<v>[^\\r\\n\\x00]*)$",
             "into": {
               "k": "$key",
               "v": "$value"
@@ -313,7 +313,7 @@
             "action": "skip",
             "code": "naive_extra_headers_invalid"
           },
-          "impl": "Правило broken_header_pair_skipped: битая пара пропускается, остальные живут; код ставится ОДИН раз на узел, о первой отброшенной паре. sort_keys — порядок входит в identity."
+          "impl": "Правило broken_header_pair_skipped: битая пара пропускается, остальные живут; код ставится ОДИН раз на узел, о первой отброшенной паре. sort_keys — порядок входит в identity. Годность пары решает САМА регулярка (PRIMITIVES §0.10): алфавит имени — дословный charset гиста DuckSoft (подмножество RFC 7230 tchar, уже нужного намеренно, ради interop), он же naiveHeaderNameCharset прежнего пути; запрет CR/LF/NUL в значении — класс [^\\r\\n\\x00]. Класс [^:]+ этого не выражал: 'X User:bad' с пробелом в имени обязан отбраковываться, а он его принимал (QUIRKS Q133-41, корпус extra_headers_bad_name_dropped)."
         },
         "padding": {
           "source": "query.padding",

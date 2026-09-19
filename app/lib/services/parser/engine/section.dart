@@ -119,11 +119,13 @@ final class UserinfoSpec {
     this.splitLimit,
     this.into = const [],
     this.singleInto,
+    this.required = false,
   });
 
   factory UserinfoSpec.fromJson(Map<String, dynamic> j) {
     final split = (j['split'] as Map?)?.cast<String, dynamic>();
     return UserinfoSpec(
+      required: j['required'] as bool? ?? false,
       decode: ((j['decode'] as List?) ?? const []).cast<String>(),
       splitSep: split?['sep'] as String?,
       // `limit: 2` — резать по ПЕРВОМУ разделителю: иначе пароль с двоеточием
@@ -139,6 +141,12 @@ final class UserinfoSpec {
   final int? splitLimit;
   final List<String> into;
   final String? singleInto;
+
+  /// `required: true` — ссылка БЕЗ userinfo не узел этой схемы: элемент
+  /// отбраковывается целиком. Судит ОБОЛОЧКУ, а не запись таблицы, поэтому
+  /// объявлен здесь: поля, которые userinfo наполняет, приходят позициями
+  /// `into`, и записи под ними у части схем нет вовсе.
+  final bool required;
 }
 
 /// Метка узла (P11, FROZEN `label`).
@@ -282,7 +290,10 @@ final class MapperParam {
     this.onPresent = const {},
     this.onLenGt = const {},
     this.onNoMatch = const {},
+    this.onWhenFalse = const {},
+    this.onImpliesWritten = const {},
     this.onItemInvalid = const {},
+    this.valueMapCase,
     this.implicit = false,
   });
 
@@ -349,8 +360,13 @@ final class MapperParam {
           ((j['on_len_gt'] as Map?) ?? const {}).cast<String, dynamic>(),
       onNoMatch:
           ((j['on_no_match'] as Map?) ?? const {}).cast<String, dynamic>(),
+      onWhenFalse:
+          ((j['on_when_false'] as Map?) ?? const {}).cast<String, dynamic>(),
+      onImpliesWritten: ((j['on_implies_written'] as Map?) ?? const {})
+          .cast<String, dynamic>(),
       onItemInvalid:
           ((j['on_item_invalid'] as Map?) ?? const {}).cast<String, dynamic>(),
+      valueMapCase: j['value_map_case'] as String?,
       implicit: j['implicit'] as bool? ?? false,
     );
   }
@@ -401,10 +417,29 @@ final class MapperParam {
   /// `on_no_match: {action, code}` — значение не попало ни в один ключ
   /// `sets`/`value_map`. `action: drop_node` снимает узел целиком.
   final Map<String, dynamic> onNoMatch;
-  /// (FROZEN `on_item_invalid`) — что делать с НЕГОДНЫМ ЭЛЕМЕНТОМ списка:
-  /// `{action: skip, code}`. Остальные элементы при этом живут, а код
-  /// ставится один раз на узел — о первом отброшенном.
+
+  /// `on_when_false: {action, code}` — код за ПОДАВЛЕНИЕ значения условием
+  /// `when`: во входе значение было, но структурное правило не дало ему
+  /// доехать до тела. Ставится только когда источник действительно ответил —
+  /// иначе запись, чьё условие ложно на каждом втором узле, шумела бы впустую.
+  final Map<String, dynamic> onWhenFalse;
+
+  /// `on_implies_written: {action, code}` — код за то, что `implies` и вправду
+  /// ДОПИСАЛ значение, которого во входе не было. Отличается от простого
+  /// наличия `implies`: при занятом пути присваивание проигрывает владельцу,
+  /// и сообщать не о чем.
+  final Map<String, dynamic> onImpliesWritten;
+
+  /// `on_item_invalid: {action, code}` — элемент списка не совпал с
+  /// регуляркой `extract` и пропущен. Код ставится ОДИН раз на узел, сколько
+  /// бы элементов ни отсеялось.
   final Map<String, dynamic> onItemInvalid;
+
+  /// `value_map_case: "sensitive"` — регистр значения ЗНАЧИМ. Общее правило
+  /// обратное (живые списки шлют `NONE`), но там, где ядро сравнивает литерал
+  /// точно, регистронезависимое попадание молча проглатывало бы негодное
+  /// значение вместо того, чтобы дать ему доехать до тела и быть отвергнутым.
+  final String? valueMapCase;
 
   final bool implicit;
 
