@@ -372,10 +372,6 @@ dynamic jsonPathValue(dynamic root, String path) {
   return cur;
 }
 
-/// Приоритет значения из `defaults` секции: слабее любой записи таблицы
-/// (`priority` у записей — небольшие числа вокруг нуля).
-const int _kDefaultPriority = 1 << 20;
-
 /// Нормализаторы, работающие над СПИСКОМ: применяются после разреза значения
 /// по `list.sep`, а не над исходной строкой.
 const Set<String> _kListNormalizers = {'port_range_spec', 'cidr_prefix'};
@@ -421,14 +417,6 @@ final class _Run {
     final schemeSet = _lookupFold(section.schemeSets, space.scheme);
     if (schemeSet is Map) _applySets(schemeSet.cast<String, dynamic>(), null);
 
-    // 2. `defaults` секции — то, чего ссылка может не сказать (порт). Пишутся
-    // ДО записей, но слабее любой из них: дефолт обязан уступить значению,
-    // которое источник всё-таки назвал.
-    for (final e in section.defaults.entries) {
-      _put(e.key, e.value);
-      _writtenBy[e.key] = _kDefaultPriority;
-    }
-
     // Адрес НЕ подставляется движком: секция объявляет его записями
     // (`server` ← `host`, `server_port` ← `port`) наравне с прочими. Иначе у
     // схем, где адрес лежит не в authority (endpoint-схемы, json-формы),
@@ -451,6 +439,20 @@ final class _Run {
     // 6. Заполнение пустоты объявленными источниками.
     for (final p in ordered) {
       _applyDefaults(p);
+    }
+
+    // 6b. `defaults` СЕКЦИИ — норма §10.1: после ОБОИХ проходов и только в
+    // путь, который никто не занял. Ни `priority`, ни `merge` к ним не
+    // применяются: они не участвуют в конкуренции, а заполняют оставшееся.
+    //
+    // Порядок важен: напиши дефолтный порт раньше записей — он победил бы
+    // явный порт из ссылки, потому что пишется первым. Формулировка «после
+    // проходов, только в пустое» предпочтительнее «с очень большим
+    // priority»: она не зависит от выбора магического числа и не ломается,
+    // если запись объявит `merge: overwrite`.
+    for (final e in section.defaults.entries) {
+      if (_read(e.key) != null) continue;
+      _put(e.key, e.value);
     }
 
     // Обязательные записи: их отсутствие — это «узла нет».

@@ -343,10 +343,25 @@ void main() {
       expect(_run(s, 'x://h.com:443?e=none')!['enc'], 'none');
     });
 
-    test('defaults секции слабее любой записи', () {
+    // Норма §10.1 — `defaults` применяются ПОСЛЕ обоих проходов и только в
+    // незанятый путь. Ни `priority`, ни `merge` к ним не применяются: они не
+    // участвуют в конкуренции, а заполняют оставшееся.
+    test('§10.1 defaults секции — только в пустое, после проходов', () {
       final s = _withParams({}, extra: {'defaults': {'server_port': 443}});
-      expect(_run(s, 'x://h.com:8443')!['server_port'], 8443);
+      expect(_run(s, 'x://h.com:8443')!['server_port'], 8443,
+          reason: 'явный порт из ссылки обязан победить дефолт');
       expect(_run(s, 'x://h.com')!['server_port'], 443);
+    });
+
+    test('§10.1 defaults не перебивает даже запись с merge: overwrite', () {
+      // Проверка того, ради чего норма выбрала «после проходов, в пустое», а
+      // не «очень большой priority»: с числом запись с overwrite победила бы
+      // дефолт формально, но порядок записи всё равно решал бы исход.
+      final s = _withParams({
+        'p': {'source': 'query.p', 'maps_to': 'field', 'merge': 'overwrite'},
+      }, extra: {'defaults': {'field': 'from-defaults'}});
+      expect(_run(s, 'x://h.com:443?p=from-link')!['field'], 'from-link');
+      expect(_run(s, 'x://h.com:443')!['field'], 'from-defaults');
     });
   });
 
@@ -483,6 +498,33 @@ void main() {
         'i': {'source': 'query.i', 'maps_to': 'i', 'aliases': ['eye']},
       }, extra: {'unknown_key': {'action': 'keep', 'code': 'uri_param_unknown'}});
       expect(runSection(_section(s), 'x://h.com:443?eye=1')!.warnings, isEmpty);
+    });
+
+    // Норма §10.3 — имя записи и имя параметра в ссылке могут отличаться;
+    // объявленным считается имя ИЗ `source`, а не только имя записи.
+    test('§10.3 имя из source объявлено наравне с именем записи', () {
+      final s = _withParams({
+        // Запись зовётся иначе, чем параметр ссылки.
+        'ключ': {'source': 'query.realName', 'maps_to': 'f'},
+      }, extra: {'unknown_key': {'action': 'keep', 'code': 'uri_param_unknown'}});
+      expect(runSection(_section(s), 'x://h.com:443?realName=1')!.warnings,
+          isEmpty);
+    });
+
+    // Норма §10.2 — спрашивать о параметре и потреблять его разные вещи.
+    // Иначе параметр, который только проверяется условием и никуда не
+    // пишется, замолкал бы там, где код — единственный признак непонятого
+    // входа.
+    test('§10.2 when ЧИТАЕТ источник, но прочитанным его не делает', () {
+      final s = _withParams({
+        // `probe` нигде не объявлен источником — только спрошен условием.
+        'f': {'source': 'query.f', 'maps_to': 'f',
+            'when': {'query.probe': 'yes'}},
+      }, extra: {'unknown_key': {'action': 'keep', 'code': 'uri_param_unknown'}});
+      final res = runSection(_section(s), 'x://h.com:443?f=1&probe=yes')!;
+      expect(res.body['f'], '1', reason: 'условие по источнику сработало');
+      expect(res.warnings.map((w) => '$w').join(), contains('probe'),
+          reason: 'спрошенный условием параметр объявленным не становится');
     });
   });
 }
