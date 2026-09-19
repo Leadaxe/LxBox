@@ -5,10 +5,16 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/dns/node_dns_records.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §435 — деривация DNS-записей узлов для экрана DNS Settings (спека §9.2)
 /// и опций `endpoint` формы сервера `tailscale` (§9.4): чистая функция над
 /// `List<ServerList>`, без storage.
 void main() {
+  // §480 W7 — эмит ссылки исполняет секции реестра; рукописного `toUri` у
+  // схем не осталось.
+  setUpAll(loadEngineSections);
+
   NodeSections canonical() => NodeSections.fromJson({
         'rules': [
           {
