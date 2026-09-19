@@ -88,10 +88,12 @@ Push в `develop` допустим вместе с завершением раб
 - Осознанная разница фиксируется per-app override со ссылкой на решение
   (`IDENTITY.md` §4, `CANON.md` §7); бесхозный override — ошибка.
 
-Перед запуском контрактных тестов синхронизируй копию:
+Перед запуском **corpus**-тестов синхронизируй вендоренную копию (реестровые
+тесты читают зеркало `assets/contract` и на CI не скипаются):
 
 ```bash
-bash app/tool/sync_contract.sh
+bash app/tool/sync_contract.sh              # восстановить app/contract из lock
+bash app/tool/sync_contract.sh --to <sha>   # бамп с коммита лаунчера
 ```
 
 ## Памятка суб-агенту (исполнителю по ТЗ)

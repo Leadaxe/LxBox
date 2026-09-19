@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
@@ -29,7 +30,6 @@ import 'corpus_warnings.dart';
 // кейс `xray/dialer_proxy_missing` проходил бы и при молчаливой потере узла,
 // то есть ровно при том дефекте, ради которого он и заведён.
 
-const _contractRoot = kContractRoot;
 
 /// Имя этой стороны в `meta.extension` (corpus/README).
 const _thisSide = 'lxbox';
@@ -163,11 +163,9 @@ List<String> _expectedChainLabels(Map<String, dynamic> node) {
 const Map<String, String> _pendingWarningNodes = {};
 
 void main() {
-  final root = Directory('$_contractRoot/corpus/body');
-  if (!root.existsSync()) {
-    // Контракт не синхронизирован — прогон пропускается, а не падает.
-    return;
-  }
+  if (corpusSuiteUnavailable('test/contract/body_contract_test.dart')) return;
+
+  final root = Directory('$kVendorRoot/corpus/body');
 
   final cases = root
       .listSync(recursive: true)
@@ -178,8 +176,8 @@ void main() {
 
   group('contract corpus: subscription bodies', () {
     setUpAll(() async {
-      if (Directory('$_contractRoot/registry').existsSync()) {
-        await ContractRegistry.I.loadFromDirectory(_contractRoot);
+      if (Directory('$kRegistryRoot/registry').existsSync()) {
+        await ContractRegistry.I.loadFromDirectory(kRegistryRoot);
       }
     });
 

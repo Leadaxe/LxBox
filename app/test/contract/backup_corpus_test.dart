@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
@@ -30,7 +31,6 @@ import '../parser/engine_test_setup.dart';
 // §438 — кейсы лежат в двух форматах (`lx_backup: 1` и `2`). Раннер формат не
 // выбирает: импорт опознаёт его сам, дальше одно слияние на оба.
 
-const _contractRoot = 'contract';
 
 /// Кейсы, которые сторона пока не проходит по известной причине: имя кейса →
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
@@ -39,6 +39,8 @@ const Map<String, String> _pendingCases = {};
 
 
 void main() {
+  if (corpusSuiteUnavailable('test/contract/backup_corpus_test.dart')) return;
+
   // §480 — секции движка грузятся и здесь. Раннер строит члена папки из его
   // ссылки (`FolderMember.raw` → `parseAll`), а разбор без загруженного
   // реестра не даёт НИ ОДНОГО узла: состав папки выходил списком пустых
@@ -47,7 +49,7 @@ void main() {
   // грузят с самого начала.
   setUpAll(loadEngineSections);
 
-  final root = Directory('$_contractRoot/corpus/backup');
+  final root = Directory('$kVendorRoot/corpus/backup');
   if (!root.existsSync()) return; // контракт не синхронизирован
 
   // §407 — предсостояние (`<case>.pre.backup.json`) кейсом НЕ является:

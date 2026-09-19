@@ -21,86 +21,217 @@
 # (иначе байт в байт бы не вышло) — происхождение названо в docs/contract/
 # README.md, который скрипт генерирует.
 #
-# Источник настраивается через LX_CONTRACT_SRC (дефолт — сосед-репозиторий
-# singbox-launcher рядом с LxBox).
+# §486 — режимы:
+#   без аргументов и без LX_CONTRACT_SRC — ВОССТАНОВЛЕНИЕ app/contract из
+#     коммита, записанного в contract.lock (поле source_sha). Зеркала и lock
+#     не меняются.
+#   LX_CONTRACT_SRC=<путь> или --to <sha> — БАМП: полная синхронизация из
+#     рабочего дерева или указанного коммита лаунчера, пересчёт lock и зеркал.
 #
-# Идемпотентен: повторный запуск с тем же источником даёт тот же контент и
+# Идемпотентен: повторный бамп с тем же источником даёт тот же контент и
 # пересчитанный (но при отсутствии изменений идентичный) sha256/synced_at.
 
 set -euo pipefail
 
-# Путь к contract/ в репозитории лаунчера — источник копии.
-LX_CONTRACT_SRC="${LX_CONTRACT_SRC:-/Users/macbook/projects/singbox-launcher/contract}"
-
-# Каталог этого скрипта → корень app/ (tool/..).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DEST_DIR="$APP_DIR/contract"
 LOCK_FILE="$APP_DIR/contract.lock"
-# §460 — бандлируемое зеркало реестра (в git, читается через rootBundle).
 ASSETS_DIR="$APP_DIR/assets/contract"
-# §460 W2b — зеркало страниц документации (в git, в APK не едет).
 REPO_DIR="$(cd "$APP_DIR/.." && pwd)"
 DOCS_DIR="$REPO_DIR/docs/contract"
 
-if [ ! -d "$LX_CONTRACT_SRC" ]; then
-  echo "sync_contract: источник не найден: $LX_CONTRACT_SRC" >&2
-  exit 1
+DEFAULT_LAUNCHER_REPO="${HOME}/projects/singbox-launcher"
+
+MODE="restore"
+BUMP_SHA=""
+LX_CONTRACT_SRC_EXPLICIT=0
+
+if [[ -n "${LX_CONTRACT_SRC:-}" ]]; then
+  MODE="bump"
+  LX_CONTRACT_SRC_EXPLICIT=1
 fi
 
-echo "sync_contract: $LX_CONTRACT_SRC -> $DEST_DIR"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --to)
+      MODE="bump"
+      BUMP_SHA="${2:?sync_contract: --to требует аргумент <sha>}"
+      shift 2
+      ;;
+    -h|--help)
+      cat <<EOF
+Использование:
+  bash app/tool/sync_contract.sh              восстановить app/contract из lock
+  bash app/tool/sync_contract.sh --to <sha>   бамп с коммита лаунчера
+  LX_CONTRACT_SRC=<path> bash app/tool/sync_contract.sh   бамп из каталога
 
-# Полная пересборка каталога-назначения: идемпотентность и отсутствие
-# «хвостов» от удалённых в источнике файлов важнее скорости rsync-подобного
-# инкремента.
-rm -rf "$DEST_DIR"
-mkdir -p "$DEST_DIR"
-cp -R "$LX_CONTRACT_SRC/." "$DEST_DIR/"
+Восстановление не трогает assets/contract, docs/contract и contract.lock.
+Бамп пересобирает копию, lock и оба зеркала.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "sync_contract: неизвестный аргумент: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 
-# Хеш дерева: сортированный список файлов + их содержимое одним потоком в
-# shasum. find выдаёт стабильный порядок через sort (LC_ALL=C — байтовый
-# порядок, не зависит от локали машины).
-TREE_HASH="$(
-  find "$DEST_DIR" -type f -print0 \
+_lock_field() {
+  local key="$1"
+  if [[ ! -f "$LOCK_FILE" ]]; then
+    return 1
+  fi
+  grep "^${key}=" "$LOCK_FILE" | head -n1 | cut -d= -f2- || true
+}
+
+_tree_hash() {
+  local dir="$1"
+  find "$dir" -type f -print0 \
     | LC_ALL=C sort -z \
     | xargs -0 cat \
     | shasum -a 256 \
     | awk '{print $1}'
-)"
+}
 
-# §460 — зеркало реестра в assets. Хеш дерева выше считается ДО него и только
-# по contract/: assets — производная копия, в lock она не входит, иначе lock
-# зависел бы сам от себя.
-#
-# Каталоги Flutter не рекурсивны, поэтому registry/ и registry/protocols/
-# объявлены в pubspec по отдельности — состав зеркала обязан этому отвечать.
-echo "sync_contract: зеркало реестра -> $ASSETS_DIR"
-rm -rf "$ASSETS_DIR"
-mkdir -p "$ASSETS_DIR/registry/protocols"
-cp "$DEST_DIR/VERSION" "$ASSETS_DIR/VERSION"
-cp "$DEST_DIR"/registry/*.json "$ASSETS_DIR/registry/"
-cp "$DEST_DIR"/registry/protocols/*.json "$ASSETS_DIR/registry/protocols/"
+_launcher_repo_from_src() {
+  local src="$1"
+  if [[ -d "$src/.git" ]]; then
+    printf '%s\n' "$(cd "$src" && pwd)"
+    return 0
+  fi
+  local parent
+  parent="$(cd "$(dirname "$src")" && pwd)"
+  if [[ -d "$parent/.git" ]]; then
+    printf '%s\n' "$parent"
+    return 0
+  fi
+  return 1
+}
 
-SYNCED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+_restore_contract() {
+  if [[ ! -f "$LOCK_FILE" ]]; then
+    echo "sync_contract: нет $LOCK_FILE — сначала бамп: --to <sha> или LX_CONTRACT_SRC" >&2
+    exit 1
+  fi
 
-cat > "$LOCK_FILE" <<EOF
-source=$LX_CONTRACT_SRC
-synced_at=$SYNCED_AT
-sha256=$TREE_HASH
+  local source_sha launcher_repo
+  source_sha="$(_lock_field source_sha)"
+  # §487 worktree_bootstrap использует LX_CONTRACT_REPO; LX_LAUNCHER_REPO —
+  # то же для явного бампа. Поле lock — если скрипт сам его записал.
+  launcher_repo="${LX_CONTRACT_REPO:-${LX_LAUNCHER_REPO:-$(_lock_field launcher_repo)}}"
+  if [[ -z "$launcher_repo" ]]; then
+    launcher_repo="$DEFAULT_LAUNCHER_REPO"
+  fi
+
+  if [[ -z "$source_sha" ]]; then
+    echo "sync_contract: в contract.lock нет source_sha — восстановление невозможно." >&2
+    echo "  Выполните бамп: bash app/tool/sync_contract.sh --to <sha> лаунчера" >&2
+    echo "  или LX_CONTRACT_SRC=<path> bash app/tool/sync_contract.sh" >&2
+    exit 1
+  fi
+
+  if [[ ! -d "$launcher_repo/.git" ]]; then
+    echo "sync_contract: репозиторий лаунчера не найден: $launcher_repo" >&2
+    exit 1
+  fi
+
+  local tmp
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+
+  echo "sync_contract: восстановление $launcher_repo@$source_sha -> $DEST_DIR"
+  git -C "$launcher_repo" archive "$source_sha" contract | tar -x -C "$tmp"
+
+  if [[ ! -d "$tmp/contract" ]]; then
+    echo "sync_contract: в коммите $source_sha нет каталога contract/" >&2
+    exit 1
+  fi
+
+  rm -rf "$DEST_DIR"
+  mkdir -p "$DEST_DIR"
+  cp -R "$tmp/contract/." "$DEST_DIR/"
+
+  local actual expected
+  expected="$(_lock_field sha256)"
+  actual="$(_tree_hash "$DEST_DIR")"
+  if [[ -n "$expected" && "$actual" != "$expected" ]]; then
+    echo "sync_contract: восстановленное дерево не совпадает с contract.lock:" >&2
+    echo "  в дереве: $actual" >&2
+    echo "  в lock:   $expected" >&2
+    exit 1
+  fi
+
+  echo "sync_contract: готово (восстановление, sha256=$actual)"
+}
+
+_bump_contract() {
+  local launcher_repo contract_src source_sha
+
+  if [[ -n "$BUMP_SHA" ]]; then
+    launcher_repo="${LX_CONTRACT_REPO:-${LX_LAUNCHER_REPO:-$DEFAULT_LAUNCHER_REPO}}"
+    if [[ ! -d "$launcher_repo/.git" ]]; then
+      echo "sync_contract: репозиторий лаунчера не найден: $launcher_repo" >&2
+      exit 1
+    fi
+    local tmp
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    git -C "$launcher_repo" archive "$BUMP_SHA" contract | tar -x -C "$tmp"
+    contract_src="$tmp/contract"
+    source_sha="$BUMP_SHA"
+  else
+    contract_src="${LX_CONTRACT_SRC:-$DEFAULT_LAUNCHER_REPO/contract}"
+    if [[ ! -d "$contract_src" ]]; then
+      echo "sync_contract: источник не найден: $contract_src" >&2
+      exit 1
+    fi
+    launcher_repo="$(_launcher_repo_from_src "$contract_src" || true)"
+    if [[ -z "$launcher_repo" ]]; then
+      launcher_repo="$DEFAULT_LAUNCHER_REPO"
+    fi
+    if [[ -d "$launcher_repo/.git" ]]; then
+      source_sha="$(git -C "$launcher_repo" rev-parse HEAD)"
+    else
+      source_sha=""
+    fi
+  fi
+
+  echo "sync_contract: $contract_src -> $DEST_DIR"
+
+  rm -rf "$DEST_DIR"
+  mkdir -p "$DEST_DIR"
+  cp -R "$contract_src/." "$DEST_DIR/"
+
+  local tree_hash synced_at
+  tree_hash="$(_tree_hash "$DEST_DIR")"
+  synced_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  echo "sync_contract: зеркало реестра -> $ASSETS_DIR"
+  rm -rf "$ASSETS_DIR"
+  mkdir -p "$ASSETS_DIR/registry/protocols"
+  cp "$DEST_DIR/VERSION" "$ASSETS_DIR/VERSION"
+  cp "$DEST_DIR"/registry/*.json "$ASSETS_DIR/registry/"
+  cp "$DEST_DIR"/registry/protocols/*.json "$ASSETS_DIR/registry/protocols/"
+
+  cat > "$LOCK_FILE" <<EOF
+source=$contract_src
+launcher_repo=$launcher_repo
+source_sha=$source_sha
+synced_at=$synced_at
+sha256=$tree_hash
 EOF
 
-# §460 W2b — зеркало страниц документации. Полная пересборка, как у зеркала
-# реестра: удалённая в источнике страница обязана исчезнуть и здесь, иначе
-# ссылка «Learn more» вела бы на страницу, которой контракт уже не знает.
-# README.md пишется ПОСЛЕ копирования — он не из источника, а про источник.
-CONTRACT_VERSION="$(cat "$DEST_DIR/VERSION")"
-if [ -d "$DEST_DIR/docs/generated" ]; then
-  echo "sync_contract: зеркало документации -> $DOCS_DIR"
-  rm -rf "$DOCS_DIR"
-  mkdir -p "$DOCS_DIR"
-  cp -R "$DEST_DIR/docs/generated/." "$DOCS_DIR/"
-  cat > "$DOCS_DIR/README.md" <<EOF
+  local contract_version
+  contract_version="$(cat "$DEST_DIR/VERSION")"
+  if [[ -d "$DEST_DIR/docs/generated" ]]; then
+    echo "sync_contract: зеркало документации -> $DOCS_DIR"
+    rm -rf "$DOCS_DIR"
+    mkdir -p "$DOCS_DIR"
+    cp -R "$DEST_DIR/docs/generated/." "$DOCS_DIR/"
+    cat > "$DOCS_DIR/README.md" <<EOF
 # Contract documentation (mirror)
 
 Эти страницы — копия \`contract/docs/generated/**\` из репозитория лаунчера,
@@ -110,19 +241,28 @@ if [ -d "$DEST_DIR/docs/generated" ]; then
 
 | | |
 |---|---|
-| Версия контракта | \`$CONTRACT_VERSION\` |
-| sha256 копии (\`app/contract.lock\`) | \`$TREE_HASH\` |
-| Синхронизировано | \`$SYNCED_AT\` |
+| Версия контракта | \`$contract_version\` |
+| sha256 копии (\`app/contract.lock\`) | \`$tree_hash\` |
+| Синхронизировано | \`$synced_at\` |
 
 **Руками не править.** Правится реестр у лаунчера, сюда изменение приезжает
-синхронизацией: \`bash app/tool/sync_contract.sh\`. Ручная правка потеряется на
-следующем прогоне, а тест-страж (\`app/test/contract/docs_mirror_test.dart\`)
-поймает рассинхрон зеркала с реестром раньше.
+синхронизацией: \`bash app/tool/sync_contract.sh --to <sha>\` или
+\`LX_CONTRACT_SRC=<path> bash app/tool/sync_contract.sh\`. Ручная правка
+потеряется на следующем прогоне, а тест-страж
+(\`app/test/contract/docs_mirror_test.dart\`) поймает рассинхрон зеркала с
+реестром раньше.
 
 Точка входа — [index.md](index.md); коды предупреждений — [warnings.md](warnings.md).
 EOF
-else
-  echo "sync_contract: docs/generated в источнике нет — зеркало документации пропущено" >&2
-fi
+  else
+    echo "sync_contract: docs/generated в источнике нет — зеркало документации пропущено" >&2
+  fi
 
-echo "sync_contract: готово, sha256=$TREE_HASH"
+  echo "sync_contract: готово, sha256=$tree_hash"
+}
+
+if [[ "$MODE" == "restore" ]]; then
+  _restore_contract
+else
+  _bump_contract
+fi

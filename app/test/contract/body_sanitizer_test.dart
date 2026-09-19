@@ -5,14 +5,12 @@
 // снято, с каким кодом и что осталось нетронутым. Мусор в теле роняет ВЕСЬ
 // конфиг ядра (24.1.3), поэтому важна каждая строка.
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/registry.dart';
 
-const _contractRoot = 'contract';
 
 /// Пин ядра, на котором сверена схема (`body.core` реестра): под ним
 /// проходят все поля, кроме явно более новых.
@@ -45,13 +43,9 @@ RegistryWarning _byCode(SanitizeResult r, String code) =>
         orElse: () => fail('нет кода $code, есть: ${_codes(r)}'));
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
 
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
-  });
+  setUpAll(loadTestRegistry);
+
 
   group('RegistrySanitizer — таблица 2.2', () {
     test('неизвестный ключ снимается с unknown_key', () {
@@ -62,7 +56,7 @@ void main() {
       expect(_byCode(r, 'unknown_key').path, 'foo');
       // Остальное тело цело.
       expect(r.body!['uuid'], '11111111-1111-1111-1111-111111111111');
-    }, skip: skip);
+    });
 
     // §470 — `unknown_key` несёт и СНЯТОЕ ЗНАЧЕНИЕ: конверт корпуса называет
     // его (`body/singbox/manual_object_junk`), и лаунчер печатает `src[name]`
@@ -72,7 +66,7 @@ void main() {
     test('unknown_key несёт снятое значение', () {
       final r = _san(_vless({'totally_unknown_key': 'whatever'}));
       expect(_byCode(r, 'unknown_key').value, 'whatever');
-    }, skip: skip);
+    });
 
     // Форма `value` нормативна (CANON §6): объект — `map[k:v k:v]` с ключами
     // по алфавиту, и у снятого ключа она та же, что у прочих кодов.
@@ -81,20 +75,20 @@ void main() {
         'totally_unknown_key': {'b': 2, 'a': true}
       }));
       expect(_byCode(r, 'unknown_key').value, 'map[a:true b:2]');
-    }, skip: skip);
+    });
 
     test('type: строка вместо порта не приводится → drop_node', () {
       // server_port: on_invalid = drop_node, code = port_invalid.
       final r = _san(_vless({'server_port': 'x'}));
       expect(r.body, isNull, reason: 'узел уходит целиком');
       expect(_codes(r), contains('port_invalid'));
-    }, skip: skip);
+    });
 
     test('type: число строкой приводится, узел живёт', () {
       final r = _san(_vless({'server_port': '8443'}));
       expect(r.body!['server_port'], 8443);
       expect(r.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('listable_string принимает и строку, и массив', () {
       final one = _san(_vless({
@@ -107,14 +101,14 @@ void main() {
       }));
       expect((many.body!['tls'] as Map)['alpn'], ['h2', 'h3']);
       expect(many.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('duration нормализуется в Go-форму', () {
       final r = _san(_vless({
         'tls': {'enabled': true, 'handshake_timeout': '10'}
       }));
       expect((r.body!['tls'] as Map)['handshake_timeout'], '10s');
-    }, skip: skip);
+    });
 
     test('enum + normalize: " Hybrid " принимается как hybrid', () {
       final r = _san(_vless({
@@ -131,7 +125,7 @@ void main() {
       final reality = (r.body!['tls'] as Map)['reality'] as Map;
       expect(reality['key_share'], 'hybrid');
       expect(r.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('enum вне набора → on_invalid с кодом реестра', () {
       final r = _san(_vless({
@@ -152,7 +146,7 @@ void main() {
           'tls.reality.key_share');
       // REALITY жив — снято одно поле, не блок.
       expect(reality['enabled'], isTrue);
-    }, skip: skip);
+    });
 
     test('format: мусорный server_name снимается', () {
       // tls.server_name: format=host, on_invalid=drop/type_invalid.
@@ -161,7 +155,7 @@ void main() {
       }));
       expect((r.body!['tls'] as Map).containsKey('server_name'), isFalse);
       expect(_codes(r), contains('type_invalid'));
-    }, skip: skip);
+    });
 
     test('len_parity: short_id нечётной длины снимается', () {
       final r = _san(_vless({
@@ -179,7 +173,7 @@ void main() {
       expect(reality.containsKey('short_id'), isFalse,
           reason: 'hex нечётной длины ядро не разберёт');
       expect(r.warnings, isNotEmpty);
-    }, skip: skip);
+    });
 
     test('required: vless без uuid → drop_node с field_missing', () {
       final body = _vless()..remove('uuid');
@@ -187,7 +181,7 @@ void main() {
       expect(r.body, isNull);
       expect(_codes(r), contains('field_missing'));
       expect(_byCode(r, 'field_missing').params['field'], 'uuid');
-    }, skip: skip);
+    });
 
     test('required внутри объекта: reality без public_key → снят БЛОК, узел жив',
         () {
@@ -214,7 +208,7 @@ void main() {
           reason: 'снят весь блок REALITY');
       expect(_byCode(r, 'field_missing').params['field'],
           'tls.reality.public_key');
-    }, skip: skip);
+    });
 
     test('secret: значение в предупреждении маскируется', () {
       // trojan.password — secret; мусорное значение даёт код, но не течёт.
@@ -231,7 +225,7 @@ void main() {
       const w = RegistryWarning(
           code: 'type_invalid', path: 'password', value: '***');
       expect(w.value, '***');
-    }, skip: skip);
+    });
 
     test('conflicts: ech.enabled + reality.enabled — снят декларант', () {
       final r = _san(_vless({
@@ -264,7 +258,7 @@ void main() {
       expect(r.warnings.where((w) => w.code == 'field_conflict').length, 1);
       expect(_byCode(r, 'field_conflict').path, 'tls.ech.enabled');
       expect(_byCode(r, 'field_conflict').params['with'], 'tls.reality.enabled');
-    }, skip: skip);
+    });
 
     test('requires: key_share при невалидном public_key снимается МОЛЧА', () {
       // public_key мусорный → снят своим кодом; key_share осмысленен только
@@ -295,7 +289,7 @@ void main() {
       // весь блок». Код по-прежнему один.
       expect((r.body!['tls'] as Map).containsKey('reality'), isFalse);
       expect(_codes(r), ['reality_pbk_invalid']);
-    }, skip: skip);
+    });
 
     test('requires: поля, которого НЕ БЫЛО, объясняет только field_requires',
         () {
@@ -306,7 +300,7 @@ void main() {
       }));
       expect(_codes(r), contains('field_requires'));
       expect(_byCode(r, 'field_requires').params['requires'], 'tls.spoof');
-    }, skip: skip);
+    });
 
     test('requires: spoof_method без spoof снимается', () {
       final r = _san(_vless({
@@ -315,7 +309,7 @@ void main() {
       final tls = r.body!['tls'] as Map;
       expect(tls.containsKey('spoof_method'), isFalse);
       expect(_byCode(r, 'field_requires').path, 'tls.spoof_method');
-    }, skip: skip);
+    });
 
     test('forbidden_for: naive + tls.alpn → tls_field_unsupported_naive', () {
       final r = _san({
@@ -338,7 +332,7 @@ void main() {
       expect(tls['certificate'], '-----BEGIN CERTIFICATE-----');
       expect(_codes(r), contains('tls_field_unsupported_naive'));
       expect(_byCode(r, 'tls_field_unsupported_naive').path, 'tls.alpn');
-    }, skip: skip);
+    });
 
     test('min_core: key_share снят на lx.3, цел на lx.4', () {
       Map<String, dynamic> body() => _vless({
@@ -363,7 +357,7 @@ void main() {
       final now = _san(body(), core: '1.14.1-lx.4');
       expect(((now.body!['tls'] as Map)['reality'] as Map)['key_share'],
           'hybrid');
-    }, skip: skip);
+    });
 
     test('platform: kernel_tx снят вне linux', () {
       final android = _san(_vless({
@@ -376,7 +370,7 @@ void main() {
         'tls': {'enabled': true, 'kernel_tx': true}
       }), platform: 'linux');
       expect((linux.body!['tls'] as Map)['kernel_tx'], isTrue);
-    }, skip: skip);
+    });
 
     test('advisory: ss aes-128-cfb даёт ss_method_legacy, поле цело', () {
       final r = _san({
@@ -390,7 +384,7 @@ void main() {
       expect(r.body!['method'], 'aes-128-cfb', reason: 'узел живёт как есть');
       expect(_codes(r), contains('ss_method_legacy'));
       expect(_byCode(r, 'ss_method_legacy').severity, WarningSeverity.info);
-    }, skip: skip);
+    });
 
     // §467 — `all_or_nothing` действия санитайзера НЕ влечёт.
     //
@@ -412,7 +406,7 @@ void main() {
       expect(xmux.keys.toList(), ['max_connections'],
           reason: 'секция байт в байт та, что пришла');
       expect(_codes(r), isEmpty);
-    }, skip: skip);
+    });
 
     // §467 — `conflicts` судит ЗНАЧЕНИЕ, а не наличие ключа (контракт §24.9).
     group('§467 conflicts по значению', () {
@@ -439,7 +433,7 @@ void main() {
         expect(Map<String, dynamic>.from(xmux.cast<String, dynamic>()), xmuxIn,
             reason: 'тело байт в байт');
         expect(_codes(r), isEmpty);
-      }, skip: skip);
+      });
 
       test('оба > 0 — конфликт как раньше', () {
         final r = _san(_vless({
@@ -455,7 +449,7 @@ void main() {
             xmux.containsKey('max_concurrency') &&
                 xmux.containsKey('max_connections'),
             isFalse);
-      }, skip: skip);
+      });
 
       test('«0-0» у соседа — тоже не задано', () {
         final r = _san(_vless({
@@ -467,7 +461,7 @@ void main() {
         expect(_codes(r), isEmpty);
         final xmux = ((r.body!['transport'] as Map)['xmux']) as Map;
         expect(xmux['max_concurrency'], '16-32');
-      }, skip: skip);
+      });
     });
 
     test('порядок ключей — входящий: гард не переставляет валидное тело', () {
@@ -485,7 +479,7 @@ void main() {
       final r = _san(Map<String, dynamic>.from(src));
       expect(r.body!.keys.toList(), src.keys.toList());
       expect(r.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('снятое поле не сдвигает соседей', () {
       final r = _san({
@@ -498,7 +492,7 @@ void main() {
       });
       expect(r.body!.keys.toList(),
           ['type', 'tag', 'server', 'server_port', 'uuid']);
-    }, skip: skip);
+    });
 
     test('дефолты не материализуются (CANON §2.4)', () {
       final r = _san(_vless());
@@ -506,14 +500,14 @@ void main() {
       expect(r.body!.containsKey('packet_encoding'), isFalse);
       expect(r.body!.containsKey('flow'), isFalse);
       expect(r.body!.containsKey('network'), isFalse);
-    }, skip: skip);
+    });
 
     test('tag и detour не трогаются — их пишет сборка', () {
       final r = _san(_vless({'detour': 'hop-1'}));
       expect(r.body!['tag'], 'n1');
       expect(r.body!['detour'], 'hop-1');
       expect(_codes(r), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
 
     test('реестр не загружен — тело возвращается как есть', () {
       // Эмулируем отсутствие схемы чужим типом: путь тот же, что у
@@ -522,7 +516,7 @@ void main() {
       final r = _san(body, scheme: 'shadowtls');
       expect(r.body, same(body));
       expect(r.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('вложенный объект и элементы массива обходятся рекурсивно', () {
       final r = _san({
@@ -548,7 +542,7 @@ void main() {
       final peer = (r.body!['peers'] as List).first as Map;
       expect(peer.containsKey('junk_key'), isFalse);
       expect(peer['public_key'], isNotNull);
-    }, skip: skip);
+    });
 
     test('транспорт выбирается по type, мусорный ключ внутри снят', () {
       final r = _san(_vless({
@@ -559,7 +553,7 @@ void main() {
       expect(t['path'], '/x');
       expect(t.containsKey('bogus'), isFalse);
       expect(_byCode(r, 'unknown_key').path, 'transport.bogus');
-    }, skip: skip);
+    });
   });
 
   // §464 — выражения реестра, приехавшие с W2d лаунчера. По кейсу на
@@ -644,7 +638,7 @@ void main() {
       // форма, которую ядро не принимает.
       expect(r.body, isNotNull, reason: 'узел жив, деградировал до plain TLS');
       expect((r.body!['tls'] as Map).containsKey('reality'), isFalse);
-    }, skip: skip);
+    });
 
     test('format base64_32: ровно 32 байта проходят в любом написании', () {
       // Одни и те же 32 байта: base64url без паддинга и base64 std с ним.
@@ -661,7 +655,7 @@ void main() {
         expect(_codes(r), isNot(contains('reality_pbk_invalid')),
             reason: '$key — 32 байта после декода');
       }
-    }, skip: skip);
+    });
 
     test('format base64_32: НЕКАНОНИЧЕСКАЯ последняя группа — годный ключ',
         () {
@@ -693,7 +687,7 @@ void main() {
         ((r.body?['tls'] as Map?)?['reality'] as Map?)?['public_key'],
         'ccccccccccccccccccccccccccccccccccccccccccA',
       );
-    }, skip: skip);
+    });
 
     test('int_array: границы min/max относятся к ЭЛЕМЕНТУ', () {
       // `peers[].reserved` — три БАЙТА (`min: 0, max: 255, len: 3`). Прежде
@@ -729,7 +723,7 @@ void main() {
       expect(_codes(ok), isNot(contains('type_invalid')));
       expect(((ok.body?['peers'] as List).first as Map)['reserved'],
           [1, 2, 3]);
-    }, skip: skip);
+    });
 
     test('normalize base64_std: неканоническая форма приводится к канону', () {
       // Та же пара байт, но у поля объявлен `normalize: base64_std` — здесь
@@ -754,7 +748,7 @@ void main() {
       expect(r.body, isNotNull, reason: 'коды: ${_codes(r)}');
       expect(r.body?['private_key'],
           'ccccccccccccccccccccccccccccccccccccccccccA=');
-    }, skip: skip);
+    });
 
     test('normalize hex_only + normalize_code: 0x1a2 чистится с кодом', () {
       final r = _san(_vless({
@@ -774,7 +768,7 @@ void main() {
       final w = _byCode(r, 'reality_short_id_invalid');
       expect(w.path, 'tls.reality.short_id');
       expect(w.value, '0x1a2');
-    }, skip: skip);
+    });
 
     test('normalize hex_only: значение без потерь кода не даёт', () {
       final r = _san(_vless({
@@ -788,7 +782,7 @@ void main() {
         }
       }));
       expect(_codes(r), isNot(contains('reality_short_id_invalid')));
-    }, skip: skip);
+    });
 
     test('advisory except+when: fp вне гибридных — код только при REALITY',
         () {
@@ -813,7 +807,7 @@ void main() {
       // `when` не выполнен — REALITY на узле нет, и код про него бессмыслен.
       final plain = _san(_vless({'tls': tls(reality: false)}));
       expect(_codes(plain), isNot(contains('reality_fp_not_chrome')));
-    }, skip: skip);
+    });
 
     test('advisory except: гибридный отпечаток кода не получает', () {
       for (final fp in const ['chrome', 'firefox', 'safari', 'random']) {
@@ -830,7 +824,7 @@ void main() {
         expect(_codes(r), isNot(contains('reality_fp_not_chrome')),
             reason: '$fp несёт гибридный key share');
       }
-    }, skip: skip);
+    });
 
     test('requires equals: gecko-размеры на salamander снимаются', () {
       final r = _san({
@@ -851,7 +845,7 @@ void main() {
       expect(obfs.containsKey('min_packet_size'), isFalse);
       // Сама обфускация цела — снято только поле не своего типа.
       expect(obfs['type'], 'salamander');
-    }, skip: skip);
+    });
 
     test('requires equals: на gecko те же размеры остаются', () {
       final r = _san({
@@ -865,7 +859,7 @@ void main() {
       }, scheme: 'hysteria2');
       expect(_codes(r), isNot(contains('field_requires')));
       expect((r.body!['obfs'] as Map)['min_packet_size'], 100);
-    }, skip: skip);
+    });
 
     test('default_when: полоса hysteria v1 материализуется без кода', () {
       // Без up_mbps ядро отвечает «missing upload speed» и не поднимает
@@ -880,7 +874,7 @@ void main() {
       expect(r.body!['up_mbps'], 100);
       expect(r.body!['down_mbps'], 100);
       expect(_codes(r), isEmpty, reason: 'узел жив и в порядке — кода нет');
-    }, skip: skip);
+    });
 
     test('default_when не перебивает заданное значение', () {
       final r = _san({
@@ -893,7 +887,7 @@ void main() {
       }, scheme: 'hysteria');
       expect(r.body!['up_mbps'], 50);
       expect(r.body!['down_mbps'], 100);
-    }, skip: skip);
+    });
 
     test('§473 default_when с when: дефолт только у AmneziaWG-узла', () {
       Map<String, dynamic> wg({bool awg = false}) => {
@@ -921,7 +915,7 @@ void main() {
       final plain = _san(wg(), scheme: 'wireguard');
       expect(plain.body!.containsKey('mtu'), isFalse);
       expect(_codes(plain), isEmpty);
-    }, skip: skip);
+    });
 
     test('§473 max_when: потолок, исключение по входу и род узла', () {
       Map<String, dynamic> body(int mtu, {bool awg = true}) => {
@@ -972,7 +966,7 @@ void main() {
           scheme: 'wireguard', coreVersion: _core);
       expect(low.body!['mtu'], 1200);
       expect(low.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('§473 any_set судит НАЛИЧИЕ ключа, а не заданность значения', () {
       // Пара к §467: `conflicts`/`requires` судят значение, и `jc: 0` для них
@@ -1000,7 +994,7 @@ void main() {
         expect(r.warnings.map((w) => w.code), contains('awg_mtu_clamped'),
             reason: 'jc=$marker');
       }
-    }, skip: skip);
+    });
 
     test('grpc service_name: нормализации нет — значение как есть', () {
       // §468 (контракт 1.1.3): правило `normalize: grpc_service_name` снято
@@ -1021,7 +1015,7 @@ void main() {
         expect((r.body!['transport'] as Map)['service_name'], v, reason: v);
         expect(r.warnings, isEmpty, reason: v);
       }
-    }, skip: skip);
+    });
 
     test('type awg_range: число и диапазон проходят, мусор снят', () {
       final r = _san({
@@ -1053,7 +1047,7 @@ void main() {
       // негодное значение снимает поле с awg_header_invalid, а не с общим
       // type_invalid.
       expect(_byCode(r, 'awg_header_invalid').path, 'h3');
-    }, skip: skip);
+    });
 
     // ───── §481 (контракт 1.1.11) — четыре новых атрибута ─────
     //
@@ -1087,19 +1081,19 @@ void main() {
               'диапазона, и [10,40] = [40,10]');
       // Кода нет: это перевод НАПИСАНИЯ, как trim, а не замена значения.
       expect(_codes(r), isEmpty);
-    }, skip: skip);
+    });
 
     test('normalize range_order: голое число и прямая пара не трогаются', () {
       expect(sanWg({'h1': 7}).body!['h1'], 7);
       expect(sanWg({'h1': '10-40'}).body!['h1'], '10-40');
-    }, skip: skip);
+    });
 
     test('range_order НЕ стоит у таймингов AWG 3.x — перевёрнутая пара там '
         'опечатка и снимается с кодом', () {
       final r = sanWg({'rekey_after_time': '120-10'});
       expect(r.body!.containsKey('rekey_after_time'), isFalse);
       expect(_byCode(r, 'awg3_field_invalid').path, 'rekey_after_time');
-    }, skip: skip);
+    });
 
     test('awg_range: граница ШИРЕ uint32 снимает поле (ядро отвергло бы '
         'разбором весь конфиг)', () {
@@ -1107,14 +1101,14 @@ void main() {
       expect(r.body, isNotNull, reason: 'снимается ПОЛЕ, не узел');
       expect(r.body!.containsKey('h1'), isFalse);
       expect(_byCode(r, 'awg_header_invalid').path, 'h1');
-    }, skip: skip);
+    });
 
     test('body.relations ranges_disjoint: пересечение h1..h4 роняет УЗЕЛ', () {
       final r = sanWg({'h1': '5-10', 'h2': 7});
       expect(r.body, isNull);
       expect(r.explicitDropNode, isTrue);
       expect(_codes(r), contains('awg_headers_overlap'));
-    }, skip: skip);
+    });
 
     test('ranges_disjoint: незаданный заголовок участвует ДЕФОЛТОМ ядра', () {
       // h2 не задан, ядро читает его как 2 — и h1=2 с ним пересекается.
@@ -1123,7 +1117,7 @@ void main() {
       expect(_codes(r), contains('awg_headers_overlap'));
       // А непересекающийся с дефолтами набор живёт.
       expect(sanWg({'h1': 100}).body, isNotNull);
-    }, skip: skip);
+    });
 
     test('ranges_disjoint читает ЧИСТУЮ карту: снятое поле не «пересекается»',
         () {
@@ -1134,7 +1128,7 @@ void main() {
       expect(r.body, isNotNull);
       expect(_codes(r), isNot(contains('awg_headers_overlap')));
       expect(_byCode(r, 'awg_header_invalid').path, 'h1');
-    }, skip: skip);
+    });
 
     test('min_when: паддинг ниже порога при заданном ключе роняет УЗЕЛ', () {
       final r = sanWg({
@@ -1147,7 +1141,7 @@ void main() {
       expect(r.body, isNull);
       expect(r.explicitDropNode, isTrue);
       expect(_byCode(r, 'awg3_padding_too_short').path, 's1');
-    }, skip: skip);
+    });
 
     test('min_when absent_is_zero: ОТСУТСТВУЮЩИЙ паддинг при ключе — так же '
         'фатально', () {
@@ -1156,7 +1150,7 @@ void main() {
       });
       expect(r.body, isNull);
       expect(_codes(r), contains('awg3_padding_too_short'));
-    }, skip: skip);
+    });
 
     test('min_when: без ключа защиты порога НЕТ — обычный AmneziaWG живёт '
         'с любым паддингом', () {
@@ -1164,7 +1158,7 @@ void main() {
       expect(r.body, isNotNull);
       expect(r.body!['s1'], 5);
       expect(_codes(r), isNot(contains('awg3_padding_too_short')));
-    }, skip: skip);
+    });
 
     test('pattern у header_protection_key: все нули роняют УЗЕЛ', () {
       // 32 нулевых байта и есть строка из одних `A` с паддингом.
@@ -1177,7 +1171,7 @@ void main() {
       });
       expect(r.body, isNull);
       expect(_codes(r), contains('awg3_header_key_invalid'));
-    }, skip: skip);
+    });
 
     test('ключи WG судит РЕЕСТР: не-32-байтный ключ роняет узел '
         'с wg_key_invalid, а не молча', () {
@@ -1191,7 +1185,7 @@ void main() {
       expect(w.path, 'private_key');
       // `secret: true` — значение в предупреждении маскируется.
       expect(w.value, '***');
-    }, skip: skip);
+    });
 
     test('битый pre_shared_key роняет УЗЕЛ наравне с обязательными ключами',
         () {
@@ -1201,7 +1195,7 @@ void main() {
       expect(r.body, isNull, reason: 'решение владельца 19.09.2026: туннель '
           'без ожидаемого сервером PSK — тихо сломанный туннель');
       expect(_codes(r), contains('wg_key_invalid'));
-    }, skip: skip);
+    });
 
     // ───── §481 (контракт 1.1.12, CANON §6.1) — `absent_when` ─────
 
@@ -1214,7 +1208,7 @@ void main() {
               'явный disabled-блок ронял ядра lx.5..lx.18 в SIGSEGV');
       // Кода нет: запись «настройки нет» — не деградация.
       expect(_codes(r), isEmpty);
-    }, skip: skip);
+    });
 
     test('absent_when судится ДО правил полей: мусор ВНУТРИ снятого блока '
         'кодов не даёт', () {
@@ -1228,7 +1222,7 @@ void main() {
       expect(_codes(r), isEmpty,
           reason: 'иначе человек получил бы коды на поля блока, которого в '
               'теле не будет');
-    }, skip: skip);
+    });
 
     test('absent_when у вложенного: reality{enabled:false} исчезает, '
         'живой tls остаётся', () {
@@ -1243,7 +1237,7 @@ void main() {
       expect(tls['enabled'], true);
       expect(tls.containsKey('reality'), isFalse);
       expect(_codes(r), isEmpty);
-    }, skip: skip);
+    });
 
     test('absent_when: tls БЕЗ ключа `enabled` — тело без флага, а не '
         'выключенный TLS', () {
@@ -1251,7 +1245,7 @@ void main() {
         'tls': {'server_name': 'example.com'}
       }));
       expect(r.body!.containsKey('tls'), isTrue);
-    }, skip: skip);
+    });
 
     test('absent_when сравнивает по печатной форме: строковое "false" '
         'совпадает с булевым', () {
@@ -1259,7 +1253,7 @@ void main() {
         'tls': {'enabled': 'false', 'server_name': 'example.com'}
       }));
       expect(r.body!.containsKey('tls'), isFalse);
-    }, skip: skip);
+    });
 
     test('default_when у allowed_ips: тело без ключа получает дефолт, '
         'а не теряет узел', () {
@@ -1271,7 +1265,7 @@ void main() {
           ['0.0.0.0/0', '::/0']);
       // Кода нет — это дефолт-конвенция, а не замена значения.
       expect(_codes(r), isEmpty);
-    }, skip: skip);
+    });
 
     test('type int_array: reserved из трёх чисел цел, мусор снят', () {
       Map<String, dynamic> wg(Object? reserved) => {
@@ -1296,14 +1290,14 @@ void main() {
       final bad = _san(wg(['a', 'b', 'c']), scheme: 'wireguard');
       final peer = (bad.body!['peers'] as List).first as Map;
       expect(peer.containsKey('reserved'), isFalse);
-    }, skip: skip);
+    });
 
     test('неизвестное выражение реестра не роняет и не портит значение', () {
       // Контракт может уехать вперёд кода: выражение, которого санитайзер не
       // знает, обязано остаться незамеченным, а не съесть поле.
       final r = _san(_vless({'transport': {'type': 'ws', 'path': '/x'}}));
       expect((r.body!['transport'] as Map)['path'], '/x');
-    }, skip: skip);
+    });
   });
 
   group('coreAtLeast', () {

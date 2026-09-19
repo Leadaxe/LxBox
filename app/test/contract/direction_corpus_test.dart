@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/codec/node_link_record.dart';
@@ -27,7 +28,6 @@ import '../parser/engine_test_setup.dart';
 //
 // Расхождение expected = модель Направления разъехалась между платформами.
 
-const _contractRoot = 'contract';
 
 // ── Что раннер сверяет, а что нет ───────────────────────────────────────────
 
@@ -128,7 +128,9 @@ const _groupsNotComparable = <String, String>{
 };
 
 void main() {
-  final root = Directory('$_contractRoot/corpus/direction');
+  if (corpusSuiteUnavailable('test/contract/direction_corpus_test.dart')) return;
+
+  final root = Directory('$kVendorRoot/corpus/direction');
   if (!root.existsSync()) {
     // contract/ — вендоренная копия (tool/sync_contract.sh), в git не идёт.
     test('корпус Направлений не синхронизирован', () {},

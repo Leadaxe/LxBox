@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -16,7 +16,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Инварианты 1 и 2 (корпус и golden) держат свои тесты: корпус URI —
 /// `test/contract/`, эталоны конфигов — `test/builder/`. Здесь то, что
 /// специфично для переезда протокола: identity, round-trip и цена.
-const _contractRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026). Формат и
 /// причина файла — те же, что у vless (шаг 3).
@@ -32,7 +31,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все vmess-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/vmess')
+  final files = Directory('$kVendorRoot/corpus/uri/vmess')
       .listSync()
       .whereType<File>()
       .toList()
@@ -49,13 +48,10 @@ List<String> _corpusUris() {
 }
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final corpusSkip =
+      corpusTestSkip('test/parser/vmess_pipeline_invariants_test.dart');
 
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
-  });
+  setUpAll(loadTestRegistry);
 
   group('§472 инвариант 4 — identity vmess не меняется', () {
     test('каждый кейс корпуса даёт хеш из фикстуры', () {
@@ -81,7 +77,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -149,7 +145,7 @@ void main() {
       // Страж от «список исключений съел корпус»: из шестнадцати
       // разбираемых кейсов круг проходят тринадцать, три названы выше.
       expect(checked, greaterThan(12));
-    }, skip: skip);
+    }, skip: corpusSkip);
 
     test('обе формы ссылки дают одно тело', () {
       // Диалекты различаются только СЛОВАРЁМ — где взять значение. Тело у
@@ -165,7 +161,7 @@ void main() {
       ))}#n')!;
       expect(b.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map);
       expect(legacyNodeIdentityHash(b), legacyNodeIdentityHash(a));
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -215,7 +211,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n vmess-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — коды vmess приходят из реестра, с путём и сырым значением', () {
@@ -232,7 +228,7 @@ void main() {
       expect(w.value, 'wat');
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect((tls['utls'] as Map)['fingerprint'], 'chrome');
-    }, skip: skip);
+    });
 
     test('§453 dial-поля контейнера идут мимо санитайзера и не теряются', () {
       // В base64-JSON они лежат ключами самого объекта v2rayN, под именами
@@ -247,7 +243,7 @@ void main() {
       expect(spec.tcpKeepAlive?.interval, '15s');
       expect(spec.tcpKeepAlive?.disabled, isTrue);
       expect(spec.warnings.map(warningCodeOf), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -261,6 +257,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

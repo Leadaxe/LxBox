@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -27,8 +28,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// КОРПУС остаётся за вендоренной копией — в зеркале его нет, оно несёт
 /// только `registry/`. Поэтому гейта два: тесты по фикстурам идут всегда,
 /// тесты по корпусу — только локально после синка.
-const _contractRoot = 'assets/contract';
-const _corpusRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/tuic/pipeline_identity_before.json';
@@ -43,7 +42,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все tuic-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_corpusRoot/corpus/uri/tuic')
+  final files = Directory('$kVendorRoot/corpus/uri/tuic')
       .listSync()
       .whereType<File>()
       .toList()
@@ -63,15 +62,11 @@ List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'зеркало реестра не найдено';
   // Корпус живёт только в вендоренной копии — на CI его нет.
-  final hasCorpus = Directory('$_corpusRoot/corpus/uri/tuic').existsSync();
-  final skipCorpus = hasCorpus ? skip : 'корпус не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/tuic_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
@@ -97,7 +92,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
 
     test('узел с `uuid` не в форме UUID теперь отбраковывается', () {
       // ЕДИНСТВЕННОЕ изменение поведения этого переезда, и оно намеренное.
@@ -116,7 +111,7 @@ void main() {
       expect(
           parseUri('tuic://11111111-1111-1111-1111-111111111111:p@h:443#n'),
           isNotNull);
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -138,7 +133,7 @@ void main() {
       }
       // У tuic круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(11));
-    }, skip: skipCorpus);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -176,7 +171,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n tuic-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — коды tuic приходят из реестра, с путём и значением', () {
@@ -196,7 +191,7 @@ void main() {
       expect(w.single.value, 'map[enabled:true fingerprint:firefox]');
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('utls'), isFalse, reason: 'тело прежнее');
-    }, skip: skip);
+    });
 
     test('ссылка и тело дают РАВНЫЕ коды (парный кейс корпуса)', () {
       final fromUri = parseUri('tuic://$uuid:pass123@tuic.example-1.com:443/'
@@ -223,7 +218,7 @@ void main() {
       expect(codes(fromBody), codes(fromUri));
       expect(fromBody.emit(TemplateVars.empty).map['tls'],
           fromUri.emit(TemplateVars.empty).map['tls']);
-    }, skip: skip);
+    });
 
     test('congestion_control и udp_relay_mode судит реестр', () {
       final cc = parseUri('tuic://$uuid:p@h:443?congestion_control=bogus#n')!;
@@ -242,7 +237,7 @@ void main() {
       expect(u.value, 'quiс', reason: 'кириллическая «с» — та самая опечатка');
       expect(urm.emit(TemplateVars.empty).map.containsKey('udp_relay_mode'),
           isFalse);
-    }, skip: skip);
+    });
 
     test('три написания 0-RTT читаются одинаково', () {
       // `uri.query.reduce_rtt.aliases` — целевой набор контракта это
@@ -257,7 +252,7 @@ void main() {
       final off = parseUri('tuic://$uuid:p@h:443#n')!;
       expect(off.emit(TemplateVars.empty).map.containsKey('zero_rtt_handshake'),
           isFalse);
-    }, skip: skip);
+    });
 
     test('disable_sni=1 убирает имя сервера из тела', () {
       final on = parseUri('tuic://$uuid:p@h.example:443?sni=a.b'
@@ -269,7 +264,7 @@ void main() {
           '&disable_sni=0#n')!;
       expect((off.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
           'a.b');
-    }, skip: skip);
+    });
 
     test('пароль с двоеточием внутри не теряется', () {
       // userinfo у tuic это `uuid:password`, но пароль — всё ПОСЛЕ первого
@@ -277,7 +272,7 @@ void main() {
       // разделитель ровно один раз.
       final spec = parseUri('tuic://$uuid:p%3A1%3A2@h:443#n')!;
       expect(spec.emit(TemplateVars.empty).map['password'], 'p:1:2');
-    }, skip: skip);
+    });
   });
 
   // РЕШЕНИЕ ВЛАДЕЛЬЦА 19.09.2026 — пустой пароль это УЗЕЛ С ПРЕДУПРЕЖДЕНИЕМ,
@@ -301,7 +296,7 @@ void main() {
         expect(w, hasLength(1), reason: 'один код на узел: $u');
         expect(w.single.path, 'password');
       }
-    }, skip: skip);
+    });
 
     test('тело у обоих написаний ОДНО и то же', () {
       final a = parseUri(empty)!.emit(TemplateVars.empty).map;
@@ -312,7 +307,7 @@ void main() {
       // (`option/tuic.go Password` с omitempty), и заводить второе написание
       // «нет пароля» значило бы двигать тела живых узлов без нужды.
       expect(a['password'], '');
-    }, skip: skip);
+    });
 
     test('круг parse(emit) сходится вместе с кодом', () {
       for (final u in [empty, absent]) {
@@ -331,13 +326,13 @@ void main() {
           reason: 'круг потерял код: $u',
         );
       }
-    }, skip: skip);
+    });
 
     test('узел С паролем кода не получает', () {
       final spec = parseUri('tuic://$uuid:pass123@example-1.com:443#n')!;
       expect(_registry(spec).where((w) => w.code == 'password_empty'), isEmpty);
       expect(spec.emit(TemplateVars.empty).map['password'], 'pass123');
-    }, skip: skip);
+    });
 
     test('синк 1.1.37 — у кода есть ТЕКСТЫ, карточка не пустая', () {
       // До синка 1.1.37 код ставился нашим оверлеем, а в `warnings.json` его
@@ -359,7 +354,7 @@ void main() {
       expect(t.textEn, contains('{path}'));
       expect(t.fixEn, isNotEmpty);
       expect(t.fixRu, isNotEmpty);
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -371,6 +366,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

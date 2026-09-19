@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/node_hash.dart';
@@ -17,8 +17,6 @@ import 'package:lxbox/services/warp/masque_account.dart';
 /// §472 шаг 7, раздел 3 спеки — инварианты переезда masque на конвейер.
 /// §480 W4 — РЕЕСТР из ЗЕРКАЛА: вендоренной копии на CI нет, и под её гейтом
 /// файл пропускался бы целиком. КОРПУС остаётся за копией — в зеркале его нет.
-const _contractRoot = 'assets/contract';
-const _corpusRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026). В нём и
 /// корпус, и ссылки `app/test`, и узлы, которые строит фабрика WARP
@@ -34,7 +32,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_corpusRoot/corpus/uri/masque')
+  final files = Directory('$kVendorRoot/corpus/uri/masque')
       .listSync()
       .whereType<File>()
       .toList()
@@ -74,14 +72,10 @@ MasqueAccount _warpAccount() => MasqueAccount(
     );
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'зеркало реестра не найдено';
-  final hasCorpus = Directory('$_corpusRoot/corpus/uri/masque').existsSync();
-  final skipCorpus = hasCorpus ? skip : 'корпус не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/masque_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
@@ -111,7 +105,7 @@ void main() {
             jsonEncode(e.value['body']),
             reason: 'тело кейса ${e.key}');
       }
-    }, skip: skip);
+    });
 
     test('узел фабрики WARP не сдвинулся ни на одной версии HTTP', () {
       // MASQUE-узлы WARP у пользователей самые массовые, и строит их ссылка
@@ -123,7 +117,7 @@ void main() {
             reason: 'identity WARP-узла vhttp=$vhttp');
         expect(spec.emit(TemplateVars.empty).map['vhttp'], vhttp);
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -145,7 +139,7 @@ void main() {
       }
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, 6);
-    }, skip: skipCorpus);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -180,7 +174,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n masque-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — masque: перевод, который остаётся за маппером', () {
@@ -198,7 +192,7 @@ void main() {
       final slash = parseUri('masque://PR/IV@192.0.2.44:443'
           '?publickey=PUBDER%3D%3D&address=172.16.0.2%2F32#n')!;
       expect(slash.emit(TemplateVars.empty).map['private_key'], 'PR/IV');
-    }, skip: skip);
+    });
 
     test('без publickey или без address узла нет', () {
       expect(
@@ -209,18 +203,18 @@ void main() {
           parseUri('masque://PRIVDER%3D%3D@192.0.2.44:443'
               '?publickey=PUBDER%3D%3D#n'),
           isNull);
-    }, skip: skip);
+    });
 
     test('порт по умолчанию 443', () {
       final spec = parseUri('masque://PRIVDER%3D%3D@192.0.2.44'
           '?publickey=PUBDER%3D%3D&address=172.16.0.2%2F32#n')!;
       expect(spec.emit(TemplateVars.empty).map['server_port'], 443);
-    }, skip: skip);
+    });
 
     test('keep_alive ссылки → keep_alive_period тела', () {
       final spec = parseUri(bare.replaceAll('#n', '&keep_alive=45s#n'))!;
       expect(spec.emit(TemplateVars.empty).map['keep_alive_period'], '45s');
-    }, skip: skip);
+    });
 
     test('profile и mtu — дефолты ССЫЛКИ, пишутся явно', () {
       // Реестр объявляет их `default`, но `default` по CANON §2.4 в тело не
@@ -228,7 +222,7 @@ void main() {
       final body = parseUri(bare)!.emit(TemplateVars.empty).map;
       expect(body['profile'], 'cloudflare');
       expect(body['mtu'], 1280);
-    }, skip: skip);
+    });
   });
 
   group('§472 — masque: судит реестр', () {
@@ -247,7 +241,7 @@ void main() {
       // Рукописного класса на пути ссылки больше нет: производитель один.
       // §472 шаг 9 — `MasqueVhttpInvalidWarning` снят совсем, и проверять его
       // отсутствие больше нечем: он не компилируется.
-    }, skip: skip);
+    });
 
     test('profile вне набора снимается реестром, узел живёт на дефолте', () {
       // Санитайзер снимает негодное значение (`on_invalid: drop`), и дальше
@@ -264,7 +258,7 @@ void main() {
       final ok = parseUri(bare.replaceAll('#n', '&profile=standard#n'))!;
       expect(ok.emit(TemplateVars.empty).map['profile'], 'standard');
       expect(_registry(ok), isEmpty);
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -276,7 +270,7 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 
   // БЕЗ ГЕЙТА: тест идёт через `parseSingboxEntry` напрямую, реестр ему не

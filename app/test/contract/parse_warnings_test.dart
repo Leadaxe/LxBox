@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
@@ -20,7 +20,6 @@ import 'package:lxbox/services/parser/parse_all.dart';
 /// Воронка одна на все входы — `parseAll` (`services/parser/parse_all.dart`),
 /// поэтому тесты идут через неё, а не через внутренний хелпер: проверяется
 /// ровно то, что увидит список подписки.
-const _contractRoot = 'contract';
 
 /// Узлы из тела любого формата — тот же путь, которым идёт приложение.
 List<NodeSpec> _parse(String raw) => parseAll(decode(raw));
@@ -41,13 +40,9 @@ RegistryWarning _byCode(NodeSpec n, String code) => _registry(n).firstWhere(
     );
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
 
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
-  });
+  setUpAll(loadTestRegistry);
+
 
   group('§460 W2a — воронка parseAll', () {
     test('URI: мусорный key_share даёт код с путём tls.reality.key_share', () {
@@ -61,7 +56,7 @@ void main() {
       final w = _byCode(n, 'reality_key_share_invalid');
       expect(w.path, 'tls.reality.key_share');
       expect(w.value, 'garbage');
-    }, skip: skip);
+    });
 
     test('JSON: битое значение модельного поля даёт код с путём', () {
       // `uuid` у tuic — поле модели и строка: до эмиссии оно доживает, и
@@ -72,7 +67,7 @@ void main() {
 ''');
       final w = _byCode(n, 'type_invalid');
       expect(w.path, 'uuid');
-    }, skip: skip);
+    });
 
     // ГРАНИЦА ВОЛНЫ W2a — СНЯТА для JSON шагом 1 фичи 472.
     //
@@ -108,7 +103,7 @@ void main() {
       // лежит числом.
       final bad = _byCode(n, 'type_invalid');
       expect(bad.path, 'tls.min_version');
-    }, skip: skip);
+    });
 
     test('разбор тело узла не меняет', () {
       // Узел без мусора: аннотация обязана пройти по нему и не тронуть
@@ -118,7 +113,7 @@ void main() {
       final before = _one(raw).emit(TemplateVars.empty).map;
       final after = _one(raw).emit(TemplateVars.empty).map;
       expect(jsonEncode(after), jsonEncode(before));
-    }, skip: skip);
+    });
 
     test('гейты ядра при разборе выключены: min_core кода не даёт', () {
       // `tls.reality.key_share` несёт min_core 1.14.1-lx.4. Валидное значение
@@ -133,7 +128,7 @@ void main() {
       expect(_registry(n).map((w) => w.code), isNot(contains('type_invalid')));
       expect(_registry(n).map((w) => w.code),
           isNot(contains('reality_key_share_invalid')));
-    }, skip: skip);
+    });
 
     test('одна пара {code, path} не повторяется', () {
       final n = _one(
@@ -145,7 +140,7 @@ void main() {
       final pairs = _registry(n).map((w) => '${w.code} ${w.path}').toList();
       expect(pairs, isNotEmpty);
       expect(pairs.toSet().length, pairs.length);
-    }, skip: skip);
+    });
   });
 
   group('§460 W2a — дедуп с рукописными кодами', () {
@@ -213,7 +208,7 @@ void main() {
           reason: 'рукописное предупреждение на месте');
       expect(_registry(seeded).map((w) => w.code), isNot(contains(code)),
           reason: 'реестр тот же код вторым сообщением не дублирует');
-    }, skip: skip);
+    });
 
     // §472 шаг 3 — а у переехавшей схемы источник кода РОВНО один: реестр.
     test('у узла конвейера flow_deprecated приходит из реестра, с путём', () {
@@ -226,7 +221,7 @@ void main() {
           orElse: () => fail('нет кода flow_deprecated: ${n.warnings}'));
       expect(w.path, 'flow');
       expect(w.value, 'xtls-rprx-origin');
-    }, skip: skip);
+    });
 
     test('обфускация: рукописный obfs_unknown не дублируется реестром', () {
       final n = _one(
@@ -236,7 +231,7 @@ void main() {
       if (n.warnings.whereType<UnknownObfsWarning>().isNotEmpty) {
         expect(codes, isNot(contains('obfs_unknown')));
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 шаг 1 — санитайзер по дословной карте JSON-узла', () {
@@ -257,7 +252,7 @@ void main() {
       expect(_byCode(n, 'packet_encoding_unknown').value, 'teleport');
       expect(_byCode(n, 'reality_short_id_invalid').path,
           'tls.reality.short_id');
-    }, skip: skip);
+    });
 
     test('дословная карта: тело узла не меняется', () {
       // Санитайзер работает наблюдателем — очищенную карту разбор
@@ -274,7 +269,7 @@ void main() {
       expect(emitted.containsKey('totally_unknown_key'), isFalse);
       expect((emitted['tls'] as Map).containsKey('insecure'), isFalse);
       expect(_byCode(n, 'unknown_key').value, 'whatever');
-    }, skip: skip);
+    });
 
     test('гейты ядра выключены и на дословной карте', () {
       // `tls.reality.key_share` несёт min_core 1.14.1-lx.4. Валидное значение
@@ -291,7 +286,7 @@ void main() {
       final codes = _registry(n).map((w) => w.code);
       expect(codes, isNot(contains('reality_key_share_invalid')));
       expect(codes, isNot(contains('min_core_unsupported')));
-    }, skip: skip);
+    });
 
     test('дедуп: рукописный класс с путём закрывает только свой путь', () {
       // У naive реестр шлёт `tls_field_unsupported_naive` на КАЖДОЕ
@@ -325,7 +320,7 @@ void main() {
       ];
       expect(pairs.toSet().length, pairs.length,
           reason: 'пара (code, path) обязана быть одна: $pairs');
-    }, skip: skip);
+    });
 
     test('URI-узел дословной карты не имеет — прежнее поведение', () {
       // `rawSource` ссылки — это ссылка, а не JSON: второй проход её
@@ -339,7 +334,7 @@ void main() {
       expect(n.rawSource.startsWith('{'), isFalse);
       final w = _byCode(n, 'reality_key_share_invalid');
       expect(w.path, 'tls.reality.key_share');
-    }, skip: skip);
+    });
 
     test('Xray-JSON остаётся на шаг 8: дословной sing-box-карты у него нет',
         () {
@@ -360,7 +355,7 @@ void main() {
           reason: 'источник Xray-узла — его собственный объект');
       expect(_registry(n).map((w) => w.code), isNot(contains('unknown_key')),
           reason: 'sing-box-санитайзер по Xray-карте не ходит (шаг 8)');
-    }, skip: skip);
+    });
 
     test('предупреждения переживают хранение: узел разбирается заново', () {
       // Узел хранится ТЕКСТОМ (`raw_body` записи 1.0), и при чтении записи
@@ -395,7 +390,7 @@ void main() {
           .toSet();
       expect(codes, contains('unknown_key'));
       expect(codes, contains('tls_field_unsupported_naive'));
-    }, skip: skip);
+    });
   });
 
   // §473 (контракт 1.1.5) — условный потолок MTU у AmneziaWG и исключение по
@@ -421,7 +416,7 @@ void main() {
       // разойдись они входом, узел получил бы и info, и warning об одном поле.
       expect(
           _registry(n).where((w) => w.code.startsWith('awg_mtu_')), hasLength(1));
-    }, skip: skip);
+    });
 
     test('та же нода ССЫЛКОЙ: значение заменено, код warning', () {
       // Парность входов нарушена НАМЕРЕННО (решение владельца 18.09.2026):
@@ -435,7 +430,7 @@ void main() {
       expect(w.path, 'mtu');
       expect(w.value, '1420',
           reason: 'в коде исходное значение, а не то, чем его заменили');
-    }, skip: skip);
+    });
 
     test('ссылка без mtu: дефолт 1280, кода нет', () {
       final n = _one(
@@ -446,7 +441,7 @@ void main() {
       expect(_registry(n).map((w) => w.code),
           isNot(contains('awg_mtu_clamped')));
       expect(_registry(n).map((w) => w.code), isNot(contains('awg_mtu_high')));
-    }, skip: skip);
+    });
 
     test('обычный WireGuard ссылкой с mtu=1420: без замены и без кодов', () {
       final n = _one(
@@ -455,7 +450,7 @@ void main() {
           '&address=10.0.0.2/32&mtu=1420#plain-wg');
       expect(n.emit(TemplateVars.empty).map['mtu'], 1420);
       expect(_registry(n).where((w) => w.code.startsWith('awg_mtu_')), isEmpty);
-    }, skip: skip);
+    });
 
     test('jc: 0 в теле — законный AWG-узел, потолок действует', () {
       // Условие `any_set` судит НАЛИЧИЕ ключа. Прочитай оно `jc: 0` как «поля
@@ -463,7 +458,7 @@ void main() {
       // снялся бы, и туннель молча перестал бы нести данные.
       final n = _one(awgBody(1420).replaceFirst('"jc":10', '"jc":0'));
       expect(_byCode(n, 'awg_mtu_high').value, '1420');
-    }, skip: skip);
+    });
 
     test('исключение по входу ПЕРЕЖИВАЕТ перезапуск', () {
       // Вход определяется по `rawSource` — тому самому тексту, что лежит в
@@ -493,7 +488,7 @@ void main() {
       expect(codes, contains('awg_mtu_high'));
       expect(codes, isNot(contains('awg_mtu_clamped')),
           reason: 'тот же код, а не подменённый на замену');
-    }, skip: skip);
+    });
   });
 
   group('§460 W2a — цена разбора', () {
@@ -539,7 +534,7 @@ void main() {
         reason: 'schemaFor перестал кэшировать: ${sw.elapsedMicroseconds}µs '
             'на $n вызовов',
       );
-    }, skip: skip);
+    });
 
     test('2000 узлов с предупреждениями разбираются за разумное время', () {
       const n = 2000;
@@ -569,7 +564,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n узлов с реестром: ${sw.elapsedMilliseconds} мс',
       );
-    }, skip: skip);
+    });
 
     // §472 шаг 1 — у JSON-входа проходов санитайзера ДВА: по дословной карте и
     // по `emit()`. Цена второго прохода измеряется здесь, тем же порогом и по
@@ -617,7 +612,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n JSON-узлов с реестром: ${sw.elapsedMilliseconds} мс',
       );
-    }, skip: skip);
+    });
   });
 
   group('§460 W2a — secret-поля', () {
@@ -643,7 +638,7 @@ void main() {
       for (final e in AppLog.I.entries) {
         expect(e.message, isNot(contains(secretValue)));
       }
-    }, skip: skip);
+    });
   });
 
   // §469 (контракт 1.1.4) — uTLS/REALITY на QUIC снимаются правилом реестра,
@@ -667,7 +662,7 @@ void main() {
       expect(tls.containsKey('utls'), isFalse);
       expect(tls['server_name'], 'x.example.com',
           reason: 'остальной TLS цел');
-    }, skip: skip);
+    });
 
     test('hysteria2 из ссылки: REALITY — один код на блок', () {
       final n = _one(
@@ -685,7 +680,7 @@ void main() {
       );
       expect((n.emit(TemplateVars.empty).map['tls'] as Map)
           .containsKey('reality'), isFalse);
-    }, skip: skip);
+    });
 
     test('tuic из ссылки: fp читается ради кода и в тело не едет', () {
       final n = _one(
@@ -698,7 +693,7 @@ void main() {
       expect(w.value, 'map[enabled:true fingerprint:firefox]');
       expect((n.emit(TemplateVars.empty).map['tls'] as Map)
           .containsKey('utls'), isFalse);
-    }, skip: skip);
+    });
 
     test('hysteria2 из тела: те же коды, что у ссылки', () {
       final n = _one('''
@@ -719,7 +714,7 @@ void main() {
               'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5…',
         ],
       );
-    }, skip: skip);
+    });
 
     test('vless+reality — без изменений: своих кодов QUIC-правило не даёт', () {
       final n = _one(
@@ -734,7 +729,7 @@ void main() {
       expect((tls['reality'] as Map)['public_key'],
           'jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0');
       expect(tls.containsKey('utls'), isTrue);
-    }, skip: skip);
+    });
 
     test('masque из тела: правило то же (ссылка fp/pbk не несёт)', () {
       final n = _one('''
@@ -750,7 +745,7 @@ void main() {
       // правило добавляет ровно слово о потере.
       expect((n.emit(TemplateVars.empty).map['tls'] as Map?)
           ?.containsKey('utls'), isNot(isTrue));
-    }, skip: skip);
+    });
 
     test('§469 п. 6 — obfs-коды hysteria2 доходят до узла и из тела', () {
       final unknown = _one('''
@@ -765,6 +760,6 @@ void main() {
 ''');
       expect(noPass.warnings.whereType<MissingObfsPasswordWarning>(),
           hasLength(1));
-    }, skip: skip);
+    });
   });
 }

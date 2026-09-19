@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -17,7 +17,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `test/contract/`, эталоны конфигов — `test/builder/` и
 /// `test/storage_migration/`. Здесь то, что специфично для переезда
 /// протокола: identity, round-trip, цена и коды из реестра.
-const _contractRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/anytls/pipeline_identity_before.json';
@@ -32,7 +31,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все anytls-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/anytls')
+  final files = Directory('$kVendorRoot/corpus/uri/anytls')
       .listSync()
       .whereType<File>()
       .toList()
@@ -52,12 +51,10 @@ List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/anytls_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
   });
 
   group('§472 инвариант 4 — identity anytls не меняется', () {
@@ -81,7 +78,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -103,7 +100,7 @@ void main() {
       }
       // У anytls круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(9));
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -139,7 +136,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n anytls-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — коды anytls приходят из реестра, с путём и значением', () {
@@ -166,7 +163,7 @@ void main() {
           parseUri('anytls://pw@h.example:443?min_idle_session=0#n')!;
       expect(_registry(zero).map((w) => w.code),
           isNot(contains('anytls_min_idle_invalid')));
-    }, skip: skip);
+    });
 
     test('insecure даёт код реестра с путём и значением', () {
       final spec =
@@ -178,7 +175,7 @@ void main() {
       final w = _registry(spec).firstWhere((w) => w.code == 'tls_insecure');
       expect(w.path, 'tls.insecure');
       expect(w.value, 'true');
-    }, skip: skip);
+    });
 
     test('REALITY: годность ключа судит реестр', () {
       const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
@@ -196,7 +193,7 @@ void main() {
           contains('reality_pbk_invalid'));
       // Узел жив и деградировал до plain TLS — так же, как прежде.
       expect(junkTls['enabled'], isTrue);
-    }, skip: skip);
+    });
   });
 
   group('§472 — anytls: перевод, который остаётся за маппером', () {
@@ -211,7 +208,7 @@ void main() {
       expect(tls['enabled'], isTrue);
       expect(tls['server_name'], 'cdn.example');
       expect(tls['alpn'], ['h2']);
-    }, skip: skip);
+    });
 
     test('эвристика SNI: имя без точки и 🔒 уступают адресу сервера', () {
       // `sni_heuristic_falls_back_to_server` — у anytls правило есть на обоих
@@ -226,13 +223,13 @@ void main() {
       final ok = parseUri('anytls://pw@h.example:443?sni=a.b#n')!;
       expect((ok.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
           'a.b');
-    }, skip: skip);
+    });
 
     test('без fp= отпечаток random (vless-конвенция D-009)', () {
       final spec = parseUri('anytls://pw@h.example:443?sni=a.b#n')!;
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect((tls['utls'] as Map)['fingerprint'], 'random');
-    }, skip: skip);
+    });
 
     test('голое число duration-поля читается как секунды', () {
       // Та же конвенция, что `heartbeat_bare_number` у tuic: ядро отвергает
@@ -242,14 +239,14 @@ void main() {
       final body = spec.emit(TemplateVars.empty).map;
       expect(body['idle_session_timeout'], '30s');
       expect(body['idle_session_check_interval'], '15s');
-    }, skip: skip);
+    });
 
     test('пароль с двоеточием внутри остаётся целым', () {
       // userinfo у anytls это пароль ЦЕЛИКОМ (в отличие от tuic, где до
       // первого двоеточия лежит uuid).
       final spec = parseUri('anytls://p%40ss%3Aword@h.example:443#n')!;
       expect(spec.emit(TemplateVars.empty).map['password'], 'p@ss:word');
-    }, skip: skip);
+    });
 
     test('дефект: нечисловой min_idle_session в ТЕЛЕ не роняет узел', () {
       // `parseSingboxEntry` читал поле жёстким кастом `as num?`, и на любом
@@ -280,14 +277,14 @@ void main() {
         'tls': {'enabled': true, 'server_name': 'h.example'},
       }) as AnyTlsSpec;
       expect(asString.minIdleSession, 3);
-    }, skip: skip);
+    });
 
     test('§453 dial-поля доезжают до тела и не теряются', () {
       final spec = parseUri(
           'anytls://pw@h.example:443?sni=a.b&tcp_keep_alive=30s#n')!;
       expect(spec.emit(TemplateVars.empty).map['tcp_keep_alive'], '30s');
       expect(_registry(spec).map((w) => w.code), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -299,6 +296,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

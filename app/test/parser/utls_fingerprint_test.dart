@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
@@ -29,13 +28,8 @@ void main() {
   // нужен. Заодно грузятся секции-мапперы: с переездом схем на движок разбор
   // без них не работает — рукописного запасного пути у vless и trojan
   // больше нет (критерий 7 спеки 480).
-  final synced = Directory('assets/contract/registry').existsSync();
-  final skip = synced ? null : 'зеркало реестра не найдено';
 
-  setUpAll(() async {
-    if (!synced) return;
-    await loadEngineSections();
-  });
+  setUpAll(loadEngineSections);
 
   group('normalizeUtlsFingerprintValue (чистая функция)', () {
     test('значения словаря проходят как есть', () {
@@ -150,7 +144,7 @@ void main() {
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'edge');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
-    }, skip: skip);
+    });
 
     test('REALITY + xray-псевдоним hellofirefox_auto → firefox, без предупреждения',
         () {
@@ -173,7 +167,7 @@ void main() {
             orElse: () => fail('нет кода reality_fp_not_chrome: ${spec.warnings}'),
           );
       expect(w.value, 'qq');
-    }, skip: skip);
+    });
 
     test('REALITY + chrome-семейство и дефолтный random → без предупреждения',
         () {
@@ -244,7 +238,7 @@ void main() {
           );
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'garbage');
-    }, skip: skip);
+    });
 
     test('emit отдаёт канонизированный utls.fingerprint', () {
       final spec = parseVless(
@@ -283,7 +277,7 @@ void main() {
           );
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'bogus');
-    }, skip: skip);
+    });
 
     test('trojan: пустой fp → null (без utls-блока)', () {
       final spec = parseTrojan('trojan://p@h:443?security=tls&sni=x.com#L')!;
@@ -316,7 +310,7 @@ void main() {
           );
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'wat');
-    }, skip: skip);
+    });
 
     test('anytls: псевдоним молча (через VLESS-конвенцию)', () {
       final spec =
@@ -343,7 +337,7 @@ void main() {
       expect(w, hasLength(1));
       // CANON §6 — `value` называет написанное автором, а не подмену.
       expect(w.first.value, 'map[enabled:true fingerprint:bogus]');
-    }, skip: skip);
+    });
 
     test('proxy-https: псевдоним молча', () {
       final spec = parseHttpProxy(
@@ -368,7 +362,7 @@ void main() {
       expect(tls.containsKey('utls'), isFalse,
           reason: 'uTLS поверх QUIC = мёртвая нода');
       expect(tls['server_name'], 'x.com', reason: 'остальной TLS цел');
-    }, skip: skip);
+    });
 
     test('hysteria2 round-trip: fp в ссылку не возвращается, и это верно', () {
       // ИЗМЕНЕНИЕ ПОВЕДЕНИЯ, названное в спеке 472 (раздел 11.6). Прежде
@@ -387,7 +381,7 @@ void main() {
       expect(spec.toUri(), contains('sni=x.com'));
       expect(parseUri(spec.toUri())!.emit(TemplateVars.empty).map,
           spec.emit(TemplateVars.empty).map);
-    }, skip: skip);
+    });
 
     test('tuic из sing-box JSON с fp → emit-конфиг БЕЗ utls', () {
       final spec = parseSingboxEntry({

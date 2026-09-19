@@ -2,18 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 6, раздел 3 спеки — инварианты переезда socks на конвейер.
-const _contractRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/socks/pipeline_identity_before.json';
@@ -27,7 +26,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/socks')
+  final files = Directory('$kVendorRoot/corpus/uri/socks')
       .listSync()
       .whereType<File>()
       .toList()
@@ -47,12 +46,10 @@ List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/socks_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
   });
 
   group('§472 инвариант 4 — identity socks не меняется', () {
@@ -76,7 +73,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -98,7 +95,7 @@ void main() {
       }
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(7));
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -131,7 +128,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n socks-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — socks: перевод, который остаётся за маппером', () {
@@ -141,7 +138,7 @@ void main() {
       final five = parseUri('socks5://u:p@h.example:1080#n')!;
       expect(five.emit(TemplateVars.empty).map,
           bare.emit(TemplateVars.empty).map);
-    }, skip: skip);
+    });
 
     test('version у пятёрки — "5" и своего параметра в ссылке не имеет', () {
       // §475 — поле кладёт МАППЕР, по схеме ссылки, а эмиттер пишет то, что в
@@ -150,12 +147,12 @@ void main() {
       final spec = parseUri('socks5://u:p@h.example:1080#n')!;
       expect(spec.emit(TemplateVars.empty).map['version'], '5');
       expect(spec.toUri(), isNot(contains('version=')));
-    }, skip: skip);
+    });
 
     test('порт по умолчанию 1080', () {
       final spec = parseUri('socks5://h.example#n')!;
       expect(spec.emit(TemplateVars.empty).map['server_port'], 1080);
-    }, skip: skip);
+    });
 
     test('userinfo: оба пусто | user | user:pass | :pass', () {
       final none =
@@ -172,14 +169,14 @@ void main() {
       // пароль пропадал на первом же пересохранении узла.
       expect(parseUri('socks5://:pw@h.example:1080#n')!.toUri(),
           contains(':pw@'));
-    }, skip: skip);
+    });
 
     test('§453 dial-поля доезжают до тела и не теряются', () {
       final spec =
           parseUri('socks5://u@h.example:1080?tcp_keep_alive=30s#n')!;
       expect(spec.emit(TemplateVars.empty).map['tcp_keep_alive'], '30s');
       expect(_registry(spec).map((w) => w.code), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
   });
 
   group('§475 — версию SOCKS несёт схема ссылки', () {
@@ -195,7 +192,7 @@ void main() {
         expect(spec!.emit(TemplateVars.empty).map['version'], want,
             reason: uri);
       }
-    }, skip: skip);
+    });
 
     test('эмиттер выбирает схему по версии — круг замкнут', () {
       // Маппер и эмиттер читают ОДНУ таблицу (`kSocksVersionByScheme`).
@@ -213,7 +210,7 @@ void main() {
         expect(b.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map,
             reason: 'круг изменил тело: $uri');
       }
-    }, skip: skip);
+    });
 
     test('socks4: пароль из ссылки переносится как есть', () {
       // У версии 4 пароля нет вовсе (userinfo — это userid), но маппер
@@ -224,7 +221,7 @@ void main() {
       expect(body['version'], '4');
       expect(body['username'], 'user');
       expect(body['password'], 'pass');
-    }, skip: skip);
+    });
 
     test('тело из JSON-вкладки: version "4" доезжает до emit()', () {
       // Критерий приёмки §475. До правки ветка socks `parseSingboxEntry`
@@ -242,7 +239,7 @@ void main() {
       expect(spec.emit(TemplateVars.empty).map['version'], '4');
       // И обратно в ссылку — той же схемой.
       expect(spec.toUri(), startsWith('socks4://'));
-    }, skip: skip);
+    });
 
     test('тело без ключа version — прежняя пятёрка', () {
       // Пусто = 5 по дефолту ядра; ключа тело не получает от нас ниоткуда,
@@ -256,7 +253,7 @@ void main() {
       expect((spec as SocksSpec).version, '5');
       expect(spec.emit(TemplateVars.empty).map['version'], '5');
       expect(spec.toUri(), startsWith('socks5://'));
-    }, skip: skip);
+    });
 
     test('негодная версия — общий type_invalid, узел живёт как SOCKS5', () {
       // Своего кода правило не заводит: снимает значение общий enum реестра,
@@ -277,7 +274,7 @@ void main() {
 
       final spec = parseSingboxEntry(res.body!)! as SocksSpec;
       expect(spec.version, '5', reason: 'узел живёт как SOCKS5');
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -288,6 +285,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

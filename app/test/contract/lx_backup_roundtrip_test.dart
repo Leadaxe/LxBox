@@ -17,6 +17,7 @@ import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
 
+import '../contract_paths.dart';
 import '../parser/engine_test_setup.dart';
 import 'json_schema_lite.dart';
 
@@ -30,7 +31,7 @@ import 'json_schema_lite.dart';
 // в подписку и в Направление, правила всех видов (включая json), DNS всех
 // видов, Направление с бюджетом теста, переносимые vars, route.final.
 
-const _schemaPath = 'contract/schema/backup.schema.json';
+String get _schemaPath => '$kVendorRoot/schema/backup.schema.json';
 
 /// Состояние стороны в памяти — то, что импорт пишет в storage.
 class _State {
@@ -379,13 +380,11 @@ void main() {
       expect(kinds, ['subscription', 'server', 'server', 'folder', 'folder', 'chain', 'chain']);
 
       final schemaFile = File(_schemaPath);
-      if (!schemaFile.existsSync()) {
-        markTestSkipped('контракт не синхронизирован');
-        return;
-      }
+      expect(schemaFile.existsSync(), isTrue, reason: 'нет $_schemaPath');
       final schema = jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
       expect(validateJsonSchema(doc, schema), isEmpty);
-    });
+    }, skip: corpusTestSkip('test/contract/lx_backup_roundtrip_test.dart',
+        subpath: 'schema'));
 
     // §439 — экспорт пишет ссылку так, как она лежит в записи хранения
     // (NODE_LINK §7.1): член папки — пара {id папки, сырой тег}, корневой
@@ -520,10 +519,7 @@ void main() {
 
     test('валидатор схемы не пропускает чужую форму', () {
       final schemaFile = File(_schemaPath);
-      if (!schemaFile.existsSync()) {
-        markTestSkipped('контракт не синхронизирован');
-        return;
-      }
+      expect(schemaFile.existsSync(), isTrue, reason: 'нет $_schemaPath');
       final schema = jsonDecode(schemaFile.readAsStringSync()) as Map<String, dynamic>;
       final bad = {
         'lx_backup': 1,
@@ -539,13 +535,20 @@ void main() {
       };
       final errors = validateJsonSchema(bad, schema);
       expect(errors.join('\n'), allOf(contains('lx_backup'), contains('"url"'), contains('ftp'), contains('json')));
-      for (final f in Directory('contract/corpus/backup').listSync().whereType<File>()) {
-        final name = f.path.split('/').last;
-        if (!name.startsWith('v10_') || !name.endsWith('.backup.json')) continue;
-        expect(validateJsonSchema(jsonDecode(f.readAsStringSync()), schema), isEmpty,
-            reason: '$name — файл корпуса 1.0 обязан проходить схему');
+      if (hasContractCorpus) {
+        for (final f
+            in Directory('$kVendorRoot/corpus/backup').listSync().whereType<File>()) {
+          final name = f.path.split('/').last;
+          if (!name.startsWith('v10_') || !name.endsWith('.backup.json')) {
+            continue;
+          }
+          expect(validateJsonSchema(jsonDecode(f.readAsStringSync()), schema),
+              isEmpty,
+              reason: '$name — файл корпуса 1.0 обязан проходить схему');
+        }
       }
-    });
+    }, skip: corpusTestSkip('test/contract/lx_backup_roundtrip_test.dart',
+        subpath: 'schema'));
   });
 }
 

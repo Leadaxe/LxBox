@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -39,7 +40,6 @@ import 'corpus_warnings.dart';
 /// сравнения переехали в `corpus_warnings.dart`: те же правила нужны
 /// body-раннеру, а две копии нормативного кода разошлись бы на первом же
 /// бампе контракта.
-const _contractRoot = kContractRoot;
 
 /// Соответствие имени каталога корпуса (= scheme из registry/protocols/*.json,
 /// contract/docs/CANON.md §1) типу kind в конверте. Все схемы вне карты —
@@ -59,7 +59,7 @@ const _thisSide = 'lxbox';
 /// а не от списка в тесте: появится вторая desktop-only схема — раннер
 /// узнает о ней сам, без правки кода.
 Set<String> _foreignExtensionSchemes() {
-  final dir = Directory('$_contractRoot/registry/protocols');
+  final dir = Directory('$kRegistryRoot/registry/protocols');
   if (!dir.existsSync()) return const {};
   final out = <String>{};
   for (final f in dir.listSync().whereType<File>()) {
@@ -216,18 +216,14 @@ bool _equalCanon(Map<String, dynamic> a, Map<String, dynamic> b) {
 }
 
 void main() {
+  if (corpusSuiteUnavailable('test/contract/contract_test.dart')) return;
+
   // §UPDATE_CONTRACT — режим регенерации: переменная окружения вместо флага
   // `--update`, потому что `flutter test` не пробрасывает произвольные флаги
   // в тестовый бинарь так же прямолинейно, как `go test -run ... -update`.
   final updateGolden = Platform.environment['UPDATE_CONTRACT'] == '1';
 
-  final root = Directory('$_contractRoot/corpus/uri');
-  if (!root.existsSync()) {
-    // contract/ — вендоренная копия (tool/sync_contract.sh), в git не идёт.
-    test('корпус контракта не синхронизирован', () {}, skip:
-        'нет $_contractRoot/corpus/uri — запустите tool/sync_contract.sh');
-    return;
-  }
+  final root = Directory('$kVendorRoot/corpus/uri');
 
   final cases = root
       .listSync(recursive: true)
@@ -250,8 +246,8 @@ void main() {
     // поведение, которого в приложении не бывает: `main()` грузит реестр до
     // `runApp`, то есть любой разбор в проде идёт с загруженным реестром.
     setUpAll(() async {
-      if (Directory('$_contractRoot/registry').existsSync()) {
-        await ContractRegistry.I.loadFromDirectory(_contractRoot);
+      if (Directory('$kRegistryRoot/registry').existsSync()) {
+        await ContractRegistry.I.loadFromDirectory(kRegistryRoot);
       }
     });
 

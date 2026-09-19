@@ -17,29 +17,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/registry.dart';
 
-const _contractRoot = 'contract';
+import '../contract_paths.dart';
 
 /// Пин ядра реестра: под ним `min_core`-поля корпуса законны.
 const _core = '1.14.1-lx.4';
 
 void main() {
-  final root = Directory('$_contractRoot/corpus/body');
-  final synced = root.existsSync() &&
-      Directory('$_contractRoot/registry').existsSync();
+  final corpusRoot = Directory('$kVendorRoot/corpus/body');
 
   group('Инвариант 24.1.7 — санитайзер идемпотентен на корпусе', () {
-    setUpAll(() async {
-      if (!synced) return;
-      await ContractRegistry.I.loadFromDirectory(_contractRoot);
-    });
+    setUpAll(loadTestRegistry);
 
-    if (!synced) {
-      test('корпус контракта не синхронизирован', () {},
-          skip: 'нет $_contractRoot/corpus/body — синхронизируйте контракт');
+    if (!hasContractCorpus) {
+      test('корпус контракта не синхронизирован', () {}, skip:
+          corpusTestSkip('test/contract/registry_invariant_test.dart',
+              subpath: 'corpus/body'));
       return;
     }
 
-    final files = root
+    final files = corpusRoot
         .listSync(recursive: true)
         .whereType<File>()
         .where((f) => f.path.endsWith('.expected.json'))
@@ -47,7 +43,7 @@ void main() {
       ..sort((a, b) => a.path.compareTo(b.path));
 
     for (final file in files) {
-      final rel = file.path.substring(root.path.length + 1);
+      final rel = file.path.substring(corpusRoot.path.length + 1);
       test(rel, () {
         final data =
             jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
@@ -132,12 +128,13 @@ void main() {
   // запись без текста — на строке останется голый идентификатор). Обе ловятся
   // здесь, а не в рантайме.
   group('§469 — forbidden_codes', () {
-    final registryDir = Directory('$_contractRoot/registry');
+    setUpAll(loadTestRegistry);
+    final registryDir = Directory('$kRegistryRoot/registry');
 
     test('ключи — только схемы из forbidden_for, коды — только из warnings.json',
         () {
       final codes = ((jsonDecode(
-                      File('$_contractRoot/registry/warnings.json')
+                      File('$kRegistryRoot/registry/warnings.json')
                           .readAsStringSync())
                   as Map<String, dynamic>)['warnings'] as Map)
           .keys
@@ -190,7 +187,7 @@ void main() {
       expect(checkedFields, greaterThan(0),
           reason: 'forbidden_codes в реестре не встречается вовсе — либо '
               'контракт откатили, либо линтер смотрит не туда');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     // §474 (контракт 1.1.7) — `coerce` с общим `type_invalid` это ошибка.
     //
@@ -243,7 +240,7 @@ void main() {
       expect(checked, greaterThanOrEqualTo(3),
           reason: 'on_invalid.coerce в реестре почти не встречается — '
               'проверьте, не разъехался ли обход с формой реестра');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('санитайзер берёт код из forbidden_codes, а не общий', () {
       // `tls.utls` запрещён и naive, и QUIC-схемам — но исход разный, и код
@@ -285,7 +282,7 @@ void main() {
         expect((res.body?['tls'] as Map?)?.containsKey('utls'), isFalse,
             reason: '$scheme: блок обязан быть снят');
       }
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('§473 — max_when: коды из warnings.json, note_code при except_sources',
         () {
@@ -296,7 +293,7 @@ void main() {
       // никто); пустое `when.any_set` (правило станет безусловным и снимет
       // поле у каждого узла схемы).
       final codes = ((jsonDecode(
-                      File('$_contractRoot/registry/warnings.json')
+                      File('$kRegistryRoot/registry/warnings.json')
                           .readAsStringSync())
                   as Map<String, dynamic>)['warnings'] as Map)
           .keys
@@ -304,7 +301,7 @@ void main() {
           .toSet();
 
       var checked = 0;
-      for (final file in Directory('$_contractRoot/registry')
+      for (final file in Directory('$kRegistryRoot/registry')
           .listSync(recursive: true)
           .whereType<File>()
           .where((f) => f.path.endsWith('.json'))) {
@@ -352,7 +349,7 @@ void main() {
       expect(checked, greaterThan(0),
           reason: 'max_when в реестре не встречается вовсе — либо контракт '
               'откатили, либо линтер смотрит не туда');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     // §477 (контракт 1.1.9) — линтер атрибута `pattern`.
     //
@@ -441,7 +438,7 @@ void main() {
       expect(checked, greaterThan(0),
           reason: 'pattern в реестре не встречается вовсе — либо контракт '
               'откатили, либо линтер смотрит не туда');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     // §477 — линтер атрибута `absent_values`.
     test('absent_values: непустой список строк у строкового поля', () {
@@ -495,7 +492,7 @@ void main() {
       expect(checked, greaterThan(0),
           reason: 'absent_values в реестре не встречается вовсе — либо '
               'контракт откатили, либо линтер смотрит не туда');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('REALITY на QUIC — один код на блок, key_share/short_id молчат', () {
       final res = RegistrySanitizer.sanitize({
@@ -520,6 +517,6 @@ void main() {
           reason: 'снят не short_id и не key_share, а весь REALITY — '
               'вложенные поля своих кодов не дают');
       expect((res.body?['tls'] as Map?)?.containsKey('reality'), isFalse);
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
   });
 }

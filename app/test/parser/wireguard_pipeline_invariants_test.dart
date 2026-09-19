@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/node_hash.dart';
@@ -23,8 +23,6 @@ import 'package:lxbox/services/warp/warp_account.dart';
 /// самые массовые.
 /// §480 W4 — РЕЕСТР из ЗЕРКАЛА: вендоренной копии на CI нет, и под её гейтом
 /// файл пропускался бы целиком. КОРПУС остаётся за копией — в зеркале его нет.
-const _contractRoot = 'assets/contract';
-const _corpusRoot = 'contract';
 
 /// Снимок, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/wireguard/pipeline_identity_before.json';
@@ -41,7 +39,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_corpusRoot/corpus/uri/wireguard')
+  final files = Directory('$kVendorRoot/corpus/uri/wireguard')
       .listSync()
       .whereType<File>()
       .toList()
@@ -90,15 +88,11 @@ final _warpAwg = Awg(const {
 });
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'зеркало реестра не найдено';
-  final hasCorpus =
-      Directory('$_corpusRoot/corpus/uri/wireguard').existsSync();
-  final skipCorpus = hasCorpus ? skip : 'корпус не синхронизирован';
+  final corpusSkip =
+      corpusTestSkip('test/parser/wireguard_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
@@ -129,7 +123,7 @@ void main() {
             reason: 'тело кейса ${e.key} (эталоны сравниваются БАЙТ В БАЙТ, '
                 'включая порядок ключей)');
       }
-    }, skip: skip);
+    });
 
     test('INI-входы дают прежние хеш, тег и тело', () {
       // §456 — INI остаётся ИСТОЧНИКОМ: `rawSource` это текст файла байт в
@@ -154,7 +148,7 @@ void main() {
             jsonEncode(e.value['body']),
             reason: 'тело кейса ${e.key}');
       }
-    }, skip: skip);
+    });
 
     test('узлы фабрик WARP не сдвинулись ни в одной комбинации', () {
       // WG-узлы WARP у пользователей самые массовые. Фабрик две: короткий
@@ -187,7 +181,7 @@ void main() {
         }
       }
       expect(checked, 16);
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -210,7 +204,7 @@ void main() {
       }
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(35));
-    }, skip: skipCorpus);
+    }, skip: corpusSkip);
 
     test('INI переживает круг через toUri(), тело и identity те же', () {
       const ini = '[Interface]\nPrivateKey = $_priv\n'
@@ -223,7 +217,7 @@ void main() {
       expect(legacyNodeIdentityHash(b), legacyNodeIdentityHash(a));
       // Источник у INI-узла остаётся INI (§456), у пересобранного — ссылка.
       expect(a.rawSource, ini);
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -256,7 +250,7 @@ void main() {
       expect(nodes, hasLength(n));
       expect(best, lessThan(3000),
           reason: 'разбор $n AWG-узлов конвейером: $best мс (лучший из трёх)');
-    }, skip: skip);
+    });
   });
 
   group('§473 — потолок и дефолт MTU исполняет РЕЕСТР', () {
@@ -271,33 +265,33 @@ void main() {
           orElse: () => fail('нет кода: ${spec.warnings}'));
       expect(w.path, 'mtu');
       expect(w.value, '1420', reason: 'значение — то, что написал автор');
-    }, skip: skip);
+    });
 
     test('AWG без mtu → тело 1280, кодов нет (подстановка — не замена)', () {
       final spec = parseUri(wg('&jc=4'))!;
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1280);
       expect(_registry(spec), isEmpty);
-    }, skip: skip);
+    });
 
     test('AWG с mtu=1200 → значение автора цело, кодов нет', () {
       final spec = parseUri(wg('&jc=4&mtu=1200'))!;
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1200);
       expect(_registry(spec), isEmpty);
-    }, skip: skip);
+    });
 
     test('обычный WG с mtu=1420 — без замены и без кодов', () {
       // Условие `when.any_set` не выполнено: потолок диктует РОД узла.
       final spec = parseUri(wg('&mtu=1420'))!;
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1420);
       expect(_registry(spec), isEmpty);
-    }, skip: skip);
+    });
 
     test('обычный WG без mtu — поля в теле нет вовсе', () {
       // Ядро берёт свой 1408; наш дефолт спорил бы с ним и ломал identity
       // (CANON §2.4).
       final spec = parseUri(wg(''))!;
       expect(spec.emit(TemplateVars.empty).map.containsKey('mtu'), isFalse);
-    }, skip: skip);
+    });
 
     test('jc=0 — законный AWG: потолок действует (предикат `any_set`)', () {
       // §473 — `any_set` судит НАЛИЧИЕ КЛЮЧА, а не заданность значения:
@@ -305,7 +299,7 @@ void main() {
       final spec = parseUri(wg('&jc=0&mtu=1420'))!;
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1280);
       expect(_registry(spec).map((w) => w.code), contains('awg_mtu_clamped'));
-    }, skip: skip);
+    });
 
     test('§463 — узел, у которого AWG-поля сняты ВСЕ, остаётся AmneziaWG', () {
       // `jc=abc` снимается молча (эталон Go), одинокий `jmin` — правилом
@@ -326,7 +320,7 @@ void main() {
       // следа.
       expect(_registry(spec).map((w) => '${w.code}@${w.path}'),
           ['awg_header_invalid@jc', 'awg_header_invalid@jmin']);
-    }, skip: skip);
+    });
 
     test('§463 — awg_header_invalid ставится ПОФАКТОРНО', () {
       // Четыре битых заголовка — четыре сообщения человеку; конверт корпуса
@@ -348,7 +342,7 @@ void main() {
         expect(body.containsKey(k), isFalse, reason: 'битый $k снят');
       }
       expect(body['jc'], 4, reason: 'годное поле уцелело');
-    }, skip: skip);
+    });
   });
 
   group('§472 — wireguard: перевод, который остаётся за маппером', () {
@@ -364,7 +358,7 @@ void main() {
       expect(body['private_key'], 'ccccccccccccccccccccccccccccccccccccccccccA=');
       expect((body['peers'] as List).first['public_key'],
           'ddddddddddddddddddddddddddddddddddddddddddA=');
-    }, skip: skip);
+    });
 
     test('битый psk ОТБРАКОВЫВАЕТ узел (требование корпуса, не реестра)', () {
       // Реестр объявляет у `peers[].pre_shared_key` `on_invalid: drop` —
@@ -375,7 +369,7 @@ void main() {
           parseUri('wireguard://$_priv@h.example:51820?publickey=$_pub'
               '&presharedkey=*****&address=10.0.0.2/32#n'),
           isNull);
-    }, skip: skip);
+    });
 
     test('allowed_ips по умолчанию 0.0.0.0/0,::/0; bare IP получает префикс',
         () {
@@ -389,7 +383,7 @@ void main() {
       final v6 = parseUri('wireguard://$_priv@h.example:51820'
           '?publickey=$_pub&address=fd00::2&allowedips=fd00::/8#n')!;
       expect(v6.emit(TemplateVars.empty).map['address'], ['fd00::2/128']);
-    }, skip: skip);
+    });
 
     test('reserved: десятичная тройка и base64 client_id — одна форма тела',
         () {
@@ -402,7 +396,7 @@ void main() {
             [1, 2, 3],
             reason: q);
       }
-    }, skip: skip);
+    });
 
     test('порт по умолчанию 51820; тег-фолбэк берёт адрес ПИРА', () {
       // У endpoint-схемы корневых `server`/`server_port` нет вовсе, и без
@@ -412,7 +406,7 @@ void main() {
       expect(spec.tag, 'wireguard-h.example-51820');
       expect((spec.emit(TemplateVars.empty).map['peers'] as List).first['port'],
           51820);
-    }, skip: skip);
+    });
 
     test('§421 — ключ защиты заголовка с сырым `+` переживает разбор', () {
       const hk = 'Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=';
@@ -420,7 +414,7 @@ void main() {
           '?publickey=$_pub&address=10.0.0.2/32&s1=55&s2=42&s3=40&s4=12'
           '&headerprotectionkey=$hk#n')! as WireguardSpec;
       expect(spec.awg!.fields['header_protection_key'], hk);
-    }, skip: skip);
+    });
 
     test('§450 — awg://<base64 .conf> распознаётся ДО конвейера', () {
       const conf = '[Interface]\nPrivateKey = $_priv\n'
@@ -433,7 +427,7 @@ void main() {
       // §454 — источник узла это ССЫЛКА, а не INI из неё: узел пришёл ссылкой.
       expect(spec.rawSource, 'awg://$payload#AmneziaWG');
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1280);
-    }, skip: skip);
+    });
   });
 
   group('§472 шаг 7 / §456 — INI это ещё один МАППЕР конвейера', () {
@@ -450,7 +444,7 @@ void main() {
       final spec = parseWireguardIni(proton, nameHint: 'file')!;
       expect(spec.rawSource, proton);
       expect(spec.rawSource, isNot(contains('wireguard://')));
-    }, skip: skip);
+    });
 
     test('имя: комментарий под [Peer] сильнее nameHint, тот — сильнее фолбэка',
         () {
@@ -460,7 +454,7 @@ void main() {
       expect(parseWireguardIni(noComment)!.tag, 'WireGuard');
       // `# Bouncing = 0` в `[Interface]` именем не считается — там `=`.
       expect(parseWireguardIni(noComment, nameHint: '   ')!.tag, 'WireGuard');
-    }, skip: skip);
+    });
 
     test('узел INI разобран КОНВЕЙЕРОМ: коды реестра на нём уже стоят', () {
       // AWG-INI с завышенным MTU: потолок исполняет санитайзер, код приходит
@@ -476,7 +470,7 @@ void main() {
       final before = spec.warnings.length;
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before));
-    }, skip: skip);
+    });
 
     test('обычный WG из INI: MTU автора цел, DNS отмечен кодом', () {
       final spec = parseWireguardIni(proton)!;
@@ -490,7 +484,7 @@ void main() {
         _registry(spec).map((w) => w.code),
         ['wgconf_dns_ignored'],
       );
-    }, skip: skip);
+    });
 
     test('Endpoint: host:port, [IPv6]:port и голый IPv6 (§219)', () {
       String withEndpoint(String e) =>
@@ -507,7 +501,7 @@ void main() {
       final bare = parseWireguardIni(withEndpoint('2001:db8::1'))!;
       expect(bare.server, '2001:db8::1');
       expect(bare.port, 51820);
-    }, skip: skip);
+    });
 
     test('без Endpoint / PrivateKey / PublicKey узла нет', () {
       for (final drop in const ['Endpoint', 'PrivateKey', 'PublicKey']) {
@@ -517,12 +511,12 @@ void main() {
             .join('\n');
         expect(parseWireguardIni(ini), isNull, reason: 'без $drop');
       }
-    }, skip: skip);
+    });
 
     test('DNS из INI в тело не уезжает (у endpoint такого поля нет)', () {
       final body = parseWireguardIni(proton)!.emit(TemplateVars.empty).map;
       expect(body.containsKey('dns'), isFalse);
-    }, skip: skip);
+    });
 
     test('AWG-ключи [Interface] и Reserved [Peer] переводятся как в ссылке',
         () {
@@ -539,7 +533,7 @@ void main() {
       final peer = (body['peers'] as List).first as Map;
       expect(peer['reserved'], [1, 2, 3]);
       expect(peer['persistent_keepalive_interval'], 25);
-    }, skip: skip);
+    });
 
     test('§110 — Amnezia vpn:// остаётся КОНТЕЙНЕРОМ поверх того же маппера',
         () {
@@ -568,7 +562,7 @@ void main() {
       expect(spec.rawSource, ini, reason: '§456 — источник узла это его INI');
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1280,
           reason: 'потолок AWG исполнил санитайзер — узел на конвейере');
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -579,7 +573,7 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 
   // БЕЗ ГЕЙТА: тест идёт через `parseSingboxEntry` напрямую, реестр ему не

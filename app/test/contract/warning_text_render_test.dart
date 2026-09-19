@@ -26,10 +26,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/registry_warning.dart';
 
-const _registryRoot = 'assets/contract';
 
 /// Плейсхолдер в тексте реестра: `{path}`, `{with}`, `{method}`.
 final _placeholder = RegExp(r'\{([a-z_][a-z0-9_]*)\}');
@@ -42,13 +42,7 @@ final _placeholder = RegExp(r'\{([a-z_][a-z0-9_]*)\}');
 const Map<String, String> _knownUndeclared = {};
 
 void main() {
-  final synced = Directory('$_registryRoot/registry').existsSync();
-  final skip = synced ? null : 'зеркало реестра не найдено';
-
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_registryRoot);
-  });
+  setUpAll(loadTestRegistry);
 
   group('§474 — тексты кодов реестра рендерятся без дыр', () {
     test('у каждого кода все тексты заполнены на en и ru', () {
@@ -88,14 +82,14 @@ void main() {
       }
       expect(holes, isEmpty,
           reason: 'плейсхолдеры без подстановки:\n${holes.join('\n')}');
-    }, skip: skip);
+    });
 
     test('у каждого известного расхождения есть причина', () {
       for (final e in _knownUndeclared.entries) {
         expect(e.value.trim(), isNotEmpty,
             reason: 'расхождение ${e.key} без причины');
       }
-    }, skip: skip);
+    });
 
     // §474 — два кода, чьи `params` контракт 1.1.6 переписал. Проверяются
     // поимённо: общий тест выше упал бы и на них, но не сказал бы, ЧТО
@@ -105,7 +99,7 @@ void main() {
       expect(t, isNotNull);
       expect(t!.severity, 'info');
       expect(t.params, containsAll(<String>['path', 'value']));
-    }, skip: skip);
+    });
 
     // §474 (контракт 1.1.7) — код подмены `vmess.security`. Общий
     // `type_invalid` здесь врал: поле не снимается, а подменяется.
@@ -114,7 +108,7 @@ void main() {
       expect(t, isNotNull);
       expect(t!.severity, 'warning');
       expect(t.params, containsAll(<String>['path', 'value']));
-    }, skip: skip);
+    });
 
     // Четыре кода, у которых рукописный класс снят и текст взят из реестра.
     // Проверяется то, ради чего снимали: severity не съехал (все четыре были
@@ -138,7 +132,7 @@ void main() {
           expect(t.params, contains(e.value), reason: e.key);
         }
       }
-    }, skip: skip);
+    });
 
     test('vision_with_transport объявляет with, severity info', () {
       final t = ContractRegistry.I.textFor('vision_with_transport');
@@ -148,14 +142,14 @@ void main() {
       // `transport` из набора ушёл — текст зовёт `{with}`, и старое имя
       // не подставилось бы никогда.
       expect(t.params, isNot(contains('transport')));
-    }, skip: skip);
+    });
   });
 }
 
 /// Все коды `registry/warnings.json`. Читается файл, а не реестр: список кодов
 /// нужен ДО того, как что-то из них отрисовано.
 List<String> _allCodes() {
-  final f = File('$_registryRoot/registry/warnings.json');
+  final f = File('$kRegistryRoot/registry/warnings.json');
   if (!f.existsSync()) return const [];
   final raw = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
   final byCode = (raw['warnings'] as Map).cast<String, dynamic>();

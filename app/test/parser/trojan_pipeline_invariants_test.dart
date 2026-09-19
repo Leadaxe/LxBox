@@ -1,13 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 
 import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -17,7 +17,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Инварианты 1 и 2 (корпус и golden) держат свои тесты: корпус URI —
 /// `test/contract/`, эталоны конфигов — `test/builder/`. Здесь то, что
 /// специфично для переезда протокола: identity, round-trip и цена.
-const _contractRoot = 'contract';
 
 /// Хеши, теги и тела trojan-узлов лежат ФАЙЛОМ:
 /// `test/fixtures/trojan/pipeline_identity_before.json`.
@@ -31,20 +30,18 @@ const _contractRoot = 'contract';
 /// CI нет вовсе, и под ним снимок молча пропускался бы именно там, где он
 /// нужнее всего. Снимок гейтится на зеркало реестра `assets/contract`.
 void main() {
+  final corpusSkip = corpusTestSkip('test/parser/trojan_pipeline_invariants_test.dart');
   setUpAll(loadEngineSections);
 
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
   });
 
   group('§472 инвариант 4 — identity trojan не меняется', () {
     test('identity всего корпуса trojan считается и не пуста', () {
       final nodes = <NodeSpec>[];
-      for (final f in Directory('$_contractRoot/corpus/uri/trojan')
+      for (final f in Directory('$kVendorRoot/corpus/uri/trojan')
           .listSync()
           .whereType<File>()) {
         if (!f.path.endsWith('.uri')) continue;
@@ -59,7 +56,7 @@ void main() {
       final ids = sourceNodeIdentities(nodes);
       // Идентичность = сырой тег: у узла с именем она есть всегда.
       expect(ids.length, nodes.length);
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -87,7 +84,7 @@ void main() {
 
     test('весь корпус trojan переживает круг', () {
       var checked = 0;
-      for (final f in Directory('$_contractRoot/corpus/uri/trojan')
+      for (final f in Directory('$kVendorRoot/corpus/uri/trojan')
           .listSync()
           .whereType<File>()) {
         if (!f.path.endsWith('.uri')) continue;
@@ -113,7 +110,7 @@ void main() {
       }
       // Страж от «список исключений съел корпус».
       expect(checked, greaterThan(25));
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -169,7 +166,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n trojan-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -191,6 +188,6 @@ void main() {
           .whereType<RegistryWarning>()
           .firstWhere((w) => w.code == 'utls_fp_unknown');
       expect(w.value, 'bogus');
-    }, skip: skip);
+    });
   });
 }

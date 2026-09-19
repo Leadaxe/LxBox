@@ -1,6 +1,7 @@
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
+
+import '../contract_paths.dart';
 
 /// §480 — общая подготовка для тестов, которые просто зовут `parseUri`.
 ///
@@ -9,12 +10,9 @@ import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 /// не осталось (критерий 7 спеки 480). Раньше такие тесты обходились без
 /// загрузки: разбор был рукописным и реестра не требовал.
 ///
-/// Зеркало `assets/contract`, а не вендоренная копия `app/contract`: второй
-/// на CI нет, и под её гейтом тест молча пропускался бы.
+/// §486 — реестр из зеркала `assets/contract` (§486, [loadTestRegistry]).
 Future<void> loadEngineSections() async {
-  if (!ContractRegistry.I.isLoaded) {
-    await ContractRegistry.I.loadFromDirectory('assets/contract');
-  }
+  await loadTestRegistry();
   await MapperSections.I
       .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
 }

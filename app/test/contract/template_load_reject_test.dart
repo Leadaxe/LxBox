@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/if_engine.dart';
 
@@ -23,7 +24,6 @@ import 'package:lxbox/services/builder/if_engine.dart';
 // Ожидания сформулированы условиями («этот кейс обязан быть отвергнут»), а не
 // снимком сообщения об ошибке: текст сообщения не нормирован контрактом.
 
-const _contractRoot = 'contract';
 
 /// Кейсы, чей `_comment` прямо объявляет конструкцию НЕВАЛИДНОЙ. Толерантный
 /// рантайм даёт по ним fail-closed FALSE + warning (это и проверяет раннер
@@ -144,7 +144,9 @@ String? _loadVerdict(String base) {
 }
 
 void main() {
-  final root = Directory('$_contractRoot/corpus/template');
+  if (corpusSuiteUnavailable('test/contract/template_load_reject_test.dart')) return;
+
+  final root = Directory('$kVendorRoot/corpus/template');
   if (!root.existsSync()) {
     // Контракт не синхронизирован — прогон пропускается, как в раннере корпуса.
     return;

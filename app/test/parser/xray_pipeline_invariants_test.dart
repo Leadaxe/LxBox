@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
@@ -18,7 +18,6 @@ import 'package:lxbox/services/parser/parse_all.dart';
 /// identity-хеш, звено цепочки и число отбраковок. Расхождений быть не должно
 /// нигде, кроме двух объявленных ниже (см. [_expectedChanges]) — и оба
 /// требует КОРПУС либо реестр.
-const _contractRoot = 'contract';
 const _identityFixture = 'test/fixtures/xray/pipeline_identity_before.json';
 
 /// Единственные два расхождения со снимком, оба — исправление дефекта.
@@ -80,13 +79,9 @@ RegistryWarning? _codeOf(NodeSpec n, String code) {
 }
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
 
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
-  });
+  setUpAll(loadTestRegistry);
+
 
   group('§472 инвариант 4 — identity Xray не меняется', () {
     test('каждый вход снимка даёт прежние хеш, тег, имя, rawSource и тело',
@@ -139,7 +134,7 @@ void main() {
         expect(dropped, hasLength(want['dropped']),
             reason: 'число отбраковок входа $name изменилось');
       }
-    }, skip: skip);
+    });
 
     test('оба объявленных расхождения — ровно те, что описаны', () {
       final before = _fixture();
@@ -173,7 +168,7 @@ void main() {
       expect(reason.value, 'totally-bogus');
       expect(reason.ownerTag, 'proxy',
           reason: 'dropped[].ref контракта называет ТЕГ записи (D-088)');
-    }, skip: skip);
+    });
   });
 
   group('§477 — отбраковка по форме encryption на Xray-входе', () {
@@ -206,7 +201,7 @@ void main() {
       expect(nodes, hasLength(1));
       expect(nodes.first.emit(TemplateVars.empty).map['encryption'], key);
       expect(_codeOf(nodes.first, 'vless_encryption_invalid'), isNull);
-    }, skip: skip);
+    });
 
     test('"none" — выключатель слоя: ключа в теле нет, узел жив и без кода',
         () {
@@ -238,7 +233,7 @@ void main() {
       expect(nodes.first.emit(TemplateVars.empty).map.containsKey('encryption'),
           isFalse);
       expect(_registry(nodes.first), isEmpty);
-    }, skip: skip);
+    });
 
     test('сосед по элементу переживает отбраковку негодного', () {
       // Узел с негодным `encryption` снимается, годный сосед остаётся: одна
@@ -295,7 +290,7 @@ void main() {
           reason: 'пропажа узла не должна быть молчаливой');
       expect(carried!.ownerTag, 'bad',
           reason: 'причина названа тегом ОТВЕРГНУТОЙ записи, не носителя');
-    }, skip: skip);
+    });
   });
 
   group('§472 шаг 8 — коды реестра приходят на Xray-узел', () {
@@ -335,7 +330,7 @@ void main() {
               'адреса и значения');
       expect(w!.path, 'tls.utls.fingerprint');
       expect(w.value, 'bogus-fp');
-    }, skip: skip);
+    });
 
     test('псевдоним uTLS переводится МОЛЧА — это написание, не мусор', () {
       final nodes = _parse([
@@ -369,7 +364,7 @@ void main() {
       final tls = nodes.single.emit(TemplateVars.empty).map['tls'] as Map;
       expect((tls['utls'] as Map)['fingerprint'], 'chrome');
       expect(_codeOf(nodes.single, 'utls_fp_unknown'), isNull);
-    }, skip: skip);
+    });
 
     test('flow вне пары даёт flow_deprecated с адресом', () {
       final nodes = _parse([
@@ -401,7 +396,7 @@ void main() {
       expect(w?.value, 'xtls-rprx-direct');
       expect(nodes.single.emit(TemplateVars.empty).map.containsKey('flow'),
           isFalse, reason: 'негодное значение снимается санитайзером');
-    }, skip: skip);
+    });
 
     test('vision при живом транспорте — код реестра, не рукописный класс', () {
       final nodes = _parse([
@@ -437,7 +432,7 @@ void main() {
       // §472 шаг 9 — `VisionWithTransportWarning` снят совсем (последний
       // производитель ушёл с переездом Xray-входа), и проверять его
       // отсутствие больше нечем: он не компилируется.
-    }, skip: skip);
+    });
 
     test('битый pbk объясняется кодом, а не молчаливой деградацией', () {
       final nodes = _parse([
@@ -479,7 +474,7 @@ void main() {
       final tls = nodes.single.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('reality'), isFalse,
           reason: 'тело не изменилось: блок по-прежнему снимается');
-    }, skip: skip);
+    });
 
     test('vmess security вне enum даёт vmess_security_unknown', () {
       final nodes = _parse([
@@ -511,7 +506,7 @@ void main() {
           reason: 'раньше подмену делал рукописный normalizeVmessSecurity, '
               'и она уходила молча, в лог');
       expect(nodes.single.emit(TemplateVars.empty).map['security'], 'auto');
-    }, skip: skip);
+    });
 
     test('vmess без security получает обязательный ключ, а не отбраковку', () {
       // `security` у схемы `required` с дефолтом `auto`, а `default` реестра
@@ -543,7 +538,7 @@ void main() {
       expect(nodes, hasLength(1));
       expect(nodes.single.emit(TemplateVars.empty).map['security'], 'auto');
       expect(_registry(nodes.single), isEmpty);
-    }, skip: skip);
+    });
   });
 
   group('§472 шаг 8 — границы переезда', () {
@@ -579,7 +574,7 @@ void main() {
       final tls = nodes.single.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('utls'), isFalse);
       expect(_codeOf(nodes.single, 'tls_not_applicable_quic'), isNotNull);
-    }, skip: skip);
+    });
 
     test('битый ТИП streamSettings пропускает узел, а не оживляет его', () {
       // `streamSettings: "none"` обязан бросить внутри маппера: вызывающий
@@ -628,7 +623,7 @@ void main() {
       expect(nodes.single.emit(TemplateVars.empty).map['server'], 'b.example');
       expect(nodes.single.warnings.whereType<UnsupportedProtocolWarning>(),
           hasLength(1));
-    }, skip: skip);
+    });
 
     test('§459 — суффикс -udp443 не переписывает порт узла', () {
       final nodes = _parse([
@@ -659,7 +654,7 @@ void main() {
       expect(body['server_port'], 8443, reason: 'порт — свойство узла');
       expect(body['flow'], 'xtls-rprx-vision');
       expect(body['packet_encoding'], 'xudp');
-    }, skip: skip);
+    });
 
     test('§310 — многоузловой элемент даёт все узлы, имена по тегам', () {
       final nodes = _parse([
@@ -688,7 +683,7 @@ void main() {
         },
       ], []);
       expect(nodes.map((n) => n.tag), ['multi a', 'multi b']);
-    }, skip: skip);
+    });
 
     test('§404 — цепочка dialerProxy жива, релей не стал узлом подписки', () {
       final nodes = _parse([
@@ -731,7 +726,7 @@ void main() {
       expect(nodes, hasLength(1), reason: 'релей узлом подписки не бывает');
       expect(nodes.single.chained?.tag, 'relay');
       expect(nodes.single.chained?.protocol, 'socks');
-    }, skip: skip);
+    });
 
     test('§454 — rawSource остаётся объектом Xray байт в байт', () {
       const outbound = {
@@ -761,7 +756,7 @@ void main() {
       expect(jsonDecode(nodes.single.rawSource) is Map, isTrue);
       expect((jsonDecode(nodes.single.rawSource) as Map).containsKey('type'),
           isFalse);
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -801,7 +796,7 @@ void main() {
           reason: 'узел помечен isPipelineParsed — источник кодов один');
       // `value` называет написанное автором, а не канонизированное.
       expect(_codeOf(nodes.single, 'utls_fp_unknown')?.value, 'bogus-fp');
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 5 — цена разбора 2000 Xray-узлов', () {
@@ -858,6 +853,6 @@ void main() {
       // ignore: avoid_print
       print('§472 шаг 8: 2000 Xray-узлов — ${best.inMilliseconds} мс '
           '(лучший из трёх)');
-    }, skip: skip);
+    });
   });
 }

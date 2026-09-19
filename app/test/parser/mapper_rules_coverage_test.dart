@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/mappers/uri_pipeline.dart';
@@ -28,7 +28,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// §480 W2 — ЗЕРКАЛО реестра, а не вендоренная копия `app/contract`: второй
 /// на CI нет вовсе, и под её гейтом тест молча пропускался бы ровно там, где
 /// он нужен. Схема переехала на движок, и без секций она не разбирается.
-const _contractRoot = 'assets/contract';
 
 /// Правила, которые LxBox сегодня НЕ исполняет, с причиной. Пустая причина
 /// недопустима: молчаливое расхождение и есть то, что страж ловит.
@@ -137,10 +136,10 @@ const Map<String, String> _covered = {
 
 /// Все mapper-правила реестра, относящиеся к [scheme].
 List<String> _mapperRuleIds(String scheme) {
-  final dir = Directory('$_contractRoot/registry');
+  final dir = Directory('$kRegistryRoot/registry');
   final files = <File>[
     ...dir.listSync().whereType<File>(),
-    ...Directory('$_contractRoot/registry/protocols')
+    ...Directory('$kRegistryRoot/registry/protocols')
         .listSync()
         .whereType<File>(),
   ];
@@ -173,12 +172,9 @@ List<String> _codes(NodeSpec n) =>
     [for (final w in n.warnings.whereType<RegistryWarning>()) w.code];
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
@@ -204,14 +200,14 @@ void main() {
           );
         }
       }
-    }, skip: skip);
+    });
 
     test('у каждого известного расхождения есть причина', () {
       for (final e in _knownGaps.entries) {
         expect(e.value.trim(), isNotEmpty,
             reason: 'расхождение ${e.key} без причины');
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (trojan)', () {
@@ -219,7 +215,7 @@ void main() {
       // SPEC 045: явный `tls:{enabled:false}` ронял ядра lx.5..lx.18.
       final spec = parseUri('trojan://p@h.example:8080?security=none#n')!;
       expect(spec.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
-    }, skip: skip);
+    });
 
     test('fp в написании uTLS → имя семейства', () {
       final spec = parseUri(
@@ -231,14 +227,14 @@ void main() {
         spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
         isNot(contains('utls_fp_unknown')),
       );
-    }, skip: skip);
+    });
 
     test('alpn одной строкой → список тела', () {
       final spec = parseUri(
           'trojan://p@h.example:443?security=tls&alpn=h2,http/1.1#n')!;
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls['alpn'], ['h2', 'http/1.1']);
-    }, skip: skip);
+    });
 
     test('ech= не переносится, узел получает код', () {
       final spec = parseUri(
@@ -246,7 +242,7 @@ void main() {
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('ech'), isFalse);
       expect(_codes(spec), contains('ech_ignored'));
-    }, skip: skip);
+    });
 
     test('?ed=N хвостом пути → два поля тела', () {
       final spec = parseUri('trojan://p@h.example:443?security=tls&type=ws'
@@ -261,7 +257,7 @@ void main() {
         ((spec as TrojanSpec).transport as WsTransport).earlyDataHeaderImplicit,
         isTrue,
       );
-    }, skip: skip);
+    });
 
     test('headerType=http поверх tcp → транспорт http', () {
       final spec = parseUri('trojan://p@h.example:443?security=tls&type=tcp'
@@ -270,7 +266,7 @@ void main() {
       expect(tr['type'], 'http');
       expect(tr['path'], '/c');
       expect(tr['host'], ['cdn.example']);
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (vless)', () {
@@ -280,7 +276,7 @@ void main() {
       expect(plain.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
       final tls = parseUri('vless://u@h.example:8443#n')!;
       expect(tls.emit(TemplateVars.empty).map.containsKey('tls'), isTrue);
-    }, skip: skip);
+    });
 
     test('pbk= создаёт блок REALITY, годность судит реестр', () {
       const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
@@ -298,7 +294,7 @@ void main() {
         junk.warnings.whereType<RegistryWarning>().map((w) => w.code),
         contains('reality_pbk_invalid'),
       );
-    }, skip: skip);
+    });
 
     test('vless без fp= → random', () {
       // D-009: конвенция обеих сторон, не дефолт ядра (у ядра пустой fp =
@@ -310,7 +306,7 @@ void main() {
       final tr = parseUri('trojan://p@h.example:443?security=tls#n')!;
       expect((tr.emit(TemplateVars.empty).map['tls'] as Map).containsKey('utls'),
           isFalse);
-    }, skip: skip);
+    });
 
     test('flow=xtls-rprx-vision-udp443 → vision + packet_encoding=xudp', () {
       final spec =
@@ -321,7 +317,7 @@ void main() {
       expect(body['packet_encoding'], 'xudp');
       // Порт НЕ переписывается (DRIFT §7.4, решение владельца).
       expect(body['server_port'], 443);
-    }, skip: skip);
+    });
 
     test('packetEncoding=none — ключа нет вовсе', () {
       // `none` в диалекте подписок = «без особой инкапсуляции». Ядро такого
@@ -335,7 +331,7 @@ void main() {
         spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
         isNot(contains('packet_encoding_unknown')),
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (hysteria2)', () {
@@ -352,7 +348,7 @@ void main() {
       final ok = parseUri('hysteria2://p@h.example:443?sni=a.b#n')!;
       expect((ok.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
           'a.b');
-    }, skip: skip);
+    });
 
     test('mport=1000-2000,3000 → server_ports [low:high]', () {
       // `mport_range_spec` — форма записи диапазона: дефис ссылки становится
@@ -367,7 +363,7 @@ void main() {
       expect(auth.emit(TemplateVars.empty).map['server_ports'],
           ['20000:30000']);
       expect(auth.emit(TemplateVars.empty).map['server_port'], 20000);
-    }, skip: skip);
+    });
 
     test('fp в написании uTLS → имя семейства (и снимается как QUIC-блок)', () {
       // `utls_xray_hello_names` работает и здесь: перевод написания делает
@@ -379,14 +375,14 @@ void main() {
           .whereType<RegistryWarning>()
           .firstWhere((w) => w.code == 'tls_not_applicable_quic');
       expect(w.value, 'map[enabled:true fingerprint:firefox]');
-    }, skip: skip);
+    });
 
     test('alpn одной строкой → список тела', () {
       final spec =
           parseUri('hysteria2://p@h.example:443?sni=x.com&alpn=h3,h3-29#n')!;
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls['alpn'], ['h3', 'h3-29']);
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (tuic)', () {
@@ -401,20 +397,20 @@ void main() {
       final explicit =
           parseUri('tuic://$uuid:p@h.example:443?heartbeat=30s#n')!;
       expect(explicit.emit(TemplateVars.empty).map['heartbeat'], '30s');
-    }, skip: skip);
+    });
 
     test('пустой sni уступает адресу сервера', () {
       final spec = parseUri('tuic://$uuid:p@h.example:443?alpn=h3#n')!;
       expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
           'h.example');
-    }, skip: skip);
+    });
 
     test('alpn одной строкой → список тела', () {
       final spec =
           parseUri('tuic://$uuid:p@h.example:443?alpn=h3,h3-29#n')!;
       expect((spec.emit(TemplateVars.empty).map['tls'] as Map)['alpn'],
           ['h3', 'h3-29']);
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (anytls)', () {
@@ -428,14 +424,14 @@ void main() {
             'h.example',
             reason: 'sni=$bad');
       }
-    }, skip: skip);
+    });
 
     test('anytls: pbk= создаёт блок REALITY, годность судит реестр', () {
       const pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
       final ok = parseUri('anytls://pw@h.example:443?pbk=$pbk&sid=abcd#n')!;
       final tls = ok.emit(TemplateVars.empty).map['tls'] as Map;
       expect((tls['reality'] as Map)['public_key'], pbk);
-    }, skip: skip);
+    });
 
     test('anytls: без fp= → random, fp в написании uTLS → семейство', () {
       // `fp_empty_defaults_to_random` и `utls_xray_hello_names` на одной схеме.
@@ -450,7 +446,7 @@ void main() {
           ((alias.emit(TemplateVars.empty).map['tls'] as Map)['utls']
               as Map)['fingerprint'],
           'firefox');
-    }, skip: skip);
+    });
 
     test('anytls: alpn одной строкой → список, ech= не переносится', () {
       // `alpn_comma_list` и `ech_param_dropped_with_code`.
@@ -460,7 +456,7 @@ void main() {
       expect(tls['alpn'], ['h2', 'http/1.1']);
       expect(tls.containsKey('ech'), isFalse);
       expect(_codes(spec), contains('ech_ignored'));
-    }, skip: skip);
+    });
   });
 
   group('§475 — правила mapper на живых ссылках (socks)', () {
@@ -477,7 +473,7 @@ void main() {
         expect(spec.emit(TemplateVars.empty).map['version'], want,
             reason: uri);
       }
-    }, skip: skip);
+    });
 
     test('socks: та же таблица работает обратно — узел эмитит свою схему', () {
       // Маппер и эмиттер обязаны читать ОДНУ таблицу: иначе узел версии 4
@@ -495,7 +491,7 @@ void main() {
         expect(spec.toUri(), startsWith(uri.split('://').first),
             reason: '$uri: схема ссылки обязана называть версию узла');
       }
-    }, skip: skip);
+    });
 
     test('socks4: пароль из ссылки переносится КАК ЕСТЬ', () {
       // У версии 4 пароля нет вовсе (userinfo — это userid), но маппер
@@ -505,7 +501,7 @@ void main() {
       expect(body['version'], '4');
       expect(body['username'], 'user');
       expect(body['password'], 'pass');
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (naive)', () {
@@ -516,7 +512,7 @@ void main() {
       final spec = parseUri('naive+https://u:p@h.example:443#n')!;
       expect(spec.emit(TemplateVars.empty).map['tls'],
           {'enabled': true, 'server_name': 'h.example'});
-    }, skip: skip);
+    });
 
     test('naive: битая пара extra-headers пропускается, остальные живут', () {
       // `broken_header_pair_skipped` — одна битая пара не стоит узлу
@@ -525,7 +521,7 @@ void main() {
           '?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok#n')!;
       expect(spec.emit(TemplateVars.empty).map['extra_headers'],
           {'X-Good': 'ok'});
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (http)', () {
@@ -536,7 +532,7 @@ void main() {
       final on = parseUri('proxy-https://u@h.example:443#n')!;
       expect((on.emit(TemplateVars.empty).map['tls'] as Map)['enabled'],
           isTrue);
-    }, skip: skip);
+    });
 
     test('http: fp в написании uTLS → имя семейства', () {
       final spec = parseUri(
@@ -548,7 +544,7 @@ void main() {
         spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
         isNot(contains('utls_fp_unknown')),
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (masque)', () {
@@ -568,7 +564,7 @@ void main() {
       final auto = parseUri(bare.replaceAll('#n', '&vhttp=auto#n'))!;
       expect(auto.emit(TemplateVars.empty).map['vhttp'], 'auto');
       expect(auto.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('masque: плоские network/sni/skip_cert_verify не переносятся', () {
       // `singbox_flat_fields_stripped` — чужой диалект. Плоский `sni` рядом с
@@ -583,7 +579,7 @@ void main() {
       expect(body.containsKey('skip_cert_verify'), isFalse);
       expect(body.containsKey('tls'), isFalse,
           reason: 'legacy server_name= не создаёт блок tls');
-    }, skip: skip);
+    });
 
     test('masque: address списком → пара ip/ipv6, bare IP получает префикс', () {
       final spec = parseUri(bare.replaceAll(
@@ -591,14 +587,14 @@ void main() {
       final body = spec.emit(TemplateVars.empty).map;
       expect(body['ip'], '172.16.0.2/32');
       expect(body['ipv6'], '2001:db8::2/128');
-    }, skip: skip);
+    });
 
     test('masque: sni и disable_sni уезжают во вложенный tls{}', () {
       final spec = parseUri(
           bare.replaceAll('#n', '&sni=a.example&disable_sni=1#n'))!;
       expect(spec.emit(TemplateVars.empty).map['tls'],
           {'server_name': 'a.example', 'disable_sni': true});
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (wireguard)', () {
@@ -619,7 +615,7 @@ void main() {
       final kept = parseUri('wireguard://$priv@h.example:51820'
           '?publickey=$pub&address=10.0.0.0/8#n')!;
       expect(kept.emit(TemplateVars.empty).map['address'], ['10.0.0.0/8']);
-    }, skip: skip);
+    });
   });
 
   group('§472 — правила mapper на живых ссылках (vmess)', () {
@@ -650,14 +646,14 @@ void main() {
       expect((body['tls'] as Map)['enabled'], isTrue);
       // Фрагмент читает ТОЛЬКО эта форма (`uri.userinfo.impl`).
       expect(spec.label, 'Legacy');
-    }, skip: skip);
+    });
 
     test('JSON-форма фрагмент ссылки не читает', () {
       // Так у обеих сторон: имя узла берётся из ключа `ps`, а `#…` после
       // base64 выбрасывается (`protocols/vmess.json` → `uri.userinfo.impl`).
       final spec = parseUri('${jsonLink({...base, 'ps': 'изPS'})}#изФрагмента');
       expect(spec!.label, 'изPS');
-    }, skip: skip);
+    });
 
     test('net=h2 включает TLS и даёт транспорт http', () {
       // `transport_name_dialect` в диалекте контейнера: `net=h2` → `http`,
@@ -668,14 +664,14 @@ void main() {
       expect((body['tls'] as Map)['enabled'], isTrue);
       // Хост транспорта откатывается на адрес сервера.
       expect((body['transport'] as Map)['host'], ['h.example']);
-    }, skip: skip);
+    });
 
     test('без tls=tls блока TLS нет вовсе', () {
       // Тот же вопрос СТРУКТУРЫ, что `security_none_no_tls` у прочих схем:
       // явный `tls:{enabled:false}` ронял ядра lx.5..lx.18 (SPEC 045).
       final spec = parseUri(jsonLink({...base, 'net': 'tcp'}))!;
       expect(spec.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
-    }, skip: skip);
+    });
 
     test('SNI контейнера: sni → host → сервер', () {
       // Цепочка у контейнера СВОЯ — среднее звено `host`, а не `peer`
@@ -700,7 +696,7 @@ void main() {
       expect(
           (byServer.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
           'h.example');
-    }, skip: skip);
+    });
 
     test('fp в написании uTLS → имя семейства, alpn одной строкой → список',
         () {
@@ -716,7 +712,7 @@ void main() {
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect((tls['utls'] as Map)['fingerprint'], 'firefox');
       expect(tls['alpn'], ['h2', 'http/1.1']);
-    }, skip: skip);
+    });
 
     test('?ed=N хвостом пути → два поля тела', () {
       // `ws_early_data_path_suffix` — путь у контейнера лежит ключом `path`.
@@ -726,7 +722,7 @@ void main() {
       expect(tr['path'], '/x');
       expect(tr['max_early_data'], 2560);
       expect(tr['early_data_header_name'], 'Sec-WebSocket-Protocol');
-    }, skip: skip);
+    });
 
     test('ech= не переносится, узел получает код', () {
       final spec = parseUri(jsonLink({
@@ -738,6 +734,6 @@ void main() {
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('ech'), isFalse);
       expect(_codes(spec), contains('ech_ignored'));
-    }, skip: skip);
+    });
   });
 }

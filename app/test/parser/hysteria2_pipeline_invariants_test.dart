@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
@@ -23,8 +23,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// §480 W4 — РЕЕСТР из ЗЕРКАЛА (`assets/contract`): вендоренной копии на CI
 /// нет вовсе, и под её гейтом файл молча пропускался бы целиком. КОРПУС
 /// остаётся за копией — в зеркале его нет.
-const _contractRoot = 'assets/contract';
-const _corpusRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/hysteria2/pipeline_identity_before.json';
@@ -39,7 +37,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все hysteria2-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_corpusRoot/corpus/uri/hysteria2')
+  final files = Directory('$kVendorRoot/corpus/uri/hysteria2')
       .listSync()
       .whereType<File>()
       .toList()
@@ -59,14 +57,10 @@ List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'зеркало реестра не найдено';
-  final hasCorpus = Directory('$_corpusRoot/corpus/uri/hysteria2').existsSync();
-  final skipCorpus = hasCorpus ? skip : 'корпус не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/hysteria2_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
@@ -92,7 +86,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
 
     test('узел без пароля обфускации ЖИВЁТ — снят только блок obfs', () {
       // Граница вложенного `required` (§472 шаг 5). Реестр пишет её прямо у
@@ -109,7 +103,7 @@ void main() {
           .firstWhere((w) => w.code == 'obfs_password_missing');
       expect(w.path, 'obfs.password', reason: 'ожидание корпуса');
       expect(w.params['type'], 'gecko');
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -144,7 +138,7 @@ void main() {
       // Прежде из 23 кейсов круг проходили 16, семь исключались по свойству
       // тела. Теперь проходят все.
       expect(checked, greaterThan(20));
-    }, skip: skipCorpus);
+    }, skip: corpusSkip);
 
     test('прежние потери эмита ПОЧИНЕНЫ: mport и pinSHA256 уезжают в ссылку',
         () {
@@ -167,7 +161,7 @@ void main() {
           ((parseUri(pin.toUri())!.emit(TemplateVars.empty).map['tls'] as Map)
               ['certificate_public_key_sha256']),
           ['YWJjZGVmZ2g=']);
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -204,7 +198,7 @@ void main() {
         reason: 'разбор $n hysteria2-узлов конвейером: $best мс '
             '(лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — коды hysteria2 приходят из реестра, с путём и значением', () {
@@ -236,7 +230,7 @@ void main() {
       expect(tls.containsKey('utls'), isFalse);
       expect(tls.containsKey('reality'), isFalse);
       expect(tls['server_name'], 'x.example.com');
-    }, skip: skip);
+    });
 
     test('ссылка и тело дают РАВНЫЕ коды (парный кейс корпуса)', () {
       // §469 требовал равенства пары uri↔body, и раньше его держали ДВА
@@ -265,7 +259,7 @@ void main() {
       expect(codes(fromBody), codes(fromUri));
       expect(fromBody.emit(TemplateVars.empty).map['tls'],
           fromUri.emit(TemplateVars.empty).map['tls']);
-    }, skip: skip);
+    });
 
     test('obfs: тип и размеры пакетов судит реестр', () {
       final unknown = parseUri('hysteria2://p@h:443?obfs=xyz&obfs-password=op'
@@ -285,7 +279,7 @@ void main() {
       final obfs = salamander.emit(TemplateVars.empty).map['obfs'] as Map;
       expect(obfs.containsKey('min_packet_size'), isFalse);
       expect(obfs['type'], 'salamander', reason: 'сама обфускация цела');
-    }, skip: skip);
+    });
 
     test('§453 dial-полей у QUIC-схемы нет — и это не потеря', () {
       // У trojan/vless/ss маппер отдаёт keep-alive в тело (`extensionFields`),
@@ -298,14 +292,14 @@ void main() {
       final body = spec.emit(TemplateVars.empty).map;
       expect(body.containsKey('tcp_keep_alive'), isFalse);
       expect(spec.warnings.map(warningCodeOf), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
 
     test('pinSHA256 доезжает до тела (на QUIC он валиден)', () {
       final spec = parseUri('hysteria2://p@h:443?sni=x.com'
           '&pinSHA256=YWJjZGVmZ2g=#H')!;
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls['certificate_public_key_sha256'], ['YWJjZGVmZ2g=']);
-    }, skip: skip);
+    });
 
     test('эвристика SNI сохранена байт в байт', () {
       // `sni_heuristic_falls_back_to_server` — у hysteria2 она ЕСТЬ на обоих
@@ -321,7 +315,7 @@ void main() {
       final ok = parseUri('hysteria2://p@h.example:443?sni=a.b#H')!;
       expect((ok.emit(TemplateVars.empty).map['tls'] as Map)['server_name'],
           'a.b');
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -333,6 +327,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

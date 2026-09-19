@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import '../contract_paths.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
@@ -21,7 +23,7 @@ import 'package:lxbox/services/lx_backup_import.dart';
 // проходит, но поля стороны LxBox его ожидание не несёт: «раннер LxBox сверяет
 // их по своей модели» (README корпуса) — здесь.
 
-const _corpus = 'contract/corpus/backup';
+String get _corpus => '$kVendorRoot/corpus/backup';
 
 typedef _Imported = ({
   LxBackupFile file,
@@ -68,14 +70,14 @@ AutoSelectSpec _group(FolderServers f, String tag) => f.members
     .singleWhere((g) => g.tag == tag);
 
 void main() {
+  if (corpusSuiteUnavailable('test/contract/lx_backup_group_links_test.dart')) {
+    return;
+  }
+
   test('v10_group_links: члены и позиция на группу — на локальную папку, '
       'selector → urltest с backup_group_degraded', () {
-    final pre = _read('v10_group_links.pre.backup.json');
-    final raw = _read('v10_group_links.backup.json');
-    if (pre == null || raw == null) {
-      markTestSkipped('контракт не синхронизирован');
-      return;
-    }
+    final pre = _read('v10_group_links.pre.backup.json')!;
+    final raw = _read('v10_group_links.backup.json')!;
     final before = _import(pre).lists;
     final got = _import(raw, lists: before);
 
@@ -102,11 +104,7 @@ void main() {
 
   test('v10_dev_forms: члены {tag} — пары своей папки, позиция финальным '
       'тегом группы (S3) — сырой тег, default строкой не хранится', () {
-    final raw = _read('v10_dev_forms.backup.json');
-    if (raw == null) {
-      markTestSkipped('контракт не синхронизирован');
-      return;
-    }
+    final raw = _read('v10_dev_forms.backup.json')!;
     final got = _import(raw);
     expect([for (final w in got.file.warnings) w.code], [kWarnGroupDegraded],
         reason: 'только selector → urltest; dev-формы молча');
@@ -124,11 +122,7 @@ void main() {
   });
 
   test('v10_lxbox_fields: поля стороны LxBox применены к модели', () {
-    final raw = _read('v10_lxbox_fields.backup.json');
-    if (raw == null) {
-      markTestSkipped('контракт не синхронизирован');
-      return;
-    }
+    final raw = _read('v10_lxbox_fields.backup.json')!;
     final got = _import(raw);
     expect(got.file.warnings, isEmpty);
 
@@ -201,11 +195,7 @@ void main() {
   });
 
   test('members_rule группы без members — группа по правилу', () {
-    final raw = _read('v10_group_degraded.backup.json');
-    if (raw == null) {
-      markTestSkipped('контракт не синхронизирован');
-      return;
-    }
+    final raw = _read('v10_group_degraded.backup.json')!;
     final got = _import(raw);
     final rules = _folder(got.lists, 'Rules');
     final byRule = _group(rules, 'by-rule');

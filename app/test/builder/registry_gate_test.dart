@@ -7,28 +7,21 @@
 //      остаться байт в байт ТЕМИ ЖЕ при ЗАГРУЖЕННОМ реестре. Обычные
 //      golden-тесты реестр не грузят, поэтому проверка живёт здесь.
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/services/builder/registry_gate.dart';
-import 'package:lxbox/services/contract/registry.dart';
 
 import '../storage_migration/golden_harness.dart';
 
-const _contractRoot = 'contract';
 
 /// Версия ядра эталонов — та же, что в golden_harness.
 const _core = kGoldenCoreVersion;
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
 
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
-  });
+  setUpAll(loadTestRegistry);
+
 
   group('гард реестра на сборке', () {
     test('naive из JSON-источника: foo и tls.insecure сняты, certificate цел',
@@ -80,7 +73,7 @@ void main() {
       expect(joined, isNot(contains('tls_field_unsupported_naive')));
       expect(joined, contains('unknown key'));
       expect(joined, contains('naive: TLS field tls.insecure removed'));
-    }, skip: skip);
+    });
 
     test('запись без обязательного поля снимается целиком', () {
       final entry = Outbound(<String, dynamic>{
@@ -92,7 +85,7 @@ void main() {
       final report = applyRegistryGate([entry], coreVersion: _core);
       expect(report.dropped, [entry]);
       expect(report.warnings.single, contains('no-uuid: '));
-    }, skip: skip);
+    });
 
     // §477 — второй эшелон для узла `origin.kind: json` (§455).
     //
@@ -122,7 +115,7 @@ void main() {
       expect(line, contains('[encryption=mlkem768x25519plus.native.0rtt]'));
       expect(line, isNot(contains('vless_encryption_invalid')),
           reason: 'человеку — текст реестра, а не голый код');
-    }, skip: skip);
+    });
 
     test('§477 — дословный JSON-узел с годным encryption проходит нетронутым',
         () {
@@ -142,7 +135,7 @@ void main() {
       expect(report.dropped, isEmpty);
       expect(report.warnings, isEmpty);
       expect(entry.map, body, reason: '§455 — тело едет дословно');
-    }, skip: skip);
+    });
 
     test('валидное тело гард не трогает и молчит', () {
       final body = <String, dynamic>{
@@ -158,7 +151,7 @@ void main() {
       expect(report.warnings, isEmpty);
       expect(report.dropped, isEmpty);
       expect(entry.map, body);
-    }, skip: skip);
+    });
 
     // §473 — условный потолок MTU у AmneziaWG (`max_when`, контракт 1.1.5) и
     // его исключение по входу. Гард — единственный, кто тело переписывает, и
@@ -196,7 +189,7 @@ void main() {
       expect(report.warnings.single, contains('awg-ep: '));
       expect(report.warnings.single, contains('[mtu=1420]'));
       expect(report.warnings.single, contains('MTU above 1280'));
-    }, skip: skip);
+    });
 
     test('то же тело БЕЗ метки дословности: MTU заменён потолком', () {
       // Узел из ссылки/INI: тело собрал наш разбор, и потолок работает
@@ -209,7 +202,7 @@ void main() {
       expect(report.warnings.single, contains('[mtu=1420]'),
           reason: 'в коде — ИСХОДНОЕ значение, а не то, чем его заменили');
       expect(report.warnings.single, contains('MTU lowered to 1280'));
-    }, skip: skip);
+    });
 
     test('обычный WireGuard: потолка нет ни на каком входе', () {
       // `max_when.when.any_set` судит РОД узла. Сработай он по полю, а не по
@@ -232,7 +225,7 @@ void main() {
       final report = applyRegistryGate([entry], coreVersion: _core);
       expect(entry.map['mtu'], 1420);
       expect(report.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('jc: 0 — законный AWG-узел, потолок с него не снимается', () {
       // Предикат условия судит НАЛИЧИЕ ключа, а не непустоту значения
@@ -244,7 +237,7 @@ void main() {
       final report = applyRegistryGate([entry], coreVersion: _core);
       expect(entry.map['mtu'], 1280);
       expect(report.warnings.single, contains('awg-jc0: '));
-    }, skip: skip);
+    });
 
     test('MTU не задан — дефолт 1280 дописывается и на дословном теле', () {
       // Исключение по входу — про ЗАМЕНУ написанного, а не про подстановку
@@ -255,7 +248,7 @@ void main() {
           coreVersion: _core, verbatim: {entry});
       expect(entry.map['mtu'], 1280);
       expect(report.warnings, isEmpty);
-    }, skip: skip);
+    });
 
     test('реестр не загружен — гард no-op', () {
       // Отдельного способа «выгрузить» реестр нет и заводить его незачем:
@@ -270,7 +263,7 @@ void main() {
       final report = applyRegistryGate([entry], coreVersion: _core);
       expect(report.warnings, isEmpty);
       expect(entry.map['whatever'], 1);
-    }, skip: skip);
+    });
   });
 
   // Д-1 (эмулятор 19.09.2026) — страховка типа. БЕЗ `skip`: она обязана
@@ -321,7 +314,7 @@ void main() {
         // гард обязан быть прозрачен для валидного конфига.
         expectGolden('$name.config.json', built.configJson);
         expectGolden('$name.config_warnings.json', prettyJson(built.warnings));
-      }, skip: skip);
+      });
     }
   });
 }

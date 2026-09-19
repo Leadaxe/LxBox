@@ -304,8 +304,9 @@ test that needs the registry loads it from the committed mirror
 artifacts from the main tree (libbox AAR, release signing, `app/contract/`).
 Before local APK builds or corpus contract tests, run
 `./tool/worktree_bootstrap.sh` from the repo root (see [BUILD.md](BUILD.md) →
-“Git worktree bootstrap”). Do not run `app/tool/sync_contract.sh` without
-`LX_CONTRACT_SRC` — it rewrites the committed contract mirrors.
+“Git worktree bootstrap”). Default `bash app/tool/sync_contract.sh` restores
+`app/contract/` from the lock and does not rewrite mirrors; a bump still
+needs `--to <sha>` or `LX_CONTRACT_SRC`.
 
 There are roughly 5100 test cases (the count moves as tests are added; the source
 of truth is the `flutter test` summary in the CI log):

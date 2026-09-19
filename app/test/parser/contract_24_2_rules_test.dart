@@ -1,12 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -35,13 +34,9 @@ void main() {
   // тестах контракта. `app/contract/` вендорится локально и в репозиторий не
   // коммитится (§460), поэтому на CI его нет вовсе: безусловный
   // `loadFromDirectory` падал там в `setUpAll` — весь файл красный.
-  final synced = Directory('contract/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
 
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory('contract');
-  });
+  setUpAll(loadTestRegistry);
+
 
   group('§24.2 п. 7.1 — hellorandom*/hellorandomized* разводятся данными', () {
     // Контракт 1.1.35 переписал прозу правила: таблица целиком лежит в
@@ -68,7 +63,7 @@ void main() {
         expect(_codes(spec), isNot(contains('UnknownFingerprintWarning')),
             reason: e.key);
       }
-    }, skip: skip);
+    });
   });
 
   group('§24.2 п. 7.5 — anytls мусорный SNI', () {
@@ -76,13 +71,13 @@ void main() {
       final spec =
           parseAnyTls('anytls://pass123@a.example.com:443?sni=%F0%9F%94%92#n');
       expect(spec!.tls.serverName, 'a.example.com');
-    }, skip: skip);
+    });
 
     test('нормальный SNI не трогается', () {
       final spec =
           parseAnyTls('anytls://pass123@a.example.com:443?sni=cover.example#n');
       expect(spec!.tls.serverName, 'cover.example');
-    }, skip: skip);
+    });
   });
 
   group('§24.2 п. 7.7 — дефолты TUIC не пишутся', () {
@@ -92,7 +87,7 @@ void main() {
       final entry = spec!.emit(TemplateVars.empty).map;
       expect(entry.containsKey('congestion_control'), isFalse);
       expect((entry['tls'] as Map).containsKey('alpn'), isFalse);
-    }, skip: skip);
+    });
   });
 
   group('§24.2 п. 7.8 — TUIC udp_relay_mode', () {
@@ -103,7 +98,7 @@ void main() {
       expect(_codes(spec), contains('tuic_udp_relay_mode_invalid'));
       expect(spec.emit(TemplateVars.empty).map.containsKey('udp_relay_mode'),
           isFalse);
-    }, skip: skip);
+    });
 
     test('валидные значения проходят без кода', () {
       for (final v in const ['native', 'quic']) {
@@ -112,13 +107,13 @@ void main() {
         expect(spec!.udpRelayMode, v);
         expect(_codes(spec), isNot(contains('tuic_udp_relay_mode_invalid')));
       }
-    }, skip: skip);
+    });
   });
 
   group('§24.2 п. 7.9 — пустой пароль', () {
     test('anytls без пароля отбраковывается', () {
       expect(parseAnyTls('anytls://@a.example.com:443#n'), isNull);
-    }, skip: skip);
+    });
 
     // РЕШЕНО ВЛАДЕЛЬЦЕМ (дельта `delta480-7`), и решение противоположно
     // прежнему ожиданию этого теста: узел ОСТАЁТСЯ, а пустой пароль назван
@@ -134,7 +129,7 @@ void main() {
           'tuic://11111111-2222-3333-4444-555555555555:@t.example.com:443#n');
       expect(spec, isNotNull);
       expect(_codes(spec!), contains('password_empty'));
-    }, skip: skip);
+    });
   });
 
   group('§24.2 п. 7.10 — ss legacy stream-шифры', () {
@@ -160,16 +155,16 @@ void main() {
         expect(spec!.method, m, reason: m);
         expect(_codes(spec), contains('ss_method_legacy'), reason: m);
       }
-    }, skip: skip);
+    });
 
     test('AEAD-методы кода не получают', () {
       final spec = parseShadowsocks(ssUri('aes-256-gcm'));
       expect(_codes(spec!), isNot(contains('ss_method_legacy')));
-    }, skip: skip);
+    });
 
     test('метод вне 18 значений ядра по-прежнему роняет узел', () {
       expect(parseShadowsocks(ssUri('made-up-cipher')), isNull);
-    }, skip: skip);
+    });
   });
 
   group('§24.2 п. 7.13 — splithttp = алиас xhttp', () {
@@ -192,7 +187,7 @@ void main() {
       final spec = parseVless(
           'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&type=splithttp&path=%2Fv1#n');
       expect(spec!.transport, isA<XhttpTransport>());
-    }, skip: skip);
+    });
 
     test('splithttp и xhttp дают одно тело и одну identity', () {
       const base =
@@ -207,7 +202,7 @@ void main() {
           jsonEncode(canon!.emit(TemplateVars.empty).map));
       // Алиас не должен разводить один узел на два в дедупе подписки.
       expect(legacyNodeIdentityHash(alias), legacyNodeIdentityHash(canon));
-    }, skip: skip);
+    });
 
     test('sing-box JSON transport.type=splithttp', () {
       final spec = parseSingboxEntry({
@@ -219,7 +214,7 @@ void main() {
         'transport': {'type': 'splithttp', 'path': '/v1'},
       });
       expect((spec as VlessSpec).transport, isA<XhttpTransport>());
-    }, skip: skip);
+    });
   });
 
   group('§24.2 п. 7.15 — socks password-only', () {
@@ -238,7 +233,7 @@ void main() {
       // Круг замкнут: пароль переживает пересохранение узла.
       final back = parseUri(spec.toUri()) as SocksSpec;
       expect(back.password, 'pass123');
-    }, skip: skip);
+    });
   });
 
   group('§24.6 — url_path', () {
@@ -248,14 +243,14 @@ void main() {
       expect(spec, isNotNull);
       expect((spec!.transport as WsTransport).path, '');
       expect(_codes(spec), contains('type_invalid'));
-    }, skip: skip);
+    });
 
     test('корректный percent-путь не трогается', () {
       final spec = parseTrojan(
           'trojan://pass123@t.example.com:443?type=ws&path=%2Fx%2Fy&security=tls#n');
       expect((spec!.transport as WsTransport).path, '/x/y');
       expect(_codes(spec), isNot(contains('type_invalid')));
-    }, skip: skip);
+    });
   });
 
   group('§24.6 — пустой reality.short_id не эмитится', () {
@@ -265,6 +260,6 @@ void main() {
           '&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sni=cover.example#n');
       final tls = spec!.emit(TemplateVars.empty).map['tls'] as Map;
       expect((tls['reality'] as Map).containsKey('short_id'), isFalse);
-    }, skip: skip);
+    });
   });
 }

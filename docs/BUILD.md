@@ -83,9 +83,10 @@ From the repository root:
 | Touches `app/assets/contract/`, `docs/contract/`, `app/contract.lock` | ✗ guarded — script exits and reverts if they change |
 | `--clean` removes symlinks and `app/contract/` | ✓ |
 
-⚠ Do **not** run `app/tool/sync_contract.sh` in a worktree without `LX_CONTRACT_SRC`
-set to the intended launcher tree — it will pull the wrong contract version and
-rewrite the committed mirrors.
+Default `bash app/tool/sync_contract.sh` restores `app/contract/` from
+`source_sha` in the lock (same as bootstrap) and does **not** rewrite mirrors.
+A version bump (`--to <sha>` or `LX_CONTRACT_SRC`) is what rewrites them —
+don't bump from a worktree unless you mean it.
 
 If `contract.lock` has no `source_sha=` field yet, bootstrap prints the manual
 `git archive` command; symlinks are still created.

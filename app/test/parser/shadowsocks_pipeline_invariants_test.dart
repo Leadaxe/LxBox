@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -16,7 +16,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Инварианты 1 и 2 (корпус и golden) держат свои тесты: корпус URI —
 /// `test/contract/`, эталоны конфигов — `test/builder/`. Здесь то, что
 /// специфично для переезда протокола: identity, round-trip и цена.
-const _contractRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026). Кейсов
 /// корпуса у схемы всего девять, поэтому в фикстуру взяты и ссылки из
@@ -34,7 +33,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все ss-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/shadowsocks')
+  final files = Directory('$kVendorRoot/corpus/uri/shadowsocks')
       .listSync()
       .whereType<File>()
       .toList()
@@ -51,12 +50,10 @@ List<String> _corpusUris() {
 }
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/shadowsocks_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
   });
 
   group('§472 инвариант 4 — identity shadowsocks не меняется', () {
@@ -80,7 +77,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
 
     test('безымянная ссылка держит прежний тег-фолбэк', () {
       // Ссылка зовётся `ss://`, а тело — `shadowsocks`, и фолбэк строится по
@@ -90,7 +87,7 @@ void main() {
         'aes-256-gcm:pass123',
       ))}@h.example:8388')!;
       expect(spec.tag, 'shadowsocks-h.example-8388');
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -114,7 +111,7 @@ void main() {
       // SIP002-форму, из которой узел и пришёл, а legacy-форма сходится к ней
       // же — метод, пароль, адрес и порт у обеих одни.
       expect(checked, greaterThan(7));
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -150,7 +147,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n ss-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — коды shadowsocks приходят из реестра', () {
@@ -167,7 +164,7 @@ void main() {
       expect(w.path, 'method');
       expect(w.value, 'aes-128-cfb');
       expect((spec as ShadowsocksSpec).method, 'aes-128-cfb');
-    }, skip: skip);
+    });
 
     test('метод вне набора ядра снимает узел целиком', () {
       // `on_invalid: drop_node` — ядро на таком значении не стартует ВСЕМ
@@ -177,7 +174,7 @@ void main() {
         'rot13:pass123',
       ))}@h.example:8388#bogus');
       expect(spec, isNull);
-    }, skip: skip);
+    });
 
     test('SS2022 с составным паролем k1:k2 сохраняет его целиком', () {
       // Пароль — ВСЁ после первого `:`. Резать по второму значило бы
@@ -190,7 +187,7 @@ void main() {
       expect((spec as ShadowsocksSpec).password, pw);
       expect(spec.method, '2022-blake3-aes-256-gcm');
       expect(spec.warnings.map(warningCodeOf), isNot(contains('type_invalid')));
-    }, skip: skip);
+    });
 
     test('plugin SIP003 раскладывается на два поля и доезжает до тела', () {
       // §472 шаг 4 — до переезда `parseSingboxEntry` эти поля не читал вовсе,
@@ -206,7 +203,7 @@ void main() {
       expect(body['plugin'], 'obfs-local');
       expect(body['plugin_opts'], 'obfs=http;obfs-host=x.com');
       expect(spec.warnings.map(warningCodeOf), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
 
     test('§453 dial-поля идут мимо санитайзера и не теряются', () {
       // До переезда они лежали в теле, и санитайзер снимал их как
@@ -217,7 +214,7 @@ void main() {
       ))}@h.example:8388?tcp_keep_alive=30s#S')!;
       expect(spec.tcpKeepAlive?.idle, '30s');
       expect(spec.warnings.map(warningCodeOf), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -229,6 +226,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

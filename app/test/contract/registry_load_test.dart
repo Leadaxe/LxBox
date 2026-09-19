@@ -11,24 +11,19 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/contract/registry.dart';
 
-const _contractRoot = 'contract';
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-
   group('ContractRegistry', () {
-    setUpAll(() async {
-      if (!synced) return;
-      await ContractRegistry.I.loadFromDirectory(_contractRoot);
-    });
+    setUpAll(loadTestRegistry);
 
     test('реестр 1.1.42 грузится', () {
       expect(ContractRegistry.I.isLoaded, isTrue);
       expect(ContractRegistry.I.version, '1.1.42');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
     // класс обязан её оттуда читать: владелец понизил `reality_fp_not_chrome`
@@ -38,7 +33,7 @@ void main() {
           'info');
       expect(const RealityFingerprintWarning('edge').severity,
           WarningSeverity.info);
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('схема vless раскрывает tls / transports / dialer', () {
       final schema = ContractRegistry.I.schemaFor('vless');
@@ -61,7 +56,7 @@ void main() {
       // Скаляры dialer.common доступны по своим именам.
       expect(schema.fields['server']!.ref, 'dialer.common');
       expect(schema.fields['server_port']!.ref, 'dialer.common');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('транспорт выбирается по дискриминатору transport.type', () {
       final ws = ContractRegistry.I.transportVariant('ws');
@@ -75,7 +70,7 @@ void main() {
 
       // Неизвестный тип транспорта схемы не даёт — санитайзер снимет поле.
       expect(ContractRegistry.I.transportVariant('kcp'), isNull);
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('суб-схема tls раскрывается по ref', () {
       final tls = ContractRegistry.I.sharedSchema('tls');
@@ -85,7 +80,7 @@ void main() {
       // naive-запреты — атрибут поля, а не отдельная таблица.
       expect(tls.fields['alpn']!.forbiddenFor, contains('naive'));
       expect(tls.fields['alpn']!.code, 'tls_field_unsupported_naive');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('warnings.json даёт title_ru / text_en для unknown_key', () {
       final w = ContractRegistry.I.textFor('unknown_key');
@@ -96,13 +91,13 @@ void main() {
       // path/value подставляются всегда (text_params_implicit).
       expect(w.params, contains('path'));
       expect(w.params, contains('value'));
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('каждый файл protocols/ прочитан — состав списка не разошёлся', () {
       // Список файлов в registry.dart перечислен поимённо (rootBundle каталог
       // не листает). Бамп контракта, добавивший протокол, обязан попасть и
       // туда — иначе схема новой записи молча не нашлась бы.
-      final onDisk = Directory('$_contractRoot/registry/protocols')
+      final onDisk = Directory('$kRegistryRoot/registry/protocols')
           .listSync()
           .whereType<File>()
           .where((f) => f.path.endsWith('.json'))
@@ -118,18 +113,21 @@ void main() {
       // group.json схемы тела не несёт (selector|urltest) — отсюда −1.
       expect(loaded, onDisk - 1,
           reason: 'список _kProtocolFiles разошёлся с registry/protocols/');
-    }, skip: synced ? null : 'контракт не синхронизирован');
+    });
 
     test('зеркало assets совпадает с копией контракта', () async {
-      // Приложение грузит реестр из assets/contract — если зеркало отстало,
-      // санитайзер в APK работал бы по другой схеме, чем тесты.
-      final mirror = ContractRegistry.I;
-      await mirror.loadFromDirectory('assets/contract');
-      expect(mirror.version, '1.1.42');
-      expect(mirror.schemaFor('vless'), isNotNull);
-      // Вернуть загрузку с копии — остальные тесты файла уже отработали, но
-      // порядок в группе не нормирован.
-      await mirror.loadFromDirectory(_contractRoot);
-    }, skip: synced ? null : 'контракт не синхронизирован');
+      // Тесты грузят реестр из зеркала. Сверка файл-в-файл — в
+      // check_contract_lock; здесь при наличии вендоренной копии сверяем
+      // версию с ней. Без копии (CI, чистый worktree) кейс не скипается:
+      // зеркало уже проверено тестами выше.
+      expect(ContractRegistry.I.version, '1.1.42');
+      expect(ContractRegistry.I.schemaFor('vless'), isNotNull);
+      if (!hasVendorContract) return;
+      final mirrorVersion = ContractRegistry.I.version;
+      final mirrorVless = ContractRegistry.I.schemaFor('vless');
+      await ContractRegistry.I.loadFromDirectory(kVendorRoot);
+      expect(ContractRegistry.I.version, mirrorVersion);
+      expect(ContractRegistry.I.schemaFor('vless'), mirrorVless);
+    });
   });
 }

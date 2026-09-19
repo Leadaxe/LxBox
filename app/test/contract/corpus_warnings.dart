@@ -1,3 +1,5 @@
+import '../contract_paths.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,9 +18,6 @@ import 'package:lxbox/services/contract/warning_codes.dart';
 //
 // Копировать правила во второй раннер нельзя: они нормативны, и две копии
 // разъехались бы на первом же бампе контракта. Поэтому — один файл на обоих.
-
-/// Корень вендоренного контракта (кладёт `tool/sync_contract.sh`).
-const kContractRoot = 'contract';
 
 /// Путь поля для рукописных классов — ТОЛЬКО там, где поле класса и есть
 /// путь (CANON §6: `path` обязателен у кодов уровня поля).

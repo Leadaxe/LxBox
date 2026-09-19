@@ -2,17 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 6, раздел 3 спеки — инварианты переезда http(s)-прокси (§222) на
 /// конвейер.
-const _contractRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/http/pipeline_identity_before.json';
@@ -26,7 +25,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/http')
+  final files = Directory('$kVendorRoot/corpus/uri/http')
       .listSync()
       .whereType<File>()
       .toList()
@@ -46,12 +45,10 @@ List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/http_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
   });
 
   group('§472 инвариант 4 — identity http не меняется', () {
@@ -75,7 +72,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -97,7 +94,7 @@ void main() {
       }
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(8));
-    }, skip: skip);
+    }, skip: corpusSkip);
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -131,7 +128,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n http-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — коды http приходят из реестра, с путём и значением', () {
@@ -155,7 +152,7 @@ void main() {
       // Отпечаток сведён к chrome — правилом реестра, не разбором.
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect((tls['utls'] as Map)['fingerprint'], 'chrome');
-    }, skip: skip);
+    });
   });
 
   group('§472 — http: перевод, который остаётся за маппером', () {
@@ -170,21 +167,21 @@ void main() {
       final sb = secure.emit(TemplateVars.empty).map;
       expect((sb['tls'] as Map)['enabled'], isTrue);
       expect(sb['server_port'], 443);
-    }, skip: skip);
+    });
 
     test('§268 — плюс-формы эквивалентны дефисным', () {
       final dash = parseUri('proxy-https://u@h.example:8443#n')!;
       final plus = parseUri('proxy+https://u@h.example:8443#n')!;
       expect(plus.emit(TemplateVars.empty).map,
           dash.emit(TemplateVars.empty).map);
-    }, skip: skip);
+    });
 
     test('security=none гасит TLS даже на https-схеме', () {
       // `security_none_no_tls` — `applies_to` включает http.
       final spec =
           parseUri('proxy-https://u@h.example:443?security=none#n')!;
       expect(spec.emit(TemplateVars.empty).map.containsKey('tls'), isFalse);
-    }, skip: skip);
+    });
 
     test('userinfo: user | user:pass | :pass', () {
       final userOnly = parseUri('proxy-http://alice@h.example#n')!
@@ -198,7 +195,7 @@ void main() {
           .map;
       expect(passOnly.containsKey('username'), isFalse);
       expect(passOnly['password'], 'secret');
-    }, skip: skip);
+    });
 
     test('headers: та же сериализация, что extra-headers у naive', () {
       final spec = parseUri(
@@ -206,14 +203,14 @@ void main() {
       // Ключи отсортированы — так эмитят оба проекта.
       expect(spec.emit(TemplateVars.empty).map['headers'],
           {'X-A': 'one', 'X-B': 'two'});
-    }, skip: skip);
+    });
 
     test('§453 dial-поля доезжают до тела и не теряются', () {
       final spec =
           parseUri('proxy-http://u@h.example?tcp_keep_alive=30s#n')!;
       expect(spec.emit(TemplateVars.empty).map['tcp_keep_alive'], '30s');
       expect(_registry(spec).map((w) => w.code), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -225,6 +222,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

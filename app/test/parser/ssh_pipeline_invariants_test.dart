@@ -2,17 +2,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 6, раздел 3 спеки — инварианты переезда ssh на конвейер.
-const _contractRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 const _identityFixture = 'test/fixtures/ssh/pipeline_identity_before.json';
@@ -32,7 +31,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_contractRoot/corpus/uri/ssh')
+  final files = Directory('$kVendorRoot/corpus/uri/ssh')
       .listSync()
       .whereType<File>()
       .toList()
@@ -52,12 +51,10 @@ List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
 
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  final corpusSkip = corpusTestSkip('test/parser/ssh_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
+    await loadTestRegistry();
   });
 
   group('§472 инвариант 4 — identity ssh не меняется', () {
@@ -81,7 +78,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
@@ -103,7 +100,7 @@ void main() {
       }
       // Круг проходят ВСЕ разбираемые кейсы, без исключений.
       expect(checked, greaterThan(8));
-    }, skip: skip);
+    }, skip: corpusSkip);
 
     test('§466 — многострочный приватный ключ переживает круг побайтно', () {
       // Ключ едет в QUERY (форма хранения, §466), и в нём законно встречается
@@ -121,7 +118,7 @@ void main() {
       expect(b.privateKey, _pem, reason: 'круг сохранил ключ');
       expect(b.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map);
       expect(legacyNodeIdentityHash(b), legacyNodeIdentityHash(a));
-    }, skip: skip);
+    });
   });
 
   group('§472 инвариант 5 — цена разбора', () {
@@ -155,7 +152,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n ssh-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — ssh: перевод, который остаётся за маппером', () {
@@ -163,12 +160,12 @@ void main() {
       expect(parseUri('ssh://h.example:22#n'), isNull);
       expect(parseUri('ssh://@h.example:22#n'), isNull);
       expect(parseUri('ssh://u@h.example:22#n'), isNotNull);
-    }, skip: skip);
+    });
 
     test('пароль — всё после первого двоеточия', () {
       final spec = parseUri('ssh://u:p%3A1%3A2@h.example:22#n')!;
       expect(spec.emit(TemplateVars.empty).map['password'], 'p:1:2');
-    }, skip: skip);
+    });
 
     test('host_key и host_key_algorithms — списки через запятую', () {
       // Пустые элементы отбрасываются (`uri.query.host_key.impl`).
@@ -177,18 +174,18 @@ void main() {
       final body = spec.emit(TemplateVars.empty).map;
       expect(body['host_key'], ['aaa', 'bbb']);
       expect(body['host_key_algorithms'], ['ssh-rsa', 'ssh-ed25519']);
-    }, skip: skip);
+    });
 
     test('порт по умолчанию 22', () {
       final spec = parseUri('ssh://u@h.example#n')!;
       expect(spec.emit(TemplateVars.empty).map['server_port'], 22);
-    }, skip: skip);
+    });
 
     test('§453 dial-поля доезжают до тела и не теряются', () {
       final spec = parseUri('ssh://u:p@h.example:22?tcp_keep_alive=30s#n')!;
       expect(spec.emit(TemplateVars.empty).map['tcp_keep_alive'], '30s');
       expect(_registry(spec).map((w) => w.code), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
   });
 
   // БЕЗ ГЕЙТА: тесты идут через `parseSingboxEntry` напрямую, реестр им не
@@ -248,6 +245,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }

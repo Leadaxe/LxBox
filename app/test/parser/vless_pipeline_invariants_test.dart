@@ -2,12 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/parse_warnings.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
@@ -23,12 +23,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `app/contract`: второй на CI нет вовсе, и под её гейтом тест молча
 /// пропускался бы ровно там, где он нужен. Схема переехала на движок, и без
 /// секций реестра она не разбирается совсем.
-const _registryRoot = 'assets/contract';
 
 /// КОРПУС лежит только в вендоренной копии — в зеркало едет один `registry/`
 /// (оно бандлится в APK, и корпусу там делать нечего). Поэтому гейт у тестов
 /// корпуса свой: корпуса нет — пропускаем именно их, а не разбор.
-const _corpusRoot = 'contract';
 
 /// Снимок identity, снятый СТАРЫМ путём ДО правки (18.09.2026).
 ///
@@ -53,7 +51,7 @@ Map<String, Map<String, dynamic>> _identityBefore() {
 /// Все vless-ссылки корпуса, в порядке файлов.
 List<String> _corpusUris() {
   final out = <String>[];
-  final files = Directory('$_corpusRoot/corpus/uri/vless')
+  final files = Directory('$kVendorRoot/corpus/uri/vless')
       .listSync()
       .whereType<File>()
       .toList()
@@ -70,17 +68,11 @@ List<String> _corpusUris() {
 }
 
 void main() {
-  final synced = Directory('$_registryRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
-  // Корпуса в зеркале нет: тесты, читающие его, пропускаются отдельно от
-  // тестов разбора — иначе отсутствие корпуса на CI молча гасило бы и их.
-  final corpusSkip = Directory('$_corpusRoot/corpus/uri/vless').existsSync()
-      ? skip
-      : 'корпус не синхронизирован (есть только в app/contract)';
+  final corpusSkip =
+      corpusTestSkip('test/parser/vless_pipeline_invariants_test.dart');
 
   setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_registryRoot);
+    await loadTestRegistry();
     await MapperSections.I
         .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
   });
@@ -109,7 +101,7 @@ void main() {
               'выбор узла, отключения и цепочки',
         );
       }
-    }, skip: skip);
+    });
 
     test('identity всего корпуса vless считается и не пуста', () {
       final nodes = <NodeSpec>[];
@@ -235,7 +227,7 @@ void main() {
         lessThan(3000),
         reason: 'разбор $n vless-узлов конвейером: $best мс (лучший из трёх)',
       );
-    }, skip: skip);
+    });
   });
 
   group('§472 — коды vless приходят из реестра, с путём и сырым значением', () {
@@ -247,7 +239,7 @@ void main() {
           .firstWhere((w) => w.code == 'utls_fp_unknown');
       expect(w.path, 'tls.utls.fingerprint');
       expect(w.value, 'bogus');
-    }, skip: skip);
+    });
 
     test('flow вне пары даёт flow_deprecated с путём', () {
       final spec = parseUri('vless://u@h.example:443?security=tls&sni=x.com'
@@ -258,7 +250,7 @@ void main() {
       expect(w.path, 'flow');
       expect(w.value, 'xtls-rprx-direct');
       expect(spec.emit(TemplateVars.empty).map.containsKey('flow'), isFalse);
-    }, skip: skip);
+    });
 
     test('мусорный packetEncoding — код реестра, поле снято', () {
       final spec = parseUri('vless://u@h.example:443?security=tls&sni=x.com'
@@ -269,7 +261,7 @@ void main() {
       expect(w.path, 'packet_encoding');
       expect(w.value, 'teleport');
       expect((spec as VlessSpec).packetEncoding, '');
-    }, skip: skip);
+    });
 
     test('негодный pbk снимает REALITY молча, кроме одного кода', () {
       // §169 — узел деградирует до plain TLS, а не выбрасывается. Коды
@@ -282,7 +274,7 @@ void main() {
       expect(codes, ['reality_pbk_invalid']);
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('reality'), isFalse);
-    }, skip: skip);
+    });
 
     test('sid только в другом регистре — нормализация без кода', () {
       // Корпус `reality_valid_pbk_sid`: `ABCD` → `abcd` молча. Регистр ничего
@@ -294,7 +286,7 @@ void main() {
       final reality =
           (spec.emit(TemplateVars.empty).map['tls'] as Map)['reality'] as Map;
       expect(reality['short_id'], 'abcd');
-    }, skip: skip);
+    });
 
     test('§453 dial-поля идут мимо санитайзера и не теряются', () {
       // Реестр их не описывает (`dialer.json` → `skipped`), и в теле
@@ -307,7 +299,7 @@ void main() {
       expect(spec.tcpKeepAlive?.interval, '15s');
       expect(spec.tcpKeepAlive?.disabled, isTrue);
       expect(spec.warnings.map(warningCodeOf), isNot(contains('unknown_key')));
-    }, skip: skip);
+    });
 
     test('encryption из ссылки доезжает до тела', () {
       // §335 — до шага 3 `parseSingboxEntry` поле не читал вовсе, и на
@@ -318,7 +310,7 @@ void main() {
           'mlkem768x25519plus.native.1rtt.AbCd');
       expect(spec.emit(TemplateVars.empty).map['encryption'],
           'mlkem768x25519plus.native.1rtt.AbCd');
-    }, skip: skip);
+    });
   });
 
   group('§477 — vless encryption: форма по реестру', () {
@@ -338,7 +330,7 @@ void main() {
         expect(spec!.emit(TemplateVars.empty).map['encryption'], enc,
             reason: enc);
       }
-    }, skip: skip);
+    });
 
     test('края обрезаются тихо, в тело едет обрезанное', () {
       // Ядро само делает TrimSpace всей строки — кода за это нет.
@@ -348,7 +340,7 @@ void main() {
       expect(spec.emit(TemplateVars.empty).map['encryption'], enc);
       expect(spec.warnings.map(warningCodeOf),
           isNot(contains('vless_encryption_invalid')));
-    }, skip: skip);
+    });
 
     test('пробел ВНУТРИ сегмента законен', () {
       // Ядро тримит сегменты начиная с четвёртого, поэтому `….0rtt. KEY`
@@ -357,7 +349,7 @@ void main() {
       final spec = parseUri('vless://u@h.example:443?security=none'
           '&encryption=${Uri.encodeQueryComponent(enc)}#n')!;
       expect(spec.emit(TemplateVars.empty).map['encryption'], enc);
-    }, skip: skip);
+    });
 
     test('пусто и ТОЧНОЕ none — слоя нет, кода нет', () {
       for (final enc in ['', 'none', '%20none%20']) {
@@ -370,7 +362,7 @@ void main() {
             isNot(contains('vless_encryption_invalid')),
             reason: 'encryption=$enc: выключатель — не повод для кода');
       }
-    }, skip: skip);
+    });
 
     test('None другого регистра — НЕ выключатель, узел отбракован', () {
       // Изменение против прежнего поведения: маппер сравнивал EqualFold.
@@ -383,7 +375,7 @@ void main() {
             isNull,
             reason: '$enc обязан отбраковать узел, а не выключить слой');
       }
-    }, skip: skip);
+    });
 
     test('негодная форма отбраковывает УЗЕЛ, а не снимает поле', () {
       // Узел без encryption к серверу, который слой требует, всё равно не
@@ -402,7 +394,7 @@ void main() {
             isNull,
             reason: '$enc должен был отбраковать узел');
       }
-    }, skip: skip);
+    });
 
     test('в код уезжает СЫРОЕ значение, до обрезки', () {
       // Человеку нужно видеть, что он написал, а не что из этого осталось.
@@ -420,7 +412,7 @@ void main() {
           .singleWhere((w) => w.code == 'vless_encryption_invalid');
       expect(w.path, 'encryption');
       expect(w.value, raw, reason: 'значение обязано быть сырым, до trim');
-    }, skip: skip);
+    });
 
     test('тело sing-box судится тем же правилом, что и ссылка', () {
       // Одна запись реестра закрывает оба входа — её исполняет санитайзер по
@@ -446,7 +438,7 @@ void main() {
       // края обрезаны, значение в теле обрезанное
       expect(clean('  mlkem768x25519plus.native.0rtt.KEYKEYKEY  ')?['encryption'],
           'mlkem768x25519plus.native.0rtt.KEYKEYKEY');
-    }, skip: skip);
+    });
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
@@ -458,6 +450,6 @@ void main() {
       annotateAllWithRegistry([spec]);
       expect(spec.warnings, hasLength(before),
           reason: 'второй проход задвоил коды узла конвейера');
-    }, skip: skip);
+    });
   });
 }
