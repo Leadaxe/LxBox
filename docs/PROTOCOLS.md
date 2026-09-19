@@ -612,7 +612,7 @@ Everything else in the TLS block is fine over QUIC and is kept:
 ### Notes
 
 - TLS is always enabled (Hysteria2 runs over QUIC).
-- Port hopping (`mport`/`ports` → `server_ports`) is **not** implemented — the parser does not read those keys and `server_ports` is never emitted.
+- Port hopping (`mport`/`ports` → `server_ports`) **is** implemented (§103 §9.B2). Both query spellings are read, and so is a multi-port authority (`host:443,20000-30000`), which `Uri.parse` cannot digest at all — the engine's own lexer splits it and the `$multiport` entry prepends the ranges. The core's form uses a **colon** (`"low:high"`); the dash a link is written with would be a `bad port range` fatal over the whole config, and a single port becomes the pair `N:N`. An element that is not a pair of numbers is dropped outright: a rebuilt authority (`host:443`) used to travel through as-is and take the whole VPN down with it, and its single port belongs to `server_port`, not to the ranges. Registry: `protocols/hysteria2.json` → `mappers.uri.params.mport` / `$multiport` (`normalize: port_range_spec`).
 - `up_mbps`/`down_mbps` are parsed and round-tripped (URI/JSON), emitted only when present. Both URI spellings are read — `upmbps`/`downmbps` **and** `up_mbps`/`down_mbps` (registry aliases, §464); emission keeps the canonical `upmbps`/`downmbps`.
 - `obfs-min-packet-size`/`obfs-max-packet-size` are gecko-only. With `obfs=salamander` they are dropped with `field_requires` instead of disappearing silently (§464, registry `requires` + `equals`).
 - Invalid SNI values (e.g. emoji-only) are replaced with the server address.
@@ -1829,6 +1829,19 @@ all three inputs (in Xray JSON its settings object `splithttpSettings` is read
 alongside `xhttpSettings`). Before that the name was not recognised at all and
 such a node reached the config with **no transport** — a plain TCP dial to a
 port expecting HTTP, dead without a single message. Contract §24.2 item 7.13.
+
+Where each input gets the alias from, and why it is not one place: the registry
+expresses it **only for the Xray dialect** (`transports.json` →
+`blocks.xray.$selector.network.value_map`). For a **link** the set of spellings
+`blocks.uri.$selector.type` is closed by a `when.in` that does not list
+`splithttp`, and a `when.in` suppresses the entry whole — so the selector never
+fires and no transport is built at all. Moving the link input onto the engine
+(§480) therefore brought the old silent breakage back, and the corpus could not
+catch it: only the Xray input is normalised there (`body/xray/vless_splithttp`).
+It is closed in **data** — the `$selector.type` entry of our overlay
+`assets/contract_draft/uri/transports.json`, a verbatim copy of the registry
+entry plus `splithttp` in both `when.in` and `value_map` (delta `delta480-8`).
+The overlay goes away once the launcher adds the spelling to the registry set.
 
 Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 002 v2): beyond the six basic fields there are configurable session/seq/uplink placements, their keys, the upload method, the X-Padding obfuscation mode and packet-up tuning. In a URI these come from flat query parameters **and** from the `extra` parameter (URL-encoded JSON, see below).
 

@@ -261,9 +261,9 @@ a single **engine** executing registry sections, and the same table drives the
 reverse direction — the link the app emits:
 
 ```
-document ─► detect (registry) ─► engine, by the section of the recognised kind ─┐
-   link / base64 / list / Xray JSON / INI (wg-quick)                            │
-                                                                                ▼
+input ─► detect (registry) ─► engine, by the section of the recognised source kind ─┐
+   link / base64 / list / Xray JSON / INI (wg-quick)                                │
+                                                                                    ▼
                                    raw map ─► registry sanitizer ─► clean map ─► parseSingboxEntry ─► NodeSpec
                                        │                                                                  │
                                        └─► warnings (code, path, value) ──────────────────────────────────┘
@@ -273,9 +273,31 @@ NodeSpec ─► emitter, from the SAME table ─► link            (round trip:
 sing-box body ──► (already a sing-box map: the step-1 pass judges it verbatim)
 ```
 
-- **Detect** picks the kind of document (a bare link, base64, a list of links,
+- **Detect** picks the **source kind** (a bare link, base64, a list of links,
   an Xray object, an INI config) from the registry, not from a hand-written
-  chain of `if`s.
+  chain of `if`s. The kinds themselves are data too — `source_kinds.json`
+  (ours, until the launcher ships its own; the loader also reads the registry's
+  file under that name). "Source" on its own means a *subscription* in this
+  codebase, hence the `kind`. The branches, in the order they are tried —
+  a lower number wins, and the last one is the catch-all:
+
+  | # | Kind | Mapper |
+  |---|---|---|
+  | 10 | `amnezia_link` | — (unwrapped, then re-detected) |
+  | 20 | `base64_wrapped` | — (unwrapped, then re-detected) |
+  | 30 / 32 / 40 / 50 | `singbox_config_array`, `singbox_outbound_array`, `singbox_outbound`, `singbox_config` | `singbox` |
+  | 31 / 33 / 34 / 35 | `xray_config_array`, `xray_outbound_array`, `xray_outbound`, `xray_config` | `xray` |
+  | 60 | `wireguard_conf` | `conf` |
+  | 100 | `uri_lines` | `uri` |
+
+  Xray is told from sing-box by `protocol` against the other's `type`. The
+  numbers, not the markers, settle an ambiguous object: a lone outbound
+  carrying **both** keys is taken by `xray_outbound` (34) before
+  `singbox_outbound` (40) is tried, whereas the two whole-config branches
+  (35, 50) each exclude a top-level `type` explicitly. All four Xray shapes
+  are accepted on paste, not only the array of configs — a lone outbound, a
+  bare array of outbounds and a full config with `outbounds` used to be
+  answered with "No valid outbounds in JSON".
 - **Engine** (`parser/engine/`) translates the dialect and **judges nothing**:
   parameter aliases, userinfo, port, name, TLS and transport — all in sing-box
   key layout. It holds **no protocol name at all**, comments included
