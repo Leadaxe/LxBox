@@ -216,6 +216,13 @@ DecodedBody _classifyByKind(DocumentMatch match) {
       }
       return _uriLines(text, match.source.lineCommentPrefixes);
     case null:
+      // Оболочка без маппера: вид объявлен (исчерпан предел unwrap),
+      // элементов нет. Запасной путь сюда не пускаем — он снимал бы ещё
+      // одну оболочку и обходил бы `max_unwrap_depth`.
+      if (match.source.unwrap != null) {
+        return DecodeFailure(
+            'no parseable content', text.substring(0, min(text.length, 80)));
+      }
       // Вид опознан, но узлов не даёт. Форма прежняя: разбор ответит нулём
       // узлов, как и до волны.
       final value = match.json ?? _tryJsonDecode(text);

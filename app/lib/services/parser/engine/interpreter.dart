@@ -593,8 +593,17 @@ bool formMatchesText(Map<String, dynamic>? d, String text) {
         return false;
       }
     }
+    // `contains` — как префикс: у формы ссылки ищем в пэйлоаде, у вида
+    // источника — в целом документе. Иначе `contains: "://"` на одиночной
+    // ссылке не срабатывает: разделитель схемы в пэйлоад не входит, и после
+    // одной обёртки base64 документ отвергается, хотя список из двух ссылок
+    // проходит (во второй строке `://` остаётся уже в пэйлоаде).
     final contains = txt['contains'] as String?;
-    if (contains != null && !payload.contains(contains)) return false;
+    if (contains != null &&
+        !payload.contains(contains) &&
+        !text.contains(contains)) {
+      return false;
+    }
     // `prefix_trim` — первый НЕПРОБЕЛЬНЫЙ символ: `{`/`[` у JSON стоят после
     // произвольного отступа, и требовать их первым байтом значило бы
     // отвергать выровненный документ.
@@ -1625,6 +1634,12 @@ final class _Run {
     // `maps_to` у неё нет.
     if (p.flatten.isNotEmpty) _applyFlatten(p);
 
+    // `on_len_gt` — код за длинный массив. Ставится до чтения скаляра
+    // записи: служебный `$extra_*` существует ради этого примитива, а
+    // `source` у него — массив, на котором обычный lookup молчит. Проход
+    // по остальным записям узла не обрывается.
+    _applyOnLenGt(p);
+
     var raw = _valueOf(p);
     if (raw == null) {
       // `on_empty` — код за ПУСТОЕ значение записи. Ставится до разбора
@@ -1656,18 +1671,8 @@ final class _Run {
       }
     }
 
-    // `on_len_gt` — у источника-МАССИВА больше `n` элементов. Лишние
-    // отбрасываются и сегодня (Q133-18), но молча; запись даёт коду место,
-    // не трогая поведения.
-    if (p.onLenGt.isNotEmpty && raw is List) {
-      final n = (p.onLenGt['n'] as num?)?.toInt() ?? 1;
-      final code = p.onLenGt['code'] as String?;
-      if (raw.length > n && code != null) {
-        warnings.add(NodeWarning.byCode(code, path: p.name, value: '${raw.length}'));
-      }
-      // Служебная запись массива в тело не едет: она только считает.
-      if (p.mapsToPresent && p.mapsTo == null) return;
-    }
+    // Служебная запись массива в тело не едет: она только считает.
+    if (p.onLenGt.isNotEmpty && p.mapsToPresent && p.mapsTo == null) return;
 
     var value = raw;
 
@@ -2196,6 +2201,31 @@ final class _Run {
     final code = p.onEmpty['code'] as String?;
     if (code == null) return;
     warnings.add(NodeWarning.byCode(code, path: p.name, value: ''));
+  }
+
+  /// `on_len_gt` — у источника-массива больше `n` элементов.
+  ///
+  /// Источники перебираются с `continue`, не `return`: цепочка `source` —
+  /// альтернативы, и первый существующий, но короткий (или вовсе не массив)
+  /// не гасит код на следующем имени. Сам проход по записям узла отсюда
+  /// не выходит.
+  void _applyOnLenGt(MapperParam p) {
+    if (p.onLenGt.isEmpty) return;
+    if ((p.onLenGt['action'] as String?) != 'note') return;
+    final code = p.onLenGt['code'] as String?;
+    if (code == null) return;
+    final n = (p.onLenGt['n'] as num?)?.toInt() ?? 1;
+    if (n <= 0) return;
+    final sources = p.sourceByForm.isNotEmpty
+        ? (p.sourceByForm[space.formId] ?? const <String>[])
+        : p.source;
+    for (final src in sources) {
+      final raw = _readSource(src, p);
+      if (raw is! List || raw.length <= n) continue;
+      warnings.add(
+          NodeWarning.byCode(code, path: p.name, value: '${raw.length}'));
+      return;
+    }
   }
 
   // ─────────────────────────── источники ───────────────────────────
@@ -2798,6 +2828,17 @@ final class _Run {
     return '$lo-$hi';
   }
 
+  /// `merge: append`/`prepend` — слияние со значением в пути, не замена.
+  ///
+  /// Сливаются только списки: путь-скаляр списком не становится (это была бы
+  /// смена типа тела), и у него побеждает пришедшее значение, как при
+  /// `overwrite`.
+  static dynamic _mergeInto(dynamic prev, dynamic val, String merge) {
+    if (merge != 'append' && merge != 'prepend') return val;
+    if (prev is! List || val is! List) return val;
+    return merge == 'prepend' ? [...val, ...prev] : [...prev, ...val];
+  }
+
   // ─────────────────────────── тело ───────────────────────────
 
   /// Записать значение по пути тела с учётом `priority`/`merge` (G3).
@@ -2805,8 +2846,8 @@ final class _Run {
     if (value == null) return;
     final prio = p?.priority ?? 0;
     final occupied = _writtenBy[path];
+    final merge = p?.merge ?? 'keep_first';
     if (occupied != null) {
-      final merge = p?.merge ?? 'keep_first';
       // Запись с МЕНЬШИМ priority уже победила — она раньше по норме.
       if (merge == 'keep_first' && occupied <= prio) {
         _trace?.add(
@@ -2820,21 +2861,8 @@ final class _Run {
         );
         return;
       }
-      // `append`/`prepend` — СЛИЯНИЕ списков, а не замена: две записи вправе
-      // наполнять один путь (порты из authority и из query — один список
-      // `server_ports`, и порядок в нём нормативен).
-      if (merge == 'append' || merge == 'prepend') {
-        final was = _read(path);
-        if (was is List) {
-          final add = value is List ? value : [value];
-          final merged = merge == 'append'
-              ? [...was, ...add]
-              : [...add, ...was];
-          _writtenBy[path] = prio;
-          _put(path, merged);
-          return;
-        }
-      }
+      // `append`/`prepend` — слияние со значением в пути, не замена.
+      value = _mergeInto(_read(path), value, merge);
     }
     final was = occupied != null;
     _writtenBy[path] = prio;
@@ -3006,8 +3034,16 @@ final class _Run {
           label = label.trim();
       }
     }
-    for (final e in section.label.valueMap.entries) {
-      label = label.replaceAll(e.key, '${e.value}');
+    // Замены подстрокой не независимы: длинный ключ раньше короткого,
+    // равные длины — по алфавиту, иначе исход зависел бы от порядка
+    // объявления в таблице.
+    final froms = section.label.valueMap.keys.toList()
+      ..sort((a, b) {
+        final byLen = b.length.compareTo(a.length);
+        return byLen != 0 ? byLen : a.compareTo(b);
+      });
+    for (final from in froms) {
+      label = label.replaceAll(from, '${section.label.valueMap[from]}');
     }
     return label;
   }

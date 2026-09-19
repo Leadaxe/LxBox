@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/parser/engine/interpreter.dart';
 import 'package:lxbox/services/parser/engine/section.dart';
 
@@ -252,6 +253,40 @@ void main() {
         'b': {'source': 'query.b', 'maps_to': 'p', 'priority': 2},
       });
       expect(_run(s2, 'x://h.com:443?a=first&b=second')!['p'], 'first');
+    });
+
+    test('append: второй писатель дописывает список, а не затирает', () {
+      final s2 = _withParams({
+        'a': {
+          'source': 'query.a',
+          'maps_to': 'ports',
+          'list': {'sep': ','},
+        },
+        'b': {
+          'source': 'query.b',
+          'maps_to': 'ports',
+          'merge': 'append',
+          'list': {'sep': ','},
+        },
+      });
+      expect(_run(s2, 'x://h.com:443?a=1-2&b=3-4')!['ports'], ['1-2', '3-4']);
+    });
+
+    test('prepend: второй писатель ставит свои элементы впереди', () {
+      final s2 = _withParams({
+        'a': {
+          'source': 'query.a',
+          'maps_to': 'ports',
+          'list': {'sep': ','},
+        },
+        'b': {
+          'source': 'query.b',
+          'maps_to': 'ports',
+          'merge': 'prepend',
+          'list': {'sep': ','},
+        },
+      });
+      expect(_run(s2, 'x://h.com:443?a=1-2&b=3-4')!['ports'], ['3-4', '1-2']);
     });
   });
 
@@ -522,6 +557,17 @@ void main() {
           '🇬🇧x');
     });
 
+    test('value_map — длинный ключ раньше короткого', () {
+      // Короткий ключ объявлен первым: без сортировки по длине `ab`
+      // стало бы `SHORTb`.
+      expect(
+          labelOf({
+            'source': ['fragment'],
+            'value_map': {'a': 'SHORT', 'ab': 'LONG'},
+          }, 'x://h.com:443#ab'),
+          'LONG');
+    });
+
     test('цепочка источников: фрагмента нет — берётся путь', () {
       expect(labelOf({'source': ['fragment', 'path']}, 'x://h.com:443/named'),
           '/named');
@@ -576,6 +622,36 @@ void main() {
       expect(res.body['f'], '1', reason: 'условие по источнику сработало');
       expect(res.warnings.map((w) => '$w').join(), contains('probe'),
           reason: 'спрошенный условием параметр объявленным не становится');
+    });
+  });
+
+  group('on_len_gt — код, не обрыв прохода', () {
+    test('превышение не роняет остальные записи узла', () {
+      final section = MapperSection.fromJson('xray', 'probe', {
+        'body_source': 'xray',
+        'params': {
+          r'$extra': {
+            'source': 'json.arr',
+            'maps_to': null,
+            'on_len_gt': {
+              'n': 1,
+              'action': 'note',
+              'code': 'xray_extra_entries_dropped',
+            },
+          },
+          'kept': {'source': 'json.kept', 'maps_to': 'kept'},
+        },
+      });
+      final res = runSectionOnJson(section, {
+        'arr': ['one', 'two', 'three'],
+        'kept': 'yes',
+      })!;
+      expect(res.body['kept'], 'yes',
+          reason: 'on_len_gt — continue по плану, не return из прохода');
+      expect(
+        res.warnings.whereType<RegistryWarning>().map((w) => w.code),
+        contains('xray_extra_entries_dropped'),
+      );
     });
   });
 }

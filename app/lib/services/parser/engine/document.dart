@@ -163,7 +163,9 @@ final class DocumentRegistry {
     // Отступ документа его видом не является: `vpn://` с пробелом впереди —
     // та же ссылка, и решать это отдельной заплатой у каждого вызывающего
     // (`input.trim().startsWith`) значило бы держать правило в трёх местах.
-    final text = rawText.trim();
+    // BOM снимается здесь же: невидимый U+FEFF сдвигает первый значащий
+    // символ, и `{` / `[Interface]` / алфавит base64 перестают совпадать.
+    final text = _stripBom(rawText).trim();
     final out = <DocumentSource>[];
     Object? json = parsedJson;
     var parsed = parsedJson != null;
@@ -196,9 +198,12 @@ final class DocumentRegistry {
     required Map<String, Unwrapper> unwrappers,
     int depth = 0,
   }) {
-    // Хвост режется всегда, голова — только для ПРЕДИКАТА (см. `matchAll`):
-    // сам текст документа отдаётся разбору с ведущими пробелами, потому что
-    // у INI первая строка бывает значимо выровнена.
+    // BOM — мусор кодировки файла, не признак формата: снимается один раз
+    // на вход, до любого предиката. Хвост режется всегда, голова — только
+    // для ПРЕДИКАТА (см. `matchAll`): сам текст документа отдаётся разбору
+    // с ведущими пробелами, потому что у INI первая строка бывает значимо
+    // выровнена.
+    text = _stripBom(text);
     final trimmed = text.trimRight();
     if (trimmed.trim().isEmpty) return null;
 
@@ -229,20 +234,33 @@ final class DocumentRegistry {
         return DocumentMatch(source: s, text: trimmed, unwrapDepth: depth);
       }
 
+      // Предел считается по СНЯТЫМ оболочкам: `max_unwrap_depth: 2` —
+      // «обёртка внутри обёртки, дальше нет». Вид оставляем объявленным,
+      // но дальше не снимаем — иначе глубина не ограничивала бы ничего.
+      if (depth >= maxUnwrapDepth && maxUnwrapDepth > 0) {
+        return DocumentMatch(source: s, text: trimmed, unwrapDepth: depth);
+      }
+
       // Оболочка. Распаковщик отдал `null` — ветка не сработала, пробуем
       // следующую: документ мог просто выглядеть похоже.
       final unwrapper = unwrappers[name];
       if (unwrapper == null) continue;
       final inner = unwrapper(trimmed)?.trim();
       if (inner == null || inner.isEmpty) continue;
-      if (!formMatchesText(s.requiresAfterUnwrap, inner)) continue;
+      if (!formMatchesText(s.requiresAfterUnwrap, inner)) {
+        // Промежуточный слой той же оболочки: распакованное — снова
+        // алфавит обёртки, `requires_after_unwrap` на нём проваливается,
+        // хотя документа мы ещё не достигли. Отличает этот случай от
+        // «обёртки не было» повторный детект той же ветки.
+        if (s.redetect && formMatchesText(d, inner)) {
+          final again =
+              detect(inner, unwrappers: unwrappers, depth: depth + 1);
+          if (again != null) return again;
+        }
+        continue;
+      }
 
       if (!s.redetect) {
-        return DocumentMatch(source: s, text: inner, unwrapDepth: depth + 1);
-      }
-      // Распакованное судится ЗАНОВО, с потолком глубины: вложенная
-      // оболочка бывает, бесконечная — нет.
-      if (depth + 1 >= maxUnwrapDepth) {
         return DocumentMatch(source: s, text: inner, unwrapDepth: depth + 1);
       }
       final again =
@@ -331,12 +349,18 @@ final class DocumentRegistry {
   }
 
   static Object? _tryJson(String text) {
-    final t = text.trimLeft();
+    final t = _stripBom(text).trimLeft();
     if (!t.startsWith('{') && !t.startsWith('[')) return null;
     try {
-      return jsonDecode(text);
+      return jsonDecode(t);
     } catch (_) {
       return null;
     }
   }
+}
+
+/// U+FEFF в начале текста — маркер порядка байтов файла, не содержимое.
+String _stripBom(String s) {
+  const bom = '\uFEFF';
+  return s.startsWith(bom) ? s.substring(bom.length) : s;
 }

@@ -163,8 +163,8 @@ void main() {
     final once = base64.encode(utf8.encode(inner));
     final twice = base64.encode(utf8.encode(once));
     expect(_kindOf(decode(once)), 'UriLines(1,0)');
-    // Предел max_unwrap_depth=2: вторая оболочка тоже снимается.
-    expect(_kindOf(decode(twice)), 'UriLines(1,0)');
+    expect((decode(once) as UriLines).lines.single, inner);
+    expect((decode(twice) as UriLines).lines.single, inner);
   }, skip: skip);
 
   /// §480 — ОБХОД ЭЛЕМЕНТОВ читает `elements`, а не рукописный `switch`.
