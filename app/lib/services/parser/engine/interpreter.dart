@@ -1196,13 +1196,28 @@ final class _Run {
     // Обязательные записи: их отсутствие — это «узла нет».
     for (final p in _plan.all) {
       if (!p.required) continue;
-      // Пути, которые запись обязана наполнить. Обычно один (`maps_to`), но у
-      // записи со `split_into` целевых путей несколько, и `maps_to` у неё
-      // может не быть вовсе: «адрес обязателен» значит «хоть одно семейство
-      // доехало», а не «оба».
-      final paths = p.splitInto.isNotEmpty
-          ? p.splitInto.keys.toList()
-          : (p.mapsTo == null ? const <String>[] : [p.mapsTo!]);
+      // Пути, которые запись обязана наполнить. Обычно один (`maps_to`), но
+      // целевых путей у записи бывает несколько, и `maps_to` у неё может не
+      // быть вовсе: «обязательна» значит «заполнен ХОТЬ ОДИН из объявленных
+      // путей», одинаково для `maps_to`, `split_into` и `extract.into`.
+      //
+      // Без ветки `extract` проверка молча пропускалась (`paths.isEmpty`), и
+      // `required: true` у записи, которая пути называет через `extract.into`,
+      // не означал НИЧЕГО: `.conf` с секцией `[Peer]` без `Endpoint` собирался
+      // в «узел» с пиром без адреса и порта. Q133-64 лаунчера, у нас тот же.
+      final paths = <String>[
+        if (p.mapsTo != null) p.mapsTo!,
+        ...p.splitInto.keys,
+        ...?p.extract?.into.values.map(
+          (v) => v is Map ? v['path'] as String? ?? '' : '$v',
+        ),
+        // `on_no_match: take_all` — тот же адресат, объявленный для случая,
+        // когда регулярка значение не разложила. Без него голый IPv6 в
+        // `Endpoint` считался бы незаполненным и снимал бы исправный узел.
+        if (p.onNoMatch['action'] == 'take_all' &&
+            p.onNoMatch['into'] is String)
+          p.onNoMatch['into'] as String,
+      ]..removeWhere((s) => s.isEmpty);
       if (paths.isEmpty) continue;
       final any = paths.any((path) {
         final v = _read(path);
@@ -2958,6 +2973,8 @@ final class _Run {
       );
     }
 
+    _reportUnknownIni(code);
+
     // Объектный вход: судятся ключи ВЕРХНЕГО уровня элемента. Их конечное
     // число, они и есть диалект, а перечислять каждый лист значило бы
     // держать вторую копию схемы входа рядом с `body.fields`.
@@ -2993,6 +3010,86 @@ final class _Run {
       }
     }
   }
+
+  /// Ключи ini-ДОКУМЕНТА, которых не объявила ни одна запись (контракт 1.1.32).
+  ///
+  /// Предмет у `.conf` другой, чем у ссылки: там имена query, здесь ключи
+  /// секций. Запись `unknown_key` стояла у `mappers.conf` и раньше, но не
+  /// срабатывала никогда — проверка спрашивала только `space.query`, а у
+  /// документа он пуст. Незнакомый ключ до тела не доходит по построению
+  /// (тело строят только объявленные записи) и потому исчезал МОЛЧА: человек
+  /// не узнавал, что часть его файла не прочитана.
+  ///
+  /// `action` здесь не при чём: класть нечего, код — единственное действие.
+  void _reportUnknownIni(String code) {
+    final ini = space.ini;
+    if (ini == null || ini.isEmpty) return;
+    final keys = ini.keys.toList()..sort();
+    for (final key in keys) {
+      // `$comment.<секция>` — не ключ файла, а источник МЕТКИ, который
+      // построил сам разбор. Судить его нечем и незачем.
+      if (key.startsWith(r'$')) continue;
+      if (_declaredIni.contains(key)) continue;
+      // Игнор-список сверяется и с полным «секция.ключ», и с голым ключом:
+      // не-узловые ключи wg-quick (PostUp, Table) осмысленны независимо от
+      // секции, а перечислять их дважды — лишний повод разойтись.
+      final dot = key.indexOf('.');
+      final short = dot < 0 ? key : key.substring(dot + 1);
+      if (section.ignoredKeys.contains(key) ||
+          section.ignoredKeys.contains(short)) {
+        continue;
+      }
+      warnings.add(RegistryWarning(code: code, path: key, value: ''));
+      _trace?.add(
+        stage: TraceStage.unknown,
+        mapper: _mapperId,
+        entry: key,
+        src: 'ini.$key',
+        act: TraceAct.skip,
+        why: TraceWhy.notDeclared,
+      );
+    }
+  }
+
+  /// То же, что [_declared], но для ini-ДОКУМЕНТА: источники вида
+  /// `ini.<Секция>.<Ключ>`, обе части в нижнем регистре.
+  ///
+  /// Держится отдельным набором, потому что объявленность считается по
+  /// ИСТОЧНИКУ, а не по имени записи: запись `keepalive` читает ключ
+  /// `ini.Peer.PersistentKeepalive`, и по имени записи объявленным не
+  /// выглядел бы ни один ключ файла. Секция в имени значима: `MTU` у
+  /// `[Interface]` и `MTU` у `[Peer]` — разные ключи.
+  late final Set<String> _declaredIni = () {
+    final out = <String>{};
+    void declare(String src) {
+      if (!src.startsWith('ini.')) return;
+      final rest = src.substring('ini.'.length);
+      // `$comment.<Секция>` источником-ключом не является.
+      if (rest.startsWith(r'$')) return;
+      if (rest.split('.').length != 2) return;
+      out.add(rest.toLowerCase());
+    }
+
+    for (final p in section.params.values) {
+      for (final src in p.source) {
+        declare(src);
+      }
+      for (final l in p.sourceByForm.values) {
+        for (final src in l) {
+          declare(src);
+        }
+      }
+    }
+    for (final src in section.label.source) {
+      declare(src);
+    }
+    for (final l in section.label.sourceByForm.values) {
+      for (final src in l) {
+        declare(src);
+      }
+    }
+    return out;
+  }();
 
   /// Все написания, ОБЪЯВЛЕННЫЕ таблицей: имя записи, её `aliases` и имена в
   /// `source` (`query.<имя>`).
