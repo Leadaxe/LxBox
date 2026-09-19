@@ -1818,9 +1818,6 @@
   "Drop existing detours — every node connects through this outbound": {
     "value": "Сбросить существующие detour — каждый узел подключается через этот исходящий канал"
   },
-  "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.": {
-    "value": "ECH не применён: «%s» из ссылки указывает на публичный ECH-пробник, а не на этот сервер — включение сломало бы TLS-рукопожатие."
-  },
   "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
     "value": "Каждый источник подписывает приложение своим ключом, поэтому сборки из разных источников не ставятся друг поверх друга. Чтобы перейти: сделайте резервную копию настроек, удалите L×Box, установите из нового источника и восстановите копию."
   },
@@ -2811,14 +2808,8 @@
   "Names outside the tailnet go to the default DNS servers; off — NXDOMAIN": {
     "value": "Имена вне tailnet идут к DNS-серверам по умолчанию; выкл — NXDOMAIN"
   },
-  "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.": {
-    "value": "Запись extra-headers NaïveProxy «%s» не является корректным заголовком и отброшена. Остальные заголовки сохранены, но этот сервер не увидит."
-  },
   "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
     "value": "NaïveProxy не входит в эту сборку libbox (пересоберите с -tags with_naive_outbound)."
-  },
-  "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.": {
-    "value": "У параметра NaïveProxy «padding=%s» нет соответствия в ядре, поэтому он проигнорирован. Узел остаётся рабочим."
   },
   "Nearby Wi-Fi devices": {
     "value": "Устройства Wi-Fi поблизости"
@@ -4846,9 +4837,6 @@
   },
   "Web page": {
     "value": "Сайт"
-  },
-  "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
-    "value": "Ранние данные WebSocket «?ed=%d» перенесены из пути в отдельное поле, как требует ядро. Узел работает, но путь в конфиге отличается от указанного в ссылке."
   },
   "What goes into this direction": {
     "value": "Что входит в Направление"

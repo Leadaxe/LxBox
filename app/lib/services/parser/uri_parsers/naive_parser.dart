@@ -30,7 +30,7 @@ NaiveSpec? parseNaive(String uri, {bool isQuic = false}) =>
 /// Невалидные пары (нет `:`, имя нарушает charset, пустое имя) — drop с warn.
 ///
 /// D-105 (`naive_extra_headers_invalid`): при первой отброшенной паре в
-/// [warnings] добавляется [NaiveExtraHeadersInvalidWarning] — один раз на
+/// [warnings] добавляется предупреждение реестра этого кода — один раз на
 /// узел, остальные отбросы только в лог. `warnings == null` — молчаливый
 /// режим: так вызывает http/https-парсер, чей собственный `headers` под код
 /// контракта не попадает.
@@ -44,7 +44,8 @@ Map<String, String> parseNaiveExtraHeaders(
   void dropped(String entry) {
     if (warned || warnings == null) return;
     warned = true;
-    warnings.add(NaiveExtraHeadersInvalidWarning(entry));
+    warnings.add(NodeWarning.byCode('naive_extra_headers_invalid',
+        path: 'extra-headers', value: entry));
   }
 
   for (final line in raw.split('\r\n')) {

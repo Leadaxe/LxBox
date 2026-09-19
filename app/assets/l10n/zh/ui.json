@@ -1631,9 +1631,6 @@
   "Drop existing detours — every node connects through this outbound": {
     "value": "清除已有 detour —— 所有节点都经此出站连接"
   },
-  "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.": {
-    "value": "未应用 ECH：链接中的「%s」指向公共 ECH 探测服务，而非本服务器——启用会导致 TLS 握手失败。"
-  },
   "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
     "value": "每个来源用自己的密钥签名，所以不同来源的安装包无法互相覆盖安装。切换方法：先备份设置，卸载 L×Box，从新来源安装后再恢复备份。"
   },
@@ -2619,14 +2616,8 @@
   "Names outside the tailnet go to the default DNS servers; off — NXDOMAIN": {
     "value": "tailnet 以外的域名交给默认 DNS 服务器；关闭则返回 NXDOMAIN"
   },
-  "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.": {
-    "value": "NaïveProxy 的 extra-headers 条目「%s」不是合法的头部，已丢弃。其余头部保留，但服务器不会看到这一条。"
-  },
   "NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).": {
     "value": "此 libbox 构建未包含 NaïveProxy（需用 -tags with_naive_outbound 重新编译）。"
-  },
-  "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.": {
-    "value": "NaïveProxy 参数「padding=%s」在内核中无对应项，已忽略。节点仍可正常使用。"
   },
   "Nearby Wi-Fi devices": {
     "value": "附近的 Wi-Fi 设备"
@@ -4648,9 +4639,6 @@
   },
   "Web page": {
     "value": "网站"
-  },
-  "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.": {
-    "value": "按内核要求，WebSocket early data「?ed=%d」已从路径移到独立字段。节点可正常工作，但配置中的路径与链接里的字面值不同。"
   },
   "What goes into this direction": {
     "value": "该方向包含什么"

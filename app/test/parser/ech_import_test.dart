@@ -23,6 +23,13 @@ void main() {
   Map<String, dynamic> tlsOf(NodeSpec n) =>
       n.emitRaw(const TemplateVars()).map['tls'] as Map<String, dynamic>;
 
+  /// Код предупреждения, а не класс: текст `ech_ignored` живёт в реестре
+  /// (`warnings.json`), и на узле он обычным `RegistryWarning`.
+  List<RegistryWarning> echWarnings(NodeSpec n) => n.warnings
+      .whereType<RegistryWarning>()
+      .where((w) => w.code == 'ech_ignored')
+      .toList();
+
   group('ech не попадает в конфиг', () {
     test('name+resolver → ech-блока нет, warning есть', () {
       final n = parseUri(
@@ -32,10 +39,11 @@ void main() {
         '&allowInsecure=0&sni=space.byu.id.yxls.eu.cc#node',
       )!;
       expect(tlsOf(n).containsKey('ech'), isFalse);
-      expect(
-        n.warnings.whereType<EchIgnoredWarning>().single,
-        const EchIgnoredWarning('encryptedsni.com'),
-      );
+      final w = echWarnings(n).single;
+      expect(w.path, 'ech');
+      expect(w.value, 'encryptedsni.com');
+      expect(w.params['query_name'], 'ech');
+      expect(w.severity, WarningSeverity.info);
       // Остальное разобрано как обычно — узел рабочий.
       expect(tlsOf(n)['server_name'], 'space.byu.id.yxls.eu.cc');
       expect((n.emitRaw(const TemplateVars()).map['transport'] as Map)['path'],
@@ -48,8 +56,7 @@ void main() {
         '&ech=ip.gs&sni=example.com#node',
       )!;
       expect(tlsOf(n).containsKey('ech'), isFalse);
-      expect(n.warnings.whereType<EchIgnoredWarning>().single,
-          const EchIgnoredWarning('ip.gs'));
+      expect(echWarnings(n).single.value, 'ip.gs');
     });
 
     test('пустое / none → ни ech-блока, ни warning', () {
@@ -59,8 +66,7 @@ void main() {
           '&ech=${Uri.encodeQueryComponent(v)}&sni=example.com#node',
         )!;
         expect(tlsOf(n).containsKey('ech'), isFalse, reason: 'ech=$v');
-        expect(n.warnings.whereType<EchIgnoredWarning>(), isEmpty,
-            reason: 'ech=$v');
+        expect(echWarnings(n), isEmpty, reason: 'ech=$v');
       }
     });
 
@@ -69,7 +75,7 @@ void main() {
         'trojan://pw@example.com:443?type=ws&path=%2Fx'
         '&security=tls&sni=example.com#node',
       )!;
-      expect(n.warnings.whereType<EchIgnoredWarning>(), isEmpty);
+      expect(echWarnings(n), isEmpty);
     });
 
     test('echfq не читается совсем (legacy pq-schemes роняет конфиг ядра)', () {
@@ -79,7 +85,7 @@ void main() {
         '&fp=chrome&echfq=none#node',
       )!;
       expect(tlsOf(n).containsKey('ech'), isFalse);
-      expect(n.warnings.whereType<EchIgnoredWarning>(), isEmpty);
+      expect(echWarnings(n), isEmpty);
     });
 
     test('vless: то же поведение', () {
@@ -88,7 +94,7 @@ void main() {
         '?type=ws&path=%2Fx&security=tls&ech=ip.gs&sni=example.com#node',
       )!;
       expect(tlsOf(n).containsKey('ech'), isFalse);
-      expect(n.warnings.whereType<EchIgnoredWarning>(), hasLength(1));
+      expect(echWarnings(n), hasLength(1));
     });
 
     test('REALITY-ветка: ech игнорируется, reality цел', () {
@@ -100,7 +106,7 @@ void main() {
       final tls = tlsOf(n);
       expect(tls.containsKey('ech'), isFalse);
       expect((tls['reality'] as Map)['public_key'], pbk);
-      expect(n.warnings.whereType<EchIgnoredWarning>(), hasLength(1));
+      expect(echWarnings(n), hasLength(1));
     });
   });
 
@@ -143,7 +149,7 @@ void main() {
       })!;
       expect(tlsOf(fromJson)['ech'],
           {'enabled': true, 'config': ['pem-block']});
-      expect(fromJson.warnings.whereType<EchIgnoredWarning>(), isEmpty,
+      expect(echWarnings(fromJson), isEmpty,
           reason: 'тело узла — не URI-параметр, предупреждать не о чем');
 
       final fromUri = parseUri(
@@ -152,7 +158,7 @@ void main() {
         '&ech=ip.gs%2Budp%3A%2F%2F8.8.8.8#node',
       )!;
       expect(tlsOf(fromUri).containsKey('ech'), isFalse);
-      expect(fromUri.warnings.whereType<EchIgnoredWarning>(), hasLength(1));
+      expect(echWarnings(fromUri), hasLength(1));
     });
   });
 

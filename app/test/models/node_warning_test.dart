@@ -103,7 +103,6 @@ void main() {
         UnknownFingerprintWarning() => 'fingerprint',
         // SPEC 083 — REALITY принимает только chrome-семейство
         RealityFingerprintWarning() => 'reality_fingerprint',
-        EchIgnoredWarning() => 'ech_ignored',
         UnknownObfsWarning() => 'obfs_unknown',
         MissingObfsPasswordWarning() => 'obfs_no_password',
         // §368 — импорт sing-box JSON
@@ -116,10 +115,7 @@ void main() {
         SelectorAsAutoWarning() => 'selector_as_auto',
         GroupMemberMissingWarning() => 'group_member_missing',
         // SPEC 103 — деградации, помеченные кодом на обеих сторонах контракта
-        WsEarlyDataConvertedWarning() => 'ws_early_data_converted',
         RealityShortIdInvalidWarning() => 'reality_short_id_invalid',
-        NaivePaddingIgnoredWarning() => 'naive_padding_ignored',
-        NaiveExtraHeadersInvalidWarning() => 'naive_extra_headers_invalid',
         // §435 — только UI, кода контракта нет.
         SectionsRecordDroppedWarning() => 'sections_record_dropped',
         SectionsConflictWarning() => 'sections_conflict',
@@ -135,6 +131,50 @@ void main() {
         RegistryWarning() => 'registry',
       };
       expect(label, 'transport');
+    });
+  });
+
+  // Коды, у которых рукописный класс снят: `byCode` обязан не только вернуть
+  // `RegistryWarning`, но и переложить путь/значение под ИМЯ, которое код
+  // объявил в `params` реестра. Без этого текст доехал бы до человека с
+  // буквальным `{query_name}` — реестр тут не поможет, подстановку ставит
+  // приложение.
+  group('byCode — именованные параметры снятых классов', () {
+    test('ech_ignored: query_name = имя параметра ссылки', () {
+      final w = NodeWarning.byCode('ech_ignored',
+          path: 'ech', value: 'encryptedsni.com') as RegistryWarning;
+      expect(w.code, 'ech_ignored');
+      expect(w.path, 'ech');
+      expect(w.value, 'encryptedsni.com');
+      expect(w.params['query_name'], 'ech');
+    });
+
+    test('ws_early_data_converted: max_early_data = что получилось', () {
+      final w = NodeWarning.byCode('ws_early_data_converted',
+          path: 'path', value: '2560') as RegistryWarning;
+      expect(w.params['max_early_data'], '2560');
+    });
+
+    test('naive_extra_headers_invalid: entry = отброшенная пара', () {
+      final w = NodeWarning.byCode('naive_extra_headers_invalid',
+          path: 'extra-headers', value: 'no-colon') as RegistryWarning;
+      expect(w.params['entry'], 'no-colon');
+    });
+
+    test('naive_padding_ignored: своего имени не нужно, хватает value', () {
+      final w = NodeWarning.byCode('naive_padding_ignored',
+          path: 'padding', value: '1') as RegistryWarning;
+      expect(w.value, '1');
+      expect(w.params, isEmpty);
+    });
+
+    // §279 — равенство по данным: два одинаковых кода на одном поле это одно
+    // предупреждение, и дедуп разбора обязан их схлопнуть.
+    test('одинаковые код+путь+значение равны', () {
+      expect(
+        NodeWarning.byCode('ech_ignored', path: 'ech', value: 'ip.gs'),
+        NodeWarning.byCode('ech_ignored', path: 'ech', value: 'ip.gs'),
+      );
     });
   });
 }

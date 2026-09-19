@@ -71,7 +71,8 @@ TransportSpec? parseTransport(
       // Ровно path-tail форма: плоские `ed=`/`eh=` конверсией не считаются
       // (Go: noteWSEarlyDataConverted читает только хвост пути).
       if (edFromPath != null) {
-        warnings?.add(WsEarlyDataConvertedWarning(edFromPath));
+        warnings?.add(NodeWarning.byCode('ws_early_data_converted',
+            path: 'path', value: '$edFromPath'));
       }
       return WsTransport(
         path: path,
@@ -478,7 +479,8 @@ String _normScRange(String v) {
 void warnEchIgnored(Map<String, String> q, List<NodeWarning> warnings) {
   final raw = (q['ech'] ?? '').trim();
   if (raw.isEmpty || raw.toLowerCase() == 'none') return;
-  warnings.add(EchIgnoredWarning(raw.split('+').first.trim()));
+  warnings.add(NodeWarning.byCode('ech_ignored',
+      path: 'ech', value: raw.split('+').first.trim()));
 }
 
 /// §097 — query-bool: `true`/`1` → true (для `no_grpc_header`).

@@ -49,6 +49,10 @@ List<String> _corpusUris() {
 List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
 
+/// Коды узла: текст предупреждения живёт в реестре, и проверять тут нужно
+/// код, а не класс.
+List<String> _codes(NodeSpec n) => [for (final w in _registry(n)) w.code];
+
 void main() {
   final synced = Directory('$_contractRoot/registry').existsSync();
   final skip = synced ? null : 'контракт не синхронизирован';
@@ -193,7 +197,7 @@ void main() {
           '?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok#n')!;
       expect(spec.emit(TemplateVars.empty).map['extra_headers'],
           {'X-Good': 'ok'});
-      expect(spec.warnings.whereType<NaiveExtraHeadersInvalidWarning>(),
+      expect(_codes(spec).where((c) => c == 'naive_extra_headers_invalid'),
           hasLength(1));
     }, skip: skip);
 
@@ -202,7 +206,7 @@ void main() {
       // ставит МАППЕР — санитайзеру сказать о нём нечего.
       final spec =
           parseUri('naive+https://u:p@h.example?padding=true#n')!;
-      expect(spec.warnings.whereType<NaivePaddingIgnoredWarning>(), isNotEmpty);
+      expect(_codes(spec), contains('naive_padding_ignored'));
       expect(spec.emit(TemplateVars.empty).map.containsKey('padding'), isFalse);
     }, skip: skip);
 

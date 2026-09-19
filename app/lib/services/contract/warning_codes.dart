@@ -30,7 +30,6 @@ const kWarningCodes = <Type, String>{
   XhttpParamResetWarning: 'xhttp_param_reset',
   // §416 — header-placement без режима: дописан mode: packet-up.
   XhttpModeForcedPacketUpWarning: 'xhttp_mode_forced_packet_up',
-  EchIgnoredWarning: 'ech_ignored',
   UnknownObfsWarning: 'obfs_unknown',
   MissingObfsPasswordWarning: 'obfs_password_missing',
   DetourCycleBrokenWarning: 'detour_cycle_broken',
@@ -39,11 +38,7 @@ const kWarningCodes = <Type, String>{
   DetourChainTooDeepWarning: 'detour_chain_too_deep',
   SelectorAsAutoWarning: 'selector_as_auto',
   GroupMemberMissingWarning: 'group_member_missing',
-  WsEarlyDataConvertedWarning: 'ws_early_data_converted',
   RealityShortIdInvalidWarning: 'reality_short_id_invalid',
-  NaivePaddingIgnoredWarning: 'naive_padding_ignored',
-  // D-105 — отброшенная пара naive extra-headers.
-  NaiveExtraHeadersInvalidWarning: 'naive_extra_headers_invalid',
   AwgHeaderInvalidWarning: 'awg_header_invalid',
   // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла
   // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.

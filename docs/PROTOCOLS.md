@@ -1799,7 +1799,7 @@ Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`, `
 
 ### ECH from subscriptions is ignored (§320)
 
-Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. **L×Box does not apply it** — the parameter is dropped with an `EchIgnoredWarning` (info severity: the node stays usable, only SNI masking is lost).
+Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. **L×Box does not apply it** — the parameter is dropped with the code `ech_ignored` (info severity, text from the contract registry: the node stays usable, only SNI masking is lost).
 
 The form carries no ECH key. It says "fetch the ECHConfigList from the DNS HTTPS record of `<query-name>`", and the key so obtained belongs to that name. Subscriptions put **public ECH probes** there. Device-verified: DNS returns the *same* config list for both `ip.gs` and `encryptedsni.com`, decoding to `public_name = cloudflare-ech.com`, while the node's SNI is `www.ignitelimit.com` / `space.byu.id.yxls.eu.cc`. The key does not belong to the node's server, so the encrypted ClientHello is undecryptable and the handshake fails.
 

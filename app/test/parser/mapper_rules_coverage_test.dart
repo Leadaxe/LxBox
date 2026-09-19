@@ -167,6 +167,11 @@ List<String> _mapperRuleIds(String scheme) {
   return out..sort();
 }
 
+/// Коды узла: текст предупреждения живёт в реестре, и проверять тут нужно
+/// код, а не класс.
+List<String> _codes(NodeSpec n) =>
+    [for (final w in n.warnings.whereType<RegistryWarning>()) w.code];
+
 void main() {
   final synced = Directory('$_contractRoot/registry').existsSync();
   final skip = synced ? null : 'контракт не синхронизирован';
@@ -240,7 +245,7 @@ void main() {
           'trojan://p@h.example:443?security=tls&ech=ip.gs+1.1.1.1#n')!;
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('ech'), isFalse);
-      expect(spec.warnings.whereType<EchIgnoredWarning>(), isNotEmpty);
+      expect(_codes(spec), contains('ech_ignored'));
     }, skip: skip);
 
     test('?ed=N хвостом пути → два поля тела', () {
@@ -454,7 +459,7 @@ void main() {
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls['alpn'], ['h2', 'http/1.1']);
       expect(tls.containsKey('ech'), isFalse);
-      expect(spec.warnings.whereType<EchIgnoredWarning>(), isNotEmpty);
+      expect(_codes(spec), contains('ech_ignored'));
     }, skip: skip);
   });
 
@@ -732,7 +737,7 @@ void main() {
       }))!;
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('ech'), isFalse);
-      expect(spec.warnings.whereType<EchIgnoredWarning>(), isNotEmpty);
+      expect(_codes(spec), contains('ech_ignored'));
     }, skip: skip);
   });
 }

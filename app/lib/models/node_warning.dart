@@ -27,24 +27,46 @@ sealed class NodeWarning {
   /// каждый такой подкласс — это текст, живущий в коде вместо реестра, то
   /// есть долг. Новый код заводить сюда не нужно — он получит
   /// [RegistryWarning] и текст из реестра.
+  ///
+  /// Вторая половина `switch` — не исключения, а перекладывание: код
+  /// получает [RegistryWarning], но с ИМЕНОВАННЫМ параметром, которого
+  /// движку взять неоткуда (см. комментарии у веток).
   static NodeWarning byCode(
     String code, {
     required String path,
     required String value,
   }) =>
       switch (code) {
-        'ech_ignored' => EchIgnoredWarning(value),
-        'ws_early_data_converted' =>
-          WsEarlyDataConvertedWarning(int.tryParse(value) ?? 0),
-        // §480 W4 — оба кода ставил рукописный маппер naive, и ставил их
-        // ТИПИЗИРОВАННЫМИ. Текст у реестра для них есть, и по нему
-        // `RegistryWarning` отрендерился бы верно, но равенство предупреждений
-        // идёт по runtimeType + данным (см. `props` ниже): подменив класс,
-        // переезд на движок сменил бы тип того же самого предупреждения на
-        // том же самом узле. Долг тот же, что у `ech_ignored`, и снимается он
-        // вместе с ним — одной задачей на все три.
-        'naive_padding_ignored' => NaivePaddingIgnoredWarning(value),
-        'naive_extra_headers_invalid' => NaiveExtraHeadersInvalidWarning(value),
+        // Тексты реестра ждут подстановку не под общим `{value}`, а под
+        // ИМЕНЕМ, которое код объявил в `params`. Движок же знает про
+        // предупреждение ровно две вещи — путь записи и значение, — потому
+        // что больше ему знать и неоткуда: `on_present`/`on_invalid` несут
+        // только код. Перекладывание здесь и делает из двух общих полей
+        // именованный параметр реестра; таблица короткая ПО ПОСТРОЕНИЮ —
+        // в неё попадает только код, чей текст зовёт своё имя.
+        'ech_ignored' => RegistryWarning(
+            code: code,
+            path: path,
+            value: value,
+            // `query_name` — ИМЯ ПАРАМЕТРА ссылки (`ech`), а не его
+            // значение: так решил лаунчер (контракт 1.1.15, ответ на сверку
+            // §24.26 п.4), и запись `tls.blocks.uri.ech` объявляет ровно это.
+            params: {'query_name': path},
+          ),
+        'ws_early_data_converted' => RegistryWarning(
+            code: code,
+            path: path,
+            value: value,
+            // Значение кода — то, ЧТО получилось из хвоста `?ed=N`
+            // (`_convertedValue` движка), оно же `max_early_data` тела.
+            params: {'max_early_data': value},
+          ),
+        'naive_extra_headers_invalid' => RegistryWarning(
+            code: code,
+            path: path,
+            value: value,
+            params: {'entry': value},
+          ),
         // §480 W4 — у этих двух кодов текст НЕ выразим шаблоном реестра: он
         // называет и поле, и написанное значение, и объясняет последствие
         // («ядро откатится на обычный заголовок WireGuard, и рукопожатие может
@@ -52,11 +74,13 @@ sealed class NodeWarning {
         // `{field}`, поэтому запись реестра даёт «field {field} removed» —
         // человеку это не говорит ничего.
         //
-        // Список тот же, что и у `ech_ignored`, и это тот же долг: текст живёт
-        // в коде вместо `warnings.json`. Снимается он не здесь, а когда у
-        // реестра появится подстановка значения (запрос к лаунчеру).
+        // Ждёт текстов реестра с `{path}`/`{value}`: пока их нет, текст живёт
+        // в коде, и это тот же долг, что был у `ech_ignored`. Снимается он не
+        // здесь, а у лаунчера.
         'awg_header_invalid' => AwgHeaderInvalidWarning(path, value),
         'awg3_field_invalid' => Awg3FieldInvalidWarning(path, value),
+        // `naive_padding_ignored` сюда не попадает: его текст зовёт `{value}`,
+        // а тот подставляется всегда (`text_params_implicit`).
         _ => RegistryWarning(code: code, path: path, value: value),
       };
 
@@ -317,29 +341,8 @@ final class XhttpModeForcedPacketUpWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
-/// §320 — `ech` из подписки проигнорирован. Xray-форма `ech=<name>+<resolver>`
-/// не несёт ключа, а лишь имя для DNS-запроса; подписки кладут туда публичные
-/// ECH-пробники (`ip.gs`, `encryptedsni.com`), чьи ключи не принадлежат серверу
-/// узла — включённый ECH ломает рукопожатие. Проверить пригодность до
-/// подключения нельзя, fallback в ядре отсутствует, поэтому параметр не
-/// применяется. Info: узел от этого рабочий, теряется только маскировка SNI.
-final class EchIgnoredWarning extends NodeWarning {
-  /// Имя из левой части `ech` (до `+`), как его написал провайдер.
-  final String queryName;
-
-  const EchIgnoredWarning(this.queryName);
-
-  @override
-  List<Object?> get props => [queryName];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.",
-      queryName);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `ech_ignored` — текст в реестре (`warnings.json`), класса нет: параметр
+// `ech` Xray-формы несёт ключ чужого клиента, снимается всегда (D-122).
 
 /// §358 — тип hysteria2-обфускации вне словаря ядра (`salamander`, `gecko`)
 /// отброшен. Оставить его нельзя: ядро отказывается сериализовать неизвестный
@@ -556,32 +559,10 @@ final class GroupMemberMissingWarning extends NodeWarning {
 // корпусом contract/corpus/uri/**.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// `ws_early_data_converted` (info) — Xray-хвост `?ed=N` в WebSocket-пути
-/// разложен на sing-box-поля `max_early_data` + `early_data_header_name`.
-/// Путь в конфиг попадает НЕ буквально: без конверсии ядро отдало бы хвост
-/// серверу как часть пути и тот ответил бы 404 (issue #96), причём
-/// `sing-box check` при этом проходит. Узел рабочий — отсюда info.
-///
-/// Ставится ровно на path-tail форму (`path=/x?ed=N`), НЕ на плоские
-/// `ed=`/`eh=` в query: те Go вообще не читает как early data-конверсию.
-/// Go-эталон: `noteWSEarlyDataConverted` (node_parser_core.go).
-final class WsEarlyDataConvertedWarning extends NodeWarning {
-  /// Значение `ed` из хвоста пути — оно уехало в `max_early_data`.
-  final int maxEarlyData;
-
-  const WsEarlyDataConvertedWarning(this.maxEarlyData);
-
-  @override
-  List<Object?> get props => [maxEarlyData];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.",
-      maxEarlyData);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `ws_early_data_converted` — текст в реестре: хвост `?ed=N` разложен на
+// `max_early_data` + `early_data_header_name`, путь в конфиг уехал не
+// буквально. Ставится ровно на path-tail форму, не на плоские `ed=`/`eh=`
+// (`transports.json` → `blocks.xray.ws.path`, `extract.into.ed.code`).
 
 /// `reality_short_id_invalid` (info) — REALITY `sid` содержит не-hex символы,
 /// нечётной длины или длиннее 16 hex-цифр. Ядро декодирует short_id как hex
@@ -610,33 +591,12 @@ final class RealityShortIdInvalidWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
-/// `naive_padding_ignored` (info) — URI-параметр `padding` у naive не имеет
-/// sing-box-эквивалента; игнорируется, узел живёт.
-final class NaivePaddingIgnoredWarning extends NodeWarning {
-  /// Значение параметра, как оно пришло в ссылке.
-  final String value;
+// `naive_padding_ignored` и `naive_extra_headers_invalid` — текст в реестре
+// (`protocols/naive.json` → `mappers.uri.params.padding` / `extra-headers`).
+// `padding` у naive sing-box-эквивалента не имеет; битая пара
+// `extra-headers` пропускается, остальные живут, код ставится ОДИН раз на
+// узел. Собственный `headers` у http/https-прокси под код не попадает.
 
-  const NaivePaddingIgnoredWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
-/// `naive_extra_headers_invalid` (info, D-105) — пара из naive `extra-headers`
-/// отброшена при разборе: нет `:`, имя вне tchar (RFC 7230) или CR/LF/NUL в
-/// значении. Прочие пары той же ссылки целы, узел живёт, но заголовок, которым
-/// часто открывают доступ на сервере, до него не доедет — раньше это было
-/// только в логе. Вешается на узел ОДИН раз при первой отброшенной паре.
-/// Собственный `headers` у http/https-прокси под код не попадает.
-/// Go-эталон: node_parser_naive.go parseNaiveExtraHeaders.
 /// §435 — запись секции узла отброшена при разборе документа
 /// (`{ endpoints: [тело], sections: {…} }`): чужой `kind` или битая форма.
 /// Остальные записи живут (NODE_SECTIONS.md §1). Кода контракта нет — UI.
@@ -669,24 +629,6 @@ final class SectionsConflictWarning extends NodeWarning {
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
-}
-
-final class NaiveExtraHeadersInvalidWarning extends NodeWarning {
-  /// Отброшенная пара, как она пришла в ссылке (после URL-decode, trim).
-  final String entry;
-
-  const NaiveExtraHeadersInvalidWarning(this.entry);
-
-  @override
-  List<Object?> get props => [entry];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.",
-      entry);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
 }
 
 // §472 шаг 9 — `TuicCongestionInvalidWarning` снят: `congestion_control` вне

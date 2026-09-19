@@ -6,6 +6,13 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+/// Отброшенные пары `extra-headers` на узле: текст кода живёт в реестре
+/// (`warnings.json`), предупреждение — обычный [RegistryWarning].
+List<RegistryWarning> _extraHeaderWarnings(NodeSpec n) => n.warnings
+    .whereType<RegistryWarning>()
+    .where((w) => w.code == 'naive_extra_headers_invalid')
+    .toList();
+
 void main() {
   // §480 W4 — схема переехала на ДВИЖОК СЕКЦИЙ, и рукописного запасного пути
   // у неё больше нет: без реестра (общие блоки `tls#uri`, `dialer#uri`) и без
@@ -102,8 +109,9 @@ void main() {
       );
       expect(spec!.extraHeaders, {'X-Good': 'ok'});
       // D-105 — отброшенная пара видна на узле кодом naive_extra_headers_invalid.
-      expect(spec.warnings.whereType<NaiveExtraHeadersInvalidWarning>().single,
-          const NaiveExtraHeadersInvalidWarning('X User:bad'));
+      final w = _extraHeaderWarnings(spec).single;
+      expect(w.value, 'X User:bad');
+      expect(w.params['entry'], 'X User:bad');
     });
 
     test('padding query is silently ignored (no field set)', () {
@@ -168,8 +176,7 @@ void main() {
       final spec = parseNaive(
         'naive+https://u:p@host?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz',
       );
-      expect(spec!.warnings.whereType<NaiveExtraHeadersInvalidWarning>(),
-          isEmpty);
+      expect(_extraHeaderWarnings(spec!), isEmpty);
     });
 
     test('две отброшенные пары → ОДИН warning, с первой парой', () {
@@ -178,8 +185,7 @@ void main() {
         'naive+https://u:p@host?extra-headers=no-colon%0D%0AX%20User%3Abad%0D%0AX-Good%3Aok',
       );
       expect(spec!.extraHeaders, {'X-Good': 'ok'});
-      expect(spec.warnings.whereType<NaiveExtraHeadersInvalidWarning>().single,
-          const NaiveExtraHeadersInvalidWarning('no-colon'));
+      expect(_extraHeaderWarnings(spec).single.value, 'no-colon');
     });
 
     test('helper без аккумулятора — молча (http/https headers)', () {

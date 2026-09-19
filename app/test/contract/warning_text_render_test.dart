@@ -116,6 +116,30 @@ void main() {
       expect(t.params, containsAll(<String>['path', 'value']));
     }, skip: skip);
 
+    // Четыре кода, у которых рукописный класс снят и текст взят из реестра.
+    // Проверяется то, ради чего снимали: severity не съехал (все четыре были
+    // `info` классом и обязаны остаться `info` реестром) и объявленный
+    // параметр называется так, как его заполняет `NodeWarning.byCode` —
+    // разойдись имена, человек прочёл бы `{query_name}` буквально.
+    test('снятые классы: severity info и объявленный параметр на месте', () {
+      const expected = <String, String?>{
+        'ech_ignored': 'query_name',
+        'ws_early_data_converted': 'max_early_data',
+        'naive_extra_headers_invalid': 'entry',
+        // `value` подставляется всегда (`text_params_implicit`), своего
+        // имени коду не нужно.
+        'naive_padding_ignored': null,
+      };
+      for (final e in expected.entries) {
+        final t = ContractRegistry.I.textFor(e.key);
+        expect(t, isNotNull, reason: 'кода ${e.key} нет в реестре');
+        expect(t!.severity, 'info', reason: e.key);
+        if (e.value != null) {
+          expect(t.params, contains(e.value), reason: e.key);
+        }
+      }
+    }, skip: skip);
+
     test('vision_with_transport объявляет with, severity info', () {
       final t = ContractRegistry.I.textFor('vision_with_transport');
       expect(t, isNotNull);
