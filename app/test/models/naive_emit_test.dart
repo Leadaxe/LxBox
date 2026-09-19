@@ -1,12 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/node_spec_emit.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
+import '../parser/engine_test_setup.dart';
+
 void main() {
+  // §480 W7 — `toUri()` этой схемы собирает ДВИЖОК по секции реестра, как и
+  // её разбор. Без загруженных секций ссылки нет вовсе (критерий 7 спеки:
+  // рукописного запасного пути у переехавшей схемы не осталось).
+  setUpAll(loadEngineSections);
+
   group('NaïveProxy emit (spec 037 §4)', () {
     NaiveSpec mk({
       String tag = 'naive-test',
@@ -160,6 +166,11 @@ void main() {
 
     test('dropping invalid header name on encode', () {
       // На входе невозможный header — encoder тихо дропает.
+      //
+      // §480 W7: правило больше не живёт отдельной функцией в коде эмита —
+      // годность пары судит ТА ЖЕ регулярка `extract.re`, какой её читает
+      // разбор. Напиши эмиттер такую пару, разбор пропустил бы её
+      // (`on_item_invalid`), и круг потерял бы её молча.
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
         server: 'h', port: 443, rawSource: '',
@@ -167,7 +178,9 @@ void main() {
         tls: const TlsSpec(enabled: true, serverName: 'h'),
         extraHeaders: const {'X Bad': 'v', 'X-Good': 'ok'},
       );
-      expect(serializeNaiveExtraHeaders(s.extraHeaders), 'X-Good: ok');
+      final uri = s.toUri();
+      expect(uri.contains('X-Good%3A%20ok'), true, reason: uri);
+      expect(uri.contains('X%20Bad'), false, reason: uri);
     });
 
     test('isValidNaiveHeaderName charset', () {

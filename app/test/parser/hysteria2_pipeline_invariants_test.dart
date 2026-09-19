@@ -113,32 +113,23 @@ void main() {
   });
 
   group('§472 инвариант 3 — parseUri(toUri()) ≈ spec', () {
-    // Исключения — два свойства ОБЩЕЙ hysteria2-эмиссии, не тронутой этим
-    // шагом. Оба проверены на СТАРОМ пути напрямую: в снятом до правки
-    // эталоне круг у этих кейсов расходился ровно так же.
+    // §480 W7 — ИСКЛЮЧЕНИЙ БОЛЬШЕ НЕТ.
     //
-    // 1. **Port hopping** (шесть кейсов): `toUriHysteria2` не пишет обратно
-    //    `server_ports` — ключа `mport=` в нём нет вовсе, и ссылка собирается
-    //    на ОДНОМ порту, том, что стоит в `server_port`.
-    // 2. **Пиннинг сертификата** (один кейс): `pinSHA256=` читается на входе
-    //    (D-078), но в ссылку не возвращается — эмиттер этого ключа не знает.
+    // Их было два, и оба были свойством РУКОПИСНОГО эмита: `toUriHysteria2`
+    // не писал обратно `server_ports` (ключа `mport=` в нём не было вовсе, и
+    // ссылка собиралась на одном порту) и не писал `pinSHA256=`, хотя на
+    // входе читал его. Тело оба значения несло — терялись они именно на
+    // обратной записи ссылки.
     //
-    // Отбор по СВОЙСТВУ тела, а не списком тегов: корпус растёт, и список
-    // пришлось бы дописывать на каждый новый кейс, пряча за ним настоящие
-    // расхождения. Тот же приём, что у vless с явным `path=/`.
-    bool outsideCanonicalUri(NodeSpec s) {
-      final body = s.emit(TemplateVars.empty).map;
-      if (body['server_ports'] != null) return true;
-      final tls = body['tls'];
-      return tls is Map && tls['certificate_public_key_sha256'] != null;
-    }
-
+    // Собирает ссылку теперь ДВИЖОК по той же таблице, что её читает, и
+    // записи `mport`/`pinSHA256` в таблице объявлены — значит обратный ход у
+    // них есть по построению. Корпус проходит круг ЦЕЛИКОМ, отбор по
+    // свойству тела снят.
     test('весь корпус hysteria2 переживает круг', () {
       var checked = 0;
       for (final u in _corpusUris()) {
         final a = parseUri(u);
         if (a == null) continue;
-        if (outsideCanonicalUri(a)) continue;
         final b = parseUri(a.toUri());
         expect(b, isNotNull, reason: 'круг потерял узел: $u');
         expect(
@@ -150,19 +141,20 @@ void main() {
             reason: 'круг изменил identity: $u');
         checked++;
       }
-      // Страж от «исключения съели корпус»: из 23 кейсов круг проходят 16,
-      // семь исключены по свойству выше.
-      expect(checked, greaterThan(14));
+      // Прежде из 23 кейсов круг проходили 16, семь исключались по свойству
+      // тела. Теперь проходят все.
+      expect(checked, greaterThan(20));
     }, skip: skipCorpus);
 
-    test('оба исключения — свойство ЭМИТТЕРА, тело своё несёт', () {
-      // Проверено напрямую, в обход конвейера: значения теряет обратная
-      // запись ссылки, а не маппер. Тела оба свойства несут.
+    test('прежние потери эмита ПОЧИНЕНЫ: mport и pinSHA256 уезжают в ссылку',
+        () {
       final hop = parseUri('hysteria2://pass123@example-1.com:20000-50000/'
           '?sni=example-1.com#r')!;
       expect(hop.emit(TemplateVars.empty).map['server_ports'], ['20000:50000']);
-      expect(hop.toUri(), isNot(contains('mport')));
-      expect(hop.toUri(), contains(':20000?'), reason: 'ссылка на одном порту');
+      expect(hop.toUri(), contains('mport'),
+          reason: 'прежде ключа не было вовсе, и порты терялись на круге');
+      expect(parseUri(hop.toUri())!.emit(TemplateVars.empty).map['server_ports'],
+          ['20000:50000']);
 
       final pin = parseUri('hysteria2://pass123@203.0.113.1:443'
           '?sni=hy.example-1.com&pinSHA256=YWJjZGVmZ2g=#h')!;
@@ -170,7 +162,11 @@ void main() {
           ((pin.emit(TemplateVars.empty).map['tls'] as Map)
               ['certificate_public_key_sha256']),
           ['YWJjZGVmZ2g=']);
-      expect(pin.toUri(), isNot(contains('pinSHA256')));
+      expect(pin.toUri(), contains('pinSHA256'));
+      expect(
+          ((parseUri(pin.toUri())!.emit(TemplateVars.empty).map['tls'] as Map)
+              ['certificate_public_key_sha256']),
+          ['YWJjZGVmZ2g=']);
     }, skip: skip);
   });
 

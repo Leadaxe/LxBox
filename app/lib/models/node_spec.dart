@@ -322,7 +322,7 @@ final class TrojanSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitTrojan(this, vars);
 
   @override
-  String toUri() => e.toUriTrojan(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -363,7 +363,7 @@ final class AnyTlsSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitAnyTls(this, vars);
 
   @override
-  String toUri() => e.toUriAnyTls(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -399,7 +399,7 @@ final class ShadowsocksSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitShadowsocks(this, vars);
 
   @override
-  String toUri() => e.toUriShadowsocks(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -458,7 +458,7 @@ final class Hysteria2Spec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitHysteria2(this, vars);
 
   @override
-  String toUri() => e.toUriHysteria2(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -508,7 +508,7 @@ final class NaiveSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitNaive(this, vars);
 
   @override
-  String toUri() => e.toUriNaive(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -559,7 +559,7 @@ final class TuicSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitTuic(this, vars);
 
   @override
-  String toUri() => e.toUriTuic(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -599,7 +599,7 @@ final class SshSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitSsh(this, vars);
 
   @override
-  String toUri() => e.toUriSsh(this);
+  String toUri() => e.uriViaEngineRequired(this);
 
   /// §466 — `toUriSsh` пишет `private_key` в query только когда ключ непустой;
   /// узел с одним паролем ключа в ссылке не несёт.
@@ -638,7 +638,7 @@ final class SocksSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitSocks(this, vars);
 
   @override
-  String toUri() => e.toUriSocks(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -676,7 +676,7 @@ final class HttpSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitHttp(this, vars);
 
   @override
-  String toUri() => e.toUriHttp(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1231,7 +1231,7 @@ final class MasqueSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitMasque(this, vars);
 
   @override
-  String toUri() => e.toUriMasque(this);
+  String toUri() => e.uriViaEngineRequired(this);
 
   /// §466 — `toUriMasque` кладёт [privateKeyDer] (SEC1 DER нашего ECDSA) в
   /// userinfo ссылки.

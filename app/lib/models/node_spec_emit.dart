@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../services/parser/engine/emitter.dart';
+import '../services/parser/engine/section_loader.dart';
 import '../services/parser/tcp_keep_alive.dart';
 import '../services/parser/transport.dart';
 import '../services/parser/uri_utils.dart';
@@ -7,6 +9,45 @@ import 'node_spec.dart';
 import 'singbox_entry.dart';
 import 'template_vars.dart';
 import 'transport_spec.dart';
+
+// ════════════════════════════════════════════════════════════════════════════
+// §480 W7 — СБОРКА ССЫЛКИ ОТ ТАБЛИЦЫ
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Собрать ссылку узла ДВИЖКОМ, по той же секции, что ведёт его разбор.
+///
+/// `null` — у типа тела нет секции либо секция не объявила обратного хода
+/// (`emit`), и схема остаётся на рукописном `toUri<Схема>` до своей волны.
+///
+/// Вход движка — КАНОНИЧЕСКОЕ ТЕЛО (`emitRaw`), то самое, что отдаёт разбор.
+/// Модели движок не знает: знал бы — знал бы и имена схем.
+///
+/// `TemplateVars.empty` здесь законен и обязателен: подстановка переменных —
+/// дело СБОРКИ КОНФИГА, а ссылка это форма ХРАНЕНИЯ узла, и подставленное
+/// значение переменной, попав в неё, замёрзло бы навсегда (NODE_SECTIONS §6).
+String? uriViaEngine(NodeSpec s) {
+  final section = MapperSections.I.sectionFor('uri', s.protocol);
+  if (section == null || !sectionEmits(section)) return null;
+  final body = s.emitRaw(TemplateVars.empty).map;
+  return emitViaSection(section, body, s.label)?.uri;
+}
+
+/// Ссылка узла ДВИЖКОМ у схемы, которая на него переехала.
+///
+/// Отличается от [uriViaEngine] тем, что `null` здесь — не «идём прежним
+/// путём», а ОШИБКА СБОРКИ: рукописного эмита у переехавшей схемы больше нет,
+/// и молчаливый возврат пустой строки стоил бы владельцу узла — ссылка и есть
+/// форма хранения. Тот же принцип, что у разбора (критерий 7 спеки):
+/// отсутствие реестра — ошибка, а не тихий откат.
+String uriViaEngineRequired(NodeSpec s) {
+  final uri = uriViaEngine(s);
+  if (uri != null) return uri;
+  throw StateError(
+    'нет секции эмита для типа тела «${s.protocol}»: реестр контракта не '
+    'загружен либо секция не объявила emit. Рукописного эмита у этой схемы '
+    'не осталось (§480 W7).',
+  );
+}
 
 /// Реализация `emit()` и `toUri()` для каждого варианта NodeSpec.
 ///
@@ -259,24 +300,6 @@ Outbound emitTrojan(TrojanSpec s, TemplateVars vars) {
   return Outbound(out);
 }
 
-String toUriTrojan(TrojanSpec s) {
-  final q = <String, String>{};
-  if (s.transport != null) q.addAll(transportToQuery(s.transport!));
-  if (s.tls.enabled) {
-    q['security'] = 'tls';
-    if (s.tls.serverName != null) q['sni'] = s.tls.serverName!;
-    if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
-    if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
-    if (s.tls.insecure) q['allowInsecure'] = '1';
-  } else {
-    q['security'] = 'none';
-  }
-  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
-  // пересохранении узла через toUri() (хранение узла — текст).
-  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  return _buildUri('trojan', s.password, s.server, s.port, q, s.label);
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // AnyTLS (§269)
 // ════════════════════════════════════════════════════════════════════════════
@@ -299,44 +322,6 @@ Outbound emitAnyTls(AnyTlsSpec s, TemplateVars vars) {
   return Outbound(out);
 }
 
-String toUriAnyTls(AnyTlsSpec s) {
-  // AnyTLS всегда TLS. idle-поля несём в query для round-trip parity
-  // (URI-стандарта у anytls нет, форма — trojan/vless-подобная).
-  final q = <String, String>{};
-  // REALITY (pbk/sid) — как у vless, иначе round-trip терял бы REALITY-блок,
-  // приходящий из sing-box JSON.
-  if (s.tls.reality != null) {
-    q['security'] = 'reality';
-    q['pbk'] = s.tls.reality!.publicKey;
-    if (s.tls.reality!.shortId.isNotEmpty) {
-      q['sid'] = s.tls.reality!.shortId;
-    }
-    // §457 — как у vless.
-    if (s.tls.reality!.keyShare != null) {
-      q['key_share'] = s.tls.reality!.keyShare!;
-    }
-  } else {
-    q['security'] = 'tls';
-  }
-  if (s.tls.serverName != null) q['sni'] = s.tls.serverName!;
-  if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
-  if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
-  if (s.tls.insecure) q['allowInsecure'] = '1';
-  if (s.idleSessionCheckInterval.isNotEmpty) {
-    q['idle_session_check_interval'] = s.idleSessionCheckInterval;
-  }
-  if (s.idleSessionTimeout.isNotEmpty) {
-    q['idle_session_timeout'] = s.idleSessionTimeout;
-  }
-  if (s.minIdleSession != null) {
-    q['min_idle_session'] = s.minIdleSession.toString();
-  }
-  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
-  // пересохранении узла через toUri() (хранение узла — текст).
-  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  return _buildUri('anytls', s.password, s.server, s.port, q, s.label);
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // Shadowsocks
 // ════════════════════════════════════════════════════════════════════════════
@@ -351,20 +336,6 @@ Outbound emitShadowsocks(ShadowsocksSpec s, TemplateVars vars) {
   }
   _addDialFields(out, s);
   return Outbound(out);
-}
-
-String toUriShadowsocks(ShadowsocksSpec s) {
-  final userinfo = base64
-      .encode(utf8.encode('${s.method}:${s.password}'))
-      .replaceAll('=', '');
-  final host = _wrapIpv6(s.server);
-  final frag = encodeFragment(s.label);
-  // §453 — query у ss-URI появляется ТОЛЬКО когда есть что в неё написать:
-  // SIP002-форма без параметров остаётся прежней байт-в-байт.
-  final qs = buildQuery(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  return 'ss://$userinfo@$host:${s.port}'
-      '${qs.isEmpty ? '' : '?$qs'}'
-      '${frag.isEmpty ? '' : '#$frag'}';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -402,33 +373,6 @@ Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
   return Outbound(out);
 }
 
-String toUriHysteria2(Hysteria2Spec s) {
-  final q = <String, String>{};
-  if (s.obfs.isNotEmpty) q['obfs'] = s.obfs;
-  if (s.obfsPassword.isNotEmpty) q['obfs-password'] = s.obfsPassword;
-  // §358 — у hysteria2 нет де-факто URI-ключей для gecko (ядро читает его
-  // только из JSON); свои — симметрично obfs-password, parseHysteria2 читает
-  // их обратно. Пишем независимо от типа: смена salamander↔gecko в редакторе
-  // не должна терять уже разобранные значения.
-  if (s.obfsMinPacketSize != null) {
-    q['obfs-min-packet-size'] = s.obfsMinPacketSize.toString();
-  }
-  if (s.obfsMaxPacketSize != null) {
-    q['obfs-max-packet-size'] = s.obfsMaxPacketSize.toString();
-  }
-  if (s.tls.serverName != null) q['sni'] = s.tls.serverName!;
-  if (s.tls.insecure) q['insecure'] = '1';
-  if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
-  if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
-  // §084 H3 / SPEC 103: round-trip bandwidth hint'ов. emit пишет up_mbps/
-  // down_mbps в sing-box JSON (то поле ядра), но URI query-ключ у Go БЕЗ
-  // подчёркивания (shareuri_hysteria2.go: q.Set("upmbps", ...)) — parser
-  // читает те же ключи обратно (см. hysteria2_parser.dart).
-  if (s.upMbps != null) q['upmbps'] = s.upMbps.toString();
-  if (s.downMbps != null) q['downmbps'] = s.downMbps.toString();
-  return _buildUri('hysteria2', s.password, s.server, s.port, q, s.label);
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // NaïveProxy
 // ════════════════════════════════════════════════════════════════════════════
@@ -458,55 +402,13 @@ Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
   return Outbound(out);
 }
 
-String toUriNaive(NaiveSpec s) {
-  // userinfo: оба пусто → нет; только password → password@; только username →
-  // user:@; оба → user:pass@.
-  //
-  // §465 / контракт §24.2 п. 7.3 — двоеточие в форме «только username»
-  // обязательно: одиночный userinfo парсер теперь читает как password, и без
-  // `:` узел, отданный нами же, вернулся бы с именем в слоте пароля
-  // (round-trip `parseUri(spec.toUri()) ≈ spec` ломался бы). Форма «только
-  // password» пишется без двоеточия — конвенция DuckSoft/hysteria2.
-  final hasUser = s.username.isNotEmpty;
-  final hasPass = s.password.isNotEmpty;
-  final ui = !hasUser && !hasPass
-      ? ''
-      : (!hasUser
-          ? '${encodeParam(s.password)}@'
-          : (!hasPass
-              ? '${encodeParam(s.username)}:@'
-              : '${encodeParam(s.username)}:${encodeParam(s.password)}@'));
-
-  final q = <String, String>{};
-  if (s.extraHeaders.isNotEmpty) {
-    q['extra-headers'] = serializeNaiveExtraHeaders(s.extraHeaders);
-  }
-
-  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
-  // пересохранении узла через toUri() (хранение узла — текст).
-  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  final host = _wrapIpv6(s.server);
-  // port=443 опускаем — соответствует канонической форме DuckSoft.
-  final portPart = s.port == 443 ? '' : ':${s.port}';
-  final qs = buildQuery(q);
-  final frag = encodeFragment(s.label);
-  return 'naive+https://$ui$host$portPart'
-      '${qs.isEmpty ? '' : '?$qs'}'
-      '${frag.isEmpty ? '' : '#$frag'}';
-}
-
-/// `Header1: Value1\r\nHeader2: Value2` (отсортировано по ключу). Невалидные
-/// имена дропаются с warning, чтобы encoder оставался robust.
-String serializeNaiveExtraHeaders(Map<String, String> headers) {
-  if (headers.isEmpty) return '';
-  final keys = headers.keys.toList()..sort();
-  final parts = <String>[];
-  for (final k in keys) {
-    if (!isValidNaiveHeaderName(k)) continue;
-    parts.add('$k: ${headers[k]!}');
-  }
-  return parts.join('\r\n');
-}
+// §480 W7 — `serializeNaiveExtraHeaders` удалён вместе с рукописным эмитом.
+// Склейку заголовков в параметр ссылки делает движок, обращая `extract`
+// записи: разделитель элементов он берёт из `list.sep`, а годность пары
+// судит ТОЙ ЖЕ регуляркой `extract.re`, какой её читает разбор. Прежде
+// правило жило двумя копиями — регуляркой в данных и `isValidNaiveHeaderName`
+// в коде эмита, — и это ровно тот дубль, ради снятия которого затеяна
+// кампания.
 
 // ════════════════════════════════════════════════════════════════════════════
 // TUIC v5
@@ -530,23 +432,6 @@ Outbound emitTuic(TuicSpec s, TemplateVars vars) {
   return Outbound(out);
 }
 
-String toUriTuic(TuicSpec s) {
-  final q = <String, String>{
-    if (s.congestionControl != null) 'congestion_control': s.congestionControl!,
-    if (s.udpRelayMode != null) 'udp_relay_mode': s.udpRelayMode!,
-    if (s.tls.serverName != null) 'sni': s.tls.serverName!,
-    if (s.tls.alpn.isNotEmpty) 'alpn': s.tls.alpn.join(','),
-    if (s.zeroRtt) 'reduce_rtt': '1',
-    if (s.tls.insecure) 'allow_insecure': '1',
-    if (s.heartbeat != null) 'heartbeat': s.heartbeat!,
-  };
-  final userinfo = '${encodeParam(s.uuid)}:${encodeParam(s.password)}';
-  final host = _wrapIpv6(s.server);
-  final qs = buildQuery(q);
-  final frag = encodeFragment(s.label);
-  return 'tuic://$userinfo@$host:${s.port}${qs.isEmpty ? '' : '?$qs'}${frag.isEmpty ? '' : '#$frag'}';
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // SSH
 // ════════════════════════════════════════════════════════════════════════════
@@ -566,28 +451,6 @@ Outbound emitSsh(SshSpec s, TemplateVars vars) {
   return Outbound(out);
 }
 
-String toUriSsh(SshSpec s) {
-  final q = <String, String>{};
-  if (s.privateKey.isNotEmpty) q['private_key'] = s.privateKey;
-  if (s.privateKeyPassphrase.isNotEmpty) {
-    q['private_key_passphrase'] = s.privateKeyPassphrase;
-  }
-  if (s.hostKey.isNotEmpty) q['host_key'] = s.hostKey.join(',');
-  if (s.hostKeyAlgorithms.isNotEmpty) {
-    q['host_key_algorithms'] = s.hostKeyAlgorithms.join(',');
-  }
-  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
-  // пересохранении узла через toUri() (хранение узла — текст).
-  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  final userinfo = s.password.isEmpty
-      ? encodeParam(s.user)
-      : '${encodeParam(s.user)}:${encodeParam(s.password)}';
-  final host = _wrapIpv6(s.server);
-  final qs = buildQuery(q);
-  final frag = encodeFragment(s.label);
-  return 'ssh://$userinfo@$host:${s.port}${qs.isEmpty ? '' : '?$qs'}${frag.isEmpty ? '' : '#$frag'}';
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // SOCKS
 // ════════════════════════════════════════════════════════════════════════════
@@ -598,32 +461,6 @@ Outbound emitSocks(SocksSpec s, TemplateVars vars) {
   if (s.password.isNotEmpty) out['password'] = s.password;
   _addDialFields(out, s);
   return Outbound(out);
-}
-
-String toUriSocks(SocksSpec s) {
-  // §463 / контракт §24.2 п. 7.15 — userinfo: оба пусто → нет; только user →
-  // `user@`; только pass → `:pass@` (та же форма, что у http-прокси ниже).
-  //
-  // Раньше пустой username снимал userinfo ЦЕЛИКОМ, и пароль молча пропадал
-  // на первом же пересохранении узла: хранение узла — это его ссылка.
-  final hasUser = s.username.isNotEmpty;
-  final hasPass = s.password.isNotEmpty;
-  final userinfo = !hasUser && !hasPass
-      ? ''
-      : (!hasPass
-          ? '${encodeParam(s.username)}@'
-          : '${encodeParam(s.username)}:${encodeParam(s.password)}@');
-  final host = _wrapIpv6(s.server);
-  final frag = encodeFragment(s.label);
-  // §453 — как у ss: query появляется только при непустых dial-полях.
-  final qs = buildQuery(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  // §475 — схему выбирает ВЕРСИЯ, по той же таблице, что читает маппер
-  // ссылки. Прежняя форма (`socks5://`) остаётся у версии 5 и у всего, чего в
-  // таблице нет, — так что у живых узлов ссылка не меняется ни на символ.
-  final scheme = socksSchemeForVersion(s.version);
-  return '$scheme://$userinfo$host:${s.port}'
-      '${qs.isEmpty ? '' : '?$qs'}'
-      '${frag.isEmpty ? '' : '#$frag'}';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -647,44 +484,6 @@ Outbound emitHttp(HttpSpec s, TemplateVars vars) {
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
   _addDialFields(out, s);
   return Outbound(out);
-}
-
-String toUriHttp(HttpSpec s) {
-  // userinfo: оба пусто → нет; только user → user@; только pass → :pass@.
-  final hasUser = s.username.isNotEmpty;
-  final hasPass = s.password.isNotEmpty;
-  final ui = !hasUser && !hasPass
-      ? ''
-      : (!hasPass
-          ? '${encodeParam(s.username)}@'
-          : '${encodeParam(s.username)}:${encodeParam(s.password)}@');
-
-  final q = <String, String>{};
-  if (s.path.isNotEmpty) q['path'] = s.path;
-  if (s.headers.isNotEmpty) {
-    q['headers'] = serializeNaiveExtraHeaders(s.headers);
-  }
-  if (s.tls.enabled) {
-    if (s.tls.serverName != null && s.tls.serverName!.isNotEmpty) {
-      q['sni'] = s.tls.serverName!;
-    }
-    if (s.tls.fingerprint != null && s.tls.fingerprint!.isNotEmpty) {
-      q['fp'] = s.tls.fingerprint!;
-    }
-    if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
-    if (s.tls.insecure) q['allowInsecure'] = '1';
-  }
-
-  // §453 — dial-поля в query: без URI-формы они терялись бы на любом
-  // пересохранении узла через toUri() (хранение узла — текст).
-  q.addAll(tcpKeepAliveToQuery(s.tcpKeepAlive));
-  final scheme = s.tls.enabled ? 'proxy-https' : 'proxy-http';
-  final host = _wrapIpv6(s.server);
-  final qs = buildQuery(q);
-  final frag = encodeFragment(s.label);
-  return '$scheme://$ui$host:${s.port}'
-      '${qs.isEmpty ? '' : '?$qs'}'
-      '${frag.isEmpty ? '' : '#$frag'}';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -790,25 +589,6 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
     if (s.keepAlive.isNotEmpty) 'keep_alive_period': s.keepAlive,
   };
   return Outbound(map);
-}
-
-String toUriMasque(MasqueSpec s) {
-  final q = <String, String>{
-    'publickey': s.publicKeyDer,
-    if (s.localAddresses.isNotEmpty) 'address': s.localAddresses.join(','),
-    'profile': s.profile,
-    'vhttp': s.vhttp,
-    if (s.sni.isNotEmpty) 'sni': s.sni,
-    if (s.disableSni) 'disable_sni': '1',
-    if (s.mtu != null) 'mtu': s.mtu.toString(),
-    if (s.idleTimeout.isNotEmpty) 'idle_timeout': s.idleTimeout,
-    if (s.keepAlive.isNotEmpty) 'keep_alive': s.keepAlive,
-  };
-  final userinfo = encodeParam(s.privateKeyDer);
-  final host = _wrapIpv6(s.server);
-  final qs = buildQuery(q);
-  final frag = encodeFragment(s.label);
-  return 'masque://$userinfo@$host:${s.port}${qs.isEmpty ? '' : '?$qs'}${frag.isEmpty ? '' : '#$frag'}';
 }
 
 // ════════════════════════════════════════════════════════════════════════════

@@ -245,13 +245,13 @@ void main() {
     });
   });
 
-  group('§480 W7 · emit_omit_port', () {
+  group('§480 W7 · emit.omit_port', () {
     test('порт, равный объявленному, опускается', () {
       const section = {
         'detect': {
           'scheme_in': ['s']
         },
-        'emit': {'form': 'url', 'emit_omit_port': 443},
+        'emit': {'form': 'url', 'omit_port': 443},
         'params': {
           'server': {'source': 'host', 'maps_to': 'server'},
           'server_port': {'source': 'port', 'maps_to': 'server_port'},

@@ -25,13 +25,23 @@ import 'dart:convert';
 
 import 'section.dart';
 
-/// §0.7 DRAFT — имена атрибутов ЭМИТА, которых в замороженной грамматике ещё
-/// нет.
+/// Имена атрибутов ЭМИТА — СВЕДЕНЫ С ЛАУНЧЕРОМ 19.09.2026
+/// (SPEC 133 `GRAMMAR_SYNC.md` «Сведение №2», §5).
 ///
-/// Здесь они лежат ровно по той же причине, что и [DraftNames]: у лаунчера
-/// обратный ход — «общий долг», эмит от таблицы не написан ни у кого, и первое
-/// написание имени делаем мы. Переименование по итогам согласования обязано
-/// быть правкой ОДНОЙ строки, а не обходом дерева.
+/// Держатся в одном месте, как и [DraftNames]: обратный ход у лаунчера ещё не
+/// написан («общий долг»), первое написание имён делали мы, и переименование
+/// по итогам сведения обязано быть правкой ОДНОЙ строки, а не обходом дерева.
+/// Так оно и вышло — префикс `emit_` снят у четырёх имён одной правкой здесь.
+///
+/// Итог сведения: принято как есть — `round_trip`+`round_trip_why`, `emit_as`;
+/// имя очищено от избыточного префикса — `emit.omit_port`, `emit.userinfo`,
+/// `emit.json_map`, `emit.json_always` (внутри объекта `emit` префикс называл
+/// бы `emit` дважды); сведено к существующему FROZEN-имени — `compose`
+/// (расширение значений строка → объект); ОТКЛОНЕНО — `emit_name`.
+///
+/// Префикс `emit_` сохраняется у атрибутов, живущих У ЗАПИСИ (`emit_as`,
+/// `emit_when`): там он не избыточен, а необходим — он отличает атрибут
+/// ВЫХОДА от атрибута входа в одном словаре записи.
 ///
 /// Ни одно имя не является именем схемы или протокола.
 abstract final class EmitNames {
@@ -64,7 +74,7 @@ abstract final class EmitNames {
   /// `emit_when: {<имя>: "always"}` — писать всегда, даже пустое.
   static const emitWhenAlways = 'always';
 
-  // ─── НОВОЕ волной W7 (список на согласование лаунчеру) ───
+  // ─── заведено волной W7, сведено с лаунчером (GRAMMAR_SYNC §5.2) ───
 
   /// Запись, у которой обратного хода НЕТ, с причиной прозой.
   /// `"round_trip": false` плюс `"round_trip_why": "<причина>"`.
@@ -118,50 +128,61 @@ abstract final class EmitNames {
   /// Значение [emitAs]: как есть, строкой.
   static const emitAsRaw = 'raw';
 
-  /// Написание имени параметра в ССЫЛКЕ, когда оно не равно канону разбора.
-  ///
-  /// Зачем: канон разбора — первое в `aliases`, и обычно он же уезжает в
-  /// ссылку. Но у части схем исторически пишется НЕ канон: запись читает имя
-  /// с подчёркиванием, а пишет слитное. Асимметрия становится данными вместо
-  /// ветки в коде.
-  static const emitName = 'emit_name';
+  // Имени «написание на выходе» здесь НЕТ, и это решение, а не пропуск.
+  //
+  // НОРМА (сведение 19.09.2026, GRAMMAR_SYNC §5.3): написание имени
+  // параметра на выходе — ПЕРВОЕ имя в `aliases` (имя записи), БЕЗ
+  // исключений. Схема, у которой выход расходится с каноном, чинится
+  // перестановкой `aliases` и строкой в `DELTAS.md`, а не вторым именем:
+  // отдельный атрибут написания позволял бы входу и выходу разъехаться
+  // молча, и «читаем одно, пишем другое» не оставляло бы следа в дельтах.
 
   /// Порт, который в ссылке ОПУСКАЕТСЯ, будучи равным этому значению.
   ///
-  /// `"emit_omit_port": 443` в блоке `emit` секции.
+  /// `"omit_port": 443` в блоке `emit` секции.
   ///
   /// Зачем: каноническая форма части схем порт по умолчанию не пишет, а часть
   /// пишет всегда. Обращать `defaults.server_port` напрямую нельзя: у схемы
   /// бывает дефолт разбора (подставить порт, когда его нет) БЕЗ права
   /// опускать его на выходе — иначе ссылка перестала бы читаться клиентами,
   /// которые дефолта не знают.
-  static const emitOmitPort = 'emit_omit_port';
+  static const omitPort = 'omit_port';
 
-  /// Кодирование userinfo на выходе: `"raw"` (percent) либо `"base64"`
-  /// (SIP002 — base64 без паддинга).
+  /// Кодирование userinfo на выходе.
   ///
-  /// Зачем: `userinfo.decode` разбора это КОНВЕЙЕР ПОПЫТОК (`percent`,
+  /// Короткое написание — строка (`"raw"` | `"base64"`); полное — объект
+  /// `{form, padding}`: паддинг base64 объявляется ОТДЕЛЬНО, потому что две
+  /// реализации пишут его по-разному (`=` на конце), обе читают обе формы, а
+  /// ссылки различаются побайтово — и ни одна сторона не меняет свою молча.
+  ///
+  /// Зачем вообще: `userinfo.decode` разбора это КОНВЕЙЕР ПОПЫТОК (`percent`,
   /// `base64?`), и обратить его нельзя — `base64?` значит «может быть, а
   /// может и нет». Выходная форма обязана быть названа однозначно.
-  static const emitUserinfo = 'emit_userinfo';
+  static const userinfo = 'userinfo';
 
-  /// Значение [emitUserinfo]: percent-кодирование.
-  static const emitUserinfoRaw = 'raw';
+  /// Ключ формы внутри объектного написания [userinfo].
+  static const userinfoForm = 'form';
 
-  /// Значение [emitUserinfo]: base64 без паддинга.
-  static const emitUserinfoBase64 = 'base64';
+  /// Ключ паддинга внутри объектного написания [userinfo].
+  static const userinfoPadding = 'padding';
+
+  /// Значение формы [userinfo]: percent-кодирование.
+  static const userinfoRaw = 'raw';
+
+  /// Значение формы [userinfo]: base64.
+  static const userinfoBase64 = 'base64';
 
   /// Форма, которая собирает не query-ссылку, а base64(JSON) — `v2rayn`.
   /// Карта «ключ JSON → путь тела».
   ///
   /// Зачем: у формы `v2rayn` пространство источников не `url`, а `json`, и
   /// записи адресуют его своими `source`. Обратный ход тот же, что у query,
-  /// но сериализация другая: объект, base64, без паддинга.
-  static const emitJsonMap = 'emit_json_map';
+  /// но сериализация другая: объект, base64.
+  static const jsonMap = 'json_map';
 
   /// Ключи JSON-формы, которые пишутся ВСЕГДА, даже пустыми
   /// (v2rayN-совместимость: клиенты ждут полный набор).
-  static const emitJsonAlways = 'emit_json_always';
+  static const jsonAlways = 'json_always';
 }
 
 /// Каноническая ссылка, собранная секцией из канонического тела.
@@ -186,13 +207,20 @@ EmitResult? emitViaSection(
   Map<String, dynamic> body,
   String label,
 ) {
-  final emit = section.emit;
-  if (emit == null) return null;
-  return _Emit(section, emit, body, label).run();
+  if (!sectionEmits(section)) return null;
+  return _Emit(section, section.emit!, body, label).run();
 }
 
 /// Есть ли у секции объявленный обратный ход.
-bool sectionEmits(MapperSection section) => section.emit != null;
+///
+/// Пустая `params` обратного хода НЕ даёт, даже при объявленном блоке `emit`.
+/// Случай живой и опасный: черновик-ОВЕРЛЕЙ несёт только свои ключи, и без
+/// загруженного реестра из него собирается секция с одним `emit` и без единой
+/// записи. Эмиттер по такой секции выдал бы ссылку БЕЗ userinfo и без
+/// параметров — синтаксически годную и молча неверную, а `toUri()` у нас
+/// форма хранения узла. Лучше отказ, который видно.
+bool sectionEmits(MapperSection section) =>
+    section.emit != null && section.params.isNotEmpty;
 
 final class _Emit {
   _Emit(this.section, this.emit, this.body, this.label);
@@ -316,7 +344,7 @@ final class _Emit {
   String _portPart() {
     final port = _read('server_port');
     if (port == null) return '';
-    final omit = emit[EmitNames.emitOmitPort];
+    final omit = emit[EmitNames.omitPort];
     if (omit != null && '$omit' == '$port') return '';
     return ':$port';
   }
@@ -342,11 +370,14 @@ final class _Emit {
       _consumed.add(p);
     }
 
-    // Форма base64 (SIP002): `base64(method:password)` без паддинга.
-    if (_userinfoMode() == EmitNames.emitUserinfoBase64) {
+    // Форма base64 (SIP002): `base64(method:password)`. Паддинг объявлен
+    // отдельно — две реализации пишут его по-разному, обе читают обе формы,
+    // и менять своё написание молча ни одна не вправе.
+    if (_userinfoForm() == EmitNames.userinfoBase64) {
       if (values.every((v) => v.isEmpty)) return '';
       final joined = values.join(u.splitSep ?? ':');
-      return base64.encode(utf8.encode(joined)).replaceAll('=', '');
+      final encoded = base64.encode(utf8.encode(joined));
+      return _userinfoPadding() ? encoded : encoded.replaceAll('=', '');
     }
 
     // Один слот — весь userinfo целиком, без разделителя.
@@ -359,27 +390,63 @@ final class _Emit {
 
     if (first.isEmpty && restEmpty) return '';
 
-    // Хвост пуст: разделитель нужен только там, где одиночный компонент
-    // читается ВТОРЫМ слотом (`single_into` называет не первый путь) —
-    // иначе `user@` вернулся бы паролем.
+    // **Форма ОДИНОЧНОГО userinfo.** `single_into` называет путь, в который
+    // уезжает userinfo БЕЗ разделителя, и обратный ход обязан этот путь
+    // узнавать: напиши мы разделитель там, где его не ждут, — или опусти
+    // там, где ждут, — своя же ссылка вернулась бы с перепутанными слотами.
+    final single = u.singleInto;
+    final singleIdx = single == null ? -1 : paths.indexOf(single);
+
+    // Заполнен ровно ОДИН слот, и это ровно тот, который читает одиночная
+    // форма: пишем его голым, без разделителя.
+    final filled = [
+      for (var i = 0; i < values.length; i++)
+        if (values[i].isNotEmpty) i,
+    ];
+    if (filled.length == 1 && filled.first == singleIdx) {
+      return _encodeParam(values[singleIdx]);
+    }
+
+    // Хвост пуст: разделитель нужен там, где без него значение прочиталось бы
+    // одиночной формой, то есть уехало бы В ДРУГОЙ слот.
     if (restEmpty) {
-      final single = u.singleInto;
-      final needsSep = single != null && single != paths.first;
+      final needsSep = singleIdx >= 0 && singleIdx != 0;
       return '${_encodeParam(first)}${needsSep ? sep : ''}';
     }
 
-    // Голова пуста, хвост нет: `:pass@` — законная форма.
+    // Голова пуста, хвост нет: `:pass@` — законная форма там, где одиночный
+    // userinfo читается ИМЕНЕМ (иначе сюда не дойдёт: случай выше).
     return [
       _encodeParam(first),
       ...rest.map(_encodeParam),
     ].join(sep);
   }
 
-  String _userinfoMode() =>
-      emit[EmitNames.emitUserinfo] as String? ??
-      (_form() == _kFormSip002
-          ? EmitNames.emitUserinfoBase64
-          : EmitNames.emitUserinfoRaw);
+  /// Форма userinfo на выходе. Короткое написание — строка, полное — объект
+  /// `{form, padding}`; не объявлено — выводится из формы секции.
+  String _userinfoForm() {
+    final raw = emit[EmitNames.userinfo];
+    if (raw is String) return raw;
+    if (raw is Map) {
+      final f = raw[EmitNames.userinfoForm];
+      if (f is String) return f;
+    }
+    return _form() == _kFormSip002
+        ? EmitNames.userinfoBase64
+        : EmitNames.userinfoRaw;
+  }
+
+  /// Паддинг base64. Умолчание — БЕЗ паддинга: так пишет сегодняшняя ссылка
+  /// LxBox, и по правилу «ссылка не меняется без дельты» умолчанием обязано
+  /// быть своё сегодняшнее написание, а не чужое.
+  bool _userinfoPadding() {
+    final raw = emit[EmitNames.userinfo];
+    if (raw is Map) {
+      final p = raw[EmitNames.userinfoPadding];
+      if (p is bool) return p;
+    }
+    return false;
+  }
 
   // ───────────────────────────── записи ─────────────────────────────
 
@@ -513,17 +580,41 @@ final class _Emit {
   /// разбора (`k` до двоеточия, пробелы после него необязательны). Порядок —
   /// по ключу при `sort_keys`, иначе порядок тела: тело у нас упорядочено, и
   /// порядок ключей входит в identity.
+  ///
+  /// Пара, которую СВОЯ ЖЕ регулярка разбора не примет, не пишется. Проверка
+  /// идёт ТОЙ ЖЕ регуляркой (`extract.re`), а не отдельным правилом в коде:
+  /// напиши эмиттер такую пару — разбор её пропустил бы (`on_item_invalid`),
+  /// и круг потерял бы её молча. Прежде то же самое делала рукописная функция
+  /// проверки имени заголовка в коде эмита; теперь правило одно и живёт в
+  /// данных.
   String? _joinPairs(MapperParam p) {
     final path = p.mapsTo;
     if (path == null) return null;
     final v = _read(path);
     if (v is! Map || v.isEmpty) return null;
     _consumed.add(path);
-    var keys = v.keys.map((e) => '$e').toList();
+    final keys = v.keys.map((e) => '$e').toList();
     if (p.sortKeys) keys.sort();
     final sep = p.list?.sep ?? '\r\n';
-    return keys.map((k) => '$k: ${v[k]}').join(sep);
+    final re = _pairRegex(p);
+    final items = <String>[];
+    for (final k in keys) {
+      final item = '$k: ${v[k]}';
+      if (re != null && !re.hasMatch(item)) continue;
+      items.add(item);
+    }
+    return items.isEmpty ? null : items.join(sep);
   }
+
+  /// Регулярка элемента из `extract.re`, в Dart-написании именованных групп.
+  static RegExp? _pairRegex(MapperParam p) {
+    final re = p.extract?.re;
+    if (re == null || re.isEmpty) return null;
+    return _reCache.putIfAbsent(
+        re, () => RegExp(re.replaceAll('(?P<', '(?<')));
+  }
+
+  static final Map<String, RegExp> _reCache = {};
 
   /// **`split_into⁻¹`** — собрать разложенные по путям значения обратно в один
   /// список источника.
@@ -640,48 +731,136 @@ final class _Emit {
 
   /// **`compose`** — обращение `extract`: собрать одно значение из нескольких
   /// путей тела по объявленному шаблону.
+  ///
+  /// Две формы, обе законны (GRAMMAR_SYNC §5.2 п.2 — имя FROZEN, расширен
+  /// словарь значений):
+  ///
+  /// - **строка** — сам шаблон, а `{...}` в нём это ПУТИ ТЕЛА напрямую
+  ///   (`"{transport.path}?ed={transport.max_early_data}"`);
+  /// - **объект** `{template, from, omit_when_empty}` — шаблон по ИМЕНАМ
+  ///   ГРУПП, где `from` переводит имя группы в путь. Нужен там, где имена
+  ///   групп короткие и совпадают с группами `extract`.
+  ///
+  /// Хвост, чьё значение отсутствует, СРЕЗАЕТСЯ вместе со своим
+  /// разделителем: `{path}?ed={ed}` без `ed` обязан дать просто путь, иначе
+  /// в ссылку уехал бы `?ed=` с пустотой, и разбор прочёл бы его нулём.
   String? _compose(MapperParam p) {
-    final spec = _composeSpec(p);
-    if (spec == null) return null;
+    final raw = p.raw[EmitNames.compose] ?? p.compose;
+    if (raw is String) {
+      return _composeTemplate(p, raw, (g) => g, _impliedOffGroups(p));
+    }
+    if (raw is! Map) return null;
+    final spec = raw.cast<String, dynamic>();
     final template = spec[EmitNames.composeTemplate] as String?;
     final from = (spec[EmitNames.composeFrom] as Map?)?.cast<String, dynamic>();
     if (template == null || from == null) return null;
-    final omitEmpty = ((spec[EmitNames.composeOmitWhenEmpty] as List?) ??
-            const [])
-        .map((e) => '$e')
-        .toSet();
-
-    final values = <String, String>{};
-    for (final e in from.entries) {
-      final v = _read('${e.value}');
-      if (v == null) continue;
-      final text = _str(v);
-      if (text == null || text.isEmpty) continue;
-      values[e.key] = text;
-      _consumed.add('${e.value}');
-    }
-    // Головы нет — параметра нет вовсе.
-    if (values.isEmpty) return null;
-
-    var out = template;
-    for (final g in from.keys) {
-      final has = values.containsKey(g);
-      if (!has && omitEmpty.contains(g)) {
-        // Группа среза: убираем её вместе с предшествующим разделителем.
-        out = out.replaceAll(RegExp('[^{}]?\\{$g\\}'), '');
-        continue;
-      }
-      out = out.replaceAll('{$g}', values[g] ?? '');
-    }
-    return out.isEmpty ? null : out;
+    final omitEmpty =
+        ((spec[EmitNames.composeOmitWhenEmpty] as List?) ?? const [])
+            .map((e) => '$e')
+            .toSet();
+    return _composeTemplate(
+        p, template, (g) => '${from[g] ?? g}', omitEmpty);
   }
 
-  /// Объектная форма `compose`. Грамматика разбора знает `compose` СТРОКОЙ
-  /// (`MapperParam.compose` — имя приёма); объектная форма с `template`/`from`
-  /// — расширение волны W7, и читается из сырого JSON записи.
-  Map<String, dynamic>? _composeSpec(MapperParam p) {
-    final raw = p.raw[EmitNames.compose];
-    return raw is Map ? raw.cast<String, dynamic>() : null;
+  /// Засчитать пути, которые ПОДРАЗУМЕВАЕТ написанная группа `compose`.
+  ///
+  /// Группа адресуется и именем, и путём: строковый шаблон пишет путь,
+  /// объектный — имя группы, и какое из двух пришло, здесь неизвестно.
+  void _consumeImplied(MapperParam p, String name, String path) {
+    final into = p.extract?.into;
+    if (into == null) return;
+    for (final e in into.entries) {
+      final spec = e.value;
+      if (spec is! Map) continue;
+      if (e.key != name && spec['path'] != path) continue;
+      final implies = spec['implies'];
+      if (implies is! Map) continue;
+      for (final i in implies.keys) {
+        _consumed.add('$i');
+      }
+    }
+  }
+
+  /// Группы `compose`, которые писать НЕЛЬЗЯ, потому что тело не подтверждает
+  /// их `implies`.
+  ///
+  /// Живой случай: у `extract` группа «ранние данные» подразумевает имя
+  /// заголовка (`implies` с `implicit: true`), и форма-хвост этим и
+  /// отличается от плоского параметра. Тело БЕЗ этого имени пришло плоским
+  /// параметром, и напиши эмиттер хвост — разбор восстановил бы заголовок,
+  /// которого в исходном теле не было. Значение уедет плоской записью: она в
+  /// таблице объявлена рядом и читает тот же путь.
+  ///
+  /// Проверяется по ДАННЫМ (`extract.into.<группа>.implies`), а не по имени
+  /// группы: имён схем и полей движок не знает.
+  Set<String> _impliedOffGroups(MapperParam p) {
+    final into = p.extract?.into;
+    if (into == null) return const {};
+    final off = <String>{};
+    for (final e in into.entries) {
+      final spec = e.value;
+      if (spec is! Map) continue;
+      final implies = spec['implies'];
+      if (implies is! Map) continue;
+      for (final i in implies.entries) {
+        final want = i.value;
+        final expected = want is Map ? want['value'] : want;
+        if (_matches(_read('${i.key}'), expected)) continue;
+        // Строковый шаблон адресует группы ПУТЯМИ тела, объектный — именами
+        // групп: запрещаем оба написания, лишнее просто не встретится.
+        off.add(e.key);
+        final path = spec['path'];
+        if (path is String) off.add(path);
+        break;
+      }
+    }
+    return off;
+  }
+
+  /// Подстановка в шаблон: `{имя}` → значение пути, который даёт [pathOf].
+  ///
+  /// Группа без значения срезается вместе с предшествующим ей литералом
+  /// (`?ed=`): границей литерала служит предыдущая группа либо начало
+  /// шаблона. Перечислять такие группы в `omit_when_empty` не обязательно —
+  /// список нужен лишь там, где срезать надо и НЕПУСТУЮ группу.
+  String? _composeTemplate(
+    MapperParam p,
+    String template,
+    String Function(String) pathOf,
+    Set<String> omitEmpty,
+  ) {
+    final re = RegExp(r'\{([^{}]+)\}');
+    final matches = re.allMatches(template).toList();
+    if (matches.isEmpty) return null;
+
+    final out = StringBuffer();
+    var cursor = 0;
+    var any = false;
+    for (final m in matches) {
+      final name = m.group(1)!;
+      final path = pathOf(name);
+      final v = _read(path);
+      final text = v == null ? '' : '$v';
+      final literal = template.substring(cursor, m.start);
+      cursor = m.end;
+      if (text.isEmpty || omitEmpty.contains(name)) {
+        // Пусто — литерал перед группой уезжает вместе с ней.
+        continue;
+      }
+      _consumed.add(path);
+      // Группа, которая ПОДРАЗУМЕВАЕТ пути, забирает и их: значение приехало
+      // самой формой, и отдельной записью его писать нельзя — иначе в ссылке
+      // окажутся и хвост, и плоский параметр, а разбор прочтёт их дважды.
+      _consumeImplied(p, name, path);
+      out
+        ..write(literal)
+        ..write(text);
+      any = true;
+    }
+    if (!any) return null;
+    out.write(template.substring(cursor));
+    final s = out.toString();
+    return s.isEmpty ? null : s;
   }
 
   /// **`round_trip: false`** — запись, у которой обратного хода нет, с
@@ -735,13 +914,14 @@ final class _Emit {
   /// значило бы править модель на каждом переименовании.
   dynamic _paramEmitAttr(MapperParam p, String name) => p.raw[name];
 
-  /// **Каноническое имя параметра в ссылке** — первое в `aliases` (§0.6),
-  /// если запись не назвала другое написание явно (`emit_name`).
-  String _nameOf(MapperParam p) {
-    final explicit = _paramEmitAttr(p, EmitNames.emitName);
-    if (explicit is String && explicit.isNotEmpty) return explicit;
-    return p.spellings.first;
-  }
+  /// **Каноническое имя параметра в ссылке** — ПЕРВОЕ в `aliases`, то есть имя
+  /// записи (§0.6), БЕЗ ИСКЛЮЧЕНИЙ.
+  ///
+  /// Второго написания «для выхода» здесь нет и не будет (GRAMMAR_SYNC §5.3):
+  /// оно позволяло бы входу и выходу разъехаться молча. Схема, которая пишет
+  /// не канон, чинится ПЕРЕСТАНОВКОЙ `aliases` в секции и строкой в
+  /// `DELTAS.md` — тогда расхождение видно, а не спрятано в коде эмита.
+  String _nameOf(MapperParam p) => p.spellings.first;
 
   void _add(MapperParam p, String value) {
     final name = _nameOf(p);
@@ -833,11 +1013,11 @@ final class _Emit {
   /// Форма `v2rayn`: base64(JSON) без паддинга.
   String _emitJson(String scheme) {
     final map = <String, dynamic>{};
-    final always = ((emit[EmitNames.emitJsonAlways] as List?) ?? const [])
+    final always = ((emit[EmitNames.jsonAlways] as List?) ?? const [])
         .map((e) => '$e')
         .toSet();
     final jsonMap =
-        (emit[EmitNames.emitJsonMap] as Map?)?.cast<String, dynamic>() ??
+        (emit[EmitNames.jsonMap] as Map?)?.cast<String, dynamic>() ??
             const {};
     for (final e in jsonMap.entries) {
       final v = _read('${e.value}');

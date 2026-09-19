@@ -1,125 +1,8 @@
 {
-  "impl": "§480 — секция-маппер из РЕЕСТРА ЛАУНЧЕРА (contract/registry/protocols/naive.json, его develop). Черновик держит её до прихода зеркалом; правки вносить только синхронно с лаунчером.",
+  "_draft": "ОТСТУПЛЕНИЕ LxBox от секции реестра. Файл НЕ дублирует секцию: загрузчик накладывает эти ключи поверх реестровых. Прежняя ПОЛНАЯ копия секции снята — с приходом секции в реестр она стала вторым источником правды и молча протухала бы на каждом синке.",
+  "_overlay": true,
   "mappers": {
     "uri": {
-      "body_source": "uri",
-      "detect": {
-        "scheme_in": [
-          "naive+https",
-          "naive+quic"
-        ]
-      },
-      "forms": [
-        {
-          "id": "url",
-          "detect": {
-            "default": true
-          },
-          "decode": [
-            "url"
-          ],
-          "space": "url"
-        }
-      ],
-      "userinfo": {
-        "split": {
-          "sep": ":",
-          "limit": 2
-        },
-        "into": [
-          "username",
-          "password"
-        ],
-        "single_into": "password",
-        "impl": "§465 — одиночный userinfo это PASSWORD (конвенция DuckSoft, та же что у hysteria2): 'naive+https://secret@host' даёт password=secret с пустым username. Наличие ':' отличает форму «только имя»: 'user:' — это username."
-      },
-      "label": {
-        "source": "fragment",
-        "normalize": [
-          "strip_control",
-          "trim"
-        ],
-        "fallback": {
-          "template": "{scheme}-{server}-{server_port}",
-          "scheme_source": "singbox_type"
-        }
-      },
-      "defaults": {
-        "type": "naive",
-        "server_port": 443
-      },
-      "scheme_sets": {
-        "naive+https": {
-          "tls.enabled": true,
-          "tls.server_name": "$host"
-        },
-        "naive+quic": {
-          "tls.enabled": true,
-          "tls.server_name": "$host",
-          "quic": true,
-          "quic_congestion_control": "bbr"
-        }
-      },
-      "params": {
-        "server": {
-          "source": "host",
-          "maps_to": "server",
-          "required": true,
-          "impl": "§463 / контракт §24.6 — пустой host отбраковывается: ядро на пустом адресе валит ВЕСЬ конфиг, то есть один такой узел из подписки оставлял человека без VPN."
-        },
-        "server_port": {
-          "source": "port",
-          "maps_to": "server_port",
-          "type": "int",
-          "materialize_default": true,
-          "impl": "Каноничная форма DuckSoft — 443."
-        },
-        "username": {
-          "source": "userinfo.user",
-          "maps_to": "username"
-        },
-        "password": {
-          "source": "userinfo.pass",
-          "maps_to": "password"
-        },
-        "extra-headers": {
-          "source": "query.extra-headers",
-          "maps_to": "extra_headers",
-          "type": "object",
-          "sort_keys": true,
-          "list": {
-            "sep": "\r\n"
-          },
-          "extract": {
-            "re": "^(?P<k>[!#$%&'*+.0-9A-Z\\\\^_`a-z|~-]+):[ \\t]*(?P<v>[^\\r\\n\\x00]*)$",
-            "into": {
-              "k": "$key",
-              "v": "$value"
-            }
-          },
-          "on_item_invalid": {
-            "action": "skip",
-            "code": "naive_extra_headers_invalid"
-          },
-          "impl": "Правило broken_header_pair_skipped: битая пара пропускается, остальные живут; код ставится ОДИН раз на узел, о первой отброшенной паре. sort_keys — порядок входит в identity. Годность пары решает САМА регулярка (PRIMITIVES §0.10): алфавит имени — дословный charset гиста DuckSoft (подмножество RFC 7230 tchar, уже нужного намеренно, ради interop), он же naiveHeaderNameCharset прежнего пути; запрет CR/LF/NUL в значении — класс [^\\r\\n\\x00]. Класс [^:]+ этого не выражал: 'X User:bad' с пробелом в имени обязан отбраковываться, а он его принимал (QUIRKS Q133-41, корпус extra_headers_bad_name_dropped)."
-        },
-        "padding": {
-          "source": "query.padding",
-          "maps_to": null,
-          "on_present": {
-            "action": "drop",
-            "code": "naive_padding_ignored"
-          },
-          "impl": "sing-box-эквивалента нет. Предупреждение О ПЕРЕВОДЕ: значения в теле уже нет, и санитайзеру сказать о нём нечего."
-        }
-      },
-      "include": [
-        "dialer#uri"
-      ],
-      "unknown_key": {
-        "action": "keep",
-        "code": "uri_param_unknown"
-      },
       "emit": {
         "form": "url",
         "form_from": {
@@ -131,7 +14,9 @@
         "param_order": "alphabetical",
         "omit_default": [
           "quic_congestion_control"
-        ]
+        ],
+        "omit_port": 443,
+        "impl": "§480 W7 — ВЫСТАВЛЕН omit_port (имя сведено с лаунчером, GRAMMAR_SYNC §5.2 п.5: примитив принят, префикс `emit_` снят). Каноническая форма DuckSoft порт 443 не пишет (`naive+https://user@host` без `:443`), и ссылка ЭТОЙ схемы у нас сегодня такая — прежний рукописный toUriNaive опускал порт явно (node_spec_emit.dart, `s.port == 443 ? '' : ':$port'`), тесты spec 037 §5 это фиксируют. Обратить `defaults.server_port: 443` вместо этого нельзя: дефолт РАЗБОРА есть у половины схем, а право опускать порт на выходе — только у этой. РАСХОЖДЕНИЕ С ЛАУНЧЕРОМ ОБЪЯВЛЕНО: у него `hostPort` пишет порт ВСЕГДА, naive включительно, поэтому у него атрибут объявлен и не выставлен; выравнивание — отдельной дельтой по решению владельца. Менять СВОЁ написание молча нам нельзя по тому же правилу 5, по которому нельзя ему."
       }
     }
   }
