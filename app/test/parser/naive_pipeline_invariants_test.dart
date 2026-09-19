@@ -88,11 +88,6 @@ void main() {
       for (final u in _corpusUris()) {
         final a = parseUri(u);
         if (a == null) continue;
-        // ИСКЛЮЧЕНИЕ, отбираемое по СВОЙСТВУ тела, а не списком тегов: узел с
-        // QUIC круг не переживает и НЕ ПЕРЕЖИВАЛ до переезда — `toUriNaive`
-        // всегда пишет `naive+https://`. Свойство общей эмиссии, проверено на
-        // старом пути; отдельный тест ниже.
-        if (a.emit(TemplateVars.empty).map['quic'] == true) continue;
         final b = parseUri(a.toUri());
         expect(b, isNotNull, reason: 'круг потерял узел: $u');
         expect(
@@ -104,24 +99,29 @@ void main() {
             reason: 'круг изменил identity: $u');
         checked++;
       }
-      // 15 разбираемых кейсов минус один QUIC.
+      // 15 разбираемых кейсов, включая QUIC.
       expect(checked, greaterThan(13));
     }, skip: skip);
 
-    test('ИСКЛЮЧЕНИЕ круга: naive+quic пересобирается как naive+https', () {
-      // Свойство ОБЩЕЙ naive-эмиссии, а не разбора: `toUriNaive` ВСЕГДА пишет
-      // `naive+https://` (`emit.note` реестра — каноничная форма DuckSoft), и
-      // обратного написания для QUIC у неё нет ни у одной стороны. Тело
-      // первого разбора несёт `quic: true`, тело круга — нет.
+    test('naive+quic переживает круг: написание схемы несёт QUIC', () {
+      // ПОЧИНКА ПОТЕРИ, а не смена нормы. Рукописный `toUriNaive` ВСЕГДА
+      // писал `naive+https://` (ветки QUIC у него не было вовсе), и узел
+      // `naive+quic://` на круге ронял и `quic`, и congestion control —
+      // человек получал по Copy link ссылку на ДРУГОЙ транспорт.
       //
-      // Проверено на СТАРОМ пути напрямую: до переезда круг терял QUIC ровно
-      // так же. Кейс корпуса — `quic_userpass`.
+      // Реестр это написание объявляет сам:
+      // `emit.form_from: {quic: {true: "naive+quic", "*": "naive+https"}}`,
+      // зеркально `scheme_sets`. Движок исполняет объявленное, и круг
+      // сходится. Кейс корпуса — `quic_userpass`; снимок `emit_before480`
+      // держит там СТАРУЮ ссылку (`naive+https://`), поэтому страж вида
+      // ссылки на этот кейс не срабатывает: он кормится старой ссылкой, в
+      // которой QUIC уже потерян.
       final a = parseUri('naive+quic://u:p@quic.example:443#q')!;
       expect(a.emit(TemplateVars.empty).map['quic'], isTrue);
-      expect(a.toUri(), startsWith('naive+https://'));
+      expect(a.toUri(), startsWith('naive+quic://'));
       final b = parseUri(a.toUri())!;
-      expect(b.emit(TemplateVars.empty).map.containsKey('quic'), isFalse,
-          reason: 'обратного написания QUIC у эмиттера нет');
+      expect(b.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map,
+          reason: 'написание схемы возвращает QUIC целиком');
     }, skip: skip);
   });
 
