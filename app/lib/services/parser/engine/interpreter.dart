@@ -502,6 +502,10 @@ final class _Run {
 
   bool _wsEarlyDataHeaderImplicit = false;
 
+  /// Порт по умолчанию, названный `scheme_sets` текущего написания схемы
+  /// (служебный ключ `$default_port`). Применяется вместе с `defaults`.
+  dynamic _schemeDefaultPort;
+
   /// `on_no_match: {action: drop_node}` — узла нет вовсе. Отличается от
   /// «тело пустое»: секция сказала, что такой записи у нас нет Spec'а.
   bool _dropNode = false;
@@ -581,6 +585,12 @@ final class _Run {
         act: TraceAct.write,
         why: TraceWhy.byDefault,
       );
+    }
+    // `$default_port` написания схемы — там же и по тому же правилу; он
+    // сильнее `defaults` секции только потому, что конкретнее: секция одна на
+    // все написания, а он назван для одного.
+    if (_schemeDefaultPort != null && _read('server_port') == null) {
+      _put('server_port', _schemeDefaultPort);
     }
 
     // Обязательные записи: их отсутствие — это «узла нет».
@@ -1036,14 +1046,16 @@ final class _Run {
   void _applySets(Map<String, dynamic> sets, MapperParam? p) {
     for (final e in sets.entries) {
       // `$default_port` — СЛУЖЕБНЫЙ ключ `scheme_sets`: телом он не является,
-      // а называет порт по умолчанию для этого написания схемы. Пишется как
-      // `server_port` и СЛАБЕЕ любой записи (тот же приоритет, что у
-      // `defaults` секции): порт, названный ссылкой, обязан победить.
+      // а называет порт по умолчанию для ЭТОГО написания схемы (у одной схемы
+      // их бывает несколько, и дефолт у них разный). Поэтому он и не может
+      // лежать в `defaults` секции — та одна на все написания.
+      //
+      // Применяется НЕ здесь, а вместе с `defaults` (норма §10.1): после
+      // обоих проходов и только в путь, который никто не занял. Напиши его
+      // сразу — он победил бы явный порт из ссылки, потому что `scheme_sets`
+      // исполняется первым.
       if (e.key == r'$default_port') {
-        if (space.port == null && e.value != null) {
-          _put('server_port', e.value);
-          _writtenBy['server_port'] = _kDefaultPriority;
-        }
+        if (e.value != null) _schemeDefaultPort = e.value;
         continue;
       }
       if (e.value == null) {
