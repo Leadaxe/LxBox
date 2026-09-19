@@ -526,10 +526,15 @@ void main() {
     // маппер. Здесь реестр не загружен (см. шапку файла), поэтому кода нет
     // вовсе; проверяет его `contract_test.dart`
     // (`awg3_timing_range_reversed_dropped`) и `body_sanitizer_test.dart`.
-    // Булевы (`randomtrailers`/`disablecookies`) код по-прежнему получают от
-    // маппера: ядро их формы не знает, и правила значения у реестра нет.
+    // Булевы (`randomtrailers`/`disablecookies`) с контракта 1.1.23 ведёт
+    // секция реестра: у записи объявлен `value_map` с `on_no_match: keep`,
+    // негодное написание доезжает до тела и снимается там правилом поля
+    // (`type: bool`, `on_invalid: drop` с кодом `awg3_field_invalid`).
+    // Рукописного `Awg3FieldInvalidWarning` на этом входе больше не
+    // возникает, а реестр под этим файлом не загружен (см. шапку) — поэтому
+    // кода здесь нет вовсе, ровно как у остальных строк таблицы. Проверяет
+    // его `contract_test.dart` по корпусу.
     test('таблица негативов: поле снято, узел жив', () {
-      const boolParams = {'randomtrailers', 'disablecookies'};
       const cases = <String, String>{
         'contentpaddingaddition': 'abc',
         'rekeyaftertime': '120-100', // N > M — НЕ свопается (в отличие от h)
@@ -545,10 +550,6 @@ void main() {
         final json = Awg.awg3ParamToJson[param]!;
         expect(spec.awg!.fields.containsKey(json), false,
             reason: '$param=$value должно быть снято');
-        if (boolParams.contains(param)) {
-          expect(spec.warnings, contains(Awg3FieldInvalidWarning(param, value)),
-              reason: '$param=$value');
-        }
         // Маркер AWG3 даже при невалидном поле: узел — AmneziaWG, дефолт 1280.
         expect(spec.mtu, 1280);
       });
@@ -651,7 +652,12 @@ void main() {
       expect(again.awg!.fields, spec.awg!.fields);
       expect(again.mtu, 1200);
       expect(again.peers.single.persistentKeepalive, '25-35');
-      expect(spec.toUri(), contains('randomtrailers=on'));
+      // Написание истины у эмита — `1`, канон записи реестра (`value_map`
+      // ведёт `on`/`true`/`1` в одно значение, а обратно пишется первое
+      // каноническое). Круг от этого не страдает — он проверен строкой выше
+      // (`again.awg!.fields` == `spec.awg!.fields`), и `on` наш же разбор
+      // читает по-прежнему.
+      expect(spec.toUri(), contains('randomtrailers=1'));
     });
 
     test('JSON endpoint: AWG3-ключи, keepalive строкой, mtu цел (§473); '
@@ -781,7 +787,13 @@ void main() {
       expect(f['rekey_after_time'], '3000-4000');
       expect(f['random_trailers'], true);
       expect(spec.mtu, 1280); // §421 — кламп AWG3
-      expect(spec.warnings, isEmpty);
+      // Контракт 1.1.23+ — `wgconf_dns_ignored` ЗАРАБОТАЛ и на этой форме:
+      // `DNS` из `.conf` относится к системному резолверу, в тело узла не
+      // едет, и потеря теперь названа кодом. Прежде снималось молча.
+      expect(
+        spec.warnings.whereType<RegistryWarning>().map((w) => w.code),
+        ['wgconf_dns_ignored'],
+      );
     });
 
     test('источник узла — исходная ссылка, не синтетический wireguard://', () {

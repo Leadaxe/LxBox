@@ -22,7 +22,7 @@ import 'dart:convert' show base64;
 import '../../models/node_warning.dart';
 import '../app_log.dart';
 import '../parser/uri_utils.dart'
-    show decodeBase64Safe, normalizeSingboxDuration, urlPathOk;
+    show decodeBase64Lenient, normalizeSingboxDuration, urlPathOk;
 import 'registry.dart';
 
 /// §473 — вход, которым тело приехало в приложение.
@@ -1530,7 +1530,10 @@ String _normalizeString(String v, String norm) {
     // Годность (длину) судит `format` поля, поэтому здесь не проверяется
     // ничего: не-base64 возвращается как пришёл и снимается правилом реестра.
     case 'base64_std':
-      final decoded = decodeBase64Safe(v.trim());
+      // Декодер ЛЕНИВЫЙ — тот же, которым судит годность `base64_32`: канон
+      // и суд обязаны читать значение одинаково, иначе ключ, признанный
+      // годным, нормализация оставила бы неканоническим (или наоборот).
+      final decoded = decodeBase64Lenient(v.trim());
       return decoded == null ? v : base64.encode(decoded);
     // `cidr_prefix`: голый адрес получает префикс — `/32` у v4, `/128` у v6.
     // Применяется поэлементно: поле-список нормализуется вызывающим по
@@ -1539,6 +1542,19 @@ String _normalizeString(String v, String norm) {
       final a = v.trim();
       if (a.isEmpty || a.contains('/')) return v;
       return a.contains(':') ? '$a/128' : '$a/32';
+    // D133-26 (контракт 1.1.26) — `duration_bare_seconds` переехал из маппера
+    // в `body.fields`: «голое число — это секунды» обязано действовать на ВСЕХ
+    // входах, а не только там, где значение пришло ссылкой. До переезда тело
+    // sing-box с `"tcp_keep_alive": 30` доезжало до ядра голым числом, а та же
+    // настройка из ссылки — как `30s`: одна настройка, два написания.
+    //
+    // Негодное после нормализации значение НЕ чинится здесь: не-число
+    // возвращается как пришло и уходит на `type_invalid` правилом поля
+    // (`type: duration`). Это и есть принятая сторонами дельта — раньше такое
+    // значение снималось молча.
+    case 'duration_bare_seconds':
+      final n = int.tryParse(v.trim());
+      return n == null ? v : '${n}s';
     default:
       _logUnknownExpression('normalize', norm);
       return v;
@@ -1777,7 +1793,14 @@ bool _formatOk(Object? v, String format) {
 ///
 /// Декодер общий с §169 (`isValidRealityPublicKey`): расходиться в том, что
 /// считать валидным base64, двум гардам одного и того же ключа нельзя.
-int? _base64Bytes(String v) => decodeBase64Safe(v.trim())?.length;
+///
+/// Декодер ЛЕНИВЫЙ (D-030), как `encoding/base64` у Go и как `normalizeWGKey`
+/// в парсере ссылки: ядро принимает неканоническую последнюю группу (`…ccC=`
+/// и `…ccA=` — одни и те же 32 байта), а строгий `dart:convert` бросает на
+/// ней `FormatException`. Строгим декодером длина такого ключа выходила
+/// `null`, и `format: base64_32` ронял ЗАКОННЫЙ узел кодом `wg_key_invalid`
+/// (корпус `uri_psk_keepalive`, где ключи лежат в query).
+int? _base64Bytes(String v) => decodeBase64Lenient(v.trim())?.length;
 
 bool _ipv4Ok(String v) {
   final parts = v.split('.');

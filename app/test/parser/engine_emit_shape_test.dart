@@ -81,13 +81,6 @@ void main() {
       'legacy_cleartext_userinfo': 'headers.Host тела (ws) равен адресу узла, '
           'и рукописный эмит писал ключ `host` пустым — поле тела терялось.',
     },
-    'wireguard': {
-      '*': 'НАПИСАНИЕ СХЕМЫ: узел с AWG-полями уезжает `awg://`, а не '
-          '`wireguard://` (emit.form_from any_set, обращение kind_when). '
-          'Род, который вход ОБЪЯВИЛ схемой, из ссылки `wireguard://` уже не '
-          'прочитается — ни нами, ни чужим клиентом. Объявлено разделом 7b '
-          'спеки 480 как класс, а не как случай.',
-    },
   };
 
   Map<String, Map<String, dynamic>> cases(String scheme) {

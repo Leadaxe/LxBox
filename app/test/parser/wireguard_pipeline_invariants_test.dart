@@ -318,16 +318,31 @@ void main() {
       expect(body['mtu'], 1280);
       expect(body.keys.where((k) => k.startsWith('j')), isEmpty,
           reason: 'ни одного AWG-поля в теле не осталось');
-      // Код ровно один, и он про снятый `jmin` (§463).
+      // Контракт 1.1.23+ — кодов ДВА, по одному на каждое снятое поле.
+      // Раньше `jc=abc` снимался молча (эталон Go до этой версии), и код
+      // оставался только у `jmin`. Теперь корпус ждёт обоих
+      // (`awg_jc_invalid_dropped.expected.json`: `jc` со значением «abc» и
+      // `jmin` без значения), и молчание про `jc` было бы потерей поля без
+      // следа.
       expect(_registry(spec).map((w) => '${w.code}@${w.path}'),
-          ['awg_header_invalid@jmin']);
+          ['awg_header_invalid@jc', 'awg_header_invalid@jmin']);
     }, skip: skip);
 
     test('§463 — awg_header_invalid ставится ПОФАКТОРНО', () {
       // Четыре битых заголовка — четыре сообщения человеку; конверт корпуса
       // при этом несёт одну запись без пути (`awg_ranged_h_broken_dropped`).
       final spec = parseUri(wg('&h1=10-&h2=a-b&h3=-5&h4=1-2-3&jc=4'))!;
-      expect(spec.warnings.whereType<AwgHeaderInvalidWarning>(), hasLength(4));
+      // Код ставит РЕЕСТР, и приезжает он общим типом `RegistryWarning` с
+      // путём — рукописного `AwgHeaderInvalidWarning` на этом входе больше
+      // не возникает. Пофакторность от этого не изменилась: четыре битых
+      // заголовка — четыре записи с путями `h1`…`h4`, ровно как ждёт корпус
+      // (`awg_ranged_h_broken_dropped.expected.json`).
+      expect(
+        _registry(spec)
+            .where((w) => w.code == 'awg_header_invalid')
+            .map((w) => w.path),
+        ['h1', 'h2', 'h3', 'h4'],
+      );
       final body = spec.emit(TemplateVars.empty).map;
       for (final k in const ['h1', 'h2', 'h3', 'h4']) {
         expect(body.containsKey(k), isFalse, reason: 'битый $k снят');
@@ -463,10 +478,18 @@ void main() {
       expect(spec.warnings, hasLength(before));
     }, skip: skip);
 
-    test('обычный WG из INI: MTU автора цел, кодов нет', () {
+    test('обычный WG из INI: MTU автора цел, DNS отмечен кодом', () {
       final spec = parseWireguardIni(proton)!;
       expect(spec.emit(TemplateVars.empty).map['mtu'], 1420);
-      expect(_registry(spec), isEmpty);
+      // Контракт 1.1.23+ — `wgconf_dns_ignored` ЗАРАБОТАЛ: `DNS` из `.conf`
+      // относится к системному резолверу, а не к узлу, и в тело не едет. До
+      // этой версии он снимался МОЛЧА; теперь корпус кода ждёт
+      // (`wgconf/ini_basic.expected.json` несёт его единственным warning), и
+      // молчание здесь было бы расхождением с лаунчером на живых узлах.
+      expect(
+        _registry(spec).map((w) => w.code),
+        ['wgconf_dns_ignored'],
+      );
     }, skip: skip);
 
     test('Endpoint: host:port, [IPv6]:port и голый IPv6 (§219)', () {

@@ -663,6 +663,59 @@ void main() {
       }
     }, skip: skip);
 
+    test('format base64_32: НЕКАНОНИЧЕСКАЯ последняя группа — годный ключ',
+        () {
+      // D-030 — `…ccC=` и `…ccA=` декодируют в ОДНИ И ТЕ ЖЕ 32 байта: в
+      // последней группе значащих бит 6, остальные не используются, и ядро
+      // (Go `encoding/base64`) такую форму принимает. Строгий `dart:convert`
+      // бросает на ней `FormatException`, и санитайзер, судивший им, ронял
+      // ЗАКОННЫЙ ключ — корпус `uri_psk_keepalive` (ключи в query) переставал
+      // разбираться целиком.
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'reality': {
+            'enabled': true,
+            'public_key': 'ccccccccccccccccccccccccccccccccccccccccccC=',
+          },
+        }
+      }));
+      expect(_codes(r), isNot(contains('reality_pbk_invalid')));
+      // Значение остаётся как пришло: у `public_key` REALITY объявлен только
+      // `format`, без `normalize: base64_std`. Канон — отдельное правило, и
+      // ставится он там, где реестр его назвал (ключи WireGuard); здесь
+      // проверяется ровно то, что ленивый декодер СУДИТ так же, как ядро.
+      expect(
+        ((r.body?['tls'] as Map?)?['reality'] as Map?)?['public_key'],
+        'ccccccccccccccccccccccccccccccccccccccccccC=',
+      );
+    }, skip: skip);
+
+    test('normalize base64_std: неканоническая форма приводится к канону', () {
+      // Та же пара байт, но у поля объявлен `normalize: base64_std` — здесь
+      // канон ОБЯЗАН встать, иначе одна нода даёт два identity-хеша (D-030).
+      // Канон и суд читают значение одним ленивым декодером.
+      final r = _san({
+        'type': 'wireguard',
+        'tag': 'wg',
+        'private_key': 'ccccccccccccccccccccccccccccccccccccccccccC=',
+        'address': ['10.0.0.3/32'],
+        'peers': [
+          {
+            'public_key': 'ddddddddddddddddddddddddddddddddddddddddddD=',
+            'address': 'h.example',
+            'port': 51820,
+            'allowed_ips': ['0.0.0.0/0'],
+          }
+        ],
+      }, scheme: 'wireguard');
+      expect(_codes(r), isNot(contains('wg_key_invalid')),
+          reason: 'коды: ${_codes(r)}');
+      expect(r.body, isNotNull, reason: 'коды: ${_codes(r)}');
+      expect(r.body?['private_key'],
+          'ccccccccccccccccccccccccccccccccccccccccccA=');
+    }, skip: skip);
+
     test('normalize hex_only + normalize_code: 0x1a2 чистится с кодом', () {
       final r = _san(_vless({
         'tls': {

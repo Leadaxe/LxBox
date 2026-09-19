@@ -77,6 +77,14 @@ final Map<int, int> _b64CharValue = {
 /// needed to match core behavior instead of over-rejecting valid keys.
 /// Accepts std/url-safe chars mixed, with or without `=` padding. Returns
 /// null on any invalid character or on a length that isn't decodable.
+/// Публичное имя того же декодера: им судит ключи САНИТАЙЗЕР
+/// (`format: base64_32`, `normalize: base64_std`). До D133-22 правило жило в
+/// парсере ссылки и звало отсюда, а санитайзер брал строгий
+/// [decodeBase64Safe] — и неканоническая форма `…ccC=`, законная для ядра,
+/// роняла узел кодом `wg_key_invalid` на входе, где ключ лежит в query
+/// (корпус `uri_psk_keepalive`). Двум гардам одного ключа расходиться нельзя.
+List<int>? decodeBase64Lenient(String s) => _decodeBase64Lenient(s);
+
 List<int>? _decodeBase64Lenient(String s) {
   final trimmed = s.replaceAll(RegExp(r'=+$'), '');
   if (trimmed.isEmpty) return null;
