@@ -50,7 +50,7 @@ void main() {
     test('tuic (UDP/QUIC) → 🚀', () {
       expect(
           defaultEmojiFor(parse(
-              'tuic://u:p@h.example:443?congestion_control=bbr&alpn=h3&sni=h.example#TUIC')),
+              'tuic://11111111-1111-1111-1111-111111111111:p@h.example:443?congestion_control=bbr&alpn=h3&sni=h.example#TUIC')),
           '🚀');
     });
     test('wireguard → 🏠', () {
