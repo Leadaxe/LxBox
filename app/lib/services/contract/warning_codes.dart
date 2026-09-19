@@ -39,10 +39,11 @@ const kWarningCodes = <Type, String>{
   SelectorAsAutoWarning: 'selector_as_auto',
   GroupMemberMissingWarning: 'group_member_missing',
   RealityShortIdInvalidWarning: 'reality_short_id_invalid',
-  AwgHeaderInvalidWarning: 'awg_header_invalid',
   // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла
   // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.
-  Awg3FieldInvalidWarning: 'awg3_field_invalid',
+  // `awg_header_invalid` и `awg3_field_invalid` здесь БОЛЬШЕ НЕТ: классы
+  // сняты (контракт 1.1.33), коды приходят `RegistryWarning` и несут свой
+  // код полем.
   Awg3HeaderKeyInvalidWarning: 'awg3_header_key_invalid',
   Awg3PaddingTooShortWarning: 'awg3_padding_too_short',
   Awg3RandomTrailersWideHeadersWarning: 'awg3_random_trailers_wide_headers',
@@ -72,9 +73,8 @@ String? warningCodeOf(NodeWarning w) =>
 /// (CANON §6), и выдуманное значение расходилось бы с контрактом молча. Класс
 /// вне таблицы пути не имеет — и в дедупе закрывает свой код целиком.
 ///
-/// `AwgHeaderInvalidWarning` сюда НЕ попадает намеренно: код ставится
-/// пофакторно на каждый битый заголовок (`h1`…`h4` — четыре сообщения
-/// человеку), а конверт по контракту несёт одну запись без пути.
+/// Кодов AWG здесь нет с контракта 1.1.33: классы сняты, и путь у них теперь
+/// свой, реестровый, — `RegistryWarning` несёт его полем.
 String? handwrittenWarningPath(NodeWarning w) => switch (w) {
       DeprecatedFlowWarning() => 'flow',
       PacketEncodingUnknownWarning() => 'packet_encoding',

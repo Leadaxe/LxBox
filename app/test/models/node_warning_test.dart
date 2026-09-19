@@ -119,8 +119,6 @@ void main() {
         // §435 — только UI, кода контракта нет.
         SectionsRecordDroppedWarning() => 'sections_record_dropped',
         SectionsConflictWarning() => 'sections_conflict',
-        AwgHeaderInvalidWarning() => 'awg_header_invalid',
-        Awg3FieldInvalidWarning() => 'awg3_field_invalid',
         Awg3HeaderKeyInvalidWarning() => 'awg3_header_key_invalid',
         Awg3PaddingTooShortWarning() => 'awg3_padding_too_short',
         Awg3RandomTrailersWideHeadersWarning() =>
@@ -165,6 +163,27 @@ void main() {
       final w = NodeWarning.byCode('naive_padding_ignored',
           path: 'padding', value: '1') as RegistryWarning;
       expect(w.value, '1');
+      expect(w.params, isEmpty);
+    });
+
+    // Контракт 1.1.33 переписал тексты обоих кодов AWG с `{path}`/`{value}`
+    // и последствием для рукопожатия; классы сняты. Своего имени им не нужно
+    // — оба плейсхолдера подставляются всегда (`text_params_implicit`).
+    test('awg_header_invalid: RegistryWarning с путём и значением', () {
+      final w = NodeWarning.byCode('awg_header_invalid',
+          path: 'h1', value: '5-1') as RegistryWarning;
+      expect(w.code, 'awg_header_invalid');
+      expect(w.path, 'h1');
+      expect(w.value, '5-1');
+      expect(w.params, isEmpty);
+    });
+
+    test('awg3_field_invalid: RegistryWarning с путём и значением', () {
+      final w = NodeWarning.byCode('awg3_field_invalid',
+          path: 'content_padding_addition', value: '100-10') as RegistryWarning;
+      expect(w.code, 'awg3_field_invalid');
+      expect(w.path, 'content_padding_addition');
+      expect(w.value, '100-10');
       expect(w.params, isEmpty);
     });
 

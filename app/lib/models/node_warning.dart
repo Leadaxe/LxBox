@@ -67,20 +67,19 @@ sealed class NodeWarning {
             value: value,
             params: {'entry': value},
           ),
-        // §480 W4 — у этих двух кодов текст НЕ выразим шаблоном реестра: он
-        // называет и поле, и написанное значение, и объясняет последствие
-        // («ядро откатится на обычный заголовок WireGuard, и рукопожатие может
-        // не сойтись»). Шаблон `warnings.json` умеет подставлять только
-        // `{field}`, поэтому запись реестра даёт «field {field} removed» —
-        // человеку это не говорит ничего.
+        // Два кода AWG сюда БОЛЬШЕ НЕ ПОПАДАЮТ (контракт 1.1.33). Их текст
+        // держался в коде ровно потому, что реестровый умел подставить одно
+        // лишь `{field}` и давал «field {field} removed» — человеку это не
+        // говорило ничего. Теперь `warnings.json` называет и поле, и
+        // написанное значение (`{path}`/`{value}`, оба подставляются всегда),
+        // и объясняет последствие: ядро откатится на обычный заголовок
+        // WireGuard, и если сервер ждёт AmneziaWG, рукопожатие может не
+        // сойтись. Держать вторую копию этого текста незачем — она разошлась
+        // бы с реестром молча.
         //
-        // Ждёт текстов реестра с `{path}`/`{value}`: пока их нет, текст живёт
-        // в коде, и это тот же долг, что был у `ech_ignored`. Снимается он не
-        // здесь, а у лаунчера.
-        'awg_header_invalid' => AwgHeaderInvalidWarning(path, value),
-        'awg3_field_invalid' => Awg3FieldInvalidWarning(path, value),
-        // `naive_padding_ignored` сюда не попадает: его текст зовёт `{value}`,
-        // а тот подставляется всегда (`text_params_implicit`).
+        // `naive_padding_ignored` сюда не попадает по той же причине: его
+        // текст зовёт `{value}`, а тот подставляется всегда
+        // (`text_params_implicit`).
         _ => RegistryWarning(code: code, path: path, value: value),
       };
 
@@ -636,62 +635,16 @@ final class SectionsConflictWarning extends NodeWarning {
 // `on_invalid: drop`), код `tuic_congestion_invalid` приходит с путём и
 // значением. Производителей в lib/ не осталось после шага 5.
 
-/// `awg_header_invalid` (warning) — AmneziaWG magic-header (h1–h4) не uint32
-/// и не диапазон `lo-hi`. Поле снимается, ядро возьмёт WireGuard-дефолт —
-/// а с ним handshake не совпадёт с сервером (тихо сломанный узел: рукопожатие
-/// уходит, ответа нет). Отсюда warning, а не info.
-///
-/// Только h1–h4: битые jc/jmin/jmax/s1–s4 Go пропускает молча (debug-лог).
-/// Go-эталон: `applyAWGFields` (node_parser_wireguard.go:400).
-final class AwgHeaderInvalidWarning extends NodeWarning {
-  /// Имя поля — `h1`…`h4`.
-  final String field;
-
-  /// Значение, как его написал провайдер.
-  final String value;
-
-  const AwgHeaderInvalidWarning(this.field, this.value);
-
-  @override
-  List<Object?> get props => [field, value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "AmneziaWG header \"%1\$s=%2\$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.",
-      field,
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
-
-/// §421 `awg3_field_invalid` (warning) — AWG 3.x тайминг/паддинг
-/// (content_padding_addition, rekey_*, reject_after_time, keepalive_timeout,
-/// max_handshake_attempts) с мусором или перевёрнутым диапазоном `N>M`,
-/// либо булево (random_trailers/disable_cookies) не on/off. Поле снято, узел
-/// живёт: тайминги клиентские, ядро работает на своих дефолтах. Границы НЕ
-/// свопаются (в отличие от h1–h4). Go-эталон: `applyAWG3Fields` (awg3.go).
-final class Awg3FieldInvalidWarning extends NodeWarning {
-  /// URI/.conf-имя параметра (`contentpaddingaddition`, `randomtrailers`…).
-  final String field;
-
-  /// Значение, как его написал провайдер.
-  final String value;
-
-  const Awg3FieldInvalidWarning(this.field, this.value);
-
-  @override
-  List<Object?> get props => [field, value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "AmneziaWG 3 field \"%1\$s=%2\$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.",
-      field,
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
+// Контракт 1.1.33 — `AwgHeaderInvalidWarning` и `Awg3FieldInvalidWarning`
+// сняты вместе с `ech_ignored` и соседями (§482): тексты обоих кодов
+// переписаны в `warnings.json` с `{path}` и `{value}` и объясняют
+// последствие — ядро откатится на обычный заголовок WireGuard, и если сервер
+// ждёт AmneziaWG, рукопожатие может не сойтись. Прежняя запись реестра
+// подставляла одно `{field}` и давала «field {field} removed», ради чего
+// текст и жил в коде; теперь копия была бы вторым источником правды.
+//
+// Коды ставит `NodeWarning.byCode` (ветка по умолчанию) — `RegistryWarning` с
+// путём поля и написанным значением, severity `warning` из реестра.
 
 /// §421 `awg3_header_key_invalid` (error) — `header_protection_key` не
 /// base64, не 32 байта или все нули. УЗЕЛ выброшен на разборе, а не помечен:

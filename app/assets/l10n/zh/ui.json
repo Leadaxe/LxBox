@@ -681,9 +681,6 @@
   "Also put tunnels on the active route (pool members, the selected node) to sleep after a long quiet period — e.g. overnight. The first connection after sleep adds ~1 round trip. Keep this at or above the directions' idle timeout (30 min by default). Requires \"Suspend idle tunnels\" to be on.": {
     "value": "也可让当前路由上的隧道（连接池成员、已选节点）在长时间空闲后休眠——例如夜间。休眠后首次连接会多约一个往返。请把该值设为不低于方向的空闲超时（默认 30 分钟）。需要先开启「挂起空闲隧道」。"
   },
-  "AmneziaWG 3 field \"%1$s=%2$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.": {
-    "value": "AmneziaWG 3 字段「%1$s=%2$s」既不是数字、不是有序的「低-高」区间，也不是开关值，已丢弃。内核将使用其默认值。"
-  },
   "AmneziaWG 3 header protection key is not a 32-byte base64 key, so the node was skipped: the handshake cannot succeed and the core would reject the whole config.": {
     "value": "AmneziaWG 3 的头部保护密钥不是 32 字节的 base64 密钥，已跳过该节点：握手无法成功，且内核会拒绝整份配置。"
   },
@@ -692,9 +689,6 @@
   },
   "AmneziaWG 3 random trailers are combined with a wide magic-header range (65536 or more); the server may mistake some upload packets for handshakes and drop them.": {
     "value": "AmneziaWG 3 的随机尾部与较宽的 magic 头部区间（65536 及以上）同时使用时，服务器可能把部分上行包误判为握手而丢弃。"
-  },
-  "AmneziaWG header \"%1$s=%2$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.": {
-    "value": "AmneziaWG 头部「%1$s=%2$s」既不是数字也不是「低-高」区间，已丢弃。内核将回退为普通 WireGuard 头部，握手可能与服务器不匹配。"
   },
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ 需要此权限才能获取 SSID。点击授予。"
