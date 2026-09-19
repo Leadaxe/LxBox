@@ -46,6 +46,11 @@ const _infoFlow = RegistryWarning(
   value: 'xtls-rprx-direct',
   params: {'flow': 'xtls-rprx-direct'},
 );
+const _infoUriParam = RegistryWarning(
+  code: 'uri_param_unknown',
+  path: 'foo',
+  params: {'query_name': 'foo'},
+);
 
 void main() {
   setUpAll(() async {
@@ -55,6 +60,8 @@ void main() {
   tearDown(() {
     LocaleController.I.setting = 'system';
   });
+
+  tearDownAll(ContractRegistry.I.resetForTesting);
 
   Future<void> pumpSheet(WidgetTester tester, List<NodeWarning> warnings) =>
       tester.pumpWidget(MaterialApp(
@@ -594,6 +601,78 @@ void main() {
       final text = ContractRegistry.I.textFor('tls_insecure')!;
       expect(find.text(text.causeEn!), findsOneWidget);
       expect(find.text(text.causeRu!), findsNothing);
+    });
+  });
+
+  group('§497 — вкладка Notifications в деталях узла', () {
+    NodeSpec inspectNode(List<NodeWarning> warnings) => VlessSpec(
+          id: 'n1',
+          tag: 'n1',
+          label: 'n1',
+          server: 'example.com',
+          port: 443,
+          rawSource: '',
+          uuid: '00000000-0000-0000-0000-000000000000',
+          warnings: warnings,
+        );
+
+    Future<void> pumpInspect(WidgetTester tester, NodeSpec node) =>
+        tester.pumpWidget(MaterialApp(
+          home: NodeInspectScreen(node: node),
+        ));
+
+    Future<void> openNotificationsTab(WidgetTester tester) async {
+      await tester.tap(find.text('Notifications'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('узел с info uri_param_unknown — счётчик и заголовок реестра',
+        (tester) async {
+      await pumpInspect(tester, inspectNode(const [_infoUriParam]));
+
+      final tabBar = find.byType(TabBar);
+      expect(
+        find.descendant(
+          of: tabBar,
+          matching: find.byIcon(Icons.info_outline),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: tabBar, matching: find.text('1')),
+        findsOneWidget,
+      );
+
+      await openNotificationsTab(tester);
+
+      final raw = ContractRegistry.I.textFor('uri_param_unknown')!;
+      expect(
+        find.text(raw.titleEn.replaceAll('{query_name}', 'foo')),
+        findsOneWidget,
+      );
+      expect(find.byType(NodeNotificationsView), findsOneWidget);
+    });
+
+    testWidgets('узел без уведомлений — вкладка есть, пустое состояние',
+        (tester) async {
+      await pumpInspect(tester, inspectNode(const []));
+
+      expect(find.text('Notifications'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(TabBar),
+          matching: find.byIcon(Icons.info_outline),
+        ),
+        findsNothing,
+      );
+
+      await openNotificationsTab(tester);
+
+      expect(
+        find.text('No notifications for this server'),
+        findsOneWidget,
+      );
+      expect(find.byType(NodeNotificationsView), findsNothing);
     });
   });
 

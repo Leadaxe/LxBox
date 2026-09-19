@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
 import 'package:lxbox/models/home_state.dart';
+import 'package:lxbox/services/core_reject/core_reject_guard.dart';
+import 'package:lxbox/services/core_reject/core_reject_state.dart';
 import 'package:lxbox/services/haptic_service.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -65,6 +67,7 @@ void main() {
 
   tearDown(() async {
     controller.dispose();
+    CoreRejectState.I.resetForTest();
     await Future<void>.delayed(const Duration(milliseconds: 50));
     for (final ch in [methods, ccStatus, ccGroups]) {
       messenger.setMockMethodCallHandler(ch, null);
@@ -112,6 +115,21 @@ void main() {
 
     expect(err, isNotEmpty);
     expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+  });
+
+  test('§498 — Disconnected скрывает плашку страховки', () {
+    CoreRejectState.I.finish(const CoreRejectRun(
+      outcome: CoreRejectOutcome.startedWithDisabled,
+      disabled: [DisabledNode(tag: 'n1', reason: 'bad')],
+    ));
+    expect(CoreRejectState.I.bannerVisible, isTrue);
+
+    controller.debugHandleStatusEvent(event(TunnelStatus.connected));
+    controller.debugHandleStatusEvent(event(TunnelStatus.disconnected));
+
+    expect(CoreRejectState.I.bannerVisible, isFalse);
+    expect(CoreRejectState.I.disabled, isNotEmpty,
+        reason: 'вердикт прогона на месте');
   });
 
   test('Stopped+core_error из stale-terminal резолвит completer', () async {

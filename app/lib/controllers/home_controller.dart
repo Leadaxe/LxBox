@@ -23,6 +23,7 @@ import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
 import '../services/rule_set_auto_updater.dart';
 import '../services/subscription/auto_updater.dart';
+import '../services/core_reject/core_reject_state.dart';
 
 part 'home_controller/config_io.dart';
 part 'home_controller/heartbeat.dart';
@@ -464,6 +465,9 @@ class HomeController extends ChangeNotifier
         return;
       }
       _stopHeartbeat();
+      // §498 — плашка страховки сообщает о прошедшем старте; при Stop/Disconnected
+      // уходит сама. Вердикты на узлах не снимаются.
+      CoreRejectState.I.dismissBanner();
       // §141 P1.2b / §286 — единый контракт «tunnel down»: гасим ВСЁ пробирование
       // (mass-ping + auto-ping-таймер + folder-probe sweep'ы) ПЕРЕД гашением
       // Направления, симметрично `_onTunnelDead`. Иначе воркеры/пробы дописывают

@@ -155,14 +155,18 @@ class CoreRejectState extends ChangeNotifier {
 
   // ── запись из хоста автомата ──────────────────────────────────────────
 
-  /// Новый прогон: старое состояние прогона стирается, плашка — нет
-  /// (её закрывает человек, а не следующее нажатие Start).
+  /// Новый прогон: старое состояние прогона стирается; плашка прошлого
+  /// прогона уходит (§498 — живёт до ×, Stop, следующего Start или перезапуска).
   void beginRun() {
     _phase = CoreRejectPhase.signalStart;
     _round = 0;
     _disabled = const [];
     _lastOutcome = null;
     _lastError = '';
+    if (_bannerVisible) {
+      _bannerVisible = false;
+      _bannerNodes = const [];
+    }
     // Очередь `answer=keep` с Debug API ставится ДО beginRun — не стирать.
     notifyListeners();
   }

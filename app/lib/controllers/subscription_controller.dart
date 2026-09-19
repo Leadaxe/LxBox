@@ -141,6 +141,12 @@ class SubscriptionController extends ChangeNotifier {
   Map<String, NodeSpec> _lastTagMap = const {};
   Map<String, NodeSpec> get lastEmittedTagMap => _lastTagMap;
 
+  /// §498 — подмена обратной карты последней сборки в тестах навигации листа.
+  @visibleForTesting
+  void debugSetLastEmittedTagMap(Map<String, NodeSpec> map) {
+    _lastTagMap = map;
+  }
+
   /// §274 — Направления, чей node_filter отсёк все ноды в последней УСПЕШНОЙ
   /// сборке (display-имена; Направление схлопнулось в block-fallback). [stamp]
   /// монотонно растёт на каждой сборке с непустым списком — Home дедупит
@@ -1774,7 +1780,10 @@ class SubscriptionController extends ChangeNotifier {
     // стирается, следующий старт проверит узел заново. Выключение рукой
     // вердикта не ставит (его ставит только страховка).
     var nextList = list.copyWith(disabledHashes: next);
-    if (enabling) nextList = clearSubscriptionVerdict(nextList, hash);
+    if (enabling) {
+      nextList = clearSubscriptionVerdict(nextList, hash);
+      unstampCoreRejected(node);
+    }
     entry._replaceList(nextList);
     await _persist();
     notifyListeners();
@@ -2277,8 +2286,14 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
-    _entries[index]._replaceList(
-        _toggleEnabled(_entries[index].list, !_entries[index].enabled));
+    final list = _entries[index].list;
+    final enabling = !list.enabled;
+    final ServerList next = switch (list) {
+      UserServer u when enabling =>
+        u.copyWith(enabled: true, warnings: dropVerdict(u.warnings)),
+      _ => _toggleEnabled(list, enabling),
+    };
+    _entries[index]._replaceList(next);
     await _persist();
     notifyListeners();
   }
@@ -2311,6 +2326,9 @@ class SubscriptionController extends ChangeNotifier {
       if (!applied.changed) continue;
       _entries[i]._replaceList(applied.list);
       _entries[i].nodeCount = _entries[i].list.nodes.length;
+      // Список узлов и вкладка Notifications читают `NodeSpec.warnings`;
+      // без штампа вердикт жил бы только в хранилище до следующего разбора.
+      stampNodeWarnings(node, [StoredWarning.coreRejected(reason)]);
       await _persist();
       notifyListeners();
       return true;
@@ -2375,6 +2393,7 @@ class SubscriptionController extends ChangeNotifier {
         if (!applied.changed) continue;
         _entries[i]._replaceList(applied.list);
         _entries[i].nodeCount = _entries[i].list.nodes.length;
+        unstampCoreRejected(mapped);
         await _persist();
         notifyListeners();
         return true;

@@ -373,6 +373,9 @@
       "other": "Удалено %d сервера"
     }
   },
+  "1 server disabled": {
+    "value": "Отключено серверов: 1"
+  },
   "%d servers disabled": {
     "value": {
       "one": "Отключено серверов: %d",
@@ -3091,6 +3094,9 @@
   "Notifications": {
     "value": "Уведомления"
   },
+  "No notifications for this server": {
+    "value": "У этого сервера нет уведомлений"
+  },
   "Number of nodes": {
     "value": "Количество узлов"
   },
@@ -4819,9 +4825,6 @@
   },
   "What happened": {
     "value": "Что произошло"
-  },
-  "What the app changed or could not apply": {
-    "value": "Что приложение изменило или не смогло применить"
   },
   "What the core receives. Read-only: edit the source instead.": {
     "value": "То, что получит ядро. Только чтение: правьте источник."

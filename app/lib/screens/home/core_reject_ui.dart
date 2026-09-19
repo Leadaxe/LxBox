@@ -7,18 +7,26 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../models/core_reject_verdict.dart';
+import '../../controllers/subscription_controller.dart';
+import '../../controllers/subscription_controller/core_reject_ops.dart';
+import '../../models/node_spec.dart';
+import '../../models/server_list.dart';
 import '../../services/core_reject/core_reject_guard.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../services/node_hash.dart';
 import '../../widgets/app_bottom_sheet.dart';
-import '../subscription_detail_screen/widgets/node_notifications_view.dart';
+import '../node_settings_screen.dart';
+import '../subscription_detail_screen/node_inspect_screen.dart';
+import 'source_lookup.dart';
 
 /// Имён в тексте плашки — до трёх, остальные уходят в хвост «+%d more».
 const _kNamesInBanner = 3;
 
-/// Заголовок плашки: число выключенных — первым словом.
+/// Заголовок плашки и листа: «1 server disabled» / «%d servers disabled».
 String coreRejectBannerTitle(int n) =>
-    getLocalText.plural("%d servers disabled", n);
+    n == 1
+        ? getLocalText.s('1 server disabled')
+        : getLocalText.plural('%d servers disabled', n);
 
 /// Текст плашки: перечень имён с хвостом.
 String coreRejectBannerText(List<DisabledNode> nodes) {
@@ -79,12 +87,75 @@ Future<CoreRejectPrompt> showCoreRejectPrompt(
   return answer ?? CoreRejectPrompt.stop;
 }
 
-/// Кнопка Show: список выключенных этим прогоном, по каждому — шторка
-/// Warnings с текстом ядра (§479, существующий рендер уведомлений узла).
+/// §498 — экран деталей узла на вкладке Notifications (тот же путь, что тап
+/// по узлу в списке). Узел ищется по [lastEmittedTagMap], не по отображаемым
+/// строкам; хоп цепочки ведёт к владельцу.
+Future<void> openCoreRejectNodeDetails(
+  BuildContext context, {
+  required SubscriptionController subController,
+  required DisabledNode disabled,
+}) async {
+  final mapped = subController.lastEmittedTagMap[disabled.tag];
+  if (mapped == null) return;
+  final owner = ownerOfNode(mapped, subController.entries);
+  if (owner == null) return;
+
+  final entry = subController.entries[owner.entryIndex];
+  final list = entry.list;
+  final source = sourceNodeOf(mapped, list) ?? mapped;
+  _stampStoredForInspect(list, source);
+
+  await Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) {
+        if (list is FolderServers || list is UserServer) {
+          return NodeSettingsScreen(
+            entry: entry,
+            index: owner.entryIndex,
+            subController: subController,
+            memberIndex: owner.memberIndex,
+            initialTab: NodeSettingsScreen.notificationsTabIndex,
+          );
+        }
+        return NodeInspectScreen(
+          node: source,
+          tagPrefix: list.tagPrefix,
+          initialTab: NodeInspectTab.notifications,
+        );
+      },
+    ),
+  );
+}
+
+/// Вкладка Notifications читает `NodeSpec.warnings`; вердикт страховки
+/// живёт в хранилище — дописываем его, как [stampStoredVerdicts] на разборе.
+void _stampStoredForInspect(ServerList list, NodeSpec source) {
+  switch (list) {
+    case SubscriptionServers():
+      final id = sourceNodeIdentities(list.nodes)[source];
+      if (id == null) return;
+      stampNodeWarnings(source, list.nodeWarnings[id] ?? const []);
+    case FolderServers():
+      for (final m in list.members) {
+        if (identical(m.node, source)) {
+          stampNodeWarnings(source, m.warnings);
+          return;
+        }
+      }
+    case UserServer():
+      if (list.nodes.any((n) => identical(n, source))) {
+        stampNodeWarnings(source, list.warnings);
+      }
+  }
+}
+
+/// Кнопка Show: список выключенных этим прогоном; тап по строке — детали
+/// узла на вкладке Notifications (§498). Удалённый узел — строка неактивна.
 Future<void> showCoreRejectList(
   BuildContext context,
-  List<DisabledNode> nodes,
-) =>
+  List<DisabledNode> nodes, {
+  required SubscriptionController subController,
+}) =>
     showAppBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -102,45 +173,33 @@ Future<void> showCoreRejectList(
               ),
             ),
             for (final d in nodes)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(d.tag),
-                subtitle: Text(d.reason,
-                    maxLines: 3, overflow: TextOverflow.ellipsis),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => showCoreRejectNodeWarnings(sheetCtx, d),
+              Builder(
+                builder: (tileCtx) {
+                  final mapped = subController.lastEmittedTagMap[d.tag];
+                  final canOpen = mapped != null &&
+                      ownerOfNode(mapped, subController.entries) != null;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    enabled: canOpen,
+                    title: Text(d.tag),
+                    subtitle: Text(d.reason,
+                        maxLines: 3, overflow: TextOverflow.ellipsis),
+                    trailing:
+                        canOpen ? const Icon(Icons.chevron_right) : null,
+                    onTap: canOpen
+                        ? () async {
+                            Navigator.pop(sheetCtx);
+                            await openCoreRejectNodeDetails(
+                              context,
+                              subController: subController,
+                              disabled: d,
+                            );
+                          }
+                        : null,
+                  );
+                },
               ),
           ],
-        ),
-      ),
-    );
-
-/// Шторка Warnings одного узла: рендер — существующий [NodeNotificationsView],
-/// новых экранов фича не заводит.
-Future<void> showCoreRejectNodeWarnings(
-  BuildContext context,
-  DisabledNode node,
-) =>
-    showAppBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetCtx) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(node.tag,
-                    style: Theme.of(sheetCtx).textTheme.titleMedium),
-              ),
-              NodeNotificationsView(
-                  [coreRejectedWarningOf(node.reason)]),
-            ],
-          ),
         ),
       ),
     );

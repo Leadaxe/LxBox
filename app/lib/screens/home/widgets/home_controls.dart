@@ -182,7 +182,8 @@ class HomeControls extends StatelessWidget {
                   onDismissCrash: () =>
                       unawaited(CrashBannerState.I.markShown()),
                   onShowCoreRejected: () => unawaited(showCoreRejectList(
-                      context, CoreRejectState.I.bannerNodes)),
+                      context, CoreRejectState.I.bannerNodes,
+                      subController: subController)),
                   onDismissCoreRejected: CoreRejectState.I.dismissBanner,
                 ),
               ),

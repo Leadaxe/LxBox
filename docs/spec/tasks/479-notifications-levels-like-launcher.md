@@ -64,11 +64,18 @@ vless  nl2.example.com:443
 
 Места:
 
-1. **Экран узла** (`node_settings_screen.dart`) — раздел `Notifications`
-   ПОСЛЕДНИМ блоком вкладки Settings; прежняя строка `NodeWarningRow` наверху
-   экрана убирается (раздел её заменяет). Узел без уведомлений — раздела нет.
-2. **Нижняя шторка** из списка (W2b) — тот же компонент вместо нынешнего
-   плоского списка; заголовок шторки `Notifications`.
+1. **Нижняя шторка** из списка (W2b) — тот же компонент вместо нынешнего
+   плоского списка; заголовок шторки `Notifications`. Тап по значку ⓘ/⚠ или
+   строке предупреждения под узлом.
+2. **Вкладка Notifications** в деталях узла (§497) — `node_inspect_screen.dart`
+   (узел подписки: JSON / Source / …) и `node_settings_screen.dart` (одиночный
+   сервер / член папки: Settings / Source / JSON / …); перед вкладкой
+   Diagnostics. Общий виджет `NodeNotificationsTab`; узел без уведомлений —
+   пустое состояние, вкладка остаётся. Раздел на вкладке Settings (§479
+   первоначально) перенесён сюда.
+3. **Шторка отказа ввода** (§500) — тот же [NodeNotificationsView] в
+   [NodeWarningsSheet], с меткой входа вместо тега. Лист «N servers disabled»
+   после §498 ведёт на вкладку Notifications, а не во вторую шторку.
 
 Видимые строки (английские ключи, переводы ru/zh): `Notifications`, `Errors`,
 `Warnings`, `Info`, `What happened`, `Why it happens`, `What you can do`,
@@ -94,7 +101,8 @@ CHANGELOG (Changed), спека 471 (пометка: ревизия 1 отмен
 
 `NodeNotificationsView`
 (`app/lib/screens/subscription_detail_screen/widgets/node_notifications_view.dart`)
-— один виджет на оба места. Собирает `groupWarningsBySeverity` (error →
+— один виджет: шторка из списка, вкладка Notifications (§497) и шторка
+отказа ввода (§500). Собирает `groupWarningsBySeverity` (error →
 warning → info, порядок ключей = порядок разделов), рисует шапку счётчиков,
 подзаголовки уровней и записи. Уровень без записей не попадает ни в счётчик,
 ни в разделы: «0 ошибок» читается как ошибка, которую не смогли назвать.
@@ -132,10 +140,10 @@ warning → info, порядок ключей = порядок разделов)
 
 ### Экран узла
 
-`NodeWarningRow` наверху вкладки Settings убран. Раздел `Notifications`
-(`_buildNotificationsBlock`) стоит ПОСЛЕДНИМ, после Sections: это следствие
-того, что выше, а не настройка. Шапка — тот же `_sectionHeader`, что у Info,
-Detour и Sections. Узел без уведомлений раздела не получает (`return const []`).
+`NodeWarningRow` наверху вкладки Settings убран (§479). Раздел `Notifications`
+на вкладке Settings заменён отдельной вкладкой (§497): `NodeNotificationsTab`
+на `node_inspect_screen.dart` и `node_settings_screen.dart`, перед
+Diagnostics.
 
 ### l10n
 
@@ -197,7 +205,7 @@ Info
 | `app/lib/screens/subscription_detail_screen/widgets/node_warnings_sheet.dart` | шторка на общем компоненте, заголовок `Notifications` |
 | `app/lib/screens/subscription_detail_screen/widgets/node_warning_row.dart` | без `compact`; `ⓘ` в конце строки и приглушённый |
 | `app/lib/screens/subscription_detail_screen/widgets/subscription_node_list.dart` | значок в строке протокола, имя чистое |
-| `app/lib/screens/node_settings_screen.dart` | раздел `Notifications` последним, прежняя строка убрана |
+| `app/lib/screens/node_settings_screen.dart` | вкладка Notifications перед Diagnostics (§497) |
 | `app/assets/l10n/{ru,zh}/ui.json` | новые ключи, удалены `Why`/`What to do`/`Learn more`, `special["1"]` у `Info` |
 | `app/test/screens/node_notifications_test.dart` | заменил `node_warnings_sheet_test.dart` |
 | `docs/USER_GUIDE.md`, `docs/USER_GUIDE.ru.md` | раздел про значки под узлом переписан |

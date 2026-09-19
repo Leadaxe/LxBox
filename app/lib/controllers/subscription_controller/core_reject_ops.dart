@@ -290,3 +290,29 @@ void stampNodeWarnings(NodeSpec node, List<StoredWarning> stored) {
     node.warnings.insert(0, made);
   }
 }
+
+/// Снять с разобранного узла вердикт `core_rejected` — зеркало [stampNodeWarnings]
+/// для ручного включения: хранилище уже очищено [dropVerdict], а
+/// `NodeSpec.warnings` иначе держал бы значок до следующего разбора.
+void unstampCoreRejected(NodeSpec node) {
+  node.warnings.removeWhere((x) =>
+      x is RegistryWarning && x.code == kCoreRejectedCode && x.path == null);
+}
+
+/// Хранимые вердикты + предупреждения разбора без мутации [node].
+///
+/// Та же логика, что [stampNodeWarnings], для отрисовки строк источников и
+/// вкладки Notifications у ручного сервера / члена папки.
+List<NodeWarning> mergedNodeWarnings(
+  NodeSpec node,
+  List<StoredWarning> stored,
+) {
+  final out = [...node.warnings];
+  for (final w in stored) {
+    final made = w.toWarning();
+    out.removeWhere(
+        (x) => x is RegistryWarning && x.code == made.code && x.path == null);
+    out.insert(0, made);
+  }
+  return out;
+}

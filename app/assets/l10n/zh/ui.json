@@ -253,6 +253,9 @@
       "other": "已删除 %d 个服务器"
     }
   },
+  "1 server disabled": {
+    "value": "已关闭 1 个服务器"
+  },
   "%d servers disabled": {
     "value": {
       "other": "已关闭 %d 个服务器"
@@ -2901,6 +2904,9 @@
   "Notifications": {
     "value": "通知"
   },
+  "No notifications for this server": {
+    "value": "此服务器没有通知"
+  },
   "Number of nodes": {
     "value": "节点数量"
   },
@@ -4621,9 +4627,6 @@
   },
   "What happened": {
     "value": "发生了什么"
-  },
-  "What the app changed or could not apply": {
-    "value": "应用改动了什么，或有什么无法应用"
   },
   "What the core receives. Read-only: edit the source instead.": {
     "value": "内核收到的内容。只读：请改为编辑来源。"

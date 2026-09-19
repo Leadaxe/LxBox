@@ -1,4 +1,5 @@
 import '../../controllers/subscription_controller.dart';
+import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../services/tag_resolver.dart';
 
@@ -114,6 +115,55 @@ TagOwner? ownerOfTag(String culpritTag, List<SubscriptionEntry> entries) {
         }
       }
     }
+  }
+  return null;
+}
+
+/// §498 — владелец [node] для навигации из плашки/листа страховки. Сравнение
+/// по идентичности объекта (`identical`), как у [disableNodeByCoreTag];
+/// хоп цепочки принадлежит владельцу (тот же обход, что у [ownerOfTag]).
+bool _nodeOrHop(NodeSpec owner, NodeSpec node) {
+  if (identical(owner, node)) return true;
+  for (var hop = owner.chained; hop != null; hop = hop.chained) {
+    if (identical(hop, node)) return true;
+  }
+  return false;
+}
+
+TagOwner? ownerOfNode(NodeSpec node, List<SubscriptionEntry> entries) {
+  for (var ei = 0; ei < entries.length; ei++) {
+    final list = entries[ei].list;
+    switch (list) {
+      case FolderServers():
+        for (var mi = 0; mi < list.members.length; mi++) {
+          final n = list.members[mi].node;
+          if (n != null && _nodeOrHop(n, node)) {
+            return TagOwner(ei, memberIndex: mi);
+          }
+        }
+      case SubscriptionServers():
+      case UserServer():
+        if (list.nodes.any((n) => _nodeOrHop(n, node))) {
+          return TagOwner(ei);
+        }
+    }
+  }
+  return null;
+}
+
+/// Исходный узел записи, которой принадлежит [node]: хоп цепочки → владелец.
+NodeSpec? sourceNodeOf(NodeSpec node, ServerList list) {
+  switch (list) {
+    case FolderServers():
+      for (final m in list.members) {
+        final n = m.node;
+        if (n != null && _nodeOrHop(n, node)) return n;
+      }
+    case SubscriptionServers():
+    case UserServer():
+      for (final n in list.nodes) {
+        if (_nodeOrHop(n, node)) return n;
+      }
   }
   return null;
 }

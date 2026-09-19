@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/core_reject_verdict.dart';
 import 'package:lxbox/models/home_state.dart';
+import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/screens/home/core_reject_ui.dart';
 import 'package:lxbox/screens/home/widgets/app_banner.dart';
+import 'package:lxbox/screens/subscription_detail_screen/node_inspect_screen.dart';
+import 'package:lxbox/screens/subscription_detail_screen/widgets/node_notifications_view.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 import 'package:lxbox/services/core_reject/core_reject_state.dart';
@@ -31,6 +37,8 @@ void main() {
     LocaleController.I.setting = 'system';
   });
 
+  tearDownAll(ContractRegistry.I.resetForTesting);
+
   const one = DisabledNode(tag: 'Frankfurt', reason: 'parse encryption: bad');
   const three = [
     DisabledNode(tag: 'Frankfurt', reason: 'parse encryption: bad'),
@@ -38,39 +46,76 @@ void main() {
     DisabledNode(tag: 'Praha', reason: 'bad key'),
   ];
 
+  VlessSpec inspectNode({String tag = 'Frankfurt'}) => VlessSpec(
+        id: tag,
+        tag: tag,
+        label: tag,
+        server: 'example.com',
+        port: 443,
+        rawSource: '',
+        uuid: '00000000-0000-0000-0000-000000000000',
+        warnings: [
+          StoredWarning.coreRejected('parse encryption: bad').toWarning(),
+        ],
+      );
+
+  SubscriptionController subWithNode(VlessSpec node,
+      {required String emittedTag}) {
+    final sub = SubscriptionController();
+    sub.debugSetEntries([
+      SubscriptionEntry(
+        list: SubscriptionServers(
+          id: 'sub-1',
+          name: 'sub',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: 'https://example.com/sub',
+          nodes: [node],
+        ),
+      ),
+    ]);
+    sub.debugSetLastEmittedTagMap({emittedTag: node});
+    return sub;
+  }
+
   group('плашка «N servers disabled»', () {
     /// Плашка в том же дереве, что на главном экране: проекция
     /// `activeBanners` → `BannerStack`.
     Future<void> pumpBanner(
       WidgetTester tester,
       List<DisabledNode> nodes, {
+      SubscriptionController? subController,
       VoidCallback? onShow,
       VoidCallback? onDismiss,
-    }) =>
-        tester.pumpWidget(MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (ctx) => BannerStack(
-                banners: activeBanners(
-                  HomeState(),
-                  configDirty: false,
-                  busy: false,
-                  coreRejected: nodes,
-                  actions: BannerActions(
-                    onRebuild: () {},
-                    onConfirmStop: () {},
-                    onClearError: () {},
-                    onShareCrash: () {},
-                    onDismissCrash: () {},
-                    onShowCoreRejected:
-                        onShow ?? () => showCoreRejectList(ctx, nodes),
-                    onDismissCoreRejected: onDismiss ?? () {},
-                  ),
+    }) {
+      final sub = subController ?? SubscriptionController();
+      return tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (ctx) => BannerStack(
+              banners: activeBanners(
+                HomeState(),
+                configDirty: false,
+                busy: false,
+                coreRejected: nodes,
+                actions: BannerActions(
+                  onRebuild: () {},
+                  onConfirmStop: () {},
+                  onClearError: () {},
+                  onShareCrash: () {},
+                  onDismissCrash: () {},
+                  onShowCoreRejected: onShow ??
+                      () => showCoreRejectList(ctx, nodes,
+                          subController: sub),
+                  onDismissCoreRejected: onDismiss ?? () {},
                 ),
               ),
             ),
           ),
-        ));
+        ),
+      ));
+    }
 
     testWidgets('число выключенных первым словом, имена в тексте, кнопка Show',
         (tester) async {
@@ -81,12 +126,11 @@ void main() {
       expect(find.widgetWithText(TextButton, 'Show'), findsOneWidget);
     });
 
-    testWidgets('один узел — текст «it», хвоста «+N more» нет', (tester) async {
+    testWidgets('один узел — «1 server disabled», текст «it», без хвоста',
+        (tester) async {
       await pumpBanner(tester, const [one]);
 
-      // Без словаря plural отдаёт английский ключ как есть — у EN отдельных
-      // форм нет by design (`get_local_text.dart`), и проверять здесь надо
-      // не форму числа, а что имя одного узла дошло целиком и без хвоста.
+      expect(find.text('1 server disabled'), findsOneWidget);
       expect(find.textContaining('The core rejected it'), findsOneWidget);
       expect(find.textContaining('Frankfurt'), findsOneWidget);
       expect(find.textContaining('more'), findsNothing,
@@ -239,6 +283,120 @@ void main() {
       s.finish(const CoreRejectRun(outcome: CoreRejectOutcome.stoppedByUser));
       expect(s.cancellable, false);
       expect(s.cancelRun(), false);
+    });
+
+    test('beginRun скрывает плашку прошлого прогона', () {
+      final s = CoreRejectState.I;
+      s.finish(const CoreRejectRun(
+        outcome: CoreRejectOutcome.startedWithDisabled,
+        disabled: [DisabledNode(tag: 'n1', reason: 'bad')],
+      ));
+      expect(s.bannerVisible, isTrue);
+      s.beginRun();
+      expect(s.bannerVisible, isFalse);
+    });
+  });
+
+  group('§498 — лист выключенных', () {
+    test('заголовок: 1 server disabled / 2 servers disabled', () {
+      expect(coreRejectBannerTitle(1), '1 server disabled');
+      expect(coreRejectBannerTitle(2), '2 servers disabled');
+    });
+
+    Future<void> pumpList(
+      WidgetTester tester,
+      List<DisabledNode> nodes,
+      SubscriptionController sub,
+    ) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () => showCoreRejectList(ctx, nodes,
+                  subController: sub),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('тап по строке открывает детали на вкладке Notifications',
+        (tester) async {
+      final node = inspectNode();
+      final sub = subWithNode(node, emittedTag: 'Frankfurt');
+      await pumpList(tester, const [one], sub);
+
+      await tester.tap(find.widgetWithText(ListTile, 'Frankfurt'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NodeInspectScreen), findsOneWidget);
+      expect(find.byType(NodeNotificationsView), findsOneWidget);
+      expect(find.text('The core rejected this server'), findsOneWidget);
+    });
+
+    testWidgets('удалённый узел — строка неактивна, без шеврона', (tester) async {
+      final sub = SubscriptionController();
+      await pumpList(tester, const [one], sub);
+
+      final tile =
+          tester.widget<ListTile>(find.widgetWithText(ListTile, 'Frankfurt'));
+      expect(tile.enabled, isFalse);
+      expect(tile.trailing, isNull);
+    });
+
+    testWidgets('заголовок листа: 1 и 2', (tester) async {
+      final sub = SubscriptionController();
+      await pumpList(tester, const [one], sub);
+      expect(find.text('1 server disabled'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await pumpList(
+        tester,
+        const [
+          one,
+          DisabledNode(tag: 'Berlin', reason: 'bad'),
+        ],
+        sub,
+      );
+      expect(find.text('2 servers disabled'), findsOneWidget);
+    });
+
+    testWidgets('хоп цепочки открывает владельца на Notifications',
+        (tester) async {
+      final hop = inspectNode(tag: 'hop-link');
+      final owner = withChained(inspectNode(tag: 'Main'), hop);
+      final sub = SubscriptionController();
+      sub.debugSetEntries([
+        SubscriptionEntry(
+          list: SubscriptionServers(
+            id: 'sub-1',
+            name: 'sub',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            url: 'https://example.com/sub',
+            nodes: [owner],
+          ),
+        ),
+      ]);
+      sub.debugSetLastEmittedTagMap({'hop-link': hop});
+      await pumpList(
+        tester,
+        const [DisabledNode(tag: 'hop-link', reason: 'parse encryption: bad')],
+        sub,
+      );
+
+      await tester.tap(find.widgetWithText(ListTile, 'hop-link'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NodeInspectScreen), findsOneWidget);
+      final screen =
+          tester.widget<NodeInspectScreen>(find.byType(NodeInspectScreen));
+      expect(screen.node.tag, 'Main');
+      expect(find.byType(NodeNotificationsView), findsOneWidget);
     });
   });
 }

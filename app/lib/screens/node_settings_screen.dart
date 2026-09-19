@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
+import '../controllers/subscription_controller/core_reject_ops.dart';
 import '../models/codec/source_record.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/error_format.dart';
@@ -19,9 +20,9 @@ import '../models/template_vars.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/node_diagnostics_tab.dart';
+import '../widgets/node_notifications_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
-import 'subscription_detail_screen/widgets/node_notifications_view.dart';
 
 /// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237).
 /// Вкладки: **Settings** (Protocol/Server/Tag + эмодзи-пикер + Detour),
@@ -46,6 +47,7 @@ class NodeSettingsScreen extends StatefulWidget {
     required this.index,
     required this.subController,
     this.memberIndex,
+    this.initialTab = 0,
   });
 
   final SubscriptionEntry entry;
@@ -54,6 +56,12 @@ class NodeSettingsScreen extends StatefulWidget {
 
   /// §237 — индекс члена папки; null = одиночный сервер (старое поведение).
   final int? memberIndex;
+
+  /// §498 — начальная вкладка (страховка открывает Notifications = 3).
+  final int initialTab;
+
+  /// Индекс вкладки Notifications: Settings, Source, JSON, Notifications, Diagnostics.
+  static const notificationsTabIndex = 3;
 
   @override
   State<NodeSettingsScreen> createState() => _NodeSettingsScreenState();
@@ -88,13 +96,21 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// из него временный конфиг).
   NodeSpec? _node;
 
+  /// Разбор + хранимый вердикт (`core_rejected` и др.) для вкладки
+  /// Notifications.
+  List<NodeWarning> _notifications = const [];
+
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController();
     _jsonCtrl = TextEditingController();
     _sourceCtrl = TextEditingController();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(
+      length: 5,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 4),
+    );
     unawaited(_load());
   }
 
@@ -141,6 +157,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     }
 
     _node = node; // §392 — источник probe-ветки диагностики
+    final stored = member?.warnings ??
+        (widget.entry.list is UserServer
+            ? (widget.entry.list as UserServer).warnings
+            : const []);
+    _notifications = mergedNodeWarnings(node, stored);
 
     // §130 — AWG-детект: WireguardSpec с непустыми obfuscation-полями.
     _isAwg = node is WireguardSpec && node.awg != null;
@@ -469,6 +490,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               Tab(text: getLocalText.s("Source")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
+              NodeNotificationsTabLabel(warnings: _notifications),
               Tab(text: getLocalText.s("Diagnostics")),
             ],
           ),
@@ -481,6 +503,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   _buildSettingsTab(theme),
                   _buildSourceTab(theme),
                   _buildJsonTab(theme),
+                  NodeNotificationsTab(warnings: _notifications),
                   // §392 — узел распарсен: доступны обе ветки (probe при
                   // выключенном VPN, боевое ядро при включённом).
                   NodeDiagnosticsTab(
@@ -562,26 +585,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ], // §322 — конец гейта detour-блока
         const SizedBox(height: 16),
         ..._buildSectionsBlock(theme),
-        // §479 — уведомления разбора узла (в т. ч. отброшенные записи секций
-        // и конфликт `sections`/`dns`+`route` из документа, §435). Последним
-        // блоком: это следствие того, что выше, а не настройка. Узел без
-        // уведомлений раздела не получает вовсе.
-        ..._buildNotificationsBlock(theme),
       ],
     );
-  }
-
-  /// §479 — раздел `Notifications`: тот же компонент, что в шторке из списка
-  /// подписки. Прежняя строка `NodeWarningRow` наверху экрана убрана — она
-  /// показывала одно предупреждение из многих и обрывала его на полуслове.
-  List<Widget> _buildNotificationsBlock(ThemeData theme) {
-    final warnings = _node?.warnings ?? const <NodeWarning>[];
-    if (warnings.isEmpty) return const [];
-    return [
-      _sectionHeader(getLocalText.s("Notifications"),
-          getLocalText.s("What the app changed or could not apply"), theme),
-      NodeNotificationsView(warnings),
-    ];
   }
 
   /// §435 — блок «Sections» (NODE_SECTIONS.md §7): счётчик записей,
