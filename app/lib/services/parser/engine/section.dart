@@ -295,6 +295,7 @@ final class MapperParam {
     this.onItemInvalid = const {},
     this.valueMapCase,
     this.implicit = false,
+    this.raw = const {},
   });
 
   factory MapperParam.fromJson(String name, Map<String, dynamic> j) {
@@ -368,6 +369,7 @@ final class MapperParam {
           ((j['on_item_invalid'] as Map?) ?? const {}).cast<String, dynamic>(),
       valueMapCase: j['value_map_case'] as String?,
       implicit: j['implicit'] as bool? ?? false,
+      raw: j,
     );
   }
 
@@ -442,6 +444,15 @@ final class MapperParam {
   final String? valueMapCase;
 
   final bool implicit;
+
+  /// §480 W7 — СЫРОЙ JSON записи.
+  ///
+  /// Нужен ЭМИТТЕРУ: атрибуты обратного хода (`emit_as`, `emit_name`,
+  /// `round_trip`) ещё не в замороженной грамматике, имена могут поменяться по
+  /// итогам согласования с лаунчером, и заводить под каждое типизированное
+  /// поле значило бы править модель на каждом переименовании. Читаются они в
+  /// ОДНОМ месте — `emitter.dart`, через [EmitNames].
+  final Map<String, dynamic> raw;
 
   /// Служебная запись (DRAFT `$`-префикс): у неё нет `maps_to`, и параметром
   /// источника она не считается.
