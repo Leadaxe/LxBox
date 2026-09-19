@@ -39,4 +39,6 @@
 - [x] Оверлеи класса A сняты; B/C (ss padding, xhttp emit_as, ws.eh, vmess json_map,
   vless/trojan emit, xray forms) — на месте.
 - [x] `mapper_sections_*_test.dart` зелёные.
-- [x] `flutter analyze` без новых issues; `test/contract/` и `test/parser/` зелёные.
+- [x] `flutter analyze` без новых issues; identity/emit/golden зелёные без
+  переписывания фикстур. `test/contract/` + `test/parser/`: ровно шесть
+  заявленных красных корпуса (`naive/empty_host_rejected` и пять `xray/*`).

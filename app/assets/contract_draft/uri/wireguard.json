@@ -4,7 +4,7 @@
   "mappers": {
     "uri": {
       "emit": {
-        "_why": "Обратного хода у лаунчера нет вовсе (`emit: null` в реестре): share-URI собирает только LxBox, у лаунчера узел живёт конфигом. Секция эмита целиком наша, и реестру её замещать нечем.",
+        "_why": "Реестр 1.1.46 объявил `emit` (form/param_order совпали и сняты). Остаются `omit_default` и `form_from`: у нас AWG-узел с awg-полями уезжает `wireguard://` через `any_set` (снимок emit_before480), у реестра `form_from` по `$kind`.",
         "omit_default": ["server_port"],
         "form_from": {
           "any_set": {

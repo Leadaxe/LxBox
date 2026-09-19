@@ -128,8 +128,10 @@ void main() {
       await ContractRegistry.I.loadFromDirectory(kVendorRoot);
       expect(ContractRegistry.I.version, mirrorVersion);
       final reloaded = ContractRegistry.I.schemaFor('vless');
+      // BodySchema без operator== — после сброса кэша это другой экземпляр.
       expect(reloaded?.core, mirrorVless?.core);
       expect(reloaded?.order, mirrorVless?.order);
+      expect(reloaded?.fields.keys, mirrorVless?.fields.keys);
     });
   });
 }

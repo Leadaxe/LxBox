@@ -110,10 +110,8 @@ void main() {
 
     test('эмит: param_order — ПРАВИЛО (алфавит), а не перечень', () {
       for (final e in uriSections.entries) {
-        // Обратный ход объявляет не каждая секция: у wireguard реестр несёт
-        // `emit: null` (share-URI собирает только LxBox), и правило порядка
-        // лежит в НАШЕМ оверлее. Секция без эмита здесь не судится — её
-        // оверлей проверяет отдельный кейс ниже.
+        // Обратный ход объявляет не каждая секция. Секция без эмита здесь
+        // не судится — оверлей wireguard (`form_from`) проверяет кейс ниже.
         final emit = section(e.value, 'uri')['emit'];
         if (emit == null) continue;
         expect((emit as Map)['param_order'], 'alphabetical', reason: e.key);
