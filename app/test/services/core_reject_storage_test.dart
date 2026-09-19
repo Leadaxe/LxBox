@@ -1,4 +1,4 @@
-// Фича 478 — хранение вердикта, его снятие и переезд в бэкап (CANON §9.4).
+// Фича 478 — хранение вердикта и его снятие (CANON §9.4). Переезд в бэкап — §489.
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';

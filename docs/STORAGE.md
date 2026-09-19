@@ -796,9 +796,12 @@ On parse the stored record is added to the node's computed warnings (deduped by
 `(code, path)`); a duplicate by code is replaced by the fresher one and the
 verdict is put first — it is a verdict on the whole node, not a degradation of
 one field. `warnings` is in the record allowlist and in the backup slice table
-symmetrically (§221), so it rides to a backup next to the `disabled` it
-explains; on import it follows the neighbouring `disabled` (union). GC of the
-subscription overlay happens with `gcDisabledHashes`.
+(§221). The **file** does not carry the insurance verdict (§489, owner's
+decision 19.09.2026): a node the guard switched off is exported as enabled,
+and an old backup that still has `core_rejected` is imported with the node on
+and the verdict dropped. Local storage is unchanged — the verdict survives an
+app restart on the device. GC of the subscription overlay happens with
+`gcDisabledHashes`.
 
 **The verdict is tied to the node's body**, and exactly two events remove it:
 

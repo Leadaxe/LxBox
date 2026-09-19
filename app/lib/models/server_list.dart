@@ -180,8 +180,9 @@ final class SubscriptionServers extends ServerList {
   /// `{code, params}`. Сегодня здесь живёт ровно `core_rejected` — вердикт
   /// ядра, который пересчётом по телу не воспроизводится; прочие
   /// предупреждения по-прежнему вычисляются при разборе и не хранятся.
-  /// Персистится рядом с `disabled` → обязан жить в кодеке записи, в
-  /// copyWith и в slice-таблице бэкапа (§221).
+  /// Персистится рядом с `disabled` → обязан жить в кодеке записи и в
+  /// copyWith; ключ в slice-таблице остаётся (§221), в файл вердикт
+  /// страховки не едет (§489).
   final Map<String, List<StoredWarning>> nodeWarnings;
 
   /// §289 — per-subscription override идентичности фетча. `null` = режим Default
@@ -359,7 +360,7 @@ final class UserServer extends ServerList {
 
   /// Фича 478 / CANON §9.4 — хранимые предупреждения ручного сервера:
   /// сегодня ровно `core_rejected`. Персистится рядом с `enabled` (ключ
-  /// `warnings` записи источника) и едет в бэкап вместе с ней.
+  /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
 
   UserServer({
@@ -434,7 +435,7 @@ final class FolderMember {
 
   /// Фича 478 / CANON §9.4 — хранимые предупреждения члена: сегодня ровно
   /// `core_rejected`. Персистится рядом с [enabled] (ключ `warnings`
-  /// записи члена) и едет в бэкап вместе с ней.
+  /// записи члена). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
 
   /// §456 — имя члена, хранимое полем записи (`tag`): у INI-источника тега в

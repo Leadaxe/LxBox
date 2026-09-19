@@ -24,6 +24,7 @@ import '../models/parser_config.dart' show kUserRuleNumStart;
 import '../models/record_codec.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
+import 'core_reject/core_reject_backup.dart';
 import 'lx_backup_slice.dart';
 import 'node_link_address.dart';
 import 'node_hash.dart' show deepSortKeys;
@@ -856,15 +857,17 @@ Map<String, dynamic>? _exportSource(
   ServerList list,
   List<LxBackupWarning> warnings,
 ) {
-  final stored = sourceToRecord(list);
-  final (kind, entity) = switch (list) {
-    SubscriptionServers() =>
-      (BackupRecord.subscription, list.name.isEmpty ? list.url : list.name),
-    UserServer() => (
-        BackupRecord.server,
-        _str(stored['tag']).isEmpty ? list.id : _str(stored['tag']),
-      ),
-    FolderServers() => (BackupRecord.folder, list.name),
+  final kind = switch (list) {
+    SubscriptionServers() => BackupRecord.subscription,
+    UserServer() => BackupRecord.server,
+    FolderServers() => BackupRecord.folder,
+  };
+  final stored = sanitizeCoreRejectInBackupRecord(sourceToRecord(list), kind);
+  final entity = switch (list) {
+    SubscriptionServers s => s.name.isEmpty ? s.url : s.name,
+    UserServer u =>
+      _str(stored['tag']).isEmpty ? u.id : _str(stored['tag']),
+    FolderServers f => f.name,
   };
   final record = exportBackupRecord(kind, stored, entity, warnings);
   if (record == null) return null;
@@ -1718,6 +1721,7 @@ LxSubscription _subscriptionFromJson(
   Map<String, dynamic> j,
   List<LxBackupWarning> warnings,
 ) {
+  j = sanitizeCoreRejectInBackupRecord(j, BackupRecord.subscription);
   final label = (j['label'] as String?) ?? '';
   final where = label.isEmpty ? ((j['url'] as String?) ?? '') : label;
 
@@ -2868,6 +2872,10 @@ LxServer? _server10(
   LxFolder? folder,
   int position = 0,
 }) {
+  j = sanitizeCoreRejectInBackupRecord(
+    j,
+    folder == null ? BackupRecord.server : BackupRecord.folderNode,
+  );
   final tag = _trimmed(j['tag']);
   final origin = _obj(j['origin']);
   final hasOrigin = _str(origin?['raw']).trim().isNotEmpty;
@@ -2999,6 +3007,7 @@ LxSubscription _subscription10(
   int position,
   List<LxBackupWarning> warnings,
 ) {
+  j = sanitizeCoreRejectInBackupRecord(j, BackupRecord.subscription);
   final fileId = _trimmed(j['id']);
   final read = sourceFromRecord(
       _sourceForCodec(BackupRecord.subscription, j, fileId));
@@ -3600,15 +3609,8 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
         for (final e in sub.disabled.entries)
           if (!existing.disabledHashes.containsKey(e.key)) e.key: at(e.value),
       };
-      // Фича 478 — вердикт едет рядом с отметкой: узел, которого у нас не
-      // было в `disabled`, приезжает и с причиной. Свой вердикт не трогаем.
-      final addW = <String, List<StoredWarning>>{
-        for (final e in sub.nodeWarnings.entries)
-          if (!existing.nodeWarnings.containsKey(e.key)) e.key: e.value,
-      };
       merged[idx] = existing.copyWith(
         disabledHashes: {...existing.disabledHashes, ...add},
-        nodeWarnings: {...existing.nodeWarnings, ...addW},
         // Пустое имя в файле именем не является — своё не затираем.
         name: sub.label.isNotEmpty ? sub.label : null,
         tagPrefix: sub.tagPrefix,
@@ -4000,7 +4002,7 @@ BackupServerMerge mergeBackupServers(
         detourPolicy: srv.detourPolicy ?? DetourPolicy.defaults,
         origin: UserSource.manual,
         rawBody: body,
-        // Фича 478 — вердикт ядра едет рядом с `enabled`.
+        // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
         warnings: srv.warnings,
         sections: srv.sections,
       ));
@@ -4269,7 +4271,7 @@ int _mergeFolderMember(
   final member = FolderMember(
     raw: body,
     enabled: srv.enabled,
-    // Фича 478 — вердикт ядра едет рядом с `enabled`.
+    // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
     warnings: srv.warnings,
     detour: detour,
     sections: srv.sections,
