@@ -416,6 +416,7 @@ final class MapperParam {
     this.onEmpty = const {},
     this.valueMapCase,
     this.implicit = false,
+    this.roundTripOnly,
     this.raw = const {},
   });
 
@@ -496,6 +497,7 @@ final class MapperParam {
       onEmpty: ((j['on_empty'] as Map?) ?? const {}).cast<String, dynamic>(),
       valueMapCase: j['value_map_case'] as String?,
       implicit: j['implicit'] as bool? ?? false,
+      roundTripOnly: j['round_trip_only'] as String?,
       raw: j,
     );
   }
@@ -584,6 +586,10 @@ final class MapperParam {
   final String? valueMapCase;
 
   final bool implicit;
+
+  /// `round_trip_only: "emit"` — только обратный ход; разбором не исполняется.
+  /// `"parse"` — только разбор; эмиттер молчит.
+  final String? roundTripOnly;
 
   /// §480 W7 — СЫРОЙ JSON записи.
   ///

@@ -1601,6 +1601,10 @@ final class _Run {
   // ───────────────────────────── запись ─────────────────────────────
 
   void _applyParam(MapperParam p) {
+    // `round_trip_only: "emit"` — значение пришло бы из ссылки, но тег чужого
+    // конфига; поле пишет только сборка/эмит (dialer.detour).
+    if (p.roundTripOnly == 'emit') return;
+
     if (!_whenHolds(p.when)) {
       _trace?.add(
         stage: TraceStage.field,

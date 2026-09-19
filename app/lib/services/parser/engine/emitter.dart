@@ -18,7 +18,8 @@
 ///
 /// Норма — `MAPPER_ENGINE.md` раздел НОРМА (обратный ход эмита) и SPEC 133
 /// `PRIMITIVES.md`: `param_order` алфавитный, пробел на выходе `%20`,
-/// каноническое имя параметра — ПЕРВОЕ в `aliases`.
+/// каноническое имя параметра — ПЕРВЫЙ `source` записи (`query.<имя>`);
+/// `emit.names` схемы/формы сильнее.
 library;
 
 import 'dart:convert';
@@ -222,6 +223,15 @@ abstract final class EmitNames {
   /// больше порога. Пустая ссылка — тот же исход, что у схемы без
   /// переносимой формы (Copy link на пустой строке молча не копирует).
   static const refuseWhen = 'refuse_when';
+
+  /// Запись действует только в одну сторону: `"emit"` либо `"parse"`.
+  static const roundTripOnly = 'round_trip_only';
+
+  /// Только эмит (разбором не исполняется), напр. `dialer.detour`.
+  static const roundTripOnlyEmit = 'emit';
+
+  /// Только разбор (эмиттер молчит).
+  static const roundTripOnlyParse = 'parse';
 }
 
 /// Каноническая ссылка, собранная секцией из канонического тела.
@@ -284,13 +294,16 @@ final class _Emit {
   final Map<String, dynamic> body;
   final String label;
 
-  /// Пары query в порядке объявления; сортировка — на сериализации.
-  final List<(String, String)> _query = [];
+  /// Пары query в порядке объявления; кодирование — на сериализации.
+  final List<(MapperParam p, String name, String value)> _query = [];
 
   /// Пути тела, уже уехавшие в ссылку: по ним считается потеря на круге.
   final Set<String> _consumed = {};
 
   final List<String> _lost = [];
+
+  /// Путь тела → запись с прямым `maps_to` (правило №3, Q133-73).
+  late final Map<String, MapperParam> _pathOwners = _seedPathOwners();
 
   EmitResult run() {
     // Отказ формата — ДО обхода записей: иначе ссылка собралась бы из
@@ -623,6 +636,8 @@ final class _Emit {
   void _emitParam(MapperParam p) {
     // Служебная запись (`$multiport`) параметром источника не является.
     if (p.isService) return;
+    // Запись, объявленная только для разбора, на выходе молчит.
+    if (_roundTripOnlyParse(p)) return;
     // Объявленный отказ от обратного хода.
     if (_roundTripOff(p)) return;
     // Запись, которая никуда не едет (`maps_to: null`), и обратно не едет —
@@ -743,7 +758,15 @@ final class _Emit {
     final inv = invertValueMap(p.valueMap);
     if (inv != null && !_isUntranslatedCanon(p, value)) {
       final hit = inv[_fold(value)];
-      if (hit != null) value = hit;
+      if (hit != null) {
+        final branch = p.sets[hit];
+        // Составное имя (ключ с веткой `sets`) пишется только когда пути
+        // ветки не принадлежат другим записям напрямую (Q133-73).
+        if (branch is! Map ||
+            !_setsBranchOwnedByOthers(p, branch.cast<String, dynamic>())) {
+          value = hit;
+        }
+      }
     }
 
     final text = _serializeValue(p, value);
@@ -869,14 +892,44 @@ final class _Emit {
       }
     }
     if (targets.isEmpty) return false;
-    final owned = <String>{};
-    for (final o in section.params.values) {
-      if (identical(o, p) || o.isService || _roundTripOff(o)) continue;
-      final m = o.mapsTo;
-      if (m != null && targets.contains(m)) owned.add(m);
-    }
-    return owned.length == targets.length;
+    return targets.every((path) => _pathOwnedByOther(p, path));
   }
+
+  /// Все пути ветки `sets` заняты ДРУГИМИ записями с прямым `maps_to`.
+  bool _setsBranchOwnedByOthers(MapperParam p, Map<String, dynamic> branch) {
+    var any = false;
+    for (final s in branch.entries) {
+      final path = s.key.toString();
+      if (path.startsWith(DraftNames.serviceParamPrefix) || s.value == null) {
+        continue;
+      }
+      if (_read(path) == null) continue;
+      any = true;
+      if (!_pathOwnedByOther(p, path)) return false;
+    }
+    return any;
+  }
+
+  Map<String, MapperParam> _seedPathOwners() {
+    final out = <String, MapperParam>{};
+    for (final p in section.params.values) {
+      if (p.isService || _roundTripOff(p)) continue;
+      final path = p.mapsTo;
+      if (path != null && _read(path) != null) out[path] = p;
+    }
+    return out;
+  }
+
+  bool _pathOwnedByOther(MapperParam p, String path) {
+    final owner = _pathOwners[path];
+    return owner != null && !identical(owner, p);
+  }
+
+  bool _roundTripOnlyParse(MapperParam p) =>
+      p.roundTripOnly == EmitNames.roundTripOnlyParse;
+
+  bool _roundTripOnlyEmit(MapperParam p) =>
+      p.roundTripOnly == EmitNames.roundTripOnlyEmit;
 
   String? _valueFromSets(MapperParam p) {
     String? best;
@@ -1212,8 +1265,8 @@ final class _Emit {
   /// значило бы править модель на каждом переименовании.
   dynamic _paramEmitAttr(MapperParam p, String name) => p.raw[name];
 
-  /// **Имя параметра в ссылке.** Умолчание — ПЕРВОЕ в `aliases`, то есть имя
-  /// записи (§0.6); схема перекрывает его картой [EmitNames.names].
+  /// **Имя параметра в ссылке.** Умолчание — ПЕРВЫЙ `source` (`query.<имя>`,
+  /// §0.6 Q133-70); схема перекрывает его картой [EmitNames.names].
   ///
   /// Перекрытие берётся только из написаний САМОЙ записи: то, чего запись не
   /// читает, писать нельзя — иначе своя же ссылка обратно не разберётся.
@@ -1222,7 +1275,18 @@ final class _Emit {
   String _nameOf(MapperParam p) {
     final want = _declaredName(p);
     if (want != null) return want;
-    return p.spellings.first;
+    return _queryCanonicalName(p);
+  }
+
+  /// Канон имени query-параметра — первый `query.*` в `source` записи.
+  String _queryCanonicalName(MapperParam p) {
+    for (final s in [
+      ...p.source,
+      for (final v in p.sourceByForm.values) ...v,
+    ]) {
+      if (s.startsWith('query.')) return s.substring('query.'.length);
+    }
+    return p.name;
   }
 
   /// Объявленное написание записи [p], если оно есть и ЗАКОННО.
@@ -1251,8 +1315,29 @@ final class _Emit {
   void _add(MapperParam p, String value) {
     final name = _nameOf(p);
     if (_omitted(p, name, value)) return;
-    _query.add((name, value));
+    _query.add((p, name, value));
   }
+
+  /// Сколько раз значение кодируется на выходе: печать query + `decode_extra`.
+  int _encodePasses(MapperParam p) {
+    final n = p.decodeExtra?.passes;
+    if (n == null || n < 1) return 1;
+    return n + 1;
+  }
+
+  /// Сериализация значения query с учётом `decode_extra.passes` (Q133-72).
+  String _encodeQueryValue(MapperParam p, String raw) {
+    var val = raw;
+    final passes = _encodePasses(p);
+    for (var i = 1; i < passes; i++) {
+      if (!val.contains('%')) break;
+      val = _percentEncodeQuery(val);
+    }
+    return _encodeParam(val);
+  }
+
+  static String _percentEncodeQuery(String s) =>
+      Uri.encodeQueryComponent(s).replaceAll('+', '%20');
 
   /// **`omit_default`** — параметр не пишется, КОГДА ЕГО ЗНАЧЕНИЕ РАВНО
   /// УМОЛЧАНИЮ. Не «не пишется никогда»: селектор вида TLS попадает в
@@ -1332,14 +1417,15 @@ final class _Emit {
     final order = emit[EmitNames.paramOrder];
     final pairs = [..._query];
     if (order == null || order == EmitNames.paramOrderAlphabetical) {
-      pairs.sort((a, b) => a.$1.compareTo(b.$1));
+      pairs.sort((a, b) => a.$2.compareTo(b.$2));
     } else if (order is List) {
       final idx = {for (var i = 0; i < order.length; i++) '${order[i]}': i};
       pairs.sort((a, b) =>
-          (idx[a.$1] ?? 1 << 20).compareTo(idx[b.$1] ?? 1 << 20));
+          (idx[a.$2] ?? 1 << 20).compareTo(idx[b.$2] ?? 1 << 20));
     }
     return pairs
-        .map((e) => '${_encodeParam(e.$1)}=${_encodeParam(e.$2)}')
+        .map((e) =>
+            '${_encodeParam(e.$2)}=${_encodeQueryValue(e.$1, e.$3)}')
         .join('&');
   }
 
@@ -1611,6 +1697,9 @@ final class _Emit {
     for (final path in _paths(body, '')) {
       // Служебные ключи тела, ссылке не принадлежащие.
       if (path == 'type' || path == 'tag') continue;
+      // Эмит-онли: поле живёт в теле сборки, обратно из ссылки не читается.
+      final owner = _pathOwners[path];
+      if (owner != null && _roundTripOnlyEmit(owner)) continue;
       // Путь засчитан САМ либо засчитан его предок: запись, забравшая
       // `headers` целиком, забрала и каждый заголовок внутри — перечислять
       // их по одному она не обязана и не может (имена приходят от данных).
