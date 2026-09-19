@@ -5,8 +5,6 @@
     "uri": {
       "emit": {
         "_why": "Обратного хода у лаунчера нет вовсе (`emit: null` в реестре): share-URI собирает только LxBox, у лаунчера узел живёт конфигом. Секция эмита целиком наша, и реестру её замещать нечем.",
-        "form": "url",
-        "param_order": "alphabetical",
         "omit_default": ["server_port"],
         "form_from": {
           "any_set": {

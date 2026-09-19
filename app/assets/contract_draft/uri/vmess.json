@@ -105,10 +105,6 @@
         }
       },
       "emit": {
-        "names": {
-          "serviceName": "path"
-        },
-        "_why_names": "§480 W8 — `emit.names`: имя gRPC-канала уезжает в контейнер ключом `path`, а не `serviceName`. Так пишет v2rayN и так писал наш рукописный эмит; запись читает оба написания (`query.serviceName`, `query.service_name`, `query.path`), поэтому свою же ссылку мы разберём обратно. Выбор объявлен у СХЕМЫ: у query-ссылки vless того же блока канон остаётся `serviceName`, и перестановка aliases общего блока сменила бы вид ссылки и ей.",
         "param_order": [
           "v",
           "ps",

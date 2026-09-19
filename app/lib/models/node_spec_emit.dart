@@ -302,9 +302,10 @@ Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitTuic(TuicSpec s, TemplateVars vars) {
-  final out = _baseOutbound('tuic', s)
-    ..['uuid'] = s.uuid
-    ..['password'] = s.password;
+  final out = _baseOutbound('tuic', s)..['uuid'] = s.uuid;
+  // §493 / Q133-67 — пустой пароль принимается с `password_empty`, но поле в
+  // теле не материализуется: ядро omitempty, корпус ждёт отсутствие ключа.
+  if (s.password.isNotEmpty) out['password'] = s.password;
   // §103 D-016(в) — дефолт не эмитим: null = не было задано явно, ядро
   // подставит cubic/native само (option/tuic.go omitempty).
   if (s.congestionControl != null) {

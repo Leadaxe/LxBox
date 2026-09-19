@@ -84,7 +84,6 @@ const kDraftFiles = <String>[
   // источника, и в одно пространство имён они не кладутся.
   'xray/trojan',
   'xray/vless',
-  'xray/vmess',
   'xray/shadowsocks',
   'xray/socks',
   // `xray/hysteria2` СНЯТ синком 1.1.28: контракт привёз ДВЕ секции

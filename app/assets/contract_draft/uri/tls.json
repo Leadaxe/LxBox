@@ -55,16 +55,6 @@
         },
         "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода. REALITY требует uTLS-блок («uTLS is required by reality client» — fatal при создании outbound), поэтому у этого написания отпечаток материализуется дефолтом ЯДРА; написанное значение перебивает его записью `fp` (priority 20 против 10)."
       },
-      "sni": {
-        "source": [
-          "json.streamSettings.realitySettings.serverName",
-          "json.streamSettings.realitySettings.server_name",
-          "json.streamSettings.tlsSettings.serverName",
-          "json.streamSettings.tlsSettings.server_name"
-        ],
-        "maps_to": "tls.server_name",
-        "impl": "Два написания каждого ключа — диалект Xray. xray_hysteria.go:227 читает ТОЛЬКО server_name, расходясь с :270 того же файла; одна запись снимает расхождение."
-      },
       "$sni_from_server": {
         "source": "json.streamSettings.security",
         "maps_to": null,
@@ -125,16 +115,6 @@
         },
         "impl": "`pbk_makes_reality_block` — блок появляется при НАЛИЧИИ ключа; годность ключа судит реестр (base64_32, код reality_pbk_invalid). `keyShare` этим входом НЕ читается (vless_reality_key_share): на входе sing-box поле читается (§457), на Xray — никогда не читалось. Разрыв входов вынесен лаунчеру (спека 472, 14.5), дельты на него нет."
       },
-      "sid": {
-        "source": [
-          "json.streamSettings.realitySettings.shortId",
-          "json.streamSettings.realitySettings.short_id"
-        ],
-        "maps_to": "tls.reality.short_id",
-        "when": {
-          "tls.reality.enabled": true
-        }
-      },
       "$key_share_not_carried": {
         "source": [
           "json.streamSettings.realitySettings.keyShare",
@@ -143,26 +123,6 @@
         "maps_to": null,
         "impl": "См. `pbk`: с этого входа key_share не едет. Запись объявлена, чтобы ключ не уехал в json_field_unknown."
       }
-    },
-    "fp_dialect": {
-      "note": "Именованная таблица value_map: uTLS-идентификаторы чужого диалекта → канон ядра. Ссылка — {\"$ref\": \"tls.fp_dialect\"}.",
-      "prefix": {
-        "hellochrome": "chrome",
-        "hellofirefox": "firefox",
-        "helloedge": "edge",
-        "hellosafari": "safari",
-        "helloios": "ios",
-        "helloandroid": "android",
-        "hello360": "360",
-        "helloqq": "qq",
-        "hellorandomized": "randomized",
-        "hellorandom": "random"
-      },
-      "strip": [
-        "_",
-        "-",
-        " "
-      ]
     },
     "uri_with_host": {
       "note": "Вариант диалекта uri для схем, у которых `host` адресует TLS, а НЕ транспорт (сегодня — http). Отличается от uri ровно одной записью — цепочкой sni. Заведён вариантом блока, а не третьим источником в общей записи: у vmess и anytls `host` несёт имя транспорта (node_parser_core.go:866-873), и общая цепочка увела бы transport-host в tls.server_name. Подключается вместо \"tls#uri\", не вместе с ним. DELTAS D133-19.",

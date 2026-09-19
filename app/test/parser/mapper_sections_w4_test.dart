@@ -120,13 +120,16 @@ void main() {
       }
     });
 
-    test('эмит wireguard — в нашем оверлее, порядок тот же (алфавит)', () {
-      final emit = (section('assets/contract_draft/uri/wireguard.json', 'uri')[
-          'emit'] as Map);
+    test('эмит wireguard — param_order из реестра, form_from в оверлее', () {
+      final emit = section(uriSections['wireguard']!, 'uri')['emit'] as Map;
       expect(emit['param_order'], 'alphabetical');
+      final draftEmit =
+          (section('assets/contract_draft/uri/wireguard.json', 'uri')['emit']
+              as Map);
       // Написание схемы — сегодняшнее: узел с awg-полями уезжает
       // `wireguard://`, как ждёт `emit_before480.json`.
-      expect(((emit['form_from'] as Map)['any_set'] as Map)['*'], 'wireguard');
+      expect(((draftEmit['form_from'] as Map)['any_set'] as Map)['*'],
+          'wireguard');
     });
 
     test('общие блоки берутся у лаунчера через include, своих копий нет', () {

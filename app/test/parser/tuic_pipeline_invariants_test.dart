@@ -302,11 +302,11 @@ void main() {
       final a = parseUri(empty)!.emit(TemplateVars.empty).map;
       final b = parseUri(absent)!.emit(TemplateVars.empty).map;
       expect(b, a, reason: 'написание входа в тело не просачивается');
-      // Форма поля — та же, что у узла с паролем: ключ на месте, значение
-      // пустое. Ядро читает отсутствующий ключ и пустую строку одинаково
-      // (`option/tuic.go Password` с omitempty), и заводить второе написание
-      // «нет пароля» значило бы двигать тела живых узлов без нужды.
-      expect(a['password'], '');
+      // Корпус 1.1.43+ (Q133-67): пустой пароль — предупреждение, ключ в теле
+      // не материализуется (omitempty у ядра; оба написания отсутствия
+      // неразличимы для тела).
+      expect(a.containsKey('password'), isFalse);
+      expect(b.containsKey('password'), isFalse);
     });
 
     test('круг parse(emit) сходится вместе с кодом', () {

@@ -280,9 +280,14 @@ final class MapperSections {
       // её можно только там, где этот файл доступен, — здесь.
       final parts = ref.split('.');
       if (parts.length < 2) continue;
-      final shared = _draftShared(parts.first) ?? _registryShared(parts.first);
-      final target = (shared?['blocks'] as Map?)?[parts.last];
-      if (target is! Map) continue;
+      // Черновик общего блока может быть оверлеем БЕЗ именованных таблиц
+      // (класс A снят синком) — тогда `$ref` берётся из реестра.
+      Map<String, dynamic>? target =
+          (_draftShared(parts.first)?['blocks'] as Map?)?[parts.last]
+              as Map<String, dynamic>?;
+      target ??= (_registryShared(parts.first)?['blocks'] as Map?)?[parts.last]
+          as Map<String, dynamic>?;
+      if (target == null) continue;
       (patched ??= {...rawParams})[e.key] = {
         ...m,
         'value_map': target.cast<String, dynamic>(),

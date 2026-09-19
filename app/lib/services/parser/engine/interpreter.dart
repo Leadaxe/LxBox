@@ -1593,7 +1593,7 @@ final class _Run {
     }
     space = space.copyWith(
       userinfoUser: parts.isNotEmpty ? parts.first : null,
-      userinfoPass: parts.length > 1 ? parts[1] : null,
+      userinfoPass: parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null,
     );
     return true;
   }
@@ -1641,7 +1641,8 @@ final class _Run {
     _applyOnLenGt(p);
 
     var raw = _valueOf(p);
-    if (raw == null) {
+    final emptyRaw = raw == null || (raw is String && raw.isEmpty);
+    if (emptyRaw) {
       // `on_empty` — код за ПУСТОЕ значение записи. Ставится до разбора
       // `default_when`: спрашивают не «чем заполнить», а «что человеку
       // сказать», и дефолт этого не отменяет.

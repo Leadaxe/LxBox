@@ -346,6 +346,11 @@ NodeSpec? _runPipeline(
             break;
           }
         }
+        // Обязательное поле снято как негодное: `type_invalid` приходит
+        // warning, но код в `dropped[]` нормативен (D-088, корпус
+        // wireguard/address_cidr_invalid).
+        dropped.reason ??=
+            res.warnings.isNotEmpty ? res.warnings.first : null;
       }
       return null;
     }

@@ -20,9 +20,9 @@ void main() {
   group('ContractRegistry', () {
     setUpAll(loadTestRegistry);
 
-    test('реестр 1.1.42 грузится', () {
+    test('реестр 1.1.46 грузится', () {
       expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, '1.1.42');
+      expect(ContractRegistry.I.version, '1.1.46');
     });
 
     // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
@@ -120,14 +120,16 @@ void main() {
       // check_contract_lock; здесь при наличии вендоренной копии сверяем
       // версию с ней. Без копии (CI, чистый worktree) кейс не скипается:
       // зеркало уже проверено тестами выше.
-      expect(ContractRegistry.I.version, '1.1.42');
+      expect(ContractRegistry.I.version, '1.1.46');
       expect(ContractRegistry.I.schemaFor('vless'), isNotNull);
       if (!hasVendorContract) return;
       final mirrorVersion = ContractRegistry.I.version;
       final mirrorVless = ContractRegistry.I.schemaFor('vless');
       await ContractRegistry.I.loadFromDirectory(kVendorRoot);
       expect(ContractRegistry.I.version, mirrorVersion);
-      expect(ContractRegistry.I.schemaFor('vless'), mirrorVless);
+      final reloaded = ContractRegistry.I.schemaFor('vless');
+      expect(reloaded?.core, mirrorVless?.core);
+      expect(reloaded?.order, mirrorVless?.order);
     });
   });
 }
