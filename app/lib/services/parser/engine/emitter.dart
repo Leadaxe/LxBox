@@ -1091,6 +1091,20 @@ final class _Emit {
 
   // ─────────────────────────── сериализация ───────────────────────────
 
+  /// Первое написание записи, которое её же `value_map` ведёт в ИСТИНУ.
+  ///
+  /// Порядок ключей таблицы нормативен (§0.6: канон ПЕРВЫЙ), и обратный ход
+  /// обязан взять именно первое: тогда своя ссылка читается своим же разбором
+  /// и не меняет написания у живых узлов. `null` — таблицы нет либо истины в
+  /// ней не нашлось.
+  String? _firstTruthySpelling(MapperParam p) {
+    for (final e in p.valueMap.entries) {
+      final v = e.value;
+      if (v == true || v == 'true') return e.key;
+    }
+    return null;
+  }
+
   /// Значение параметра текстом — по объявленному `emit_as`, а при его
   /// отсутствии по типу значения.
   String? _serializeValue(MapperParam p, dynamic value) {
@@ -1098,7 +1112,12 @@ final class _Emit {
     switch (mode) {
       case EmitNames.emitAsBool01:
         if (value == false) return null;
-        return '1';
+        // Написание истины — первым ключом `value_map` САМОЙ записи, если
+        // таблица есть: у записи с `{"on": "true", "true": "true", "1":
+        // "true", …}` каноном объявлено `on`, и подмена на `1` меняет
+        // СОХРАНЁННЫЙ rawSource ручного узла и то, что уезжает по Copy link.
+        // Таблицы нет — остаётся общее `1`.
+        return _firstTruthySpelling(p) ?? '1';
       case EmitNames.emitAsJoin:
         final sep = p.list?.sep ?? ',';
         if (value is List) return value.isEmpty ? null : value.join(sep);
@@ -1117,7 +1136,16 @@ final class _Emit {
         _paramEmitAttr(p, EmitNames.emitAs) == EmitNames.emitAsRaw) {
       return value ? 'true' : null;
     }
-    if (value is bool) return value ? '1' : null;
+    // Написание истины берётся у САМОЙ ЗАПИСИ — первым ключом её `value_map`,
+    // который ведёт в истину. У записи с таблицей `{"on": "true", "true":
+    // "true", "1": "true", …}` каноном объявлено `on`, и писать вместо него
+    // `1` значит менять СОХРАНЁННЫЙ rawSource ручного узла и то, что уезжает
+    // по Copy link в чужие клиенты (страж вида ссылки ловит это как класс).
+    // Таблицы нет — остаётся общее `1`.
+    if (value is bool) {
+      if (!value) return null;
+      return _firstTruthySpelling(p) ?? '1';
+    }
     if (value is List) {
       if (value.isEmpty) return null;
       return value.join(p.list?.sep ?? ',');

@@ -652,12 +652,10 @@ void main() {
       expect(again.awg!.fields, spec.awg!.fields);
       expect(again.mtu, 1200);
       expect(again.peers.single.persistentKeepalive, '25-35');
-      // Написание истины у эмита — `1`, канон записи реестра (`value_map`
-      // ведёт `on`/`true`/`1` в одно значение, а обратно пишется первое
-      // каноническое). Круг от этого не страдает — он проверен строкой выше
-      // (`again.awg!.fields` == `spec.awg!.fields`), и `on` наш же разбор
-      // читает по-прежнему.
-      expect(spec.toUri(), contains('randomtrailers=1'));
+      // Написание истины эмит берёт у САМОЙ записи — первым ключом её
+      // `value_map` (`on`), а не общим `1`: иначе поменялся бы сохранённый
+      // rawSource ручного узла и то, что уезжает по Copy link.
+      expect(spec.toUri(), contains('randomtrailers=on'));
     });
 
     test('JSON endpoint: AWG3-ключи, keepalive строкой, mtu цел (§473); '

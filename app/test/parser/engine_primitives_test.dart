@@ -431,7 +431,12 @@ void main() {
     });
 
     test('«+» в userinfo литерален, percent снят', () {
-      final s = _withParams({}, extra: {'userinfo': {'into': ['password']}});
+      // `single_into` объявлен ЯВНО: умолчание «одинокий userinfo → первое
+      // имя `into`» снято вместе с контрактом 1.1.25, где лаунчер проставил
+      // атрибут всем секциям и завёл линтер на его написание.
+      final s = _withParams({}, extra: {
+        'userinfo': {'into': ['password'], 'single_into': 'password'},
+      });
       expect(_run(s, 'x://pa+ss@h.com:443')!['password'], 'pa+ss');
       expect(_run(s, 'x://p%40ss@h.com:443')!['password'], 'p@ss');
     });
