@@ -17,6 +17,7 @@ import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
 
+import '../parser/engine_test_setup.dart';
 import 'json_schema_lite.dart';
 
 // §438 — запись LX Backup 1.0 и круг «состояние → экспорт → импорт».
@@ -352,6 +353,10 @@ Object? _snapshot(_State s) {
 }
 
 void main() {
+  // §480 — круг бэкапа разбирает ссылки узлов, а разбор исполняет секции
+  // реестра: без них узлов не получается вовсе (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('§438 запись LX Backup 1.0', () {
     test('экспорт — форма 1.0 и валиден по схеме', () async {
       final out = await _export(_source());

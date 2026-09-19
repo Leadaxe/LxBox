@@ -7,6 +7,8 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/lx_backup.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §439 N2 — член папки `autogroup://…` в LX Backup 0.x (`lx_backup: 1`).
 // Разбор текста снят, и до правки такой член ложился `kind: unsupported`
 // рядом с группой того же тега (проверка на AVD: папка «E439 Folder», член
@@ -63,6 +65,11 @@ final _stand = [
 }
 
 void main() {
+  // §480 — ввоз бэкапа разбирает ссылки узлов, а разбор исполняет секции
+  // реестра: без них узлов не получается вовсе (критерий 7 спеки 480), и
+  // ключи членов папки не находят никого — «matches no node».
+  setUpAll(loadEngineSections);
+
   test('autogroup:// папки 0.x ввозится группой, ключи — пары на члены папки',
       () {
     final got = _import(_file(_stand));

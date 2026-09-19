@@ -14,6 +14,8 @@ import 'package:lxbox/services/warp/masque_account.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 import 'package:lxbox/services/warp/warp_backup.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // LX Backup v1, сторона LxBox (SPEC 103, фаза 4).
 //
 // Парные тесты к core/backup/*_test.go в лаунчере: перенос настроек между
@@ -31,6 +33,10 @@ List<Map<String, dynamic>> _sourcesOf(String raw, String kind) => [
     ];
 
 void main() {
+  // §480 — секции обмена разбирают ссылки узлов, а разбор исполняет секции
+  // реестра: без них узлов не получается вовсе (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('LX Backup: словарь переносимых переменных', () {
     test('совпадает с реестром', () {
       final file = File('$_contractRoot/registry/vars.json');
