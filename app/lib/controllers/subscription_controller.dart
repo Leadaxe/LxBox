@@ -933,7 +933,7 @@ class SubscriptionController extends ChangeNotifier {
       return _addUriLines(decoded, text, origin: origin);
     }
     if (decoded is! JsonConfig) return _JsonAdd.notJson;
-    // §482 — «форма даёт узлы» спрашивается у самой ветки: вид без маппера
+    // §483 — «форма даёт узлы» спрашивается у самой ветки: вид без маппера
     // (Clash, нераспознанный JSON) элементов не имеет по определению.
     // Перечислять виды здесь незачем — список разъезжался бы с реестром
     // молча, а новый вид источника получал бы «не распознано».
