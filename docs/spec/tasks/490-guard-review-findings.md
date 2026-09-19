@@ -27,7 +27,7 @@
 | 1 | Повторный Start затирает `_startOutcome` | да | `runCoreRejectGuard` single-flight; join в `startAndAwaitVerdict`; `guardActive` блокирует кнопку |
 | 2 | Сбой `startVPN` — 45 с зависания | да | `_settleStartOutcome` при `lastError` после `start()` |
 | 3 | `?guard=true` — HTTP-таймаут vs долгий прогон | да | async `{started, async}` + `GET /core_reject` |
-| 4 | Предел 10 кругов на API | да | `askKeepChecking` → `CoreRejectState.askPrompt`; очередь `answer=keep` |
+| 4 | Предел 10 кругов на API | да | `askKeepChecking` → `CoreRejectState.askPrompt`; очередь `answer=keep` (не стирается в `beginRun`, сбрасывается в `finish`) |
 | 5 | enable/notifications не принимают emitted-тег | да | `enableNodeByCoreTag` через `lastEmittedTagMap` + `revertVerdict`; notifications lookup |
 | 6 | Хоп цепочки нет в `nodeByEmittedTag` | да | `noteEmittedAlias` при сборке detour |
 | 7 | Отмена после успешного check поднимает VPN | да | проверка `_cancelled` после `check` и перед `finalStart` |

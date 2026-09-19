@@ -731,7 +731,12 @@ class HomeController extends ChangeNotifier
       return c.future;
     }
     return c.future.timeout(timeout, onTimeout: () {
-      if (_startOutcome == c) _startOutcome = null;
+      // Завершаем ИМЕННО этот completer: иначе join-ожидающий висит, а
+      // поздний Stopped не выключит узел; чужой (новый) _startOutcome не трогаем.
+      if (!c.isCompleted) {
+        if (_startOutcome == c) _startOutcome = null;
+        c.complete('');
+      }
       return '';
     });
   }

@@ -51,8 +51,8 @@ Future<String?> rebuildConfigSilently(
 /// и его `mounted`-проверки остались как были.
 ///
 /// [askPrompt] — вопрос человеку после предела кругов; `null` — пути без UI
-/// (Debug API, автозапуск, сторож, плитка QS): там диалога нет, и ответ всегда
-/// [CoreRejectPrompt.stop].
+/// (Debug API): тогда ждём [CoreRejectState.askPrompt] (в т.ч. заранее
+/// поставленный `answer=keep`).
 Future<CoreRejectRun> runCoreRejectGuard({
   required HomeController home,
   required SubscriptionController sub,

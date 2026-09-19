@@ -1,3 +1,5 @@
+// ignore_for_file: depend_on_referenced_packages
+
 // Фича 478 — находки ревью guard_builder_api (Debug API).
 import 'dart:io';
 

@@ -163,7 +163,7 @@ class CoreRejectState extends ChangeNotifier {
     _disabled = const [];
     _lastOutcome = null;
     _lastError = '';
-    _queuedPromptAnswer = null;
+    // Очередь `answer=keep` с Debug API ставится ДО beginRun — не стирать.
     notifyListeners();
   }
 
@@ -206,6 +206,7 @@ class CoreRejectState extends ChangeNotifier {
     _disabled = List.unmodifiable(run.disabled);
     _lastOutcome = run.outcome;
     _lastError = run.error;
+    _queuedPromptAnswer = null;
     if (run.outcome == CoreRejectOutcome.startedWithDisabled &&
         run.disabled.isNotEmpty) {
       _bannerVisible = true;

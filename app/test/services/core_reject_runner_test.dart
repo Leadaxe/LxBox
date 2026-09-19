@@ -18,4 +18,25 @@ void main() {
     expect(answer, CoreRejectPrompt.keepChecking);
     expect(CoreRejectState.I.promptPending, isFalse);
   });
+
+  test('очередь keep переживает beginRun (Debug API до старта прогона)',
+      () async {
+    CoreRejectState.I.queuePromptAnswer(CoreRejectPrompt.keepChecking);
+    CoreRejectState.I.beginRun();
+    final answer = await CoreRejectState.I.askPrompt(10);
+    expect(answer, CoreRejectPrompt.keepChecking);
+  });
+
+  test('finish сбрасывает неиспользованную очередь keep', () async {
+    CoreRejectState.I.queuePromptAnswer(CoreRejectPrompt.keepChecking);
+    CoreRejectState.I.beginRun();
+    CoreRejectState.I.finish(const CoreRejectRun(
+      outcome: CoreRejectOutcome.startedClean,
+      rounds: 0,
+    ));
+    final pending = CoreRejectState.I.askPrompt(10);
+    expect(CoreRejectState.I.promptPending, isTrue);
+    CoreRejectState.I.answerPrompt(CoreRejectPrompt.stop);
+    expect(await pending, CoreRejectPrompt.stop);
+  });
 }

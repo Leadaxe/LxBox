@@ -267,10 +267,9 @@ Future<DebugResponse> _stopVpn(DebugContext ctx) async {
 /// некому: отказ ядра, назвавший узел, выключит его и запустит тихий цикл
 /// `checkConfig`, а фаза и выключенное читаются из `/core_reject`.
 ///
-/// Диалога предела кругов здесь нет и быть не может — вопрос задать некому,
-/// поэтому предел остаётся пределом (ответ `stop`). Ответить за человека можно
-/// заранее, `POST /core_reject/prompt?answer=keep`: автомат ждёт ОБА источника
-/// и берёт первый.
+/// Диалога на экране нет. Вопрос предела идёт через `CoreRejectState.askPrompt`
+/// (тот же, что `GET/POST /core_reject/prompt`); `answer=keep` можно поставить
+/// в очередь до старта прогона.
 ///
 /// Без флага — прежний путь, байт в байт.
 Future<DebugResponse> _startVpnHeadless(
@@ -291,8 +290,15 @@ Future<DebugResponse> _startVpnHeadless(
   final home = ctx.requireHome();
   final sub = ctx.requireSub();
   // Однопоточный HTTP-сервер не должен висеть на всём прогоне: стартуем
-  // асинхронно, состояние читается через GET /core_reject.
-  unawaited(runCoreRejectGuard(home: home, sub: sub));
+  // асинхронно, состояние читается через GET /core_reject. Ошибку ловим
+  // здесь — иначе unawaited-future роняет зону.
+  unawaited(() async {
+    try {
+      await runCoreRejectGuard(home: home, sub: sub);
+    } catch (e) {
+      AppLog.I.warning('core reject guard (async): $e');
+    }
+  }());
   return _ok('start-vpn-headless', {
     'guard': true,
     'started': true,

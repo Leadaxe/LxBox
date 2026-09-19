@@ -19,8 +19,7 @@ import 'core_reject_state.dart';
 /// Реализация [CoreRejectHost] поверх контроллеров.
 ///
 /// [askPrompt] приходит снаружи: на пути с UI это показ диалога, на старте
-/// без UI (автозапуск, сторож, плитка QS, Intent API) его нет — там предел
-/// остаётся пределом и ответ всегда [CoreRejectPrompt.stop].
+/// без UI — [CoreRejectState.askPrompt] (очередь `answer=keep` с Debug API).
 class AppCoreRejectHost implements CoreRejectHost {
   AppCoreRejectHost({
     required this.home,
