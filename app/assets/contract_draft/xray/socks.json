@@ -63,7 +63,18 @@
       },
       "unknown_key": {
         "action": "drop",
-        "code": "json_field_unknown"
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ],
+        "_impl": "`ignore` — ключи УРОВНЯ ДОКУМЕНТА, полем узла не являющиеся: бухгалтерия элемента (`protocol` — по нему элемент и опознан, `tag`/`remarks` — имя, которое читает сборка документа) плюс контейнеры, чьи листья читают записи таблицы. Список дословно тот же, что у живых секций trojan и vless. Без него КАЖДОЕ звено цепочки получало бы два json_field_unknown на `protocol` и `tag` — проверено прогоном (см. отчёт §480)."
       },
       "emit": null
     }
