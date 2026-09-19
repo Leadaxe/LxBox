@@ -9,7 +9,14 @@ import 'package:lxbox/services/parser/uri_utils.dart';
 import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 
+import 'engine_test_setup.dart';
+
 void main() {
+  // §480 W5 — Xray-вход идёт ДВИЖКОМ по секции `mappers.xray` реестра, и
+  // без загруженных секций разбор отвечает «узла нет». Запасного
+  // рукописного пути у переехавшего входа не осталось (критерий 7 спеки).
+  setUpAll(loadEngineSections);
+
   group('parseSingboxEntry', () {
     test('§115: raw sing-box JSON flow=vision + transport → emit гасит flow',
         () {

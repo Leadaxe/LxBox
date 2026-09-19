@@ -539,6 +539,9 @@ final class _Run {
     // priority»: она не зависит от выбора магического числа и не ломается,
     // если запись объявит `merge: overwrite`.
     for (final e in section.defaults.entries) {
+      // `$`-ключ — служебная запись (проза `impl` рядом со значением), а не
+      // путь тела: то же соглашение, что у `$`-записей таблицы.
+      if (e.key.startsWith(DraftNames.serviceParamPrefix)) continue;
       if (_read(e.key) != null) {
         _trace?.add(
           stage: TraceStage.defaults,

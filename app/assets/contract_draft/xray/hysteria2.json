@@ -10,7 +10,11 @@
       "label": {
         "fallback": {"template": "{scheme}-{server}-{server_port}", "scheme_source": "as_written"}
       },
-      "defaults": {"server_port": 443},
+      "defaults": {
+        "server_port": 443,
+        "tls.enabled": true,
+        "$impl_tls": "§480 W5 — QUIC-ПРОТОКОЛ БЕЗ TLS НЕ БЫВАЕТ: блок обязателен, даже когда `security` записи о нём молчит (прежняя ветка Xray ставила тот же дефолт безусловно). Дефолт секции слабее любой записи, поэтому написанный `security` его не перебивает, а дополняет. Без этого ключа элемент без `streamSettings.security` приезжал БЕЗ блока tls и терялся (json_parsers_test, «hysteria (форма форка)»)."
+      },
       "params": {
         "version": {
           "source": ["json.streamSettings.hysteriaSettings.version", "json.settings.version"],

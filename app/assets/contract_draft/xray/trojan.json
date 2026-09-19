@@ -1,15 +1,8 @@
 {
-  "_draft": "§480 W5 — черновая КОПИЯ исполняемой секции mappers.xray реестра лаунчера (контракт 1.1.13+). Временная: загрузчик берёт секцию из реестра, как только она приедет синком, и только иначе отсюда. Отличия от копии перечислены в `impl` записей.",
+  "_draft": "ОТСТУПЛЕНИЯ LxBox от секции `mappers.xray` реестра (контракт 1.1.15). Файл НЕ дублирует секцию: загрузчик накладывает эти ключи поверх реестровых. Каждый ключ — красный кейс на identity-фикстуре `xray/pipeline_identity_before.json`, переданный лаунчеру.",
+  "_overlay": true,
   "mappers": {
     "xray": {
-      "detect": {
-        "json": {
-          "value_of": {
-            "protocol": "trojan"
-          }
-        }
-      },
-      "body_source": "xray",
       "forms": [
         {
           "id": "servers",
@@ -23,7 +16,7 @@
           },
           "space": "json",
           "base": "settings.servers.0",
-          "impl": "§322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА: мусорный ТИП поля (streamSettings: \"none\", settings: []) означает битую запись, а не «транспорта нет». Формы под неё нет — элемент пропускается."
+          "impl": "§322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА: мусорный ТИП поля (streamSettings: \"none\", settings: []) означает БИТУЮ ЗАПИСЬ, а не «транспорта нет». Ветка `default: true` реестра собрала бы из неё рабочий узел без транспорта и TLS."
         }
       ],
       "include": [
@@ -34,33 +27,8 @@
       "defaults": {
         "server_port": 443
       },
-      "params": {
-        "address": {
-          "source": "json.$base.address",
-          "maps_to": "server",
-          "required": true
-        },
-        "port": {
-          "source": "json.$base.port",
-          "maps_to": "server_port",
-          "type": "int"
-        },
-        "password": {
-          "source": "json.$base.password",
-          "maps_to": "password",
-          "required": true
-        },
-        "$extra_servers": {
-          "source": "json.settings.servers",
-          "maps_to": null,
-          "on_len_gt": {
-            "n": 1,
-            "action": "note",
-            "code": "xray_extra_entries_dropped"
-          },
-          "impl": "QUIRKS Q133-18: servers[1..] отбрасываются молча. Поведение то же, появляется код."
-        }
-      },
+      "_impl_include": "В `include` реестра блока `dialer#xray` нет, и keep-alive из sockopt (§453) с этого входа не читается вовсе.",
+      "_impl_defaults": "У реестра `port` объявлен `required` без дефолта: элемент без порта даёт НОЛЬ узлов вместо узла на 443, как было.",
       "unknown_key": {
         "action": "drop",
         "code": "json_field_unknown",
@@ -73,9 +41,9 @@
           "mux",
           "sendThrough",
           "proxySettings"
-        ]
-      },
-      "emit": null
+        ],
+        "_impl": "`ignore` — ключи УРОВНЯ ДОКУМЕНТА, полем узла не являющиеся: бухгалтерия элемента (`protocol` — по нему элемент и опознан, `tag`/`remarks` — имя, которое читает сборка документа) плюс контейнеры, чьи листья читают записи таблицы. У реестра списка нет, и каждый такой ключ уехал бы в json_field_unknown шумом на каждом узле."
+      }
     }
   }
 }
