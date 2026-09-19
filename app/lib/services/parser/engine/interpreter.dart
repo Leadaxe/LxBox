@@ -702,9 +702,104 @@ const Set<String> _kListNormalizers = {'port_range_spec', 'cidr_prefix'};
 /// принял бы `-5` числом.
 final RegExp _kUintRe = RegExp(r'^\d+$');
 
+/// ПЛАН СЕКЦИИ — то, что не зависит от узла и потому считается ОДИН РАЗ.
+///
+/// Рекомендация НОРМЫ («предкомпиляция при загрузке, а не интерпретация на
+/// лету») и главная статья цены слоя: раскладка записей на проходы A/B и
+/// сортировка по `priority` считались на КАЖДОМ узле, хотя секция между
+/// узлами не меняется. На подписке в 2000 узлов это 2000 одинаковых сортировок
+/// одного и того же списка.
+///
+/// План кэшируется по ЭКЗЕМПЛЯРУ секции ([_planCache]): загрузчик отдаёт один
+/// и тот же объект, пока реестр не перезагрузили, а перезагрузка даёт новый
+/// экземпляр — и новый план вместе с ним, без ручной инвалидации. Ключ —
+/// сама секция, а не её имя: два плана для одной секции разошлись бы молча.
+final class _SectionPlan {
+  _SectionPlan(MapperSection section)
+      : selectors = _pass(section, selector: true),
+        dependents = _pass(section, selector: false),
+        declared = _declaredOf(section);
+
+  /// Записи прохода A (`selector: true`) в нормативном порядке.
+  final List<MapperParam> selectors;
+
+  /// Записи прохода B — все остальные, в том же порядке.
+  final List<MapperParam> dependents;
+
+  /// Оба прохода подряд: стадии после них (`default_from`, `required`) идут
+  /// по ВСЕМ записям в том же нормативном порядке.
+  late final List<MapperParam> all = [...selectors, ...dependents];
+
+  /// Все написания, ОБЪЯВЛЕННЫЕ таблицей: имя записи, её `aliases` и имена в
+  /// `source` (`query.<имя>`).
+  ///
+  /// Считается по таблице, а не по факту чтения (норма §8): запись,
+  /// не применившаяся по `when`, объявленной быть не перестаёт. Иначе `eh=`
+  /// без `ed=` и любой параметр чужого транспорта давали бы info о
+  /// «неизвестном параметре» на ровном месте — а это ровно то молчание
+  /// наоборот, ради которого затеяна кампания.
+  final Set<String> declared;
+
+  /// Стабильная сортировка по `priority` с индексом ОБЪЯВЛЕНИЯ как
+  /// тай-брейком (норма §7: порядок объявления нормативен).
+  static List<MapperParam> _pass(MapperSection s, {required bool selector}) {
+    final all = s.params.values.toList();
+    final index = {for (var i = 0; i < all.length; i++) all[i].name: i};
+    final out = [
+      for (final p in all)
+        if (p.selector == selector) p,
+    ];
+    out.sort((a, b) {
+      final pa = a.priority ?? 0;
+      final pb = b.priority ?? 0;
+      if (pa != pb) return pa.compareTo(pb);
+      return index[a.name]!.compareTo(index[b.name]!);
+    });
+    return out;
+  }
+
+  static Set<String> _declaredOf(MapperSection s) {
+    final out = <String>{};
+    for (final p in s.params.values) {
+      for (final sp in p.spellings) {
+        out.add(sp.toLowerCase());
+      }
+      // Норма §10.3: имя из `source` объявлено НАРАВНЕ с именем записи —
+      // запись читает `query.<name>`, и `<name>` бывает не равно её имени.
+      for (final src in [
+        ...p.source,
+        for (final l in p.sourceByForm.values) ...l,
+      ]) {
+        if (src.startsWith('query.')) {
+          out.add(src.substring('query.'.length).toLowerCase());
+        }
+      }
+    }
+    return out;
+  }
+}
+
+/// Кэш планов по экземпляру секции. `Expando` — чтобы план жил ровно столько,
+/// сколько живёт секция, и не держал её от сборки после перезагрузки реестра.
+final Expando<_SectionPlan> _planCache = Expando<_SectionPlan>('mapper plan');
+
+/// Точечный путь, разложенный на сегменты ОДИН РАЗ.
+///
+/// `_put`/`_read`/`_erase` резали строку на каждом обращении, а путей в
+/// секции конечное число и известны они при загрузке. Кэш статический и общий
+/// по той же причине, что кэш регулярок: один и тот же путь приходит от
+/// разных записей и с каждого узла подписки.
+final Map<String, List<String>> _segCache = {};
+
+List<String> _segments(String path) => _segCache[path] ??= path.split('.');
+
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
-  _Run(this.section, this.space, this._trace);
+  _Run(this.section, this.space, this._trace)
+      : _plan = _planCache[section] ??= _SectionPlan(section);
+
+  /// План секции: проходы и множество объявленных — посчитаны один раз.
+  final _SectionPlan _plan;
 
   /// Коллектор трассы; `null` — трасса не собирается, и ни одна строка не
   /// строится (приложение «ТРАССА»: коллектор не стоит ничего, когда
@@ -766,18 +861,17 @@ final class _Run {
     if (!_applyUserinfo()) return null;
 
     // 4–5. Два прохода: сперва селекторы, потом зависимые.
-    final ordered = _orderedParams();
-    for (final p in ordered.where((p) => p.selector)) {
+    for (final p in _plan.selectors) {
       _applyParam(p);
       if (_dropNode) return null;
     }
-    for (final p in ordered.where((p) => !p.selector)) {
+    for (final p in _plan.dependents) {
       _applyParam(p);
       if (_dropNode) return null;
     }
 
     // 6. Заполнение пустоты объявленными источниками.
-    for (final p in ordered) {
+    for (final p in _plan.all) {
       _applyDefaults(p);
     }
 
@@ -825,7 +919,7 @@ final class _Run {
     }
 
     // Обязательные записи: их отсутствие — это «узла нет».
-    for (final p in ordered) {
+    for (final p in _plan.all) {
       if (!p.required) continue;
       // Пути, которые запись обязана наполнить. Обычно один (`maps_to`), но у
       // записи со `split_into` целевых путей несколько, и `maps_to` у неё
@@ -914,17 +1008,6 @@ final class _Run {
 
   /// Записи в порядке исполнения: `priority` (меньше = раньше), при равенстве
   /// — порядок объявления в секции (G3, FROZEN).
-  List<MapperParam> _orderedParams() {
-    final list = section.params.values.toList();
-    final index = {for (var i = 0; i < list.length; i++) list[i].name: i};
-    list.sort((a, b) {
-      final pa = a.priority ?? 0;
-      final pb = b.priority ?? 0;
-      if (pa != pb) return pa.compareTo(pb);
-      return index[a.name]!.compareTo(index[b.name]!);
-    });
-    return list;
-  }
 
   /// Построить наложенные пространства (FROZEN `overlays[]`).
   ///
@@ -2286,7 +2369,7 @@ final class _Run {
       path: path,
       act: TraceAct.remove,
     );
-    final segs = path.split('.');
+    final segs = _segments(path);
     Map<String, dynamic>? cur = body;
     for (var i = 0; i < segs.length - 1; i++) {
       final seg = segs[i];
@@ -2310,7 +2393,7 @@ final class _Run {
   /// Вложенная карта НЕ пересобирается: `tls.enabled` и `tls.server_name` —
   /// две записи в один блок, и вторая обязана дописаться к первой.
   void _put(String path, dynamic value) {
-    final segs = path.split('.');
+    final segs = _segments(path);
     var cur = body;
     for (var i = 0; i < segs.length - 1; i++) {
       final seg = segs[i];
@@ -2346,7 +2429,7 @@ final class _Run {
 
   dynamic _read(String path) {
     dynamic cur = body;
-    for (final seg in path.split('.')) {
+    for (final seg in _segments(path)) {
       if (cur is! Map) return null;
       // `имя[]` — первый элемент массива (см. [_put]).
       if (seg.endsWith('[]')) {

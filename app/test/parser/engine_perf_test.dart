@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/engine_mapper.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -44,9 +45,21 @@ void main() {
       parseUri(l);
     }
 
-    var best = Duration(days: 1);
+    // Слой маппера и полная воронка меряются ОТДЕЛЬНО: критерий спеки задан
+    // на воронке (×1,5), но растёт при этом слой, и по одному числу не видно,
+    // что именно подорожало. На W1 слой стоил ×4 к рукописному при +28% на
+    // воронке — без раздельного замера этот запас был бы неразличим.
+    var bestLayer = const Duration(days: 1);
+    var best = const Duration(days: 1);
     for (var run = 0; run < 3; run++) {
-      final sw = Stopwatch()..start();
+      var sw = Stopwatch()..start();
+      for (final l in links) {
+        mapViaEngine(l, 'trojan');
+      }
+      sw.stop();
+      if (sw.elapsed < bestLayer) bestLayer = sw.elapsed;
+
+      sw = Stopwatch()..start();
       for (final l in links) {
         parseUri(l);
       }
@@ -55,7 +68,7 @@ void main() {
     }
 
     // ignore: avoid_print
-    print('§480 перф: 2000 ссылок — ${best.inMilliseconds} мс '
-        '(лучший из трёх)');
+    print('§480 перф: 2000 ссылок — слой ${bestLayer.inMilliseconds} мс, '
+        'воронка ${best.inMilliseconds} мс (лучший из трёх)');
   });
 }
