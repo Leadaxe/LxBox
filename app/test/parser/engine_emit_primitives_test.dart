@@ -309,6 +309,80 @@ void main() {
       expect(r.lost, isEmpty);
       expect(r.uri, 's://h');
     });
+
+    test('consumed первого элемента массива не покрывает остальные', () {
+      // Ссылка несёт один набор параметров: `_read('hops[]…')` берёт
+      // первый объект. Без индексных путей второй объект числился бы
+      // уехавшим — тот же `hops[].key` уже в `_consumed`.
+      final r = emitViaSection(
+        _section(const {
+          'detect': {
+            'scheme_in': ['s']
+          },
+          'emit': {'form': 'url'},
+          'params': {
+            'server': {'source': 'host', 'maps_to': 'hops[].host'},
+            'k': {'source': 'query.k', 'maps_to': 'hops[].key'},
+          },
+        }),
+        {
+          'hops': [
+            {'host': 'a.example', 'key': 'one'},
+            {'host': 'b.example', 'key': 'two'},
+          ],
+        },
+        '',
+      )!;
+      expect(r.uri, 's://a.example?k=one');
+      expect(r.lost, containsAll(['hops[1].host', 'hops[1].key']));
+    });
+  });
+
+  group('§480 W7 · emit.refuse_when', () {
+    const section = {
+      'detect': {
+        'scheme_in': ['s']
+      },
+      'emit': {
+        'form': 'url',
+        'refuse_when': [
+          {'path': 'hops', 'len_gt': 1},
+        ],
+      },
+      'params': {
+        'server': {'source': 'host', 'maps_to': 'hops[].host'},
+      },
+    };
+
+    test('длина больше порога — ссылки нет (как у схемы без share_uri)', () {
+      final r = emitViaSection(
+        _section(section),
+        {
+          'hops': [
+            {'host': 'a.example'},
+            {'host': 'b.example'},
+          ],
+        },
+        '',
+      );
+      expect(r, isNotNull, reason: 'секция emit объявила — это не «нет хода»');
+      expect(r!.uri, isEmpty);
+    });
+
+    test('один элемент — ссылка собирается', () {
+      expect(
+        emitViaSection(
+          _section(section),
+          {
+            'hops': [
+              {'host': 'a.example'},
+            ],
+          },
+          '',
+        )!.uri,
+        's://a.example',
+      );
+    });
   });
 
   test('секция без блока emit обратного хода не даёт', () {

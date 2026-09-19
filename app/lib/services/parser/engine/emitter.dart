@@ -216,6 +216,12 @@ abstract final class EmitNames {
   /// строкой чужие клиенты читают хуже, чем нулём, а версия контейнера
   /// вообще константа.
   static const jsonAlways = 'json_always';
+
+  /// Условия, при которых ссылка НЕ собирается: форма тела не выражает.
+  /// Список карт `{path, len_gt}` — отказ, если длина значения по пути
+  /// больше порога. Пустая ссылка — тот же исход, что у схемы без
+  /// переносимой формы (Copy link на пустой строке молча не копирует).
+  static const refuseWhen = 'refuse_when';
 }
 
 /// Каноническая ссылка, собранная секцией из канонического тела.
@@ -287,6 +293,10 @@ final class _Emit {
   final List<String> _lost = [];
 
   EmitResult run() {
+    // Отказ формата — ДО обхода записей: иначе ссылка собралась бы из
+    // первого элемента массива, а остальные числились бы уехавшими.
+    if (_refuse()) return const EmitResult(uri: '');
+
     final scheme = _scheme();
     final userinfo = _userinfo();
 
@@ -1570,6 +1580,31 @@ final class _Emit {
 
   // ───────────────────────────── потери ─────────────────────────────
 
+  /// `emit.refuse_when` — форма ссылки тело не выражает. Пустая ссылка:
+  /// Copy link на `uri.isEmpty` молча не копирует, как у схемы без
+  /// переносимой формы.
+  bool _refuse() {
+    final raw = emit[EmitNames.refuseWhen];
+    if (raw is! List) return false;
+    for (final item in raw) {
+      if (item is! Map) continue;
+      if (_refuseRule(item.cast<String, dynamic>())) return true;
+    }
+    return false;
+  }
+
+  bool _refuseRule(Map<String, dynamic> rule) {
+    final path = rule['path'];
+    if (path is! String) return false;
+    final actual = _read(path);
+    final lenGt = rule['len_gt'];
+    if (lenGt is num) {
+      final n = actual is List ? actual.length : 0;
+      return n > lenGt;
+    }
+    return false;
+  }
+
   /// Пути тела, не уехавшие в ссылку. Объявленная потеря (`round_trip:
   /// false`) — не ошибка; НЕобъявленная означает, что круг рвётся молча.
   void _collectLost() {
@@ -1593,11 +1628,12 @@ final class _Emit {
   }
 
   /// Все листовые пути тела, в ТОЙ ЖЕ записи, какой их адресуют записи
-  /// таблицы: массив объектов даёт сегмент `имя[]`.
+  /// таблицы: первый элемент массива объектов даёт сегмент `имя[]`.
   ///
-  /// Нужно для учёта потерь: путь `peers[].public_key` объявлен записью
-  /// именно так, и не совпади написание — уехавшее в ссылку поле числилось бы
-  /// потерянным.
+  /// Нужно для учёта потерь: путь `hops[].key` объявлен записью именно так,
+  /// и не совпади написание — уехавшее в ссылку поле числилось бы
+  /// потерянным. Остальные элементы несут индекс (`имя[1]`): иначе
+  /// consumed первого покрывал бы весь массив одним путём.
   static Iterable<String> _paths(Map<String, dynamic> m, String prefix) sync* {
     for (final e in m.entries) {
       final p = prefix.isEmpty ? e.key : '$prefix.${e.key}';
@@ -1605,10 +1641,13 @@ final class _Emit {
       if (v is Map<String, dynamic> && v.isNotEmpty) {
         yield* _paths(v, p);
       } else if (v is List && v.isNotEmpty && v.first is Map<String, dynamic>) {
-        // Массив ОБЪЕКТОВ — элементы адресуются `имя[]`; массив скаляров
-        // (alpn, address) сам по себе лист.
-        for (final item in v) {
-          if (item is Map<String, dynamic>) yield* _paths(item, '$p[]');
+        // Массив ОБЪЕКТОВ. Первый — `имя[]` (как `_read`); остальные —
+        // `имя[i]`, иначе один consumed-путь засчитывал бы все элементы.
+        // Массив скаляров (alpn, address) сам по себе лист.
+        for (var i = 0; i < v.length; i++) {
+          final item = v[i];
+          if (item is! Map<String, dynamic>) continue;
+          yield* _paths(item, i == 0 ? '$p[]' : '$p[$i]');
         }
       } else {
         yield p;
