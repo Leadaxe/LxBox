@@ -160,64 +160,30 @@ int _payloadCount(Map<String, dynamic> element) {
 List<NodeSpec> _parseJson(JsonConfig j, List<NodeWarning>? out) {
   // §480 — ОБХОД ЭЛЕМЕНТОВ ВЕДЁТ РЕЕСТР. Ветка документа называет и вид
   // источника элемента (`mapper`), и путь к элементам (`elements`); движок
-  // достаёт по нему группы. Прежний `switch (flavor)` был второй копией того
-  // же знания: вид источника уже опознан данными, а путь к его элементам
-  // оставался ветвями здесь.
+  // достаёт по нему группы. Прежний рукописный `switch` по форме документа
+  // был второй копией того же знания: вид источника уже опознан данными, а
+  // путь к его элементам оставался ветвями здесь.
+  //
+  // §482 — ветка есть у ЛЮБОГО опознанного документа, включая опознанный без
+  // реестра (`_detectLegacySource`), и второго обхода под запасной путь
+  // больше нет: формы те же, различать их незачем.
   //
   // Группами, а не плоским списком: границы конфига несут смысл для дедупа
   // (§404) и владения именем (§342).
   final source = j.source;
-  final spec = source?.elements;
-  if (source?.mapper != null && spec != null) {
-    final groups = DocumentRegistry.groupsFor(spec, j.value);
-    if (groups != null) {
-      if (groups.isEmpty) return const [];
-      return source!.mapper == 'xray'
-          ? _parseXrayDocument(groups, out)
-          : parseSingboxConfigs(groups);
-    }
-  }
+  final spec = source.elements;
+  final mapper = source.mapper;
+  // Вид без маппера узлов не даёт по определению (Clash, нераспознанный
+  // JSON): ноль узлов, как и прежде.
+  if (mapper == null || spec == null) return const [];
 
-  // Запасной путь: документ опознан БЕЗ реестра (юнит-тест без `loadDrafts`,
-  // форма, собранная вызывающим из UI). Опознание документа, в отличие от
-  // разбора узла, обязано работать и без реестра — на нём стоит вся вставка
-  // из буфера.
-  switch (j.flavor) {
-    case JsonFlavor.xrayArray:
-      if (j.value is! List) return const [];
-      return _parseXrayDocument(
-        (j.value as List).whereType<Map<String, dynamic>>().toList(),
-        out,
-      );
-    // §368 — четыре sing-box-формы отличаются только обёрткой; нормализуем к
-    // «массиву конфигов» и отдаём одному ядру. Одиночный outbound больше не
-    // ходит в `parseSingboxEntry` напрямую: общий путь даёт ему то же, что
-    // остальным (detour, warning'и), а массив из одного элемента вырождает
-    // сортировку §342 и дедуп P4.
-    case JsonFlavor.singboxOutbound:
-      if (j.value is! Map<String, dynamic>) return const [];
-      return parseSingboxConfigs([
-        {
-          'outbounds': [j.value],
-        },
-      ]);
-    case JsonFlavor.singboxArray:
-      if (j.value is! List) return const [];
-      return parseSingboxConfigs([
-        {'outbounds': j.value},
-      ]);
-    case JsonFlavor.singboxConfig:
-      if (j.value is! Map<String, dynamic>) return const [];
-      return parseSingboxConfigs([j.value as Map<String, dynamic>]);
-    case JsonFlavor.singboxMulti:
-      if (j.value is! List) return const [];
-      return parseSingboxConfigs(
-        (j.value as List).whereType<Map<String, dynamic>>().toList(),
-      );
-    case JsonFlavor.clashYaml:
-    case JsonFlavor.unknown:
-      return const [];
-  }
+  // Форма документа не та, что объявлена веткой, — обойти нечем.
+  final groups = DocumentRegistry.groupsFor(spec, j.value);
+  if (groups == null || groups.isEmpty) return const [];
+
+  return mapper == 'xray'
+      ? _parseXrayDocument(groups, out)
+      : parseSingboxConfigs(groups);
 }
 
 /// §310/§321/§342/§404 — СБОРКА ДОКУМЕНТА Xray из его элементов.

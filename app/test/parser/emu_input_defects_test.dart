@@ -47,12 +47,12 @@ void main() {
 
   nodesOf(String input) => parseAll(decode(input));
 
-  /// Гейт контроллера (`_addJsonNodes`): вход, чей `flavor` не опознан,
+  /// Гейт контроллера (`_addJsonNodes`): вход, чья ветка узлов не даёт,
   /// отвергается ДО разбора — `parseAll` его уже не видит. Дефект как раз
-  /// тут и жил, поэтому форма проверяется отдельно от числа узлов.
-  JsonFlavor flavorOf(String input) {
+  /// тут и жил, поэтому ветка проверяется отдельно от числа узлов.
+  JsonConfig? jsonOf(String input) {
     final d = decode(input);
-    return d is JsonConfig ? d.flavor : JsonFlavor.unknown;
+    return d is JsonConfig ? d : null;
   }
 
   group('Д-3 — Xray-JSON принимается всеми тремя формами входа', () {
@@ -73,15 +73,16 @@ void main() {
     });
 
     test('все три формы проходят гейт вставки, а не только разбор', () {
-      // `unknown` здесь = «вставка ответит 400», даже если `parseAll` узел
-      // собирает: контроллер до разбора не доходит.
+      // Ветка без маппера здесь = «вставка ответит 400», даже если `parseAll`
+      // узел собирает: контроллер до разбора не доходит. Маппер же называет
+      // диалект — все четыре вида Xray отвечают одним `xray`.
       for (final input in [
         xrayOutbound,
         '{"outbounds":[$xrayOutbound]}',
         '[$xrayOutbound]',
         '[{"outbounds":[$xrayOutbound]}]',
       ]) {
-        expect(flavorOf(input), JsonFlavor.xrayArray,
+        expect(jsonOf(input)?.source.mapper, 'xray',
             reason: 'форма отвергается гейтом вставки: $input');
       }
     });
@@ -89,10 +90,10 @@ void main() {
     test('sing-box-формы за Xray-ветки не уезжают', () {
       const sb = '{"type":"trojan","server":"h.example",'
           '"server_port":443,"password":"p"}';
-      expect(flavorOf(sb), JsonFlavor.singboxOutbound);
-      expect(flavorOf('[$sb]'), JsonFlavor.singboxArray);
-      expect(flavorOf('{"log":{},"outbounds":[$sb]}'),
-          JsonFlavor.singboxConfig);
+      expect(jsonOf(sb)?.source.kind, SourceKind.singboxOutbound);
+      expect(jsonOf('[$sb]')?.source.kind, SourceKind.singboxOutboundArray);
+      expect(jsonOf('{"log":{},"outbounds":[$sb]}')?.source.kind,
+          SourceKind.singboxConfig);
     });
   });
 

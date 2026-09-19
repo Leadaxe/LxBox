@@ -36,18 +36,17 @@ final class AmneziaConfig extends DecodedBody {
 
 final class JsonConfig extends DecodedBody {
   final Object value;
-  final JsonFlavor flavor;
 
-  /// §480 — ВЕТКА РЕЕСТРА, которой опознан документ: по её `elements` идёт
-  /// обход элементов (`parse_all`), а по `mapper` — вид источника элемента.
+  /// §480/§482 — ВЕТКА, которой опознан документ: `kind` называет вид,
+  /// `elements` — где лежат элементы (обход ведёт `parse_all`), `mapper` —
+  /// вид источника элемента.
   ///
-  /// `null` — документ опознан запасным рукописным путём (реестра нет) либо
-  /// форму собрал вызывающий из UI. Тогда обход идёт по [flavor], как до
-  /// волны: [JsonFlavor] остаётся ПУБЛИЧНОЙ формой (её читают превью вставки
-  /// и контроллер подписок), и снимать её — не эта задача.
-  final DocumentSource? source;
+  /// Ветка едет ЦЕЛИКОМ и у запасного пути тоже (`_detectLegacySource`):
+  /// второго имени вида — перечисления форм в коде — больше нет, и
+  /// потребителю незачем знать, откуда взялось опознание.
+  final DocumentSource source;
 
-  const JsonConfig(this.value, this.flavor, {this.source});
+  const JsonConfig(this.value, this.source);
 }
 
 final class DecodeFailure extends DecodedBody {
@@ -56,29 +55,95 @@ final class DecodeFailure extends DecodedBody {
   const DecodeFailure(this.reason, [this.sample]);
 }
 
-/// §368 — формы JSON на входе. Четыре sing-box-варианта отличаются только
-/// обёрткой и сводятся к одному ядру (`parseSingboxConfigs`); flavor нужен,
-/// чтобы нормализовать вход и чтобы превью в UI читало тот же результат, что и
-/// импорт (раньше эвристик было три, и они разошлись — §368 §1).
-enum JsonFlavor {
-  /// Массив автономных Xray-конфигов (элементы с `outbounds` и `protocol`).
-  xrayArray,
+/// §482 — имена видов источника, у которых есть СВОЁ поведение в коде.
+///
+/// Перечислением видов этот класс не является: виды объявляет реестр, и
+/// незнакомое имя обязано вести себя как «узлов нет», а не ронять разбор.
+/// Здесь лежат только те имена, на которые потребитель отвечает по-разному
+/// (превью вставки, вырезание `tailscale`-записей), — чтобы одна и та же
+/// строка не переписывалась в четырёх файлах.
+abstract final class SourceKind {
+  /// §480 Д-3 — ЧЕТЫРЕ вида Xray. Обёртка документа их различает, а диалект
+  /// — нет: обход элементов идёт по `elements` ветки, и потребителю (превью
+  /// буфера) все четыре отвечают одинаково. Перечислены именно потому, что
+  /// молчащий на трёх из них `switch` вернул бы «вид неизвестен» документу,
+  /// который ветка реестра уже опознала.
+  ///
+  /// Массив автономных Xray-конфигов (элементы с `outbounds`).
+  static const xrayConfigArray = 'xray_config_array';
+
+  /// Полный Xray-конфиг: `{"outbounds":[{"protocol":…},…],…}`.
+  static const xrayConfig = 'xray_config';
+
+  /// Одиночный Xray-outbound: `{"protocol":"vless",…}`.
+  static const xrayOutbound = 'xray_outbound';
+
+  /// Массив Xray-outbound'ов: `[{"protocol":"vless",…},…]`.
+  static const xrayOutboundArray = 'xray_outbound_array';
 
   /// Одиночный sing-box outbound: `{"type":"vless",…}`.
-  singboxOutbound,
+  static const singboxOutbound = 'singbox_outbound';
 
   /// Массив sing-box outbound'ов: `[{"type":"vless",…},…]`.
-  singboxArray,
+  static const singboxOutboundArray = 'singbox_outbound_array';
 
   /// Полный sing-box конфиг: `{"log":…,"outbounds":[…],"route":…}`.
-  singboxConfig,
+  static const singboxConfig = 'singbox_config';
 
   /// Массив автономных sing-box конфигов (подписка пер-узел).
-  singboxMulti,
+  static const singboxConfigArray = 'singbox_config_array';
 
-  clashYaml,
-  unknown,
+  /// §482 — своей ветки в реестре НЕТ: её убрал GRAMMAR_SYNC, у лаунчера её
+  /// заменяет `on_unrecognized`, которого движок ещё не исполняет. Имя живёт
+  /// на запасном пути, чтобы «ноль узлов» не подменилось на «список ссылок
+  /// из одной строки JSON» (фича 480, раздел 7c).
+  static const clashYaml = 'clash_yaml';
+
+  /// JSON, не похожий ни на одну форму. Узлов не даёт.
+  static const unknown = 'unknown';
 }
+
+/// §482 — виды источника ЗАПАСНОГО пути (реестр не загружен).
+///
+/// `kind`, `mapper` и `elements` списаны с одноимённых веток реестра, и
+/// расхождение ловит линтер `document_registry_test`: разъехавшийся
+/// `elements` дал бы на запасном пути другой обход элементов — то есть
+/// другой состав подписки — и сказал бы об этом только пользователь.
+///
+/// `clash_yaml` и `unknown` своих веток в реестре не имеют (см. [SourceKind]):
+/// маппера у них нет, узлов они не дают.
+const kFallbackDocumentSources = <DocumentSource>[
+  DocumentSource(
+    kind: SourceKind.xrayConfigArray,
+    mapper: 'xray',
+    elements: '[].outbounds[]',
+  ),
+  DocumentSource(
+    kind: SourceKind.singboxConfigArray,
+    mapper: 'singbox',
+    elements: '[].outbounds[]',
+  ),
+  DocumentSource(
+    kind: SourceKind.singboxOutboundArray,
+    mapper: 'singbox',
+    elements: '[]',
+  ),
+  DocumentSource(
+    kind: SourceKind.singboxOutbound,
+    mapper: 'singbox',
+    elements: r'$self',
+  ),
+  DocumentSource(
+    kind: SourceKind.singboxConfig,
+    mapper: 'singbox',
+    elements: 'outbounds[]+endpoints[]',
+  ),
+  DocumentSource(kind: SourceKind.clashYaml),
+  DocumentSource(kind: SourceKind.unknown),
+];
+
+DocumentSource _fallback(String kind) =>
+    kFallbackDocumentSources.firstWhere((s) => s.kind == kind);
 
 /// Декодирует body подписки. Не throws.
 ///
@@ -134,10 +199,9 @@ DecodedBody _classifyByKind(DocumentMatch match) {
     case 'singbox':
       final value = match.json ?? _tryJsonDecode(text);
       if (value == null) return _classifyLegacy(text);
-      // §480 — ветка едет дальше ЦЕЛИКОМ: обход элементов идёт по её
-      // `elements`, а не по `flavor`. `flavor` остаётся для UI-читателей.
-      return JsonConfig(value, _flavorOf(match.source.kind),
-          source: match.source);
+      // §480 — ветка едет дальше ЦЕЛИКОМ: и обход элементов (`elements`), и
+      // вид источника (`kind`) читаются прямо с неё.
+      return JsonConfig(value, match.source);
     case 'uri':
       // Ветка «всё остальное» ловит и опознаваемый JSON, своей ветки в
       // реестре не имеющий: такой документ узлов не даёт, но форму ответа
@@ -148,7 +212,7 @@ DecodedBody _classifyByKind(DocumentMatch match) {
       final head = text.trimLeft();
       if (head.startsWith('{') || head.startsWith('[')) {
         final value = _tryJsonDecode(text);
-        if (value != null) return JsonConfig(value, _detectFlavor(value));
+        if (value != null) return JsonConfig(value, _detectLegacySource(value));
       }
       return _uriLines(text, match.source.lineCommentPrefixes);
     case null:
@@ -156,35 +220,11 @@ DecodedBody _classifyByKind(DocumentMatch match) {
       // узлов, как и до волны.
       final value = match.json ?? _tryJsonDecode(text);
       if (value == null) return _classifyLegacy(text);
-      return JsonConfig(value, _detectFlavor(value));
+      return JsonConfig(value, _detectLegacySource(value));
     default:
       return _classifyLegacy(text);
   }
 }
-
-/// `kind` ветки реестра → [JsonFlavor].
-///
-/// Перевод, а не решение: формы JSON перечислены в `parse_all` и виду
-/// источника не принадлежат. Один незнакомый `kind` — `unknown`, как и было.
-///
-/// §480 Д-3 — ЧЕТЫРЕ вида Xray переводятся в ОДИН `xrayArray`. `flavor` не
-/// различает обёртку документа, он отвечает на вопрос «какой диалект»:
-/// обход элементов идёт по `elements` ветки реестра, а не по нему. Читатели
-/// же (`_addJsonNodes`, превью буфера, `tailscale_split`) спрашивают именно
-/// диалект, и новый вид, переведённый в `unknown`, они бы отвергли — вход
-/// остался бы нерабочим, хотя ветка его опознала.
-JsonFlavor _flavorOf(String kind) => switch (kind) {
-      'xray_config_array' ||
-      'xray_config' ||
-      'xray_outbound' ||
-      'xray_outbound_array' =>
-        JsonFlavor.xrayArray,
-      'singbox_config_array' => JsonFlavor.singboxMulti,
-      'singbox_outbound_array' => JsonFlavor.singboxArray,
-      'singbox_outbound' => JsonFlavor.singboxOutbound,
-      'singbox_config' => JsonFlavor.singboxConfig,
-      _ => JsonFlavor.unknown,
-    };
 
 Object? _tryJsonDecode(String text) {
   try {
@@ -262,7 +302,7 @@ DecodedBody _classifyPlain(String body) {
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
       final value = jsonDecode(trimmed);
-      return JsonConfig(value, _detectFlavor(value));
+      return JsonConfig(value, _detectLegacySource(value));
     } catch (_) {
       // Fall through to URI-lines detection.
     }
@@ -330,34 +370,41 @@ String _firstNonCommentLine(String s) {
   return '';
 }
 
-JsonFlavor _detectFlavor(Object v) {
+/// Вид источника рукописным порядком — запасной путь, когда реестра нет.
+///
+/// Отвечает ТОЙ ЖЕ формой, что реестр ([DocumentSource]): вид у документа
+/// один, и зависеть он от того, загружен ли реестр, не должен — сверяет
+/// `document_registry_test`.
+DocumentSource _detectLegacySource(Object v) {
   if (v is List && v.isNotEmpty) {
     final first = v.first;
     if (first is Map && first['outbounds'] is List) {
       // §368 §7.1 — массив конфигов бывает и Xray, и sing-box: обе формы это
       // List элементов с `outbounds`. Различаем по содержимому массива —
       // элементы Xray несут `protocol`, sing-box `type`.
-      return _looksLikeSingboxOutbounds(first['outbounds'] as List)
-          ? JsonFlavor.singboxMulti
-          : JsonFlavor.xrayArray;
+      return _fallback(_looksLikeSingboxOutbounds(first['outbounds'] as List)
+          ? SourceKind.singboxConfigArray
+          : SourceKind.xrayConfigArray);
     }
     // §368 — массив sing-box outbound'ов. Раньше падал в `unknown` (0 узлов на
     // всех путях, кроме вставки из буфера, где контроллер разбирал его сам).
-    if (first is Map && first['type'] is String) return JsonFlavor.singboxArray;
-    return JsonFlavor.unknown;
+    if (first is Map && first['type'] is String) {
+      return _fallback(SourceKind.singboxOutboundArray);
+    }
+    return _fallback(SourceKind.unknown);
   }
   if (v is Map) {
     // `type` проверяем ПЕРВЫМ: одиночный `selector` несёт и `type`, и
     // `outbounds` — он outbound, а не конфиг.
-    if (v['type'] is String) return JsonFlavor.singboxOutbound;
-    if (v['proxies'] is List) return JsonFlavor.clashYaml;
+    if (v['type'] is String) return _fallback(SourceKind.singboxOutbound);
+    if (v['proxies'] is List) return _fallback(SourceKind.clashYaml);
     // §368 — полный конфиг. `endpoints` (sing-box ≥1.11) равноправен: конфиг
     // может состоять из одних WireGuard-узлов.
     if (v['outbounds'] is List || v['endpoints'] is List) {
-      return JsonFlavor.singboxConfig;
+      return _fallback(SourceKind.singboxConfig);
     }
   }
-  return JsonFlavor.unknown;
+  return _fallback(SourceKind.unknown);
 }
 
 /// §368 §7.1 — чей это `outbounds[]`. Смотрим первый элемент-объект: `type` —

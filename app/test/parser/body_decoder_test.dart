@@ -36,13 +36,13 @@ void main() {
     test('JSON singbox outbound', () {
       final r = decode('{"type":"vless","server":"h","server_port":443,"uuid":"u"}');
       expect(r, isA<JsonConfig>());
-      expect((r as JsonConfig).flavor, JsonFlavor.singboxOutbound);
+      expect((r as JsonConfig).source.kind, SourceKind.singboxOutbound);
     });
 
     test('Xray JSON array', () {
       final r = decode('[{"outbounds":[{"protocol":"vless","tag":"proxy"}]}]');
       expect(r, isA<JsonConfig>());
-      expect((r as JsonConfig).flavor, JsonFlavor.xrayArray);
+      expect((r as JsonConfig).source.kind, SourceKind.xrayConfigArray);
     });
 
     test('empty body → failure', () {
@@ -99,11 +99,16 @@ void main() {
       expect(decode(body), isA<IniConfig>());
     });
 
-    test('JSON object с proxies → flavor = clashYaml', () {
+    // §482 — у Clash своей ветки в реестре нет (её убрал GRAMMAR_SYNC):
+    // документ опознаётся веткой «всё остальное», а вид ему даёт запасной
+    // классификатор. Узлов такой вид не даёт — маппера у него нет.
+    test('JSON object с proxies → вид clash_yaml, узлов нет', () {
       const body = '{"proxies": [{"type": "vmess", "server": "h"}]}';
       final r = decode(body);
       expect(r, isA<JsonConfig>());
-      expect((r as JsonConfig).flavor, JsonFlavor.clashYaml);
+      expect((r as JsonConfig).source.kind, SourceKind.clashYaml);
+      expect(r.source.mapper, isNull);
+      expect(parseAll(r), isEmpty);
     });
 
     test('слишком короткая base64 (<16) не декодируется — падает в plain path', () {

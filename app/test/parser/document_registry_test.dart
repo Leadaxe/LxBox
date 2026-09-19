@@ -58,7 +58,7 @@ String _kindOf(DecodedBody b) => switch (b) {
       UriLines() => 'UriLines(${b.lines.length},${b.skippedComments})',
       IniConfig() => 'IniConfig',
       AmneziaConfig() => 'AmneziaConfig(${b.iniTexts.length})',
-      JsonConfig() => 'JsonConfig(${b.flavor.name})',
+      JsonConfig() => 'JsonConfig(${b.source.kind})',
       DecodeFailure() => 'DecodeFailure',
     };
 
@@ -116,6 +116,36 @@ void main() {
             '${bad.join("\n")}');
   }, skip: skip);
 
+  /// §482 — запасной путь отвечает той же ВЕТКОЙ, что реестр.
+  ///
+  /// Перечисления форм в коде больше нет: вид источника читается ключом
+  /// `kind`, а обход элементов — строкой `elements`. Разъехавшийся `elements`
+  /// у запасной ветки дал бы без реестра другой состав подписки, и сказал бы
+  /// об этом только пользователь.
+  test('запасные ветки совпадают с реестровыми по mapper и elements', () {
+    final registry = MapperSections.I.documents!;
+    final byKind = {for (final s in registry.sources) s.kind: s};
+    final diffs = <String>[];
+    for (final f in kFallbackDocumentSources) {
+      final s = byKind[f.kind];
+      // Вид без ветки в реестре законен ровно пока он не даёт узлов
+      // (`clash_yaml`, `unknown`): маппера у него нет, и обходить нечего.
+      if (s == null) {
+        if (f.mapper != null) {
+          diffs.add('${f.kind}: даёт узлы, а ветки в реестре нет');
+        }
+        continue;
+      }
+      if (f.mapper != s.mapper) {
+        diffs.add('${f.kind}: mapper ${f.mapper} против ${s.mapper}');
+      }
+      if (f.elements != s.elements) {
+        diffs.add('${f.kind}: elements ${f.elements} против ${s.elements}');
+      }
+    }
+    expect(diffs, isEmpty, reason: diffs.join('\n'));
+  }, skip: skip);
+
   test('реестр даёт ТУ ЖЕ форму, что прежний рукописный порядок', () {
     final diffs = <String>[];
     for (final e in _documents.entries) {
@@ -137,7 +167,7 @@ void main() {
     expect(_kindOf(decode(twice)), 'UriLines(1,0)');
   }, skip: skip);
 
-  /// §480 — ОБХОД ЭЛЕМЕНТОВ читает `elements`, а не `switch (flavor)`.
+  /// §480 — ОБХОД ЭЛЕМЕНТОВ читает `elements`, а не рукописный `switch`.
   ///
   /// Прежде `elements` читал один линтер: опознание документа было объявлено
   /// данными, а путь к его элементам оставался ветвями в `parse_all`.

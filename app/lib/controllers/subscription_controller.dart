@@ -909,9 +909,9 @@ class SubscriptionController extends ChangeNotifier {
   /// §368 — JSON любой из четырёх форм (одиночный outbound, массив
   /// outbound'ов, полный конфиг, массив конфигов) → одна запись.
   ///
-  /// Гейт один — `decode` + flavor; своей эвристики («начинается с `{` и
-  /// содержит `"type"`») здесь больше нет: она была третьей по счёту и
-  /// разошлась с превью (§368 §1).
+  /// Гейт один — `decode` и ветка, которой опознан документ; своей эвристики
+  /// («начинается с `{` и содержит `"type"`») здесь больше нет: она была
+  /// третьей по счёту и разошлась с превью (§368 §1).
   ///
   /// Одна запись, а не N: раньше массив outbound'ов раскладывался по одной
   /// записи на элемент («v1 behavior parity»). Вставленный файл — один
@@ -933,17 +933,11 @@ class SubscriptionController extends ChangeNotifier {
       return _addUriLines(decoded, text, origin: origin);
     }
     if (decoded is! JsonConfig) return _JsonAdd.notJson;
-    switch (decoded.flavor) {
-      case JsonFlavor.singboxOutbound:
-      case JsonFlavor.singboxArray:
-      case JsonFlavor.singboxConfig:
-      case JsonFlavor.singboxMulti:
-      case JsonFlavor.xrayArray:
-        break;
-      case JsonFlavor.clashYaml:
-      case JsonFlavor.unknown:
-        return _JsonAdd.notJson;
-    }
+    // §482 — «форма даёт узлы» спрашивается у самой ветки: вид без маппера
+    // (Clash, нераспознанный JSON) элементов не имеет по определению.
+    // Перечислять виды здесь незачем — список разъезжался бы с реестром
+    // молча, а новый вид источника получал бы «не распознано».
+    if (decoded.source.mapper == null) return _JsonAdd.notJson;
 
     final nodes = parseAll(decoded);
     if (nodes.isEmpty) {
