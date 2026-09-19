@@ -9,6 +9,8 @@ import 'package:lxbox/services/builder/server_list_build.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/subscription/import_rules.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §307 — накопление tag-префикса у пропатченных нод (4PDA #1263).
 ///
 /// Репро бага: узел с `patchedJson` (import-rule REPLACE) эмитился патчем ПО
@@ -53,6 +55,10 @@ class _FakeCtx extends EmitContext {
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   const uri = 'vless://u1@h1.com:443?type=ws&security=tls&sni=h1.com#0004';
 
   SubscriptionServers sub(String prefix) => SubscriptionServers(

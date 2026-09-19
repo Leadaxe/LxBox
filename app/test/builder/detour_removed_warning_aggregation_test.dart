@@ -6,6 +6,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §377 — предупреждение о висячем detour агрегируется в одну строку на цель.
 ///
 /// До §377 строка эмитилась на КАЖДУЮ ноду: один выключенный WARP-пресет из
@@ -16,6 +18,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// эмитится (NODE_LINK §5.1), и строка говорит «skipped», а не «works
 /// directly». Агрегация та же: одна строка на ссылку и причину.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   final template = WizardTemplate(
     parserConfig: ParserConfigBlock(),
     groupTemplates: GroupTemplates(

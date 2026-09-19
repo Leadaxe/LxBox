@@ -8,11 +8,17 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §125 F1/F2/F3 — билдер собирает outbound-группы из BuildSettings.directions:
 /// per-direction regex node-set, direct/auto-членство из галок, auto-двойник,
 /// default-regex. Проверяем через настоящий buildConfig (directions !== пусто →
 /// идёт по новому пути, минуя template-fallback).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   // template без preset-групп: Направления целиком из settings.directions.
   //
   // Служебные outbound'ы — ОБА, как их эмитит боевой `wizard_template.json`

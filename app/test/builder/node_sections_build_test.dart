@@ -12,9 +12,15 @@ import 'package:lxbox/services/builder/core_chain_capability.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/tailscale_state/state_keys.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §435 / контракт ## 13 — инъекция секций узла при сборке
 /// (NODE_SECTIONS.md §3), Tailscale (§6), гейт ядра.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   final template = WizardTemplate(
     parserConfig: ParserConfigBlock(),
     groupTemplates: GroupTemplates(

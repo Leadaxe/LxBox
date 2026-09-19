@@ -8,6 +8,8 @@ import 'package:lxbox/models/validation.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §248/§274 — detour-Направления в билдере. §274 сменил семантику isDetour с
 /// «роли» на «разрешение»: block-опция совместима с detour, route_final и
 /// custom-rule могут целиться в detour-Направление, fallback пустого Направления един
@@ -21,6 +23,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Harness — как в direction_groups_test.dart (настоящий buildConfig,
 /// directions из settings).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   // Служебные outbound'ы — ОБА, как в боевом `wizard_template.json`
   // (`magic_nodes.direct`/`magic_nodes.block`): `includeBlock` и пустой
   // block-fallback кладут в состав селектора тег `block`, и без его записи
