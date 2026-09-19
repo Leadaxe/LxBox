@@ -37,7 +37,17 @@ final class AmneziaConfig extends DecodedBody {
 final class JsonConfig extends DecodedBody {
   final Object value;
   final JsonFlavor flavor;
-  const JsonConfig(this.value, this.flavor);
+
+  /// §480 — ВЕТКА РЕЕСТРА, которой опознан документ: по её `elements` идёт
+  /// обход элементов (`parse_all`), а по `mapper` — вид источника элемента.
+  ///
+  /// `null` — документ опознан запасным рукописным путём (реестра нет) либо
+  /// форму собрал вызывающий из UI. Тогда обход идёт по [flavor], как до
+  /// волны: [JsonFlavor] остаётся ПУБЛИЧНОЙ формой (её читают превью вставки
+  /// и контроллер подписок), и снимать её — не эта задача.
+  final DocumentSource? source;
+
+  const JsonConfig(this.value, this.flavor, {this.source});
 }
 
 final class DecodeFailure extends DecodedBody {
@@ -123,7 +133,10 @@ DecodedBody _classifyByKind(DocumentMatch match) {
     case 'singbox':
       final value = match.json ?? _tryJsonDecode(text);
       if (value == null) return _classifyLegacy(text);
-      return JsonConfig(value, _flavorOf(match.source.kind));
+      // §480 — ветка едет дальше ЦЕЛИКОМ: обход элементов идёт по её
+      // `elements`, а не по `flavor`. `flavor` остаётся для UI-читателей.
+      return JsonConfig(value, _flavorOf(match.source.kind),
+          source: match.source);
     case 'uri':
       // Ветка «всё остальное» ловит и опознаваемый JSON, своей ветки в
       // реестре не имеющий: такой документ узлов не даёт, но форму ответа

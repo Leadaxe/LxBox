@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/engine/document.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 
@@ -135,4 +136,60 @@ void main() {
     // Предел max_unwrap_depth=2: вторая оболочка тоже снимается.
     expect(_kindOf(decode(twice)), 'UriLines(1,0)');
   }, skip: skip);
+
+  /// §480 — ОБХОД ЭЛЕМЕНТОВ читает `elements`, а не `switch (flavor)`.
+  ///
+  /// Прежде `elements` читал один линтер: опознание документа было объявлено
+  /// данными, а путь к его элементам оставался ветвями в `parse_all`.
+  group('обход элементов объявлен реестром', () {
+    test('у каждой ветки с mapper объявлен путь к элементам', () {
+      final registry = MapperSections.I.documents!;
+      for (final s in registry.sources) {
+        if (s.mapper == null) continue;
+        expect(s.elements, isNotNull,
+            reason: '${s.kind}: вид даёт узлы, а где они лежат — не сказано');
+      }
+    }, skip: skip);
+
+    test('грамматика elements разбирается движком, а не кодом разбора', () {
+      // Формы пути, которыми сегодня пользуется реестр. Каждая обязана дать
+      // ГРУППЫ: границы конфига несут смысл для дедупа (§404) и владения
+      // именем (§342), и плоский список их потерял бы.
+      const cfg = {
+        'outbounds': [
+          {'type': 'trojan'},
+        ],
+      };
+      expect(DocumentRegistry.groupsFor('[].outbounds[]', [cfg]), [cfg],
+          reason: 'каждый член корневого массива — самостоятельный конфиг');
+      expect(DocumentRegistry.groupsFor('outbounds[]+endpoints[]', cfg), [cfg],
+          reason: 'документ-объект и есть единственная группа');
+      expect(
+          DocumentRegistry.groupsFor(r'$self', {'type': 'trojan'}),
+          [
+            {
+              'outbounds': [
+                {'type': 'trojan'},
+              ],
+            },
+          ],
+          reason: 'документ сам себе элемент — одна группа с одним элементом');
+      expect(
+          DocumentRegistry.groupsFor('[]', [
+            {'type': 'trojan'},
+          ]),
+          [
+            {
+              'outbounds': [
+                {'type': 'trojan'},
+              ],
+            },
+          ],
+          reason: 'члены корневого массива принадлежат ОДНОМУ конфигу');
+      // Форма документа не та, что объявлена строкой: обойти нечем, и
+      // вызывающий обязан узнать об этом, а не получить пустой список.
+      expect(DocumentRegistry.groupsFor('[].outbounds[]', {'a': 1}), isNull);
+      expect(DocumentRegistry.groupsFor(r'$self', [1, 2]), isNull);
+    });
+  });
 }

@@ -144,4 +144,78 @@ void main() {
       expect(stages.indexOf('field'), lessThan(stages.indexOf('label')));
     });
   });
+
+  /// §480 — трасса снимается НА ВСЕХ ТРЁХ входах движка, а не только на
+  /// ссылке. Сверка Go↔Dart идёт обычным диффом, и вход, который трассы не
+  /// пишет, из неё просто выпадает: расхождение на нём не видно вовсе.
+  group('трасса на объектном и текстовом входе', () {
+    test('объектный вход (JSON элемента) пишет ту же трассу', () {
+      final section = MapperSections.I.sectionFor('xray', 'vless');
+      if (section == null) return; // секции нет — проверять нечего
+      final trace = MapperTrace();
+      final res = runSectionOnJson(
+        section,
+        {
+          'protocol': 'vless',
+          'settings': {
+            'vnext': [
+              {
+                'address': 'example.com',
+                'port': 443,
+                'users': [
+                  {'id': '11111111-1111-1111-1111-111111111111'},
+                ],
+              },
+            ],
+          },
+        },
+        trace: trace,
+      );
+      expect(res, isNotNull);
+      final lines = trace.lines;
+      expect(lines, isNotEmpty, reason: 'объектный вход обязан писать трассу');
+      expect(lines.first, contains('"stage":"elem_detect"'),
+          reason: 'первая строка называет опознанную форму');
+      expect(lines.last, contains('"stage":"result"'));
+      expect(lines.last, contains('"body_source":"xray"'));
+    });
+
+    test('вход .conf (INI) пишет ту же трассу', () {
+      final section = MapperSections.I.sectionFor('conf', 'wireguard');
+      if (section == null) return;
+      final trace = MapperTrace();
+      final res = runSectionOnIni(
+        section,
+        '[Interface]\n'
+        'PrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\n'
+        'Address = 10.0.0.2/32\n'
+        '\n'
+        '[Peer]\n'
+        '# NL-1\n'
+        'PublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\n'
+        'Endpoint = example.com:51820\n',
+        trace: trace,
+      );
+      expect(res, isNotNull);
+      final lines = trace.lines;
+      expect(lines.first, contains('"stage":"elem_detect"'));
+      expect(lines.last, contains('"stage":"result"'));
+      expect(lines.last, contains('"body_source":"wgconf"'));
+      expect(lines.any((l) => l.contains('"stage":"label"')), isTrue,
+          reason: 'метка INI — звено цепочки, и она обязана быть в трассе');
+      expect(
+          lines.any((l) =>
+              l.contains('"path":"peers[].address"') &&
+              l.contains('"act":"write"')),
+          isTrue,
+          reason: 'запись поля видна с путём и действием, как у ссылки');
+    });
+
+    test('первая строка elem_detect есть у ВСЕХ входов', () {
+      final uri = MapperSections.I.sectionFor('uri', 'trojan')!;
+      final t = MapperTrace();
+      runSection(uri, 'trojan://pw@h.com:443#n', trace: t);
+      expect(t.lines.first, contains('"stage":"elem_detect"'));
+    });
+  });
 }
