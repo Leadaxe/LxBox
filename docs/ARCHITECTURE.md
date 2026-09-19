@@ -256,25 +256,48 @@ the **sing-box body** input, and by construction: its body is already a sing-box
 map, so the step-1 pass judges it verbatim — it needs no mapper, only a route
 from the same map into the model.
 
+Since feature 480 the mapper is no longer a set of hand-written translators but
+a single **engine** executing registry sections, and the same table drives the
+reverse direction — the link the app emits:
+
 ```
-link ─────────┐
-INI (wg-quick)├──mapper──► raw map ─► registry sanitizer ─► clean map ─► parseSingboxEntry ─► NodeSpec
-Xray object ──┘                │
-                               └─► warnings (code, path, value) ─► NodeSpec.warnings
+document ─► detect (registry) ─► engine, by the section of the recognised kind ─┐
+   link / base64 / list / Xray JSON / INI (wg-quick)                            │
+                                                                                ▼
+                                   raw map ─► registry sanitizer ─► clean map ─► parseSingboxEntry ─► NodeSpec
+                                       │                                                                  │
+                                       └─► warnings (code, path, value) ──────────────────────────────────┘
+
+NodeSpec ─► emitter, from the SAME table ─► link            (round trip: parse → emit → parse)
 
 sing-box body ──► (already a sing-box map: the step-1 pass judges it verbatim)
 ```
 
-- **Mapper** (`parser/mappers/`) translates the dialect and **judges nothing**:
-  parameter aliases, userinfo, port, name from the fragment, TLS and transport
-  from the query — all in sing-box key layout. Its rules are written down in
-  the registry's `mapper` section (`registry/tls.json`, `transports.json`,
-  `protocols/*.json`); the code executes them and
-  `test/parser/mapper_rules_coverage_test.dart` guards that no registry rule
-  for a migrated scheme goes unimplemented and unnamed.
-  The only warnings a mapper raises are about the *translation* losing or
+- **Detect** picks the kind of document (a bare link, base64, a list of links,
+  an Xray object, an INI config) from the registry, not from a hand-written
+  chain of `if`s.
+- **Engine** (`parser/engine/`) translates the dialect and **judges nothing**:
+  parameter aliases, userinfo, port, name, TLS and transport — all in sing-box
+  key layout. It holds **no protocol name at all**, comments included
+  (`test/parser/engine_no_scheme_names_test.dart`): a scheme's rule lives in
+  its registry section, shared with the launcher, so a divergence between the
+  two apps is fixed by editing the table rather than by patching both sides.
+  Deviations LxBox must keep live as overlays in `assets/contract_draft/`, each
+  one a complete copy of the registry entry plus a `_why`.
+  The only warnings the engine raises are about the *translation* losing or
   relocating something (`ws_early_data_converted`, `ech_ignored`) — the body no
   longer holds those values, so the sanitizer has nothing to say about them.
+- **Emitter** builds the link from that same table, which is what makes the
+  round trip hold: a field the parser learns to read is a field the emitter
+  writes back, with no second list to keep in step. What a key is *spelled* as
+  on the way out is the entry's own business (`emit_as`, `emit.names`) — the
+  two spellings of a boolean, `1` and `true`, are different links to a live
+  panel.
+- `unknown_key` judges a key by what the **section declares**, not by what the
+  run happened to read: an entry skipped by its `when`, or belonging to another
+  form of the same input, is still a declaration. Otherwise a container form —
+  which the lexer spreads into a flat layer of names — would report the very
+  keys the node was built from.
 - **Sanitizer** (`contract/body_sanitizer.dart`) is the single judge of values.
   Core gates (`min_core`, `platform`) are off at parse time: they depend on the
   running core, the node does not.

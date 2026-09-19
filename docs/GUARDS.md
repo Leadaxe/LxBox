@@ -157,6 +157,20 @@ working as designed.
 Nodes with `origin.kind: json` are out of scope by construction: they go to the
 core **verbatim**, never through the model (§455), so they have nothing to lose.
 
+## Guards over the engine itself (feature 480)
+
+Once the mapper became a registry interpreter, a new class of defect appeared:
+the engine is right, the table is right, and the two have silently drifted
+apart. These four guards watch the seam, and all of them are cheap tests, not
+runtime checks — a drift caught after shipping is a whole scheme read wrong.
+
+| Guard | What it fixes in place | Where |
+|---|---|---|
+| **identity snapshot** | The identity hash of every corpus node, recorded **before** the engine existed. Identity is the key a stored node is found by, so a shifted hash is not a cosmetic diff: the node detaches from its folder, its position and its overrides. The snapshot is never rewritten to match new output — a diff here is a question to answer, not an expectation to update | `test/fixtures/parser/pipeline_identity_before.json` |
+| **link shape** | The text of every link the emitter produces, snapshotted the same way. The emitter and the parser now read one table, and a change meant for the parsing direction silently rewrites what "Copy link" puts on the clipboard | `test/fixtures/parser/emit_before480.json` |
+| **full copies of drafts** | An overlay **replaces** a registry entry, it does not merge fields into it. So an overlay carrying a lone `emit_as` would drop that entry's `source` and kill it. The guard requires every overlay entry to be a complete copy of the registry entry plus the deviation, and every deviation to carry a `_why` — an unexplained divergence can neither be lifted nor handed to the launcher | `test/contract/mapper_sections_draft_test.dart` |
+| **no scheme names in the engine** | Greps `lib/services/parser/engine/` for protocol names, **comments included**. The whole point is one engine for every scheme; the first `if (scheme == …)` is the end of it, and a name in a comment is how that starts — it documents a special case that the next reader then implements | `test/parser/engine_no_scheme_names_test.dart` |
+
 ## The last echelon — the core's own verdict (feature 478)
 
 Layers 1–4 cover what the app knows about. Feature 478 covers the rest: when
