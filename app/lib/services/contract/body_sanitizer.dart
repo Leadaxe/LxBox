@@ -18,6 +18,7 @@
 library;
 
 import 'dart:convert' show base64, base64Url;
+import 'dart:io' show InternetAddress, InternetAddressType;
 
 import '../../models/node_warning.dart';
 import '../app_log.dart';
@@ -1872,13 +1873,13 @@ bool _formatOk(Object? v, String format) {
     // ВЕСЬ config.json («ws: parse path: invalid URL escape»), а не один узел.
     case 'url_path':
       return v is String && urlPathOk(v);
+    // Ядро разбирает префикс через `netip.ParsePrefix` и на негодном
+    // значении (IPv4 с маской >32, `::::`, ведущие нули октета) отвечает
+    // отказом ВСЕГО config.json, а не одного endpoint. Формат обязан
+    // совпасть с ядром: адрес — строгим парсером, длина префикса — по
+    // семейству. `contains(':')` как «это IPv6» здесь не годится.
     case 'cidr':
-      if (v is! String) return false;
-      final parts = v.split('/');
-      if (parts.length != 2) return false;
-      final bits = int.tryParse(parts[1]);
-      if (bits == null || bits < 0 || bits > 128) return false;
-      return _ipv4Ok(parts[0]) || parts[0].contains(':');
+      return v is String && _cidrOk(v);
     default:
       _logUnknownExpression('format', format);
       return true;
@@ -1907,6 +1908,41 @@ bool _ipv4Ok(String v) {
     if (n == null || n < 0 || n > 255) return false;
   }
   return true;
+}
+
+/// CIDR, который примет `netip.ParsePrefix`: адрес без ведущих нулей и зон,
+/// префикс 0..32 у IPv4 и 0..128 у IPv6.
+bool _cidrOk(String v) {
+  final parts = v.split('/');
+  if (parts.length != 2) return false;
+  final bits = int.tryParse(parts[1]);
+  if (bits == null) return false;
+  final host = parts[0];
+  if (_ipv4CidrHostOk(host)) return bits >= 0 && bits <= 32;
+  if (_ipv6CidrHostOk(host)) return bits >= 0 && bits <= 128;
+  return false;
+}
+
+/// Четыре десятичных октета 0..255 без ведущих нулей. `int.tryParse('01')`
+/// дал бы 1 и пропустил бы написание, которое ядро отвергает.
+bool _ipv4CidrHostOk(String host) {
+  final parts = host.split('.');
+  if (parts.length != 4) return false;
+  for (final p in parts) {
+    if (p.isEmpty) return false;
+    if (p.length > 1 && p.startsWith('0')) return false;
+    final n = int.tryParse(p);
+    if (n == null || n < 0 || n > 255) return false;
+  }
+  return true;
+}
+
+/// IPv6 без зоны (`fe80::1%eth0` ядро не берёт префиксом). Тип проверяется
+/// явно: `InternetAddress.tryParse` на IPv4-строке вернул бы v4.
+bool _ipv6CidrHostOk(String host) {
+  if (host.contains('%')) return false;
+  final addr = InternetAddress.tryParse(host);
+  return addr != null && addr.type == InternetAddressType.IPv6;
 }
 
 final _reUuid = RegExp(
