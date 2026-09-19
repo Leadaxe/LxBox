@@ -18,6 +18,21 @@ MapperSection _section(Map<String, dynamic> json) =>
 Map<String, dynamic>? _run(Map<String, dynamic> json, String uri) =>
     runSection(_section(json), uri)?.body;
 
+/// JSON-форма: число приходит `num`, а не строкой query.
+Map<String, dynamic>? _runJson(
+  Map<String, dynamic> params,
+  Map<String, dynamic> doc,
+) =>
+    runSectionOnJson(
+      _section({
+        'forms': [
+          {'id': 'j', 'space': 'json'},
+        ],
+        'params': params,
+      }),
+      doc,
+    )?.body;
+
 /// Минимальная секция: адрес плюс переданные записи.
 Map<String, dynamic> _withParams(Map<String, dynamic> params,
         {Map<String, dynamic>? extra}) =>
@@ -306,6 +321,22 @@ void main() {
       });
       expect(_run(s, 'x://h.com:443?r=1%2C2%2Cxx%2C4')!['r'], [1, 2, 4]);
     });
+
+    test('item: int — дробный JSON-элемент не усекается', () {
+      final params = {
+        'r': {
+          'source': 'json.r',
+          'maps_to': 'r',
+          'list': {'sep': ',', 'item': 'int'},
+        },
+      };
+      expect(_runJson(params, {
+        'r': [1, 2.5, 4]
+      })?['r'], [1, 4]);
+      expect(_runJson(params, {
+        'r': [1.5]
+      })?.containsKey('r'), isNot(isTrue));
+    });
   });
 
   group('P10 default_from / default_when / materialize_default', () {
@@ -366,6 +397,21 @@ void main() {
   });
 
   group('типы значений', () {
+    test('int из JSON: дробное не усекается, целое принимается', () {
+      const params = {
+        'server_port': {
+          'source': 'json.port',
+          'maps_to': 'server_port',
+          'type': 'int',
+          'required': true,
+        },
+      };
+      expect(_runJson(params, {'port': 443.9}), isNull,
+          reason: 'нецелое → required не нашёл значения');
+      expect(_runJson(params, {'port': 443.0})!['server_port'], 443);
+      expect(_runJson(params, {'port': 443})!['server_port'], 443);
+    });
+
     test('bool_spelled — общий набор написаний истины', () {
       final s = _withParams({
         'i': {'source': 'query.i', 'type': 'bool_spelled', 'maps_to': 'ins'},

@@ -2621,7 +2621,7 @@ final class _Run {
       if (spec.item == 'int') {
         final ints = <int>[];
         for (final it in items) {
-          final n = it is num ? it.toInt() : int.tryParse('$it'.trim());
+          final n = _asInt(it);
           if (n != null) ints.add(n);
         }
         return ints.isEmpty ? null : ints;
@@ -2631,8 +2631,7 @@ final class _Run {
 
     switch (p.type) {
       case 'int':
-        if (value is num) return value.toInt();
-        return int.tryParse('$value'.trim());
+        return _asInt(value);
       // Длительность ГОЛЫМИ СЕКУНДАМИ (`30`→`30s`) объявляется не типом, а
       // нормализатором `duration_bare_seconds` (§0.3): вторым именем для той
       // же операции грамматика не обзаводится (GRAMMAR_SYNC §1 №8). Разница
@@ -2668,6 +2667,19 @@ final class _Run {
         }
         return value;
     }
+  }
+
+  /// `num` как целое — только если значение математически целое и конечное.
+  /// `443.9.toInt()` дало бы 443 и молча сменило бы endpoint; строка
+  /// `"443.9"` и так не парсится, JSON-double этот путь обходил.
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) {
+      if (!value.isFinite) return null;
+      final n = value.toInt();
+      return value == n ? n : null;
+    }
+    return int.tryParse('$value'.trim());
   }
 
   String _normalize(String value, String name) {
