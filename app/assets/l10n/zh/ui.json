@@ -4204,9 +4204,6 @@
   "Test download/upload speed": {
     "value": "测试下载/上传速度"
   },
-  "Test servers": {
-    "value": "测试服务器"
-  },
   "Test servers list unavailable": {
     "value": "测试服务器列表不可用"
   },
