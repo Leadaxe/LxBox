@@ -42,6 +42,12 @@ const Set<String> _mapperKeys = {
   'detect', 'body_source', 'forms', 'userinfo', 'label', 'params', 'include',
   'scheme_sets', 'type_synonyms', 'defaults', 'unknown_key', 'emit',
   'ini_dialect', 'impl',
+  // §480 — РОД УЗЛА ОТ ВХОДА. В `PRIMITIVES.md` лаунчера ключа нет: он наш,
+  // заведён коммитом «род узла от входа» и исполняется движком
+  // (`section.dart`, `interpreter.dart` G1). Секция объявляет им род,
+  // который судит не тело, а сам вход, — иначе одна и та же запись читалась
+  // бы разными родами в зависимости от формы.
+  'kind_when',
 };
 
 const Set<String> _bodySources = {'uri', 'singbox', 'xray', 'wgconf', 'amnezia'};
@@ -59,6 +65,12 @@ const Set<String> _types = {
 /// Проверки записей одинаковы для обеих; различается только вход в дерево.
 /// Файл `registry_mapper.schema.json` — это САМА JSON-схема грамматики, а не
 /// секция: он лежит рядом копией, и проверять его как секцию бессмысленно.
+///
+/// §480 W6 — `documents.json` это ТРЕТЬЯ форма: реестр ВИДОВ ДОКУМЕНТА
+/// (корень несёт `sources`). Он не секция и не общий блок — он выбирает, чем
+/// читать вход, до того как секция вообще понадобится, и записей с `source`
+/// в нём нет. Его форму судит свой тест (`document_registry_test.dart`), а
+/// здесь он молча читался как секция и падал на отсутствующем `mappers`.
 bool _isBlocks(Map<String, dynamic> doc) => doc.containsKey('blocks');
 
 List<File> _sections() {
@@ -69,6 +81,7 @@ List<File> _sections() {
       .whereType<File>()
       .where((f) => f.path.endsWith('.json'))
       .where((f) => !f.path.endsWith('registry_mapper.schema.json'))
+      .where((f) => !f.path.endsWith('documents.json'))
       .toList()
     ..sort((a, b) => a.path.compareTo(b.path));
 }
