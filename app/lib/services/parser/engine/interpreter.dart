@@ -30,6 +30,7 @@ import 'decoders.dart';
 import 'lexer.dart';
 import 'section.dart';
 import 'source_space.dart';
+import 'trace.dart';
 
 /// Итог исполнения секции.
 final class EngineResult {
@@ -73,10 +74,11 @@ final class EngineResult {
 ///
 /// `null` — записи нет: не сработала ни одна форма, либо обязательная запись
 /// (`required`) не нашла значения. Тем же `null` отвечали рукописные мапперы.
-EngineResult? runSection(MapperSection section, String text) {
+EngineResult? runSection(MapperSection section, String text,
+    {MapperTrace? trace}) {
   final space = _selectForm(section, text);
   if (space == null) return null;
-  return _Run(section, space).execute();
+  return _Run(section, space, trace).execute();
 }
 
 /// §480 W5 — исполнить секцию на РАЗОБРАННОМ документе-объекте.
@@ -92,11 +94,12 @@ EngineResult? runSection(MapperSection section, String text) {
 /// секцию у загрузчика, а не ветку здесь.
 EngineResult? runSectionOnJson(
   MapperSection section,
-  Map<String, dynamic> doc,
-) {
+  Map<String, dynamic> doc, {
+  MapperTrace? trace,
+}) {
   final space = _selectJsonForm(section, doc);
   if (space == null) return null;
-  return _Run(section, space).execute();
+  return _Run(section, space, trace).execute();
 }
 
 /// Выбрать форму (P1) и построить пространство источников.
@@ -378,7 +381,17 @@ const Set<String> _kListNormalizers = {'port_range_spec', 'cidr_prefix'};
 
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
-  _Run(this.section, this.space);
+  _Run(this.section, this.space, this._trace);
+
+  /// Коллектор трассы; `null` — трасса не собирается, и ни одна строка не
+  /// строится (приложение «ТРАССА»: коллектор не стоит ничего, когда
+  /// выключен).
+  final MapperTrace? _trace;
+
+  /// Имя маппера для трассы: `<тип тела>.<вид источника>.<форма>`.
+  String get _mapperId =>
+      '${section.singboxType}.${section.kind}'
+      '${space.formId.isEmpty ? '' : '.${space.formId}'}';
 
   final MapperSection section;
   SourceSpace space;
@@ -451,8 +464,28 @@ final class _Run {
     // priority»: она не зависит от выбора магического числа и не ломается,
     // если запись объявит `merge: overwrite`.
     for (final e in section.defaults.entries) {
-      if (_read(e.key) != null) continue;
+      if (_read(e.key) != null) {
+        _trace?.add(
+          stage: TraceStage.defaults,
+          mapper: _mapperId,
+          entry: r'$defaults',
+          val: e.value,
+          path: e.key,
+          act: TraceAct.skip,
+          why: TraceWhy.byDefault,
+        );
+        continue;
+      }
       _put(e.key, e.value);
+      _trace?.add(
+        stage: TraceStage.defaults,
+        mapper: _mapperId,
+        entry: r'$defaults',
+        val: e.value,
+        path: e.key,
+        act: TraceAct.write,
+        why: TraceWhy.byDefault,
+      );
     }
 
     // Обязательные записи: их отсутствие — это «узла нет».
@@ -476,9 +509,34 @@ final class _Run {
     // 7. Неизвестные параметры источника.
     _reportUnknown();
 
+    final label = _label();
+    _trace?.add(
+      stage: TraceStage.label,
+      mapper: _mapperId,
+      entry: r'$label',
+      val: label,
+      act: label.isEmpty ? TraceAct.skip : TraceAct.write,
+      why: label.isEmpty ? TraceWhy.empty : TraceWhy.none,
+    );
+
+    // Последняя строка трассы — итог: тело (ключи в том порядке, в каком их
+    // положил движок), метка и вход. По ней сверка видит не только КАК
+    // получилось, но и ЧТО получилось.
+    _trace?.add(
+      stage: TraceStage.result,
+      mapper: _mapperId,
+      entry: r'$result',
+      val: {
+        'body': body,
+        'label': label,
+        'body_source': section.bodySource,
+      },
+      act: TraceAct.keep,
+    );
+
     return EngineResult(
       body: body,
-      label: _label(),
+      label: label,
       warnings: warnings,
       extensionFields: extensionFields,
       wsEarlyDataHeaderImplicit: _wsEarlyDataHeaderImplicit,
@@ -664,7 +722,18 @@ final class _Run {
   // ───────────────────────────── запись ─────────────────────────────
 
   void _applyParam(MapperParam p) {
-    if (!_whenHolds(p.when)) return;
+    if (!_whenHolds(p.when)) {
+      _trace?.add(
+        stage: TraceStage.field,
+        mapper: _mapperId,
+        entry: p.name,
+        src: p.source.isEmpty ? '-' : p.source.first,
+        path: p.mapsTo,
+        act: TraceAct.skip,
+        why: TraceWhy.whenFalse,
+      );
+      return;
+    }
 
     var raw = _valueOf(p);
     if (raw == null) {
@@ -1502,7 +1571,18 @@ final class _Run {
     if (occupied != null) {
       final merge = p?.merge ?? 'keep_first';
       // Запись с МЕНЬШИМ priority уже победила — она раньше по норме.
-      if (merge == 'keep_first' && occupied <= prio) return;
+      if (merge == 'keep_first' && occupied <= prio) {
+        _trace?.add(
+          stage: TraceStage.field,
+          mapper: _mapperId,
+          entry: p?.name ?? r'$sets',
+          val: value,
+          path: path,
+          act: TraceAct.skip,
+          why: TraceWhy.lowerPriority(_writtenByName[path] ?? '-'),
+        );
+        return;
+      }
       // `append`/`prepend` — СЛИЯНИЕ списков, а не замена: две записи вправе
       // наполнять один путь (порты из authority и из query — один список
       // `server_ports`, и порядок в нём нормативен).
@@ -1519,9 +1599,22 @@ final class _Run {
         }
       }
     }
+    final was = occupied != null;
     _writtenBy[path] = prio;
+    _writtenByName[path] = p?.name ?? r'$sets';
     _put(path, value);
+    _trace?.add(
+      stage: TraceStage.field,
+      mapper: _mapperId,
+      entry: p?.name ?? r'$sets',
+      val: value,
+      path: path,
+      act: was ? TraceAct.override : TraceAct.write,
+    );
   }
+
+  /// Кто занял путь — для `why: lower_priority:<entry>` в трассе.
+  final Map<String, String> _writtenByName = {};
 
   void _writeIfAbsent(String path, dynamic value, MapperParam? p) {
     if (value == null || _read(path) != null) return;
@@ -1530,6 +1623,13 @@ final class _Run {
 
   /// **G2** — снять путь целиком (`sets: {path: null}`).
   void _erase(String path) {
+    _trace?.add(
+      stage: TraceStage.sets,
+      mapper: _mapperId,
+      entry: r'$sets',
+      path: path,
+      act: TraceAct.remove,
+    );
     final segs = path.split('.');
     Map<String, dynamic>? cur = body;
     for (var i = 0; i < segs.length - 1; i++) {
@@ -1633,6 +1733,14 @@ final class _Run {
     for (final name in space.query.names) {
       if (_declared.contains(name.toLowerCase())) continue;
       warnings.add(RegistryWarning(code: code, path: name, value: ''));
+      _trace?.add(
+        stage: TraceStage.unknown,
+        mapper: _mapperId,
+        entry: name,
+        src: 'query.$name',
+        act: TraceAct.skip,
+        why: TraceWhy.notDeclared,
+      );
     }
 
     // Объектный вход: судятся ключи ВЕРХНЕГО уровня элемента. Их конечное
