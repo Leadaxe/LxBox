@@ -9,10 +9,16 @@ import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/transport.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import 'engine_test_setup.dart';
+
 /// §097 — XHTTP (Xray splithttp) нативный transport. По образцу
 /// singbox-launcher SPEC 071: parse (URI camelCase + snake) → emit → round-trip,
 /// httpupgrade остаётся отдельным типом.
 void main() {
+  // §480 — разбор ссылки и Xray-элемента идёт ДВИЖКОМ по секциям реестра;
+  // без них у схемы запасного рукописного пути не осталось (критерий 7).
+  setUpAll(loadEngineSections);
+
   group('XHTTP', () {
     test('parseTransport xhttp → все поля (Xray camelCase)', () {
       final t = parseTransport({
@@ -694,8 +700,14 @@ void main() {
         scStreamUpServerSecs: '20-80',
         scMaxBufferedPosts: 30,
         noSseHeader: true,
+        // §480 — `max_concurrency` в эталон НЕ входит, и это не пробел
+        // состава: реестр объявляет его взаимоисключающим с
+        // `max_connections` (`transports.xhttp.xmux.max_concurrency.conflicts`,
+        // код `field_conflict`), и санитайзер снимает ДЕКЛАРАНТА, когда в
+        // теле оба. Узла с обоими полями не бывает — ядро отвергает такой
+        // конфиг, — поэтому эталон «все поля разом» несёт одно из двух.
+        // Само поле читается всеми тремя ветками: отдельный кейс ниже.
         maxConnections: '1',
-        maxConcurrency: '16-32',
         cMaxReuseTimes: '5',
         hMaxRequestTimes: '600',
         hMaxReusableSecs: '1800',
@@ -722,6 +734,39 @@ void main() {
       expect(singboxTransport(expected).toSingbox(TemplateVars.empty).$1,
           expected,
           reason: 'sing-box-JSON-ветка потеряла поле');
+    });
+
+    // §480 — вторая половина критерия 7: поле, которое в общий эталон войти
+    // не может (оно конфликтует с соседом), всё равно обязано читаться
+    // всеми тремя ветками. Без соседа конфликта нет, и оно доезжает.
+    test('max_concurrency без max_connections читают все три ветки', () {
+      const golden = XhttpTransport(
+        host: 'h',
+        path: '/p',
+        mode: 'packet-up',
+        maxConcurrency: '16-32',
+        cMaxReuseTimes: '5',
+      );
+      final expected = golden.toSingbox(TemplateVars.empty).$1;
+
+      expect(parseTransport(transportToQuery(golden))!
+          .toSingbox(TemplateVars.empty)
+          .$1,
+          expected,
+          reason: 'URI-ветка потеряла max_concurrency');
+
+      final viaXray = xrayTransport({
+        'host': 'h',
+        'path': '/p',
+        'mode': 'packet-up',
+        'extra': Map<String, dynamic>.from(expected)..remove('type'),
+      });
+      expect(viaXray.toSingbox(TemplateVars.empty).$1, expected,
+          reason: 'Xray-JSON-ветка потеряла max_concurrency');
+
+      expect(singboxTransport(expected).toSingbox(TemplateVars.empty).$1,
+          expected,
+          reason: 'sing-box-JSON-ветка потеряла max_concurrency');
     });
 
     // Паритет с Go (SPEC 102 R2): Xray пишет xmux в `extra` вложенным

@@ -976,6 +976,29 @@ final class _Run {
   /// Наложенные слои по имени: `extra` → плоская карта ключей слоя.
   final Map<String, QueryPairs> _overlays = {};
 
+  /// `flatten` (FROZEN, P15): вложенный объект, поднятый в СВОЙ слой.
+  ///
+  /// Слой кладётся в [_overlays] под именем, которое `flatten` и назвал
+  /// (`extra`, `xmux`), и дальше читается обычным `source` с этим
+  /// префиксом. Отдельный слой, а не правка документа на месте (как у Go),
+  /// по двум причинам:
+  ///
+  /// 1. документ элемента едет дальше как `rawSource` узла — исходник
+  ///    провайдера байт в байт, — и дописать в него ключи значило бы
+  ///    показать человеку не то, что он прислал;
+  /// 2. и главное: кто из двух написаний побеждает, обязана решать САМА
+  ///    ЗАПИСЬ порядком своих источников (PRIMITIVES §0.9). У xhttp это
+  ///    решение РАЗНОЕ: у обычных полей сильнее вложенный слой (SPEC 002
+  ///    §1.5), а у базовой тройки `mode`/`path`/`host` — плоский, причём
+  ///    даже будучи пустым (D-097: `SplitHTTPConfig.Build` безусловно
+  ///    затирает `extra` внешними значениями). Подъём «в плоский слой»
+  ///    принял бы это решение за запись и одинаково для всех ключей.
+  ///
+  /// Пустое значение слоя = «слой промолчал» (правило `empty: absent`
+  /// движка), поэтому непустое плоское поле переживает пустое одноимённое
+  /// в слое — §410, регрессия v2.21.0.
+  final Set<String> _flattened = {};
+
   /// [inputCodes] — коды, которые поставил САМ РАЗБОР входа, а не запись
   /// таблицы: у INI это «вторая `[Peer]` отброшена». Ни одна запись о них не
   /// узнает — ключи отброшенной секции до пространства не доехали вовсе.
@@ -1233,6 +1256,90 @@ final class _Run {
     }
   }
 
+  /// `flatten` (FROZEN, P15): поднять члены названных вложенных объектов на
+  /// уровень объекта-хозяина.
+  ///
+  /// Хозяин ищется по ЦЕПОЧКЕ источников записи — первый найденный объект и
+  /// побеждает: один и тот же вложенный слой чужой диалект пишет под разными
+  /// именами (`xhttpSettings` ∥ `splithttpSettings`), и запись объявляет оба
+  /// написания обычным списком, а не двумя копиями таблицы.
+  ///
+  /// Поднятое кладётся в ОТДЕЛЬНЫЙ слой [_jsonLifted] под полным путём: у
+  /// документа он читается вторым, поэтому существующий ключ хозяина
+  /// поднятым не перекрывается (D-097).
+  void _applyFlatten(MapperParam p) {
+    for (final src in _sourcesOf(p)) {
+      if (!src.startsWith('json.')) continue;
+      final path = _resolveBase(src.substring('json.'.length));
+      final owner = jsonPathValue(space.json, path);
+      if (owner is! Map) continue;
+      for (final name in p.flatten) {
+        if (!_flattened.add(name)) continue;
+        // Имя ищется у хозяина, а если его там нет — в УЖЕ поднятом слое:
+        // у xhttp `xmux` лежит ВНУТРИ `extra`, и до подъёма `extra` такого
+        // ключа у хозяина нет вовсе. Порядок имён в `flatten` поэтому
+        // нормативен — ровно как у Go, где второе имя ищется в уже
+        // правленом объекте.
+        // Объект слоя бывает в ДВУХ местах разом: `xmux` лежит и у хозяина,
+        // и внутри `extra`. Порядок тот же, что у прочих полей: сперва
+        // вложенный слой, потом плоский, и решает его первое непустое
+        // значение — слой это набор пар, а не один ключ.
+        final sources = <Map>[
+          if (_overlayRaw[name] is Map) _overlayRaw[name]! as Map,
+          if (owner[name] is Map) owner[name] as Map,
+        ];
+        if (sources.isEmpty) continue;
+        final pairs = <(String, String)>[];
+        for (final inner in sources) {
+          for (final e in inner.cast<String, dynamic>().entries) {
+            final v = e.value;
+            if (v == null) continue;
+            if (v is Map || v is List) {
+              // Вложенный объект слоя сам может быть назван в `flatten`
+              // следующим именем — значение придерживается для него.
+              _overlayRaw.putIfAbsent(e.key, () => v);
+              continue;
+            }
+            pairs.add((e.key, _scalar(v)));
+          }
+        }
+        // Пустое значение слоя = «слой промолчал»: непустое одноимённое из
+        // второго места сильнее. Без этого `extra.xmux.maxConcurrency: ""`
+        // затирал бы заданное поле хозяина — §410, регрессия v2.21.0.
+        final nonEmpty = {
+          for (final p in pairs)
+            if (p.$2.trim().isNotEmpty) p.$1.toLowerCase(),
+        };
+        _overlays[name] = QueryPairs([
+          for (final p in pairs)
+            if (p.$2.trim().isNotEmpty || !nonEmpty.contains(p.$1.toLowerCase()))
+              p,
+        ]);
+      }
+      // Хозяин найден — прочие написания того же слоя не разбираются:
+      // цепочка источников это «первый непустой», а не «все сразу».
+      return;
+    }
+  }
+
+  /// Вложенные объекты, встреченные внутри слоя: следующее имя `flatten`
+  /// ищет свой объект и здесь (`extra.xmux`).
+  final Map<String, dynamic> _overlayRaw = {};
+
+  /// Скаляр слоя строкой. Числа печатаются БЕЗ экспоненты и без хвоста
+  /// `.0` (PRIMITIVES §0.9): `30.0` в JSON означает то же, что `30`, а
+  /// `1e+06` в теле — мусор.
+  static String _scalar(Object v) {
+    if (v is double && v == v.roundToDouble() && v.abs() < 1e15) {
+      return v.toInt().toString();
+    }
+    return '$v';
+  }
+
+  /// Источники записи для текущей формы, плоско.
+  Iterable<String> _sourcesOf(MapperParam p) =>
+      p.sourceByForm[space.formId] ?? p.source;
+
   // ───────────────────────────── userinfo ─────────────────────────────
 
   bool _applyUserinfo() {
@@ -1363,6 +1470,13 @@ final class _Run {
       }
       return;
     }
+
+    // `flatten` (FROZEN, P15) — члены названных вложенных объектов
+    // поднимаются на уровень объекта-хозяина, и дальше их читают ОБЫЧНЫЕ
+    // записи своим `source`. Исполняется до чтения значения самой записи:
+    // у служебной записи (`$`-префикс) вся работа в этом и состоит, своего
+    // `maps_to` у неё нет.
+    if (p.flatten.isNotEmpty) _applyFlatten(p);
 
     var raw = _valueOf(p);
     if (raw == null) {
@@ -2198,7 +2312,8 @@ final class _Run {
         return nameHint;
     }
     if (src.startsWith('json.')) {
-      return jsonPathValue(space.json, _resolveBase(src.substring('json.'.length)));
+      return jsonPathValue(
+          space.json, _resolveBase(src.substring('json.'.length)));
     }
     if (src.startsWith('ini.')) {
       return space.ini?[src.substring('ini.'.length).toLowerCase()];
