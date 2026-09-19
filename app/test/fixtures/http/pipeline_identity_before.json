@@ -43,7 +43,7 @@
     },
     "b480:extra_headers_https": {
       "uri": "proxy-https://user1:pass123@example-1.com:8443?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#https-hdr",
-      "identity": "62670bbbbcf42eab12abd2c31dda49b86a88647504bdef92c2700d7733eb725c",
+      "identity": "d5268ec307f162cf8106df1023ee372a9342a92c9048c85e877de579d651dddf",
       "tag": "https-hdr",
       "body": {
         "type": "http",
@@ -52,15 +52,21 @@
         "server_port": 8443,
         "username": "user1",
         "password": "pass123",
+        "headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        },
         "tls": {
           "enabled": true,
           "server_name": "example-1.com"
         }
-      }
+      },
+      "delta480": "delta480 D133-18: было — http читал ТОЛЬКО параметр headers, и ссылка с extra-headers (написание naive, его же шлют реальные ссылки) теряла заголовки молча; стало — extra-headers заведён алиасом, каноническое имя для эмита остаётся headers. Значения сняты прогоном движка."
     },
     "b480:extra_headers_unsorted": {
       "uri": "proxy-http://user1:pass123@example-1.com:8080?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#http-hdr",
-      "identity": "c2b62c2bc7edf92565f517d9c818f91c30308bfd1fdd536695f9268ef846e272",
+      "identity": "b5c064948da364795123e06426c89db70c116c3ee1eea2c38ddb14b8b1298bf3",
       "tag": "http-hdr",
       "body": {
         "type": "http",
@@ -68,8 +74,14 @@
         "server": "example-1.com",
         "server_port": 8080,
         "username": "user1",
-        "password": "pass123"
-      }
+        "password": "pass123",
+        "headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        }
+      },
+      "delta480": "delta480 D133-18: то же на http-суффиксе схемы — заголовки больше не теряются. Порядок ключей задаёт sort_keys (G4), он входит в identity. Значения сняты прогоном движка."
     }
   }
 }

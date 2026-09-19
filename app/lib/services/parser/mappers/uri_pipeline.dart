@@ -34,11 +34,6 @@ import '../../contract/registry.dart';
 import '../../../services/parser/engine/engine_mapper.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
-import 'anytls_mapper.dart';
-import 'http_mapper.dart';
-import 'naive_mapper.dart';
-import 'shadowsocks_mapper.dart';
-import 'ssh_mapper.dart';
 import 'uri_mapper.dart';
 import 'vless_mapper.dart';
 import 'vmess_mapper.dart';
@@ -123,21 +118,25 @@ const Map<String, String> _kSchemeToType = <String, String>{
   'hysteria2': 'hysteria2',
   'hy2': 'hysteria2',
   'masque': 'masque',
+  'ssh': 'ssh',
+  'anytls': 'anytls',
+  // §472 шаг 4 — схема `ss`, тип тела `shadowsocks`: секция адресуется ТИПОМ.
+  'ss': 'shadowsocks',
+  // §268 — четыре написания схемы http-прокси; суффикс это TLS-дискриминатор,
+  // и различает их `scheme_sets` секции, а не эта таблица.
+  'proxy-http': 'http',
+  'proxy-https': 'http',
+  'proxy+http': 'http',
+  'proxy+https': 'http',
+  // §103 §9.B1 — у naive схема НЕСЁТ ТРАНСПОРТ; различает `scheme_sets`.
+  'naive+https': 'naive',
+  'naive+quic': 'naive',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
 const Map<String, UriMapper> _kMappers = <String, UriMapper>{
-  'vless': mapVlessUri,
   'vmess': mapVmessUri,
-  'ss': mapShadowsocksUri,
-  'anytls': mapAnyTlsUri,
-  'naive+https': mapNaiveHttpsUri,
-  'naive+quic': mapNaiveQuicUri,
-  'proxy-http': mapHttpProxyUri,
-  'proxy-https': mapHttpProxyUri,
-  'proxy+http': mapHttpProxyUri,
-  'proxy+https': mapHttpProxyUri,
-  'ssh': mapSshUri,
+  'vless': mapVlessUri,
   'wireguard': mapWireguardUri,
   'wg': mapWireguardUri,
   'awg': mapWireguardUri,

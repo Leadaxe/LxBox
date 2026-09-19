@@ -200,5 +200,38 @@
         }
       }
     }
+  },
+  "tls": {
+    "_impl": "Только СЛОВАРЬ НАПИСАНИЙ (aliases) из описательной части реестра. Исполняемые записи лежат в blocks и написаний не дублируют — загрузчик берёт их отсюда. Без этой части aliases разрешались бы только при загруженном реестре, и в юнит-тестах, которые его не грузят, девять написаний insecure пропадали бы молча.",
+    "params": {
+      "sni": {
+        "aliases": [
+          "peer"
+        ]
+      },
+      "insecure": {
+        "aliases": [
+          "allowInsecure",
+          "allowinsecure",
+          "allow_insecure",
+          "allow-insecure",
+          "skipCertVerify",
+          "skipcertverify",
+          "skip_cert_verify",
+          "skip-cert-verify",
+          "noverify"
+        ]
+      },
+      "fp": {
+        "aliases": [
+          "fingerprint (только vless, оба проекта)"
+        ]
+      },
+      "ech": {
+        "aliases": [
+          "echfq (не читается намеренно — legacy pq-опция, removed in sing-box 1.13)"
+        ]
+      }
+    }
   }
 }

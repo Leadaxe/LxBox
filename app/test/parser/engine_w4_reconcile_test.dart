@@ -32,6 +32,11 @@ const _registryRoot = 'assets/contract';
 /// Счётчик — страж от «снимок тихо похудел».
 const Map<String, int> _switched = {
   'socks': 17,
+  'ssh': 13,
+  'anytls': 13,
+  'shadowsocks': 27,
+  'http': 12,
+  'naive': 19,
 };
 
 Map<String, Map<String, dynamic>> _cases(String scheme) {

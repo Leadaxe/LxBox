@@ -60,7 +60,7 @@
     },
     "b480:pem_raw_plus": {
       "uri": "ssh://user@example-1.com:22?private_key=-----BEGIN+OPENSSH+PRIVATE+KEY-----%0Ab3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w%2FAAAAAAAAA%0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w%3D%3D%0A-----END+OPENSSH+PRIVATE+KEY-----%0A#pem-raw-plus",
-      "identity": "9ee7a6643cbf6a4b51ee6065e389ef773b55c7a8b76bef7d8b9b10da21c22516",
+      "identity": "4ddbe7ff2f8231f172d490a4f6756f27dea261bd1fec79b4913bfe614342fff6",
       "tag": "pem-raw-plus",
       "body": {
         "type": "ssh",
@@ -68,8 +68,9 @@
         "server": "example-1.com",
         "server_port": 22,
         "user": "user",
-        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA w==\n-----END OPENSSH PRIVATE KEY-----\n"
-      }
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      },
+      "delta480": "delta480 D133-15: было — сырой «+» в query становился пробелом ВЕЗДЕ, и base64-тело ключа портилось ('…AAAB w/AAA…' вместо '…AAAB+w/AAA…'), то есть чужая ссылка привозила неработающий ключ молча; стало — format: \"pem\" читает «+» буквально в теле ключа и оставляет его пробелом внутри строк -----BEGIN…----- / -----END…-----. Зелёный кейс pem_percent_encoded при этом не двигается. Значения сняты прогоном движка."
     }
   }
 }

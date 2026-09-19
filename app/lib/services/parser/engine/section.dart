@@ -282,6 +282,7 @@ final class MapperParam {
     this.onPresent = const {},
     this.onLenGt = const {},
     this.onNoMatch = const {},
+    this.onItemInvalid = const {},
     this.implicit = false,
   });
 
@@ -348,6 +349,8 @@ final class MapperParam {
           ((j['on_len_gt'] as Map?) ?? const {}).cast<String, dynamic>(),
       onNoMatch:
           ((j['on_no_match'] as Map?) ?? const {}).cast<String, dynamic>(),
+      onItemInvalid:
+          ((j['on_item_invalid'] as Map?) ?? const {}).cast<String, dynamic>(),
       implicit: j['implicit'] as bool? ?? false,
     );
   }
@@ -398,6 +401,10 @@ final class MapperParam {
   /// `on_no_match: {action, code}` — значение не попало ни в один ключ
   /// `sets`/`value_map`. `action: drop_node` снимает узел целиком.
   final Map<String, dynamic> onNoMatch;
+  /// (FROZEN `on_item_invalid`) — что делать с НЕГОДНЫМ ЭЛЕМЕНТОМ списка:
+  /// `{action: skip, code}`. Остальные элементы при этом живут, а код
+  /// ставится один раз на узел — о первом отброшенном.
+  final Map<String, dynamic> onItemInvalid;
 
   final bool implicit;
 

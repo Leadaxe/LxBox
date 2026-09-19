@@ -159,13 +159,30 @@ SourceSpace? _selectJsonForm(MapperSection section, Map<String, dynamic> doc) {
 ///
 /// `{"reparse": "url"}` говорит, что декодированный текст — снова ссылка: он
 /// возвращается со схемой на месте и разбирается лексером обычным порядком.
+/// §480 W4 — ФРАГМЕНТ снимается до декода и возвращается после: имя узла
+/// пишется СНАРУЖИ оболочки, а внутрь её уехала только запись. Не сними его —
+/// и `#имя` попало бы в base64-декодер, оболочка не раскрылась бы вовсе.
+///
+/// Шаг `percent` — тоже W4: у формы, где base64 приезжает percent-экранированным
+/// (панели пишут `=`-паддинг как `%3D`), порядок «percent, потом base64»
+/// выразим только списком.
 String? _applyFormDecode(MapperForm form, String text) {
   if (form.decode.isEmpty) return text;
   final split = _splitScheme(text);
   if (split == null) return text;
   var payload = split.payload;
+  var fragment = '';
+  final hash = payload.indexOf('#');
+  if (hash >= 0) {
+    fragment = payload.substring(hash);
+    payload = payload.substring(0, hash);
+  }
   for (final step in form.decode) {
     if (step == 'url') continue; // percent снимает сам лексер.
+    if (step == 'percent') {
+      payload = percentDecodeOnce(payload, mode: DecodeMode.path);
+      continue;
+    }
     if (step == 'base64' || step == 'base64?') {
       final decoded = _RunDecode.base64(payload.trim());
       if (decoded == null) {
@@ -177,7 +194,7 @@ String? _applyFormDecode(MapperForm form, String text) {
     }
     if (step is Map && step['reparse'] != null) continue;
   }
-  return '${split.scheme}://$payload';
+  return '${split.scheme}://$payload$fragment';
 }
 
 /// Декодеры оболочки формы. Отдельный тип, чтобы не тащить статику в `_Run`.
@@ -913,6 +930,22 @@ final class _Run {
       return;
     }
 
+    // `extract` ПО ЭЛЕМЕНТАМ списка с группами `$key`/`$value` — объект
+    // произвольной формы (заголовки).
+    //
+    // Отдельного примитива под заголовки нет намеренно: пара «имя: значение»
+    // выражается той же регуляркой, что и всякая другая раскладка, а
+    // `list.sep` говорит, чем элементы разделены. Ключи объекта задаёт сам
+    // источник, поэтому перечислить их в `into` нельзя — их называют
+    // служебные имена групп `$key` и `$value`.
+    if (p.extract != null &&
+        p.list != null &&
+        p.type == 'object' &&
+        value is String) {
+      _applyExtractItems(p, value);
+      return;
+    }
+
     // `extract` — одно значение по нескольким путям.
     if (p.extract != null && value is String) {
       _applyExtract(p, value);
@@ -1002,12 +1035,93 @@ final class _Run {
   /// имя сервера, а не промолчать.
   void _applySets(Map<String, dynamic> sets, MapperParam? p) {
     for (final e in sets.entries) {
+      // `$default_port` — СЛУЖЕБНЫЙ ключ `scheme_sets`: телом он не является,
+      // а называет порт по умолчанию для этого написания схемы. Пишется как
+      // `server_port` и СЛАБЕЕ любой записи (тот же приоритет, что у
+      // `defaults` секции): порт, названный ссылкой, обязан победить.
+      if (e.key == r'$default_port') {
+        if (space.port == null && e.value != null) {
+          _put('server_port', e.value);
+          _writtenBy['server_port'] = _kDefaultPriority;
+        }
+        continue;
+      }
       if (e.value == null) {
         _erase(e.key);
       } else {
-        _write(e.key, e.value, p);
+        _write(e.key, _substituteServiceValue(e.value), p);
       }
     }
+  }
+
+  /// Служебные подстановки в значениях `sets`/`scheme_sets`.
+  ///
+  /// `$host` — адрес из источника. Нужен там, где присваивание схемы обязано
+  /// сослаться на значение, которого в момент записи ещё нет в теле: имя
+  /// сервера для TLS у схем, где TLS включает сама схема, а не параметр.
+  /// Без подстановки `"$host"` уехал бы в тело литералом.
+  Object? _substituteServiceValue(Object? v) {
+    if (v is! String) return v;
+    switch (v) {
+      case r'$host':
+        return space.host;
+      default:
+        return v;
+    }
+  }
+
+  /// `extract` ПО ЭЛЕМЕНТАМ списка: объект, ключи которого называет источник.
+  ///
+  /// `list.sep` режет значение на элементы, регулярка раскладывает каждый на
+  /// группы, а служебные имена `$key` и `$value` в `into` говорят, какая
+  /// группа даёт имя ключа, а какая — его значение. Перечислить такие ключи в
+  /// `into` нельзя: их не знает никто, кроме самой ссылки.
+  ///
+  /// Негодный элемент пропускается, остальные живут (`on_item_invalid`), а
+  /// код ставится ОДИН раз на узел — о первом отброшенном.
+  void _applyExtractItems(MapperParam p, String value) {
+    final spec = p.extract!;
+    final re = _regex(spec.re);
+    String? keyGroup;
+    String? valueGroup;
+    for (final e in spec.into.entries) {
+      final target = e.value;
+      if (target == r'$key') keyGroup = e.key;
+      if (target == r'$value') valueGroup = e.key;
+    }
+    if (keyGroup == null) return;
+
+    final out = <String, dynamic>{};
+    var reported = false;
+    for (final part in value.split(p.list!.sep)) {
+      if (part.trim().isEmpty) continue;
+      final m = re.firstMatch(part);
+      final k = m?.namedGroup(keyGroup);
+      if (m == null || k == null || k.isEmpty) {
+        final code = p.onItemInvalid['code'] as String?;
+        if (code != null && !reported) {
+          reported = true;
+          warnings.add(
+            NodeWarning.byCode(code, path: p.name, value: part.trim()),
+          );
+        }
+        continue;
+      }
+      out[k] = valueGroup == null ? '' : (m.namedGroup(valueGroup) ?? '');
+    }
+    if (out.isEmpty) return;
+    // **G4 (`sort_keys`)** — порядок ключей входит в тело, то есть в
+    // identity. `_coerceType` здесь не зовётся: у записи объявлен `list`, и
+    // он увёл бы готовый объект в списочную ветку — `list` в такой записи
+    // говорит лишь, ЧЕМ разделены элементы источника, а формой результата
+    // распоряжается `type: object`.
+    final result = p.sortKeys
+        ? <String, dynamic>{
+            for (final k in out.keys.toList()..sort()) k: out[k],
+          }
+        : out;
+    if (p.mapsTo != null) _write(p.mapsTo!, result, p);
+    _applyImplies(p);
   }
 
   void _applyExtract(MapperParam p, String value) {
@@ -1274,6 +1388,25 @@ final class _Run {
   ///   чинить было бы уже нечего (D133-14).
   String _decodeQueryValue(String raw, MapperParam p) {
     final pathMode = p.decodeExtra?.mode == 'path';
+    // `format: "pem"` (§0.4a, D133-15) — «+» читается ПО-РАЗНОМУ в разных
+    // частях одного значения, и одним режимом это не выражается.
+    //
+    // В теле ключа «+» — данные base64, и пробел там ломает ключ. В строках
+    // `-----BEGIN …-----` / `-----END …-----` он, наоборот, кодирует ПРОБЕЛ:
+    // слова заголовка разделены им, и литеральный «+» сделал бы заголовок
+    // невалидным. Поэтому percent снимается один раз path-семантикой (весь
+    // «+» литерален), а потом «+» возвращается пробелом ровно внутри
+    // заголовочных строк.
+    if (p.format == 'pem') {
+      final decoded = percentDecodeOnce(raw, mode: DecodeMode.path);
+      return decoded
+          .split('\n')
+          .map((line) {
+            final t = line.trimLeft();
+            return t.startsWith('-----') ? line.replaceAll('+', ' ') : line;
+          })
+          .join('\n');
+    }
     return percentDecodeOnce(
       raw,
       mode: p.plusLiteral || pathMode ? DecodeMode.path : DecodeMode.query,
@@ -1893,16 +2026,7 @@ final class _Run {
     return null;
   }
 
-  static String? _tryBase64(String raw) {
-    try {
-      var s = raw.replaceAll('-', '+').replaceAll('_', '/');
-      final pad = s.length % 4;
-      if (pad != 0) s = s.padRight(s.length + (4 - pad), '=');
-      return String.fromCharCodes(_b64.decode(s));
-    } catch (_) {
-      return null;
-    }
-  }
+  static String? _tryBase64(String raw) => _RunDecode.base64(raw);
 }
 
 const _b64 = Base64Codec();

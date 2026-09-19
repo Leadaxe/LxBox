@@ -30,6 +30,11 @@ const Set<String> _paramKeys = {
   'sort_keys', 'empty', 'on_invalid', 'on_present', 'on_item_invalid',
   'on_no_match', 'on_len_gt', 'emit_when', 'omit_default', 'implicit',
   'since', 'desc_en', 'desc_ru', 'impl',
+  // §0.4a ДОБАВЛЕНИЕ (контракт 1.1.14): `format` — исключение «+» выводится
+  // из ФОРМАТА поля, а не из списка имён. `base64*` даёт литеральный «+» на
+  // всё значение, `pem` — только в base64-теле, тогда как в строках
+  // `-----BEGIN …-----` «+» остаётся пробелом (D133-15).
+  'format',
 };
 
 /// Ключи секции (`mappers.<kind>`), `PRIMITIVES.md` §0.1.

@@ -36,6 +36,15 @@ sealed class NodeWarning {
         'ech_ignored' => EchIgnoredWarning(value),
         'ws_early_data_converted' =>
           WsEarlyDataConvertedWarning(int.tryParse(value) ?? 0),
+        // §480 W4 — оба кода ставил рукописный маппер naive, и ставил их
+        // ТИПИЗИРОВАННЫМИ. Текст у реестра для них есть, и по нему
+        // `RegistryWarning` отрендерился бы верно, но равенство предупреждений
+        // идёт по runtimeType + данным (см. `props` ниже): подменив класс,
+        // переезд на движок сменил бы тип того же самого предупреждения на
+        // том же самом узле. Долг тот же, что у `ech_ignored`, и снимается он
+        // вместе с ним — одной задачей на все три.
+        'naive_padding_ignored' => NaivePaddingIgnoredWarning(value),
+        'naive_extra_headers_invalid' => NaiveExtraHeadersInvalidWarning(value),
         _ => RegistryWarning(code: code, path: path, value: value),
       };
 

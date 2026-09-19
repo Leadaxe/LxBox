@@ -138,7 +138,7 @@
     },
     "b480:plugin_opts_camel_alias": {
       "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local&pluginOpts=obfs%3Dhttp%3Bobfs-host%3Dx.example#plug-camel",
-      "identity": "c5622b2e59b16810894993ed8f0b70dd2755b01cd25d40f06ea85c27920d01e4",
+      "identity": "6d3235fec6d152da33ba4dc0b06f11a536267a06751671b4754cc73b634c731c",
       "tag": "plug-camel",
       "body": {
         "type": "shadowsocks",
@@ -147,8 +147,10 @@
         "server_port": 8388,
         "method": "aes-256-gcm",
         "password": "pass123",
-        "plugin": "obfs-local"
-      }
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "delta480": "delta480 D133-1: было — алиас pluginOpts не читался и plugin_opts в теле не появлялся; стало — читается. Значения сняты прогоном движка."
     },
     "b480:plugin_opts_separate": {
       "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local&plugin_opts=obfs%3Dhttp%3Bobfs-host%3Dx.example#plug-sep",
@@ -167,8 +169,17 @@
     },
     "b480:ss2022_cleartext_userinfo": {
       "uri": "ss://2022-blake3-aes-128-gcm:AAAAAAAAAAAAAAAAAAAAAA%3D%3D@example-1.com:8388#ss2022-clear",
-      "identity": null,
-      "dropped": true
+      "identity": "cbd487e6c4a793c9e37af69c68d8395985745227c193eefef55ab71455277e93",
+      "tag": "ss2022-clear",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "ss2022-clear",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "AAAAAAAAAAAAAAAAAAAAAA=="
+      },
+      "delta480": "delta480 D133-2/D133-12: было — открытый SS2022 method:key@host уходил в безусловный base64-декод, узел отбраковывался (dropped); стало — try-decode base64? читает его как есть. Значения сняты прогоном движка."
     }
   }
 }
