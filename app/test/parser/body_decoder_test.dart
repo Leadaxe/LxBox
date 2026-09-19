@@ -2,8 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/parse_all.dart';
+
+import 'engine_test_setup.dart';
 
 void main() {
+  // §480 — разбор `.conf` идёт ДВИЖКОМ по секции реестра; без него у схемы
+  // запасного рукописного пути не осталось (критерий 7).
+  setUpAll(loadEngineSections);
+
   group('decode', () {
     test('plain URI list', () {
       final r = decode('vless://x@h:1#a\nss://x@h:1#b\n\n# comment\n');
@@ -70,9 +77,21 @@ void main() {
       expect(decode('   \n\t\n  '), isA<DecodeFailure>());
     });
 
-    test('INI без [Peer] → не классифицируется как INI', () {
+    // §480 — норма ИЗМЕНИЛАСЬ, и тест переписан под неё, а не подогнан.
+    //
+    // Реестр видов документа (`contract_draft/documents.json`, вид
+    // `wireguard_conf`) опознаёт `.conf` по ПЕРВОЙ не-комментарной секции
+    // `[Interface]`, и требования `[Peer]` там НЕТ — сверено с лаунчером
+    // (TASKS_LXBOX §24.27 п.3, правда наша): заготовка без пира это законный
+    // `.conf`, и прежнее требование роняло её в ссылочную ветку, где она
+    // становилась мусорной строкой. Узлов такой файл не даёт — пира, то есть
+    // адреса, в нём нет, — но и исключения не бросает.
+    test('INI без [Peer] — законный .conf: ноль узлов, без исключения', () {
       const body = '[Interface]\nPrivateKey = xxx\nAddress = 10.0.0.2/24';
-      expect(decode(body), isNot(isA<IniConfig>()));
+      final r = decode(body);
+      expect(r, isA<IniConfig>());
+      expect(() => parseAll(r), returnsNormally);
+      expect(parseAll(r), isEmpty);
     });
 
     test('INI с [Interface] + [Peer] → IniConfig', () {

@@ -1,99 +1,22 @@
 {
-  "_note": "§480 — секция-маппер вида источника xray у vmess. Списано с xray_mapper.dart (_vmess). Данные: движок W1 вид источника xray сегодня не исполняет — секция кладётся впрок, вместе с uri-секцией того же протокола.",
+  "_draft": "ОТСТУПЛЕНИЕ LxBox от секции реестра (§480). Файл НЕ дублирует секцию: загрузчик накладывает эти ключи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Полная копия при ИСПОЛНЯЕМОЙ секции реестра запрещена — её загрузчик молча игнорирует, и написанное в ней не исполняется (страж в mapper_sections_w4_test).",
+  "_overlay": true,
   "mappers": {
     "xray": {
-      "body_source": "xray",
-      "detect": {
-        "json": {
-          "value_of": {
-            "protocol": "vmess"
-          }
-        }
-      },
-      "forms": [
-        {
-          "id": "vnext",
-          "detect": {
-            "default": true
-          },
-          "space": "json",
-          "base": "settings.vnext.0",
-          "impl": "Единственная форма — ветка default: элемент Xray уже опознан detect секции (protocol), и разбирать его иначе не из чего. Так же записана форма servers у trojan в живом реестре лаунчера (контракт 1.1.13)."
-        }
-      ],
       "defaults": {
         "type": "vmess",
         "server_port": 443,
-        "$_divergence": "РАСХОЖДЕНИЕ СТОРОН, не дефект (GRAMMAR_SYNC §3.3, TASKS_LXBOX §24.27 п.3). `server_port: 443` остаётся НАШИМ оверлеем: у лаунчера дефолта нет и элемент без порта отбраковывается целиком, у нас даёт узел на 443, как было. Вопрос состава подписки, а не маппера; поднят владельцу, до решения оверлей не снимать.",
-        "$_awaitingContractSync": "Лаунчер ПРИНЯЛ `include dialer#xray` и `detect` формы по `type_of` (TASKS_LXBOX §24.27); после ближайшего синка реестра оверлеи снимаются. Синк ведёт агент движка."
+        "_why": "РАСХОЖДЕНИЕ СТОРОН, не дефект (GRAMMAR_SYNC §3.3, TASKS_LXBOX §24.27 п.3). `server_port: 443` остаётся НАШИМ оверлеем: у лаунчера дефолта нет и элемент без порта отбраковывается целиком, у нас даёт узел на 443, как было. Вопрос состава подписки, а не маппера; поднят владельцу, до решения оверлей не снимать."
       },
       "params": {
-        "address": {
-          "source": "json.$base.address",
-          "maps_to": "server",
-          "required": true
-        },
         "port": {
           "source": "json.$base.port",
           "maps_to": "server_port",
           "type": "int",
-          "materialize_default": true
-        },
-        "id": {
-          "source": "json.$base.users.0.id",
-          "maps_to": "uuid",
-          "required": true
-        },
-        "security": {
-          "source": "json.$base.users.0.security",
-          "maps_to": "security",
-          "normalize": "trim_lower",
           "materialize_default": true,
-          "value_map": {
-            "chacha20-ietf-poly1305": "chacha20-poly1305",
-            "": "auto",
-            "null": "auto",
-            "undefined": "auto"
-          },
-          "impl": "§459 — то же правило написания, что у маппера ссылки. Ключ обязан ПОЯВИТЬСЯ в теле даже при пустом значении: у ядра поле без omitempty, опущенный ключ снял бы узел кодом field_missing. Годность судит реестр (enum + on_invalid coerce auto)."
-        },
-        "alterId": {
-          "source": "json.$base.users.0.alterId",
-          "maps_to": "alter_id",
-          "type": "int",
-          "materialize_default": true,
-          "impl": "В отличие от ссылки, здесь alter_id пишется ВСЕГДА, в том числе нулём (прежняя ветка Xray клала его безусловно)."
-        },
-        "$extra_vnext": {
-          "source": "json.settings.vnext",
-          "maps_to": null,
-          "on_len_gt": {
-            "n": 1,
-            "action": "note",
-            "code": "xray_extra_entries_dropped"
-          },
-          "impl": "vnext[1..] отбрасываются; сегодня молча."
-        },
-        "$extra_users": {
-          "source": "json.$base.users",
-          "maps_to": null,
-          "on_len_gt": {
-            "n": 1,
-            "action": "note",
-            "code": "xray_extra_entries_dropped"
-          }
+          "_why": "Пара к дефолту выше: `required: true` реестра снял бы узел без порта, а `materialize_default` записывает в тело дефолт секции (443). Одно отступление, выраженное в двух местах, — снимаются они вместе."
         }
-      },
-      "include": [
-        "transports#xray",
-        "tls#xray",
-        "dialer#xray"
-      ],
-      "unknown_key": {
-        "action": "drop",
-        "code": "json_field_unknown"
-      },
-      "emit": null
+      }
     }
   }
 }

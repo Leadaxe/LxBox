@@ -1,89 +1,16 @@
 {
-  "_note": "§480 — секция-маппер вида источника xray у shadowsocks. Списано с xray_mapper.dart (_shadowsocks). Своего транспорта у ss нет, но sockopt лежит в streamSettings — оттуда и keep-alive (§453). Данные: движок W1 вид источника xray сегодня не исполняет.",
+  "_draft": "ОТСТУПЛЕНИЕ LxBox от секции реестра (§480). Файл НЕ дублирует секцию: загрузчик накладывает эти ключи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Полная копия при ИСПОЛНЯЕМОЙ секции реестра запрещена — её загрузчик молча игнорирует, и написанное в ней не исполняется (страж в mapper_sections_w4_test).",
+  "_overlay": true,
   "mappers": {
     "xray": {
-      "body_source": "xray",
-      "detect": {
-        "json": {
-          "value_in": {
-            "protocol": [
-              "shadowsocks",
-              "ss"
-            ]
-          }
-        }
-      },
-      "type_synonyms": {
-        "shadowsocks": "ss"
-      },
-      "forms": [
-        {
-          "id": "servers",
-          "detect": {
-            "default": true
-          },
-          "space": "json",
-          "base": "settings.servers.0",
-          "impl": "Единственная форма — ветка default: элемент Xray уже опознан detect секции (protocol), и разбирать его иначе не из чего. Так же записана форма servers у trojan в живом реестре лаунчера (контракт 1.1.13)."
-        }
-      ],
-      "defaults": {
-        "type": "shadowsocks"
-      },
-      "label": {
-        "source": "json.remarks",
-        "normalize": [
-          "strip_control",
-          "trim"
-        ],
-        "fallback": {
-          "template": "{scheme}-{server}-{server_port}",
-          "scheme_source": "as_written"
-        },
-        "impl": "У Xray-входа имя схемы для фолбэка не равно типу тела: 'ss' при 'shadowsocks' (tagScheme в XrayMapping). Тег И ЕСТЬ identity, поэтому as_written здесь нормативен."
-      },
       "params": {
-        "address": {
-          "source": "json.$base.address",
-          "maps_to": "server",
-          "required": true
-        },
-        "port": {
-          "source": "json.$base.port",
-          "maps_to": "server_port",
-          "type": "int",
-          "required": true,
-          "impl": "Порт ОБЯЗАТЕЛЕН и ненулевой: port==0 даёт null (записи нет). Дефолта у этого входа нет, в отличие от ссылки."
-        },
-        "method": {
-          "source": "json.$base.method",
-          "maps_to": "method",
-          "required": true
-        },
         "password": {
           "source": "json.$base.password",
           "maps_to": "password",
           "empty": "significant",
-          "impl": "Пишется даже пустым (прежняя ветка клала ''), в отличие от ссылки, где пустой пароль снимает узел."
-        },
-        "$extra_servers": {
-          "source": "json.settings.servers",
-          "maps_to": null,
-          "on_len_gt": {
-            "n": 1,
-            "action": "note",
-            "code": "xray_extra_entries_dropped"
-          }
+          "_why": "У реестра запись `required: true`, и элемент с ПУСТЫМ паролем отбраковывается целиком. У нас пустой пароль — законное значение (`empty: significant`): узел доезжает до санитайзера, и судит его реестр телом, а не маппер наличием ключа. Снятие отступления сдвинет состав подписки, поэтому идёт отдельной дельтой."
         }
-      },
-      "include": [
-        "dialer#xray"
-      ],
-      "unknown_key": {
-        "action": "drop",
-        "code": "json_field_unknown"
-      },
-      "emit": null
+      }
     }
   }
 }

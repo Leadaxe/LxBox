@@ -1,155 +1,29 @@
 {
-  "impl": "§480 — секция-маппер из РЕЕСТРА ЛАУНЧЕРА (contract/registry/protocols/anytls.json, его develop). Черновик держит её до прихода зеркалом; правки вносить только синхронно с лаунчером.",
+  "_draft": "ОТСТУПЛЕНИЕ LxBox от секции реестра (§480). Файл НЕ дублирует секцию: загрузчик накладывает эти ключи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Полная копия при ИСПОЛНЯЕМОЙ секции реестра запрещена — её загрузчик молча игнорирует, и написанное в ней не исполняется (страж в mapper_sections_w4_test).",
+  "_overlay": true,
   "mappers": {
     "uri": {
-      "body_source": "uri",
-      "detect": {
-        "scheme_in": [
-          "anytls"
-        ]
-      },
-      "forms": [
-        {
-          "id": "url",
-          "detect": {
-            "default": true
-          },
-          "decode": [
-            "url"
-          ],
-          "space": "url"
-        }
-      ],
-      "userinfo": {
-        "into": [
-          "password"
-        ],
-        "impl": "Пароль = ВЕСЬ userinfo, без split: двоеточие — законная часть пароля (кейс корпуса percent_encoded_password нормирует 'p@ss:word'). Go берёт только Username() — расхождение зафиксировано реестром и сохранено как было."
-      },
-      "label": {
-        "source": "fragment",
-        "normalize": [
-          "strip_control",
-          "trim"
-        ],
-        "fallback": {
-          "template": "{scheme}-{server}-{server_port}",
-          "scheme_source": "singbox_type"
-        }
-      },
-      "defaults": {
-        "type": "anytls",
-        "server_port": 443
-      },
-      "scheme_sets": {
-        "anytls": {
-          "tls.enabled": true
-        }
-      },
       "params": {
-        "server": {
-          "source": "host",
-          "maps_to": "server",
-          "required": true
-        },
-        "server_port": {
-          "source": "port",
-          "maps_to": "server_port",
-          "type": "int",
-          "materialize_default": true
-        },
-        "password": {
-          "source": "userinfo",
-          "maps_to": "password",
-          "required": true,
-          "impl": "Пустой пароль — записи нет."
-        },
-        "fp": {
+        "sni": {
           "source": [
-            "query.fp",
-            "query.fingerprint"
+            "query.sni",
+            "query.peer"
           ],
-          "maps_to": "tls.utls.fingerprint",
-          "value_map": {
-            "$ref": "tls.fp_dialect"
-          },
-          "implies": {
-            "tls.utls.enabled": true
-          },
-          "materialize_default": true,
-          "sets": {
-            "": {
-              "tls.utls.enabled": true,
-              "tls.utls.fingerprint": "random"
+          "maps_to": "tls.server_name",
+          "default_from": "host",
+          "on_invalid": {
+            "action": "default_from",
+            "when": {
+              "value": {
+                "not_matches": "[.:]"
+              }
             }
           },
           "when": {
             "tls.enabled": true
           },
-          "impl": "D-009, та же конвенция, что у vless: ПУСТОЙ fp означает `random`, и это НЕ дефолт ядра (у него пустой = chrome), а договорённость обеих сторон — отсюда materialize_default, маппер обязан записать значение в тело (node_parser_transport.go:920-929 через utlsFingerprintOrDefault). У trojan/http дефолта нет, и общая запись блока tls#uri там остаётся как есть. Запись перекрывает одноимённую из include, потому что объявлена ПОЗЖЕ него."
-        },
-        "security": {
-          "source": "query.security",
-          "selector": true,
-          "priority": 10,
-          "maps_to": null,
-          "impl": "ИГНОРИРУЕТСЯ до чтения TLS, и это выражается ЯВНО: запись перекрывает одноимённую из блока tls#uri (объявлена позже него, merge overwrite) и во ВСЕХ ветках, включая none, оставляет tls.enabled. AnyTLS живёт только поверх TLS (body.fields.tls → required, ядро отвечает C.ErrTLSRequired), и security=none для него бессмысленен: ветка блока `{\"tls\": null}` унесла бы весь блок вместе с sni, alpn и insecure, которые автор написал, и санитайзер отверг бы узел целиком (field_missing). Кейс корпуса security_none_params_kept нормирует именно это. selector: запись объявляет СТРУКТУРУ (есть ли блок tls), значит её место — проход A, рядом с одноимённой записью блока; priority 10 против умолчания 0 у той ставит её ПОЗЖЕ, и merge overwrite возвращает tls.enabled. Иначе записи блока (sni/alpn/fp/insecure) со своим when: {tls.enabled: true} исполнялись бы в проходе B раньше нашей и видели бы снятый блок.",
-          "sets": {
-            "none": {
-              "tls.enabled": true
-            },
-            "": {
-              "tls.enabled": true
-            },
-            "tls": {
-              "tls.enabled": true
-            }
-          },
-          "merge": "overwrite"
-        },
-        "idle_session_check_interval": {
-          "source": "query.idle_session_check_interval",
-          "maps_to": "idle_session_check_interval",
-          "type": "duration",
-          "normalize": "duration_bare_seconds",
-          "impl": "Голое число это секунды — та же конвенция, что heartbeat_bare_number у tuic. Форма записи это работа маппера; годность судит реестр."
-        },
-        "idle_session_timeout": {
-          "source": "query.idle_session_timeout",
-          "maps_to": "idle_session_timeout",
-          "type": "duration",
-          "normalize": "duration_bare_seconds"
-        },
-        "min_idle_session": {
-          "source": "query.min_idle_session",
-          "maps_to": "min_idle_session",
-          "type": "int",
-          "on_invalid": {
-            "action": "keep",
-            "code": null
-          },
-          "impl": "Идёт в карту КАК ПРИШЁЛ — числом если число, иначе строкой: годность («неотрицательное целое») судит реестр, min:0 + on_invalid drop с кодом anytls_min_idle_invalid. Привести здесь к числу значило бы судить."
-        },
-        "key_share": {
-          "source": "query.key_share",
-          "maps_to": "tls.reality.key_share",
-          "when": {
-            "tls.reality.enabled": true
-          },
-          "impl": "Дыра с ОБЕИХ сторон: параметр читает node_parser_anytls.go:66-68 и на нём стоит корпус (uri/anytls/reality_key_share_hybrid), но в черновике LxBox его нет, и в нашем описательном anytls.json тоже нет. SPEC 089, ядро lx.4."
+          "_why": "§472 — правило `sni_heuristic_falls_back_to_server`: у anytls оно есть на ОБОИХ проектах (как у hysteria2), а общий блок tls#uri несёт только цепочку источников и фолбэк на ПУСТОМ. Имя без точки и двоеточия адресом быть не может, а «🔒» — витринный значок подписки: и то и другое уступает адресу сервера. Вторая половина правила объявляется у схемы, потому что исполняют его НЕ ВСЕ схемы, включившие блок."
         }
-      },
-      "include": [
-        "tls#uri",
-        "dialer#uri"
-      ],
-      "unknown_key": {
-        "action": "keep",
-        "code": "uri_param_unknown"
-      },
-      "emit": {
-        "form": "url",
-        "param_order": "alphabetical"
       }
     }
   }

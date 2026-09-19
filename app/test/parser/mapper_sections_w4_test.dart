@@ -105,17 +105,69 @@ void main() {
     });
 
     test('общие блоки берутся у лаунчера через include, своих копий нет', () {
-      // wireguard — единственная схема волны без TLS вовсе (endpoint).
-      for (final k in const ['hysteria2', 'tuic', 'masque']) {
+      // TLS приходит include'ом у тех, кто его вообще разбирает. wireguard —
+      // endpoint, TLS у него нет вовсе; masque несёт QUIC со своим набором
+      // (`sni`/`disable_sni` и больше ничего), и общий блок ссылочного TLS
+      // принёс бы ему поля, которых его диалект не знает.
+      for (final k in const ['hysteria2', 'tuic']) {
         final s = section(uriSections[k]!, 'uri');
         expect((s['include'] as List), contains('tls#uri'), reason: k);
       }
+
+      // Записи общего блока в секции схемы дублироваться не должны — они
+      // приходят include'ом.
+      //
+      // `fp` из этого набора ИСКЛЮЧЁН, и это не послабление. У части схем
+      // (anytls, vless) пустое написание отпечатка означает `random`, а не
+      // дефолт ядра, и записать это значение в тело обязан МАППЕР
+      // (`materialize_default`). Выразить «у меня иначе» можно только
+      // собственной записью, перекрывающей блочную: перечислять `fp` среди
+      // запрещённых значило бы запретить сам примитив переопределения,
+      // которым блок и задуман пользоваться.
       for (final e in uriSections.entries) {
         final params = (section(e.value, 'uri')['params'] as Map).cast<String, dynamic>();
-        // Записи общего блока (security/alpn/pbk/sid/fp) в секции схемы
-        // дублироваться не должны — они приходят include'ом.
-        for (final dup in const ['security', 'alpn', 'pbk', 'sid', 'fp']) {
+        for (final dup in const ['security', 'alpn', 'pbk', 'sid']) {
           expect(params.containsKey(dup), isFalse, reason: '${e.key}.$dup');
+        }
+      }
+    });
+
+    // §480 — ПОЛНАЯ КОПИЯ исполняемой секции реестра в черновике запрещена.
+    //
+    // Загрузчик при исполняемой секции реестра берёт РЕЕСТР и копию молча
+    // игнорирует (`_rawSection`): черновик-не-оверлей секцию не заменяет.
+    // Пока стража не было, копия выглядела рабочей и протухала незаметно —
+    // так пропала sni-эвристика anytls (`sni_heuristic_falls_back_to_server`
+    // была написана в копии и не исполнялась НИ РАЗУ), а вместе с ней
+    // разъехались ещё четыре файла. Молчаливое игнорирование и есть источник
+    // регрессии, поэтому здесь оно красное.
+    test('черновик при исполняемой секции реестра — только _overlay', () {
+      final registry = Directory('assets/contract/registry/protocols');
+      final executable = <String, Set<String>>{};
+      for (final f in registry.listSync().whereType<File>()) {
+        if (!f.path.endsWith('.json')) continue;
+        final name = f.uri.pathSegments.last.replaceAll('.json', '');
+        final mappers = (load(f.path)['mappers'] as Map?)?.cast<String, dynamic>();
+        if (mappers == null) continue;
+        executable[name] = mappers.keys.toSet();
+      }
+
+      for (final sub in const ['uri', 'xray', 'singbox', 'conf']) {
+        final dir = Directory('assets/contract_draft/$sub');
+        if (!dir.existsSync()) continue;
+        for (final f in dir.listSync().whereType<File>()) {
+          if (!f.path.endsWith('.json')) continue;
+          final name = f.uri.pathSegments.last.replaceAll('.json', '');
+          final file = load(f.path);
+          final kinds = (file['mappers'] as Map?)?.keys.cast<String>() ?? const [];
+          for (final kind in kinds) {
+            if (!(executable[name]?.contains(kind) ?? false)) continue;
+            expect(file['_overlay'], isTrue,
+                reason: 'assets/contract_draft/$sub/$name.json: секция '
+                    'mappers.$kind есть в реестре и исполняема, значит '
+                    'черновик обязан быть оверлеем (_overlay: true) и нести '
+                    'только отличия. Полную копию загрузчик игнорирует.');
+          }
         }
       }
     });

@@ -23,7 +23,7 @@
 /// отсутствие ключа неотличимо от «не задано».
 library;
 
-import 'dart:convert' show Base64Codec, jsonDecode;
+import 'dart:convert' show Base64Codec, jsonDecode, utf8;
 
 import '../../../models/node_warning.dart';
 import 'decoders.dart';
@@ -474,7 +474,12 @@ abstract final class _RunDecode {
       var s = raw.replaceAll('-', '+').replaceAll('_', '/');
       final pad = s.length % 4;
       if (pad != 0) s = s.padRight(s.length + (4 - pad), '=');
-      return String.fromCharCodes(_b64.decode(s));
+      // Байты — UTF-8, и читать их обязаны как UTF-8. `String.fromCharCodes`
+      // принимал каждый БАЙТ за символ latin-1, и любое не-ASCII имя узла
+      // приезжало искажённым: «изPS» становилось «Ð¸Ð·PS». Малформед
+      // допускается, а не бросается: мусорный байт в имени не стоит узлу
+      // разбора целиком.
+      return utf8.decode(_b64.decode(s), allowMalformed: true);
     } catch (_) {
       return null;
     }
@@ -2201,7 +2206,11 @@ final class _Run {
             : _readSource(src, p);
         if (v == null) continue;
         if (v is String && v.isEmpty) continue;
-        _write(path, v, p);
+        // ФОРМА значения у отката та же, что у самого поля: путь, куда едет
+        // список, списком и заполняется. Без этого откат клал бы в него
+        // скаляр, и одно и то же поле приезжало разной формы в зависимости
+        // от того, назвал его автор ссылки или оно взялось умолчанием.
+        _write(path, p.coerceScalarToList && v is! List ? [v] : v, p);
         break;
       }
     }

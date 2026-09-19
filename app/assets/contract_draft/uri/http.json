@@ -1,70 +1,8 @@
 {
-  "impl": "§480 — секция-маппер из РЕЕСТРА ЛАУНЧЕРА (contract/registry/protocols/http.json, его develop). Черновик держит её до прихода зеркалом; правки вносить только синхронно с лаунчером.",
+  "_draft": "ОТСТУПЛЕНИЕ LxBox от секции реестра (§480). Файл НЕ дублирует секцию: загрузчик накладывает эти ключи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Полная копия при ИСПОЛНЯЕМОЙ секции реестра запрещена — её загрузчик молча игнорирует, и написанное в ней не исполняется (страж в mapper_sections_w4_test).",
+  "_overlay": true,
   "mappers": {
     "uri": {
-      "body_source": "uri",
-      "detect": {
-        "scheme_in": [
-          "proxy-http",
-          "proxy-https",
-          "proxy+http",
-          "proxy+https"
-        ]
-      },
-      "forms": [
-        {
-          "id": "url",
-          "detect": {
-            "default": true
-          },
-          "decode": [
-            "url"
-          ],
-          "space": "url"
-        }
-      ],
-      "userinfo": {
-        "split": {
-          "sep": ":",
-          "limit": 2
-        },
-        "into": [
-          "username",
-          "password"
-        ],
-        "single_into": "username",
-        "impl": "Три формы: 'user' | 'user:pass' | ':pass' — оба компонента опциональны (uri.userinfo.impl). Пароль — всё после ПЕРВОГО двоеточия."
-      },
-      "label": {
-        "source": "fragment",
-        "normalize": [
-          "strip_control",
-          "trim"
-        ],
-        "fallback": {
-          "template": "{scheme}-{server}-{server_port}",
-          "scheme_source": "singbox_type"
-        }
-      },
-      "defaults": {
-        "type": "http"
-      },
-      "scheme_sets": {
-        "proxy-https": {
-          "tls.enabled": true,
-          "$default_port": 443
-        },
-        "proxy+https": {
-          "tls.enabled": true,
-          "$default_port": 443
-        },
-        "proxy-http": {
-          "$default_port": 80
-        },
-        "proxy+http": {
-          "$default_port": 80
-        }
-      },
       "params": {
         "security": {
           "source": "query.security",
@@ -90,73 +28,30 @@
               ]
             }
           },
-          "impl": "Перекрывает одноимённую запись блока tls#uri тем же приёмом, что anytls.security: priority 10 против умолчания 0 ставит её ПОЗЖЕ в проходе A, merge overwrite возвращает решение ей. Отличие от anytls — знак: у http наличие блока TLS решает НАПИСАНИЕ схемы, а не этот параметр, и запись гейтится по нему же (when.scheme.not_in). На http-суффиксе блока быть не должно НИ ПРИ КАКОМ security, поэтому все три ветки снимают путь: общая запись блока со своим sets[\"\"] → tls.enabled сочиняла бы TLS простому proxy-http прокси (корпус proxy_http_plain_basic и ещё пять кейсов). На https-суффиксе запись молчит, и блок целиком ведёт tls#uri + tls#uri_with_host; значение none снимает его там своей веткой блока — прежний путь читал его тем же trojanTLSFromNode. QUIRKS Q133-45."
+          "_why": "Запись реестра, повторена дословно: оверлей обязан объявить ОБЕ записи над query.security, потому что спор с записью блока tls#uri решается по совпадению имени И источника, и вторая запись (ниже) без первой не встала бы на её место в таблице."
         },
-        "server": {
-          "source": "host",
-          "maps_to": "server",
-          "required": true
-        },
-        "server_port": {
-          "source": "port",
-          "maps_to": "server_port",
-          "type": "int",
-          "materialize_default": true,
-          "impl": "Дефолт задаёт scheme_sets: 443 у https-суффикса, 80 у http-суффикса."
-        },
-        "username": {
-          "source": "userinfo.user",
-          "maps_to": "username"
-        },
-        "password": {
-          "source": "userinfo.pass",
-          "maps_to": "password"
-        },
-        "path": {
-          "source": "query.path",
-          "maps_to": "path",
-          "impl": "Читается у ОБОИХ суффиксов — так делал прежний путь."
-        },
-        "headers": {
-          "source": "query.headers",
-          "maps_to": "headers",
-          "type": "object",
-          "sort_keys": true,
-          "list": {
-            "sep": "\r\n"
-          },
-          "extract": {
-            "re": "^(?P<k>[!#$%&'*+.0-9A-Z\\\\^_`a-z|~-]+):[ \\t]*(?P<v>[^\\r\\n\\x00]*)$",
-            "into": {
-              "k": "$key",
-              "v": "$value"
+        "$security_none_https": {
+          "source": "query.security",
+          "selector": true,
+          "priority": 11,
+          "maps_to": null,
+          "sets": {
+            "none": {
+              "tls": null
             }
           },
-          "impl": "Та же сериализация И ТА ЖЕ регулярка, что extra-headers у naive: 'H1: V1\\r\\nH2: V2' → карта тела. sort_keys — порядок ключей входит в тело, то есть в identity. Битая пара пропускается МОЛЧА: код naive_extra_headers_invalid объявлен у naive, и под контракт эти заголовки не попадают (так было и на прежнем пути). ДЕФЕКТ, ВОСПРОИЗВЕДЁН НАМЕРЕННО: имя параметра тут 'headers', а не 'extra-headers', как у naive и как пишут реальные ссылки — обе фикстуры b480 (extra_headers_https и extra_headers_unsorted) шлют 'extra-headers' и теряют заголовки ЦЕЛИКОМ, на ОБОИХ суффиксах схемы. В DELTAS.md этого случая нет, поэтому поведение оставлено как есть; починка — отдельное решение владельца. DELTAS D133-18: extra-headers — АЛИАС headers. Сегодня http читает только 'headers' (node_parser_http.go:115), а naive — только 'extra-headers' (node_parser_naive.go:137), при ОБЩЕМ разборе parseNaiveExtraHeaders; ссылка с extra-headers на http-прокси теряла заголовки молча. Каноническое имя для эмита остаётся headers — тела рабочих узлов не меняются. QUIRKS Q133-39.",
-          "aliases": [
-            "extra-headers"
-          ]
+          "when": {
+            "scheme": {
+              "in": [
+                "proxy-https",
+                "proxy+https"
+              ]
+            }
+          },
+          "_why": "§472 / mapper-правило `security_none_no_tls` (http в applies_to) — ДЫРА, которую у нас не закрывал никто. На https-написании блок TLS заводит `scheme_sets`, а `security=none` обязан его снять; запись блока tls#uri, у которой ветка `none` есть, до исполнения не доходит — одноимённая запись секции (выше) роняет её по совпадению имени и источника, а сама молчит под своим `when.scheme.not_in`. Лаунчер решил это РАЗДЕЛЕНИЕМ блока (tls#uri_security, его http его include'ит); у нас блок ещё не разделён, и до синка ту же истину несёт вторая запись схемы: тот же источник, зеркальный гейт `in` вместо `not_in`, и единственная ветка `none`. Значения `tls` и пустое на https-написании трогать нельзя — блок там заводит написание схемы, и снять его значило бы отменить scheme_sets. priority 11: после записи выше, чтобы порядок двух записей над одним источником был объявлен, а не случаен. Служебная ($-префикс): своего пути нет, вся работа — sets."
         }
       },
-      "include": [
-        "tls#uri",
-        "tls#uri_with_host",
-        "dialer#uri"
-      ],
-      "unknown_key": {
-        "action": "keep",
-        "code": "uri_param_unknown"
-      },
-      "emit": {
-        "form": "url",
-        "form_from": {
-          "tls.enabled": {
-            "true": "proxy-https",
-            "*": "proxy-http"
-          }
-        },
-        "param_order": "alphabetical"
-      }
+      "_why_params": "Обе записи над query.security объявлены здесь целиком: загрузчик накладывает оверлей ключами секции, и `params` заменяется поимённо."
     }
   }
 }

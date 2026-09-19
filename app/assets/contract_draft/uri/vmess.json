@@ -74,6 +74,25 @@
           "maps_to": "disable_tcp_keep_alive",
           "type": "bool_spelled",
           "impl": "Пара к `tcp_keep_alive` выше, по той же причине. Значение в контейнере булево (true), а не строка: `bool_spelled` читает оба написания."
+        },
+        "http_host_from_server": {
+          "source": {
+            "v2rayn": [
+              "json.add"
+            ],
+            "legacy": [
+              "host"
+            ]
+          },
+          "maps_to": "transport.host",
+          "coerce": {
+            "scalar_to_list": true
+          },
+          "priority": 90,
+          "when": {
+            "transport.type": "http"
+          },
+          "_why": "§472 — при `net=h2` без своего host транспорт берёт адресом САМ СЕРВЕР: прежняя ветка звала `transportMapFromQuery(defaultHost: server)`, и без отката узел приезжал с транспортом http БЕЗ host, а ядро слало запросы с пустым Host. Откат объявлен СВОЕЙ записью, а не переопределением блочного `host`: спор с блоком решается по имени и источнику, а записей `host` у блока три (ws/http/xhttp), и одноимённая запись схемы снесла бы все — вместе с транспортами, которые отката не знают. priority 90 ставит её ПОСЛЕ блочной, и умолчание `merge: keep_first` само делает её ОТКАТОМ: названный автором host уже занял путь с меньшим priority, и запись молчит. coerce.scalar_to_list: у http транспорта host СПИСОК."
         }
       }
     }
