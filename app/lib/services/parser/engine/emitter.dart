@@ -302,8 +302,8 @@ final class _Emit {
 
   final List<String> _lost = [];
 
-  /// Путь тела → запись с прямым `maps_to` (правило №3, Q133-73).
-  late final Map<String, MapperParam> _pathOwners = _seedPathOwners();
+  /// Путь тела → записи с прямым `maps_to` (правило №3, Q133-73).
+  late final Map<String, List<MapperParam>> _pathOwners = _seedPathOwners();
 
   EmitResult run() {
     // Отказ формата — ДО обхода записей: иначе ссылка собралась бы из
@@ -892,7 +892,13 @@ final class _Emit {
       }
     }
     if (targets.isEmpty) return false;
-    return targets.every((path) => _pathOwnedByOther(p, path));
+    final owned = <String>{};
+    for (final o in section.params.values) {
+      if (identical(o, p) || o.isService || _roundTripOff(o)) continue;
+      final m = o.mapsTo;
+      if (m != null && targets.contains(m)) owned.add(m);
+    }
+    return owned.length == targets.length;
   }
 
   /// Все пути ветки `sets` заняты ДРУГИМИ записями с прямым `maps_to`.
@@ -910,19 +916,25 @@ final class _Emit {
     return any;
   }
 
-  Map<String, MapperParam> _seedPathOwners() {
-    final out = <String, MapperParam>{};
+  /// Путь тела → запись с прямым `maps_to`. Несколько записей в один путь —
+  /// все хозяева: last-writer здесь нельзя, иначе составное имя решило бы,
+  /// что путь «свой», хотя сосед с `maps_to` тоже на него смотрит.
+  Map<String, List<MapperParam>> _seedPathOwners() {
+    final out = <String, List<MapperParam>>{};
     for (final p in section.params.values) {
       if (p.isService || _roundTripOff(p)) continue;
       final path = p.mapsTo;
-      if (path != null && _read(path) != null) out[path] = p;
+      if (path != null && _read(path) != null) {
+        (out[path] ??= []).add(p);
+      }
     }
     return out;
   }
 
   bool _pathOwnedByOther(MapperParam p, String path) {
-    final owner = _pathOwners[path];
-    return owner != null && !identical(owner, p);
+    final owners = _pathOwners[path];
+    if (owners == null) return false;
+    return owners.any((o) => !identical(o, p));
   }
 
   bool _roundTripOnlyParse(MapperParam p) =>
@@ -1331,13 +1343,10 @@ final class _Emit {
     final passes = _encodePasses(p);
     for (var i = 1; i < passes; i++) {
       if (!val.contains('%')) break;
-      val = _percentEncodeQuery(val);
+      val = _encodeParam(val);
     }
     return _encodeParam(val);
   }
-
-  static String _percentEncodeQuery(String s) =>
-      Uri.encodeQueryComponent(s).replaceAll('+', '%20');
 
   /// **`omit_default`** — параметр не пишется, КОГДА ЕГО ЗНАЧЕНИЕ РАВНО
   /// УМОЛЧАНИЮ. Не «не пишется никогда»: селектор вида TLS попадает в
@@ -1698,8 +1707,8 @@ final class _Emit {
       // Служебные ключи тела, ссылке не принадлежащие.
       if (path == 'type' || path == 'tag') continue;
       // Эмит-онли: поле живёт в теле сборки, обратно из ссылки не читается.
-      final owner = _pathOwners[path];
-      if (owner != null && _roundTripOnlyEmit(owner)) continue;
+      final owners = _pathOwners[path];
+      if (owners != null && owners.any(_roundTripOnlyEmit)) continue;
       // Путь засчитан САМ либо засчитан его предок: запись, забравшая
       // `headers` целиком, забрала и каждый заголовок внутри — перечислять
       // их по одному она не обязана и не может (имена приходят от данных).

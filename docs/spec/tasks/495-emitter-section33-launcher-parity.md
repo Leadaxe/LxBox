@@ -27,8 +27,8 @@
 | Q133-70 | `_queryCanonicalName`: выходное имя = первый `query.*` в `source`; `emit.names` сильнее |
 | Q133-71 | Без изменений логики: пустой ключ `sets` в `_valueFromSets` не пишется (тест закрепляет) |
 | Q133-72 | `_encodeQueryValue`: `passes+1` кодирований, доп. проходы только если в значении есть `%` |
-| Q133-73 | `_seedPathOwners` + `_setsBranchOwnedByOthers`: составное имя `value_map`+`sets` уступает записи с прямым `maps_to` |
-| Q133-75 | `round_trip_only` в модели; разбор пропускает `"emit"`, эмиттер пропускает `"parse"`; `detour` пишется из тела |
+| Q133-73 | `_setsBranchOwnedByOthers`: составное имя `value_map`+`sets` уступает записи с прямым `maps_to`. На живом реестре тождественной пары у такого flow нет — канон уже держит `_isUntranslatedCanon`, вид ссылок не меняется |
+| Q133-75 | `round_trip_only` в модели; разбор пропускает `"emit"`, эмиттер пропускает `"parse"`. Эмит `detour` из тела — как до правки (`detour=relay` пишется) |
 
 Тесты: `test/parser/engine_emit_section33_test.dart`.
 
@@ -38,8 +38,8 @@
 
 | Пункт | У нас | У лаунчера | Что изменится в ссылке |
 |---|---|---|---|
-| http `headers` vs `extra-headers` | эмит: `headers` (канон source); чтение: оба | канон `headers`; чтение через алиас | Ссылки с `extra-headers` на http-прокси по-прежнему теряют заголовки на входе (D133-18, отдельное решение владельца). Эмит не трогали — менять `headers`→`extra-headers` сломало бы Copy link |
-| Q133-74 `keep_empty_tail` (socks4) | не объявлено в реестре LxBox для socks4 | явный флаг у схемы | Нет затронутых живых ссылок в корпусе LxBox |
+| http `headers` vs `extra-headers` | эмит: `headers` (имя записи = первый `query.*`) | канон `headers`; чтение через алиас | Ссылки с `extra-headers` на http-прокси по-прежнему теряют заголовки на входе (D133-18, отдельное решение владельца). Эмит не трогали — менять `headers`→`extra-headers` сломало бы Copy link |
+| Q133-74 `keep_empty_tail` (socks4) | флаг **объявлен** в `socks.json` (`emit.userinfo.keep_empty_tail: true`), движок его не исполняет: пустой хвост userinfo не пишется | пишет `userid:@host` | Снимки `socks4://userid1@…` стали бы `socks4://userid1:@…` — вид живых ссылок |
 
 ## Критерии приёмки
 
