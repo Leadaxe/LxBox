@@ -484,6 +484,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           ],
           bottom: TabBar(
             controller: _tabs,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: getLocalText.s("Settings")),
               Tab(text: getLocalText.s("Source")),
@@ -507,6 +509,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                     liveTag: TagResolver.displayTag(
                         widget.entry.list.tagPrefix, _originalTag),
                     warnings: _notifications,
+                    scrollToNotifications: widget.initialTab ==
+                        NodeSettingsScreen.diagnosticsTabIndex,
                   ),
                 ],
               ),

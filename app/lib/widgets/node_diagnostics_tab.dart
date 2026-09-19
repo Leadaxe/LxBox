@@ -31,8 +31,12 @@ import 'safe_bottom.dart';
 /// [liveTag] — тег узла в БОЕВОМ конфиге (с префиксом списка). По нему ядро
 /// адресует узел, не переключая активный selector.
 ///
-/// [warnings] — уведомления узла (§501): при непустом списке сверху секция
-/// Notifications, иначе секция не показывается.
+/// [warnings] — уведомления узла (§501): при непустом списке снизу секция
+/// Notifications (под Check/Endpoint/Run), иначе секция не показывается.
+///
+/// [scrollToNotifications] — после первого кадра прокрутить к секции (лист
+/// страховки и прочие переходы «к уведомлениям»); при обычном открытии вкладки
+/// — false.
 class NodeDiagnosticsTab extends StatefulWidget {
   const NodeDiagnosticsTab({
     super.key,
@@ -40,11 +44,13 @@ class NodeDiagnosticsTab extends StatefulWidget {
     this.node,
     this.header,
     this.warnings = const [],
+    this.scrollToNotifications = false,
   });
 
   final NodeSpec? node;
   final String liveTag;
   final List<NodeWarning> warnings;
+  final bool scrollToNotifications;
 
   /// §394 — блок, специфичный для ЭТОГО вида узла, над общей секцией «Check».
   /// Сейчас единственный такой блок — послойная проба цепочки (её показывает
@@ -67,6 +73,29 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
   /// не поднялась probe-сессия). Отличается от состоявшегося обмена с плохим
   /// статусом — тот лежит в [_outcome] и ошибкой не считается.
   String _error = '';
+
+  final _notificationsSectionKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.scrollToNotifications && widget.warnings.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToNotificationsSection();
+      });
+    }
+  }
+
+  void _scrollToNotificationsSection() {
+    final ctx = _notificationsSectionKey.currentContext;
+    if (ctx == null) return;
+    unawaited(Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      alignment: 0.0,
+    ));
+  }
 
   @override
   void dispose() {
@@ -124,11 +153,6 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24).withSafeBottom(context),
       children: [
-        if (warnings.isNotEmpty) ...[
-          _sectionHeader(getLocalText.s("Notifications"), theme),
-          NodeNotificationsView(warnings),
-          const SizedBox(height: 24),
-        ],
         if (widget.header != null) ...[
           widget.header!,
           const SizedBox(height: 24),
@@ -286,6 +310,14 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
                 ),
               ),
           ],
+        ],
+        if (warnings.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          KeyedSubtree(
+            key: _notificationsSectionKey,
+            child: _sectionHeader(getLocalText.s("Notifications"), theme),
+          ),
+          NodeNotificationsView(warnings),
         ],
       ],
     );

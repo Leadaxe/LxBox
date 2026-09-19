@@ -367,12 +367,22 @@ void main() {
       expect(tile.enabled, isTrue);
       expect(tile.trailing, isA<Text>());
 
+      const viewportHeight = 480.0;
+      tester.view.physicalSize = const Size(360, viewportHeight);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       await tester.tap(find.widgetWithText(ListTile, 'Frankfurt'));
       await tester.pumpAndSettle();
 
       expect(find.byType(NodeInspectScreen), findsOneWidget);
       expect(find.byType(NodeNotificationsView), findsOneWidget);
       expect(find.text('The core rejected this server'), findsOneWidget);
+      final notifHeader = find.text('Notifications');
+      final rect = tester.getRect(notifHeader);
+      expect(rect.top, greaterThanOrEqualTo(0));
+      expect(rect.top, lessThan(viewportHeight));
     });
 
     testWidgets(

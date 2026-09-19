@@ -608,6 +608,11 @@ void main() {
   group('§501 — уведомления во вкладке Diagnostics', () {
     setUp(() => LocaleController.I.setting = 'en');
 
+    bool isInViewport(WidgetTester tester, Finder finder, double height) {
+      final rect = tester.getRect(finder);
+      return rect.top >= 0 && rect.top < height;
+    }
+
     NodeSpec inspectNode(List<NodeWarning> warnings) => VlessSpec(
           id: 'n1',
           tag: 'n1',
@@ -718,6 +723,90 @@ void main() {
         ),
         findsNothing,
       );
+    });
+
+    testWidgets('секция Notifications ниже кнопки Run', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: NodeDiagnosticsTab(
+            liveTag: 'n1',
+            warnings: const [_warnTransport],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final runY = tester.getTopLeft(find.text('Run')).dy;
+      final notifY = tester.getTopLeft(
+        find.descendant(
+          of: find.byType(NodeDiagnosticsTab),
+          matching: find.text('Notifications'),
+        ),
+      ).dy;
+      expect(notifY, greaterThan(runY));
+    });
+
+    testWidgets('переход на Diagnostics с уведомлениями — прокрутка к секции',
+        (tester) async {
+      const viewportHeight = 480.0;
+      tester.view.physicalSize = const Size(360, viewportHeight);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(MaterialApp(
+        home: NodeInspectScreen(
+          node: inspectNode(const [_warnTransport]),
+          initialTab: NodeInspectTab.diagnostics,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final notif = find.descendant(
+        of: find.byType(NodeDiagnosticsTab),
+        matching: find.text('Notifications'),
+      );
+      expect(notif, findsOneWidget);
+      expect(isInViewport(tester, notif, viewportHeight), isTrue);
+    });
+
+    testWidgets('обычное открытие Diagnostics — без автопрокрутки к уведомлениям',
+        (tester) async {
+      const viewportHeight = 480.0;
+      tester.view.physicalSize = const Size(360, viewportHeight);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpInspect(tester, inspectNode(const [_warnTransport]));
+      await openDiagnosticsTab(tester);
+
+      final run = find.text('Run');
+      expect(isInViewport(tester, run, viewportHeight), isTrue);
+    });
+
+    testWidgets('360dp — ярлыки вкладок не наезжают друг на друга',
+        (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpInspect(tester, inspectNode(const [_warnTransport]));
+
+      final labels = ['JSON', 'Source', 'Diagnostics'];
+      final rects = labels
+          .map((l) => tester.getRect(find.text(l)))
+          .toList();
+      for (var i = 0; i < rects.length; i++) {
+        for (var j = i + 1; j < rects.length; j++) {
+          expect(
+            rects[i].overlaps(rects[j]),
+            isFalse,
+            reason: '${labels[i]} vs ${labels[j]}',
+          );
+        }
+      }
     });
   });
 

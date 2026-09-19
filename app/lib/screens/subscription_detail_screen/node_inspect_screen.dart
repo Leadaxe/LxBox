@@ -118,6 +118,8 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
               node: _node,
               liveTag: TagResolver.displayTag(widget.tagPrefix, _node.tag),
               warnings: warnings,
+              scrollToNotifications:
+                  widget.initialTab == NodeInspectTab.diagnostics,
             ),
           ],
         ),
