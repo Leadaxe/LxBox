@@ -691,6 +691,42 @@ void main() {
       );
     }, skip: skip);
 
+    test('int_array: границы min/max относятся к ЭЛЕМЕНТУ', () {
+      // `peers[].reserved` — три БАЙТА (`min: 0, max: 255, len: 3`). Прежде
+      // ветка списка проверяла только длину и возвращалась, границы не
+      // смотрел никто: `reserved=1,2,999` уезжал в ядро целым числом,
+      // которое в байт не влезает.
+      Map<String, dynamic> wg(List<Object> reserved) => {
+            'type': 'wireguard',
+            'tag': 'wg',
+            'private_key': 'ccccccccccccccccccccccccccccccccccccccccccA=',
+            'address': ['10.0.0.3/32'],
+            'peers': [
+              {
+                'public_key': 'ddddddddddddddddddddddddddddddddddddddddddA=',
+                'address': 'h.example',
+                'port': 51820,
+                'allowed_ips': ['0.0.0.0/0'],
+                'reserved': reserved,
+              }
+            ],
+          };
+
+      final bad = _san(wg([1, 2, 999]), scheme: 'wireguard');
+      expect(_codes(bad), contains('type_invalid'));
+      expect(
+        ((bad.body?['peers'] as List?)?.first as Map?)?.containsKey('reserved'),
+        isFalse,
+        reason: 'элемент вне 0..255 — поле снято целиком',
+      );
+
+      // Контраст: те же три элемента внутри границ проходят нетронутыми.
+      final ok = _san(wg([1, 2, 3]), scheme: 'wireguard');
+      expect(_codes(ok), isNot(contains('type_invalid')));
+      expect(((ok.body?['peers'] as List).first as Map)['reserved'],
+          [1, 2, 3]);
+    }, skip: skip);
+
     test('normalize base64_std: неканоническая форма приводится к канону', () {
       // Та же пара байт, но у поля объявлен `normalize: base64_std` — здесь
       // канон ОБЯЗАН встать, иначе одна нода даёт два identity-хеша (D-030).

@@ -1203,6 +1203,21 @@ final class _Ctx {
     // `len` у массива — число элементов (`reserved`: ровно три).
     if (v is List) {
       if (len != null && v.length != len) return v;
+      // `min`/`max` у массива относятся к ЭЛЕМЕНТУ, а не к длине: длину
+      // задаёт `len`, и второго смысла у границ быть не может. Прежде ветка
+      // списка возвращалась здесь же, и границы не проверялись ВОВСЕ —
+      // `reserved=1,2,999` уезжал в ядро, хотя у `peers[].reserved`
+      // объявлено `0..255` (байт). Нарушителем считается сам элемент: его
+      // и показываем человеку, а не весь массив.
+      final min = f.min;
+      final max = f.max;
+      if (min != null || max != null) {
+        for (final e in v) {
+          if (e is! num) continue;
+          if (min != null && e < min) return e;
+          if (max != null && e > max) return e;
+        }
+      }
       return null;
     }
     if (v is String) {
