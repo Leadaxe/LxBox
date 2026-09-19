@@ -2844,6 +2844,9 @@
   "Nodes with their own detour keep it; this outbound is set only where none is defined": {
     "value": "有自己 detour 的节点保持不变；此出站只在未定义 detour 处设置"
   },
+  "New": {
+    "value": "新"
+  },
   "Non-matching hidden": {
     "value": "不匹配项已隐藏"
   },

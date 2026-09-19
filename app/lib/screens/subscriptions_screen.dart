@@ -80,15 +80,34 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   /// практически всегда). На Android TV — false, пункт прячется.
   bool? _hasCamera;
 
-  // §255 — прокрутка к владельцу + вспышка строки (навигация из detour-cycle
-  // sheet). Локальная (в этом экране нет HomeState для персистентного кольца) —
-  // таймер-вспышка, гаснет сама.
+  // §255 / §504 — прокрутка к строке + подсветка. Локальная (в хранилище не
+  // пишется): focusEntryId (detour-cycle) или свежедобавленная запись.
   final _scrollController = ScrollController();
   final _tileKeys = <String, GlobalKey>{};
   String? _highlightedEntryId;
+  _HighlightMode _highlightMode = _HighlightMode.none;
+  double _highlightOpacity = 0;
+  double? _highlightScrollBaseline;
   Timer? _highlightTimer;
+  Timer? _highlightFadeTimer;
+
+  /// §504 — programmatic clear поля после add не снимает подсветку.
+  bool _ignoreInputDismiss = false;
+
+  /// §504 — ensureVisible/jumpTo к новой записи не считается ручным скроллом.
+  bool _programmaticScroll = false;
 
   GlobalKey _tileKey(String id) => _tileKeys.putIfAbsent(id, GlobalKey.new);
+
+  Set<String> _entryIds(SubscriptionController ctrl) =>
+      ctrl.entries.map((e) => e.id).toSet();
+
+  String? _firstNewEntryId(Set<String> before, SubscriptionController ctrl) {
+    for (final e in ctrl.entries) {
+      if (!before.contains(e.id)) return e.id;
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -101,6 +120,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (prefill != null && prefill.trim().isNotEmpty) {
       _inputController.text = prefill.trim();
     }
+    _inputController.addListener(_onInputForHighlightDismiss);
+    _scrollController.addListener(_onScrollForHighlightDismiss);
     final focus = widget.focusEntryId;
     if (focus != null) {
       WidgetsBinding.instance
@@ -108,19 +129,78 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
+  void _onInputForHighlightDismiss() {
+    if (_ignoreInputDismiss) return;
+    if (_highlightMode == _HighlightMode.newEntry) {
+      _dismissHighlight(animated: true);
+    }
+  }
+
+  void _onScrollForHighlightDismiss() {
+    if (_programmaticScroll) return;
+    if (_highlightMode != _HighlightMode.newEntry) return;
+    if (!_scrollController.hasClients) return;
+    final baseline = _highlightScrollBaseline;
+    if (baseline == null) return;
+    final screenH = MediaQuery.sizeOf(context).height;
+    if ((_scrollController.offset - baseline).abs() > screenH) {
+      _dismissHighlight(animated: true);
+    }
+  }
+
+  void _onUserInteractionDismissHighlight() {
+    if (_highlightMode == _HighlightMode.newEntry) {
+      _dismissHighlight(animated: true);
+    }
+  }
+
+  void _dismissHighlight({required bool animated}) {
+    _highlightTimer?.cancel();
+    _highlightFadeTimer?.cancel();
+    if (_highlightedEntryId == null) return;
+    if (!animated || _highlightMode != _HighlightMode.newEntry) {
+      if (!mounted) return;
+      setState(() {
+        _highlightedEntryId = null;
+        _highlightMode = _HighlightMode.none;
+        _highlightOpacity = 0;
+        _highlightScrollBaseline = null;
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _highlightOpacity = 0);
+    _highlightFadeTimer = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      setState(() {
+        _highlightedEntryId = null;
+        _highlightMode = _HighlightMode.none;
+        _highlightScrollBaseline = null;
+      });
+    });
+  }
+
   /// §255 — скролл к строке владельца + вспышка. Retry по кадрам: строка за
   /// вьюпортом в lazy-списке не смонтирована (currentContext null); грубо
   /// прыгаем по оценке позиции и повторяем ensureVisible.
-  void _focusEntry(String id, {required int attempt}) {
+  Future<void> _focusEntry(String id, {required int attempt}) async {
     if (!mounted) return;
-    if (attempt == 0) setState(() => _highlightedEntryId = id);
+    if (attempt == 0) {
+      _highlightTimer?.cancel();
+      _highlightFadeTimer?.cancel();
+      setState(() {
+        _highlightedEntryId = id;
+        _highlightMode = _HighlightMode.focus;
+        _highlightOpacity = 1;
+      });
+    }
     const maxAttempts = 6;
     final ctx = _tileKeys[id]?.currentContext;
     if (ctx != null) {
-      unawaited(Scrollable.ensureVisible(ctx,
+      await Scrollable.ensureVisible(ctx,
           duration: const Duration(milliseconds: 350),
           curve: Curves.easeOutCubic,
-          alignment: 0.3));
+          alignment: 0.3);
     } else if (attempt < maxAttempts && _scrollController.hasClients) {
       final idx = widget.subController.entries.indexWhere((e) => e.id == id);
       if (idx >= 0) {
@@ -134,8 +214,60 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
     _highlightTimer?.cancel();
     _highlightTimer = Timer(const Duration(milliseconds: 2200), () {
-      if (mounted) setState(() => _highlightedEntryId = null);
+      _dismissHighlight(animated: false);
     });
+  }
+
+  /// §504 — после успешного add: подсветка + прокрутка к новой записи.
+  Future<void> _beginNewEntryHighlight(String id) async {
+    if (!mounted) return;
+    _highlightTimer?.cancel();
+    _highlightFadeTimer?.cancel();
+    setState(() {
+      _highlightedEntryId = id;
+      _highlightMode = _HighlightMode.newEntry;
+      _highlightOpacity = 1;
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    _programmaticScroll = true;
+    await _scrollToEntry(id);
+    _programmaticScroll = false;
+    if (!mounted) return;
+    _highlightScrollBaseline =
+        _scrollController.hasClients ? _scrollController.offset : 0;
+    _highlightTimer = Timer(const Duration(seconds: 7), () {
+      _dismissHighlight(animated: true);
+    });
+  }
+
+  /// Прокрутка к строке записи (~300 мс, ближе к центру — не под SnackBar).
+  ///
+  /// ensureVisible не ждём до конца Future: в widget-тестах без pump'ов это
+  /// зависает, а SnackBar должен выйти после анимации — хватает длительности.
+  Future<void> _scrollToEntry(String id, {int attempt = 0}) async {
+    if (!mounted) return;
+    final ctx = _tileKeys[id]?.currentContext;
+    if (ctx != null) {
+      unawaited(Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        alignment: 0.45,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      return;
+    }
+    if (attempt < 6 && _scrollController.hasClients) {
+      final idx = widget.subController.entries.indexWhere((e) => e.id == id);
+      if (idx >= 0) {
+        final target = (idx * 88.0)
+            .clamp(0.0, _scrollController.position.maxScrollExtent);
+        _scrollController.jumpTo(target);
+      }
+      await WidgetsBinding.instance.endOfFrame;
+      return _scrollToEntry(id, attempt: attempt + 1);
+    }
   }
 
   Future<void> _loadAutoUpdateFlag() async {
@@ -321,10 +453,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   @override
+  void deactivate() {
+    _dismissHighlight(animated: false);
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
+    _inputController.removeListener(_onInputForHighlightDismiss);
+    _scrollController.removeListener(_onScrollForHighlightDismiss);
     _inputController.dispose();
     _scrollController.dispose();
     _highlightTimer?.cancel();
+    _highlightFadeTimer?.cancel();
     super.dispose();
   }
 
@@ -359,10 +500,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   /// `addUserServer`/`addFromInput`; после successful add — callback
   /// делает `_regenerateAndSave` тут.
   void _openAddServerWizard() {
+    final baseline = _entryIds(widget.subController);
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => AddServerWizardScreen(
         subController: widget.subController,
-        onAdded: _regenerateAndSave,
+        onAdded: () => _regenerateAndSave(entryBaseline: baseline),
       ),
     ));
   }
@@ -376,10 +518,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   /// §025 — открыть full-screen визард Cloudflare WARP.
   void _openWarpWizard() {
+    final baseline = _entryIds(widget.subController);
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => WarpWizardScreen(
         subController: widget.subController,
-        onAdded: _regenerateAndSave,
+        onAdded: () => _regenerateAndSave(entryBaseline: baseline),
       ),
     ));
   }
@@ -402,10 +545,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       await _pasteFromClipboard();
       return;
     }
+    final baseline = _entryIds(widget.subController);
     await widget.subController.addFromInput(text);
     if (widget.subController.lastError == null) {
+      _ignoreInputDismiss = true;
       _inputController.clear();
-      await _regenerateAndSave();
+      _ignoreInputDismiss = false;
+      await _regenerateAndSave(entryBaseline: baseline);
     } else {
       _presentParseRejectSheetIfNeeded();
     }
@@ -413,7 +559,10 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   /// После любого add'а — пересобрать конфиг и сохранить, чтобы новые
   /// узлы попали в выбираемые group'ы без ручного нажатия rebuild.
-  Future<void> _regenerateAndSave() async {
+  ///
+  /// [entryBaseline] — id записей до add; при успехе §504 прокручивает к первой
+  /// новой и подсвечивает её, SnackBar — после прокрутки.
+  Future<void> _regenerateAndSave({Set<String>? entryBaseline}) async {
     final config = await widget.subController.generateConfig();
     if (!mounted || config == null) return;
     await widget.homeController.saveParsedConfig(config);
@@ -429,6 +578,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     // последняя по баннеру, как раньше.
     final applied = widget.homeController.canReload;
     if (applied) unawaited(widget.homeController.reloadVpn());
+    final newEntryId = entryBaseline == null
+        ? null
+        : _firstNewEntryId(entryBaseline, widget.subController);
+    if (newEntryId != null) {
+      await _beginNewEntryHighlight(newEntryId);
+      if (!mounted) return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(applied
@@ -461,10 +617,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final confirmed = await showConfirmAddDialog(context, analysis);
 
     if (confirmed != true || !mounted) return;
+    final baseline = _entryIds(widget.subController);
     await widget.subController.addFromInput(text);
     final addErr = widget.subController.lastError;
     if (addErr == null) {
-      await _regenerateAndSave();
+      await _regenerateAndSave(entryBaseline: baseline);
     } else if (mounted) {
       _presentParseRejectSheetIfNeeded();
       if (addErr is! ParseInputRejectedMsg || !addErr.hasDropped) {
@@ -509,11 +666,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final confirmed = await showConfirmAddDialog(context, analysis);
     if (confirmed != true || !mounted) return;
 
+    final baseline = _entryIds(widget.subController);
     await widget.subController
         .addFromInput(text, origin: UserSource.qr);
     final addErr = widget.subController.lastError;
     if (addErr == null) {
-      await _regenerateAndSave();
+      await _regenerateAndSave(entryBaseline: baseline);
     } else if (mounted) {
       _presentParseRejectSheetIfNeeded();
       if (addErr is! ParseInputRejectedMsg || !addErr.hasDropped) {
@@ -528,7 +686,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   Future<void> _createFolder() async {
     final name = await showFolderNameDialog(context);
     if (name == null) return;
+    final baseline = _entryIds(widget.subController);
     await widget.subController.addFolder(name);
+    if (!mounted) return;
+    final newId = _firstNewEntryId(baseline, widget.subController);
+    if (newId != null) await _beginNewEntryHighlight(newId);
   }
 
   /// Импорт подписки/конфига из файла. Содержимое (URI-список, JSON-конфиг,
@@ -565,6 +727,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         return;
       }
       if (!mounted) return;
+      final baseline = _entryIds(widget.subController);
       // §129 — если в файле > 1 ноды, создаём ФАЙЛОВУЮ подписку (снапшот в
       // кэше, живёт как обычная подписка). ≤ 1 ноды → старое поведение
       // (addFromInput → одиночный сервер/нода).
@@ -581,7 +744,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       }
       final importErr = widget.subController.lastError;
       if (importErr == null) {
-        await _regenerateAndSave();
+        await _regenerateAndSave(entryBaseline: baseline);
       } else if (mounted) {
         _presentParseRejectSheetIfNeeded();
         if (importErr is! ParseInputRejectedMsg || !importErr.hasDropped) {
@@ -606,6 +769,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final name = await showFolderNameDialog(context,
         title: getLocalText.plural("Import %d files into folder", files.length));
     if (name == null || !mounted) return;
+    final baseline = _entryIds(widget.subController);
     await widget.subController.addFolder(name);
     final folderIndex = widget.subController.entries.length - 1;
     var addedFiles = 0;
@@ -634,7 +798,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       );
     }
     if (addedFiles > 0) {
-      await _regenerateAndSave();
+      await _regenerateAndSave(entryBaseline: baseline);
     }
   }
 
@@ -804,6 +968,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           Expanded(
             child: TextField(
               controller: _inputController,
+              onChanged: (_) => _onInputForHighlightDismiss(),
               decoration: InputDecoration(
                 hintText: getLocalText.s("Subscription URL or proxy link"),
                 border: const OutlineInputBorder(),
@@ -893,6 +1058,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       buildDefaultDragHandles: false,
       itemCount: rows.length,
       onReorderItem: (oldIndex, newIndex) {
+        _onUserInteractionDismissHighlight();
         // onReorderItem уже нормализует newIndex под удалённый элемент.
         unawaited(_reorderRows(ctrl, oldIndex, newIndex));
       },
@@ -913,30 +1079,39 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         final entry = row.entry!;
         final at = row.entryIndex;
         final highlighted = _highlightedEntryId == entry.id;
+        final showNewBadge = highlighted &&
+            _highlightMode == _HighlightMode.newEntry &&
+            _highlightOpacity > 0;
         final cs = Theme.of(context).colorScheme;
-        // §255 — reorder-key остаётся top-level (KeyedSubtree); GlobalKey для
-        // ensureVisible + вспышка — на внутреннем Container.
+        // §255 / §504 — reorder-key остаётся top-level (KeyedSubtree);
+        // GlobalKey для ensureVisible + подсветка — на внутреннем Container.
         return KeyedSubtree(
           key: ValueKey(entry.id),
           child: AnimatedContainer(
             key: _tileKey(entry.id),
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 400),
             decoration: highlighted
                 ? BoxDecoration(
-                    color: cs.primaryContainer.withValues(alpha: 0.5),
-                    border: Border(
-                        left: BorderSide(color: cs.primary, width: 3)),
+                    color: cs.primaryContainer
+                        .withValues(alpha: 0.5 * _highlightOpacity),
+                    border: _highlightMode == _HighlightMode.focus
+                        ? Border(
+                            left: BorderSide(color: cs.primary, width: 3))
+                        : null,
                   )
                 : null,
             child: SubscriptionEntryTile(
               dragIndex: i,
               entry: entry,
+              showNewBadge: showNewBadge,
               onToggle: () {
+                _onUserInteractionDismissHighlight();
                 unawaited(widget.subController.toggleAt(at));
               },
               onLaunchUrl: _launchUrl,
               onLongPress: (context) => _showContextMenu(context, at, entry),
               onTap: (context) {
+                _onUserInteractionDismissHighlight();
                 // §234 — папка открывает свой экран (члены + settings).
                 if (entry.list is FolderServers) {
                   Navigator.push(
@@ -1018,6 +1193,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     await widget.subController.moveEntry(rows[oldIndex].entryIndex, to);
   }
 }
+
+/// §255 — навигация из detour-cycle sheet. §504 — свежедобавленная запись.
+enum _HighlightMode { none, focus, newEntry }
 
 /// §393 D1 — ряд общего списка источников: либо запись контроллера
 /// (подписка/сервер/папка), либо цепочка. Ровно два рода, поэтому обычный

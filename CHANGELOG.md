@@ -20,6 +20,14 @@
 ### Changed
 
 - **Лист «N servers disabled» ведёт в детали узла на вкладке Diagnostics
+- **Новая запись на экране Servers: прокрутка и подсветка (§504).** После
+  успешного добавления источника (поле «+», буфер, QR, файл, визард) список
+  плавно прокручивается к новой строке (выше SnackBar пересборки конфига),
+  строка подсвечивается и помечается «New»; подсветка снимается по действию
+  пользователя, уходу с экрана или через 7 с. При отказе ввода (§500) —
+  без прокрутки.
+
+- **Лист «N servers disabled» ведёт в детали узла на вкладке Notifications
   ([§498](docs/spec/tasks/498-core-reject-list-navigation.md),
   [§501](docs/spec/tasks/501-diagnostics-notifications-merge.md),
   [§503](docs/spec/tasks/503-core-reject-list-disabled-node-navigation.md),

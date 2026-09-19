@@ -3034,6 +3034,9 @@
   "Nodes with their own detour keep it; this outbound is set only where none is defined": {
     "value": "Узлы со своим detour сохраняют его; этот исходящий канал назначается только там, где detour не задан"
   },
+  "New": {
+    "value": "Новое"
+  },
   "Non-matching hidden": {
     "value": "Несовпадающие скрыты"
   },

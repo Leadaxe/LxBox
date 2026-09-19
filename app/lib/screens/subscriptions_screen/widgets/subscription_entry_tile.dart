@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
+import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../entry_warnings.dart';
 import 'subscription_entry_subtitle.dart';
@@ -18,9 +19,13 @@ class SubscriptionEntryTile extends StatelessWidget {
     required this.onLaunchUrl,
     required this.onLongPress,
     required this.onTap,
+    this.showNewBadge = false,
   });
 
   final SubscriptionEntry entry;
+
+  /// §504 — метка «New» у свежедобавленной записи (локальная подсветка экрана).
+  final bool showNewBadge;
 
   /// Индекс в `ReorderableListView` для drag-старта (§098).
   final int dragIndex;
@@ -79,6 +84,28 @@ class SubscriptionEntryTile extends StatelessWidget {
               ),
             ),
           ),
+          if (showNewBadge)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  child: Text(
+                    getLocalText.s('New'),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (entry.supportUrl.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 4),
