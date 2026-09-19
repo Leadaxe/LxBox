@@ -3,26 +3,6 @@
   "_overlay": true,
   "blocks": {
     "uri": {
-      "pbk": {
-        "source": "query.pbk",
-        "selector": true,
-        "maps_to": "tls.reality.public_key",
-        "decode_extra": {
-          "plus_literal": true
-        },
-        "implies": {
-          "tls.enabled": true,
-          "tls.reality.enabled": true
-        },
-        "when": {
-          "$type": {
-            "not_in": [
-              "trojan"
-            ]
-          }
-        },
-        "impl": "КРАСНЫЙ КЕЙС trojan/reality_full. Общий блок tls#uri отдаёт REALITY всем схемам, включая trojan, и тело рабочего узла получает блок reality, которого в нём не было. В реестре самого лаунчера (protocols/trojan.json → query.security.impl) записано обратное: «REALITY у trojan-URI не разбирается ни одним проектом; pbk игнорируется, reality приезжает только через sing-box/Xray-импорт». Дельты на снятие этого нет. До ответа лаунчера запись сужена по типу тела."
-      },
       "ech": {
         "source": "query.ech",
         "maps_to": null,
