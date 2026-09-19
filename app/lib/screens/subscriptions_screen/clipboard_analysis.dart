@@ -149,11 +149,16 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
       );
 
     case JsonFlavor.xrayArray:
+      // §480 Д-3 — документ Xray бывает и объектом (одиночный outbound,
+      // полный конфиг), а не только массивом конфигов. Счёт по `value` как
+      // по списку дал бы таким формам «0 elements»: пересчитываем по
+      // разобранным узлам, как это делает ветка sing-box выше.
       final list = j.value is List ? j.value as List : const [];
+      final count = list.isNotEmpty ? list.length : parseAll(j).length;
       return ClipboardAnalysis(
         type: 'json_outbound',
         title: 'Xray config',
-        subtitle: '${list.length} elements',
+        subtitle: '$count elements',
       );
 
     case JsonFlavor.clashYaml:

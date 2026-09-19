@@ -165,8 +165,19 @@ DecodedBody _classifyByKind(DocumentMatch match) {
 ///
 /// Перевод, а не решение: формы JSON перечислены в `parse_all` и уровню
 /// документа не принадлежат. Один незнакомый `kind` — `unknown`, как и было.
+///
+/// §480 Д-3 — ЧЕТЫРЕ вида Xray переводятся в ОДИН `xrayArray`. `flavor` не
+/// различает обёртку документа, он отвечает на вопрос «какой диалект»:
+/// обход элементов идёт по `elements` ветки реестра, а не по нему. Читатели
+/// же (`_addJsonNodes`, превью буфера, `tailscale_split`) спрашивают именно
+/// диалект, и новый вид, переведённый в `unknown`, они бы отвергли — вход
+/// остался бы нерабочим, хотя ветка его опознала.
 JsonFlavor _flavorOf(String kind) => switch (kind) {
-      'xray_config_array' => JsonFlavor.xrayArray,
+      'xray_config_array' ||
+      'xray_config' ||
+      'xray_outbound' ||
+      'xray_outbound_array' =>
+        JsonFlavor.xrayArray,
       'singbox_config_array' => JsonFlavor.singboxMulti,
       'singbox_outbound_array' => JsonFlavor.singboxArray,
       'singbox_outbound' => JsonFlavor.singboxOutbound,
