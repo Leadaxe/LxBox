@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import '../../../models/custom_rule.dart';
 import '../../app_log.dart';
 import '../../automation/handlers.dart' as automation;
-import '../../core_reject/core_reject_guard.dart';
 import '../../core_reject/core_reject_runner.dart';
+import '../../core_reject/core_reject_state.dart';
 import '../../error_humanize.dart';
 import '../../platform_channels.dart';
 import '../../../vpn/box_vpn_client.dart';
@@ -285,21 +285,18 @@ Future<DebugResponse> _startVpnHeadless(
       'guard': false,
     });
   }
+  if (CoreRejectState.I.guardActive) {
+    throw const Conflict('guard already running');
+  }
   final home = ctx.requireHome();
   final sub = ctx.requireSub();
-  final run = await runCoreRejectGuard(home: home, sub: sub);
+  // Однопоточный HTTP-сервер не должен висеть на всём прогоне: стартуем
+  // асинхронно, состояние читается через GET /core_reject.
+  unawaited(runCoreRejectGuard(home: home, sub: sub));
   return _ok('start-vpn-headless', {
     'guard': true,
-    'started': run.started,
-    'outcome': switch (run.outcome) {
-      CoreRejectOutcome.startedClean => 'started_clean',
-      CoreRejectOutcome.startedWithDisabled => 'started_with_disabled',
-      CoreRejectOutcome.failed => 'failed',
-      CoreRejectOutcome.stoppedByUser => 'stopped_by_user',
-    },
-    'rounds': run.rounds,
-    'disabled': [for (final d in run.disabled) d.toJson()],
-    'error': run.error,
+    'started': true,
+    'async': true,
   });
 }
 

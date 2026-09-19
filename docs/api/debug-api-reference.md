@@ -227,7 +227,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
 | `POST /action/start-vpn` | — | `home.start()` (через Activity, с VpnService.prepare dance — может показать consent-диалог) |
-| `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку**: тот же автомат, что на кнопке Start (`core_reject_runner.dart`), отказ ядра с названным узлом выключает его и запускает тихий цикл `checkConfig`. → `{guard:true, started, outcome, rounds, disabled:[{tag,reason}], error}`. Диалога предела кругов здесь нет — спрашивать некого, предел остаётся пределом; ответить заранее можно через `POST /core_reject/prompt?answer=keep`. Без флага — прежний путь |
+| `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
 | `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig` по **текущему собранному** конфигу (тому, что лежит на диске, а не пересобранному на лету): та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает CANON §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
 | `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра) |
 | `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
@@ -599,12 +599,16 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 | `/nodes/link?tag=<tag>` | GET | экспорт узла ссылкой — ровно то, что кладёт в буфер `Copy link` (`NodeSpec.toUri()`) |
 
 ```bash
-curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7" | jq
+curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7&reveal=true" | jq
 # → {"tag":"node-7","protocol":"vless","uri":"vless://…","private_key":false}
+curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7" | jq
+# → {"tag":"node-7","protocol":"vless","private_key":false,"error":"reveal required"}
 ```
 
 - `tag` принимается и «как в конфиге» (с префиксом подписки), и голым: экран
   адресует узлы первым, хранение — вторым. Звенья цепочки (§404) тоже ищутся.
+- `uri` несёт credentials → только с `?reveal=true` (симметрично `/subs/{id}` и
+  `raw` члена папки). Без флага → `{error:"reveal required"}`.
 - `private_key: true` — ссылка несёт приватный ключ владельца. На экране это
   поднимает диалог (§466); здесь предупреждение не теряется, а становится
   данными.
@@ -968,9 +972,9 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 | `/core_reject/banner` | GET | плашка «выключено N»: `{visible, count, nodes:[{tag,reason}]}` |
 | `/core_reject/banner/dismiss` | POST | закрыть плашку (идемпотентно) |
 | `/core_reject/prompt` | GET | вопрос про предел кругов: `{pending, count, limit}` |
-| `/core_reject/prompt?answer=stop\|keep` | POST | ответить на него за человека |
+| `/core_reject/prompt?answer=stop\|keep` | POST | ответить на него за человека; `keep` можно поставить в очередь заранее |
 | `/core_reject/cancel` | POST | отменить идущий прогон — то же, что нажатие кнопки в фазе цикла |
-| `/core_reject/enable?tag=<tag>` | POST | снять вердикт руками, узел проверится заново |
+| `/core_reject/enable?tag=<tag>` | POST | снять вердикт руками (emitted-тег ядра или сырой тег идентичности) |
 | `/core_reject/notifications[?tag=<tag>]` | GET | что нарисуют строка и карточка узла: `[{code, severity, params, title_en, text_en}]` |
 
 `GET /core_reject`:
@@ -1026,7 +1030,8 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 
 ```bash
 # Довести ядро до отказа и смотреть, что делает автомат
-curl -X POST -H "$HDR" "$BASE/action/start-vpn-headless"
+curl -X POST -H "$HDR" "$BASE/core_reject/prompt?answer=keep"   # снять предел заранее
+curl -X POST -H "$HDR" "$BASE/action/start-vpn-headless?guard=true"
 curl -s -H "$HDR" "$BASE/core_reject" | jq
 
 # Если автомат уперся в предел кругов — ответить за человека
@@ -1045,9 +1050,9 @@ curl -X POST -H "$HDR" "$BASE/core_reject/banner/dismiss"
 ```
 
 **Quirks:**
-- `POST /core_reject/prompt` без висящего вопроса → 409 `conflict`. Ответ в
-  пустоту значил бы, что автомат ждёт чего-то другого, — молча это не
-  проглатывается.
+- `POST /core_reject/prompt?answer=keep` без висящего вопроса → `{queued:true}`
+  (ответ ждёт следующего `askPrompt`). `answer=stop` без вопроса → 409.
+- `POST /action/start-vpn-headless?guard=true` при уже идущем прогоне → 409.
 - `answer` вне `stop|keep` → 400; `keep_checking` принимается синонимом `keep`.
 - `POST /core_reject/enable` с тегом, которого нет ни у одного узла → 404.
 - `GET /core_reject/notifications?tag=` с тегом без хранимых записей → 404

@@ -272,6 +272,8 @@ final class CoreRejectGuard {
       _host.onProgress(CoreRejectPhase.checking, _round,
           disabledNodes: List.unmodifiable(_disabled));
 
+      if (_cancelled) return _finish(CoreRejectOutcome.stoppedByUser);
+
       if (verdict.ok) break; // чисто → финальный старт
 
       if (verdict.bridgeDown) {
@@ -287,6 +289,7 @@ final class CoreRejectGuard {
     }
 
     // ── реальный старт ядра (второй, финальный) ─────────────────────────
+    if (_cancelled) return _finish(CoreRejectOutcome.stoppedByUser);
     _to(CoreRejectPhase.finalStart);
     final last = await _host.realStart();
     if (last.ok) {

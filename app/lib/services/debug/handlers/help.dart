@@ -115,11 +115,12 @@ POST /action/start-vpn                         Start the tunnel (via Activity, m
 POST /action/start-vpn-headless[?guard=true]   Start WITHOUT Activity/consent (needs permission already granted)
                                                   → {"started":bool,"needs_consent":bool}. For automation/self-test.
                                                   guard=true (feature 478): start through the core-reject GUARD —
-                                                  the same state machine the Start button runs. A core refusal that
-                                                  names a node disables it and the silent checkConfig loop takes over.
-                                                  → {guard:true, started, outcome, rounds, disabled:[{tag,reason}],
-                                                  error}. No round-limit dialog here (nobody to ask) — the limit
-                                                  holds; answer it up front with POST /core_reject/prompt?answer=keep.
+                                                  the same state machine the Start button runs. Returns immediately
+                                                  → {guard:true, started:true, async:true}; read phase/outcome via
+                                                  GET /core_reject (409 if a run is already in flight). A core
+                                                  refusal that names a node disables it and the silent checkConfig
+                                                  loop takes over. No round-limit dialog on screen — queue
+                                                  POST /core_reject/prompt?answer=keep before or while awaiting.
 POST /action/check-config[?timeout_ms=N]       Run Libbox.checkConfig over the CURRENTLY BUILT config (the one on
                                                   disk, not a fresh rebuild) — the same check the guard loops on,
                                                   once, without a tunnel. → {config_ok:bool, error, ms, bytes}.
@@ -252,12 +253,12 @@ SubscriptionController (fetch-state machine + UI notify), not SettingsStorage di
 
 === Nodes (the emitter's side) ===
 
-GET    /nodes/link?tag=<tag>                   Export the node as a link — exactly what Copy link puts on the
+GET    /nodes/link?tag=<tag>[?reveal=true]     Export the node as a link — exactly what Copy link puts on the
                                                  clipboard (NodeSpec.toUri()). tag is taken either as it stands
                                                  in the config (with the subscription prefix) or bare; chain hops
-                                                 are searched too. → {tag, protocol, uri, private_key}.
-                                                 private_key=true means the link carries the owner's private key
-                                                 (on screen that raises a dialog; here it is data).
+                                                 are searched too. uri carries credentials → only with reveal=true
+                                                 → {tag, protocol, uri, private_key}. Without reveal →
+                                                 {tag, protocol, private_key, error:"reveal required"}.
                                                  Found but not expressible as a link (app-built nodes, groups) →
                                                  {tag, protocol, error:"node has no link form"}, not a 404.
                                                  No such node → 404.
@@ -471,10 +472,11 @@ GET  /core_reject/prompt                       Round-limit dialog: {pending, cou
                                                  number in the dialog text (the round LIMIT, not the
                                                  disabled tally).
 POST /core_reject/prompt?answer=stop|keep      Answer it in place of the user (body {"answer":"..."} also
-                                                 works). keep = drop the limit until this Start ends;
+                                                 works). keep = drop the limit until this Start ends — may be
+                                                 sent BEFORE the dialog is pending (queued for the next ask);
                                                  stop = end the run, VPN stays down, disabled nodes stay
-                                                 disabled. → {answered:true, answer}. 409 when nothing
-                                                 is pending.
+                                                 disabled. → {answered:true, answer} (keep early → queued:true).
+                                                 409 for stop when nothing is pending.
 POST /core_reject/cancel                       Cancel the running guard — the same as tapping the
                                                  button while it says "Checking servers…". The current
                                                  round finishes, the next one does not start; outcome
@@ -684,7 +686,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
-    {'method': 'POST', 'path': '/action/start-vpn-headless', 'params': {'guard': 'true|false (default false)'}, 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}. guard=true (feature 478): start through the core-reject guard — the same state machine the Start button runs → {guard:true, started, outcome, rounds, disabled:[{tag,reason}], error}. No round-limit dialog here (nobody to ask), so answer it up front with POST /core_reject/prompt?answer=keep.'},
+    {'method': 'POST', 'path': '/action/start-vpn-headless', 'params': {'guard': 'true|false (default false)'}, 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}. guard=true (feature 478): start through the core-reject guard asynchronously → {guard:true, started:true, async:true}; read phase/outcome via GET /core_reject (409 if already running). Queue POST /core_reject/prompt?answer=keep before or while awaiting the round-limit dialog.'},
     {'method': 'POST', 'path': '/action/check-config', 'params': {'timeout_ms': 'N (default 10000, capped by the request timeout)'}, 'description': 'Run Libbox.checkConfig over the CURRENTLY BUILT config (the one on disk, not a fresh rebuild) — the same check the guard loops on, once, without a tunnel → {config_ok, error, ms, bytes}. error is the core RAW text (what CANON §9 parses). 409 on timeout.'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
     {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
@@ -730,7 +732,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'DELETE', 'path': '/subs/{id}/rules/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove rule. Indexes shift — rebuild the next call from the returned "rules".'},
     {'method': 'POST', 'path': '/subs/{id}/rules/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder (full permutation of 0..n-1). Order matters: rules apply sequentially, last enable/disable wins.'},
     // Nodes (the emitter's side)
-    {'method': 'GET', 'path': '/nodes/link', 'params': {'tag': '<tag> (required)'}, 'description': 'Export the node as a link — exactly what Copy link puts on the clipboard (NodeSpec.toUri()). tag is taken either as it stands in the config (with the subscription prefix) or bare; chain hops are searched too → {tag, protocol, uri, private_key}. private_key=true means the link carries the owner private key (on screen that raises a dialog; here it is data). Found but not expressible as a link (app-built nodes, groups) → {tag, protocol, error:"node has no link form"}, not a 404. No such node → 404.'},
+    {'method': 'GET', 'path': '/nodes/link', 'params': {'tag': '<tag> (required)', 'reveal': 'true|false (default false)'}, 'description': 'Export the node as a link — exactly what Copy link puts on the clipboard (NodeSpec.toUri()). tag is taken either as it stands in the config (with the subscription prefix) or bare; chain hops are searched too. uri carries credentials → only with reveal=true → {tag, protocol, uri, private_key}. Without reveal → {tag, protocol, private_key, error:"reveal required"}. Found but not expressible as a link (app-built nodes, groups) → {tag, protocol, error:"node has no link form"}, not a 404. No such node → 404.'},
     // Directions CRUD (routing directions)
     {'method': 'GET', 'path': '/directions', 'description': 'List routing directions (storage shape, snake_case)'},
     {'method': 'GET', 'path': '/directions/{tag}', 'description': "Single direction (tag = the direction's outbound tag, e.g. vpn-1 or a custom one)"},
@@ -764,9 +766,9 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/core_reject/banner', 'description': '"N disabled" banner: {visible, count, nodes:[{tag,reason}]}. Raised only on outcome=started_with_disabled.'},
     {'method': 'POST', 'path': '/core_reject/banner/dismiss', 'description': 'Close the banner (idempotent). Verdicts stay — the message was dismissed, not the decision. → {ok, action, visible, count, nodes}'},
     {'method': 'GET', 'path': '/core_reject/prompt', 'description': 'Round-limit dialog: {pending, count, limit}. count is the number in the dialog text (the round LIMIT, not the disabled tally).'},
-    {'method': 'POST', 'path': '/core_reject/prompt', 'params': {'answer': 'stop|keep'}, 'body': '{"answer":"stop|keep"} (alternative to the query param)', 'description': 'Answer the round-limit dialog in place of the user. keep = drop the limit until this Start ends; stop = end the run (VPN stays down, disabled nodes stay disabled). → {answered:true, answer}. 409 when nothing is pending.'},
+    {'method': 'POST', 'path': '/core_reject/prompt', 'params': {'answer': 'stop|keep'}, 'body': '{"answer":"stop|keep"} (alternative to the query param)', 'description': 'Answer the round-limit dialog in place of the user. keep = drop the limit until this Start ends — may be sent BEFORE pending (queued for the next ask); stop = end the run (VPN stays down, disabled nodes stay disabled). → {answered:true, answer} (keep early → queued:true). 409 for stop when nothing is pending.'},
     {'method': 'POST', 'path': '/core_reject/cancel', 'description': 'Cancel the running guard — the same as tapping the button while it says "Checking servers…". The current round finishes, the next one does not start; outcome = stopped_by_user (VPN stays down, disabled nodes stay disabled). → {cancelled:true, phase, round}. 409 when no run is in flight.'},
-    {'method': 'POST', 'path': '/core_reject/enable', 'params': {'tag': 'core tag of the node'}, 'body': '{"tag":"..."} (alternative to the query param)', 'description': 'Re-enable a node by its core tag (same as the banner button): the verdict is wiped and the node is checked again. → {enabled, tag}; 404 when no node carries that tag.'},
+    {'method': 'POST', 'path': '/core_reject/enable', 'params': {'tag': 'core tag of the node'}, 'body': '{"tag":"..."} (alternative to the query param)', 'description': 'Re-enable a node by its core tag — emitted tag (with subscription prefix) or raw identity tag (same lookup as disable). → {enabled, tag}; 404 when no node carries that tag.'},
     {'method': 'GET', 'path': '/core_reject/notifications', 'params': {'tag': 'core tag (omit for every node with stored warnings)'}, 'description': 'What the node row and card will render, without a screenshot: [{code, severity, params, title_en, text_en}]. Texts come from the contract registry, pinned English (a machine surface must not depend on the device locale). No tag → a map {tag: [...]}. 404 when the given tag has no stored warnings.'},
     // Wi-Fi history (saved networks for routing rule editor)
     {'method': 'GET', 'path': '/wifi_history', 'description': 'List [{ssid, bssid, last_seen}], cap 50'},

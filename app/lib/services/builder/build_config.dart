@@ -758,6 +758,7 @@ Future<BuildResult> buildConfig({
     generatedVars: generatedVars,
     directionsWithoutNodes: directionsWithoutNodes,
     nodeByEmittedTag: {
+      for (final e in ctx.emittedTagAliases.entries) e.key: e.value,
       for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
     },
   );
@@ -881,6 +882,9 @@ class _BuildCtx implements EmitContext {
   /// §435 — узел → финальный тег (после префикса и `allocateTag`).
   final emittedTagByNode = <NodeSpec, String>{};
 
+  /// Фича 478 — финальный тег хопа цепочки → владелец узла (main outbound).
+  final emittedTagAliases = <String, NodeSpec>{};
+
   /// §473 — записи с дословным JSON-телом (§455): их вход — `singbox`.
   ///
   /// Identity-множество (`identityHashCode`), а не по равенству: тело
@@ -909,6 +913,11 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmitted(NodeSpec node, String finalTag) {
     emittedTagByNode[node] = finalTag;
+  }
+
+  @override
+  void noteEmittedAlias(String finalTag, NodeSpec owner) {
+    emittedTagAliases[finalTag] = owner;
   }
 
   @override

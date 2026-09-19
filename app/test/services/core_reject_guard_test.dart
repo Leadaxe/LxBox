@@ -1,5 +1,7 @@
 // Фича 478 — автомат страховки на поддельном клиенте ядра.
 // Сценарии — раздел 5 спеки.
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 
@@ -290,6 +292,21 @@ void main() {
       expect(phases, isNot(contains(CoreRejectPhase.awaitingPrompt)));
     });
 
+    test('отмена после успешного check не поднимает VPN', () async {
+      final core = _DeferredCheckCore(
+        tags: ['A', 'B'],
+        bad: {'A': 'bad a'},
+      );
+      final guard = CoreRejectGuard(core);
+      final fut = guard.run();
+      await core.checkGate.future;
+      guard.cancel();
+      final run = await fut;
+
+      expect(run.outcome, CoreRejectOutcome.stoppedByUser);
+      expect(core.realStarts, 1, reason: 'финального старта не было');
+    });
+
     test('отмена во время цикла → stoppedByUser с уже выключенными', () async {
       final tags = [for (var i = 0; i < 6; i++) 'N$i'];
       final core = FakeCore(
@@ -307,6 +324,55 @@ void main() {
       expect(core.realStarts, 1);
     });
   });
+}
+
+/// Ядро, у которого `check` ждёт внешний сигнал — для отмены после check.
+class _DeferredCheckCore implements CoreRejectHost {
+  _DeferredCheckCore({required this.tags, required this.bad});
+
+  final List<String> tags;
+  final Map<String, String> bad;
+  final checkGate = Completer<void>();
+  final disabledTags = <String>[];
+  var realStarts = 0;
+
+  @override
+  Future<CoreAttempt> realStart() async {
+    realStarts++;
+    if (realStarts == 1) {
+      final t = tags.firstWhere((t) => bad.containsKey(t));
+      return CoreAttempt.rejected('initialize outbound[0] vless[$t]: ${bad[t]}');
+    }
+    return const CoreAttempt.accepted();
+  }
+
+  @override
+  Future<RebuiltConfig?> rebuild() async =>
+      RebuiltConfig(configJson: '{}', tags: tags.toSet());
+
+  @override
+  Future<CoreAttempt> check(String configJson) async {
+    if (!checkGate.isCompleted) checkGate.complete();
+    await Future<void>.delayed(Duration.zero);
+    return const CoreAttempt.accepted();
+  }
+
+  @override
+  Future<bool> disableNode(String tag, String reason) async {
+    disabledTags.add(tag);
+    return true;
+  }
+
+  @override
+  Future<CoreRejectPrompt> askKeepChecking(int disabledCount) async =>
+      CoreRejectPrompt.stop;
+
+  @override
+  void onProgress(
+    CoreRejectPhase phase,
+    int round, {
+    List<DisabledNode> disabledNodes = const [],
+  }) {}
 }
 
 /// Клиент со сценарием ответов: `null` — мост недоступен.

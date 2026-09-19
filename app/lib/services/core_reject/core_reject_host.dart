@@ -81,10 +81,10 @@ class AppCoreRejectHost implements CoreRejectHost {
   @override
   Future<CoreRejectPrompt> askKeepChecking(int disabledCount) async {
     final ask = askPrompt;
-    // Старт без UI: диалога нет, предел остаётся пределом — дальше ошибка,
-    // как сейчас. Починка случится при первом Start из приложения.
-    if (ask == null) return CoreRejectPrompt.stop;
-    return ask(disabledCount);
+    if (ask != null) return ask(disabledCount);
+    // Debug API и прочие пути без экрана ждут ответ через CoreRejectState
+    // (`GET/POST /core_reject/prompt`, в т.ч. заранее `answer=keep`).
+    return CoreRejectState.I.askPrompt(disabledCount);
   }
 
   @override

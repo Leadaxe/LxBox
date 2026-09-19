@@ -13,12 +13,16 @@
 /// идёт молча через контроллер подписок.
 library;
 
+import 'dart:async';
+
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../app_log.dart';
 import 'core_reject_guard.dart';
 import 'core_reject_host.dart';
 import 'core_reject_state.dart';
+
+Completer<CoreRejectRun>? _activeGuardRun;
 
 /// Тихая пересборка конфига без экрана: то же, что делает `_rebuildConfig`
 /// экрана в `silent`-режиме, но без снэкбаров и `mounted`-проверок.
@@ -55,6 +59,12 @@ Future<CoreRejectRun> runCoreRejectGuard({
   Future<String?> Function()? rebuildAndSave,
   Future<CoreRejectPrompt> Function(int limit)? askPrompt,
 }) async {
+  final active = _activeGuardRun;
+  if (active != null && !active.isCompleted) return active.future;
+
+  final runCompleter = Completer<CoreRejectRun>();
+  _activeGuardRun = runCompleter;
+
   CoreRejectState.I.beginRun();
   final host = AppCoreRejectHost(
     home: home,
@@ -68,12 +78,20 @@ Future<CoreRejectRun> runCoreRejectGuard({
   // и `POST /core_reject/cancel` дотягиваются до автомата только отсюда — сам
   // он живёт ровно этот прогон.
   CoreRejectState.I.bindCancel(guard.cancel);
-  final run = await guard.run();
-  CoreRejectState.I.finish(run);
-  if (run.outcome == CoreRejectOutcome.failed && run.error.isNotEmpty) {
-    // Ошибка показывается обычным путём (экран слушает контроллер): автомат её
-    // не перехватывает, а лишь довёл до неё быстрее.
-    AppLog.I.warning('core reject guard: ${run.error}');
+  try {
+    final run = await guard.run();
+    CoreRejectState.I.finish(run);
+    if (run.outcome == CoreRejectOutcome.failed && run.error.isNotEmpty) {
+      // Ошибка показывается обычным путём (экран слушает контроллер): автомат её
+      // не перехватывает, а лишь довёл до неё быстрее.
+      AppLog.I.warning('core reject guard: ${run.error}');
+    }
+    runCompleter.complete(run);
+    return run;
+  } catch (e, st) {
+    runCompleter.completeError(e, st);
+    rethrow;
+  } finally {
+    if (_activeGuardRun == runCompleter) _activeGuardRun = null;
   }
-  return run;
 }

@@ -2329,7 +2329,22 @@ class SubscriptionController extends ChangeNotifier {
 
   /// Фича 478 — ручное включение узла ПО ТЕГУ (Debug API, плашка «Show»):
   /// вердикт стирается, узел проверится заново. `false` — узла нет.
+  ///
+  /// [tag] — финальный тег ядра (с префиксом подписки) либо сырой тег
+  /// идентичности: сначала [lastEmittedTagMap], как у [disableNodeByCoreTag].
   Future<bool> enableNodeByCoreTag(String tag) async {
+    final mapped = _lastTagMap[tag];
+    if (mapped != null) {
+      for (var i = 0; i < _entries.length; i++) {
+        final applied = revertVerdict(_entries[i].list, mapped);
+        if (!applied.changed) continue;
+        _entries[i]._replaceList(applied.list);
+        _entries[i].nodeCount = _entries[i].list.nodes.length;
+        await _persist();
+        notifyListeners();
+        return true;
+      }
+    }
     for (var i = 0; i < _entries.length; i++) {
       final list = _entries[i].list;
       switch (list) {
@@ -2789,11 +2804,12 @@ class SubscriptionController extends ChangeNotifier {
       // регидрация из кэша состав не проясняют, file:-подписки сюда не
       // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
       // чистить.
+      final freshIdentities = sourceNodeIdentities(result.nodes).values.toSet();
       final baseDisabled = migrated.isEmpty && ruleMarks.disable.isEmpty
           ? migrated
           : gcDisabledHashes(
               migrated,
-              sourceNodeIdentities(result.nodes).values.toSet(),
+              freshIdentities,
               updateIntervalHours: nextInterval,
               now: ruleNow,
             );
@@ -2809,9 +2825,14 @@ class SubscriptionController extends ChangeNotifier {
       // новое тела доступны одновременно. Тело то же → вердикт держится;
       // тело изменилось ИЛИ старого тела нет (кэш пуст) → вердикт снимается
       // И узел включается обратно. Обновление ядра вердикты НЕ сбрасывает.
+      final gcWarnings = gcNodeWarnings(
+        current.nodeWarnings,
+        nextDisabled,
+        freshIdentities,
+      );
       final verdicts = refreshSubscriptionVerdicts(
         disabled: nextDisabled,
-        warnings: current.nodeWarnings,
+        warnings: gcWarnings,
         oldBodies: bodiesByIdentity(current.nodes),
         newBodies: bodiesByIdentity(result.nodes),
       );

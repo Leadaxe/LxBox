@@ -140,6 +140,8 @@ extension ServerListBuild on ServerList {
       for (final d in detours) {
         detourBases.add(d.tag);
         d.map['tag'] = ctx.allocateTag(TagResolver.displayTag(tagPrefix, d.tag));
+        // Фича 478 — хоп цепочки ведёт к исходному узлу (CANON §9.3).
+        ctx.noteEmittedAlias(d.map['tag'] as String, server);
       }
       final mainBase = main.tag;
       main.map['tag'] =

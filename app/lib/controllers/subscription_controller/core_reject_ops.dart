@@ -91,6 +91,71 @@ VerdictApply applyVerdict(ServerList list, NodeSpec node, String reason) {
   }
 }
 
+/// Снять вердикт с узла [node] и включить его обратно — зеркало [applyVerdict].
+VerdictApply revertVerdict(ServerList list, NodeSpec node) {
+  switch (list) {
+    case SubscriptionServers():
+      final hash = sourceNodeIdentities(list.nodes)[node];
+      if (hash == null) return (list: list, changed: false);
+      if (!list.disabledHashes.containsKey(hash) &&
+          !list.nodeWarnings.containsKey(hash)) {
+        return (list: list, changed: false);
+      }
+      final disabled = Map<String, DateTime>.from(list.disabledHashes)
+        ..remove(hash);
+      return (
+        list: clearSubscriptionVerdict(
+          list.copyWith(disabledHashes: disabled),
+          hash,
+        ),
+        changed: true,
+      );
+
+    case FolderServers():
+      final at = list.members.indexWhere((m) => identical(m.node, node));
+      if (at < 0) return (list: list, changed: false);
+      final m = list.members[at];
+      if (m.enabled && !m.warnings.any((w) => w.isCoreRejected)) {
+        return (list: list, changed: false);
+      }
+      final members = [...list.members];
+      members[at] = m.copyWith(
+        enabled: true,
+        warnings: dropVerdict(m.warnings),
+      );
+      return (list: list.copyWith(members: members), changed: true);
+
+    case UserServer():
+      if (!list.nodes.any((n) => identical(n, node))) {
+        return (list: list, changed: false);
+      }
+      if (list.enabled && !list.warnings.any((w) => w.isCoreRejected)) {
+        return (list: list, changed: false);
+      }
+      return (
+        list: list.copyWith(
+          enabled: true,
+          warnings: dropVerdict(list.warnings),
+        ),
+        changed: true,
+      );
+  }
+}
+
+/// GC оверлея `warnings` вместе с `disabledHashes` (спека 478 §3b).
+Map<String, List<StoredWarning>> gcNodeWarnings(
+  Map<String, List<StoredWarning>> warnings,
+  Map<String, DateTime> disabled,
+  Set<String> freshIdentities,
+) {
+  if (warnings.isEmpty) return warnings;
+  return {
+    for (final e in warnings.entries)
+      if (disabled.containsKey(e.key) || freshIdentities.contains(e.key))
+        e.key: e.value,
+  };
+}
+
 /// Снять вердикт с узла подписки по его идентичности (ручное включение).
 SubscriptionServers clearSubscriptionVerdict(
     SubscriptionServers list, String identity) {

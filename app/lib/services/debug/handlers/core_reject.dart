@@ -1,6 +1,8 @@
+import '../../../controllers/subscription_controller.dart';
 import '../../../models/core_reject_verdict.dart';
 import '../../../models/node_warning.dart' show WarningSeverity;
 import '../../../models/server_list.dart';
+import '../../../services/node_hash.dart';
 import '../../contract/registry_warning.dart';
 import '../../core_reject/core_reject_guard.dart';
 import '../../core_reject/core_reject_state.dart';
@@ -144,9 +146,6 @@ Future<DebugResponse> _promptState(DebugRequest req, DebugContext ctx) async {
 /// автомат ждёт чего-то другого, и проверяющий этого бы не заметил.
 Future<DebugResponse> _answerPrompt(DebugRequest req, DebugContext ctx) async {
   final s = CoreRejectState.I;
-  if (!s.promptPending) {
-    throw const Conflict('no pending prompt');
-  }
   // Ответ принимается и запросом, и телом — curl'ом удобнее query.
   final body = req.jsonBodyAsMap();
   final raw = (req.q('answer') ?? body['answer']?.toString() ?? '').trim();
@@ -155,6 +154,17 @@ Future<DebugResponse> _answerPrompt(DebugRequest req, DebugContext ctx) async {
     'keep' || 'keep_checking' => CoreRejectPrompt.keepChecking,
     _ => throw BadRequest('param "answer" must be stop|keep, got "$raw"'),
   };
+  if (!s.promptPending) {
+    if (answer == CoreRejectPrompt.keepChecking) {
+      s.queuePromptAnswer(answer);
+      return JsonResponse({
+        'answered': true,
+        'answer': 'keep',
+        'queued': true,
+      });
+    }
+    throw const Conflict('no pending prompt');
+  }
   s.answerPrompt(answer);
   return JsonResponse({
     'answered': true,
@@ -227,13 +237,40 @@ Future<DebugResponse> _notifications(DebugRequest req, DebugContext ctx) async {
   }
 
   if (wanted != null && wanted.isNotEmpty) {
-    final ws = byTag[wanted];
+    final ws = byTag[wanted] ?? _warningsForCoreTag(sub, wanted);
     if (ws == null) throw NotFound('node by core tag: $wanted');
     return JsonResponse(_renderWarnings(ws));
   }
   return JsonResponse({
     for (final e in byTag.entries) e.key: _renderWarnings(e.value),
   });
+}
+
+List<StoredWarning>? _warningsForCoreTag(
+  SubscriptionController sub,
+  String tag,
+) {
+  final node = sub.lastEmittedTagMap[tag];
+  if (node == null) return null;
+  for (final e in sub.entries) {
+    final list = e.list;
+    switch (list) {
+      case SubscriptionServers():
+        final hash = sourceNodeIdentities(list.nodes)[node];
+        if (hash == null) continue;
+        final ws = list.nodeWarnings[hash];
+        if (ws != null && ws.isNotEmpty) return ws;
+      case FolderServers():
+        final at = list.members.indexWhere((m) => identical(m.node, node));
+        if (at < 0) continue;
+        final ws = list.members[at].warnings;
+        if (ws.isNotEmpty) return ws;
+      case UserServer():
+        if (!list.nodes.any((n) => identical(n, node))) continue;
+        if (list.warnings.isNotEmpty) return list.warnings;
+    }
+  }
+  return null;
 }
 
 /// Английский пиненный — machine-поверхность: ответ не должен зависеть от

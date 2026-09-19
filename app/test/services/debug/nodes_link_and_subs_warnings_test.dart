@@ -88,14 +88,25 @@ void main() {
       await controller.addFromInput(uri);
       final tag = controller.entries.single.list.nodes.single.tag;
 
-      final body = asMap(
-          await nodesHandler(req('GET', '/nodes/link', query: {'tag': tag}), ctx()));
+      final body = asMap(await nodesHandler(
+        req('GET', '/nodes/link', query: {'tag': tag, 'reveal': 'true'}),
+        ctx(),
+      ));
       expect(body['tag'], tag);
       expect(body['protocol'], 'vless');
       expect(body['uri'], startsWith('vless://'));
       expect(body['private_key'], isFalse);
       // Тот же текст, что кладёт в буфер экран.
       expect(body['uri'], controller.entries.single.list.nodes.single.toUri());
+    });
+
+    test('без reveal — uri не отдаётся', () async {
+      await controller.addFromInput(uri);
+      final tag = controller.entries.single.list.nodes.single.tag;
+      final body = asMap(
+          await nodesHandler(req('GET', '/nodes/link', query: {'tag': tag}), ctx()));
+      expect(body['error'], 'reveal required');
+      expect(body.containsKey('uri'), isFalse);
     });
 
     test('тег с префиксом подписки тоже находится', () async {
@@ -118,7 +129,7 @@ void main() {
       final prefixed = '${e.tagPrefix} ${node.tag}';
 
       final body = asMap(await nodesHandler(
-        req('GET', '/nodes/link', query: {'tag': prefixed}),
+        req('GET', '/nodes/link', query: {'tag': prefixed, 'reveal': 'true'}),
         ctx(),
       ));
       expect(body['tag'], node.tag);

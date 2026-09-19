@@ -371,6 +371,39 @@ void main() {
     });
   });
 
+  group('GC оверлея warnings (спека 478 §3b)', () {
+    test('ключ без disabled и без узла в наборе выбрасывается', () {
+      final out = gcNodeWarnings(
+        {
+          'gone': [StoredWarning.coreRejected('bad')],
+          'live': [StoredWarning.coreRejected('bad')],
+        },
+        {'live': DateTime.utc(2026, 9, 19)},
+        {'live'},
+      );
+      expect(out.containsKey('gone'), isFalse);
+      expect(out.containsKey('live'), isTrue);
+    });
+  });
+
+  group('revertVerdict по NodeSpec (enable по emitted-тегу)', () {
+    test('снимает вердикт с узла подписки', () {
+      final list = _sub(
+        uris: [
+          'vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls#Frankfurt',
+        ],
+      );
+      final node = list.nodes.single;
+      final applied = applyVerdict(list, node, 'bad');
+      expect(applied.changed, isTrue);
+      final reverted = revertVerdict(applied.list, node);
+      expect(reverted.changed, isTrue);
+      final sub = reverted.list as SubscriptionServers;
+      expect(sub.disabledHashes.containsKey('Frankfurt'), isFalse);
+      expect(sub.nodeWarnings.containsKey('Frankfurt'), isFalse);
+    });
+  });
+
   group('каноническое тело', () {
     test('одинаковые узлы дают одинаковую форму, разные — разную', () {
       final a = parseUri('vless://11111111-1111-1111-1111-111111111111@h:443?type=ws&security=tls&sni=x#A')!;

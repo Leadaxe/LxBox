@@ -45,6 +45,15 @@ Future<DebugResponse> _link(DebugRequest req, DebugContext ctx) async {
   final hit = _findByTag(tag, sub);
   if (hit == null) throw NotFound('node by tag: $tag');
 
+  if (!req.qBool('reveal')) {
+    return JsonResponse({
+      'tag': hit.tag,
+      'protocol': hit.protocol,
+      'private_key': hit.linkCarriesPrivateKey,
+      'error': 'reveal required',
+    });
+  }
+
   final uri = hit.toUri();
   if (uri.isEmpty) {
     return JsonResponse({

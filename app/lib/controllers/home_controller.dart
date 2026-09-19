@@ -454,6 +454,13 @@ class HomeController extends ChangeNotifier
         if (tunnel != prevTunnel) _emit(_state.copyWith(tunnel: tunnel));
         _transientTimeoutTimer?.cancel();
         _transientTimeoutTimer = null;
+        // Фича 478 — error-несущий Stopped резолвит ждущую страховку даже из
+        // stale-terminal: иначе completer висит до таймаута, узел не выключается
+        // (ревью guard_builder_api №10).
+        final rawError = event.coreError ?? event.errorReason;
+        if (rawError != null && rawError.isNotEmpty) {
+          _settleStartOutcome(rawError);
+        }
         return;
       }
       _stopHeartbeat();
@@ -705,6 +712,10 @@ class HomeController extends ChangeNotifier
   Future<String?> startAndAwaitVerdict({
     Duration timeout = const Duration(seconds: 45),
   }) async {
+    final existing = _startOutcome;
+    if (existing != null && !existing.isCompleted) {
+      return existing.future.timeout(timeout, onTimeout: () => '');
+    }
     final c = Completer<String?>();
     _startOutcome = c;
     await start();
@@ -712,8 +723,15 @@ class HomeController extends ChangeNotifier
       _settleStartOutcome(null);
       return null;
     }
+    // Старт не дошёл до ядра (startVPN отказал / нет Activity) — не ждём 45 с.
+    if (!c.isCompleted &&
+        _state.tunnel == TunnelStatus.disconnected &&
+        _state.lastError != null) {
+      _settleStartOutcome(_state.lastError!.renderEn());
+      return c.future;
+    }
     return c.future.timeout(timeout, onTimeout: () {
-      _startOutcome = null;
+      if (_startOutcome == c) _startOutcome = null;
       return '';
     });
   }

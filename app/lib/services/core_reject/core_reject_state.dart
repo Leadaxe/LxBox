@@ -107,6 +107,7 @@ class CoreRejectState extends ChangeNotifier {
   bool _promptPending = false;
   int _promptCount = 0;
   Completer<CoreRejectPrompt>? _promptCompleter;
+  CoreRejectPrompt? _queuedPromptAnswer;
 
   /// Висит ли сейчас вопрос человеку.
   bool get promptPending => _promptPending;
@@ -118,9 +119,22 @@ class CoreRejectState extends ChangeNotifier {
   /// Задать вопрос и ждать ответа. Вызывается хостом автомата из
   /// `askKeepChecking`. Повторный вызов при уже висящем вопросе отдаёт ТУ ЖЕ
   /// future — иначе первый ожидающий остался бы висеть навсегда.
+  /// Ответ на вопрос предела ДО того, как он повис (Debug API:
+  /// `POST /core_reject/prompt?answer=keep` заранее).
+  void queuePromptAnswer(CoreRejectPrompt answer) {
+    _queuedPromptAnswer = answer;
+    if (_promptPending) answerPrompt(answer);
+    notifyListeners();
+  }
+
   Future<CoreRejectPrompt> askPrompt(int count) {
     final pending = _promptCompleter;
     if (pending != null && !pending.isCompleted) return pending.future;
+    final queued = _queuedPromptAnswer;
+    if (queued != null) {
+      _queuedPromptAnswer = null;
+      return Future.value(queued);
+    }
     final c = Completer<CoreRejectPrompt>();
     _promptCompleter = c;
     _promptPending = true;
@@ -149,8 +163,15 @@ class CoreRejectState extends ChangeNotifier {
     _disabled = const [];
     _lastOutcome = null;
     _lastError = '';
+    _queuedPromptAnswer = null;
     notifyListeners();
   }
+
+  /// Идёт ли прогон страховки (любая фаза, кроме idle/done). Кнопка Start
+  /// занята на всём этом интервале — иначе повторный тап затирает ожидание
+  /// вердикта (фича 478, ревью guard_builder_api №1).
+  bool get guardActive =>
+      _phase != CoreRejectPhase.idle && _phase != CoreRejectPhase.done;
 
   /// Идёт ли тихий цикл (кнопка Start показывает «Checking servers…»).
   bool get checking =>
@@ -205,6 +226,7 @@ class CoreRejectState extends ChangeNotifier {
     _promptPending = false;
     _promptCount = 0;
     _promptCompleter = null;
+    _queuedPromptAnswer = null;
     _cancel = null;
   }
 }

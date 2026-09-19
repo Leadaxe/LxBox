@@ -103,7 +103,9 @@ class HomeControls extends StatelessWidget {
                   // VPN не поднят, выключенные остаются выключенными). Своих
                   // строк отмена не заводит: подпись та же, что у фазы.
                   final checking = CoreRejectState.I.checking;
-                  final pressable = checking || toggleEnabled;
+                  final guardActive = CoreRejectState.I.guardActive;
+                  final pressable =
+                      checking || (!guardActive && toggleEnabled);
                   return FilledButton.icon(
                 // §372 — D-pad: на Android TV фокус при открытии экрана должен
                 // стоять на главном действии, иначе первое нажатие пульта
