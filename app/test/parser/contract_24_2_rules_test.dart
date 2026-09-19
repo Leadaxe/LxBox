@@ -42,20 +42,30 @@ void main() {
     await ContractRegistry.I.loadFromDirectory('contract');
   });
 
-  group('§24.2 п. 7.1 — hellorandom* → random', () {
-    test('весь префикс даёт random, а не chrome и не randomized', () {
-      for (final fp in const [
-        'hellorandom',
-        'hellorandomized',
-        'hellorandomizedalpn',
-        'hellorandomizednoalpn',
-      ]) {
+  group('§24.2 п. 7.1 — hellorandom*/hellorandomized* разводятся данными', () {
+    // Контракт 1.1.35 переписал прозу правила: таблица целиком лежит в
+    // `tls.fp_dialect.prefix`, и рукописного списка префиксов нет ни у одной
+    // стороны. Длинный префикс матчится РАНЬШЕ короткого, поэтому
+    // `hellorandomized` не проигрывает `hellorandom`.
+    //
+    // Прежнее ожидание теста («весь префикс даёт random») повторяло прозу
+    // лаунчера, описывавшую мир до 1.1.28, и было неверным: `randomized` —
+    // отдельный uTLS-идентификатор ядра, а не написание `random`.
+    test('каждый префикс даёт СВОЙ канон', () {
+      const cases = {
+        'hellorandom': 'random',
+        'hellorandom_120': 'random',
+        'hellorandomized': 'randomized',
+        'hellorandomizedalpn': 'randomized',
+        'hellorandomizednoalpn': 'randomized',
+      };
+      for (final e in cases.entries) {
         final spec = parseVless(
-            'vless://11111111-1111-1111-1111-111111111111@e.example.com:443?security=tls&fp=$fp#n');
-        expect(spec!.tls.fingerprint, 'random', reason: fp);
+            'vless://11111111-1111-1111-1111-111111111111@e.example.com:443?security=tls&fp=${e.key}#n');
+        expect(spec!.tls.fingerprint, e.value, reason: e.key);
         // Значение опознано — подменой оно не считается, кода нет.
         expect(_codes(spec), isNot(contains('UnknownFingerprintWarning')),
-            reason: fp);
+            reason: e.key);
       }
     }, skip: skip);
   });
@@ -105,13 +115,22 @@ void main() {
   });
 
   group('§24.2 п. 7.9 — пустой пароль', () {
-    test('anytls и tuic без пароля отбраковываются', () {
+    test('anytls без пароля отбраковывается', () {
       expect(parseAnyTls('anytls://@a.example.com:443#n'), isNull);
+    }, skip: skip);
+
+    // ОТКРЫТЫЙ ВОПРОС ВЛАДЕЛЬЦАМ (Q133-67, контракт 1.1.35). У tuic пустой
+    // пароль данными не выражается и, по словам лаунчера, выражаться не
+    // должен: это не диалект, а выбор СТРОГОСТИ, и он меняет судьбу живых
+    // узлов. Кейса корпуса лаунчер намеренно не завёл — корпус нормирует
+    // согласованное, а не спорное. Кейс оставлен как есть до решения; свою
+    // сторону под чужую прозу не подгоняем.
+    test('tuic без пароля отбраковывается', () {
       expect(
           parseTuic(
               'tuic://11111111-2222-3333-4444-555555555555:@t.example.com:443#n'),
           isNull);
-    }, skip: skip);
+    }, skip: skip ?? 'Q133-67 — строгость tuic решают владельцы');
   });
 
   group('§24.2 п. 7.10 — ss legacy stream-шифры', () {
@@ -150,11 +169,24 @@ void main() {
   });
 
   group('§24.2 п. 7.13 — splithttp = алиас xhttp', () {
+    // РАСХОЖДЕНИЕ СТОРОН, передано лаунчеру (синк 1.1.35). Контракт 1.1.35
+    // называет алиас выраженным данными, но выражен он только в диалекте
+    // XRAY: `blocks.xray.$selector.network.value_map` несёт
+    // `splithttp → xhttp`, а `blocks.uri.$selector.type` держит закрытый
+    // набор написаний, в котором `splithttp` не значится, и `when.in`
+    // подавляет запись целиком. Корпус ссылок такого кейса не несёт —
+    // нормирован только вход Xray (`body/xray/vless_splithttp`).
+    //
+    // У нас же ссылка с `type=splithttp` транспорт получала: рукописный
+    // маппер знал алиас (`transport.dart`), и после перевода vless на движок
+    // узел стал уезжать в конфиг БЕЗ транспорта — голый TCP на порт, который
+    // ждёт HTTP, молча. Чинится не оверлеем: набор `type` нормативен, и
+    // угадывать за лаунчера его состав нельзя.
     test('URI type=splithttp даёт транспорт xhttp', () {
       final spec = parseVless(
           'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&type=splithttp&path=%2Fv1#n');
       expect(spec!.transport, isA<XhttpTransport>());
-    }, skip: skip);
+    }, skip: skip ?? 'расхождение сторон: алиас объявлен только у входа Xray');
 
     test('sing-box JSON transport.type=splithttp', () {
       final spec = parseSingboxEntry({

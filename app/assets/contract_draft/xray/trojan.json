@@ -27,22 +27,7 @@
       "_divergence_resolved": "РАСХОЖДЕНИЕ ЗАКРЫТО по арбитру — исходникам XTLS/Xray-core (решение владельца 19.09.2026). У trojan Xray отбраковывает ЯВНО и первым делом: `if rec.Port == 0 { return nil, errors.New(\"Invalid Trojan port.\") }` (`infra/conf/trojan.go:67-69`). Проверка стоит ПОСЛЕ свёртки плоской формы в `Servers` (`:44-55`), поэтому накрывает обе записи — и `settings.servers[0]`, и плоские `address`/`port` прямо в settings. Дефолта 443 у Xray нет нигде. Наш оверлей делал узел там, где сам Xray конфиг собрать отказывается, — он снят; работает `required: true` записи `port` реестра, та же, что у лаунчера. Причину отбраковки мы при этом не показываем (`desc_en` движок не читает, `required` роняет узел молча) — общий остаток всех записей `required`, развёрнут у vless.",
       "_awaitingContractSync": "Лаунчер ПРИНЯЛ `include dialer#xray` и `detect` формы по `type_of` (TASKS_LXBOX §24.27); после ближайшего синка реестра оверлеи снимаются. Синк ведёт агент движка.",
       "_impl_include": "В `include` реестра блока `dialer#xray` нет, и keep-alive из sockopt (§453) с этого входа не читается вовсе.",
-      "_impl_defaults_removed": "Дефолт снят: элемент без порта даёт ноль узлов и одну отбраковку — как у Xray и у лаунчера.",
-      "unknown_key": {
-        "action": "drop",
-        "code": "json_field_unknown",
-        "ignore": [
-          "protocol",
-          "tag",
-          "remarks",
-          "settings",
-          "streamSettings",
-          "mux",
-          "sendThrough",
-          "proxySettings"
-        ],
-        "_impl": "`ignore` — ключи УРОВНЯ ДОКУМЕНТА, полем узла не являющиеся: бухгалтерия элемента (`protocol` — по нему элемент и опознан, `tag`/`remarks` — имя, которое читает сборка документа) плюс контейнеры, чьи листья читают записи таблицы. У реестра списка нет, и каждый такой ключ уехал бы в json_field_unknown шумом на каждом узле."
-      }
+      "_impl_defaults_removed": "Дефолт снят: элемент без порта даёт ноль узлов и одну отбраковку — как у Xray и у лаунчера."
     }
   }
 }

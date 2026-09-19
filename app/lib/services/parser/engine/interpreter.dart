@@ -2983,7 +2983,7 @@ final class _Run {
       // формы, которая раскладывается плоским слоем имён, тот же самый ключ
       // получал разный приговор в зависимости от ветки.
       if (section.ignoredKeys.contains(name)) continue;
-      warnings.add(RegistryWarning(code: code, path: name, value: ''));
+      warnings.add(_unknownWarning(code, name));
       _trace?.add(
         stage: TraceStage.unknown,
         mapper: _mapperId,
@@ -3025,12 +3025,32 @@ final class _Run {
       // неизвестным. Без этой строки ключ имени узла у контейнерной формы
       // попадал в неизвестные и при `action: keep` уезжал в тело (rich_v0).
       if (_labelKeys.contains(e.key.toLowerCase())) continue;
-      warnings.add(RegistryWarning(code: code, path: e.key, value: ''));
+      warnings.add(_unknownWarning(code, e.key));
       if (section.unknownKeyAction == 'keep' && !body.containsKey(e.key)) {
         body[e.key] = e.value;
       }
     }
   }
+
+  /// Предупреждение о НЕОБЪЯВЛЕННОМ имени: `uri_param_unknown`,
+  /// `json_field_unknown`, `wgconf_param_unknown`.
+  ///
+  /// Имя едет ДВАЖДЫ и намеренно. В `path` — потому что дедуп идёт по паре
+  /// «код, путь» (CANON §6), и без него второй незнакомый параметр той же
+  /// ссылки исчезал бы молча. В `params.query_name` — потому что текст
+  /// реестра у всех трёх кодов называет именно этот параметр
+  /// (`{query_name}`), а подстановка `{path}` его не закрывает: незаполненный
+  /// плейсхолдер остаётся в строке как есть, и человек видел бы
+  /// «параметр {query_name}» вместо имени.
+  ///
+  /// `value` пуст: код про САМО наличие имени, а не про написанное значение.
+  static RegistryWarning _unknownWarning(String code, String name) =>
+      RegistryWarning(
+        code: code,
+        path: name,
+        value: '',
+        params: {'query_name': name},
+      );
 
   /// Ключи ini-ДОКУМЕНТА, которых не объявила ни одна запись (контракт 1.1.32).
   ///
@@ -3060,7 +3080,7 @@ final class _Run {
           section.ignoredKeys.contains(short)) {
         continue;
       }
-      warnings.add(RegistryWarning(code: code, path: key, value: ''));
+      warnings.add(_unknownWarning(code, key));
       _trace?.add(
         stage: TraceStage.unknown,
         mapper: _mapperId,

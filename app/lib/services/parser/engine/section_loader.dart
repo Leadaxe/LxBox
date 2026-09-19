@@ -455,6 +455,17 @@ final class MapperSections {
     final out = <String, MapperParam>{};
     for (final e in byDialect.entries) {
       final v = e.value;
+      // Запись-`null` — ОБЪЯВЛЕННОЕ «знаем, читать нечего» (контракт 1.1.34
+      // §31.2). Параметр назван, значит незнакомым он не является и кода не
+      // даёт ни на одном входе; источника у него нет, поэтому в тело он не
+      // едет. Пропусти её молча — и `spx` у vless, `echfq` у trojan уезжали
+      // бы в `uri_param_unknown`, то есть объявленное молчание звучало бы
+      // потерей.
+      if (v == null) {
+        out['$fileName.${e.key}'] =
+            MapperParam.fromJson(e.key, const {'source': <String>[]});
+        continue;
+      }
       // `note` и прочая проза записью не является.
       if (v is! Map) continue;
       final m = v.cast<String, dynamic>();

@@ -266,10 +266,10 @@ void main() {
   });
 
   group('§480 W4 — форма секции conf (INI)', () {
-    // Секция `mappers.conf` приехала РЕЕСТРОМ (контракт 1.1.23+); наш
-    // черновик стал тонким оверлеем и форму секции больше не несёт.
+    // Секция `mappers.conf` приехала РЕЕСТРОМ (контракт 1.1.23+), а диалект
+    // INI — контрактом 1.1.30. Черновика `conf/` больше нет вовсе: последнее
+    // отличие (дефолтный порт пира) сняла ветка `endpoint.on_no_match`.
     const path = 'assets/contract/registry/protocols/wireguard.json';
-    const overlayPath = 'assets/contract_draft/conf/wireguard.json';
 
     test('секция объявляет источник тела wgconf и опознаётся по [Interface]', () {
       final s = section(path, 'conf');
@@ -307,25 +307,34 @@ void main() {
       expect((noMatch['defaults'] as Map)['peers[].port'], 51820);
     });
 
-    test('читается только ПЕРВАЯ [Peer]; код повтора ждёт корпуса', () {
-      // `ini_dialect` — НАШ оверлей: секция реестра диалект INI не объявляет
-      // вовсе (у Go правила чтения зашиты в ридер). Передано лаунчеру,
-      // держится под `_awaitingContractSync` до его контракта.
-      final dialect = section(overlayPath, 'conf')['ini_dialect'] as Map;
+    test('читается только ПЕРВАЯ [Peer], и отброс повтора назван кодом', () {
+      // Контракт 1.1.30 объявил диалект INI ДАННЫМИ (`ini_dialect`), и наш
+      // оверлей снят: судить надо реестр. До него на одном месте жили три
+      // поведения — слияние секций, молчаливый отброс и норма, — и выбрать
+      // между ними было нечем, пока решение жило в коде.
+      final dialect = section(path, 'conf')['ini_dialect'] as Map;
       final peer = (dialect['sections'] as Map)['Peer'] as Map;
       expect(peer['repeat'], 'first_only');
-      final onExtra = peer['on_extra'] as Map;
-      // Контракт 1.1.22 привёз ТЕКСТ кода, но корпус его не ждёт, и Go
-      // сегодня молчит: включённый код разошёлся бы с лаунчером на живых
-      // узлах. Имя ждёт под `$code_pending` правки корпуса.
-      expect(onExtra['code'], isNull, reason: 'корпус кода не ждёт');
-      expect(onExtra[r'$code_pending'], 'wgconf_extra_peer_dropped');
-      // Диалект записан дословно по сегодняшнему разбору; имя префиксов
-      // комментария — по GRAMMAR_SYNC §0.11 (`line_comment_prefixes`).
+      expect((peer['on_extra'] as Map)['code'], 'wgconf_extra_peer_dropped');
+      // Диалект wg-quick дословно; имя префиксов комментария — по
+      // GRAMMAR_SYNC §0.11 (`line_comment_prefixes`).
       expect(dialect['key_case'], 'lower');
+      expect(dialect['value_case'], 'preserve');
       expect(dialect['repeated_key'], 'last_wins');
       expect(dialect['inline_comments'], isFalse);
       expect(dialect['line_comment_prefixes'], ['#', ';']);
+    });
+
+    test('незнакомый ключ .conf назван кодом, не-узловые ключи молчат', () {
+      // Контракт 1.1.32: запись стояла и раньше, но исполнителя не имела —
+      // проверка спрашивала только имена query, а у документа предмет другой.
+      final uk = section(path, 'conf')['unknown_key'] as Map;
+      expect(uk['code'], 'wgconf_param_unknown');
+      final ignore = (uk['ignore'] as List).cast<String>();
+      // Ключи, которые управляют интерфейсом и самим wg-quick, а не
+      // описывают узел: ругаться на них значило бы ругаться на исправный
+      // конфиг провайдера.
+      expect(ignore, containsAll(['postup', 'table', 'saveconfig']));
     });
 
     // §480 — потеря `Interface.DNS` осознанная (у endpoint'а sing-box поля

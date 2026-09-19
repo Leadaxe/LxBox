@@ -3,21 +3,6 @@
   "_overlay": true,
   "mappers": {
     "xray": {
-      "unknown_key": {
-        "action": "drop",
-        "code": "json_field_unknown",
-        "ignore": [
-          "protocol",
-          "tag",
-          "remarks",
-          "settings",
-          "streamSettings",
-          "mux",
-          "sendThrough",
-          "proxySettings"
-        ],
-        "_why": "ПЕРЕОПРЕДЕЛЯЕТ `unknown_key` реестра, добавляя `ignore`; `action`/`code` скопированы из реестра ЦЕЛИКОМ, потому что оверлей замещает ключ, а не сливает его поля. Перечень — ключи УРОВНЯ ДОКУМЕНТА Xray, полем узла не являющиеся: бухгалтерия элемента (`protocol`, по которому элемент и опознан, `tag`/`remarks` — имя для сборки документа) плюс контейнеры, чьи листья читают записи таблицы. У vless, vmess и trojan этот перечень в реестре ЕСТЬ, и его же `impl` называет список «общим, не нашим»; у shadowsocks он не заведён, и корпус ловит разницу: каждый ss-узел из Xray получал json_field_unknown на `tag` и `protocol` (кейсы xray/ss_basic, xray/ss_method_legacy). Отступление одностороннее и снимается, как только перечень появится у секции реестра."
-      },
       "params": {
         "password": {
           "source": "json.$base.password",

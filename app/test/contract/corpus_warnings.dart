@@ -111,14 +111,56 @@ List<String> _bodyOrderFor(String scheme) => _bodyOrderCache.putIfAbsent(
       },
     );
 
+/// Имена записей с `maps_to: null` — те, чей `path` заведомо НЕ путь тела.
+///
+/// Контракт 1.1.34 §31.2: у такой записи пути в теле нет по построению, и
+/// `path` кода несёт ИМЯ ЗАПИСИ (`dns` у `wgconf_dns_ignored`). Отличить его
+/// от пути вне схемы нечем, кроме самого реестра, — а разница в месте: потеря
+/// на разборе случилась ДО того, как тело вообще собралось, и в списке она
+/// стоит впереди кодов санитайзера, а не в хвосте вместе с необъявленным.
+///
+/// Без этого `amnezia_vpn_awg` расходился с лаунчером ПОРЯДКОМ: у него
+/// `wgconf_dns_ignored` первый, у нас — последний, потому что `dns` в
+/// `body.order` не значится и получал ранг хвоста.
+final _mapperOnlyPathsCache = <String, Set<String>>{};
+
+Set<String> _mapperOnlyPathsFor(String scheme) =>
+    _mapperOnlyPathsCache.putIfAbsent(scheme, () {
+      final f = File('$kContractRoot/registry/protocols/$scheme.json');
+      if (!f.existsSync()) return const <String>{};
+      final data = json.decode(f.readAsStringSync()) as Map<String, dynamic>;
+      final mappers = data['mappers'];
+      if (mappers is! Map) return const <String>{};
+      final out = <String>{};
+      for (final section in mappers.values) {
+        if (section is! Map) continue;
+        final params = section['params'];
+        if (params is! Map) continue;
+        for (final e in params.entries) {
+          final p = e.value;
+          if (p is! Map) continue;
+          // `maps_to` ОБЪЯВЛЕН и равен null — «знаем, читать нечего».
+          // Запись без ключа вовсе сюда не идёт: у неё путь просто не назван.
+          if (p.containsKey('maps_to') && p['maps_to'] == null) {
+            out.add('${e.key}');
+          }
+        }
+      }
+      return out;
+    });
+
 void sortWarningsByBodyOrder(
     List<Map<String, dynamic>> warnings, String scheme) {
   if (warnings.length < 2) return;
   final order = _bodyOrderFor(scheme);
   if (order.isEmpty) return;
+  final mapperOnly = _mapperOnlyPathsFor(scheme);
   int rank(Map<String, dynamic> w) {
     final path = w['path'];
     if (path is! String || path.isEmpty) return 1 << 20;
+    // Потеря на разборе — впереди всего тела: её место в списке определяет
+    // стадия, а не ветка схемы, которой у неё нет.
+    if (mapperOnly.contains(path)) return -1;
     final i = order.indexOf(path.split('.').first);
     return i < 0 ? 1 << 20 : i;
   }
