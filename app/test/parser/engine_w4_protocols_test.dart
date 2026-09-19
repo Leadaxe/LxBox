@@ -108,6 +108,22 @@ void main() {
         }
         if (e.value['tag'] != null && spec.tag != e.value['tag']) {
           diffs.add('${e.key}: тег «${spec.tag}» вместо «${e.value['tag']}»');
+          continue;
+        }
+
+        // Кейс, помеченный дельтой, обязан НЕСТИ прежние значения рядом и
+        // действительно от них отличаться: иначе пометка протухла и
+        // прикрывает собой будущую регрессию.
+        if (delta == null) continue;
+        final before = e.value['_before480'] as Map?;
+        if (before == null) {
+          diffs.add('${e.key}: помечен дельтой, но прежних значений в '
+              'фикстуре нет — «было → стало» обязано быть записано ($delta)');
+          continue;
+        }
+        if (jsonEncode(before['body']) == gotBody) {
+          diffs.add('${e.key}: помечен дельтой, но тело не изменилось '
+              '($delta)');
         }
       }
       expect(diffs, isEmpty,

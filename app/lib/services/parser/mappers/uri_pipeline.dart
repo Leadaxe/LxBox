@@ -35,7 +35,6 @@ import '../../../services/parser/engine/engine_mapper.dart';
 import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'anytls_mapper.dart';
-import 'hysteria2_mapper.dart';
 import 'http_mapper.dart';
 import 'masque_mapper.dart';
 import 'naive_mapper.dart';
@@ -122,6 +121,8 @@ const Map<String, String> _kSchemeToType = <String, String>{
   'socks4': 'socks',
   'socks4a': 'socks',
   'tuic': 'tuic',
+  'hysteria2': 'hysteria2',
+  'hy2': 'hysteria2',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -129,8 +130,6 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'vless': mapVlessUri,
   'vmess': mapVmessUri,
   'ss': mapShadowsocksUri,
-  'hysteria2': mapHysteria2Uri,
-  'hy2': mapHysteria2Uri,
   'anytls': mapAnyTlsUri,
   'naive+https': mapNaiveHttpsUri,
   'naive+quic': mapNaiveQuicUri,

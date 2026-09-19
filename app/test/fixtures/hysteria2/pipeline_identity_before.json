@@ -170,7 +170,7 @@
     },
     "b480:pinsha256_pair": {
       "uri": "hy2://pass123@example-1.com:443?pinSHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%2Cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&sni=example-1.com#pin-pair",
-      "identity": "cb576f61bca9f20207b7347098a10a76eda32921c3d9f9988af28ebe6154095d",
+      "identity": "f8cfae314d30f85660b4c32cb89e3ee53a3c893e1e2a04a67e5664bf5f4907ce",
       "tag": "pin-pair",
       "body": {
         "type": "hysteria2",
@@ -180,9 +180,29 @@
         "password": "pass123",
         "tls": {
           "enabled": true,
-          "server_name": "example-1.com"
+          "server_name": "example-1.com",
+          "certificate_public_key_sha256": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          ]
         }
-      }
+      },
+      "_before480": {
+        "identity": "cb576f61bca9f20207b7347098a10a76eda32921c3d9f9988af28ebe6154095d",
+        "tag": "pin-pair",
+        "body": {
+          "type": "hysteria2",
+          "tag": "pin-pair",
+          "server": "example-1.com",
+          "server_port": 443,
+          "password": "pass123",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com"
+          }
+        }
+      },
+      "_delta480": "delta480-1 (D133-11): pinSHA256 списком по запятой. Было — ПУСТО: значение с запятой не читалось вовсе, и пиннинг молча терялся. Стало — два элемента в certificate_public_key_sha256."
     }
   }
 }

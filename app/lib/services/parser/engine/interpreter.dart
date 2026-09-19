@@ -76,9 +76,15 @@ SourceSpace? _selectForm(MapperSection section, String text) {
       : section.forms;
   for (final form in forms) {
     if (!_formMatches(form, text)) continue;
+    // `forms[].decode` — оболочка источника: тело после схемы бывает целиком
+    // base64 (перекодированные подписки). Декодер работает над ПЭЙЛОАДОМ, а
+    // схему возвращает на место: написание схемы — источник (`scheme_sets`,
+    // `label_fallback`), и потерять его нельзя.
+    final decoded = _applyFormDecode(form, text);
+    if (decoded == null) continue;
     switch (form.space) {
       case 'url':
-        final space = lexUri(text, formId: form.id);
+        final space = lexUri(decoded, formId: form.id);
         if (space != null) return space;
       default:
         // Пространства json/ini заводятся волной W5 вместе с их видами
@@ -90,9 +96,61 @@ SourceSpace? _selectForm(MapperSection section, String text) {
   return null;
 }
 
+/// Пэйлоад источника — то, что стоит ПОСЛЕ `<схема>://`. `detect` и `decode`
+/// формы работают над ним: признак «тело целиком base64» о схеме ничего не
+/// говорит, а декодер обязан её сохранить.
+({String scheme, String payload})? _splitScheme(String text) {
+  final i = text.indexOf('://');
+  if (i <= 0) return null;
+  return (scheme: text.substring(0, i), payload: text.substring(i + 3));
+}
+
+/// Исполнить `forms[].decode` над пэйлоадом; `null` — шаг не отработал, и
+/// форма не отвечает (молча выдать пустое тело нельзя — это узел из ничего).
+///
+/// `{"reparse": "url"}` говорит, что декодированный текст — снова ссылка: он
+/// возвращается со схемой на месте и разбирается лексером обычным порядком.
+String? _applyFormDecode(MapperForm form, String text) {
+  if (form.decode.isEmpty) return text;
+  final split = _splitScheme(text);
+  if (split == null) return text;
+  var payload = split.payload;
+  for (final step in form.decode) {
+    if (step == 'url') continue; // percent снимает сам лексер.
+    if (step == 'base64' || step == 'base64?') {
+      final decoded = _RunDecode.base64(payload.trim());
+      if (decoded == null) {
+        if (step == 'base64') return null;
+        continue;
+      }
+      payload = decoded;
+      continue;
+    }
+    if (step is Map && step['reparse'] != null) continue;
+  }
+  return '${split.scheme}://$payload';
+}
+
+/// Декодеры оболочки формы. Отдельный тип, чтобы не тащить статику в `_Run`.
+abstract final class _RunDecode {
+  static String? base64(String raw) {
+    try {
+      var s = raw.replaceAll('-', '+').replaceAll('_', '/');
+      final pad = s.length % 4;
+      if (pad != 0) s = s.padRight(s.length + (4 - pad), '=');
+      return String.fromCharCodes(_b64.decode(s));
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 bool _formMatches(MapperForm form, String text) {
   final d = form.detect;
   if (d == null || d['default'] == true) return true;
+  // Предикаты по ТЕКСТУ адресуют пэйлоад: «тело целиком base64» — это про то,
+  // что после схемы, и со схемой такое выражение не совпало бы никогда.
+  final payload = _splitScheme(text)?.payload ?? text;
   final schemeIn = (d['scheme_in'] as List?)?.cast<String>();
   if (schemeIn != null) {
     final colon = text.indexOf(':');
@@ -100,16 +158,46 @@ bool _formMatches(MapperForm form, String text) {
     if (!schemeIn.any((s) => s.toLowerCase() == scheme)) return false;
   }
   final re = d['regex'] as String?;
-  if (re != null && !RegExp(re).hasMatch(text)) return false;
+  if (re != null && !RegExp(re).hasMatch(payload)) return false;
   final txt = (d['text'] as Map?)?.cast<String, dynamic>();
   if (txt != null) {
     final prefix = txt['prefix_fold'] as String?;
     if (prefix != null &&
-        !text.toLowerCase().startsWith(prefix.toLowerCase())) {
+        !payload.toLowerCase().startsWith(prefix.toLowerCase())) {
       return false;
     }
     final contains = txt['contains'] as String?;
-    if (contains != null && !text.contains(contains)) return false;
+    if (contains != null && !payload.contains(contains)) return false;
+  }
+  final not = d['not'];
+  if (not is Map) {
+    if (_formMatches(
+        MapperForm(id: form.id, detect: not.cast<String, dynamic>()), text)) {
+      return false;
+    }
+  }
+  final all = d['all'];
+  if (all is List) {
+    for (final sub in all) {
+      if (sub is! Map) continue;
+      if (!_formMatches(
+          MapperForm(id: form.id, detect: sub.cast<String, dynamic>()), text)) {
+        return false;
+      }
+    }
+  }
+  final any = d['any'];
+  if (any is List && any.isNotEmpty) {
+    var hit = false;
+    for (final sub in any) {
+      if (sub is! Map) continue;
+      if (_formMatches(
+          MapperForm(id: form.id, detect: sub.cast<String, dynamic>()), text)) {
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) return false;
   }
   return true;
 }
@@ -117,6 +205,10 @@ bool _formMatches(MapperForm form, String text) {
 /// Приоритет значения из `defaults` секции: слабее любой записи таблицы
 /// (`priority` у записей — небольшие числа вокруг нуля).
 const int _kDefaultPriority = 1 << 20;
+
+/// Нормализаторы, работающие над СПИСКОМ: применяются после разреза значения
+/// по `list.sep`, а не над исходной строкой.
+const Set<String> _kListNormalizers = {'port_range_spec', 'cidr_prefix'};
 
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
@@ -327,6 +419,21 @@ final class _Run {
 
     var value = raw;
 
+    // `on_invalid.action: "default_from"` — значение ЕСТЬ, но не годится как
+    // источник, и запись обязана вести себя так, будто его не было: дальше
+    // сработает её же `default_from`.
+    //
+    // Это НЕ суждение о значении (его судит санитайзер), а выбор ИСТОЧНИКА:
+    // предикат смотрит на написание, а не на смысл. Так эвристика SNI
+    // («имя без точки и двоеточия адресом быть не может») перестаёт быть
+    // веткой в коде и становится строкой таблицы — причём только у тех схем,
+    // которые её объявили.
+    if (p.onInvalid['action'] == 'default_from' && value is String) {
+      final cond = (p.onInvalid['when'] as Map?)?.cast<String, dynamic>();
+      final probe = cond == null ? null : cond['value'];
+      if (probe != null && _matches(value, probe)) return;
+    }
+
     // `decode_extra` — поверх первого прохода декодера формы.
     final de = p.decodeExtra;
     if (de != null && value is String) {
@@ -339,8 +446,24 @@ final class _Run {
     }
 
     // `normalize` — общие нормализаторы (форма записи, не смысл).
-    if (p.normalize != null && value is String) {
-      value = _normalize(value, p.normalize!);
+    //
+    // Скалярные применяются здесь, над строкой. Списочные
+    // (`port_range_spec`, `cidr_prefix`) — ПОСЛЕ `_coerceType`, когда список
+    // уже разрезан: до него значение ещё одна строка с разделителями.
+    // `range_order` меняет и ТИП значения (`"5"` → 5), поэтому идёт мимо
+    // строкового [_normalize].
+    final norm = p.normalize;
+    if (norm != null && value is String) {
+      if (norm.startsWith('range_order')) {
+        final swap = norm.endsWith('swap');
+        value = _normalizeRange(value, swap: swap);
+        if (value == null) {
+          _applyOnInvalid(p, raw is String ? raw : '$raw');
+          return;
+        }
+      } else if (!_kListNormalizers.contains(norm)) {
+        value = _normalize(value, norm);
+      }
     }
 
     // `maps_to: null` — значение ОБЪЯВЛЕННО никуда не едет (ECH, padding).
@@ -386,10 +509,15 @@ final class _Run {
     final hadSets = _applyValueSets(p, raw is String ? raw : '$raw');
 
     // Приведение типа (`type`) — форма, а не суждение.
-    final typed = _coerceType(p, value);
+    var typed = _coerceType(p, value);
     if (typed == null) {
       _applyImplies(p);
       return;
+    }
+
+    // Списочные нормализаторы — над уже разрезанным списком.
+    if (norm != null && _kListNormalizers.contains(norm) && typed is List) {
+      typed = _normalizeList(typed, norm);
     }
 
     if (p.mapsTo != null) {
@@ -450,11 +578,48 @@ final class _Run {
         final t = target.cast<String, dynamic>();
         final path = t['path'] as String?;
         if (path == null) continue;
-        final typed = t['type'] == 'int' ? int.tryParse(group.trim()) : group;
+        dynamic typed = t['type'] == 'int' ? int.tryParse(group.trim()) : group;
         if (typed == null) continue;
         // `int` с неположительным значением — это «ed не задан», а не ноль:
         // режим включает только `max_early_data > 0`.
         if (typed is int && typed <= 0) continue;
+        // `normalize` у ЧЛЕНА `into`: одна группа регулярки бывает списком со
+        // своей формой записи (хвост multi-port `,20000-30000` — это список
+        // диапазонов, а не скаляр). Без этого запись пришлось бы дробить на
+        // две, и порядок слияния списка стал бы неуправляемым.
+        // `prepend_group` — член `into` склеивается с ДРУГОЙ группой той же
+        // регулярки. Нужен там, где одно значение источника читается дважды в
+        // разной нарезке: первый порт multi-port спецификации едет числом в
+        // `server_port`, а ВСЯ спецификация вместе с ним — списком диапазонов
+        // в `server_ports`. Без склейки пришлось бы либо дублировать группу в
+        // регулярке, либо заводить вторую запись с тем же источником, и
+        // порядок слияния списка стал бы неуправляемым.
+        final prependFrom = t['prepend_group'] as String?;
+        if (prependFrom != null && typed is String) {
+          String? head;
+          try {
+            head = m.namedGroup(prependFrom);
+          } catch (_) {
+            head = null;
+          }
+          if (head != null) typed = '$head$typed';
+        }
+        final memberNorm = t['normalize'] as String?;
+        if (memberNorm != null && typed is String) {
+          if (_kListNormalizers.contains(memberNorm)) {
+            final sep = (t['sep'] as String?) ?? ',';
+            typed = _normalizeList(
+              typed.split(sep).where((s) => s.trim().isNotEmpty).toList(),
+              memberNorm,
+            );
+            if ((typed as List).isEmpty) continue;
+          } else if (memberNorm.startsWith('range_order')) {
+            typed = _normalizeRange(typed, swap: memberNorm.endsWith('swap'));
+            if (typed == null) continue;
+          } else {
+            typed = _normalize(typed, memberNorm);
+          }
+        }
         _write(path, typed, p);
         final implies = (t['implies'] as Map?)?.cast<String, dynamic>();
         if (implies != null) {
@@ -497,6 +662,18 @@ final class _Run {
       }
     }
     warnings.add(NodeWarning.byCode(code, path: p.name, value: shown));
+  }
+
+  /// `on_invalid` — значение не приводится к объявленной форме.
+  ///
+  /// Само СНЯТИЕ уже случилось (значение не записано); здесь только код, и
+  /// только когда запись его назвала. Молчание — не умолчание движка, а
+  /// объявленное решение: эталон второй стороны на части полей молчит, и
+  /// поставь движок код сам, узел получил бы его там, где корпус ждёт тишины.
+  void _applyOnInvalid(MapperParam p, String raw) {
+    final code = p.onInvalid['code'] as String?;
+    if (code == null) return;
+    warnings.add(NodeWarning.byCode(code, path: p.name, value: raw.trim()));
   }
 
   // ─────────────────────────── источники ───────────────────────────
@@ -858,6 +1035,61 @@ final class _Run {
     }
   }
 
+  /// Нормализаторы, работающие над СПИСКОМ, а не над скаляром: их результат —
+  /// список, и применяются они после [_coerceType].
+  ///
+  /// Оба — форма записи, не суждение: негодные значения уезжают в карту и
+  /// судятся санитайзером.
+  static List<dynamic> _normalizeList(List<dynamic> items, String name) {
+    switch (name) {
+      // `"1000-2000"` → `"1000:2000"`, одиночный порт → пара `"N:N"`. Ядру
+      // нужно ДВОЕТОЧИЕ: дефис даёт фатал «bad port range».
+      case 'port_range_spec':
+        return [
+          for (final raw in items)
+            if ('$raw'.trim().isNotEmpty)
+              () {
+                final seg = '$raw'.trim().replaceAll('-', ':');
+                return seg.contains(':') ? seg : '$seg:$seg';
+              }(),
+        ];
+      // Голый адрес получает префикс: `/32` у v4, `/128` у v6.
+      case 'cidr_prefix':
+        return [
+          for (final raw in items)
+            if ('$raw'.trim().isNotEmpty)
+              () {
+                final a = '$raw'.trim();
+                if (a.contains('/')) return a;
+                return a.contains(':') ? '$a/128' : '$a/32';
+              }(),
+        ];
+      default:
+        return items;
+    }
+  }
+
+  /// Пара `N-M`: `swap` переставляет перевёрнутые границы, `strict` оставляет
+  /// как есть. Одиночное число возвращается числом (type-fidelity).
+  ///
+  /// Два режима у одного нормализатора, потому что смысл у диапазонов разный:
+  /// magic headers — та же пара в другом написании (без нормализации одна нода
+  /// даёт два identity-хеша), а перевёрнутый тайминг — опечатка, которую
+  /// человек должен увидеть.
+  static dynamic _normalizeRange(String value, {required bool swap}) {
+    final v = value.trim();
+    if (v.isEmpty) return null;
+    final single = int.tryParse(v);
+    if (single != null) return single;
+    final dash = v.indexOf('-');
+    if (dash <= 0) return null;
+    final lo = int.tryParse(v.substring(0, dash).trim());
+    final hi = int.tryParse(v.substring(dash + 1).trim());
+    if (lo == null || hi == null) return null;
+    if (hi < lo) return swap ? '$hi-$lo' : null;
+    return '$lo-$hi';
+  }
+
   // ─────────────────────────── тело ───────────────────────────
 
   /// Записать значение по пути тела с учётом `priority`/`merge` (G3).
@@ -869,6 +1101,21 @@ final class _Run {
       final merge = p?.merge ?? 'keep_first';
       // Запись с МЕНЬШИМ priority уже победила — она раньше по норме.
       if (merge == 'keep_first' && occupied <= prio) return;
+      // `append`/`prepend` — СЛИЯНИЕ списков, а не замена: две записи вправе
+      // наполнять один путь (порты из authority и из query — один список
+      // `server_ports`, и порядок в нём нормативен).
+      if (merge == 'append' || merge == 'prepend') {
+        final was = _read(path);
+        if (was is List) {
+          final add = value is List ? value : [value];
+          final merged = merge == 'append'
+              ? [...was, ...add]
+              : [...add, ...was];
+          _writtenBy[path] = prio;
+          _put(path, merged);
+          return;
+        }
+      }
     }
     _writtenBy[path] = prio;
     _put(path, value);

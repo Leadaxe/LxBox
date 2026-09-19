@@ -31,10 +31,14 @@
           "source": "port_raw",
           "selector": true,
           "extract": {
-            "re": "^(?P<first>\\d+)(?P<rest>[,:-].*)?$",
+            "re": "^(?P<first>\\d+)(?P<spec>[,:-][^#]*)?$",
             "into": {
               "first": {"path": "server_port", "type": "int"},
-              "rest": {"path": "server_ports", "normalize": "port_range_spec"}
+              "spec": {
+                "path": "server_ports",
+                "normalize": "port_range_spec",
+                "prepend_group": "first"
+              }
             }
           },
           "impl": "Multi-port прямо в authority (host:443,20000-30000). Платформенный парсер URL такую строку не читает вовсе — её берёт лексер движка из port_raw: authority встаёт на ПЕРВЫЙ числовой порт, остальное уезжает в тот же конвейер, что и ?mport=. Порядок слияния — authority, потом query."
@@ -43,6 +47,7 @@
           "source": ["query.mport", "query.ports"],
           "maps_to": "server_ports",
           "merge": "append",
+          "list": {"sep": ","},
           "normalize": "port_range_spec",
           "impl": "Форма ядра — 'low:high' через ДВОЕТОЧИЕ; дефис ссылки даёт фатал «bad port range». Одиночный порт становится парой N:N."
         },
@@ -86,10 +91,15 @@
           "list": {"sep": ",", "coerce_scalar": true},
           "impl": "§103/D-078 — пиннинг публичного ключа сертификата; на QUIC валиден (в отличие от utls/reality). DELTAS D133-11 / delta480-1: список по запятой вместо одного элемента 'a,b'."
         },
-        "$quic_sni_heuristic": {
-          "source": "query.sni",
-          "maps_to": null,
-          "impl": "У hysteria2 эвристика написания SNI ЕСТЬ на обоих проектах (uri.query.sni.impl): имя без точки и двоеточия либо '🔒' уступает адресу сервера — в отличие от trojan и vless, где её нет. Общий блок tls#uri несёт только цепочку источников и default_from: host; вторая половина правила объявляется здесь."
+        "sni": {
+          "source": ["query.sni", "query.peer"],
+          "maps_to": "tls.server_name",
+          "default_from": "host",
+          "on_invalid": {
+            "action": "default_from",
+            "when": {"value": {"not_matches": "[.:]"}}
+          },
+          "impl": "sni_heuristic_falls_back_to_server — у hysteria2 эвристика НАПИСАНИЯ есть на обоих проектах (uri.query.sni.impl), в отличие от trojan и vless. Имя без точки и двоеточия адресом быть не может, а '🔒' — витринный значок подписки: и то и другое уступает адресу сервера. Общий блок tls#uri несёт только цепочку источников и фолбэк на пустом; вторая половина правила объявляется здесь, потому что исполняют её НЕ ВСЕ схемы."
         }
       },
       "scheme_sets": {"*": {"tls.enabled": true}},
