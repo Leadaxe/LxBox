@@ -34,10 +34,6 @@ void main() {
     for (final scheme in dir.listSync().whereType<Directory>()) {
       final f = File('${scheme.path}/pipeline_identity_before.json');
       if (!f.existsSync()) continue;
-      final name = scheme.uri.pathSegments
-          .where((s) => s.isNotEmpty)
-          .last;
-
       final raw = jsonDecode(f.readAsStringSync()) as Map;
       final cases = (raw['cases'] as Map?)?.cast<String, dynamic>();
       if (cases == null) continue;
