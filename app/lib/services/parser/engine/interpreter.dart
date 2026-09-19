@@ -2856,15 +2856,6 @@ final class _Run {
     // глушило следующие звенья: `trim` превратил бы его в пустую строку уже
     // после выбора, и узел остался бы вовсе без имени.
     for (final src in sources) {
-      // Источник метки — такое же ОБЪЯВЛЕНИЕ ключа, как запись таблицы, и
-      // отметить его прочитанным обязан тот, кто читает. Иначе ветка
-      // `unknown_key` объектного входа объявляла бы неизвестным ключ, из
-      // которого узел только что взял ИМЯ: у контейнерной формы имя лежит
-      // отдельным ключом объекта (корпус rich_v0). Отметка ставится ДО
-      // проверки значения: пустой ключ объявленным быть не перестаёт — та же
-      // норма §8, по которой запись, не применившаяся по `when`, остаётся
-      // объявленной.
-      if (src.startsWith('json.')) _consumeJson(src.substring('json.'.length));
       final v = _readSourceBare(src);
       // Метка бывает НЕ СТРОКОЙ: в контейнере чужого диалекта `ps` приезжает
       // числом ровно так же, как `port`. Отбрасывать её за это значило бы
@@ -2936,6 +2927,21 @@ final class _Run {
     if (code == null) return;
     for (final name in space.query.names) {
       if (_declared.contains(name.toLowerCase())) continue;
+      // Тот же ключ, объявленный ПУТЁМ ОБЪЕКТА. Контейнерная форма
+      // раскладывается лексером плоским слоем имён, и эта ветка обходит его
+      // наравне со строкой запроса — а объявлен такой ключ записью вида
+      // `json.<имя>`, до которой плоский набор `_declared` не достаёт.
+      // Без этих двух строк неизвестными объявлялись адрес, порт,
+      // идентификатор и имя узла контейнера, то есть ровно те ключи, из
+      // которых узел и собран (корпус rich_v0).
+      if (_declaredJson.contains(name.toLowerCase())) continue;
+      if (_labelKeys.contains(name.toLowerCase())) continue;
+      // `unknown_key.ignore` — объявление секции, а не свойство одного входа:
+      // ключ, названный там, молчит с какой бы стороны его ни судили. Ветка
+      // объектного входа сверялась с ним всегда, эта — нет, и у контейнерной
+      // формы, которая раскладывается плоским слоем имён, тот же самый ключ
+      // получал разный приговор в зависимости от ветки.
+      if (section.ignoredKeys.contains(name)) continue;
       warnings.add(RegistryWarning(code: code, path: name, value: ''));
       _trace?.add(
         stage: TraceStage.unknown,
@@ -2968,6 +2974,14 @@ final class _Run {
       // теле, — у корпуса rich_v0 это путь и заголовок Host ws-транспорта.
       // При `action: keep` они вдобавок уезжали в тело вторым, чужим полем.
       if (_consumed.contains(e.key.toLowerCase())) continue;
+      // Ключ, ОБЪЯВЛЕННЫЙ источником МЕТКИ. Метка читается позже этой ветки
+      // (`_label()` зовётся после `_reportUnknown()`), поэтому отметкой о
+      // чтении её ключ закрыть нельзя — только объявлением. Так и правильнее:
+      // норма §8 считает объявленным то, что объявила секция, а не то, что
+      // удалось прочитать, — иначе пустое имя делало бы свой ключ
+      // неизвестным. Без этой строки ключ имени узла у контейнерной формы
+      // попадал в неизвестные и при `action: keep` уезжал в тело (rich_v0).
+      if (_labelKeys.contains(e.key.toLowerCase())) continue;
       warnings.add(RegistryWarning(code: code, path: e.key, value: ''));
       if (section.unknownKeyAction == 'keep' && !body.containsKey(e.key)) {
         body[e.key] = e.value;
@@ -2998,6 +3012,58 @@ final class _Run {
           out.add(src.substring('query.'.length).toLowerCase());
         }
       }
+    }
+    return out;
+  }();
+
+  /// То же, что [_declared], но для ОБЪЕКТНОГО входа: имена верхнего уровня,
+  /// объявленные таблицей через `json.<имя>`.
+  ///
+  /// Держится отдельным набором, а не общим с query: пространства имён у
+  /// входов разные, и ключ, объявленный только в строке запроса, не делает
+  /// одноимённый ключ объекта прочитанным. Учитываются и `source` по ФОРМАМ:
+  /// у входа с двумя формами запись живёт в одной из них, а судить ключ
+  /// приходится до выбора формы.
+  ///
+  /// Путь режется до верхнего сегмента (`json.foo`, но не `json.foo.bar`):
+  /// ветка судит ровно верхний уровень, а вложенный лист ключом верхнего
+  /// уровня не является — иначе запись, читающая лист, молча признавала бы
+  /// объявленной всю ветку документа над ним.
+  late final Set<String> _declaredJson = () {
+    final out = <String>{};
+    for (final p in section.params.values) {
+      final sources = [
+        ...p.source,
+        for (final l in p.sourceByForm.values) ...l,
+      ];
+      for (final src in sources) {
+        if (!src.startsWith('json.')) continue;
+        final rest = src.substring('json.'.length);
+        final dot = rest.indexOf('.');
+        out.add((dot < 0 ? rest : rest.substring(0, dot)).toLowerCase());
+      }
+    }
+    return out;
+  }();
+
+  /// Ключи ВЕРХНЕГО уровня объектного входа, объявленные источником МЕТКИ.
+  ///
+  /// Берутся все формы, а не только текущая: набор считается по секции, и
+  /// ключ, из которого имя берёт соседняя форма, чужим диалектом не
+  /// становится. Путь режется до верхнего сегмента — ветка судит ровно
+  /// верхний уровень.
+  late final Set<String> _labelKeys = () {
+    final out = <String>{};
+    final byForm = section.label.sourceByForm;
+    final sources = [
+      ...section.label.source,
+      for (final l in byForm.values) ...l,
+    ];
+    for (final src in sources) {
+      if (!src.startsWith('json.')) continue;
+      final rest = src.substring('json.'.length);
+      final dot = rest.indexOf('.');
+      out.add((dot < 0 ? rest : rest.substring(0, dot)).toLowerCase());
     }
     return out;
   }();
