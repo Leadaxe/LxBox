@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../screens/home/special_node_display.dart';
+import '../screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'node_view_item.dart';
 import '../services/l10n/locale_controller.dart';
 
@@ -98,10 +99,18 @@ class NodeRow extends StatelessWidget {
     final hasProto = !hasAuto &&
         item.protocolLabel != null &&
         item.protocolLabel!.isNotEmpty;
+    final notificationWarnings = item.notificationWarnings;
+    final hasNotificationBadge = notificationWarnings != null &&
+        notificationWarnings.isNotEmpty;
     // §201 — у block нет осмысленного delay (всегда ERR): бейдж не рисуем.
     final dl = _isBlock ? '' : _delayLabel;
 
-    if (!hasActive && !hasArrow && !hasProto && !hasAuto && dl.isEmpty) {
+    if (!hasActive &&
+        !hasArrow &&
+        !hasProto &&
+        !hasAuto &&
+        !hasNotificationBadge &&
+        dl.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -141,20 +150,30 @@ class NodeRow extends StatelessWidget {
           )
         : null;
 
-    final Widget? proto = hasProto
-        ? Text(
-            item.protocolLabel!,
-            // §199 — транспорт уступает серверу: обрезается ellipsis'ом, не
-            // переполняет (внутри Flexible).
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurfaceVariant,
-              letterSpacing: 0.3,
-            ),
+    final Widget? proto = (hasProto || hasNotificationBadge)
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasNotificationBadge)
+                NodeInfoBadge(notificationWarnings, showTopSeverity: true),
+              if (hasProto)
+                Flexible(
+                  child: Text(
+                    item.protocolLabel!,
+                    // §199 — транспорт уступает серверу: обрезается ellipsis'ом,
+                    // не переполняет (внутри Flexible).
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+            ],
           )
         : null;
 

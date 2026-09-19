@@ -1,8 +1,10 @@
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
+import '../../models/node_warning.dart';
 import '../../models/server_list.dart';
 import '../../services/safe_regex.dart';
+import '../subscriptions_screen/entry_warnings.dart';
 import 'node_filter.dart';
 import 'node_filter_view_model.dart';
 import 'source_lookup.dart';
@@ -377,6 +379,13 @@ class NodeListPresenter {
     // (UserServer / без префикса / импорт) фильтруются прочими средствами,
     // отдельный chip только путал.
 
+    // §502 — уведомления узлов: один проход по карте последней сборки, без
+    // чтения хранилища на каждую строку в itemBuilder.
+    final warningsByTag = <String, List<NodeWarning>>{
+      for (final e in subController.lastEmittedTagMap.entries)
+        e.key: warningsForEmittedNode(e.value, subController.entries),
+    };
+
     return NodeListData(
       cache: cache,
       matchingSet: matchingSet,
@@ -389,6 +398,7 @@ class NodeListPresenter {
           return byRank != 0 ? byRank : a.compareTo(b);
         }),
       sourceOptions: sourceOptions,
+      warningsByTag: warningsByTag,
     );
   }
 }
@@ -403,6 +413,7 @@ class NodeListData {
     required this.availableProtocols,
     required this.availableVariants,
     required this.sourceOptions,
+    required this.warningsByTag,
   });
 
   final ParsedConfig cache;
@@ -417,4 +428,11 @@ class NodeListData {
 
   /// §235 — (id, имя) источников для чипов фильтра: подписки + папки.
   final List<(String, String)> sourceOptions;
+
+  /// §502 — уведомления узла по эмитированному тегу (разбор + вердикт).
+  final Map<String, List<NodeWarning>> warningsByTag;
+
+  /// Старший уровень уведомлений узла; `null` — уведомлений нет.
+  WarningSeverity? topWarningSeverityOf(String tag) =>
+      topWarningSeverity(warningsByTag[tag] ?? const []);
 }

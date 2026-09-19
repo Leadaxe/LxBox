@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../controllers/subscription_controller/core_reject_ops.dart';
 import '../../models/core_reject_verdict.dart';
+import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/server_list.dart';
+import '../../screens/home/source_lookup.dart';
 import '../../services/node_hash.dart';
 import '../../widgets/banner_palette.dart';
 
@@ -23,6 +25,40 @@ class EntryWarningSummary {
 /// Есть ли у узла предупреждение, требующее действия (error/warning).
 bool nodeHasActionableWarnings(List<NodeWarning> warnings) =>
     warnings.any((w) => w.severity != WarningSeverity.info);
+
+/// Старший уровень среди уведомлений узла; `null` — список пуст.
+WarningSeverity? topWarningSeverity(List<NodeWarning> warnings) {
+  if (warnings.isEmpty) return null;
+  return warnings
+      .map((w) => w.severity)
+      .reduce((a, b) => a.index > b.index ? a : b);
+}
+
+/// Все уведомления узла по эмитированному [node]: разбор + хранимый вердикт
+/// страховки. Источник — тот же, что вкладка Notifications (§497).
+List<NodeWarning> warningsForEmittedNode(
+  NodeSpec node,
+  List<SubscriptionEntry> entries,
+) {
+  final owner = ownerOfNode(node, entries);
+  if (owner == null) return List.unmodifiable(node.warnings);
+
+  final list = entries[owner.entryIndex].list;
+  final source = sourceNodeOf(node, list) ?? node;
+  final stored = switch (list) {
+    SubscriptionServers() => () {
+        final id = sourceNodeIdentities(list.nodes)[source];
+        return id == null
+            ? const <StoredWarning>[]
+            : list.nodeWarnings[id] ?? const <StoredWarning>[];
+      }(),
+    FolderServers() => owner.memberIndex == null
+        ? const <StoredWarning>[]
+        : list.members[owner.memberIndex!].warnings,
+    UserServer() => list.warnings,
+  };
+  return mergedNodeWarnings(source, stored);
+}
 
 /// Текст inline-строки предупреждения в списке. У `core_rejected` — дословная
 /// причина ядра; у остальных — заголовок кода реестра ([NodeWarning.message]).

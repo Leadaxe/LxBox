@@ -90,33 +90,64 @@ class NodeWarningRow extends StatelessWidget {
 /// подложка 24×24 — чтобы тап не проваливался в `onTap` строки (разбор узла):
 /// сам значок 14 px, попасть в него пальцем иначе нельзя.
 class NodeInfoBadge extends StatelessWidget {
-  const NodeInfoBadge(this.warnings, {super.key});
+  const NodeInfoBadge(this.warnings,
+      {super.key, this.showTopSeverity = false});
 
-  /// ВСЕ предупреждения узла — шторка показывает их целиком. Значок
-  /// рисуется, когда среди них есть info (гейт — на вызывающей стороне).
+  /// ВСЕ предупреждения узла — шторка показывает их целиком.
+  ///
+  /// По умолчанию значок рисуется только при info (гейт — на вызывающей
+  /// стороне). [showTopSeverity] — главный экран (§502): один значок старшего
+  /// уровня (error / warning / info) перед подписью протокола.
   final List<NodeWarning> warnings;
+
+  /// §502 — значок старшего уровня, а не только info.
+  final bool showTopSeverity;
 
   @override
   Widget build(BuildContext context) {
-    final infos =
-        warnings.where((w) => w.severity == WarningSeverity.info).toList();
-    if (infos.isEmpty) return const SizedBox.shrink();
+    if (warnings.isEmpty) return const SizedBox.shrink();
+
+    late final WarningSeverity severity;
+    late final Color color;
+    late final IconData icon;
+    late final String semanticsLabel;
+
+    if (showTopSeverity) {
+      final sorted = [...warnings]
+        ..sort((a, b) => b.severity.index.compareTo(a.severity.index));
+      final top = sorted.first;
+      severity = top.severity;
+      semanticsLabel = top.message();
+      if (severity == WarningSeverity.info) {
+        color = Theme.of(context).colorScheme.onSurfaceVariant;
+        icon = Icons.info_outline;
+      } else {
+        final styled = warningSeverityStyle(context, severity);
+        color = styled.$1;
+        icon = styled.$2;
+      }
+    } else {
+      final infos =
+          warnings.where((w) => w.severity == WarningSeverity.info).toList();
+      if (infos.isEmpty) return const SizedBox.shrink();
+      severity = WarningSeverity.info;
+      semanticsLabel = infos.first.message();
+      color = Theme.of(context).colorScheme.onSurfaceVariant;
+      icon = Icons.info_outline;
+    }
+
     return Semantics(
       button: true,
       // Текста рядом нет — метку скринридеру собираем из самого
       // предупреждения: он слышит то, что зрячий прочитает в шторке.
-      label: infos.first.message(),
+      label: semanticsLabel,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => showNodeWarningsSheet(context, warnings),
         child: SizedBox(
           width: 24,
           height: 24,
-          child: Icon(
-            Icons.info_outline,
-            size: 14,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+          child: Icon(icon, size: 14, color: color),
         ),
       ),
     );

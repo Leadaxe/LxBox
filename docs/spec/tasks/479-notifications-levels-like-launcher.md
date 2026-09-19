@@ -76,6 +76,9 @@ vless  nl2.example.com:443
 3. **Шторка отказа ввода** (§500) — тот же [NodeNotificationsView] в
    [NodeWarningsSheet], с меткой входа вместо тега. Лист «N servers disabled»
    после §498 ведёт на вкладку Notifications, а не во вторую шторку.
+4. **Список Nodes на главном экране** (§502) — [NodeInfoBadge] с
+   `showTopSeverity` перед подписью протокола в строке; тап открывает ту же
+   шторку. Служебные строки (Direct / Auto / Block) без значка.
 
 Видимые строки (английские ключи, переводы ru/zh): `Notifications`, `Errors`,
 `Warnings`, `Info`, `What happened`, `Why it happens`, `What you can do`,

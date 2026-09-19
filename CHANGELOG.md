@@ -260,6 +260,16 @@
 ### Added
 
 - **Уведомления узла — внутри вкладки Diagnostics в деталях
+- **Главный экран: значок уведомлений у узла в списке Nodes
+  ([§502](docs/spec/tasks/502-home-node-list-notification-badge.md),
+  [§479](docs/spec/tasks/479-notifications-levels-like-launcher.md)).**
+  Во второй строке, перед подписью протокола, показывается один значок
+  старшего уровня (✖ / ⚠ / ⓘ) — те же иконки и цвета, что в списке подписки.
+  Тап по значку открывает шторку с карточками уведомлений; у Direct, Auto и
+  Block значка нет. Уровень считается в presenter один раз на обновление
+  списка (разбор + вердикт страховки).
+
+- **Уведомления узла — отдельная вкладка в деталях
   ([§497](docs/spec/tasks/497-node-notifications-tab.md),
   [§501](docs/spec/tasks/501-diagnostics-notifications-merge.md),
   [§479](docs/spec/tasks/479-notifications-levels-like-launcher.md)).** Тап по
