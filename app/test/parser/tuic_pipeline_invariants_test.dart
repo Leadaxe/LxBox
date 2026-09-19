@@ -338,6 +338,28 @@ void main() {
       expect(_registry(spec).where((w) => w.code == 'password_empty'), isEmpty);
       expect(spec.emit(TemplateVars.empty).map['password'], 'pass123');
     }, skip: skip);
+
+    test('синк 1.1.37 — у кода есть ТЕКСТЫ, карточка не пустая', () {
+      // До синка 1.1.37 код ставился нашим оверлеем, а в `warnings.json` его
+      // не было вовсе: severity бралась умолчанием, заголовком вставал сам
+      // идентификатор, карточка оставалась пустой. Реестр привёз код ОБЩИМ
+      // (не под схему) вместе с текстами — проверяем именно это, иначе
+      // регрессия реестра прошла бы молча: поведение-то осталось бы верным.
+      final t = ContractRegistry.I.textFor('password_empty');
+      expect(t, isNotNull, reason: 'кода нет в registry/warnings.json');
+      expect(t!.severity, 'warning');
+      expect(t.params, contains('path'));
+      for (final s in [t.titleEn, t.titleRu, t.textEn, t.textRu]) {
+        expect(s, isNotEmpty);
+        expect(s, isNot('password_empty'),
+            reason: 'заголовком встал идентификатор — текста нет');
+      }
+      // Подстановка `{path}` обязана быть названа значением, а не остаться
+      // в тексте дословно: путь кода у этой записи — `password`.
+      expect(t.textEn, contains('{path}'));
+      expect(t.fixEn, isNotEmpty);
+      expect(t.fixRu, isNotEmpty);
+    }, skip: skip);
   });
 
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {

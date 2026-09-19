@@ -393,4 +393,63 @@ void main() {
       expect(readableNames(p), {'insecure', 'allowInsecure'});
     });
   });
+
+  group('§480 · синк 1.1.37 · написание булева объявляет ЗАПИСЬ, не тип', () {
+    // Контракт 1.1.36 снял у xhttp-булевых объявление `emit_as: raw`, и
+    // соблазн вывести написание из типа (`bool_spelled` → слово) здесь
+    // разбирается вслух, потому что он НЕВЕРЕН в обе стороны:
+    //
+    // - у лаунчера `bool` и `bool_spelled` на выходе неразличимы (exec.go,
+    //   одна ветка), а СЛОВОМ он пишет любой необъявленный булев — цифру
+    //   даёт только явный `emit_as: bool01`;
+    // - у нас умолчание обратное (цифра), и словом пишет только явный
+    //   `emit_as: raw`.
+    //
+    // Привязка к типу сменила бы вид ссылок tuic: `reduce_rtt` объявлен
+    // `bool_spelled`, а наши ссылки несут `reduce_rtt=1` с самого начала.
+    // Поэтому у xhttp-записей `emit_as: raw` остаётся НАШИМ оверлеем.
+    Map<String, dynamic> sectionOf(String type, {String? emitAs}) => {
+          'emit': {'form': 'url', 'param_order': 'alphabetical'},
+          'params': {
+            'server': {'source': 'host', 'maps_to': 'server'},
+            'server_port': {'source': 'port', 'maps_to': 'server_port'},
+            'flag': {
+              'source': 'query.flag',
+              'maps_to': 'transport.flag',
+              'type': type,
+              'emit_as': ?emitAs,
+            },
+          },
+        };
+    const body = {
+      'server': 'h',
+      'server_port': 1,
+      'transport': {'flag': true},
+    };
+
+    test('bool_spelled БЕЗ объявления — цифра: тип написания не решает', () {
+      expect(_emit(sectionOf('bool_spelled'), body), 'x://h:1?flag=1');
+    });
+
+    test('bool без объявления — та же цифра', () {
+      expect(_emit(sectionOf('bool'), body), 'x://h:1?flag=1');
+    });
+
+    test('emit_as: raw — слово, и это ЕДИНСТВЕННЫЙ способ его получить', () {
+      expect(_emit(sectionOf('bool_spelled', emitAs: 'raw'), body),
+          'x://h:1?flag=true');
+      expect(_emit(sectionOf('bool', emitAs: 'raw'), body),
+          'x://h:1?flag=true');
+    });
+
+    test('ложь не пишется вовсе — ни с объявлением, ни без', () {
+      const off = {
+        'server': 'h',
+        'server_port': 1,
+        'transport': {'flag': false},
+      };
+      expect(_emit(sectionOf('bool_spelled'), off), 'x://h:1');
+      expect(_emit(sectionOf('bool_spelled', emitAs: 'raw'), off), 'x://h:1');
+    });
+  });
 }
