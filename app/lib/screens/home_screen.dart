@@ -8,8 +8,8 @@ import '../models/home_state.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
 import '../services/core_reject/core_reject_guard.dart';
+import '../services/core_reject/core_reject_runner.dart';
 import '../services/core_reject/core_reject_state.dart';
-import 'home/core_reject_host.dart';
 import 'home/core_reject_ui.dart';
 import '../services/error_humanize.dart';
 import '../services/support/active_time_tracker.dart';
@@ -968,9 +968,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// Фича 478 — прогон страховки на одно нажатие Start. Дерево ветвлений —
   /// в `core_reject_guard.dart`; здесь только связка с экраном: вопрос
   /// человеку диалогом и плашка по итогу.
+  ///
+  /// Сам прогон живёт в `services/core_reject/core_reject_runner.dart` — его
+  /// же зовёт `POST /action/start-vpn-headless?guard=true`, где экрана нет.
+  /// Здесь остаётся ровно то, что без экрана невозможно: тихая пересборка со
+  /// своими `mounted`-проверками и диалог предела кругов.
   Future<void> _runWithCoreRejectGuard() async {
-    CoreRejectState.I.beginRun();
-    final host = AppCoreRejectHost(
+    await runCoreRejectGuard(
       home: _controller,
       sub: _subController,
       // Пересборка круга — тихая: человек в это время смотрит на кнопку
@@ -989,19 +993,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         return answer;
       },
     );
-    final guard = CoreRejectGuard(host);
-    // Отмена доступна всегда (спека раздел 3): кнопка Start в фазе тихого
-    // цикла и `POST /core_reject/cancel` дотягиваются до автомата только
-    // отсюда — сам он живёт ровно этот прогон.
-    CoreRejectState.I.bindCancel(guard.cancel);
-    final run = await guard.run();
-    CoreRejectState.I.finish(run);
-    if (!mounted) return;
-    if (run.outcome == CoreRejectOutcome.failed && run.error.isNotEmpty) {
-      // Ошибка показывается обычным путём (_onControllerChange): автомат её
-      // не перехватывает, а лишь довёл до неё быстрее.
-      AppLog.I.warning('core reject guard: ${run.error}');
-    }
   }
 
   /// §107 single-flight: параллельные триггеры (возврат на home + гейт на

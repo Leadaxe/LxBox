@@ -78,6 +78,8 @@ auth), а не факт, что за границей всё открыто.
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
   - [identity подписки (§289)](#346--identity-подписки-289)
   - [Import rules CRUD — `/subs/{id}/rules`](#346--import-rules-crud--subsidrules)
+  - [`reveal` и `warnings` у одной записи (478)](#фича-478--reveal-и-warnings-у-одной-записи)
+- [Nodes — `/nodes/*`](#nodes--nodes)
 - [Directions CRUD — `/directions/*`](#directions-crud--directions)
 - [Chains CRUD — `/chains/*`](#chains-crud--chains)
 - [Folders CRUD — `/folders/*`](#folders-crud--folders)
@@ -225,7 +227,8 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
 | `POST /action/start-vpn` | — | `home.start()` (через Activity, с VpnService.prepare dance — может показать consent-диалог) |
-| `POST /action/start-vpn-headless` | — | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}` |
+| `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку**: тот же автомат, что на кнопке Start (`core_reject_runner.dart`), отказ ядра с названным узлом выключает его и запускает тихий цикл `checkConfig`. → `{guard:true, started, outcome, rounds, disabled:[{tag,reason}], error}`. Диалога предела кругов здесь нет — спрашивать некого, предел остаётся пределом; ответить заранее можно через `POST /core_reject/prompt?answer=keep`. Без флага — прежний путь |
+| `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig` по **текущему собранному** конфигу (тому, что лежит на диске, а не пересобранному на лету): та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает CANON §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
 | `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра) |
 | `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
 | `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
@@ -356,11 +359,48 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 |---|---|---|
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
-| `/subs/{id}` | GET | — |
+| `/subs/{id}` | GET | `?reveal=true`, `?warnings=true` — см. ниже |
 | `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity. **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
 | `/subs/reorder` | POST | `{"order":[id1,...]}` |
+
+### Фича 478 — `reveal` и `warnings` у одной записи
+
+**`?reveal=true`** теперь отдаёт `raw` и у одиночного `UserServer` — текст
+узла, как он сохранён. Раньше сырое тело показывал только член папки, и
+сличить разбор с источником у одиночной записи было нечем. Несёт
+credentials, поэтому симметрично папке: только под `reveal`.
+
+**`?warnings=true`** добавляет ключ `warnings` — предупреждения разбора **по
+узлам**:
+
+```jsonc
+{
+  "id": "…", "kind": "SubscriptionServers", …,
+  "warnings": {
+    "🇩🇪 Frankfurt": [
+      {
+        "code": "reality_fp_not_chrome",
+        "severity": "warning",
+        "path": "tls.utls.fingerprint",
+        "value": "safari",
+        "title_en": "…", "text_en": "…"
+      }
+    ]
+  }
+}
+```
+
+Узлы без предупреждений в карту не попадают. Тексты — **пиненный
+английский**: ответ не должен зависеть от локали устройства, а проверять надо
+резолв кода и подстановки, а не вёрстку. У предупреждений, чей текст пока
+живёт классом приложения (не кодом реестра), `code`/`path`/`value`/`title_en`
+— `null`, а `text_en` есть всегда (`NodeWarning.renderEn()`). По мере
+перевода классов на `RegistryWarning` форма ответа не меняется — у кода
+просто появляются `path`/`value`.
+
+По умолчанию выключено: на 500 узлах это лишний вес.
 
 **Добавить подписку:**
 ```bash
@@ -544,6 +584,35 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 - `replace_detour_chain` (§073) — bool detour-флаг, ранее пропущенный в PATCH-маппинге (асимметрия с соседними `register_detour_*`); теперь маппится. Config-significant → `?rebuild=true` чтобы применить.
 - `POST /subs/{id}/refresh` на UserServer → 409 `conflict` (нечего фетчить).
 - `POST /subs` с `?rebuild=true` **не ждёт fetch'а** — fetch асинхронный, rebuild'ит с текущими nodes (которых ещё нет → config без этих outbound'ов). Делай последовательно: `POST /subs` → `POST /subs/{id}/refresh` → wait → `POST /action/rebuild-config`.
+
+---
+
+## Nodes — `/nodes/*`
+
+Фича 478. Узел глазами **эмиттера**, а не хранения. В `/subs/{id}` узел виден
+так, как лежит (`raw`, секции, поля записи); здесь — тем, что приложение
+отдаст наружу. Между двумя сторонами стоит эмиттер, и расхождение заметно
+только когда обе читаются рядом.
+
+| Endpoint | Метод | Что делает |
+|---|---|---|
+| `/nodes/link?tag=<tag>` | GET | экспорт узла ссылкой — ровно то, что кладёт в буфер `Copy link` (`NodeSpec.toUri()`) |
+
+```bash
+curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7" | jq
+# → {"tag":"node-7","protocol":"vless","uri":"vless://…","private_key":false}
+```
+
+- `tag` принимается и «как в конфиге» (с префиксом подписки), и голым: экран
+  адресует узлы первым, хранение — вторым. Звенья цепочки (§404) тоже ищутся.
+- `private_key: true` — ссылка несёт приватный ключ владельца. На экране это
+  поднимает диалог (§466); здесь предупреждение не теряется, а становится
+  данными.
+- Узел найден, но ссылкой не выражается (группы §208 и прочие узлы,
+  собранные приложением без текста) → `{tag, protocol, error:"node has no
+  link form"}`, а **не** 404: узел есть, ответ обязан отличать «нет узла» от
+  «нет ссылки».
+- Узла с таким тегом нет → 404.
 
 ---
 

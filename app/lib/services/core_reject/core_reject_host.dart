@@ -3,14 +3,18 @@
 /// Автомат (`core_reject_guard.dart`) знает только этот интерфейс; всё, что
 /// про туннель, сборку и хранение, живёт здесь. Так автомат остаётся
 /// проверяемым юнитами, а связка — тонкой.
+///
+/// Лежал под `screens/home/`, хотя виджетов не знает вовсе: ни одного импорта
+/// Flutter. Переехал в сервисы, когда прогон понадобился Debug API
+/// (`core_reject_runner.dart`) — сервису нельзя зависеть от экрана.
 library;
 
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
-import '../../services/app_log.dart';
-import '../../services/core_reject/core_reject_guard.dart';
-import '../../services/core_reject/core_reject_state.dart';
 import '../../vpn/box_vpn_client.dart';
+import '../app_log.dart';
+import 'core_reject_guard.dart';
+import 'core_reject_state.dart';
 
 /// Реализация [CoreRejectHost] поверх контроллеров.
 ///

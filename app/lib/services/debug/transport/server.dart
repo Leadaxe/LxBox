@@ -18,6 +18,7 @@ import '../handlers/files.dart';
 import '../handlers/folders.dart';
 import '../handlers/logs.dart';
 import '../handlers/help.dart';
+import '../handlers/nodes.dart';
 import '../handlers/ping.dart';
 import '../handlers/pool.dart';
 import '../handlers/profiler.dart';
@@ -181,6 +182,8 @@ class DebugServer {
       ..mount('/backup', backupHandler)
       ..mount('/rules', rulesHandler)
       ..mount('/subs', subsHandler)
+      // Фича 478 — узел глазами эмиттера: ссылка, как у Copy link.
+      ..mount('/nodes', nodesHandler)
       ..mount('/directions', directionsHandler) // §238 — Направления роутинга §125
       ..mount('/chains', chainsHandler) // §393 C — источники-цепочки SPEC 110
       ..mount('/folders', foldersHandler) // §238 — папки серверов §234

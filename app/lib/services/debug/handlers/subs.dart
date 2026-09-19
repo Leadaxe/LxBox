@@ -126,9 +126,16 @@ Future<DebugResponse> _list(DebugContext ctx, DebugRequest req) async {
 Future<DebugResponse> _single(String id, DebugContext ctx, DebugRequest req) async {
   final sub = ctx.requireSub();
   final reveal = req.qBool('reveal');
+  // Фича 478 — `?warnings=true` добавляет предупреждения разбора по узлам.
+  // Отдельным ключом, а не вместо записи: сверять код с телом узла надо в
+  // одном ответе. По умолчанию выключено — на 500 узлах это лишний вес.
+  final warnings = req.qBool('warnings');
   for (final e in sub.entries) {
     if (e.id == id) {
-      return JsonResponse(serializeSubEntry(e, reveal: reveal));
+      return JsonResponse({
+        ...serializeSubEntry(e, reveal: reveal),
+        if (warnings) 'warnings': serializeEntryWarnings(e),
+      });
     }
   }
   throw NotFound('sub: $id');

@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../../../models/custom_rule.dart';
 import '../../app_log.dart';
 import '../../automation/handlers.dart' as automation;
+import '../../core_reject/core_reject_guard.dart';
+import '../../core_reject/core_reject_runner.dart';
 import '../../error_humanize.dart';
 import '../../platform_channels.dart';
 import '../../../vpn/box_vpn_client.dart';
@@ -41,7 +43,8 @@ Future<DebugResponse> actionHandler(
     '/action/switch-node' => _switchNode(req, ctx),
     '/action/set-group' => _setGroup(req, ctx),
     '/action/start-vpn' => _startVpn(ctx),
-    '/action/start-vpn-headless' => _startVpnHeadless(),
+    '/action/start-vpn-headless' => _startVpnHeadless(req, ctx),
+    '/action/check-config' => _checkConfig(req, ctx),
     '/action/stop-vpn' => _stopVpn(ctx),
     '/action/reconnect' => _reconnect(ctx),
     '/action/reload-vpn' => _reloadVpn(ctx),
@@ -257,11 +260,91 @@ Future<DebugResponse> _stopVpn(DebugContext ctx) async {
 /// (идёт через Activity и может показать consent-диалог), этот стартует прямо
 /// через `BoxVpnService.start()`. Debug API живёт в Flutter-процессе (не привязан
 /// к VPN), поэтому роут доступен при опущенном туннеле.
-Future<DebugResponse> _startVpnHeadless() async {
-  final r = await BoxVpnClient().startVpnHeadless();
+///
+/// Фича 478 — `?guard=true` поднимает VPN ЧЕРЕЗ страховку: тот же автомат, что
+/// на кнопке Start (`core_reject_runner.dart`), а не голый native-старт. Это
+/// единственный способ проверить фичу на устройстве, где на экран смотреть
+/// некому: отказ ядра, назвавший узел, выключит его и запустит тихий цикл
+/// `checkConfig`, а фаза и выключенное читаются из `/core_reject`.
+///
+/// Диалога предела кругов здесь нет и быть не может — вопрос задать некому,
+/// поэтому предел остаётся пределом (ответ `stop`). Ответить за человека можно
+/// заранее, `POST /core_reject/prompt?answer=keep`: автомат ждёт ОБА источника
+/// и берёт первый.
+///
+/// Без флага — прежний путь, байт в байт.
+Future<DebugResponse> _startVpnHeadless(
+  DebugRequest req,
+  DebugContext ctx,
+) async {
+  if (!req.qBool('guard')) {
+    final r = await BoxVpnClient().startVpnHeadless();
+    return _ok('start-vpn-headless', {
+      'started': r.started,
+      'needs_consent': r.needsConsent,
+      'guard': false,
+    });
+  }
+  final home = ctx.requireHome();
+  final sub = ctx.requireSub();
+  final run = await runCoreRejectGuard(home: home, sub: sub);
   return _ok('start-vpn-headless', {
-    'started': r.started,
-    'needs_consent': r.needsConsent,
+    'guard': true,
+    'started': run.started,
+    'outcome': switch (run.outcome) {
+      CoreRejectOutcome.startedClean => 'started_clean',
+      CoreRejectOutcome.startedWithDisabled => 'started_with_disabled',
+      CoreRejectOutcome.failed => 'failed',
+      CoreRejectOutcome.stoppedByUser => 'stopped_by_user',
+    },
+    'rounds': run.rounds,
+    'disabled': [for (final d in run.disabled) d.toJson()],
+    'error': run.error,
+  });
+}
+
+/// `POST /action/check-config` — Фича 478. Прогнать `Libbox.checkConfig` по
+/// ТЕКУЩЕМУ собранному конфигу и отдать вердикт ядра дословно. Это та же
+/// проверка, которой страховка крутит тихий цикл, но одним выстрелом и без
+/// туннеля: видно, примет ядро конфиг или нет, ДО нажатия Start.
+///
+/// `error` — сырой текст ядра, без обёрток приложения: по нему и разбирается
+/// грамматика CANON §9.
+///
+/// Сервер однопоточный, поэтому ждём вердикт с потолком: `?timeout_ms=`
+/// (по умолчанию 10 с, максимум — таймаут запроса). Не успели — 409, а не
+/// вечный висяк.
+Future<DebugResponse> _checkConfig(DebugRequest req, DebugContext ctx) async {
+  final home = ctx.requireHome();
+  // Проверяем ровно то, что лежит у ядра: конфиг с диска, а не пересобранный
+  // на лету — иначе ответ был бы про другой конфиг, чем поднимет Start.
+  final config = home.state.configRaw;
+  if (config.isEmpty) {
+    throw const Conflict('no config built yet');
+  }
+  final capMs = ctx.config.requestTimeout.inMilliseconds;
+  var timeoutMs = int.tryParse(req.query['timeout_ms'] ?? '') ?? 10000;
+  if (timeoutMs <= 0 || (capMs > 0 && timeoutMs > capMs)) {
+    timeoutMs = capMs > 0 ? capMs : 10000;
+  }
+  final started = DateTime.now();
+  CoreCheck? r;
+  try {
+    r = await BoxVpnClient()
+        .checkConfig(config)
+        .timeout(Duration(milliseconds: timeoutMs));
+  } on TimeoutException {
+    throw Conflict('checkConfig did not answer in ${timeoutMs}ms');
+  }
+  final ms = DateTime.now().difference(started).inMilliseconds;
+  // Моста нет (старый native, ядро не подгружено) — отвечать нечем, и молчать
+  // об этом нельзя: `ok:false` соврал бы, что конфиг плохой.
+  if (r == null) throw const Conflict('checkConfig bridge unavailable');
+  return _ok('check-config', {
+    'config_ok': r.ok,
+    'error': r.error,
+    'ms': ms,
+    'bytes': config.length,
   });
 }
 

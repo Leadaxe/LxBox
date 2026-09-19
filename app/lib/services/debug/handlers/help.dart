@@ -112,8 +112,19 @@ POST /logs/clear[?source=app|core]  Clear AppLog. No source — everything; othe
 === Actions (mutating, POST) ===
 
 POST /action/start-vpn                         Start the tunnel (via Activity, may show consent) → {"ok":true}
-POST /action/start-vpn-headless                Start WITHOUT Activity/consent (needs permission already granted)
+POST /action/start-vpn-headless[?guard=true]   Start WITHOUT Activity/consent (needs permission already granted)
                                                   → {"started":bool,"needs_consent":bool}. For automation/self-test.
+                                                  guard=true (feature 478): start through the core-reject GUARD —
+                                                  the same state machine the Start button runs. A core refusal that
+                                                  names a node disables it and the silent checkConfig loop takes over.
+                                                  → {guard:true, started, outcome, rounds, disabled:[{tag,reason}],
+                                                  error}. No round-limit dialog here (nobody to ask) — the limit
+                                                  holds; answer it up front with POST /core_reject/prompt?answer=keep.
+POST /action/check-config[?timeout_ms=N]       Run Libbox.checkConfig over the CURRENTLY BUILT config (the one on
+                                                  disk, not a fresh rebuild) — the same check the guard loops on,
+                                                  once, without a tunnel. → {config_ok:bool, error, ms, bytes}.
+                                                  error is the core's RAW text (what CANON §9 parses). Waits at most
+                                                  timeout_ms (default 10000, capped by the request timeout) → 409.
 POST /action/stop-vpn                          Stop it
 POST /action/force-stop-vpn                    Hard force-stop (doForceStop): teardown→stopSelf, frees CommandServer
                                                   port 63130 when a normal stop hung. Fire-and-forget.
@@ -181,7 +192,15 @@ POST   /rules/move                             Body: {"id":"<uuid>","after":"<uu
 === Subscriptions CRUD (user servers + subscriptions) ===
 
 GET    /subs[?reveal=true]                     alias /state/subs. reveal=true → unmasked URLs
-GET    /subs/{id}[?reveal=true]                Single entry
+GET    /subs/{id}[?reveal=true][?warnings=true]  Single entry. reveal=true also returns `raw` for a single
+                                                 UserServer (the node's own text, as folder members already do —
+                                                 it carries credentials, hence reveal only).
+                                                 warnings=true adds `warnings`: {tag: [{code, severity, path,
+                                                 value, params, title_en, text_en}]} — parse warnings per node,
+                                                 pinned English so the answer does not depend on device locale.
+                                                 Nodes without warnings are absent. code/path/value are null for
+                                                 warnings whose text still lives in the app rather than the
+                                                 registry; text_en is always there.
 POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|WG-conf|JSON-outbounds>"}.
                                                  input runs through the parser pipeline (same as UI paste);
                                                  JSON with multiple outbounds may create several entries.
@@ -230,6 +249,18 @@ POST   /subs/{id}/rules/reorder                Body {"order":[old indexes in new
 
 `?rebuild=true` on any write → auto rebuild-config. Writes go through
 SubscriptionController (fetch-state machine + UI notify), not SettingsStorage directly.
+
+=== Nodes (the emitter's side) ===
+
+GET    /nodes/link?tag=<tag>                   Export the node as a link — exactly what Copy link puts on the
+                                                 clipboard (NodeSpec.toUri()). tag is taken either as it stands
+                                                 in the config (with the subscription prefix) or bare; chain hops
+                                                 are searched too. → {tag, protocol, uri, private_key}.
+                                                 private_key=true means the link carries the owner's private key
+                                                 (on screen that raises a dialog; here it is data).
+                                                 Found but not expressible as a link (app-built nodes, groups) →
+                                                 {tag, protocol, error:"node has no link form"}, not a 404.
+                                                 No such node → 404.
 
 === Directions CRUD (routing directions) ===
 

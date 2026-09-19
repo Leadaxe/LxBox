@@ -1,7 +1,9 @@
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/codec/node_link_record.dart';
 import '../../../models/import_rule.dart';
+import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
+import '../../contract/registry_warning.dart';
 import '../../url_mask.dart';
 
 export '../../url_mask.dart' show maskSubscriptionUrl;
@@ -46,6 +48,12 @@ Map<String, Object?> serializeSubEntry(
     // §435 — секции одиночного узла (контракт ## 13), read-only, как
     // хранятся (с плейсхолдерами `@self`). У подписки/папки ключа нет.
     if (list is UserServer) 'sections': list.sections?.toJson(),
+    // Фича 478 — `raw` одиночного узла под `reveal=true`. Раньше сырое тело
+    // отдавал только член папки (`serializeFolderMember`), и проверить, что
+    // именно лежит у одиночной записи, снаружи было нечем — при разборе
+    // ссылки это ровно то, что нужно сличить. Несёт credentials, поэтому
+    // симметрично папке: только под `reveal` (скраббер `/state/storage`).
+    if (list is UserServer && reveal) 'raw': list.rawBody,
     if (list is SubscriptionServers) ...{
       'on_update_action': list.onUpdateAction.name, // §323
       // §289 — null = режим Default (глобальная идентичность §118).
@@ -58,6 +66,50 @@ Map<String, Object?> serializeSubEntry(
       'import_rules_count': list.importRules.length,
     },
   };
+}
+
+/// Фича 478 — предупреждения разбора одного узла для `?warnings=true`.
+///
+/// Почему это API, а не экран: предупреждения вычисляются при разборе и на
+/// узле не хранятся, а экран показывает уже отрендеренную строку по активной
+/// локали. Проверять же надо резолв КОДА и подстановки — поэтому здесь и код,
+/// и severity, и оба текста реестра пиненным английским: ответ не должен
+/// зависеть от языка устройства.
+///
+/// `path`/`value` есть у кодов реестра ([RegistryWarning]); у классов, чей
+/// текст живёт в приложении, их нет — там `null`, а `text_en` даёт [renderEn].
+/// Общий интерфейс — [NodeWarning], поэтому перевод классов на
+/// `RegistryWarning` форму ответа не двигает: у переведённого кода просто
+/// появляются `path`/`value`.
+Map<String, Object?> serializeNodeWarning(NodeWarning w) {
+  final reg = w is RegistryWarning ? w : null;
+  final code = reg?.code;
+  return {
+    'code': code,
+    'severity': w.severity.name,
+    'path': reg?.path,
+    'value': reg?.value,
+    if (reg != null && reg.params.isNotEmpty) 'params': {...reg.params},
+    // Заголовок есть только у кодов реестра — у классов приложения его нет,
+    // и выдумывать его из текста нельзя.
+    'title_en': code == null
+        ? null
+        : registryTitle(code, RegistryLang.en, params: reg!.params),
+    // Текст — всегда: у кода реестра из реестра, у класса приложения его
+    // собственный пиненный английский.
+    'text_en': w.renderEn(),
+  };
+}
+
+/// Фича 478 — предупреждения по узлам записи: `tag` → список.
+/// Узлы без предупреждений в карту не попадают.
+Map<String, Object?> serializeEntryWarnings(SubscriptionEntry e) {
+  final byTag = <String, Object?>{};
+  for (final n in e.list.nodes) {
+    if (n.warnings.isEmpty) continue;
+    byTag[n.tag] = [for (final w in n.warnings) serializeNodeWarning(w)];
+  }
+  return byTag;
 }
 
 /// §346 — одно import-правило (§302) для `/subs/{id}/rules`. Shape — канонный

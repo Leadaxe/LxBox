@@ -278,6 +278,29 @@ fingerprint`) и на ошибке не про узел (`inbound`, `dns`, `rout
 разбирается, но на сопоставление не влияет — он диагностический (§9.1).
 Функция чистая: теги приходят параметром, ядро и хранение ей не нужны.
 
+**Д-1 (эмулятор, 19.09.2026) — страховка не срабатывала ни разу.** До Dart
+строка доходит не голой: Go кладёт свою цепочку (`start or reload service: `),
+а Kotlin сверху **локализованный** шаблон `stop_alert_start_failed` — в ru
+префикс другой. Разбор требовал `startsWith('initialize ')`, получал `null`, и
+автомат стоял в `idle` (round 0). Дословно с устройства:
+
+```
+Failed to start service: start or reload service: initialize outbound[33] shadowsocks[⚡ c-ss2022-badkey]: bad key length, required 32, got 5
+```
+
+Чинится двумя независимыми путями, ни один не знает текста обёртки:
+
+1. **Сырой текст отдельным полем.** `BoxService` кладёт в бродкаст
+   `EXTRA_CORE_ERROR` (`core_error`) — ровно `t.message` от
+   `startOrReloadService`, без единой обёртки приложения; `error` рядом
+   остаётся локализованной витриной для человека. Дальше `VpnPlugin` →
+   `TunnelStatusEvent.coreError` → `HomeController._settleStartOutcome`, где
+   он и берётся первым. Видимый текст алерта не менялся.
+2. **Разбор ищет грамматику по вхождению.** `initialize ` ищется не с начала
+   строки, а по всем вхождениям слева направо; побеждает первое, за которым
+   §9 сходится целиком, включая сопоставление тега. Это запасной путь для
+   native старше `core_error` — и страховка от любой будущей обёртки.
+
 ### Автомат
 
 `app/lib/services/core_reject/core_reject_guard.dart` — `CoreRejectGuard`,
@@ -398,6 +421,30 @@ Show. Новых экранов нет: список выключенных ве
 `POST /core_reject/prompt?answer=stop|keep`, `POST /core_reject/cancel`
 (отмена идущего прогона — то же, что кнопка), `POST /core_reject/enable?tag=`,
 `GET /core_reject/notifications[?tag=]`.
+
+**Д-1а — чего не хватало для проверки на устройстве.** Наблюдать фичу было
+можно, а завести — нет: старт шёл только с экрана. Добавлено (полные описания
+в `docs/api/debug-api-reference.md`):
+
+| Путь | Зачем |
+|---|---|
+| `POST /action/start-vpn-headless?guard=true` | старт **через страховку** — тот же автомат, что на кнопке Start. Без флага прежний путь байт в байт |
+| `POST /action/check-config[?timeout_ms=]` | `Libbox.checkConfig` по текущему собранному конфигу → `{config_ok, error, ms, bytes}`; `error` — сырой текст ядра. Сервер однопоточный ⇒ потолок ожидания, не успели — 409 |
+| `GET /subs/{id}?warnings=true` | предупреждения разбора по узлам: `{tag: [{code, severity, path, value, params, title_en, text_en}]}`, пиненный английский |
+| `GET /subs/{id}?reveal=true` | теперь отдаёт `raw` и у одиночного `UserServer` (раньше только у члена папки) |
+| `GET /nodes/link?tag=` | экспорт узла ссылкой — тот же emit, что у `Copy link`; `{uri, private_key}` либо `{error}` |
+
+Ради первого пункта прогон уехал из экрана в
+`app/lib/services/core_reject/core_reject_runner.dart` (`runCoreRejectGuard`):
+экран зовёт его же, отдавая своё — тихую пересборку и диалог предела; Debug
+API зовёт без них, и предел там остаётся пределом (ответить заранее можно
+`POST /core_reject/prompt?answer=keep`). Заодно `core_reject_host.dart`
+переехал из `screens/home/` в `services/core_reject/`: виджетов он не знал
+вовсе, а сервису нельзя зависеть от экрана.
+
+Форма ответа `warnings` не зависит от того, переведён ли класс предупреждения
+на `RegistryWarning`: общий интерфейс — `NodeWarning` (`severity`,
+`renderEn()`), у кода реестра дополнительно есть `path`/`value`/`title_en`.
 
 ### Замер
 
