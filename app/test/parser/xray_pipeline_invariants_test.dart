@@ -534,9 +534,16 @@ void main() {
 
   group('§472 шаг 8 — границы переезда', () {
     test('hysteria2 не получает utls: у QUIC нет TLS-рукопожатия', () {
-      // `quic_has_no_utls_or_reality` — блоки снимает МАППЕР. Отдай он их
-      // судье, узел получил бы `tls_not_applicable_quic` там, где прежняя
-      // ветка молчала (она читала отпечаток, но Hysteria2Spec его не эмитил).
+      // Блок utls снимается, узел живёт — это нормативно и не менялось.
+      //
+      // Контракт 1.1.28: снимает его САНИТАЙЗЕР по правилу реестра
+      // (`tls.json`: `body.fields.utls.forbidden_for` с четырьмя
+      // QUIC-схемами), а не маппер, и делает это ОДИНАКОВО на трёх входах —
+      // ссылке, JSON-теле и Xray-объекте. Отсюда и код: `tls_not_applicable_quic`
+      // уровня info, то есть «поле было, мы его сняли и говорим об этом».
+      // Прежняя рукописная ветка молчала, потому что отпечаток читала, но
+      // эмитить его было некому; молчание было свойством реализации, а не
+      // правилом. Судится ТЕЛО (блока нет) и наличие кода — оба нормативны.
       final nodes = _parse([
         {
           'remarks': 'hy2',
@@ -557,7 +564,7 @@ void main() {
       ], []);
       final tls = nodes.single.emit(TemplateVars.empty).map['tls'] as Map;
       expect(tls.containsKey('utls'), isFalse);
-      expect(_codeOf(nodes.single, 'tls_not_applicable_quic'), isNull);
+      expect(_codeOf(nodes.single, 'tls_not_applicable_quic'), isNotNull);
     }, skip: skip);
 
     test('битый ТИП streamSettings пропускает узел, а не оживляет его', () {

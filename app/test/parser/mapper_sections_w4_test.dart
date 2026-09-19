@@ -357,25 +357,37 @@ void main() {
     });
   });
 
-  group('§480 W4 — форма секции xray', () {
-    const path = 'assets/contract_draft/xray/hysteria2.json';
+  // Контракт 1.1.28 забрал вид `xray` у пары hysteria/hysteria2 В РЕЕСТР, и
+  // решение там ДРУГОЕ, чем в нашем снятом черновике: не одна секция с
+  // селектором по версии, а ДВЕ секции со взаимоисключающими `detect`
+  // (TASKS_LXBOX §26). Причина — тип тела выбирает вызывающий по схеме,
+  // которую вернул `detect`, а запись `sets` кладёт `type` в тело и сменить
+  // выбранную схему не может. Проверяется взаимоисключаемость: две секции на
+  // один элемент — ошибка реестра, и держится она только предикатами.
+  group('§480 W4 — вид xray у пары по версии', () {
+    const h2Path = 'assets/contract/registry/protocols/hysteria2.json';
+    const h1Path = 'assets/contract/registry/protocols/hysteria.json';
 
-    test('опознание по protocol: "hysteria"; версия выбирает тип тела', () {
-      final s = section(path, 'xray');
-      expect(((s['detect'] as Map)['json'] as Map)['value_of'],
-          {'protocol': 'hysteria'});
-      expect(s['body_source'], 'xray');
-      expect(s['emit'], isNull);
-      final version = (s['params'] as Map)['version'] as Map;
-      expect(version['selector'], isTrue);
-      expect((version['sets'] as Map)['2'], {'type': 'hysteria2'});
+    test('обе секции исполняемы и читают вид xray', () {
+      for (final p in [h2Path, h1Path]) {
+        final s = section(p, 'xray');
+        expect(s['body_source'], 'xray', reason: p);
+        expect(s['detect'], isNotNull, reason: p);
+        expect((s['params'] as Map), isNotEmpty, reason: p);
+      }
     });
 
-    test(r'пути формы идут через якорь $base', () {
-      final s = section(path, 'xray');
-      expect((s['forms'] as List).first, containsPair('base', 'settings'));
-      expect(((s['params'] as Map)['address'] as Map)['source'],
-          r'json.$base.address');
+    test('detect у пары ВЗАИМОИСКЛЮЧАЮЩИЕ: версия 2 только у одной', () {
+      // Ровно та развилка, ради которой решение сделано двумя секциями:
+      // `hysteria2` берёт свой протокол ЛИБО пару (протокол + версия 2), а
+      // `hysteria` — ту же пару под отрицанием версии 2. Сверяется наличие
+      // отрицания, а не буква предиката: переписать его вправе лаунчер, а
+      // взаимоисключаемость нормативна.
+      final h2 = jsonEncode(section(h2Path, 'xray')['detect']);
+      final h1 = jsonEncode(section(h1Path, 'xray')['detect']);
+      expect(h2, contains('hysteria2'));
+      expect(h1, isNot(contains('hysteria2')));
+      expect(section(h1Path, 'xray')['detect'].toString(), contains('not'));
     });
   });
 }
