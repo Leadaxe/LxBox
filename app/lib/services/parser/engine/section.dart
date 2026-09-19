@@ -457,7 +457,12 @@ final class MapperParam {
       implies: ((j['implies'] as Map?) ?? const {}).cast<String, dynamic>(),
       when: ((j['when'] as Map?) ?? const {}).cast<String, dynamic>(),
       extract: ex == null ? null : ExtractSpec.fromJson(ex),
-      compose: j['compose'] as String?,
+      // `compose` ДВУХ форм (PRIMITIVES §0.12): строка-шаблон и объект
+      // `{template, from, omit_when_empty}`. Здесь остаётся только строковая —
+      // объектную читает эмиттер из `raw`, разбору она не нужна вовсе.
+      // Слепой каст к String? ронял загрузку секции целиком, как только
+      // реестр объявил объектную форму у `ws.path` (контракт 1.1.36).
+      compose: j['compose'] is String ? j['compose'] as String : null,
       list: ls == null ? null : ListSpec.fromJson(ls),
       splitInto:
           ((j['split_into'] as Map?) ?? const {}).cast<String, dynamic>(),

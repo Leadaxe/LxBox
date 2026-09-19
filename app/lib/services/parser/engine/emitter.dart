@@ -953,9 +953,10 @@ final class _Emit {
   ///
   /// - **строка** — сам шаблон, а `{...}` в нём это ПУТИ ТЕЛА напрямую
   ///   (`"{transport.path}?ed={transport.max_early_data}"`);
-  /// - **объект** `{template, from, omit_when_empty}` — шаблон по ИМЕНАМ
-  ///   ГРУПП, где `from` переводит имя группы в путь. Нужен там, где имена
-  ///   групп короткие и совпадают с группами `extract`.
+  /// - **объект** `{template, from, omit_when_empty}`, где `from` бывает двух
+  ///   написаний: КАРТА «имя группы → путь» (шаблон пишет короткие имена
+  ///   групп `extract`) и СПИСОК путей — форма реестра, в которой шаблон
+  ///   адресует пути напрямую, а `from` лишь перечисляет их.
   ///
   /// Хвост, чьё значение отсутствует, СРЕЗАЕТСЯ вместе со своим
   /// разделителем: `{path}?ed={ed}` без `ed` обязан дать просто путь, иначе
@@ -968,14 +969,24 @@ final class _Emit {
     if (raw is! Map) return null;
     final spec = raw.cast<String, dynamic>();
     final template = spec[EmitNames.composeTemplate] as String?;
-    final from = (spec[EmitNames.composeFrom] as Map?)?.cast<String, dynamic>();
-    if (template == null || from == null) return null;
-    final omitEmpty =
-        ((spec[EmitNames.composeOmitWhenEmpty] as List?) ?? const [])
-            .map((e) => '$e')
-            .toSet();
+    if (template == null) return null;
+    // `from` двух написаний. КАРТА «имя группы → путь» нужна шаблону, который
+    // пишет короткие имена групп `extract`. СПИСОК путей (форма реестра,
+    // контракт 1.1.36) ничего не переводит: такой шаблон адресует пути
+    // напрямую, и `from` в нём лишь объявляет их перечнем. Подстановка тогда
+    // тождественна — как у строковой формы.
+    final fromRaw = spec[EmitNames.composeFrom];
+    final from = fromRaw is Map ? fromRaw.cast<String, dynamic>() : null;
+    // `omit_when_empty` реестра здесь НЕ нужен отдельным списком: он говорит
+    // «срезать хвост, КОГДА значение пусто», а пустую группу шаблон срезает и
+    // так (см. _composeTemplate). Безусловный запрет — только `implies`,
+    // которого тело не подтверждает.
     return _composeTemplate(
-        p, template, (g) => '${from[g] ?? g}', omitEmpty);
+      p,
+      template,
+      from == null ? (g) => g : (g) => '${from[g] ?? g}',
+      _impliedOffGroups(p),
+    );
   }
 
   /// Обращение `extract` С ОДНОЙ содержательной группой, у записи без
