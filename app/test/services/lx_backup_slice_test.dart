@@ -17,6 +17,8 @@ import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
 import 'package:lxbox/services/lx_backup_slice.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §439 §1.3 — LX Backup 1.0 = срез записи хранения одной таблицей полей
 /// (`lx_backup_slice.dart`): поле контракта едет, настройка LxBox без дома в
 /// 1.0 срезается одним `backup_local_only_dropped` на сущность, рантайм и
@@ -168,6 +170,10 @@ List<BackupField> _settingsUndeclared() => [
     ];
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   tearDown(() => overrideBackupFieldsForTesting(null));
 
   group('срез по таблице', () {

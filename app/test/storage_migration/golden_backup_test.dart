@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'golden_harness.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §439 волна 0 — LX Backup 1.0 (писатель §438) из фикстуры хранения и круг
 // «экспорт → импорт в пустое хранение → сборка конфига».
 //
@@ -23,6 +25,10 @@ import 'golden_harness.dart';
 // фикстуры, — на живом устройстве их принесли бы сеть и загрузчик.
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   for (final name in kStorageFixtures) {
     test('$name: экспорт LX Backup и круг экспорт → импорт → конфиг', () async {
       final source = await StorageSandbox.create();

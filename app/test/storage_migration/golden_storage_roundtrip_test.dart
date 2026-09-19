@@ -9,6 +9,8 @@ import 'package:lxbox/services/subscription/http_cache.dart';
 
 import 'golden_harness.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §439 — фикстура хранения формы 2.23.2 мигрирует при первом чтении
 // (`_load`), и документ формы 1.0 проходит все типизированные геттеры и
 // сейверы (кодек записей → модели → кодек) без потерь.
@@ -24,6 +26,10 @@ import 'golden_harness.dart';
 //     форма 1.0 проходит модели дословно.
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   for (final name in kStorageFixtures) {
     test('$name: загрузка и запись SettingsStorage — разница с фикстурой',
         timeout: kGoldenTimeout, () async {

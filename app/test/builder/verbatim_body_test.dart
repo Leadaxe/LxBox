@@ -13,6 +13,8 @@ import 'package:lxbox/services/builder/verbatim_body.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §455 — источник записи JSON → тело узла в конфиг дословно (объект
 /// источника), а не emit() модели; ссылка/INI — через модель, как раньше.
 class _Ctx extends EmitContext {
@@ -51,6 +53,10 @@ class _Ctx extends EmitContext {
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   const pem = '-----BEGIN CERTIFICATE-----\nMII…\n-----END CERTIFICATE-----\n';
   final naive = {
     'type': 'naive',

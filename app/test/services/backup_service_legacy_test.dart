@@ -10,12 +10,18 @@ import 'package:lxbox/services/settings_storage.dart';
 
 import '../storage_migration/golden_harness.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §439 §3.4 — внутренний бэкап (`app: lxbox`, `kind: backup`) со снимком
 /// хранения 2.23.2: блок `storage` мигрирует при разборе, превью и
 /// категорийный фильтр видят форму 1.0 (источники делятся по
 /// `sources[].kind`: цепочка — Routing, прочее — Server lists), восстановление
 /// собирает тот же `config.json`, что и хранение до миграции.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   /// Блок `storage`, каким его писал внутренний бэкап 2.23.2.
   Map<String, dynamic> legacyStorage() => {
         'vars': {

@@ -13,6 +13,8 @@ import 'package:lxbox/services/subscription/sources.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../parser/engine_test_setup.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   final String tempRoot;
@@ -25,6 +27,10 @@ class _FakePathProvider extends PathProviderPlatform
 
 /// §101 — стартовая гонка rehydrate↔bootstrap + guard на пустой fetch.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   late Directory tempDir;
 
   const bodyA = 'vless://uuid-1@h1.example:443?type=ws&security=tls#A1\n'

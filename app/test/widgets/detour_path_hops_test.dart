@@ -6,11 +6,17 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/selector_info.dart';
 import 'package:lxbox/widgets/detour_target_picker.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §252 — detourPathHops: разворот сохранённого detour-значения в цепочку
 /// «как пакет пойдёт» — В ПОРЯДКЕ ПАКЕТА (глубочайший транспорт первым,
 /// прямая цель последней). Контроллер без init — entries пуст, внешние одиночки в этих
 /// кейсах не участвуют.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() => SelectorInfo.I.resetForTesting());

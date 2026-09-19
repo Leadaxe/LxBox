@@ -13,6 +13,8 @@ import 'package:lxbox/services/builder/server_list_build.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §283 — выключенная нода подписки не эмитится в конфиг (но остаётся в
 /// `nodes` для UI), её warnings не сыпятся в emitWarnings.
 ///
@@ -64,6 +66,10 @@ class _FakeCtx extends EmitContext {
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   const uriA = 'vless://u1@h1.com:443?type=ws&security=tls&sni=h1.com#A';
   const uriB = 'vless://u2@h2.com:443?type=ws&security=tls&sni=h2.com#B';
 

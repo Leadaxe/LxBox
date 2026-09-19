@@ -18,6 +18,8 @@ import 'package:lxbox/services/subscription/subscription_identity.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../../parser/engine_test_setup.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   final String tempRoot;
@@ -37,6 +39,10 @@ class _FakePathProvider extends PathProviderPlatform
 /// доезжают до модели и персистятся; применение identity к HTTP-заголовкам
 /// живёт в §289 и device-verify.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   late Directory tempDir;
   late SubscriptionController controller;
 

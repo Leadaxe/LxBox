@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/storage_migration/migrate_storage.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §439 §2.3 п. 8 — ссылки на узлы формы 2.23.2 (финальные теги строкой) →
 /// NodeLink. Цель ссылки может быть выключена: сам одиночный сервер, папка
 /// целиком, член папки. Такая ссылка не висячая — предупреждение только для
@@ -79,6 +81,10 @@ Map<String, dynamic> _byId(StorageMigrationResult r, String id) =>
     _sources(r).firstWhere((s) => s['id'] == id);
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   test('detour на выключенный одиночный сервер — корневая ссылка без '
       'предупреждения', () {
     final r = migrateStorageDoc(_doc());
