@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Статус | Реализовано |
+| Статус | **Released в v2.25.0** (20.09.2026, ядро `v1.14.1-lx.8`). Реализовано |
 | Дата | 2026-09-19 |
 | Контракт | 1.1.45, TASKS_LXBOX §41; кейс `body/xray/dialer_proxy_freedom_fragment` |
 | Связанные | [§404](404-dialer-proxy-signature.md) (цепочка dialerProxy), [§480](../features/480%20registry-driven-mapper/spec.md) (движок Xray) |
