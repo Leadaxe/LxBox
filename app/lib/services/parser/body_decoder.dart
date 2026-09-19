@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'amnezia_link.dart';
+import 'engine/document.dart';
+import 'engine/section_loader.dart';
 import 'uri_utils.dart';
 
 /// Результат декодирования тела подписки (§3.2 спеки 026).
@@ -70,24 +72,138 @@ enum JsonFlavor {
 
 /// Декодирует body подписки. Не throws.
 ///
-/// Алгоритм:
-/// 0. Начинается с `vpn://` → Amnezia-ссылка (§110, `decodeAmneziaLink`).
-/// 1. Пробуем base64 (все варианты). Успех + валидный UTF-8 → заменяем body.
-/// 2. Trim начинается с `{` / `[` → `jsonDecode` + определяем flavor.
-/// 3. Первая непустая строка `[Interface]` → IniConfig.
-/// 4. Иначе — разбить на строки, выкинуть пустые и комментарии.
-/// 5. Пусто → DecodeFailure.
+/// §480 W6 — ВИД ДОКУМЕНТА ОПОЗНАЁТ РЕЕСТР (`contract_draft/documents.json`,
+/// движок `engine/document.dart`): порядок веток, предикаты и глубина
+/// распаковки объявлены данными, а не ветвями здесь. Рукописный порядок
+/// («сперва `vpn://`, потом эвристика base64, потом `{`/`[`, потом
+/// `[Interface]`, иначе строки») сохранён в данных буква в букву — он
+/// нормативен, и его правка это правка JSON плюс синк, а не код в двух
+/// приложениях.
+///
+/// Оболочки остаются КОДОМ (`decodeAmneziaLink`, base64+UTF-8): `qCompress`
+/// и zlib предикатами не выражаются. Но вызываются они по ИМЕНИ из
+/// `unwrap`, а не веткой в снифере — так же устроено у лаунчера.
+///
+/// Реестр не загружен (юнит-тест без `loadDrafts`) — работает прежний
+/// рукописный порядок: [_classifyLegacy]. Опознание документа, в отличие от
+/// разбора узла, обязано работать и без реестра: на нём стоит вся вставка из
+/// буфера, и молчаливый отказ выглядел бы как «подписка пустая».
 DecodedBody decode(String body) {
   final original = body.trimRight();
   if (original.isEmpty) return const DecodeFailure('empty body');
 
-  // Step 0: Amnezia vpn:// (§110). База64-эвристика ниже её не зацепит
-  // (`:` вне base64-алфавита), но явная ветка должна идти первой.
+  final registry = MapperSections.I.documents;
+  if (registry == null) return _classifyLegacy(original);
+
+  final match = registry.detect(original, unwrappers: _kUnwrappers);
+  if (match == null) {
+    return DecodeFailure(
+        'no parseable content', original.substring(0, min(original.length, 80)));
+  }
+
+  // §110 — распаковщик оболочки Amnezia отдаёт INI-тексты, а не текст:
+  // контейнеров в ссылке бывает несколько, и «текстом» их не выразить.
+  if (match.source.unwrap == _kAmneziaUnwrap) {
+    return decodeAmneziaLink(original);
+  }
+
+  return _classifyByKind(match);
+}
+
+/// Вид документа → форма, которую ждёт разбор.
+///
+/// [DecodedBody] — граница волны: sealed-набор форм и весь `parse_all` за
+/// ним не меняются, меняется ТОЛЬКО способ выбрать форму.
+DecodedBody _classifyByKind(DocumentMatch match) {
+  final text = match.text;
+  switch (match.source.elementKind) {
+    case 'conf':
+      return IniConfig(text);
+    case 'xray':
+    case 'singbox':
+      final value = match.json ?? _tryJsonDecode(text);
+      if (value == null) return _classifyLegacy(text);
+      return JsonConfig(value, _flavorOf(match.source.id));
+    case 'uri':
+      return _uriLines(text, match.source.lineCommentPrefixes);
+    case null:
+      // Вид опознан, но узлов не даёт (Clash). Форма прежняя: разбор
+      // ответит нулём узлов, как и до волны.
+      final value = match.json ?? _tryJsonDecode(text);
+      if (value == null) return _classifyLegacy(text);
+      return JsonConfig(value, JsonFlavor.clashYaml);
+    default:
+      return _classifyLegacy(text);
+  }
+}
+
+/// `id` ветки реестра → [JsonFlavor].
+///
+/// Перевод, а не решение: формы JSON перечислены в `parse_all` и уровню
+/// документа не принадлежат. Один незнакомый `id` — `unknown`, как и было.
+JsonFlavor _flavorOf(String id) => switch (id) {
+      'xray_config_array' => JsonFlavor.xrayArray,
+      'singbox_config_array' => JsonFlavor.singboxMulti,
+      'singbox_outbound_array' => JsonFlavor.singboxArray,
+      'singbox_outbound' => JsonFlavor.singboxOutbound,
+      'singbox_config' => JsonFlavor.singboxConfig,
+      'clash_yaml' => JsonFlavor.clashYaml,
+      _ => JsonFlavor.unknown,
+    };
+
+Object? _tryJsonDecode(String text) {
+  try {
+    return jsonDecode(text.trim());
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Имя распаковщика Amnezia в реестре видов документа.
+const _kAmneziaUnwrap = 'amnezia_vpn_link';
+
+/// Именованные распаковщики оболочки: `unwrap` реестра → функция.
+final Map<String, Unwrapper> _kUnwrappers = {
+  // Оболочка Amnezia снимается своей функцией целиком (она отдаёт список
+  // INI-текстов, а не текст) — здесь только признак «оболочка есть».
+  _kAmneziaUnwrap: (text) => text,
+  'base64_utf8': (text) {
+    final noWs = text.replaceAll(RegExp(r'\s+'), '');
+    final bytes = decodeBase64Safe(noWs);
+    if (bytes == null || !_isLikelyUtf8(bytes)) return null;
+    final decoded = utf8Lossy(bytes).trim();
+    return decoded.isEmpty ? null : decoded;
+  },
+};
+
+DecodedBody _uriLines(String text, List<String> commentPrefixes) {
+  final lines = <String>[];
+  var skipped = 0;
+  for (final raw in text.split(RegExp(r'\r?\n'))) {
+    final l = raw.trim();
+    if (l.isEmpty) continue;
+    if (commentPrefixes.any(l.startsWith)) {
+      skipped++;
+      continue;
+    }
+    lines.add(l);
+  }
+  if (lines.isEmpty) {
+    return DecodeFailure(
+        'no parseable content', text.substring(0, min(text.length, 80)));
+  }
+  return UriLines(lines, skipped);
+}
+
+/// Прежний рукописный порядок — запасной путь, когда реестра нет.
+DecodedBody _classifyLegacy(String body) {
+  final original = body.trimRight();
+  if (original.isEmpty) return const DecodeFailure('empty body');
+
   if (original.trimLeft().startsWith('vpn://')) {
     return decodeAmneziaLink(original);
   }
 
-  // Step 1: base64 attempt. Только если body выглядит как base64 (буквы/+/=//).
   final trimmedNoWs = original.replaceAll(RegExp(r'\s+'), '');
   if (_looksLikeBase64(trimmedNoWs)) {
     final bytes = decodeBase64Safe(trimmedNoWs);

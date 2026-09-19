@@ -26,6 +26,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../../contract/registry.dart';
+import 'document.dart';
 import 'interpreter.dart' show detectMatchesJson;
 import 'section.dart';
 
@@ -59,11 +60,12 @@ final class MapperSections {
   /// Прочитать черновики. [dir] — корень черновиков на диске (для тестов и
   /// для CI, где биндинга Flutter нет); по умолчанию — ассеты приложения.
   ///
-  /// [files] — пути черновика БЕЗ расширения, вида `<каталог>/<имя>`
-  /// (`uri/trojan`, `xray/vmess`, `documents`). Список приходит снаружи, а не
-  /// живёт здесь: имена файлов протоколов — это имена схем, а в пакете
-  /// движка их быть не должно (греп-страж). Ассеты Flutter в рантайме не
-  /// перечисляются, поэтому список явный.
+  /// [files] — пути черновика БЕЗ расширения, вида `<каталог>/<имя>`, где
+  /// каталог это вид источника; имя без каталога читается как `uri/<имя>`,
+  /// а если такого файла нет — как файл КОРНЯ черновика. Список приходит
+  /// снаружи, а не живёт здесь: имена файлов протоколов — это имена схем, а
+  /// в пакете движка их быть не должно (греп-страж). Ассеты Flutter в
+  /// рантайме не перечисляются, поэтому список явный.
   ///
   /// Имя без каталога читается как `uri/<имя>` — так короче писался список
   /// волны W1, когда вид источника был один.
@@ -71,11 +73,19 @@ final class MapperSections {
     _draftDir = dir;
     _draft.clear();
     _cache.clear();
+    _documents = null;
     for (final name in files) {
       final rel = name.contains('/') ? name : 'uri/$name';
-      final text = await _readDraft('$rel.json');
+      var text = await _readDraft('$rel.json');
+      var key = rel;
+      if (text == null && !name.contains('/')) {
+        // Файл КОРНЯ черновика (реестр видов документа): он не принадлежит
+        // ни одному виду источника, поэтому каталога у него нет.
+        text = await _readDraft('$name.json');
+        key = name;
+      }
       if (text == null) continue;
-      _draft[rel] = jsonDecode(text) as Map<String, dynamic>;
+      _draft[key] = jsonDecode(text) as Map<String, dynamic>;
     }
     _draftLoaded = true;
   }
@@ -136,6 +146,23 @@ final class MapperSections {
   /// рукописным маппером.
   bool has(String kind, String singboxType) =>
       sectionFor(kind, singboxType) != null;
+
+  /// §480 W6 — РЕЕСТР ВИДОВ ДОКУМЕНТА; `null` — реестра нет, и опознание
+  /// идёт прежним рукописным путём.
+  ///
+  /// Черновик лежит в корне (`documents.json`), без каталога вида источника:
+  /// он не принадлежит ни одному виду, он их ВЫБИРАЕТ.
+  DocumentRegistry? get documents {
+    if (_documents != null) return _documents;
+    if (!_draftLoaded) _loadDraftsFromDiskSync();
+    final raw = ContractRegistry.I.rawShared('sources.json') ??
+        _draft['documents'] ??
+        _draft['uri/documents'];
+    if (raw == null) return null;
+    return _documents = DocumentRegistry.fromJson(raw);
+  }
+
+  DocumentRegistry? _documents;
 
   /// Типы тела, у которых есть секция вида [kind].
   ///
@@ -272,15 +299,16 @@ final class MapperSections {
   /// и переопределение обязано работать. Заменяет, а не дополняет: две
   /// записи с одним `source` читали бы параметр дважды и писали бы путь
   /// дважды, а тонкая настройка схемы (`priority`, `sets`) при этом
-  /// действовала бы только у второй (живой пример — `disable_sni` у tuic,
-  /// где вся суть записи в её месте в таблице).
+  /// действовала бы только у второй — а бывает запись, у которой вся суть
+  /// в её МЕСТЕ в таблице (снятие пути обязано идти последним).
   ///
   /// Ключи в плоском наборе НЕСУТ ИМЯ БЛОКА (`tls.security`), потому что у
   /// разных блоков и разных транспортов бывают одноимённые записи, ведущие в
   /// разные поля. Переопределением считается совпадение ИМЕНИ ПАРАМЕТРА **и
   /// ИСТОЧНИКА**: одно имя над РАЗНЫМИ источниками — это две разные записи, а
-  /// не спор (`security` у vmess читает шифр из тела пользователя, `security`
-  /// общего блока — вид TLS из `streamSettings`, и обе обязаны отработать).
+  /// не спор. Живой случай: у одной схемы `security` читает шифр из данных
+  /// пользователя, у общего блока `security` — вид TLS из настроек потока, и
+  /// обе записи обязаны отработать.
   MapperSection _withIncludes(MapperSection section) {
     final merged = <String, MapperParam>{};
     final own = <String>{
@@ -346,8 +374,8 @@ final class MapperSections {
       final m = v.cast<String, dynamic>();
       if (m.containsKey('source')) {
         // Ключ в плоском наборе — С ИМЕНЕМ БЛОКА (`tls.security`), потому что
-        // одноимённая запись бывает и у схемы: у vmess свой `security` (шифр
-        // VMess), у общего блока свой (вид TLS), и ведут они в разные поля.
+        // одноимённая запись бывает и у схемы: `security` схемы это шифр, а
+        // `security` общего блока — вид TLS, и ведут они в разные поля тела.
         // Без разведения запись схемы затирала бы селектор блока, и TLS-блок
         // у такой схемы не появлялся бы вовсе. ИМЯ ПАРАМЕТРА при этом
         // остаётся коротким: по нему читаются написания.

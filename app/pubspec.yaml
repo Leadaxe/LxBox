@@ -73,6 +73,9 @@ flutter:
     - assets/contract_draft/uri/
     - assets/contract_draft/conf/
     - assets/contract_draft/xray/
+    # §480 W6 — реестр ВИДОВ ДОКУМЕНТА лежит в корне: он не принадлежит ни
+    # одному виду источника, он их выбирает.
+    - assets/contract_draft/documents.json
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)
 

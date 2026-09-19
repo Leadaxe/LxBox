@@ -58,4 +58,7 @@ const kDraftFiles = <String>[
   'xray/shadowsocks',
   'xray/socks',
   'xray/hysteria2',
+  // §480 W6 — реестр ВИДОВ ДОКУМЕНТА. Лежит в корне черновика: он не
+  // принадлежит ни одному виду источника, он их выбирает.
+  'documents',
 ];

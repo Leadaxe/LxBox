@@ -215,12 +215,42 @@ bool formMatchesText(Map<String, dynamic>? d, String text) {
   final txt = (d['text'] as Map?)?.cast<String, dynamic>();
   if (txt != null) {
     final prefix = txt['prefix_fold'] as String?;
-    if (prefix != null &&
-        !payload.toLowerCase().startsWith(prefix.toLowerCase())) {
-      return false;
+    // Префикс сверяется и с пэйлоадом, и с ЦЕЛЫМ текстом: у формы ссылки
+    // выражение адресует то, что после схемы, а у вида документа — сам
+    // документ, и `vpn://` это его начало, а не начало пэйлоада.
+    if (prefix != null) {
+      final p = prefix.toLowerCase();
+      if (!payload.toLowerCase().startsWith(p) &&
+          !text.toLowerCase().startsWith(p)) {
+        return false;
+      }
     }
     final contains = txt['contains'] as String?;
     if (contains != null && !payload.contains(contains)) return false;
+    // `prefix_trim` — первый НЕПРОБЕЛЬНЫЙ символ: `{`/`[` у JSON стоят после
+    // произвольного отступа, и требовать их первым байтом значило бы
+    // отвергать выровненный документ.
+    final prefixTrim = txt['prefix_trim'] as String?;
+    if (prefixTrim != null && !payload.trimLeft().startsWith(prefixTrim)) {
+      return false;
+    }
+    // `min_len` — длина ПОСЛЕ снятия пробелов. Короткая строка из букв и
+    // цифр проходит алфавит base64 случайно, и порог отсекает её без
+    // отдельной ветки в коде.
+    final minLen = (txt['min_len'] as num?)?.toInt();
+    if (minLen != null && payload.replaceAll(RegExp(r'\s+'), '').length < minLen) {
+      return false;
+    }
+  }
+  // `ini.first_section_fold` — имя ПЕРВОЙ секции INI, без учёта регистра;
+  // строки-комментарии до неё пропускаются (комментарий над `[Interface]`
+  // законен и несёт имя узла, G7).
+  final ini = (d['ini'] as Map?)?.cast<String, dynamic>();
+  if (ini != null) {
+    final want = (ini['first_section_fold'] as String?)?.toLowerCase();
+    if (want != null && _firstIniSection(text)?.toLowerCase() != want) {
+      return false;
+    }
   }
   // Комбинаторы предиката: рекурсия по тому же выражению. Имя формы им не
   // нужно — предикат судит ТЕКСТ, а не форму, и с вынесением наружу
@@ -249,6 +279,21 @@ bool formMatchesText(Map<String, dynamic>? d, String text) {
     if (!hit) return false;
   }
   return true;
+}
+
+/// Имя первой секции INI (`[Interface]` → `Interface`); `null` — секций нет.
+/// Комментарные и пустые строки до неё пропускаются.
+String? _firstIniSection(String text) {
+  for (final raw in text.split(RegExp(r'\r?\n'))) {
+    final l = raw.trim();
+    if (l.isEmpty) continue;
+    if (l.startsWith('#') || l.startsWith('//') || l.startsWith(';')) continue;
+    if (l.startsWith('[') && l.endsWith(']')) {
+      return l.substring(1, l.length - 1).trim();
+    }
+    return null;
+  }
+  return null;
 }
 
 /// `detect.json` по РАЗОБРАННОМУ значению — тот же язык предикатов, что и у
@@ -319,6 +364,32 @@ bool detectMatchesJson(Map<String, dynamic>? d, dynamic value) {
       if (!_isJsonType(actual, '${e.value}')) return false;
     }
   }
+
+  // Комбинаторы — те же, что у текстового предиката: одно выражение обязано
+  // читаться одинаково на обоих уровнях (§2 НОРМЫ).
+  final any = j['any'];
+  if (any is List && any.isNotEmpty) {
+    var hit = false;
+    for (final sub in any) {
+      if (sub is! Map) continue;
+      if (detectMatchesJson(sub.cast<String, dynamic>(), value)) {
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) return false;
+  }
+  final all = j['all'];
+  if (all is List) {
+    for (final sub in all) {
+      if (sub is! Map) continue;
+      if (!detectMatchesJson(sub.cast<String, dynamic>(), value)) return false;
+    }
+  }
+  final not = j['not'];
+  if (not is Map && detectMatchesJson(not.cast<String, dynamic>(), value)) {
+    return false;
+  }
   return true;
 }
 
@@ -330,8 +401,12 @@ bool _isJsonType(dynamic value, String type) => switch (type) {
       _ => false,
     };
 
-/// `outbounds[].protocol` — хотя бы у одного элемента массива по пути слева
-/// от `[]` есть путь справа.
+/// `[].outbounds[].protocol` — хотя бы у одного элемента каждого названного
+/// массива есть остаток пути.
+///
+/// Массивов в пути бывает НЕСКОЛЬКО (массив конфигов, у каждого свой
+/// `outbounds`), поэтому обход рекурсивный. Пустой путь слева от `[]`
+/// означает «сам корень — массив».
 bool _anyElemHas(dynamic root, String path) {
   final marker = path.indexOf('[]');
   if (marker < 0) return jsonPathValue(root, path) != null;
@@ -341,7 +416,7 @@ bool _anyElemHas(dynamic root, String path) {
   if (arr is! List) return false;
   for (final el in arr) {
     if (rest.isEmpty) return true;
-    if (jsonPathValue(el, rest) != null) return true;
+    if (_anyElemHas(el, rest)) return true;
   }
   return false;
 }
