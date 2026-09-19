@@ -239,8 +239,49 @@ final class MapperSections {
     if (!_draftLoaded) _loadDraftsFromDiskSync();
     final raw = _rawSection(kind, singboxType);
     if (raw == null) return null;
-    final section = MapperSection.fromJson(kind, singboxType, raw);
+    final section =
+        MapperSection.fromJson(kind, singboxType, _sectionRefs(raw));
     return section.include.isEmpty ? section : _withIncludes(section);
+  }
+
+  /// Раскрыть `{"$ref": …}` у записей САМОЙ секции.
+  ///
+  /// Именованная таблица `value_map` живёт в общем файле (`tls.fp_dialect`),
+  /// и до сих пор ссылка разворачивалась ТОЛЬКО при сборке общего блока
+  /// ([_withRefs]). Запись схемы, которая перекрывает одноимённую запись
+  /// блока (у `fp` так делают те схемы, где пустое значение означает
+  /// `random`), уносила ссылку с собой нераскрытой — и таблица переставала
+  /// исполняться совсем: `hellofirefox_auto` доезжал до тела как есть, а
+  /// санитайзер закрытого набора возвращал первое значение.
+  ///
+  /// Развернуть ссылку у схемы дешевле, чем копировать таблицу в каждую
+  /// секцию: копия и есть тот второй источник правды, ради снятия которого
+  /// затеяна кампания.
+  Map<String, dynamic> _sectionRefs(Map<String, dynamic> raw) {
+    final rawParams = (raw['params'] as Map?)?.cast<String, dynamic>();
+    if (rawParams == null) return raw;
+    Map<String, dynamic>? patched;
+    for (final e in rawParams.entries) {
+      final v = e.value;
+      if (v is! Map) continue;
+      final m = v.cast<String, dynamic>();
+      final vm = m['value_map'];
+      if (vm is! Map) continue;
+      final ref = vm[r'$ref'];
+      if (ref is! String) continue;
+      // `<файл>.<имя блока>`: таблица лежит в блоках общего файла, и найти
+      // её можно только там, где этот файл доступен, — здесь.
+      final parts = ref.split('.');
+      if (parts.length < 2) continue;
+      final shared = _draftShared(parts.first) ?? _registryShared(parts.first);
+      final target = (shared?['blocks'] as Map?)?[parts.last];
+      if (target is! Map) continue;
+      (patched ??= {...rawParams})[e.key] = {
+        ...m,
+        'value_map': target.cast<String, dynamic>(),
+      };
+    }
+    return patched == null ? raw : {...raw, 'params': patched};
   }
 
   /// Сырой JSON секции: сперва реестр (если исполняемая), затем черновик.

@@ -5,10 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
+
+import 'engine_test_setup.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
@@ -20,16 +21,20 @@ void main() {
   // §472 шаги 2–3 — отпечаток судит РЕЕСТР, а не рукописный
   // `normalizeTlsFingerprint`: тестам переехавших схем (trojan, vless) нужен
   // загруженный реестр, иначе они проверяли бы разбор БЕЗ санитайзера, то
-  // есть не то поведение, которое видит приложение. Гейт — как во всём
-  // `test/contract`: `app/contract/` вендорится локально и в репозиторий не
-  // коммитится (§460), на CI его нет. Тесты чистых функций и непереехавших
-  // схем от реестра не зависят и идут всегда.
-  final synced = Directory('contract/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
+  // есть не то поведение, которое видит приложение.
+  //
+  // §480 — гейт переставлен с вендоренной копии `app/contract/` на ЗЕРКАЛО
+  // `assets/contract`, как у tuic и anytls. Копии на CI нет вовсе (она в
+  // `.gitignore`), и под её гейтом файл молча пропускался бы именно там, где
+  // нужен. Заодно грузятся секции-мапперы: с переездом схем на движок разбор
+  // без них не работает — рукописного запасного пути у vless и trojan
+  // больше нет (критерий 7 спеки 480).
+  final synced = Directory('assets/contract/registry').existsSync();
+  final skip = synced ? null : 'зеркало реестра не найдено';
 
   setUpAll(() async {
     if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory('contract');
+    await loadEngineSections();
   });
 
   group('normalizeUtlsFingerprintValue (чистая функция)', () {
@@ -114,7 +119,7 @@ void main() {
         () {
       for (final fp in ['firefox', 'safari']) {
         final spec = parseVless(
-            'vless://u@h:443?type=tcp&security=reality&encryption=none'
+            'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
             '&fp=$fp&pbk=$_validPbk#L')!;
         expect(spec.tls.fingerprint, fp,
             reason: '§444: отпечаток источника не подменяется');
@@ -134,7 +139,7 @@ void main() {
     // видит приложение.
     test('REALITY + fp=edge → reality_fp_not_chrome, значение сохранено', () {
       final spec = parseVless(
-          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&fp=edge&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'edge',
           reason: '§444: отпечаток источника не подменяется ни в entry, ни в конфиге');
@@ -150,7 +155,7 @@ void main() {
     test('REALITY + xray-псевдоним hellofirefox_auto → firefox, без предупреждения',
         () {
       final spec = parseVless(
-          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&fp=hellofirefox_auto&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'firefox');
       expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty);
@@ -158,7 +163,7 @@ void main() {
 
     test('REALITY + xray-псевдоним helloqq_auto → qq + предупреждение', () {
       final spec = parseVless(
-          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&fp=helloqq_auto&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'qq');
       // Перевод написания кода не даёт, а отпечаток без гибридного шара —
@@ -174,7 +179,7 @@ void main() {
         () {
       for (final q in ['&fp=chrome', '&fp=chrome_pq', '&fp=HelloChrome_120', '']) {
         final spec = parseVless(
-            'vless://u@h:443?type=tcp&security=reality&encryption=none'
+            'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
             '$q&pbk=$_validPbk#L')!;
         expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty,
             reason: 'q="$q"');
@@ -183,7 +188,7 @@ void main() {
 
     test('plain TLS + fp=firefox → без предупреждения (сервер не REALITY)', () {
       final spec = parseVless(
-          'vless://u@h:443?type=tcp&security=tls&encryption=none'
+          'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=tls&encryption=none'
           '&fp=firefox&sni=h#L')!;
       expect(spec.tls.reality, isNull);
       expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty);
@@ -211,7 +216,7 @@ void main() {
   group('VLESS (реальный кейс подписки)', () {
     test('REALITY + fp=hellochrome_120 → chrome, МОЛЧА, reality на месте', () {
       final spec = parseVless(
-          'vless://u@h:443?type=tcp&security=reality&encryption=none'
+          'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&flow=xtls-rprx-vision&fp=hellochrome_120&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.tls.reality, isNotNull, reason: 'REALITY не потерян');
@@ -221,7 +226,7 @@ void main() {
 
     test('fp=QQ → qq (регистр)', () {
       final spec = parseVless(
-          'vless://u@h:443?type=grpc&security=reality&fp=QQ&pbk=$_validPbk#L')!;
+          'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=grpc&security=reality&fp=QQ&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'qq');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
@@ -231,7 +236,7 @@ void main() {
     // путь и СЫРОЕ значение ссылки.
     test('мусор → chrome + код реестра utls_fp_unknown', () {
       final spec =
-          parseVless('vless://u@h:443?security=tls&fp=garbage&sni=x.com#L')!;
+          parseVless('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=garbage&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
             (w) => w.code == 'utls_fp_unknown',
@@ -243,14 +248,14 @@ void main() {
 
     test('emit отдаёт канонизированный utls.fingerprint', () {
       final spec = parseVless(
-          'vless://u@h:443?security=tls&fp=hellochrome_120&sni=x.com#L')!;
+          'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=hellochrome_120&sni=x.com#L')!;
       final out = spec.emit(TemplateVars.empty).map;
       final utls = (out['tls'] as Map)['utls'] as Map;
       expect(utls['fingerprint'], 'chrome');
     });
 
     test('пустой fp → существующий дефолт random (не тронут)', () {
-      final spec = parseVless('vless://u@h:443?security=tls&fp=&sni=x.com#L')!;
+      final spec = parseVless('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'random');
     });
   });
@@ -406,7 +411,7 @@ void main() {
 
     test('TCP-протокол (vless) с fp → utls НА МЕСТЕ (контроль)', () {
       final spec =
-          parseVless('vless://u@h:443?security=tls&fp=chrome&sni=x.com#L')!;
+          parseVless('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=chrome&sni=x.com#L')!;
       final tls = emitTls(spec);
       expect((tls['utls'] as Map)['fingerprint'], 'chrome');
     });
