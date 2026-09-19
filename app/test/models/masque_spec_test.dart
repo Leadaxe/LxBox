@@ -1,28 +1,22 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+
+import '../parser/engine_test_setup.dart';
 
 /// §130 — MasqueSpec emit (Outbound-схема ядра) + URI round-trip.
 ///
 /// §472 шаг 7 — masque разбирается конвейером, и значения судит реестр.
-/// Поэтому файлу понадобился реестр, а значит и ГЕЙТ: `app/contract/`
-/// вендорится локально и на CI его нет (спека 472, 9.3).
-const _contractRoot = 'contract';
-
+/// §480 W7 — эмит ссылки тоже идёт секциями: рукописного `toUri` не осталось.
+///
+/// Грузим ЗЕРКАЛО `assets/contract` (оно в git), а не вендоренную копию
+/// `app/contract`: второй на CI нет, и под его гейтом файл молча пропускался
+/// бы целиком — ровно те проверки, что ловят регрессии эмита.
 void main() {
-  final synced = Directory('$_contractRoot/registry').existsSync();
-  final skip = synced ? null : 'контракт не синхронизирован';
-
-  setUpAll(() async {
-    if (!synced) return;
-    await ContractRegistry.I.loadFromDirectory(_contractRoot);
-  });
+  setUpAll(loadEngineSections);
 
   MasqueSpec spec() => MasqueSpec(
         id: 'id1',
@@ -181,7 +175,7 @@ void main() {
       expect(w.path, 'vhttp');
       expect(w.value, 'h9',
           reason: 'форс обязан быть виден пользователю, а не только в логе');
-    }, skip: skip);
+    });
 
     test('h2 остаётся валидным (тройка контракта целиком)', () {
       expect(
