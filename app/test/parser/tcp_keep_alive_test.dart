@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/tcp_keep_alive_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -10,6 +12,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// §453 — TCP keep-alive dial-поля sing-box на узле: sing-box JSON, share-URI,
 /// Xray sockopt.
 void main() {
+  setUpAll(loadEngineSections);
+
   const vars = TemplateVars();
 
   Map<String, dynamic> emitOf(NodeSpec s) =>

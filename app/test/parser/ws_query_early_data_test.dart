@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
@@ -11,6 +13,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `early_data_header_name` ядро дописывает base64 В ПУТЬ (conn.go:172), а
 /// сервер с `eh=Sec-WebSocket-Protocol` ждёт данные в заголовке → 404.
 void main() {
+  setUpAll(loadEngineSections);
+
   Map<String, dynamic> wsMap(TransportSpec? t) =>
       t!.toSingbox(const TemplateVars()).$1;
 

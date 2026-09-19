@@ -34,6 +34,8 @@ sealed class NodeWarning {
   }) =>
       switch (code) {
         'ech_ignored' => EchIgnoredWarning(value),
+        'ws_early_data_converted' =>
+          WsEarlyDataConvertedWarning(int.tryParse(value) ?? 0),
         _ => RegistryWarning(code: code, path: path, value: value),
       };
 

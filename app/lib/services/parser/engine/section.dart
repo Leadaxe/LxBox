@@ -76,6 +76,41 @@ final class MapperForm {
   final String? level;
 }
 
+/// Наложенное пространство источников (FROZEN `overlays[]`, контракт 1.1.15).
+///
+/// Вложенный слой чужого диалекта, адресуемый в `source` своим префиксом
+/// (`extra.scMaxEachPostBytes`). Слой держится ОТДЕЛЬНО от query, а не
+/// сливается с ним, потому что «кто из двух побеждает» обязана решать сама
+/// запись порядком своих источников: у части полей сильнее слой, у части —
+/// плоский слой, причём даже будучи пустым.
+final class OverlaySpec {
+  const OverlaySpec({
+    required this.name,
+    this.source = const [],
+    this.decode = const [],
+    this.flatten = const [],
+  });
+
+  factory OverlaySpec.fromJson(Map<String, dynamic> j) => OverlaySpec(
+        name: j['name'] as String? ?? '',
+        source: _stringList(j['source'], fallback: const []),
+        decode: ((j['decode'] as List?) ?? const []).cast<String>(),
+        flatten: ((j['flatten'] as List?) ?? const []).cast<String>(),
+      );
+
+  /// Префикс, под которым слой адресуется в `source`.
+  final String name;
+
+  /// Откуда берётся ТЕКСТ слоя.
+  final List<String> source;
+
+  /// Конвейер декодеров текста: `percent`, `base64?`, `base64`.
+  final List<String> decode;
+
+  /// Вложенные объекты слоя, чьи члены поднимаются в плоский слой.
+  final List<String> flatten;
+}
+
 /// Разбор userinfo (P2, FROZEN `userinfo`).
 final class UserinfoSpec {
   const UserinfoSpec({
@@ -393,6 +428,7 @@ final class MapperSection {
     this.label = const LabelSpec(),
     this.params = const {},
     this.include = const [],
+    this.overlays = const [],
     this.schemeSets = const {},
     this.typeSynonyms = const {},
     this.defaults = const {},
@@ -430,6 +466,9 @@ final class MapperSection {
           : LabelSpec.fromJson((j['label'] as Map).cast<String, dynamic>()),
       params: params,
       include: ((j['include'] as List?) ?? const []).cast<String>(),
+      overlays: ((j['overlays'] as List?) ?? const [])
+          .map((o) => OverlaySpec.fromJson((o as Map).cast<String, dynamic>()))
+          .toList(),
       schemeSets:
           ((j['scheme_sets'] as Map?) ?? const {}).cast<String, dynamic>(),
       typeSynonyms:
@@ -456,6 +495,9 @@ final class MapperSection {
   final LabelSpec label;
   final Map<String, MapperParam> params;
   final List<String> include;
+
+  /// Наложенные пространства источников (FROZEN `overlays[]`).
+  final List<OverlaySpec> overlays;
   final Map<String, dynamic> schemeSets;
   final Map<String, String> typeSynonyms;
   final Map<String, dynamic> defaults;
@@ -481,6 +523,7 @@ final class MapperSection {
         label: label,
         params: merged,
         include: include,
+        overlays: overlays,
         schemeSets: schemeSets,
         typeSynonyms: typeSynonyms,
         defaults: defaults,

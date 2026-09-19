@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -29,6 +31,8 @@ const _contractRoot = 'contract';
 /// CI нет вовсе, и под ним снимок молча пропускался бы именно там, где он
 /// нужнее всего. Снимок гейтится на зеркало реестра `assets/contract`.
 void main() {
+  setUpAll(loadEngineSections);
+
   final synced = Directory('$_contractRoot/registry').existsSync();
   final skip = synced ? null : 'контракт не синхронизирован';
 

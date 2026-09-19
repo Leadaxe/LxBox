@@ -206,6 +206,10 @@ final class MapperSections {
   }
 
   MapperSection? _build(String kind, String singboxType) {
+    // Черновики нужны и тогда, когда сама секция нашлась в реестре: оверлеи
+    // общих блоков лежат там же, и без них блок соберётся без наших
+    // отступлений.
+    if (!_draftLoaded) _loadDraftsFromDiskSync();
     final raw = _rawSection(kind, singboxType);
     if (raw == null) return null;
     final section = MapperSection.fromJson(kind, singboxType, raw);
@@ -213,18 +217,25 @@ final class MapperSections {
   }
 
   /// Сырой JSON секции: сперва реестр (если исполняемая), затем черновик.
+  ///
+  /// Черновик-ОВЕРЛЕЙ (`_overlay: true`) секцию не заменяет, а накладывается
+  /// на неё: в нём лежат только те ключи, которые у нас обязаны быть иными.
   Map<String, dynamic>? _rawSection(String kind, String singboxType) {
-    final fromRegistry = _registrySection(kind, singboxType);
-    if (fromRegistry != null) return fromRegistry;
     if (!_draftLoaded) _loadDraftsFromDiskSync();
     // Черновик вида источника лежит в своём каталоге; `uri` — исторически
     // и в плоском пространстве имён тоже.
     final file = _draft['$kind/$singboxType'] ??
         (kind == 'uri' ? _draft[singboxType] : null);
-    if (file == null) return null;
-    final mappers = (file['mappers'] as Map?)?.cast<String, dynamic>();
-    final section = (mappers?[kind] as Map?)?.cast<String, dynamic>();
-    return section;
+    final draft =
+        ((file?['mappers'] as Map?)?[kind] as Map?)?.cast<String, dynamic>();
+
+    final fromRegistry = _registrySection(kind, singboxType);
+    // Реестра нет — идёт ПОЛНЫЙ черновик (волны, написанные вперёд синка).
+    if (fromRegistry == null) return draft;
+    // Реестр есть, а черновик не оверлей — реестр нормативен.
+    if (draft == null || file?['_overlay'] != true) return fromRegistry;
+    // Оверлей: только те ключи, которые у нас обязаны быть иными.
+    return _mergeOverlay(fromRegistry, draft);
   }
 
   Map<String, dynamic>? _registrySection(String kind, String singboxType) {
@@ -307,11 +318,25 @@ final class MapperSections {
 
     // Общий блок живёт ОДНИМ файлом на все диалекты (`blocks.uri`,
     // `blocks.xray`), поэтому каталог у него не по виду источника.
-    final file = _draftShared(fileName) ?? _registryShared(fileName);
+    //
+    // Источник — ПОЛНЫЙ черновик, если он есть, иначе реестр. Поверх обоих
+    // ложится ОВЕРЛЕЙ (`_overlay: true`): он несёт не весь блок, а только те
+    // записи, которые у нас обязаны вести себя иначе, и каждая такая запись
+    // — красный кейс, переданный лаунчеру. Полная копия блока ради одной
+    // правки была бы вторым источником правды и протухла бы на первом синке.
+    final draft = _draftShared(fileName);
+    final overlay = draft != null && draft['_overlay'] == true ? draft : null;
+    final file = (overlay == null ? draft : null) ?? _registryShared(fileName);
     if (file == null) return const {};
     final blocks = (file['blocks'] as Map?)?.cast<String, dynamic>();
-    final byDialect = (blocks?[dialect] as Map?)?.cast<String, dynamic>();
+    var byDialect = (blocks?[dialect] as Map?)?.cast<String, dynamic>();
     if (byDialect == null) return const {};
+
+    if (overlay != null) {
+      final ov = ((overlay['blocks'] as Map?)?[dialect] as Map?)
+          ?.cast<String, dynamic>();
+      if (ov != null) byDialect = _mergeOverlay(byDialect, ov);
+    }
 
     final out = <String, MapperParam>{};
     for (final e in byDialect.entries) {
@@ -374,6 +399,30 @@ final class MapperSections {
       }
     }
     return param;
+  }
+
+  /// Наложить оверлей на блок реестра: запись оверлея ЗАМЕЩАЕТ одноимённую
+  /// запись реестра целиком, группы сливаются по имени.
+  ///
+  /// Замещение целиком, а не слияние полей записи: «снять `implies`» иначе не
+  /// выразить, а именно это и нужно в обоих сегодняшних отступлениях.
+  static Map<String, dynamic> _mergeOverlay(
+    Map<String, dynamic> base,
+    Map<String, dynamic> overlay,
+  ) {
+    final out = {...base};
+    for (final e in overlay.entries) {
+      final ov = e.value;
+      final b = out[e.key];
+      // Группа записей (`ws`, `http`): сливаем поимённо, иначе оверлей одной
+      // записи снёс бы всю группу.
+      if (ov is Map && b is Map && !ov.containsKey('source')) {
+        out[e.key] = {...b.cast<String, dynamic>(), ...ov.cast<String, dynamic>()};
+      } else {
+        out[e.key] = ov;
+      }
+    }
+    return out;
   }
 
   /// Раскрыть `{"$ref": "tls.fp_dialect"}` — именованную таблицу `value_map`.

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -7,6 +9,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `id`, `rawSource`, `warnings` — это ephemeral поля, не связанные со значением
 /// узла.
 void main() {
+  setUpAll(loadEngineSections);
+
   group('Round-trip URI → Spec → URI → Spec', () {
     test('VLESS Reality: pbk, sid, flow preserved', () {
       final a = parseVless(

@@ -1,73 +1,11 @@
 {
-  "_draft": "Черновая КОПИЯ исполняемой секции реестра лаунчера, sha 8cc6ac69 (контракт 1.1.13). Временная: загрузчик берёт секцию из реестра, как только она приедет синком контракта, и только иначе отсюда. Источник — SPEC 133 лаунчера.",
+  "_draft": "ОТСТУПЛЕНИЯ LxBox от секций реестра (контракт 1.1.15, 963dc6d6). Файл НЕ дублирует блок целиком: загрузчик накладывает эти записи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Каждая запись — красный кейс, переданный лаунчеру: в DELTAS.md его секции дельты на это нет, а тело РАБОЧЕГО узла меняется. Снятие отступления — отдельной дельтой с правкой identity-фикстуры.",
+  "_overlay": true,
   "blocks": {
-    "note": "SPEC 133: ИСПОЛНЯЕМЫЕ записи общего TLS-блока, по диалектам. Секция протокола подключает их через include (\"tls#uri\", \"tls#xray\"). Описательные tls.params выше НЕ отменяются: там словарь и проза для документации, здесь — таблица, которую исполняет движок. Диалектов два, потому что имена ключей у Xray свои (serverName/publicKey/shortId), а у ссылки — свои (sni/pbk/sid).",
     "uri": {
-      "security": {
-        "source": "query.security",
-        "selector": true,
-        "sets": {
-          "tls": {
-            "tls.enabled": true
-          },
-          "reality": {
-            "tls.enabled": true
-          },
-          "none": {},
-          "": {
-            "tls.enabled": true
-          }
-        },
-        "impl": "security=none → блока tls НЕТ вовсе (не enabled:false): явный блок ронял ядра lx.5..lx.18 в SIGSEGV, SPEC 045. Пустой sets выражает именно это — ключ не появляется. || ОТСТУПЛЕНИЕ LxBox: security=reality у trojan даёт ОБЫЧНЫЙ TLS без блока reality (см. сужение pbk/sid/key_share). Запись общая для всех схем, поэтому сужение стоит у зависимых полей, а не здесь; сам ключ tls.reality.enabled без public_key телу ничего не даёт."
-      },
-      "sni": {
-        "source": [
-          "query.sni",
-          "query.peer"
-        ],
-        "maps_to": "tls.server_name",
-        "default_from": "host"
-      },
-      "alpn": {
-        "source": "query.alpn",
-        "maps_to": "tls.alpn",
-        "list": {
-          "sep": ","
-        },
-        "decode_extra": {
-          "mode": "query",
-          "passes": "until_stable",
-          "max": 16
-        },
-        "impl": "until_stable, а не 2 прохода: фикстура uri/vless/alpn_multiply_encoded несёт ТРИ уровня (http%2525252F1.1 → http/1.1). max=16 — страховка от неограниченного цикла, на корпусе не достигается."
-      },
-      "fp": {
-        "source": [
-          "query.fp",
-          "query.fingerprint"
-        ],
-        "maps_to": "tls.utls.fingerprint",
-        "value_map": {
-          "$ref": "tls.fp_dialect"
-        },
-        "implies": {
-          "tls.utls.enabled": true
-        }
-      },
-      "insecure": {
-        "source": "query.insecure",
-        "type": "bool_spelled",
-        "maps_to": "tls.insecure",
-        "impl": "Написания берутся из aliases (9 имён, tls.params.insecure); истинность — общий bool_spelled (1|true|yes). До этого у masque был свой список из трёх имён, и 'yes' там не работал."
-      },
-      "disable_sni": {
-        "source": "query.disable_sni",
-        "type": "bool_spelled",
-        "maps_to": "tls.disable_sni",
-        "impl": "DELTAS D133-3: объявлен у tuic и masque, но Go не читал его НИ ТАМ НИ ТАМ — поле терялось только на десктопе."
-      },
       "pbk": {
         "source": "query.pbk",
+        "selector": true,
         "maps_to": "tls.reality.public_key",
         "decode_extra": {
           "plus_literal": true
@@ -76,43 +14,34 @@
           "tls.enabled": true,
           "tls.reality.enabled": true
         },
-        "impl": "REALITY заводится по НАЛИЧИЮ pbk, а не по security=reality. plus_literal — DELTAS D133-7: поле base64, и '+' в нём обязан читаться буквально; сегодня заплаты у pbk НЕТ, поэтому '+' становится пробелом и реестр снимает поле по format. || ОТСТУПЛЕНИЕ LxBox от секции лаунчера 8cc6ac69 (передано ему списком): REALITY из trojan-URI сегодня не разбирает НИ ОДИН проект — так записано в registry/protocols/trojan.json (query.security.impl: «pbk игнорируется; reality приезжает только через sing-box/Xray-импорт»). Общий tls#uri-блок отдал бы его и trojan, то есть ДОБАВИЛ бы блок reality телу рабочего узла — дельты на это нет ни в DELTAS.md, ни в ТЗ волны. До решения запись сужена условием по типу тела; снимать сужение — отдельной дельтой с правкой фикстуры.",
         "when": {
           "$type": {
-            "not": "trojan"
-          }
-        }
-      },
-      "sid": {
-        "source": "query.sid",
-        "maps_to": "tls.reality.short_id",
-        "when": {
-          "tls.reality.enabled": true,
-          "$type": {
-            "not": "trojan"
+            "not_in": [
+              "trojan"
+            ]
           }
         },
-        "impl": "ОТСТУПЛЕНИЕ LxBox от секции лаунчера 8cc6ac69 (передано ему списком): REALITY из trojan-URI сегодня не разбирает НИ ОДИН проект — так записано в registry/protocols/trojan.json (query.security.impl: «pbk игнорируется; reality приезжает только через sing-box/Xray-импорт»). Общий tls#uri-блок отдал бы его и trojan, то есть ДОБАВИЛ бы блок reality телу рабочего узла — дельты на это нет ни в DELTAS.md, ни в ТЗ волны. До решения запись сужена условием по типу тела; снимать сужение — отдельной дельтой с правкой фикстуры."
-      },
-      "key_share": {
-        "source": "query.key_share",
-        "maps_to": "tls.reality.key_share",
-        "when": {
-          "tls.reality.enabled": true,
-          "$type": {
-            "not": "trojan"
-          }
-        },
-        "impl": "ОТСТУПЛЕНИЕ LxBox от секции лаунчера 8cc6ac69 (передано ему списком): REALITY из trojan-URI сегодня не разбирает НИ ОДИН проект — так записано в registry/protocols/trojan.json (query.security.impl: «pbk игнорируется; reality приезжает только через sing-box/Xray-импорт»). Общий tls#uri-блок отдал бы его и trojan, то есть ДОБАВИЛ бы блок reality телу рабочего узла — дельты на это нет ни в DELTAS.md, ни в ТЗ волны. До решения запись сужена условием по типу тела; снимать сужение — отдельной дельтой с правкой фикстуры."
+        "impl": "КРАСНЫЙ КЕЙС trojan/reality_full. Общий блок tls#uri отдаёт REALITY всем схемам, включая trojan, и тело рабочего узла получает блок reality, которого в нём не было. В реестре самого лаунчера (protocols/trojan.json → query.security.impl) записано обратное: «REALITY у trojan-URI не разбирается ни одним проектом; pbk игнорируется, reality приезжает только через sing-box/Xray-импорт». Дельты на снятие этого нет. До ответа лаунчера запись сужена по типу тела."
       },
       "ech": {
         "source": "query.ech",
         "maps_to": null,
-        "on_present": {
-          "action": "drop",
-          "code": "ech_ignored"
+        "when": {
+          "query.ech": {
+            "not_in": [
+              "",
+              "none"
+            ]
+          }
         },
-        "impl": "РАСШИРЕНИЕ LxBox (в блоке лаунчера записи нет; описательный tls.params.ech у него есть): §320 — ключа ECH ссылка не несёт, а чужой ключ рвёт рукопожатие, поэтому значение в тело не переносится вовсе. maps_to: null — это ОБЪЯВЛЕННОЕ «никуда не едет», а не отсутствие записи: без него параметр попал бы в uri_param_unknown, и человек не узнал бы, что ECH снят.",
+        "on_present": {
+          "action": "note",
+          "code": "ech_ignored",
+          "params": {
+            "query_name": "ech"
+          }
+        },
+        "impl": "КРАСНЫЙ КЕЙС ech_import_test/name+resolver. Запись реестра ставит код с ПОЛНЫМ значением `encryptedsni.com+udp://8.8.8.8`, а наш текст кода (и корпусный кейс) называет только имя пробника — левую часть до «+». Правило «до первого +» это форма значения, то есть данные: выражено extract, чтобы не заводить первую схемную функцию в общем движке. || ЕДИНСТВЕННЫЙ параметр ссылки без адреса в теле (D-122): Xray-форма `ech=<public_name>+<resolver>` несёт ключ ЧУЖОГО клиента (public_name ≠ SNI узла), и рукопожатие с ним не состоится. maps_to: null — значение осознанно никуда не едет, но и молчать нельзя, поэтому on_present ставит код. Условие через not_in, а не через отрицание in: `ech=none` — способ подписки сказать «ECH выключен», сообщать не о чем, и пустое значение тоже; not_in по отсутствующему адресу истинен, поэтому пустую строку перечисляем явно. Блок tls.ech из sing-box-JSON НЕ затрагивается: ECH в ядре скомпилирован всегда, и нативная конфигурация рабочая — различить два случая может только маппер, санитайзер видит уже готовое тело (DRIFT §7.2).",
         "extract": {
           "re": "^(?P<name>[^+]*)",
           "into": {

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -16,6 +18,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Замер (узел 172.67.149.60 `/in-pdr`): с `ech` мёртв, без — 723 мс. NekoBox
 /// параметр отбрасывает и держит тот же узел живым на 23 мс.
 void main() {
+  setUpAll(loadEngineSections);
+
   Map<String, dynamic> tlsOf(NodeSpec n) =>
       n.emitRaw(const TemplateVars()).map['tls'] as Map<String, dynamic>;
 

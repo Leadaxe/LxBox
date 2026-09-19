@@ -1,41 +1,20 @@
 {
-  "_draft": "Черновая КОПИЯ исполняемой секции реестра лаунчера, sha 8cc6ac69 (контракт 1.1.13). Временная: загрузчик берёт секцию из реестра, как только она приедет синком контракта, и только иначе отсюда. Источник — SPEC 133 лаунчера.",
+  "_draft": "ОТСТУПЛЕНИЯ LxBox от секций реестра (контракт 1.1.15, 963dc6d6). Файл НЕ дублирует блок целиком: загрузчик накладывает эти записи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Каждая запись — красный кейс, переданный лаунчеру: в DELTAS.md его секции дельты на это нет, а тело РАБОЧЕГО узла меняется. Снятие отступления — отдельной дельтой с правкой identity-фикстуры.",
+  "_overlay": true,
   "blocks": {
-    "note": "SPEC 133: ИСПОЛНЯЕМЫЕ записи транспортов по диалектам. Подключаются секцией протокола через include (\"transports#uri\", \"transports#xray\"). Описательные transports.<type>.params выше не отменяются — там словарь для документации. Диалектов два, потому что у Xray свои имена секций (wsSettings/grpcSettings/...) и своя форма host.",
     "uri": {
-      "$selector": {
-        "type": {
-          "source": "query.type",
-          "selector": true,
-          "maps_to": "transport.type",
-          "value_map": {
-            "": null,
-            "tcp": null,
-            "raw": null
-          }
-        },
-        "headerType": {
-          "source": "query.headerType",
-          "selector": true,
-          "maps_to": "transport.type",
-          "when": {
-            "query.type": {
-              "in": [
-                "tcp",
-                "raw",
-                ""
-              ]
-            }
-          },
-          "value_map": {
-            "http": "http",
-            "none": null,
-            "": null
-          },
-          "impl": "Xray-камуфляж HTTP поверх TCP/RAW: headerType читается ТОЛЬКО когда type пуст или tcp/raw."
-        }
-      },
       "ws": {
+        "ed": {
+          "source": "query.ed",
+          "maps_to": "transport.max_early_data",
+          "type": "int",
+          "when": {
+            "transport.type": "ws"
+          },
+          "priority": -1,
+          "impl": "РАСШИРЕНИЕ LxBox (в секции лаунчера записи нет): плоская форма ?ed=N параметром ссылки. Сегодня её читают оба наших входа; без записи узел молча терял max_early_data. Хвост пути СИЛЬНЕЕ: он адресует конкретный путь, а не ссылку целиком, и пишется записью ws.path с merge overwrite. Дефолтного заголовка плоская форма НЕ подразумевает — его даёт только форма ?ed= в хвосте пути (implicit).",
+          "merge": "keep_first"
+        },
         "path": {
           "source": "query.path",
           "decode_extra": {
@@ -62,9 +41,13 @@
           "when": {
             "transport.type": "ws"
           },
-          "impl": "Память проекта ws-early-data-ed-param: ?ed=N жил в ЧЕТЫРЁХ слоях (3 парсера + allowlist-эмиттер). Здесь одна запись на оба направления. mode:path — оба прохода path-семантика, '+' литерален (DELTAS D133-14).",
+          "impl": "КРАСНЫЙ КЕЙС trojan/ws_ed_path_tail и ещё три кейса корпуса: запись реестра раскладывает хвост ?ed=N по двум полям тела, но кода за это не ставит, а корпус обеих сторон ждёт ws_early_data_converted — путь уехал в тело не буквально, и сказать об этом может только маппер. Код в warnings.json есть, записи под него нет. || Память проекта ws-early-data-ed-param: ?ed=N жил в ЧЕТЫРЁХ слоях (3 парсера + allowlist-эмиттер). Здесь одна запись на оба направления. mode:path — оба прохода path-семантика, '+' литерален (DELTAS D133-14).",
           "priority": 1,
-          "merge": "overwrite"
+          "merge": "overwrite",
+          "on_present": {
+            "action": "note",
+            "code": "ws_early_data_converted"
+          }
         },
         "host": {
           "source": [
@@ -77,17 +60,6 @@
             "transport.type": "ws"
           },
           "impl": "Фолбэк-цепочка host → sni → obfsParam; сегодня живёт прозой в aliases."
-        },
-        "ed": {
-          "source": "query.ed",
-          "maps_to": "transport.max_early_data",
-          "type": "int",
-          "when": {
-            "transport.type": "ws"
-          },
-          "priority": -1,
-          "impl": "РАСШИРЕНИЕ LxBox (в секции лаунчера записи нет): плоская форма ?ed=N параметром ссылки. Сегодня её читают оба наших входа; без записи узел молча терял max_early_data. Хвост пути СИЛЬНЕЕ: он адресует конкретный путь, а не ссылку целиком, и пишется записью ws.path с merge overwrite. Дефолтного заголовка плоская форма НЕ подразумевает — его даёт только форма ?ed= в хвосте пути (implicit).",
-          "merge": "keep_first"
         },
         "eh": {
           "source": "query.eh",
@@ -123,14 +95,13 @@
         },
         "host": {
           "source": [
-            "query.host",
-            "query.sni"
+            "query.host"
           ],
           "maps_to": "transport.host",
           "when": {
             "transport.type": "httpupgrade"
           },
-          "impl": "У httpupgrade host — СКАЛЯР (у ws это headers.Host, у http — список): форма различается по типу транспорта, поэтому три записи, а не одна."
+          "impl": "КРАСНЫЙ КЕЙС trojan/httpupgrade_ed_tail_stripped и ещё два кейса корпуса. Запись реестра даёт цепочку host → sni, но у httpupgrade отката на sni НЕТ — в отличие от ws (§103 D-016(в)), и корпус обеих сторон ждёт тело БЕЗ transport.host, когда в ссылке только sni=. Цепочка сочиняет узлу Host, которого автор не писал. || У httpupgrade host — СКАЛЯР (у ws это headers.Host, у http — список): форма различается по типу транспорта, поэтому три записи, а не одна. Источник ОДИН: QUIRKS Q133-32 — фолбэка на sni у httpupgrade в коде нет (node_parser_transport.go:250-252), в отличие от ws. Черновик секции был написан по ws-образцу и начал подставлять sni; расширение фолбэка меняет тела живых узлов и обязано быть дельтой с решением владельца, а не побочным эффектом волны."
         }
       },
       "http": {

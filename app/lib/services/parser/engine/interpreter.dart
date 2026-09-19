@@ -23,7 +23,7 @@
 /// отсутствие ключа неотличимо от «не задано».
 library;
 
-import 'dart:convert' show Base64Codec;
+import 'dart:convert' show Base64Codec, jsonDecode;
 
 import '../../../models/node_warning.dart';
 import 'decoders.dart';
@@ -395,8 +395,15 @@ final class _Run {
   /// «тело пустое»: секция сказала, что такой записи у нас нет Spec'а.
   bool _dropNode = false;
 
+  /// Наложенные слои по имени: `extra` → плоская карта ключей слоя.
+  final Map<String, QueryPairs> _overlays = {};
+
   EngineResult? execute() {
     body['type'] = section.singboxType;
+
+    // Слои (`overlays[]`) строятся ДО записей: запись адресует их обычным
+    // `source` с префиксом имени, и к моменту её исполнения слой обязан быть.
+    _buildOverlays();
 
     // 1. `scheme_sets` — написание схемы НЕСЁТ ТЕЛО: у части схем цифра или
     // суффикс в написании это дискриминатор версии либо транспорта, а не
@@ -479,6 +486,71 @@ final class _Run {
       return index[a.name]!.compareTo(index[b.name]!);
     });
     return list;
+  }
+
+  /// Построить наложенные пространства (FROZEN `overlays[]`).
+  ///
+  /// Текст слоя достаётся объявленным `source`, проходит объявленный
+  /// `decode`, разбирается как JSON-объект (вложенный слой чужого диалекта
+  /// им и является) и укладывается плоско. `flatten` поднимает члены
+  /// названных вложенных объектов на тот же уровень.
+  ///
+  /// Слой НЕ сливается с query: кто из двух побеждает, решает сама запись
+  /// порядком своих источников — у части полей сильнее слой, у части плоский
+  /// слой, причём даже будучи пустым.
+  void _buildOverlays() {
+    for (final o in section.overlays) {
+      if (o.name.isEmpty) continue;
+      String? text;
+      for (final src in o.source) {
+        final v = _readSourceBare(src);
+        if (v is String && v.isNotEmpty) {
+          text = v;
+          break;
+        }
+      }
+      if (text == null) continue;
+      for (final step in o.decode) {
+        switch (step) {
+          case 'percent':
+            text = percentDecodeOnce(text!, mode: DecodeMode.query);
+          case 'base64':
+          case 'base64?':
+            final decoded = _tryBase64(text!);
+            if (decoded != null) {
+              text = decoded;
+            } else if (step == 'base64') {
+              text = null;
+            }
+        }
+        if (text == null) break;
+      }
+      if (text == null) continue;
+      Object? parsed;
+      try {
+        parsed = jsonDecode(text);
+      } catch (_) {
+        continue;
+      }
+      if (parsed is! Map) continue;
+
+      final pairs = <(String, String)>[];
+      void put(String k, Object? v) {
+        if (v == null || v is Map || v is List) return;
+        pairs.add((k, '$v'));
+      }
+
+      for (final e in parsed.cast<String, dynamic>().entries) {
+        if (o.flatten.contains(e.key) && e.value is Map) {
+          for (final f in (e.value as Map).cast<String, dynamic>().entries) {
+            put(f.key, f.value);
+          }
+        } else {
+          put(e.key, e.value);
+        }
+      }
+      _overlays[o.name] = QueryPairs(pairs);
+    }
   }
 
   // ───────────────────────────── userinfo ─────────────────────────────
@@ -687,6 +759,7 @@ final class _Run {
       return;
     }
 
+
     // `value_map` — перевод значений диалекта. `null` = «ключа нет».
     if (p.valueMap.isNotEmpty && value is String) {
       final mapped = _mapValue(p.valueMap, value);
@@ -781,6 +854,12 @@ final class _Run {
     final spec = p.extract!;
     final m = _regex(spec.re).firstMatch(value);
     if (m == null) return;
+
+    // `on_present` у записи с `extract` — код о том, что значение уехало в
+    // тело НЕ буквально. Ставится только когда регулярка действительно
+    // что-то разложила сверх первой группы: иначе путь без хвоста получал бы
+    // код о преобразовании, которого не было.
+    var converted = false;
     for (final e in spec.into.entries) {
       String? group;
       try {
@@ -839,6 +918,10 @@ final class _Run {
           }
         }
         _write(path, typed, p);
+        // Разложилось не только в первую группу — значение уехало в тело не
+        // буквально, и это и есть «преобразование».
+        converted = true;
+        _convertedValue = '$typed';
         final implies = (t['implies'] as Map?)?.cast<String, dynamic>();
         if (implies != null) {
           for (final i in implies.entries) {
@@ -855,7 +938,12 @@ final class _Run {
         }
       }
     }
+
+    if (converted) _applyOnPresent(p, _convertedValue);
   }
+
+  /// Значение для кода преобразования: то, ЧТО получилось, а не что пришло.
+  String _convertedValue = '';
 
   /// `on_present` — код о том, что ОБЪЯВЛЕННОЕ значение никуда не поехало.
   ///
@@ -977,6 +1065,13 @@ final class _Run {
     }
     if (src.startsWith('ini.')) {
       return space.ini?[src.substring('ini.'.length).toLowerCase()];
+    }
+    // Наложенный слой: `<имя слоя>.<ключ>`. Значение слоя уже разобрано и
+    // декодировано, второй percent-декод ему не нужен.
+    final dot = src.indexOf('.');
+    if (dot > 0) {
+      final layer = _overlays[src.substring(0, dot)];
+      if (layer != null) return layer.get(src.substring(dot + 1));
     }
     return null;
   }
@@ -1135,6 +1230,11 @@ final class _Run {
     if (src.startsWith('ini.')) {
       return space.ini?[src.substring('ini.'.length).toLowerCase()];
     }
+    final dot = src.indexOf('.');
+    if (dot > 0) {
+      final layer = _overlays[src.substring(0, dot)];
+      if (layer != null) return layer.get(src.substring(dot + 1));
+    }
     return null;
   }
 
@@ -1285,6 +1385,10 @@ final class _Run {
         final truthy = s == '1' || s == 'true' || s == 'yes';
         // Ложь = «не просили»: ключ не появляется вовсе.
         return truthy ? true : null;
+      case 'duration':
+        // Форму значения (`30s`, `1m30s`) судит санитайзер по реестру, как и
+        // у всех прочих полей: маппер её только переносит.
+        return '$value'.trim();
       case 'object':
         if (value is Map) {
           final m = value.cast<String, dynamic>();
@@ -1514,7 +1618,7 @@ final class _Run {
     final code = section.unknownKeyCode;
     if (code == null) return;
     for (final name in space.query.names) {
-      if (_consumed.contains(name.toLowerCase())) continue;
+      if (_declared.contains(name.toLowerCase())) continue;
       warnings.add(RegistryWarning(code: code, path: name, value: ''));
     }
 
@@ -1536,6 +1640,33 @@ final class _Run {
       }
     }
   }
+
+  /// Все написания, ОБЪЯВЛЕННЫЕ таблицей: имя записи, её `aliases` и имена в
+  /// `source` (`query.<имя>`).
+  ///
+  /// Считается по таблице, а не по факту чтения (норма §8): запись,
+  /// не применившаяся по `when`, объявленной быть не перестаёт. Иначе
+  /// `eh=` без `ed=` и любой параметр чужого транспорта давали бы info о
+  /// «неизвестном параметре» на ровном месте — а это ровно то молчание
+  /// наоборот, ради которого затеяна кампания.
+  late final Set<String> _declared = () {
+    final out = <String>{};
+    for (final p in section.params.values) {
+      for (final s in p.spellings) {
+        out.add(s.toLowerCase());
+      }
+      final sources = [
+        ...p.source,
+        for (final l in p.sourceByForm.values) ...l,
+      ];
+      for (final src in sources) {
+        if (src.startsWith('query.')) {
+          out.add(src.substring('query.'.length).toLowerCase());
+        }
+      }
+    }
+    return out;
+  }();
 
   /// Регулярка реестра, скомпилированная и закэшированная.
   ///

@@ -136,6 +136,9 @@ void main() {
         // У общего блока своей секции нет: он вмонтируется в секцию схемы, и
         // `body_source` объявляет она.
         if (_isBlocks(doc)) return;
+        // ОВЕРЛЕЙ несёт не секцию, а только те ключи, которые перекрывают
+        // реестровые: обязательных среди них нет по определению.
+        if (doc['_overlay'] == true) return;
         final mappers = (doc['mappers'] as Map).cast<String, dynamic>();
         for (final e in mappers.entries) {
           final sec = (e.value as Map).cast<String, dynamic>();
