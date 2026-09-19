@@ -82,6 +82,7 @@ final class SourceSpace {
     this.fragment = '',
     QueryPairs? query,
     this.json,
+    this.jsonBase,
     this.ini,
   }) : _query = query;
 
@@ -130,6 +131,12 @@ final class SourceSpace {
   /// Пространство `json` (формы `space: json`): Xray/sing-box/v2rayN.
   final Map<String, dynamic>? json;
 
+  /// Якорь пути формы: значение `base` подставляется в `source` вместо
+  /// `$base`. Одна таблица обслуживает разные раскладки одного диалекта
+  /// (`settings.vnext.0`, `settings.servers.0`, плоская форма) — без якоря
+  /// пришлось бы держать три копии записей (§4 НОРМЫ).
+  final String? jsonBase;
+
   /// Пространство `ini` (формы `space: ini`): `Section.Key` в нижнем
   /// регистре, плюс `$comment.<Section>`.
   final Map<String, String>? ini;
@@ -153,6 +160,7 @@ final class SourceSpace {
         fragment: fragment,
         query: _query,
         json: json,
+        jsonBase: jsonBase,
         ini: ini,
       );
 }

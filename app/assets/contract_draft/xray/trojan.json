@@ -1,0 +1,81 @@
+{
+  "_draft": "§480 W5 — черновая КОПИЯ исполняемой секции mappers.xray реестра лаунчера (контракт 1.1.13+). Временная: загрузчик берёт секцию из реестра, как только она приедет синком, и только иначе отсюда. Отличия от копии перечислены в `impl` записей.",
+  "mappers": {
+    "xray": {
+      "detect": {
+        "json": {
+          "value_of": {
+            "protocol": "trojan"
+          }
+        }
+      },
+      "body_source": "xray",
+      "forms": [
+        {
+          "id": "servers",
+          "detect": {
+            "json": {
+              "type_of": {
+                "settings": "object",
+                "streamSettings": "object"
+              }
+            }
+          },
+          "space": "json",
+          "base": "settings.servers.0",
+          "impl": "§322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА: мусорный ТИП поля (streamSettings: \"none\", settings: []) означает битую запись, а не «транспорта нет». Формы под неё нет — элемент пропускается."
+        }
+      ],
+      "include": [
+        "transports#xray",
+        "tls#xray",
+        "dialer#xray"
+      ],
+      "defaults": {
+        "server_port": 443
+      },
+      "params": {
+        "address": {
+          "source": "json.$base.address",
+          "maps_to": "server",
+          "required": true
+        },
+        "port": {
+          "source": "json.$base.port",
+          "maps_to": "server_port",
+          "type": "int"
+        },
+        "password": {
+          "source": "json.$base.password",
+          "maps_to": "password",
+          "required": true
+        },
+        "$extra_servers": {
+          "source": "json.settings.servers",
+          "maps_to": null,
+          "on_len_gt": {
+            "n": 1,
+            "action": "note",
+            "code": "xray_extra_entries_dropped"
+          },
+          "impl": "QUIRKS Q133-18: servers[1..] отбрасываются молча. Поведение то же, появляется код."
+        }
+      },
+      "unknown_key": {
+        "action": "drop",
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ]
+      },
+      "emit": null
+    }
+  }
+}

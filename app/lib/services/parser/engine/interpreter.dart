@@ -40,6 +40,7 @@ final class EngineResult {
     this.extensionFields = const {},
     this.wsEarlyDataHeaderImplicit = false,
     this.tagAddress,
+    this.tagScheme,
   });
 
   /// Сырая карта тела в ключах sing-box.
@@ -52,6 +53,10 @@ final class EngineResult {
   final Map<String, dynamic> extensionFields;
   final bool wsEarlyDataHeaderImplicit;
   final (String, int)? tagAddress;
+
+  /// Написание имени в теге-фолбэке, объявленное секцией (`label.fallback
+  /// .scheme`): `null` — фолбэк строится по типу тела, как у всех прочих.
+  final String? tagScheme;
 }
 
 /// Исполнить секцию на тексте источника.
@@ -64,18 +69,36 @@ EngineResult? runSection(MapperSection section, String text) {
   return _Run(section, space).execute();
 }
 
+/// §480 W5 — исполнить секцию на РАЗОБРАННОМ документе-объекте.
+///
+/// Второй вход движка, и разница с [runSection] ровно одна: пространство
+/// строится не лексером из текста, а из уже разобранной карты. Элемент к
+/// этому моменту разобран один раз на весь документ (норма §1: «JSON
+/// элемента разбирается один раз на элемент»), и просить движок разбирать
+/// текст заново значило бы разбирать подписку из 2000 узлов дважды.
+///
+/// Всё остальное общее: те же формы, тот же `detect`, те же записи и тот же
+/// порядок проходов. Вид источника движок не знает — `kind` выбирает
+/// секцию у загрузчика, а не ветку здесь.
+EngineResult? runSectionOnJson(
+  MapperSection section,
+  Map<String, dynamic> doc,
+) {
+  final space = _selectJsonForm(section, doc);
+  if (space == null) return null;
+  return _Run(section, space).execute();
+}
+
 /// Выбрать форму (P1) и построить пространство источников.
 ///
 /// Формы пробуются ПО ПОРЯДКУ, первая, чей `detect` сработал, выигрывает;
-/// `detect.default` — ветка «всё остальное». W1 исполняет только `space: url`;
-/// `json`/`ini` приедут волной W5 вместе со своими видами источника, и
-/// пространство для них уже заведено ([SourceSpace.json], [SourceSpace.ini]).
+/// `detect.default` — ветка «всё остальное».
 SourceSpace? _selectForm(MapperSection section, String text) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'url', space: 'url')]
       : section.forms;
   for (final form in forms) {
-    if (!_formMatches(form, text)) continue;
+    if (!formMatchesText(form.detect, text)) continue;
     // `forms[].decode` — оболочка источника: тело после схемы бывает целиком
     // base64 (перекодированные подписки). Декодер работает над ПЭЙЛОАДОМ, а
     // схему возвращает на место: написание схемы — источник (`scheme_sets`,
@@ -87,11 +110,24 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         final space = lexUri(decoded, formId: form.id);
         if (space != null) return space;
       default:
-        // Пространства json/ini заводятся волной W5 вместе с их видами
-        // источника. Молча выдавать пустое тело нельзя — это был бы узел
-        // из ничего, поэтому форма просто не отвечает.
+        // Текстовая форма с пространством json/ini разбирается своим входом
+        // ([runSectionOnJson]). Молча выдавать пустое тело нельзя — это был
+        // бы узел из ничего, поэтому форма просто не отвечает.
         continue;
     }
+  }
+  return null;
+}
+
+/// Форма для объектного входа: `detect` формы судится предикатами `json`
+/// (§2 НОРМЫ — язык предикатов ОДИН на обоих уровнях).
+SourceSpace? _selectJsonForm(MapperSection section, Map<String, dynamic> doc) {
+  final forms = section.forms.isEmpty
+      ? const [MapperForm(id: 'json', space: 'json')]
+      : section.forms;
+  for (final form in forms) {
+    if (!detectMatchesJson(form.detect, doc)) continue;
+    return SourceSpace(formId: form.id, json: doc, jsonBase: form.base);
   }
   return null;
 }
@@ -145,8 +181,12 @@ abstract final class _RunDecode {
   }
 }
 
-bool _formMatches(MapperForm form, String text) {
-  final d = form.detect;
+/// `detect` по ТЕКСТУ (уровень ссылки и уровень документа).
+///
+/// Вынесено наружу: тем же предикатом судится вид документа (W6), и второго
+/// языка для документа норма (§2) не допускает — иначе сниффер формата
+/// вернулся бы в код.
+bool formMatchesText(Map<String, dynamic>? d, String text) {
   if (d == null || d['default'] == true) return true;
   // Предикаты по ТЕКСТУ адресуют пэйлоад: «тело целиком base64» — это про то,
   // что после схемы, и со схемой такое выражение не совпало бы никогда.
@@ -169,21 +209,18 @@ bool _formMatches(MapperForm form, String text) {
     final contains = txt['contains'] as String?;
     if (contains != null && !payload.contains(contains)) return false;
   }
+  // Комбинаторы предиката: рекурсия по тому же выражению. Имя формы им не
+  // нужно — предикат судит ТЕКСТ, а не форму, и с вынесением наружу
+  // (`formMatchesText`) вложенное выражение адресуется напрямую.
   final not = d['not'];
-  if (not is Map) {
-    if (_formMatches(
-        MapperForm(id: form.id, detect: not.cast<String, dynamic>()), text)) {
-      return false;
-    }
+  if (not is Map && formMatchesText(not.cast<String, dynamic>(), text)) {
+    return false;
   }
   final all = d['all'];
   if (all is List) {
     for (final sub in all) {
       if (sub is! Map) continue;
-      if (!_formMatches(
-          MapperForm(id: form.id, detect: sub.cast<String, dynamic>()), text)) {
-        return false;
-      }
+      if (!formMatchesText(sub.cast<String, dynamic>(), text)) return false;
     }
   }
   final any = d['any'];
@@ -191,8 +228,7 @@ bool _formMatches(MapperForm form, String text) {
     var hit = false;
     for (final sub in any) {
       if (sub is! Map) continue;
-      if (_formMatches(
-          MapperForm(id: form.id, detect: sub.cast<String, dynamic>()), text)) {
+      if (formMatchesText(sub.cast<String, dynamic>(), text)) {
         hit = true;
         break;
       }
@@ -200,6 +236,130 @@ bool _formMatches(MapperForm form, String text) {
     if (!hit) return false;
   }
   return true;
+}
+
+/// `detect.json` по РАЗОБРАННОМУ значению — тот же язык предикатов, что и у
+/// формы, и у вида документа (§2 НОРМЫ).
+///
+/// Предикаты (`PRIMITIVES.md` §1.2):
+///
+/// - `value_of: {<путь>: <значение>}` — точное равенство скаляра;
+/// - `value_in: {<путь>: [<значения>]}` — вхождение в набор;
+/// - `has_key: [<путь>…]` — путь существует (значение любое, включая
+///   пустое);
+/// - `array_elem_any_keys: ["outbounds[].protocol", …]` — хотя бы у ОДНОГО
+///   элемента массива есть этот путь. Массив назван явно (`[]` в пути), а не
+///   угадывается: «первый элемент решает за весь массив» — ровно тот
+///   рукописный сниффер, который волна снимает.
+///
+/// Несколько предикатов в одном `detect` — конъюнкция.
+bool detectMatchesJson(Map<String, dynamic>? d, dynamic value) {
+  if (d == null || d['default'] == true) return true;
+  final j = (d['json'] as Map?)?.cast<String, dynamic>();
+  if (j == null) {
+    // У объектного входа предиката по тексту быть не может: текста нет.
+    return d.containsKey('json') ? false : d.isEmpty;
+  }
+  final valueOf = (j['value_of'] as Map?)?.cast<String, dynamic>();
+  if (valueOf != null) {
+    for (final e in valueOf.entries) {
+      final actual = jsonPathValue(value, e.key);
+      if (actual == null) return false;
+      if (!_scalarEq(actual, e.value)) return false;
+    }
+  }
+  final valueIn = (j['value_in'] as Map?)?.cast<String, dynamic>();
+  if (valueIn != null) {
+    for (final e in valueIn.entries) {
+      final actual = jsonPathValue(value, e.key);
+      if (actual == null) return false;
+      final set = (e.value as List?) ?? const [];
+      if (!set.any((v) => _scalarEq(actual, v))) return false;
+    }
+  }
+  final hasKey = (j['has_key'] as List?)?.cast<String>();
+  if (hasKey != null) {
+    for (final path in hasKey) {
+      if (jsonPathValue(value, path) == null) return false;
+    }
+  }
+  final anyKeys = (j['array_elem_any_keys'] as List?)?.cast<String>();
+  if (anyKeys != null) {
+    for (final path in anyKeys) {
+      if (!_anyElemHas(value, path)) return false;
+    }
+  }
+  final type = j['type'] as String?;
+  if (type != null && !_isJsonType(value, type)) return false;
+
+  // `type_of: {<путь>: object|array|string|number}` — ФОРМА значения по
+  // пути. Нужна там, где мусорный ТИП поля делает элемент нечитаемым
+  // целиком: `streamSettings: "none"` это не «транспорта нет», а битая
+  // запись, и собрать из неё рабочий узел без транспорта и TLS значило бы
+  // выдать узел, которого провайдер не присылал. Отсутствующий путь условию
+  // НЕ противоречит: ключа может не быть вовсе.
+  final typeOf = (j['type_of'] as Map?)?.cast<String, dynamic>();
+  if (typeOf != null) {
+    for (final e in typeOf.entries) {
+      final actual = jsonPathValue(value, e.key);
+      if (actual == null) continue;
+      if (!_isJsonType(actual, '${e.value}')) return false;
+    }
+  }
+  return true;
+}
+
+bool _isJsonType(dynamic value, String type) => switch (type) {
+      'object' => value is Map,
+      'array' => value is List,
+      'string' => value is String,
+      'number' => value is num,
+      _ => false,
+    };
+
+/// `outbounds[].protocol` — хотя бы у одного элемента массива по пути слева
+/// от `[]` есть путь справа.
+bool _anyElemHas(dynamic root, String path) {
+  final marker = path.indexOf('[]');
+  if (marker < 0) return jsonPathValue(root, path) != null;
+  final arrayPath = path.substring(0, marker);
+  final rest = path.substring(marker + 2).replaceFirst(RegExp(r'^\.'), '');
+  final arr = arrayPath.isEmpty ? root : jsonPathValue(root, arrayPath);
+  if (arr is! List) return false;
+  for (final el in arr) {
+    if (rest.isEmpty) return true;
+    if (jsonPathValue(el, rest) != null) return true;
+  }
+  return false;
+}
+
+bool _scalarEq(dynamic actual, dynamic expected) {
+  if (actual is bool || expected is bool) return actual == expected;
+  if (actual is num && expected is num) return actual == expected;
+  return actual.toString() == expected.toString();
+}
+
+/// Значение по точечному пути; числовой сегмент индексирует массив.
+///
+/// Массив НЕ приводится к строке (§4 НОРМЫ): запись, которой нужен не
+/// скаляр, берёт значение как есть (`list`, `coerce`, `flatten`). Склейка
+/// массива в строку — источник живого дефекта у Go (Q133-16).
+dynamic jsonPathValue(dynamic root, String path) {
+  dynamic cur = root;
+  for (final seg in path.split('.')) {
+    if (seg.isEmpty) continue;
+    if (cur is Map) {
+      cur = cur[seg];
+    } else if (cur is List) {
+      final i = int.tryParse(seg);
+      if (i == null || i < 0 || i >= cur.length) return null;
+      cur = cur[i];
+    } else {
+      return null;
+    }
+    if (cur == null) return null;
+  }
+  return cur;
 }
 
 /// Приоритет значения из `defaults` секции: слабее любой записи таблицы
@@ -231,6 +391,10 @@ final class _Run {
 
   bool _wsEarlyDataHeaderImplicit = false;
 
+  /// `on_no_match: {action: drop_node}` — узла нет вовсе. Отличается от
+  /// «тело пустое»: секция сказала, что такой записи у нас нет Spec'а.
+  bool _dropNode = false;
+
   EngineResult? execute() {
     body['type'] = section.singboxType;
 
@@ -260,9 +424,11 @@ final class _Run {
     final ordered = _orderedParams();
     for (final p in ordered.where((p) => p.selector)) {
       _applyParam(p);
+      if (_dropNode) return null;
     }
     for (final p in ordered.where((p) => !p.selector)) {
       _applyParam(p);
+      if (_dropNode) return null;
     }
 
     // 6. Заполнение пустоты объявленными источниками.
@@ -288,6 +454,7 @@ final class _Run {
       warnings: warnings,
       extensionFields: extensionFields,
       wsEarlyDataHeaderImplicit: _wsEarlyDataHeaderImplicit,
+      tagScheme: section.label.fallbackScheme,
     );
   }
 
@@ -405,16 +572,37 @@ final class _Run {
   void _applyParam(MapperParam p) {
     if (!_whenHolds(p.when)) return;
 
-    final raw = _valueOf(p);
+    var raw = _valueOf(p);
     if (raw == null) {
-      // Параметра нет. `implies` не срабатывает (он от НАЛИЧИЯ), `sets` — у
-      // ключа `""`, если секция его объявила: так выражается «пусто тоже
-      // значение» (`security` без параметра включает TLS).
-      final absentSet = p.sets[''];
-      if (absentSet is Map && p.sets.containsKey('')) {
-        _applySets(absentSet.cast<String, dynamic>(), p);
+      // `default_when: {absent: true, value: …}` — «не сказано» ЕСТЬ
+      // значение, и дальше запись исполняется как обычная. Без этого
+      // селектор рода узла (`version` у форка Xray, где 2 подразумевается)
+      // не отработал бы на конфиге, который версии не пишет вовсе.
+      if (p.defaultWhen['absent'] == true && p.defaultWhen['value'] != null) {
+        raw = p.defaultWhen['value'];
+      } else {
+        // Параметра нет. `implies` не срабатывает (он от НАЛИЧИЯ), `sets` — у
+        // ключа `""`, если секция его объявила: так выражается «пусто тоже
+        // значение» (`security` без параметра включает TLS).
+        final absentSet = p.sets[''];
+        if (absentSet is Map && p.sets.containsKey('')) {
+          _applySets(absentSet.cast<String, dynamic>(), p);
+        }
+        return;
       }
-      return;
+    }
+
+    // `on_len_gt` — у источника-МАССИВА больше `n` элементов. Лишние
+    // отбрасываются и сегодня (Q133-18), но молча; запись даёт коду место,
+    // не трогая поведения.
+    if (p.onLenGt.isNotEmpty && raw is List) {
+      final n = (p.onLenGt['n'] as num?)?.toInt() ?? 1;
+      final code = p.onLenGt['code'] as String?;
+      if (raw.length > n && code != null) {
+        warnings.add(NodeWarning.byCode(code, path: p.name, value: '${raw.length}'));
+      }
+      // Служебная запись массива в тело не едет: она только считает.
+      if (p.mapsToPresent && p.mapsTo == null) return;
     }
 
     var value = raw;
@@ -507,6 +695,16 @@ final class _Run {
 
     // `sets` по значению — набор присваиваний вместо/вместе с `maps_to`.
     final hadSets = _applyValueSets(p, raw is String ? raw : '$raw');
+
+    // `on_no_match` — значение не попало ни в один ключ `sets`. У селектора
+    // рода записи (`version` у форка Xray) это «узла нет»: своего Spec для
+    // другого значения у нас не существует.
+    if (!hadSets && p.sets.isNotEmpty && p.onNoMatch.isNotEmpty) {
+      if (p.onNoMatch['action'] == 'drop_node') {
+        _dropNode = true;
+        return;
+      }
+    }
 
     // Приведение типа (`type`) — форма, а не суждение.
     var typed = _coerceType(p, value);
@@ -732,12 +930,39 @@ final class _Run {
         return space.fragment;
     }
     if (src.startsWith('json.')) {
-      return _readJsonPath(space.json, src.substring('json.'.length));
+      final path = _resolveBase(src.substring('json.'.length));
+      _consumeJson(path);
+      return jsonPathValue(space.json, path);
     }
     if (src.startsWith('ini.')) {
       return space.ini?[src.substring('ini.'.length).toLowerCase()];
     }
     return null;
+  }
+
+  /// Подставить якорь формы: `$base.address` → `settings.vnext.0.address`.
+  ///
+  /// Форма без `base` оставляет путь как есть — запись в такой секции
+  /// адресует документ от корня.
+  String _resolveBase(String path) {
+    if (!path.contains(DraftNames.baseAnchor)) return path;
+    final base = space.jsonBase ?? '';
+    final out = path.replaceAll(DraftNames.baseAnchor, base);
+    // Пустой якорь оставил бы ведущую точку (`.address`).
+    return out.startsWith('.') ? out.substring(1) : out;
+  }
+
+  /// Отметить путь ПРОЧИТАННЫМ: верхний сегмент и полный путь.
+  ///
+  /// Верхний нужен, потому что `json_field_unknown` судит ключи ВЕРХНЕГО
+  /// уровня элемента: запись, читающая `settings.vnext.0.address`, объявляет
+  /// весь `settings` прочитанным — перечислять каждый лист диалекта значило
+  /// бы держать вторую копию схемы входа.
+  void _consumeJson(String path) {
+    _consumed.add('json.$path'.toLowerCase());
+    final dot = path.indexOf('.');
+    _consumed.add('json.${dot < 0 ? path : path.substring(0, dot)}'
+        .toLowerCase());
   }
 
   /// Первый percent-декод query-значения (декодер формы `url`).
@@ -763,24 +988,6 @@ final class _Run {
     _consumed.add(name.toLowerCase());
   }
 
-  static dynamic _readJsonPath(Map<String, dynamic>? json, String path) {
-    if (json == null) return null;
-    dynamic cur = json;
-    for (final seg in path.split('.')) {
-      if (cur is Map) {
-        cur = cur[seg];
-      } else if (cur is List) {
-        final i = int.tryParse(seg);
-        if (i == null || i < 0 || i >= cur.length) return null;
-        cur = cur[i];
-      } else {
-        return null;
-      }
-      if (cur == null) return null;
-    }
-    return cur;
-  }
-
   // ─────────────────────────── дефолты ───────────────────────────
 
   void _applyDefaults(MapperParam p) {
@@ -792,7 +999,13 @@ final class _Run {
     // поле пусто, и только если `when` записи держится.
     if (!present && p.defaultFrom.isNotEmpty && _whenHolds(p.when)) {
       for (final src in p.defaultFrom) {
-        final v = _readSource(src, p);
+        // `body.<путь>` — дефолт из УЖЕ ПОСТРОЕННОГО тела. Нужен там, где
+        // источника у поля нет вовсе: у объектного входа адрес лежит под
+        // якорем формы, и общий блок (tls) его пути не знает — знать его
+        // значило бы завести в общем блоке запись про конкретный диалект.
+        final v = src.startsWith('body.')
+            ? _read(src.substring('body.'.length))
+            : _readSource(src, p);
         if (v == null) continue;
         if (v is String && v.isEmpty) continue;
         _write(path, v, p);
@@ -814,7 +1027,13 @@ final class _Run {
     // источник молчал (отличается от дефолта санитайзера: тот дефолты не
     // материализует вовсе).
     if (p.materializeDefault && _read(path) == null) {
-      final v = p.defaultWhen['value'] ?? section.defaults[path];
+      // Третий источник дефолта — `value_map[""]`: «пусто» и «не сказано»
+      // диалект называет одним значением, и объявлять его дважды (в
+      // `value_map` для пустой строки и ещё раз в `defaults`) значило бы
+      // завести два места, которые разъедутся.
+      final v = p.defaultWhen['value'] ??
+          section.defaults[path] ??
+          p.valueMap[''];
       if (v != null) _write(path, v, p);
     }
   }
@@ -870,7 +1089,7 @@ final class _Run {
         return space.userinfo;
     }
     if (src.startsWith('json.')) {
-      return _readJsonPath(space.json, src.substring('json.'.length));
+      return jsonPathValue(space.json, _resolveBase(src.substring('json.'.length)));
     }
     if (src.startsWith('ini.')) {
       return space.ini?[src.substring('ini.'.length).toLowerCase()];
@@ -915,6 +1134,20 @@ final class _Run {
       if (m.containsKey('not_matches')) {
         return actual is! String ||
             !RegExp(m['not_matches'] as String).hasMatch(actual);
+      }
+      // Числовое сравнение: диалект, где ЗНАК значения несёт смысл
+      // («любое отрицательное = выключено совсем»), выразить набором
+      // значений нельзя — их бесконечно много.
+      if (m.containsKey('lt') || m.containsKey('gt')) {
+        final n = actual is num
+            ? actual.toDouble()
+            : double.tryParse('${actual ?? ''}'.trim());
+        if (n == null) return false;
+        final lt = (m['lt'] as num?)?.toDouble();
+        final gt = (m['gt'] as num?)?.toDouble();
+        if (lt != null && !(n < lt)) return false;
+        if (gt != null && !(n > gt)) return false;
+        return true;
       }
       return false;
     }
@@ -991,6 +1224,17 @@ final class _Run {
       case 'int':
         if (value is num) return value.toInt();
         return int.tryParse('$value'.trim());
+      // Диалект, где длительность записана ЦЕЛЫМИ СЕКУНДАМИ числом, а ядро
+      // ждёт строку с единицей (`30`→`30s`). Перевод написания, не суждение:
+      // годность длительности судит общее правило поля.
+      //
+      // Неположительное значение ключа НЕ даёт: ноль у этого диалекта значит
+      // «не задано», а отрицательное — «выключено совсем», и выключение
+      // объявляется отдельной записью (`sets` по знаку), а не этой.
+      case 'duration_seconds':
+        final n = value is num ? value.toInt() : int.tryParse('$value'.trim());
+        if (n == null || n <= 0) return null;
+        return '${n}s';
       case 'bool':
       case 'bool_spelled':
         // Общий набор написаний истины (§4 FROZEN): 1 | true | yes. Одно
@@ -1231,6 +1475,24 @@ final class _Run {
     for (final name in space.query.names) {
       if (_consumed.contains(name.toLowerCase())) continue;
       warnings.add(RegistryWarning(code: code, path: name, value: ''));
+    }
+
+    // Объектный вход: судятся ключи ВЕРХНЕГО уровня элемента. Их конечное
+    // число, они и есть диалект, а перечислять каждый лист значило бы
+    // держать вторую копию схемы входа рядом с `body.fields`.
+    //
+    // `action: keep` (sing-box) кладёт неопознанный ключ в тело: чужой ключ
+    // может быть расширением форка, выбрасывать его нельзя. `drop` (xray)
+    // не кладёт — диалект Xray в тело ядра не едет ни одним именем.
+    final json = space.json;
+    if (json == null) return;
+    for (final e in json.entries) {
+      if (_consumed.contains('json.${e.key}'.toLowerCase())) continue;
+      if (section.ignoredKeys.contains(e.key)) continue;
+      warnings.add(RegistryWarning(code: code, path: e.key, value: ''));
+      if (section.unknownKeyAction == 'keep' && !body.containsKey(e.key)) {
+        body[e.key] = e.value;
+      }
     }
   }
 

@@ -114,6 +114,7 @@ final class LabelSpec {
     this.valueMap = const {},
     this.fallbackTemplate,
     this.fallbackSchemeSource = 'singbox_type',
+    this.fallbackScheme,
   });
 
   factory LabelSpec.fromJson(Map<String, dynamic> j) {
@@ -127,6 +128,14 @@ final class LabelSpec {
       // ссылки и тип тела совпадают, разницы нет; там, где нет (`hy2`, `ss`),
       // это решение переименовывает узлы и оформляется дельтой своей волной.
       fallbackSchemeSource: fb?['scheme_source'] as String? ?? 'singbox_type',
+      // `scheme` — ЯВНОЕ написание имени в теге-фолбэке безымянного узла,
+      // когда оно не равно типу тела. Совпадений нет у двух протоколов, и
+      // обе разницы историчны: прежние ветки этого входа звали фолбэк
+      // короткой формой. Тег И ЕСТЬ identity (`node_hash.dart`), поэтому
+      // написание объявлено ДАННЫМИ, а не остаётся свойством кода: возьми
+      // конвейер имя типа, у живых безымянных узлов слетели бы выбор,
+      // отключения и цепочки.
+      fallbackScheme: fb?['scheme'] as String?,
     );
   }
 
@@ -135,6 +144,7 @@ final class LabelSpec {
   final Map<String, dynamic> valueMap;
   final String? fallbackTemplate;
   final String fallbackSchemeSource;
+  final String? fallbackScheme;
 }
 
 /// Правила списка (P9, FROZEN `list`).
@@ -235,6 +245,8 @@ final class MapperParam {
     this.format,
     this.onInvalid = const {},
     this.onPresent = const {},
+    this.onLenGt = const {},
+    this.onNoMatch = const {},
     this.implicit = false,
   });
 
@@ -297,6 +309,10 @@ final class MapperParam {
           ((j['on_invalid'] as Map?) ?? const {}).cast<String, dynamic>(),
       onPresent:
           ((j['on_present'] as Map?) ?? const {}).cast<String, dynamic>(),
+      onLenGt:
+          ((j['on_len_gt'] as Map?) ?? const {}).cast<String, dynamic>(),
+      onNoMatch:
+          ((j['on_no_match'] as Map?) ?? const {}).cast<String, dynamic>(),
       implicit: j['implicit'] as bool? ?? false,
     );
   }
@@ -337,6 +353,17 @@ final class MapperParam {
   final String? format;
   final Map<String, dynamic> onInvalid;
   final Map<String, dynamic> onPresent;
+
+  /// `on_len_gt: {n, action, code}` — у источника-МАССИВА больше `n`
+  /// элементов, и лишние отбрасываются. Сегодня это молчаливая потеря
+  /// (Q133-18: второй сервер подписки просто исчезает); запись даёт ей код,
+  /// не меняя поведения.
+  final Map<String, dynamic> onLenGt;
+
+  /// `on_no_match: {action, code}` — значение не попало ни в один ключ
+  /// `sets`/`value_map`. `action: drop_node` снимает узел целиком.
+  final Map<String, dynamic> onNoMatch;
+
   final bool implicit;
 
   /// Служебная запись (DRAFT `$`-префикс): у неё нет `maps_to`, и параметром
@@ -371,6 +398,7 @@ final class MapperSection {
     this.defaults = const {},
     this.unknownKeyAction = 'drop',
     this.unknownKeyCode,
+    this.ignoredKeys = const {},
     this.emit,
   });
 
@@ -409,6 +437,8 @@ final class MapperSection {
       defaults: ((j['defaults'] as Map?) ?? const {}).cast<String, dynamic>(),
       unknownKeyAction: uk?['action'] as String? ?? 'drop',
       unknownKeyCode: uk?['code'] as String?,
+      ignoredKeys:
+          ((uk?['ignore'] as List?) ?? const []).cast<String>().toSet(),
       emit: (j['emit'] as Map?)?.cast<String, dynamic>(),
     );
   }
@@ -431,6 +461,13 @@ final class MapperSection {
   final Map<String, dynamic> defaults;
   final String unknownKeyAction;
   final String? unknownKeyCode;
+
+  /// `unknown_key.ignore` — ключи УРОВНЯ ДОКУМЕНТА, которые полем узла не
+  /// являются и неизвестными не считаются: бухгалтерия элемента
+  /// (`protocol`/`type` — по ним элемент и опознан, `tag`, `remarks` — имя,
+  /// которое читает сборка документа, а не маппер одного узла).
+  final Set<String> ignoredKeys;
+
   final Map<String, dynamic>? emit;
 
   /// Секция с вмонтированными блоками `include` (общие tls/transports).
@@ -449,6 +486,7 @@ final class MapperSection {
         defaults: defaults,
         unknownKeyAction: unknownKeyAction,
         unknownKeyCode: unknownKeyCode,
+        ignoredKeys: ignoredKeys,
         emit: emit,
       );
 }

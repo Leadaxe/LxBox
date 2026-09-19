@@ -16,6 +16,41 @@
         "type": "bool_spelled",
         "maps_to": "disable_tcp_keep_alive"
       }
+    },
+    "xray": {
+      "$note": "§453 — Xray держит keep-alive в sockopt ЦЕЛЫМИ СЕКУНДАМИ числом, ядро ждёт строку с единицей. Перевод написания; годность длительности судит общее правило поля.",
+      "tcp_keep_alive": {
+        "source": "json.streamSettings.sockopt.tcpKeepAliveIdle",
+        "maps_to": "tcp_keep_alive",
+        "type": "duration_seconds"
+      },
+      "tcp_keep_alive_interval": {
+        "source": "json.streamSettings.sockopt.tcpKeepAliveInterval",
+        "maps_to": "tcp_keep_alive_interval",
+        "type": "duration_seconds"
+      },
+      "disable_keep_alive_idle": {
+        "source": "json.streamSettings.sockopt.tcpKeepAliveIdle",
+        "maps_to": null,
+        "when": {
+          "json.streamSettings.sockopt.tcpKeepAliveIdle": { "lt": 0 }
+        },
+        "implies": { "disable_tcp_keep_alive": true },
+        "impl": "ЛЮБОЕ отрицательное значит SO_KEEPALIVE=0 (sockopt_linux.go:143) — keep-alive выключен целиком. Ноль = «не задано»."
+      },
+      "disable_keep_alive_interval": {
+        "source": "json.streamSettings.sockopt.tcpKeepAliveInterval",
+        "maps_to": null,
+        "when": {
+          "json.streamSettings.sockopt.tcpKeepAliveInterval": { "lt": 0 }
+        },
+        "implies": { "disable_tcp_keep_alive": true }
+      },
+      "$dialer_proxy": {
+        "source": "json.streamSettings.sockopt.dialerProxy",
+        "maps_to": null,
+        "impl": "§404/D-085 — цепочку релеев собирает СБОРКА ДОКУМЕНТА (ей принадлежат теги элемента), а не маппер одного узла. Запись объявлена, чтобы ключ не уехал в json_field_unknown."
+      }
     }
   }
 }

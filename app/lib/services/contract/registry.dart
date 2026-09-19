@@ -498,6 +498,12 @@ final class ContractRegistry {
   Map<String, dynamic>? rawProtocol(String singboxType) =>
       _protocols[singboxType];
 
+  /// §480 W5 — имена загруженных протоколов.
+  ///
+  /// Нужны загрузчику секций, чтобы перебрать секции вида источника, не
+  /// перечисляя протоколы в коде (в пакете движка имён схем быть не должно).
+  Iterable<String> get protocolNames => _protocols.keys;
+
   /// §480 — СЫРОЙ JSON общего файла по имени (`tls.json`, `transports.json`).
   ///
   /// Движку маппера нужны `blocks` — исполняемые записи общих блоков по

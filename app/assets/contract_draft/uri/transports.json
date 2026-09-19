@@ -216,9 +216,11 @@
           "impl": "QUIRKS Q133-17: сегодня неизвестный network (kcp/quic/ds) возвращает nil МОЛЧА — узел приезжает чистым TCP. Код transport_unsupported объявлен, но из Xray не ставится."
         }
       },
+      "$note_paths": "§480 W5 — ПУТИ У НАС ПОЛНЫЕ (json.streamSettings.<…>Settings.<…>), в отличие от копии лаунчера, где у сабсекций префикс streamSettings потерян, а у селектора network он есть. С их написанием ни одно поле транспорта не читается вовсе. Передано лаунчеру.",
       "ws": {
         "path": {
-          "source": "json.wsSettings.path",
+          "source": "json.streamSettings.wsSettings.path",
+          "empty": "significant",
           "extract": {
             "re": "^(?P<path>[^?]*)(?:\\?ed=(?P<ed>\\d+))?$",
             "into": {
@@ -237,19 +239,39 @@
           },
           "when": {
             "transport.type": "ws"
-          }
+          },
+          "impl": "§303 — Xray кладёт early data ХВОСТОМ ПУТИ (/x?ed=2560); в sing-box это отдельные поля, а хвост в пути даёт 404. §103 D-016(в): ключа path не было вовсе → путь не задан, поэтому empty: significant (пустая строка это «задан пустым»)."
         },
         "host": {
-          "source": "json.wsSettings.host",
+          "source": "json.streamSettings.wsSettings.headers.Host",
           "maps_to": "transport.headers.Host",
           "when": {
             "transport.type": "ws"
-          }
+          },
+          "impl": "Диалект Xray держит Host в headers объекта wsSettings, а не плоским ключом host."
+        },
+        "ed": {
+          "source": "json.streamSettings.wsSettings.ed",
+          "maps_to": "transport.max_early_data",
+          "type": "int",
+          "when": {
+            "transport.type": "ws"
+          },
+          "impl": "§320 — Xray-конфиги несут early data и ПЛОСКИМИ полями ed/eh. Хвост пути в приоритете: он пишется записью `path`, которая объявлена раньше (merge keep_first)."
+        },
+        "eh": {
+          "source": "json.streamSettings.wsSettings.eh",
+          "maps_to": "transport.early_data_header_name",
+          "normalize": "trim",
+          "when": {
+            "transport.type": "ws"
+          },
+          "impl": "§103 D-008 — дефолт заголовка применим ТОЛЬКО когда early data взята из ХВОСТА ПУТИ (там он и подставляется, с пометкой implicit), не из плоских полей."
         }
       },
       "httpupgrade": {
         "path": {
-          "source": "json.httpupgradeSettings.path",
+          "source": "json.streamSettings.httpupgradeSettings.path",
           "extract": {
             "re": "^(?P<path>[^?]*)(?:\\?ed=\\d+)?$",
             "into": {
@@ -261,7 +283,7 @@
           }
         },
         "host": {
-          "source": "json.httpupgradeSettings.host",
+          "source": "json.streamSettings.httpupgradeSettings.host",
           "maps_to": "transport.host",
           "when": {
             "transport.type": "httpupgrade"
@@ -270,14 +292,18 @@
       },
       "http": {
         "path": {
-          "source": "json.httpSettings.path",
+          "source": "json.streamSettings.httpSettings.path",
           "maps_to": "transport.path",
+          "value_map": {
+            "/": null
+          },
           "when": {
             "transport.type": "http"
-          }
+          },
+          "impl": "Корневой путь ключа НЕ даёт: у ядра это умолчание, и прежняя ветка его не писала."
         },
         "host": {
-          "source": "json.httpSettings.host",
+          "source": "json.streamSettings.httpSettings.host",
           "maps_to": "transport.host",
           "list": {
             "sep": ",",
@@ -286,26 +312,27 @@
           "when": {
             "transport.type": "http"
           },
-          "impl": "QUIRKS Q133-16: сегодня массив ['a.com','b.com'] уходит через fmt.Sprint и даёт host ['[a.com b.com]'] — типовой реальный конфиг даёт мусор. coerce_scalar принимает ОБЕ формы."
+          "impl": "QUIRKS Q133-16: у Go массив ['a.com','b.com'] уходит через fmt.Sprint и даёт мусорный host. coerce_scalar принимает ОБЕ формы."
         }
       },
       "grpc": {
         "serviceName": {
           "source": [
-            "json.grpcSettings.serviceName",
-            "json.grpcSettings.service_name"
+            "json.streamSettings.grpcSettings.serviceName",
+            "json.streamSettings.grpcSettings.service_name"
           ],
           "maps_to": "transport.service_name",
           "when": {
             "transport.type": "grpc"
-          }
+          },
+          "impl": "§468 — значение идёт ядру КАК ЕСТЬ, ведущий «/» разбирает ядро само."
         }
       },
       "xhttp": {
         "$settings": {
           "source": [
-            "json.xhttpSettings",
-            "json.splithttpSettings"
+            "json.streamSettings.xhttpSettings",
+            "json.streamSettings.splithttpSettings"
           ],
           "flatten": [
             "extra",
@@ -314,24 +341,33 @@
           "when": {
             "transport.type": "xhttp"
           },
-          "impl": "xhttpSettings ∥ splithttpSettings — один транспорт под двумя именами. flatten разворачивает вложенные extra и xmux в плоский слой (сегодня это делает xrayFlattenScalars вручную)."
+          "impl": "§463 — xhttpSettings ∥ splithttpSettings: один транспорт под двумя именами. flatten разворачивает вложенные extra и xmux в плоский слой."
         },
         "mode": {
-          "source": "json.xhttpSettings.mode",
+          "source": [
+            "json.streamSettings.xhttpSettings.mode",
+            "json.streamSettings.splithttpSettings.mode"
+          ],
           "maps_to": "transport.mode",
           "when": {
             "transport.type": "xhttp"
           }
         },
         "path": {
-          "source": "json.xhttpSettings.path",
+          "source": [
+            "json.streamSettings.xhttpSettings.path",
+            "json.streamSettings.splithttpSettings.path"
+          ],
           "maps_to": "transport.path",
           "when": {
             "transport.type": "xhttp"
           }
         },
         "host": {
-          "source": "json.xhttpSettings.host",
+          "source": [
+            "json.streamSettings.xhttpSettings.host",
+            "json.streamSettings.splithttpSettings.host"
+          ],
           "maps_to": "transport.host",
           "when": {
             "transport.type": "xhttp"

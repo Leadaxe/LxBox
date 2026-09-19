@@ -130,17 +130,21 @@
       "security": {
         "source": "json.streamSettings.security",
         "selector": true,
+        "normalize": "trim_lower",
+        "priority": 10,
         "sets": {
           "tls": {
             "tls.enabled": true
           },
           "reality": {
-            "tls.enabled": true
+            "tls.enabled": true,
+            "tls.utls.enabled": true,
+            "tls.utls.fingerprint": "chrome"
           },
           "none": {},
           "": {}
         },
-        "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода."
+        "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода. REALITY требует uTLS-блок («uTLS is required by reality client» — fatal при создании outbound), поэтому у этого написания отпечаток материализуется дефолтом ЯДРА; написанное значение перебивает его записью `fp` (priority 20 против 10)."
       },
       "sni": {
         "source": [
@@ -152,14 +156,21 @@
         "maps_to": "tls.server_name",
         "impl": "Два написания каждого ключа — диалект Xray. xray_hysteria.go:227 читает ТОЛЬКО server_name, расходясь с :270 того же файла; одна запись снимает расхождение."
       },
-      "alpn": {
-        "source": "json.streamSettings.tlsSettings.alpn",
-        "maps_to": "tls.alpn",
-        "list": {
-          "sep": ",",
-          "coerce_scalar": true
+      "$sni_from_server": {
+        "source": "json.streamSettings.security",
+        "maps_to": null,
+        "when": {
+          "tls.enabled": true
         },
-        "impl": "DELTAS D133-C9: сегодня читается ТОЛЬКО в hysteria-ветке (xray_hysteria.go:213-225); vless/vmess/trojan из Xray-конфига теряют alpn. Кандидат — поведение не меняется до решения владельца."
+        "default_from": [
+          "body.server"
+        ],
+        "impl": "Пустое или отсутствующее имя сервера у живого TLS-блока заполняется АДРЕСОМ УЗЛА. Источник — уже построенное тело (`body.server`), а не путь входа: адрес объектного входа лежит под якорем формы, и общему блоку его путь не известен. Так делали обе прежние ветки (_tls: `sni.isEmpty ? server : sni`)."
+      },
+      "$alpn_not_carried": {
+        "source": "json.streamSettings.tlsSettings.alpn",
+        "maps_to": null,
+        "impl": "DELTAS D133-C9 — КАНДИДАТ, не дельта: у лаунчера запись alpn в tls#xray есть, у нас ALPN с этого входа не едет и никогда не ехал (vless_alpn_tls). Перенос сдвинул бы ТЕЛО и identity живых узлов Xray-подписок, а дельты на это нет ни в DELTAS.md, ни в ТЗ волны. Запись объявлена, чтобы ключ не уехал в json_field_unknown; снятие — отдельной дельтой вместе с ответом про сдвиг identity."
       },
       "fp": {
         "source": [
@@ -167,12 +178,18 @@
           "json.streamSettings.tlsSettings.fingerprint"
         ],
         "maps_to": "tls.utls.fingerprint",
+        "priority": 20,
+        "merge": "overwrite",
+        "when": {
+          "tls.enabled": true
+        },
         "value_map": {
           "$ref": "tls.fp_dialect"
         },
         "implies": {
           "tls.utls.enabled": true
-        }
+        },
+        "impl": "У выключенного TLS отпечатка не бывает: `when` держит блок от появления там, где security=none."
       },
       "insecure": {
         "source": [
@@ -180,6 +197,9 @@
           "json.streamSettings.tlsSettings.allowInsecure"
         ],
         "type": "bool_spelled",
+        "when": {
+          "tls.enabled": true
+        },
         "maps_to": "tls.insecure"
       },
       "pbk": {
@@ -188,10 +208,13 @@
           "json.streamSettings.realitySettings.public_key"
         ],
         "maps_to": "tls.reality.public_key",
+        "when": {
+          "tls.enabled": true
+        },
         "implies": {
-          "tls.enabled": true,
           "tls.reality.enabled": true
-        }
+        },
+        "impl": "`pbk_makes_reality_block` — блок появляется при НАЛИЧИИ ключа; годность ключа судит реестр (base64_32, код reality_pbk_invalid). `keyShare` этим входом НЕ читается (vless_reality_key_share): на входе sing-box поле читается (§457), на Xray — никогда не читалось. Разрыв входов вынесен лаунчеру (спека 472, 14.5), дельты на него нет."
       },
       "sid": {
         "source": [
@@ -202,6 +225,14 @@
         "when": {
           "tls.reality.enabled": true
         }
+      },
+      "$key_share_not_carried": {
+        "source": [
+          "json.streamSettings.realitySettings.keyShare",
+          "json.streamSettings.realitySettings.key_share"
+        ],
+        "maps_to": null,
+        "impl": "См. `pbk`: с этого входа key_share не едет. Запись объявлена, чтобы ключ не уехал в json_field_unknown."
       }
     },
     "fp_dialect": {

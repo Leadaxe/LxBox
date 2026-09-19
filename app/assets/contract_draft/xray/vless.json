@@ -1,0 +1,114 @@
+{
+  "_draft": "§480 W5 — черновая КОПИЯ исполняемой секции mappers.xray реестра лаунчера (контракт 1.1.13+). Временная: загрузчик берёт секцию из реестра, как только она приедет синком, и только иначе отсюда. Отличия от копии перечислены в `impl` записей.",
+  "mappers": {
+    "xray": {
+      "detect": {
+        "json": {
+          "value_of": {
+            "protocol": "vless"
+          }
+        }
+      },
+      "body_source": "xray",
+      "forms": [
+        {
+          "id": "vnext",
+          "detect": {
+            "json": {
+              "type_of": {
+                "settings": "object",
+                "streamSettings": "object"
+              }
+            }
+          },
+          "space": "json",
+          "base": "settings.vnext.0",
+          "impl": "§322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА: мусорный ТИП поля (streamSettings: \"none\", settings: []) означает битую запись, а не «транспорта нет». Формы под неё нет — элемент пропускается, соседи по элементу и остальная подписка живут. Прежде это же делал жёсткий каст в коде, роняя TypeError в catch вызывающего."
+        }
+      ],
+      "include": [
+        "transports#xray",
+        "tls#xray",
+        "dialer#xray"
+      ],
+      "defaults": {
+        "server_port": 443
+      },
+      "params": {
+        "address": {
+          "source": "json.$base.address",
+          "maps_to": "server",
+          "required": true
+        },
+        "port": {
+          "source": "json.$base.port",
+          "maps_to": "server_port",
+          "type": "int"
+        },
+        "id": {
+          "source": "json.$base.users.0.id",
+          "maps_to": "uuid",
+          "required": true
+        },
+        "flow": {
+          "source": "json.$base.users.0.flow",
+          "maps_to": "flow",
+          "normalize": "trim",
+          "value_map": {
+            "xtls-rprx-vision-udp443": "xtls-rprx-vision",
+            "": null
+          },
+          "sets": {
+            "xtls-rprx-vision-udp443": {
+              "packet_encoding": "xudp"
+            }
+          },
+          "impl": "`vision_udp443_is_a_compound_name` — раскладка составного ИМЕНИ на два поля. Судить тут нечего: xtls-rprx-vision-udp443 в enum ядра не входит вовсе. §459 — порт узла при этом НЕ переписывается."
+        },
+        "encryption": {
+          "source": "json.$base.users.0.encryption",
+          "maps_to": "encryption",
+          "value_map": {
+            "": null,
+            "none": null
+          },
+          "impl": "§335/§477 — постквантовый слой. Сравнение у Xray-ветки ТОЧНОЕ (не fold-case, xray_outbound_convert.go:164) — value_map это сохраняет. Обрезка краёв, выключатель и форма — работа САНИТАЙЗЕРА, одна на все входы."
+        },
+        "$extra_vnext": {
+          "source": "json.settings.vnext",
+          "maps_to": null,
+          "on_len_gt": {
+            "n": 1,
+            "action": "note",
+            "code": "xray_extra_entries_dropped"
+          },
+          "impl": "QUIRKS Q133-18: vnext[1..] и users[1..] отбрасываются молча."
+        },
+        "$extra_users": {
+          "source": "json.$base.users",
+          "maps_to": null,
+          "on_len_gt": {
+            "n": 1,
+            "action": "note",
+            "code": "xray_extra_entries_dropped"
+          }
+        }
+      },
+      "unknown_key": {
+        "action": "drop",
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ]
+      },
+      "emit": null
+    }
+  }
+}

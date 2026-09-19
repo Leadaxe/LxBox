@@ -8,15 +8,23 @@ import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
+import 'engine/engine_mapper.dart' show mapJsonViaEngine;
 import 'hysteria2_obfs.dart';
 import 'mappers/uri_pipeline.dart'
     show XrayDropVerdict, parseXrayViaPipeline;
-import 'mappers/xray_mapper.dart' show kXrayServiceProtocols, mapXrayOutbound;
 import 'tcp_keep_alive.dart';
 import 'transport.dart';
 import '../app_log.dart';
 import 'uri_utils.dart';
 import 'utls_fingerprint.dart';
+
+/// Служебные outbound'ы Xray: не серверы, узлами не становятся (§321).
+///
+/// §480 W5 — набор живёт ЗДЕСЬ, а не в маппере: это знание СБОРКИ
+/// ДОКУМЕНТА («какой элемент вообще претендует на узел»), а не перевода
+/// диалекта. Маппер одного узла о соседях по документу не знает; реестр
+/// видов документа заберёт набор волной W6.
+const kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
 
 /// §310 — Парсинг одного элемента Xray JSON array в список узлов.
 ///
@@ -607,7 +615,10 @@ NodeSpec? _xrayToSpec(
   // что отбор остался здесь, где он и был: прежний диспетчер ветки `socks`
   // просто не имел.
   if (!allowSocks && o['protocol']?.toString() == 'socks') return null;
-  final mapping = mapXrayOutbound(o);
+  // §480 W5 — карту строит ДВИЖОК по секции `mappers.xray` реестра.
+  // Диспетчера по имени протокола здесь больше нет: секцию выбирает `detect`
+  // самой секции, то есть опознание элемента объявлено данными.
+  final mapping = mapJsonViaEngine('xray', o);
   if (mapping == null) return null;
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
   return parseXrayViaPipeline(

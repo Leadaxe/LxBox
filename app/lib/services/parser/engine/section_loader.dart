@@ -26,6 +26,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../../contract/registry.dart';
+import 'interpreter.dart' show detectMatchesJson;
 import 'section.dart';
 
 /// Корень черновых секций. Черновик временный: он живёт до прихода секций
@@ -45,7 +46,9 @@ final class MapperSections {
   /// `<kind>/<singbox_type>` → секция; отсутствие секции тоже кэшируется.
   final Map<String, MapperSection?> _cache = {};
 
-  /// Черновые файлы, уже прочитанные с диска/из ассетов.
+  /// Черновые файлы, уже прочитанные с диска/из ассетов. Ключ —
+  /// `<каталог>/<имя>`: у одного протокола черновиков столько же, сколько
+  /// видов источника, и класть их в одно пространство имён нельзя.
   final Map<String, Map<String, dynamic>> _draft = {};
 
   bool _draftLoaded = false;
@@ -56,18 +59,23 @@ final class MapperSections {
   /// Прочитать черновики. [dir] — корень черновиков на диске (для тестов и
   /// для CI, где биндинга Flutter нет); по умолчанию — ассеты приложения.
   ///
-  /// [files] — имена файлов черновика БЕЗ расширения. Список приходит
-  /// снаружи, а не живёт здесь: имена файлов протоколов — это имена схем, а в
-  /// пакете движка их быть не должно (греп-страж). Ассеты Flutter в рантайме
-  /// не перечисляются, поэтому список явный.
+  /// [files] — пути черновика БЕЗ расширения, вида `<каталог>/<имя>`
+  /// (`uri/trojan`, `xray/vmess`, `documents`). Список приходит снаружи, а не
+  /// живёт здесь: имена файлов протоколов — это имена схем, а в пакете
+  /// движка их быть не должно (греп-страж). Ассеты Flutter в рантайме не
+  /// перечисляются, поэтому список явный.
+  ///
+  /// Имя без каталога читается как `uri/<имя>` — так короче писался список
+  /// волны W1, когда вид источника был один.
   Future<void> loadDrafts({String? dir, List<String> files = const []}) async {
     _draftDir = dir;
     _draft.clear();
     _cache.clear();
     for (final name in files) {
-      final text = await _readDraft('uri/$name.json');
+      final rel = name.contains('/') ? name : 'uri/$name';
+      final text = await _readDraft('$rel.json');
       if (text == null) continue;
-      _draft[name] = jsonDecode(text) as Map<String, dynamic>;
+      _draft[rel] = jsonDecode(text) as Map<String, dynamic>;
     }
     _draftLoaded = true;
   }
@@ -86,15 +94,19 @@ final class MapperSections {
   void _loadDraftsFromDiskSync() {
     _draftLoaded = true;
     final dir = _draftDir ?? kDraftRoot;
-    final root = Directory('$dir/uri');
-    if (!root.existsSync()) return;
-    for (final f in root.listSync().whereType<File>()) {
-      if (!f.path.endsWith('.json')) continue;
-      final name = f.uri.pathSegments.last.replaceAll('.json', '');
-      try {
-        _draft[name] = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
-      } catch (_) {
-        // Битый черновик — та же «секции нет»: схема идёт прежним путём.
+    for (final sub in const ['uri', 'xray', 'singbox', 'conf', '']) {
+      final root = Directory(sub.isEmpty ? dir : '$dir/$sub');
+      if (!root.existsSync()) continue;
+      for (final f in root.listSync().whereType<File>()) {
+        if (!f.path.endsWith('.json')) continue;
+        final name = f.uri.pathSegments.last.replaceAll('.json', '');
+        final key = sub.isEmpty ? name : '$sub/$name';
+        try {
+          _draft[key] =
+              jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+        } catch (_) {
+          // Битый черновик — та же «секции нет».
+        }
       }
     }
   }
@@ -125,6 +137,74 @@ final class MapperSections {
   bool has(String kind, String singboxType) =>
       sectionFor(kind, singboxType) != null;
 
+  /// Типы тела, у которых есть секция вида [kind].
+  ///
+  /// Состав берётся из ЧЕРНОВИКА и РЕЕСТРА вместе, без списка в коде: имена
+  /// протоколов в пакете движка не живут (греп-страж), и «знать, какие
+  /// секции бывают» значило бы завести их здесь.
+  List<String> typesFor(String kind) {
+    if (!_draftLoaded) _loadDraftsFromDiskSync();
+    final out = <String>{};
+    final prefix = '$kind/';
+    for (final key in _draft.keys) {
+      if (!key.startsWith(prefix)) continue;
+      final name = key.substring(prefix.length);
+      // Общий блок (`tls`, `transports`) секцией протокола не является.
+      if (_draft[key]?['mappers'] == null) continue;
+      out.add(name);
+    }
+    for (final name in ContractRegistry.I.protocolNames) {
+      final proto = ContractRegistry.I.rawProtocol(name);
+      final mappers = (proto?['mappers'] as Map?)?.cast<String, dynamic>();
+      final section = (mappers?[kind] as Map?)?.cast<String, dynamic>();
+      if (section != null) out.add(name);
+    }
+    final list = out.toList()..sort();
+    return list;
+  }
+
+  /// **ОПОЗНАНИЕ ЭЛЕМЕНТА** (§2 НОРМЫ): какой секции принадлежит объект.
+  ///
+  /// Побеждает секция с меньшим `priority` у `detect`; ветка `default: true`
+  /// НИКОГДА не конкурирует с настоящим предикатом (иначе «всё остальное»
+  /// выигрывало бы у точного признака). Ровно одна секция на элемент —
+  /// инвариант, который проверяет линтер корпуса.
+  MapperSection? matchJson(String kind, Map<String, dynamic> element) {
+    MapperSection? best;
+    var bestPriority = 1 << 30;
+    MapperSection? fallback;
+    for (final type in typesFor(kind)) {
+      final section = sectionFor(kind, type);
+      if (section == null) continue;
+      final d = section.detect;
+      if (d == null) continue;
+      if (d['default'] == true) {
+        fallback ??= section;
+        continue;
+      }
+      if (!detectMatchesJson(d, element)) continue;
+      final pr = (d['priority'] as num?)?.toInt() ?? 0;
+      if (pr < bestPriority) {
+        best = section;
+        bestPriority = pr;
+      }
+    }
+    return best ?? fallback;
+  }
+
+  /// Все секции вида [kind], чей `detect` опознал элемент. Нужен ЛИНТЕРУ:
+  /// «ровно одна секция» — красное при нуле и при двух.
+  List<MapperSection> matchJsonAll(String kind, Map<String, dynamic> element) {
+    final out = <MapperSection>[];
+    for (final type in typesFor(kind)) {
+      final section = sectionFor(kind, type);
+      final d = section?.detect;
+      if (section == null || d == null || d['default'] == true) continue;
+      if (detectMatchesJson(d, element)) out.add(section);
+    }
+    return out;
+  }
+
   MapperSection? _build(String kind, String singboxType) {
     final raw = _rawSection(kind, singboxType);
     if (raw == null) return null;
@@ -137,7 +217,10 @@ final class MapperSections {
     final fromRegistry = _registrySection(kind, singboxType);
     if (fromRegistry != null) return fromRegistry;
     if (!_draftLoaded) _loadDraftsFromDiskSync();
-    final file = _draft[singboxType];
+    // Черновик вида источника лежит в своём каталоге; `uri` — исторически
+    // и в плоском пространстве имён тоже.
+    final file = _draft['$kind/$singboxType'] ??
+        (kind == 'uri' ? _draft[singboxType] : null);
     if (file == null) return null;
     final mappers = (file['mappers'] as Map?)?.cast<String, dynamic>();
     final section = (mappers?[kind] as Map?)?.cast<String, dynamic>();
@@ -173,13 +256,29 @@ final class MapperSections {
   /// правило «параметры общих файлов не попадают в `uri_param_unknown`»:
   /// отдельного списка исключений не заводится, они просто есть в таблице.
   ///
-  /// Конфликт имени — собственная запись схемы побеждает: общий блок даёт
-  /// запись с одним набором написаний, схема вправе объявить свой, и
-  /// переопределение обязано работать.
+  /// Конфликт имени — собственная запись схемы ЗАМЕНЯЕТ запись блока: общий
+  /// блок даёт запись с одним набором написаний, схема вправе объявить свой,
+  /// и переопределение обязано работать. Заменяет, а не дополняет: две
+  /// записи с одним `source` читали бы параметр дважды и писали бы путь
+  /// дважды, а тонкая настройка схемы (`priority`, `sets`) при этом
+  /// действовала бы только у второй (живой пример — `disable_sni` у tuic,
+  /// где вся суть записи в её месте в таблице).
+  ///
+  /// Ключи в плоском наборе НЕСУТ ИМЯ БЛОКА (`tls.security`), потому что у
+  /// разных блоков и разных транспортов бывают одноимённые записи, ведущие в
+  /// разные поля. Переопределением считается совпадение ИМЕНИ ПАРАМЕТРА **и
+  /// ИСТОЧНИКА**: одно имя над РАЗНЫМИ источниками — это две разные записи, а
+  /// не спор (`security` у vmess читает шифр из тела пользователя, `security`
+  /// общего блока — вид TLS из `streamSettings`, и обе обязаны отработать).
   MapperSection _withIncludes(MapperSection section) {
     final merged = <String, MapperParam>{};
+    final own = <String>{
+      for (final p in section.params.values) '${p.name} ${p.source.join(",")}',
+    };
     for (final ref in section.include) {
       for (final e in _blockParams(ref).entries) {
+        final key = '${e.value.name} ${e.value.source.join(",")}';
+        if (own.contains(key)) continue;
         merged[e.key] = e.value;
       }
     }
@@ -206,7 +305,9 @@ final class MapperSections {
     final fileName = hash < 0 ? ref : ref.substring(0, hash);
     final dialect = hash < 0 ? 'uri' : ref.substring(hash + 1);
 
-    final file = _draft[fileName] ?? _registryShared(fileName);
+    // Общий блок живёт ОДНИМ файлом на все диалекты (`blocks.uri`,
+    // `blocks.xray`), поэтому каталог у него не по виду источника.
+    final file = _draftShared(fileName) ?? _registryShared(fileName);
     if (file == null) return const {};
     final blocks = (file['blocks'] as Map?)?.cast<String, dynamic>();
     final byDialect = (blocks?[dialect] as Map?)?.cast<String, dynamic>();
@@ -219,8 +320,14 @@ final class MapperSections {
       if (v is! Map) continue;
       final m = v.cast<String, dynamic>();
       if (m.containsKey('source')) {
-        out[e.key] =
-            MapperParam.fromJson(e.key, _withAliases(e.key, _withRefs(m, blocks!), fileName));
+        // Ключ в плоском наборе — С ИМЕНЕМ БЛОКА (`tls.security`), потому что
+        // одноимённая запись бывает и у схемы: у vmess свой `security` (шифр
+        // VMess), у общего блока свой (вид TLS), и ведут они в разные поля.
+        // Без разведения запись схемы затирала бы селектор блока, и TLS-блок
+        // у такой схемы не появлялся бы вовсе. ИМЯ ПАРАМЕТРА при этом
+        // остаётся коротким: по нему читаются написания.
+        out['$fileName.${e.key}'] = MapperParam.fromJson(
+            e.key, _withAliases(e.key, _withRefs(m, blocks!), fileName));
         continue;
       }
       // Группа записей (`$selector`, `ws`, `http`…).
@@ -229,8 +336,8 @@ final class MapperSections {
         if (gv is! Map) continue;
         final gm = gv.cast<String, dynamic>();
         if (!gm.containsKey('source')) continue;
-        out['${e.key}.${g.key}'] =
-            MapperParam.fromJson(g.key, _withAliases(g.key, _withRefs(gm, blocks!), fileName));
+        out['$fileName.${e.key}.${g.key}'] = MapperParam.fromJson(
+            g.key, _withAliases(g.key, _withRefs(gm, blocks!), fileName));
       }
     }
     return out;
@@ -252,7 +359,7 @@ final class MapperSections {
     // Черновик несёт только `blocks`; словарь написаний лежит в
     // ОПИСАТЕЛЬНОЙ части того же файла реестра, которая у нас есть всегда.
     for (final file in [
-      _draft[fileName],
+      _draftShared(fileName),
       ContractRegistry.I.rawShared('$fileName.json'),
     ]) {
       if (file == null) continue;
@@ -285,6 +392,17 @@ final class MapperSections {
     final target = blocks[ref.split('.').last];
     if (target is! Map) return param;
     return {...param, 'value_map': target.cast<String, dynamic>()};
+  }
+
+  /// Черновик общего блока: он один на все диалекты, и каталог у него может
+  /// быть любой (исторически `uri/`).
+  Map<String, dynamic>? _draftShared(String fileName) {
+    if (!_draftLoaded) _loadDraftsFromDiskSync();
+    for (final key in ['uri/$fileName', fileName, 'xray/$fileName']) {
+      final f = _draft[key];
+      if (f != null && f['blocks'] is Map) return f;
+    }
+    return null;
   }
 
   /// Общий файл реестра (`tls.json`, `transports.json`), когда черновика нет:

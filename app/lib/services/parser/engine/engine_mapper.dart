@@ -9,6 +9,7 @@
 /// ([MapperSections.has]); прочие схемы идут прежними мапперами до своих волн.
 library;
 
+import '../../../models/node_warning.dart';
 import '../mappers/uri_mapper.dart';
 import 'interpreter.dart';
 import 'section_loader.dart';
@@ -32,5 +33,48 @@ UriMapping? mapViaEngine(String uri, String singboxType) {
     extensionFields: res.extensionFields,
     wsEarlyDataHeaderImplicit: res.wsEarlyDataHeaderImplicit,
     tagAddress: res.tagAddress,
+  );
+}
+
+/// §480 W5 — результат перевода ОБЪЕКТНОГО элемента (Xray/sing-box-JSON).
+///
+/// Отличается от [UriMapping] тем, что метку сюда движок не отдаёт: имя
+/// узла объектного входа приходит от ЭЛЕМЕНТА документа (`remarks`, `tag`),
+/// а это уровень сборки документа, а не маппера одного узла.
+final class JsonMapping {
+  const JsonMapping({
+    required this.body,
+    this.warnings = const [],
+    this.wsEarlyDataHeaderImplicit = false,
+    this.tagScheme,
+  });
+
+  final Map<String, dynamic> body;
+  final List<NodeWarning> warnings;
+  final bool wsEarlyDataHeaderImplicit;
+
+  /// Написание имени в теге-фолбэке безымянного узла, когда оно не равно
+  /// типу тела: объявляется секцией (`label.fallback.scheme`).
+  final String? tagScheme;
+}
+
+/// Перевести ОБЪЕКТНЫЙ элемент документа секцией вида [kind].
+///
+/// Диспетчера по имени протокола здесь нет: секцию выбирает `detect` самой
+/// секции ([MapperSections.matchJson]) — это и есть «опознание элемента
+/// декларативно» (§2 НОРМЫ). Движку остаётся исполнить найденную таблицу.
+///
+/// `null` — ни одна секция не опознала элемент либо обязательная запись не
+/// нашла значения (тем же `null` отвечал рукописный диспетчер).
+JsonMapping? mapJsonViaEngine(String kind, Map<String, dynamic> element) {
+  final section = MapperSections.I.matchJson(kind, element);
+  if (section == null) return null;
+  final res = runSectionOnJson(section, element);
+  if (res == null) return null;
+  return JsonMapping(
+    body: res.body,
+    warnings: res.warnings,
+    wsEarlyDataHeaderImplicit: res.wsEarlyDataHeaderImplicit,
+    tagScheme: res.tagScheme,
   );
 }
