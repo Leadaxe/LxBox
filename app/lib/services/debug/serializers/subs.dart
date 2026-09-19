@@ -92,9 +92,15 @@ Map<String, Object?> serializeNodeWarning(NodeWarning w) {
     if (reg != null && reg.params.isNotEmpty) 'params': {...reg.params},
     // Заголовок есть только у кодов реестра — у классов приложения его нет,
     // и выдумывать его из текста нельзя.
+    //
+    // Д-2 (эмулятор 19.09.2026) — `path`/`value` передаются НАРАВНЕ с
+    // `params`: реестр объявил их неявными (`text_params_implicit`), и
+    // заголовки их зовут (`awg_header_invalid` → «magic header {path} not
+    // applied»). Без них в ответ уезжал незаполненный плейсхолдер.
     'title_en': code == null
         ? null
-        : registryTitle(code, RegistryLang.en, params: reg!.params),
+        : registryTitle(code, RegistryLang.en,
+            path: reg!.path, value: reg.value, params: reg.params),
     // Текст — всегда: у кода реестра из реестра, у класса приложения его
     // собственный пиненный английский.
     'text_en': w.renderEn(),

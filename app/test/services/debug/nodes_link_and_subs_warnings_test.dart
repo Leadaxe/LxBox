@@ -207,6 +207,21 @@ void main() {
       expect(j['text_en'] as String, isNotEmpty);
     });
 
+    // Д-2 (эмулятор 19.09.2026) — заголовок зовёт `{path}`, а сериализатор
+    // передавал одни `params`: в ответ уезжал сам плейсхолдер.
+    test('awg_header_invalid: в title_en подставлен path, {…} не осталось',
+        () {
+      final j = serializeNodeWarning(const RegistryWarning(
+        code: 'awg_header_invalid',
+        path: 'h1',
+        value: 'abc',
+      ));
+      final title = j['title_en'] as String;
+      expect(title, contains('h1'));
+      expect(title, isNot(contains('{')));
+      expect(j['text_en'] as String, isNot(contains('{')));
+    });
+
     test('класс приложения: кода нет, text_en есть', () {
       final j = serializeNodeWarning(
           const UnsupportedTransportWarning('xhttp', 'httpupgrade'));
