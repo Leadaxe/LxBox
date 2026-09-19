@@ -180,4 +180,43 @@ void main() {
       expect(ports, everyElement(matches(RegExp(r'^\d+:\d+$'))));
     });
   });
+
+  group('Д-6 — REALITY pbk приводится к RawURL', () {
+    // Ядро декодирует public_key ТОЛЬКО RawURLEncoding: std-алфавит («+»,
+    // «/», «=») даёт `decode public_key: illegal base64 data` и роняет ВЕСЬ
+    // конфиг. Реестр (`tls.json` → reality.pbk) объявляет законными оба
+    // алфавита, с паддингом и без, — значит вход годен, а привести его к
+    // форме ядра обязаны мы.
+    const keyStd = 'jmkCSfA0rAyVmB/CkYESE34r92HHXxePk7MnKp++9zk=';
+    const keyRawUrl = 'jmkCSfA0rAyVmB_CkYESE34r92HHXxePk7MnKp--9zk';
+
+    String? pbkOf(String pbk) {
+      final spec = parseUri(
+        'vless://b831381d-6324-4d53-ad4f-8cda48b30811@198.51.100.24:443'
+        '?encryption=none&security=reality&sni=example.com'
+        '&fp=chrome&pbk=${Uri.encodeQueryComponent(pbk)}&sid=0123abcd'
+        '&type=tcp#n',
+      );
+      return spec is VlessSpec ? spec.tls.reality?.publicKey : null;
+    }
+
+    test('std-алфавит приводится к RawURL', () {
+      expect(pbkOf(keyStd), keyRawUrl);
+    });
+
+    test('url-safe с паддингом приводится к RawURL', () {
+      expect(pbkOf('$keyRawUrl='), keyRawUrl);
+    });
+
+    test('ключ УЖЕ в RawURL не трогается — тело рабочего узла прежнее', () {
+      expect(pbkOf(keyRawUrl), keyRawUrl);
+    });
+
+    test('не декодируется в 32 байта — REALITY не строится', () {
+      // Гейт блока по реестру: `public_key` required, негодный снимает
+      // REALITY целиком (узел деградирует до plain TLS), а не уезжает в тело.
+      expect(pbkOf('enabled'), isNull);
+      expect(pbkOf('%%%'), isNull);
+    });
+  });
 }

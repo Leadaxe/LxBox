@@ -1370,7 +1370,14 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
               !isValidRealityPublicKey(reality['public_key']?.toString() ?? '')
           ? null
           : RealitySpec(
-              publicKey: reality['public_key']!.toString(),
+              // §480 Д-6 — написание ключа переводится в форму ядра
+              // (RawURL): std-алфавит законен по реестру, но ядро на нём
+              // отвечает `illegal base64 data` и роняет ВЕСЬ конфиг.
+              // Годность уже проверена гейтом выше, здесь только написание —
+              // как у `short_id` строкой ниже.
+              publicKey: normalizeRealityPublicKey(
+                reality['public_key']!.toString(),
+              ),
               shortId: normalizeRealityShortId(
                 reality['short_id']?.toString() ?? '',
               ),

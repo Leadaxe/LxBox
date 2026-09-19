@@ -467,7 +467,7 @@
     },
     "b480:pbk_encoded_plus": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=Awo%2BGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com#pbk-plus-enc",
-      "identity": "ade520d1e9c558b07dffa3d6b7d273787f869b400c8153dcfee25dc5963b1955",
+      "identity": "df0244c5d77be587aa3a0b684d07be985719526267a1d73f435e3359948ef693",
       "tag": "pbk-plus-enc",
       "body": {
         "type": "vless",
@@ -484,15 +484,40 @@
           },
           "reality": {
             "enabled": true,
-            "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "public_key": "Awo-GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
             "short_id": "abcd"
+          }
+        }
+      },
+      "_delta480": "delta480 Д-6: написание ключа REALITY переводится в форму ядра (RawURL). Было: ключ ехал в тело в std-алфавите («+», «/», «=») как пришёл, и ядро отвечало «decode public_key: illegal base64 data», роняя ВЕСЬ конфиг — узел разбирался, но VPN не поднимался вовсе. Стало: public_key в RawURL, конфиг живой. Ключ, уже написанный RawURL, не трогается — тела рабочих узлов прежние.",
+      "_before480": {
+        "identity": "ade520d1e9c558b07dffa3d6b7d273787f869b400c8153dcfee25dc5963b1955",
+        "tag": "pbk-plus-enc",
+        "body": {
+          "type": "vless",
+          "tag": "pbk-plus-enc",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            },
+            "reality": {
+              "enabled": true,
+              "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+              "short_id": "abcd"
+            }
           }
         }
       }
     },
     "b480:pbk_raw_plus": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com#pbk-plus",
-      "identity": "ade520d1e9c558b07dffa3d6b7d273787f869b400c8153dcfee25dc5963b1955",
+      "identity": "df0244c5d77be587aa3a0b684d07be985719526267a1d73f435e3359948ef693",
       "tag": "pbk-plus",
       "body": {
         "type": "vless",
@@ -509,12 +534,12 @@
           },
           "reality": {
             "enabled": true,
-            "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "public_key": "Awo-GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
             "short_id": "abcd"
           }
         }
       },
-      "_delta480": "delta480 D133-7: поле format base64, сырой «+» в нём читается БУКВАЛЬНО. Было: «+» становился пробелом, ключ не проходил санитайзер и блок reality пропадал целиком. Стало: reality.public_key читается, блок на месте.",
+      "_delta480": "delta480 D133-7: поле format base64, сырой «+» в нём читается БУКВАЛЬНО. Было: «+» становился пробелом, ключ не проходил санитайзер и блок reality пропадал целиком. Стало: reality.public_key читается, блок на месте. ВТОРОЙ СЛОЙ, Д-6: написание ключа переводится в форму ядра (RawURL) — std-алфавит ядро не декодирует («illegal base64 data») и роняет ВЕСЬ конфиг. `_before480` ниже остаётся снимком ДО ОБЕИХ правок.",
       "_before480": {
         "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
         "tag": "pbk-plus",

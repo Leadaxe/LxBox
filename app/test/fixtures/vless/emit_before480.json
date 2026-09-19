@@ -2163,8 +2163,31 @@
           },
           "reality": {
             "enabled": true,
-            "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "public_key": "Awo-GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
             "short_id": "abcd"
+          }
+        }
+      },
+      "_delta480": "delta480 Д-6: сохранённая старая ссылка читается в ключ, приведённый к форме ядра (RawURL). Было: public_key оставался в std-алфавите и ядро роняло ВЕСЬ конфиг («decode public_key: illegal base64 data»). Стало: «Awo-…». Ключ тот же побайтно — сменилось написание.",
+      "_before480": {
+        "body_of_old_uri": {
+          "type": "vless",
+          "tag": "pbk-plus-enc",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            },
+            "reality": {
+              "enabled": true,
+              "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+              "short_id": "abcd"
+            }
           }
         }
       }
