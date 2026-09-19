@@ -1,3 +1,4 @@
+import 'safe_bottom.dart';
 import 'package:flutter/material.dart';
 
 import '../models/node_warning.dart';
@@ -67,12 +68,7 @@ class NodeNotificationsTab extends StatelessWidget {
     }
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(
-        0,
-        8,
-        0,
-        MediaQuery.of(context).padding.bottom + 16,
-      ),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 16).withSafeBottom(context),
       children: [
         NodeNotificationsView(warnings),
       ],
