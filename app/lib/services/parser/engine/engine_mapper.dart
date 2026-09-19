@@ -11,6 +11,7 @@ library;
 
 import '../../../models/node_warning.dart';
 import '../../contract/body_sanitizer.dart' show BodySource;
+import '../drop_verdict.dart';
 import '../mappers/uri_mapper.dart';
 import 'interpreter.dart';
 import 'section_loader.dart';
@@ -22,10 +23,11 @@ import 'section_loader.dart';
 /// диспетчер по реестру.
 ///
 /// `null` — секции нет либо запись не построилась (нет обязательного поля).
-UriMapping? mapViaEngine(String uri, String singboxType) {
+UriMapping? mapViaEngine(String uri, String singboxType,
+    {XrayDropVerdict? dropped}) {
   final section = MapperSections.I.sectionFor('uri', singboxType);
   if (section == null) return null;
-  final res = runSection(section, uri);
+  final res = runSection(section, uri, dropped: dropped);
   if (res == null) return null;
   return UriMapping(
     body: res.body,
@@ -59,10 +61,12 @@ UriMapping? mapIniViaEngine(
   String text,
   String singboxType, {
   String? nameHint,
+  XrayDropVerdict? dropped,
 }) {
   final section = MapperSections.I.sectionFor('conf', singboxType);
   if (section == null) return null;
-  final res = runSectionOnIni(section, text, nameHint: nameHint);
+  final res =
+      runSectionOnIni(section, text, nameHint: nameHint, dropped: dropped);
   if (res == null) return null;
   return UriMapping(
     body: res.body,
@@ -105,10 +109,11 @@ final class JsonMapping {
 ///
 /// `null` — ни одна секция не опознала элемент либо обязательная запись не
 /// нашла значения (тем же `null` отвечал рукописный диспетчер).
-JsonMapping? mapJsonViaEngine(String kind, Map<String, dynamic> element) {
+JsonMapping? mapJsonViaEngine(String kind, Map<String, dynamic> element,
+    {XrayDropVerdict? dropped}) {
   final section = MapperSections.I.matchJson(kind, element);
   if (section == null) return null;
-  final res = runSectionOnJson(section, element);
+  final res = runSectionOnJson(section, element, dropped: dropped);
   if (res == null) return null;
   return JsonMapping(
     body: res.body,

@@ -29,6 +29,7 @@ library;
 
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
+import '../drop_verdict.dart';
 import '../../contract/body_sanitizer.dart';
 import '../../contract/registry.dart';
 import '../../../services/parser/engine/engine_mapper.dart';
@@ -166,7 +167,7 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme,
   // секции).
   final singboxType = _kSchemeToType[scheme];
   if (singboxType != null) {
-    final mapping = mapViaEngine(uri, singboxType);
+    final mapping = mapViaEngine(uri, singboxType, dropped: dropped);
     if (mapping == null) return null;
     return _runPipeline(uri, null, mapping: mapping, dropped: dropped);
   }
@@ -198,10 +199,12 @@ NodeSpec? parseIniViaPipeline(
   String source,
   String singboxType, {
   String? nameHint,
+  XrayDropVerdict? dropped,
 }) {
-  final mapping = mapIniViaEngine(source, singboxType, nameHint: nameHint);
+  final mapping =
+      mapIniViaEngine(source, singboxType, nameHint: nameHint, dropped: dropped);
   if (mapping == null) return null;
-  return _runPipeline(source, null, mapping: mapping);
+  return _runPipeline(source, null, mapping: mapping, dropped: dropped);
 }
 
 /// §472 шаг 8 — конвейер для Xray-JSON.
@@ -244,16 +247,6 @@ NodeSpec? parseXrayViaPipeline(
       ),
       dropped: dropped,
     );
-
-/// §477 — вердикт «запись снята реестром целиком», вынесенный наружу:
-/// `null`-ответ конвейера сам по себе о причине не говорит.
-final class XrayDropVerdict {
-  /// Реестр снял запись явным правилом `on_invalid: { action: drop_node }`.
-  bool explicit = false;
-
-  /// Код и адрес причины — первый `error`-код, который поставил санитайзер.
-  RegistryWarning? reason;
-}
 
 /// Готовая карта от маппера, который отработал снаружи (Xray-вход).
 final class _Prebuilt {

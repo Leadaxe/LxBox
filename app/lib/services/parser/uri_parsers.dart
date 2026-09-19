@@ -1,7 +1,9 @@
 import '../../models/node_spec.dart';
 import 'amnezia_link.dart';
 import 'mappers/uri_pipeline.dart';
-export 'mappers/uri_pipeline.dart' show XrayDropVerdict;
+export 'drop_verdict.dart' show XrayDropVerdict;
+
+import 'drop_verdict.dart';
 import 'uri_utils.dart';
 import 'uri_parsers/anytls_parser.dart';
 import 'uri_parsers/http_parser.dart';

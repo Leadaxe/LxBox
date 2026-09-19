@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/services/parser/drop_verdict.dart';
 import 'package:lxbox/services/parser/engine/interpreter.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 
@@ -26,10 +27,12 @@ void main() {
   ({String label, Map<String, dynamic> body, List<NodeWarning> warnings})? run(
     String text, {
     String? nameHint,
+    XrayDropVerdict? dropped,
   }) {
     final section = MapperSections.I.sectionFor('conf', 'wireguard');
     expect(section, isNotNull, reason: 'секция conf/wireguard не загрузилась');
-    final res = runSectionOnIni(section!, text, nameHint: nameHint);
+    final res =
+        runSectionOnIni(section!, text, nameHint: nameHint, dropped: dropped);
     if (res == null) return null;
     return (label: res.label, body: res.body, warnings: res.warnings);
   }

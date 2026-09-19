@@ -114,24 +114,55 @@ List<NodeSpec> _parseAll(
     // §302/§454/§456 — источник узла (`rawSource`) проставляют сами парсеры:
     // для URI-строк это строка, для INI — сам INI-текст (тег — поле записи),
     // для JSON — объект outbound'а.
-    UriLines(lines: final ls) => [
-        for (final l in ls)
-          if (parseUri(l) case final NodeSpec n) n,
-      ],
-    IniConfig(text: final t) => [
-        parseWireguardIni(t, nameHint: nameHint),
-      ].whereType<NodeSpec>().toList(),
+    UriLines(lines: final ls) => _parseUriLines(ls, dropped),
+    IniConfig(text: final t) => _parseIniConfigs([t], nameHint: nameHint, dropped: dropped),
     // §110 — Amnezia vpn://: каждый контейнер → INI → нода (null-skip).
     // §243 — hint с индексным суффиксом (`hint`, `hint 2`, …): фрагмент
     // теперь «собственное имя» raw, суффикс-логика addMembersToFolder до
     // таких нод не дойдёт — разводим коллизии здесь.
-    AmneziaConfig(iniTexts: final ts) => [
-        for (var i = 0; i < ts.length; i++)
-          parseWireguardIni(ts[i], nameHint: _indexedHint(nameHint, i)),
-      ].whereType<NodeSpec>().toList(),
+    AmneziaConfig(iniTexts: final ts) => _parseIniConfigs(
+        ts,
+        nameHint: nameHint,
+        dropped: dropped,
+        indexedHint: true,
+      ),
     JsonConfig() => _parseJson(decoded, dropped),
     DecodeFailure() => const <NodeSpec>[],
   };
+}
+
+List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
+  final nodes = <NodeSpec>[];
+  for (final l in lines) {
+    final verdict = XrayDropVerdict();
+    final n = parseUri(l, dropped: verdict);
+    if (n != null) {
+      nodes.add(n);
+    } else if (verdict.reason != null) {
+      dropped?.add(verdict.reason!);
+    }
+  }
+  return nodes;
+}
+
+List<NodeSpec> _parseIniConfigs(
+  List<String> texts, {
+  String? nameHint,
+  List<NodeWarning>? dropped,
+  bool indexedHint = false,
+}) {
+  final nodes = <NodeSpec>[];
+  for (var i = 0; i < texts.length; i++) {
+    final hint = indexedHint ? _indexedHint(nameHint, i) : nameHint;
+    final verdict = XrayDropVerdict();
+    final n = parseWireguardIni(texts[i], nameHint: hint, dropped: verdict);
+    if (n != null) {
+      nodes.add(n);
+    } else if (verdict.reason != null) {
+      dropped?.add(verdict.reason!);
+    }
+  }
+  return nodes;
 }
 
 // Суффикс — по индексу КОНТЕЙНЕРА, не произведённой ноды: при null-skip

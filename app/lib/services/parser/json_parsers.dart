@@ -11,7 +11,8 @@ import '../node_hash.dart';
 import 'engine/engine_mapper.dart' show mapJsonViaEngine;
 import 'hysteria2_obfs.dart';
 import 'mappers/uri_pipeline.dart'
-    show XrayDropVerdict, parseXrayViaPipeline;
+    show parseXrayViaPipeline;
+import 'drop_verdict.dart';
 import 'tcp_keep_alive.dart';
 import 'transport.dart';
 import '../app_log.dart';
@@ -633,7 +634,7 @@ NodeSpec? _xrayToSpec(
   // §480 W5 — карту строит ДВИЖОК по секции `mappers.xray` реестра.
   // Диспетчера по имени протокола здесь больше нет: секцию выбирает `detect`
   // самой секции, то есть опознание элемента объявлено данными.
-  final mapping = mapJsonViaEngine('xray', o);
+  final mapping = mapJsonViaEngine('xray', o, dropped: dropped);
   if (mapping == null) return null;
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
   return parseXrayViaPipeline(

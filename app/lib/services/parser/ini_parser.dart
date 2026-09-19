@@ -1,4 +1,5 @@
 import '../../models/node_spec.dart';
+import 'drop_verdict.dart';
 import 'mappers/uri_pipeline.dart';
 
 /// Разбор WireGuard INI (`wg-quick`) в `WireguardSpec`.
@@ -36,6 +37,8 @@ import 'mappers/uri_pipeline.dart';
 /// §480 — цепочка имени (комментарий под `[Peer]` → [nameHint] → `WireGuard`)
 /// объявлена в `label` секции, а не построена здесь: тег И ЕСТЬ identity, и
 /// порядок звеньев обязан быть данными.
-WireguardSpec? parseWireguardIni(String config, {String? nameHint}) =>
-    parseIniViaPipeline(config, 'wireguard', nameHint: nameHint)
+WireguardSpec? parseWireguardIni(String config,
+        {String? nameHint, XrayDropVerdict? dropped}) =>
+    parseIniViaPipeline(config, 'wireguard',
+            nameHint: nameHint, dropped: dropped)
         as WireguardSpec?;

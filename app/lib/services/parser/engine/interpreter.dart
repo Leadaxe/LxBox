@@ -26,6 +26,7 @@ library;
 import 'dart:convert' show Base64Codec, jsonDecode, utf8;
 
 import '../../../models/node_warning.dart';
+import '../drop_verdict.dart';
 import 'decoders.dart';
 import 'ini_space.dart';
 import 'lexer.dart';
@@ -81,10 +82,10 @@ final class EngineResult {
 /// `null` — записи нет: не сработала ни одна форма, либо обязательная запись
 /// (`required`) не нашла значения. Тем же `null` отвечали рукописные мапперы.
 EngineResult? runSection(MapperSection section, String text,
-    {MapperTrace? trace}) {
+    {MapperTrace? trace, XrayDropVerdict? dropped}) {
   final space = _selectForm(section, text);
   if (space == null) return null;
-  return _Run(section, space, trace).execute();
+  return _Run(section, space, trace, dropped: dropped).execute();
 }
 
 /// §480 W5 — исполнить секцию на РАЗОБРАННОМ документе-объекте.
@@ -102,10 +103,11 @@ EngineResult? runSectionOnJson(
   MapperSection section,
   Map<String, dynamic> doc, {
   MapperTrace? trace,
+  XrayDropVerdict? dropped,
 }) {
   final space = _selectJsonForm(section, doc);
   if (space == null) return null;
-  return _Run(section, space, trace).execute();
+  return _Run(section, space, trace, dropped: dropped).execute();
 }
 
 /// §480 — исполнить секцию на тексте INI (`.conf`).
@@ -127,11 +129,12 @@ EngineResult? runSectionOnIni(
   String text, {
   String? nameHint,
   MapperTrace? trace,
+  XrayDropVerdict? dropped,
 }) {
   final space = _selectIniForm(section, text);
   if (space == null) return null;
   final parsed = parseIniSpace(text, section.iniDialect ?? const IniDialect());
-  return _Run(section, space, trace, nameHint: nameHint)
+  return _Run(section, space, trace, nameHint: nameHint, dropped: dropped)
       .execute(inputCodes: parsed.codes);
 }
 
@@ -1012,8 +1015,10 @@ List<String> _segments(String path) => _segCache[path] ??= path.split('.');
 
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
-  _Run(this.section, this.space, this._trace, {this.nameHint})
-      : _plan = _planCache[section] ??= _SectionPlan(section);
+  _Run(this.section, this.space, this._trace,
+      {this.nameHint, XrayDropVerdict? dropped})
+      : _plan = _planCache[section] ??= _SectionPlan(section),
+        _dropped = dropped;
 
   /// План секции: проходы и множество объявленных — посчитаны один раз.
   final _SectionPlan _plan;
@@ -1027,6 +1032,9 @@ final class _Run {
   /// строится (приложение «ТРАССА»: коллектор не стоит ничего, когда
   /// выключен).
   final MapperTrace? _trace;
+
+  /// §484 — причина отбраковки записи (`field_missing` у `required`).
+  final XrayDropVerdict? _dropped;
 
   /// Имя маппера для трассы: `<тип тела>.<вид источника>.<форма>`.
   String get _mapperId =>
@@ -1223,7 +1231,10 @@ final class _Run {
         final v = _read(path);
         return v != null && !(v is String && v.isEmpty);
       });
-      if (!any) return null;
+      if (!any) {
+        _rejectFieldMissing(bodyPath: paths.first, param: p);
+        return null;
+      }
     }
 
     // 7. Неизвестные параметры источника.
@@ -1448,6 +1459,30 @@ final class _Run {
   Iterable<String> _sourcesOf(MapperParam p) =>
       p.sourceByForm[space.formId] ?? p.source;
 
+  /// §484 — обязательная запись маппера не наполнилась: узел снимается с
+  /// `field_missing`, как у санитайзера на корне тела, а текст `{field}` берёт
+  /// `desc_en` записи, если реестр его объявил, иначе путь тела.
+  void _rejectFieldMissing({
+    required String bodyPath,
+    MapperParam? param,
+    String? fallbackField,
+  }) {
+    final descEn = param?.raw['desc_en'] as String?;
+    final field = (descEn != null && descEn.isNotEmpty)
+        ? descEn
+        : (fallbackField ?? bodyPath);
+    final w = RegistryWarning(
+      code: 'field_missing',
+      path: bodyPath,
+      params: {'field': field},
+    );
+    warnings.add(w);
+    if (_dropped != null) {
+      _dropped.explicit = true;
+      _dropped.reason = w;
+    }
+  }
+
   // ───────────────────────────── userinfo ─────────────────────────────
 
   bool _applyUserinfo() {
@@ -1487,7 +1522,12 @@ final class _Run {
       // схемы. Объявлен здесь, а не у записи, потому что поля, которые
       // userinfo наполняет, приходят позициями `into`, и записи под ними у
       // части схем нет вовсе.
-      if (u.required) return false;
+      if (u.required) {
+        final path =
+            u.singleInto ?? (u.into.isNotEmpty ? u.into.first : 'userinfo');
+        _rejectFieldMissing(bodyPath: path, fallbackField: path);
+        return false;
+      }
       if (u.into.isNotEmpty) return true;
     }
 
