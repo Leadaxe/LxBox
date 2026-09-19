@@ -60,8 +60,9 @@ String? documentKindOf(String input) {
 bool isWireGuardConfig(String input) {
   final kind = documentKindOf(input);
   if (kind != null) return kind == 'wireguard_conf';
-  final t = input.trim();
-  return t.contains('[Interface]') && t.contains('[Peer]');
+  // Реестр не загружен — запасной признак тот же, что у реестра
+  // (`source_kinds.json`): секция `[Interface]`; `[Peer]` не требуется.
+  return input.trim().contains('[Interface]');
 }
 
 /// §110 — Amnezia `vpn://`-ссылка (контейнерный экспорт Amnezia/awg2).
