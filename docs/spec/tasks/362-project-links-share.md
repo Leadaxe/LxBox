@@ -74,7 +74,7 @@ call-site'ов; публичные `guideUrlEn/guideUrlRu/guideUrlFor` — пр�
 ## 7. Страница поддержки и донат-попап
 
 - `docs/DONATE.md` / `docs/DONATE_RU.md` — веб-страница поддержки (пара RU/EN
-  как гайд): четыре крипто-адреса с deeplink'ами Trust Wallet, Boosty, раздел
+  как гайд): четыре крипто-адреса с deeplink'ами Trust Wallet, раздел
   «как помочь не деньгами». Ссылки добавлены в шапку и таблицу доков обоих
   README.
 - `docs/donate.json` — источник донат-попапа приложения (About → «Поддержать

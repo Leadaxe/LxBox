@@ -55,14 +55,6 @@ bc1qupzrxnyvkccpfuv6pmnt58w8xyx5c0l8a6jue7
 
 ---
 
-## Boosty
-
-Разовая поддержка или подписка — карты, СБП и другие привычные способы:
-
-**[boosty.to/lxbox/donate](https://boosty.to/lxbox/donate)**
-
----
-
 ## Как ещё помочь, если не деньгами
 
 Это не менее ценно:
