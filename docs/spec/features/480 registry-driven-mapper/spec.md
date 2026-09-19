@@ -1167,9 +1167,8 @@ override'ов корпуса). Запись приведена к реестро
 | `naive/empty_host_rejected` | `parse_error` против `emit_error`+`field_missing` — **норма наша** (пустой host → dropped), лаунчер правит у себя |
 | `wireguard/amnezia_vpn_awg*` | порядок `warnings[]`: наш `wgconf_dns_ignored` несёт `path: dns`, чужой — без пути, и `body.order` разводит их по-разному — **норма наша** |
 | `hysteria/*` (8) | схема объявлена расширением чужой стороны, каталог скипается целиком — скип законен |
-| `xray/vless_default_port` | у лаунчера элемент без порта отбраковывается (`required`), у нас дефолт 443 — расхождение СОСТАВА подписки, поднято владельцу, оверлей `xray/vless.json` НЕ снимать |
 | `xray/balancer_group` | род группы: у нас `urltest`, у лаунчера `group` |
-| `xray/malformed_stream`, `xray/unsupported_protocol`, `xray/hysteria_v1_skipped`, `xray/vless_encryption_junk` | бухгалтерия `dropped[]`: состав и `ref` отброшенных элементов |
+| `xray/malformed_stream`, `xray/unsupported_protocol`, `xray/hysteria_v1_skipped`, `xray/vless_encryption_junk`, `xray/vless_default_port` | бухгалтерия `dropped[]`: состав, `ref` и текст причины отброшенных элементов. Сам дефолт порта снят отдельно (коммит `18998a8d`, арбитр — исходники Xray); красным остаётся именно форма отчёта об отбраковке |
 | `contract_24_2_rules` ×3 | `hellorandom*`→`randomized` (реестр: префикс есть ТОЛЬКО у Go, «Dart не матчит и уводит в junk»), пустой пароль tuic (реестр: Go принимает с warning, `tuic://uuid@host` проходит), алиас `splithttp` (реестр: ветку читает ТОЛЬКО Go, `у Dart в _xrayTransportFromStream ветки splithttp нет`) |
 
 Все три кейса `contract_24_2_rules` реестр называет расхождением сторон
