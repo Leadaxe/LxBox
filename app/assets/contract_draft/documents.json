@@ -109,6 +109,58 @@
       "impl": "§368 — массив sing-box outbound'ов. Раньше падал в `unknown` (0 узлов на всех путях, кроме вставки из буфера, где контроллер разбирал его сам)."
     },
     {
+      "kind": "xray_outbound_array",
+      "priority": 33,
+      "detect": {
+        "json": {
+          "type": "array",
+          "array_elem_any_keys": ["[].protocol"]
+        }
+      },
+      "mapper": "xray",
+      "elements": "[]",
+      "desc_en": "Array of bare Xray outbounds. `protocol` is the Xray marker, as `type` is the sing-box one.",
+      "desc_ru": "Массив голых Xray-outbound'ов. Признак Xray — `protocol`, как `type` у sing-box.",
+      "_why": "§480 Д-3 — массив голых outbound'ов Xray веткой не опознавался: у `singbox_outbound_array` (32) признак `[].type`, которого у Xray нет, и массив доезжал до `uri_lines`. Приоритет ниже sing-box-массива: неоднозначный вход (есть оба признака) остаётся за sing-box, как и у пары 30/31."
+    },
+    {
+      "kind": "xray_outbound",
+      "priority": 34,
+      "detect": {
+        "json": {
+          "type": "object",
+          "required_keys": ["protocol"]
+        }
+      },
+      "mapper": "xray",
+      "elements": "$self",
+      "desc_en": "A single Xray outbound object, the form copied out of an Xray config by hand.",
+      "desc_ru": "Одиночный Xray-outbound — форма, которую выписывают из конфига Xray руками.",
+      "_why": "§480 Д-3 — одиночный outbound Xray не принимался (`400 No valid outbounds in JSON`): ветки на него не было вовсе, а `singbox_outbound` (40) требует `type`. Стоит РАНЬШЕ sing-box-одиночки: объект с `protocol` — это Xray, и вопрос решает признак диалекта, а не порядок."
+    },
+    {
+      "kind": "xray_config",
+      "priority": 35,
+      "detect": {
+        "all": [
+          {
+            "json": {
+              "type": "object",
+              "array_elem_any_keys": ["outbounds[].protocol"]
+            }
+          },
+          {
+            "not": { "json": { "required_keys": ["type"] } }
+          }
+        ]
+      },
+      "mapper": "xray",
+      "elements": "outbounds[]",
+      "desc_en": "Full Xray config, `inbounds` and the rest included. Recognised by `protocol` inside `outbounds`, so it does not fall to the sing-box config branch.",
+      "desc_ru": "Полный конфиг Xray, вместе с `inbounds` и прочим. Опознаётся по `protocol` внутри `outbounds` и потому не падает в ветку sing-box-конфига.",
+      "_why": "§480 Д-3 — полный конфиг Xray забирала ветка `singbox_config` (50): у неё признак `outbounds` БЕЗ проверки диалекта, и Xray-элементы уезжали в sing-box-маппер, который их не читает — узлов ноль. Отрицание `type` — как у пары 30/31: неоднозначный конфиг остаётся за sing-box."
+    },
+    {
       "kind": "singbox_outbound",
       "priority": 40,
       "detect": {
