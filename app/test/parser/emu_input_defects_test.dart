@@ -45,6 +45,14 @@ void main() {
 
   nodesOf(String input) => parseAll(decode(input));
 
+  /// Гейт контроллера (`_addJsonNodes`): вход, чей `flavor` не опознан,
+  /// отвергается ДО разбора — `parseAll` его уже не видит. Дефект как раз
+  /// тут и жил, поэтому форма проверяется отдельно от числа узлов.
+  JsonFlavor flavorOf(String input) {
+    final d = decode(input);
+    return d is JsonConfig ? d.flavor : JsonFlavor.unknown;
+  }
+
   group('Д-3 — Xray-JSON принимается всеми тремя формами входа', () {
     test('одиночный outbound-объект даёт узел', () {
       expect(nodesOf(xrayOutbound), isNotEmpty);
@@ -60,6 +68,29 @@ void main() {
             '"outbounds":[$xrayOutbound]}'),
         isNotEmpty,
       );
+    });
+
+    test('все три формы проходят гейт вставки, а не только разбор', () {
+      // `unknown` здесь = «вставка ответит 400», даже если `parseAll` узел
+      // собирает: контроллер до разбора не доходит.
+      for (final input in [
+        xrayOutbound,
+        '{"outbounds":[$xrayOutbound]}',
+        '[$xrayOutbound]',
+        '[{"outbounds":[$xrayOutbound]}]',
+      ]) {
+        expect(flavorOf(input), JsonFlavor.xrayArray,
+            reason: 'форма отвергается гейтом вставки: $input');
+      }
+    });
+
+    test('sing-box-формы за Xray-ветки не уезжают', () {
+      const sb = '{"type":"trojan","server":"h.example",'
+          '"server_port":443,"password":"p"}';
+      expect(flavorOf(sb), JsonFlavor.singboxOutbound);
+      expect(flavorOf('[$sb]'), JsonFlavor.singboxArray);
+      expect(flavorOf('{"log":{},"outbounds":[$sb]}'),
+          JsonFlavor.singboxConfig);
     });
   });
 
@@ -88,6 +119,19 @@ void main() {
     test('переводы строк \\r\\n переживают кодирование', () {
       final crlf = plain.replaceAll('\n', '\r\n');
       expect(nodesOf(base64.encode(utf8.encode(crlf))), hasLength(3));
+    });
+
+    test('завёрнутое тело отличается от голого списка по исходному тексту',
+        () {
+      // Признак, по которому контроллер решает, снимать ли оболочку: у
+      // голого списка `://` есть в САМОМ вводе, у завёрнутого — только
+      // после распаковки. Обе формы дают `UriLines`, и без этого признака
+      // они неразличимы.
+      final wrapped = base64.encode(utf8.encode(plain));
+      expect(decode(wrapped), isA<UriLines>());
+      expect(wrapped.contains('://'), isFalse);
+      expect(decode(plain), isA<UriLines>());
+      expect(plain.contains('://'), isTrue);
     });
   });
 }

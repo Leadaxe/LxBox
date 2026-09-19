@@ -919,6 +919,19 @@ class SubscriptionController extends ChangeNotifier {
   Future<_JsonAdd> _addJsonNodes(String text,
       {UserSource origin = UserSource.paste}) async {
     final decoded = decode(text);
+    // §480 Д-4 — список ссылок, завёрнутый в base64 целиком. Декодер такое
+    // тело разворачивает и отдаёт `UriLines` (ветка `base64_wrapped`
+    // реестра), но сюда приходит только JSON, и вставка отвечала «не
+    // распознано» — при том, что ТОТ ЖЕ текст без base64 проходил, а
+    // подписка с таким телом по ссылке читается штатно.
+    //
+    // Гейт — `wrapped`, а не «похоже на base64»: голый список ссылок
+    // приезжает тем же `UriLines`, и его разбирают ветки выше (`isDirectLink`
+    // для одной ссылки); перехватывать его здесь значило бы заводить
+    // второй путь для уже работающего входа.
+    if (decoded is UriLines && !_looksLikeUriList(text)) {
+      return _addUriLines(decoded, text, origin: origin);
+    }
     if (decoded is! JsonConfig) return _JsonAdd.notJson;
     switch (decoded.flavor) {
       case JsonFlavor.singboxOutbound:
@@ -1016,6 +1029,64 @@ class SubscriptionController extends ChangeNotifier {
     ));
     _entries.add(SubscriptionEntry(
         list: jsonServer, nodeCount: jsonServer.nodes.length));
+    return _JsonAdd.added;
+  }
+
+  /// §480 Д-4 — ввод УЖЕ является списком ссылок, оболочку снимать не с чего.
+  ///
+  /// Спрашивается исходный текст, а не форма ответа: `UriLines` приходит и от
+  /// голого списка, и от завёрнутого в base64, а различать их нужно — голый
+  /// список разбирают ветки выше.
+  static bool _looksLikeUriList(String text) => text.contains('://');
+
+  /// §480 Д-4 — список ссылок из снятой оболочки → запись.
+  ///
+  /// Контейнер выбирается тем же порогом, что и у JSON (§368/§129): один
+  /// узел — сервер, несколько — файловая подписка. В кэш кладётся ИСХОДНЫЙ
+  /// текст (завёрнутый): тело подписки перечитывается на старте тем же
+  /// `decode`, и он развернёт оболочку заново.
+  Future<_JsonAdd> _addUriLines(UriLines decoded, String text,
+      {UserSource origin = UserSource.paste}) async {
+    final nodes = parseAll(decoded);
+    if (nodes.isEmpty) {
+      _lastError = const ErrMsg(ErrKey.noValidOutboundsInJson);
+      return _JsonAdd.empty;
+    }
+
+    if (nodes.length > 1) {
+      final url = 'file:${newUuidV4()}';
+      await HttpCache.save(url, text, const {});
+      _entries.add(SubscriptionEntry(
+        list: SubscriptionServers(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: url,
+          lastUpdated: DateTime.now(),
+          lastUpdateStatus: UpdateStatus.ok,
+          lastNodeCount: nodes.length,
+          updateIntervalHours: -1, // §129 — файловая: авто-обновления нет
+          nodes: nodes,
+        ),
+        nodeCount: nodes.length,
+      ));
+      return _JsonAdd.added;
+    }
+
+    final srv = _autoEmoji(UserServer(
+      id: newUuidV4(),
+      name: '',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      origin: origin,
+      rawBody: text,
+      sections: sectionsForNewNode(nodes.first),
+      nodes: nodes,
+    ));
+    _entries.add(SubscriptionEntry(list: srv, nodeCount: srv.nodes.length));
     return _JsonAdd.added;
   }
 
