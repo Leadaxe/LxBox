@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
+import '../models/ui_msg.dart';
 import '../services/builder/node_link_pool.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
@@ -17,6 +18,7 @@ import 'folder_detail_screen.dart';
 import 'node_settings_screen.dart';
 import 'qr_scan_screen.dart';
 import 'subscription_detail_screen.dart';
+import 'subscription_detail_screen/widgets/node_warnings_sheet.dart';
 import 'warp_wizard_screen.dart';
 import 'subscriptions_screen/clipboard_analysis.dart';
 import 'subscriptions_screen/entry_context_menu.dart';
@@ -27,6 +29,7 @@ import '../models/source_chain.dart';
 import 'chain_edit/new_chain_dialog.dart';
 import 'chain_edit_screen.dart';
 import 'subscriptions_screen/widgets/add_icon_button.dart';
+import 'subscriptions_screen/widgets/parse_input_error_banner.dart';
 import 'subscriptions_screen/widgets/chains_section.dart';
 import 'subscriptions_screen/widgets/subscription_entry_tile.dart';
 import 'subscriptions_screen/widgets/subscriptions_empty_state.dart';
@@ -381,6 +384,16 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     ));
   }
 
+  /// §500 — при отказе с известной причиной открыть шторку сразу после add.
+  void _presentParseRejectSheetIfNeeded() {
+    final err = widget.subController.lastError;
+    if (err is! ParseInputRejectedMsg || !err.hasDropped || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showNodeWarningsSheet(context, err.dropped, sourceLabel: err.sourceLabel);
+    });
+  }
+
   Future<void> _add() async {
     final text = _inputController.text.trim();
     if (text.isEmpty) {
@@ -393,6 +406,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (widget.subController.lastError == null) {
       _inputController.clear();
       await _regenerateAndSave();
+    } else {
+      _presentParseRejectSheetIfNeeded();
     }
   }
 
@@ -451,9 +466,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (addErr == null) {
       await _regenerateAndSave();
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(addErr.render())),
-      );
+      _presentParseRejectSheetIfNeeded();
+      if (addErr is! ParseInputRejectedMsg || !addErr.hasDropped) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(addErr.render())),
+        );
+      }
     }
   }
 
@@ -497,9 +515,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (addErr == null) {
       await _regenerateAndSave();
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(addErr.render())),
-      );
+      _presentParseRejectSheetIfNeeded();
+      if (addErr is! ParseInputRejectedMsg || !addErr.hasDropped) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(addErr.render())),
+        );
+      }
     }
   }
 
@@ -562,9 +583,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       if (importErr == null) {
         await _regenerateAndSave();
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(importErr.render())),
-        );
+        _presentParseRejectSheetIfNeeded();
+        if (importErr is! ParseInputRejectedMsg || !importErr.hasDropped) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(importErr.render())),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -735,10 +759,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 if (ctrl.lastError != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      ctrl.lastError!.render(),
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
+                    child: ParseInputErrorBanner(ctrl.lastError!),
                   ),
                 if (ctrl.progressMessage != null)
                   Padding(

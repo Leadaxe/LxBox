@@ -413,6 +413,30 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 # → {"ok":true,"action":"subs-add","id":"<new>","kind":"SubscriptionServers"}
 ```
 
+**Отказ `addFromInput` (§500)** — запись не создаётся, `400 bad_request`.
+В теле, кроме `error.message` (базовая фраза без деталей), массив `dropped`
+с причинами отбраковки (код реестра; `value` у секретных полей — `***`):
+
+```json
+{
+  "error": {
+    "code": "bad_request",
+    "message": "addFromInput rejected: Could not parse direct link"
+  },
+  "dropped": [
+    {
+      "code": "type_invalid",
+      "path": "address",
+      "value": "1.2.3.4/64",
+      "title_en": "Field address removed: wrong type"
+    }
+  ]
+}
+```
+
+Если ввод не распознан как ссылка/JSON (нет причины разбора), `dropped`
+отсутствует.
+
 **Inline single server (SS URI):**
 ```bash
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \

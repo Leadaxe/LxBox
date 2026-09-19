@@ -2,6 +2,8 @@
 // (SubscriptionsScreen paste / "Add servers" поток). Чистые функции без
 // зависимостей на контроллеры/стораджи.
 
+import 'dart:convert';
+
 import '../parser/engine/section_loader.dart' show MapperSections;
 import '../parser/mappers/uri_pipeline.dart' show kPipelineSchemes;
 
@@ -71,4 +73,34 @@ bool isAmneziaVpnLink(String input) {
   final kind = documentKindOf(input);
   if (kind != null) return kind == 'amnezia_link';
   return input.trim().startsWith('vpn://');
+}
+
+/// §500 — метка в шапке шторки при отказе одиночного ввода: фрагмент ссылки
+/// (`#tag`) или схема/тип входа.
+String inputSourceLabel(String input) {
+  final t = input.trim();
+  final firstLine = t.split(RegExp(r'\r?\n')).first.trim();
+  if (firstLine.contains('://')) {
+    final uri = Uri.tryParse(firstLine);
+    if (uri != null) {
+      if (uri.fragment.isNotEmpty) return uri.fragment;
+      if (uri.scheme.isNotEmpty) return uri.scheme;
+    }
+    final scheme = firstLine.split('://').first.toLowerCase();
+    if (scheme.isNotEmpty) return scheme;
+  }
+  if (isWireGuardConfig(t)) return 'wireguard';
+  if (firstLine.startsWith('{') || firstLine.startsWith('[')) {
+    try {
+      final decoded = jsonDecode(t);
+      if (decoded is Map) {
+        final type = decoded['type'] ?? decoded['protocol'];
+        if (type is String && type.isNotEmpty) return type;
+      }
+    } on FormatException {
+      // ignore
+    }
+    return 'json';
+  }
+  return 'input';
 }

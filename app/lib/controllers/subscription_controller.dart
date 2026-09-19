@@ -11,6 +11,7 @@ import '../models/import_rule.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart';
+import '../models/node_warning.dart';
 import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
 import '../models/tailscale_bundle.dart';
@@ -766,6 +767,29 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
+  /// §500 — отказ одиночного ввода: базовая фраза + причины в шторке.
+  void _setParseInputReject(
+    ErrKey key,
+    String input, {
+    RegistryWarning? verdict,
+    List<NodeWarning>? dropped,
+  }) {
+    final all = <NodeWarning>[
+      ?verdict,
+      ...?dropped,
+    ];
+    final sorted = sortedDropWarnings(all);
+    if (sorted.isEmpty) {
+      _lastError = ErrMsg(key);
+      return;
+    }
+    _lastError = ParseInputRejectedMsg(
+      key,
+      dropped: sorted,
+      sourceLabel: inputSourceLabel(input),
+    );
+  }
+
   /// §243 — [nameHint] (имя файла без расширения при импорте из файла)
   /// становится tag'ом узла для WG/AWG INI-ветки (фрагмент синтетического
   /// URI, живёт в rawBody ⇒ переживает рестарт). Ветка `vpn://` hint
@@ -804,9 +828,12 @@ class SubscriptionController extends ChangeNotifier {
         await _persist();
         await _fetchEntry(_entries.length - 1);
       } else if (isWireGuardConfig(trimmed)) {
-        var spec = parseWireguardIni(trimmed, nameHint: nameHint);
+        final verdict = XrayDropVerdict();
+        var spec = parseWireguardIni(trimmed,
+            nameHint: nameHint, dropped: verdict);
         if (spec == null) {
-          _lastError = const ErrMsg(ErrKey.invalidWireguardConfig);
+          _setParseInputReject(ErrKey.invalidWireguardConfig, trimmed,
+              verdict: verdict.reason);
           return;
         }
         // §090 G2b × §456 — в INI тега нет, эмодзи некуда дописать (как в
@@ -868,9 +895,11 @@ class SubscriptionController extends ChangeNotifier {
             list: vpnServer, nodeCount: vpnServer.nodes.length));
         await _persist();
       } else if (isDirectLink(trimmed)) {
-        final spec = parseUri(trimmed);
+        final verdict = XrayDropVerdict();
+        final spec = parseUri(trimmed, dropped: verdict);
         if (spec == null) {
-          _lastError = const ErrMsg(ErrKey.couldNotParseDirectLink);
+          _setParseInputReject(ErrKey.couldNotParseDirectLink, trimmed,
+              verdict: verdict.reason);
           return;
         }
         final dlServer = _autoEmoji(UserServer(
@@ -939,9 +968,11 @@ class SubscriptionController extends ChangeNotifier {
     // молча, а новый вид источника получал бы «не распознано».
     if (decoded.source.mapper == null) return _JsonAdd.notJson;
 
-    final nodes = parseAll(decoded);
+    final dropped = <NodeWarning>[];
+    final nodes = parseAll(decoded, dropped: dropped);
     if (nodes.isEmpty) {
-      _lastError = const ErrMsg(ErrKey.noValidOutboundsInJson);
+      _setParseInputReject(ErrKey.noValidOutboundsInJson, text,
+          dropped: dropped);
       return _JsonAdd.empty;
     }
 
@@ -1041,9 +1072,11 @@ class SubscriptionController extends ChangeNotifier {
   /// `decode`, и он развернёт оболочку заново.
   Future<_JsonAdd> _addUriLines(UriLines decoded, String text,
       {UserSource origin = UserSource.paste}) async {
-    final nodes = parseAll(decoded);
+    final dropped = <NodeWarning>[];
+    final nodes = parseAll(decoded, dropped: dropped);
     if (nodes.isEmpty) {
-      _lastError = const ErrMsg(ErrKey.noValidOutboundsInJson);
+      _setParseInputReject(ErrKey.noValidOutboundsInJson, text,
+          dropped: dropped);
       return _JsonAdd.empty;
     }
 

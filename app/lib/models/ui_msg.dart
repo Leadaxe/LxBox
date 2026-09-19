@@ -11,6 +11,7 @@
 // живут здесь же extension'ами (renderEn-allowlist-правило в
 // tool/l10n/hardcoded_check.dart).
 
+import 'node_warning.dart';
 import 'stop_reason.dart';
 import 'validation.dart';
 import '../services/l10n/get_local_text.dart';
@@ -187,6 +188,33 @@ enum ErrKey {
   detourSelf,
   detourLoopInFolder,
   onlySingleServersCanBeMoved,
+}
+
+/// §500 — отказ `addFromInput`: базовая фраза под полем; причины из
+/// `dropped[]` разбора — в шторке уведомлений (как у узла, §479).
+/// Без причин — как [ErrMsg].
+final class ParseInputRejectedMsg extends UiMsg {
+  final ErrKey key;
+  final List<NodeWarning> dropped;
+  final String? sourceLabel;
+  const ParseInputRejectedMsg(
+    this.key, {
+    this.dropped = const [],
+    this.sourceLabel,
+  });
+
+  bool get hasDropped => dropped.isNotEmpty;
+
+  @override
+  List<Object?> get props => [key, dropped, sourceLabel];
+
+  @override
+  String renderWith(GetLocalText t) => switch (key) {
+        ErrKey.invalidWireguardConfig => t.s("Invalid WireGuard config"),
+        ErrKey.couldNotParseDirectLink => t.s("Could not parse direct link"),
+        ErrKey.noValidOutboundsInJson => t.s("No valid outbounds in JSON"),
+        _ => ErrMsg(key).renderWith(t),
+      };
 }
 
 final class ErrMsg extends UiMsg {

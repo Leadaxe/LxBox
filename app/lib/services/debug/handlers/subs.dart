@@ -2,6 +2,8 @@ import 'dart:async';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/import_rule.dart';
+import '../../../models/node_warning.dart';
+import '../../../models/ui_msg.dart';
 import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
 import '../../node_link_address.dart';
@@ -156,8 +158,16 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   // Если controller записал lastError — input отвергнут целиком, ничего не добавилось.
   if (sub.lastError != null &&
       sub.entries.map((e) => e.id).toSet().length == before.length) {
-    throw BadRequest(
-        'addFromInput rejected: ${sub.lastError?.renderEn() ?? ''}');
+    final err = sub.lastError!;
+    List<Map<String, Object?>>? dropped;
+    if (err is ParseInputRejectedMsg && err.hasDropped) {
+      dropped = [
+        for (final w in err.dropped)
+          if (w is RegistryWarning) serializeParseDrop(w),
+      ];
+    }
+    throw BadRequest('addFromInput rejected: ${err.renderEn()}',
+        dropped: dropped);
   }
   // Находим новую запись (или записи — JSON outbounds могут создать несколько).
   final added = sub.entries.where((e) => !before.contains(e.id)).toList();

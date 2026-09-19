@@ -126,6 +126,28 @@ bool _propsEqual(List<Object?> a, List<Object?> b) {
   return true;
 }
 
+/// Первая причина отбраковки по старшему уровню (error → warning → info).
+RegistryWarning? primaryDropReason(List<NodeWarning> dropped) {
+  for (final w in sortedDropWarnings(dropped)) {
+    if (w is RegistryWarning) return w;
+  }
+  return null;
+}
+
+/// Причины отбраковки по старшему уровню (error → warning → info).
+/// §500 — для одиночного ввода без узла: шторка и Debug API.
+List<NodeWarning> sortedDropWarnings(List<NodeWarning> dropped) {
+  final out = <NodeWarning>[];
+  for (final level in const [
+    WarningSeverity.error,
+    WarningSeverity.warning,
+    WarningSeverity.info,
+  ]) {
+    out.addAll(dropped.where((w) => w.severity == level));
+  }
+  return out;
+}
+
 // `transport_unsupported` — текст в реестре (`transports.json` → fallback
 // транспорта). Класс снят (§485): код ставит движок, не парсер.
 

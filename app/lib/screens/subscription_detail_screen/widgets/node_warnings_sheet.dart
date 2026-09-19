@@ -17,22 +17,26 @@ import 'node_notifications_view.dart';
 /// разными в зависимости от того, откуда на него посмотрели.
 Future<void> showNodeWarningsSheet(
   BuildContext context,
-  List<NodeWarning> warnings,
-) {
+  List<NodeWarning> warnings, {
+  String? sourceLabel,
+}) {
   return showAppBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (ctx) => NodeWarningsSheet(warnings),
+    builder: (ctx) => NodeWarningsSheet(warnings, sourceLabel: sourceLabel),
   );
 }
 
 /// Содержимое шторки. Отдельный публичный виджет — чтобы виджет-тесты могли
 /// строить его без модального роутера.
 class NodeWarningsSheet extends StatelessWidget {
-  const NodeWarningsSheet(this.warnings, {super.key});
+  const NodeWarningsSheet(this.warnings, {this.sourceLabel, super.key});
 
   final List<NodeWarning> warnings;
+
+  /// §500 — для одиночного ввода: фрагмент ссылки или схема вместо тега узла.
+  final String? sourceLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +52,22 @@ class NodeWarningsSheet extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Text(
-              getLocalText.s("Notifications"),
-              style: theme.textTheme.titleMedium,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  getLocalText.s("Notifications"),
+                  style: theme.textTheme.titleMedium,
+                ),
+                if (sourceLabel != null && sourceLabel!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      sourceLabel!,
+                      style: theme.textTheme.labelLarge,
+                    ),
+                  ),
+              ],
             ),
           ),
           Flexible(
