@@ -1373,11 +1373,13 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
               // §480 Д-6 — написание ключа переводится в форму ядра
               // (RawURL): std-алфавит законен по реестру, но ядро на нём
               // отвечает `illegal base64 data` и роняет ВЕСЬ конфиг.
-              // Годность уже проверена гейтом выше, здесь только написание —
-              // как у `short_id` строкой ниже.
-              publicKey: normalizeRealityPublicKey(
-                reality['public_key']!.toString(),
-              ),
+              //
+              // Контракт 1.1.40 объявил это правило реестром —
+              // `normalize: base64_rawurl` у `tls.reality.public_key`, — и
+              // санитайзер исполняет его на ВСЕХ входах. Здесь рукописный
+              // перевод снят: два движка одного правила рано или поздно
+              // разошлись бы, а тело рабочего узла обязано остаться одним.
+              publicKey: reality['public_key']!.toString().trim(),
               shortId: normalizeRealityShortId(
                 reality['short_id']?.toString() ?? '',
               ),

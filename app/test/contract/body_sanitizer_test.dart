@@ -681,13 +681,17 @@ void main() {
         }
       }));
       expect(_codes(r), isNot(contains('reality_pbk_invalid')));
-      // Значение остаётся как пришло: у `public_key` REALITY объявлен только
-      // `format`, без `normalize: base64_std`. Канон — отдельное правило, и
-      // ставится он там, где реестр его назвал (ключи WireGuard); здесь
-      // проверяется ровно то, что ленивый декодер СУДИТ так же, как ядро.
+      // Контракт 1.1.40 — у `public_key` REALITY объявлен ещё и
+      // `normalize: base64_rawurl`, поэтому годный ключ приводится к форме
+      // ЯДРА: url-safe алфавит без паддинга. Ядро декодирует этот ключ только
+      // `RawURLEncoding`, и std-написание роняет ВЕСЬ конфиг.
+      //
+      // Проверяется ровно то, ради чего кейс заведён: ленивый декодер СУДИТ
+      // неканоническую последнюю группу так же, как ядро, — а нормализация,
+      // признав ключ годным, записывает его канон.
       expect(
         ((r.body?['tls'] as Map?)?['reality'] as Map?)?['public_key'],
-        'ccccccccccccccccccccccccccccccccccccccccccC=',
+        'ccccccccccccccccccccccccccccccccccccccccccA',
       );
     }, skip: skip);
 

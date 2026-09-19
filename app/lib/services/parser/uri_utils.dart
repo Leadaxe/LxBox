@@ -395,28 +395,12 @@ bool isValidRealityPublicKey(String pbk) {
   return bytes != null && bytes.length == 32;
 }
 
-/// §480 Д-6 — ПЕРЕВОД НАПИСАНИЯ ключа REALITY в форму ядра: RawURLEncoding
-/// (url-safe алфавит, без паддинга).
-///
-/// Годность судит [isValidRealityPublicKey] — реестр (`tls.json` →
-/// `reality.pbk`) объявляет законными ОБА алфавита, с паддингом и без.
-/// Ядро же декодирует `public_key` только `RawURLEncoding`: std-написание
-/// («+», «/», «=») даёт `decode public_key: illegal base64 data` и роняет
-/// ВЕСЬ конфиг, а не одну ноду. Значит вход годен, а привести его к форме
-/// ядра обязаны мы — ровно как [normalizeAwgHeaderKey] переводит ключ
-/// защиты заголовков AWG 3.x (§481, контракт 1.1.11).
-///
-/// Не суждение: значение, которое в 32 байта не декодируется, возвращается
-/// КАК ПРИШЛО — судить его будет гейт блока, и в код предупреждения человеку
-/// нужно написанное им, а не наша догадка. Ключ, уже лежащий в RawURL, не
-/// меняется: тело рабочего узла обязано остаться прежним (identity).
-String normalizeRealityPublicKey(String pbk) {
-  final s = pbk.trim();
-  if (s.isEmpty) return pbk;
-  final bytes = decodeBase64Safe(s);
-  if (bytes == null || bytes.length != 32) return pbk;
-  return base64Url.encode(bytes).replaceAll('=', '');
-}
+// §480 Д-6 — перевод написания ключа REALITY в форму ядра (RawURLEncoding)
+// жил здесь функцией `normalizeRealityPublicKey`. Контракт 1.1.40 объявил
+// это правило РЕЕСТРОМ — `normalize: base64_rawurl` у
+// `tls.reality.public_key`, — и исполняет его санитайзер тела на всех
+// входах сразу. Рукописный перевод снят: два движка одного правила рано или
+// поздно разошлись бы, а тело рабочего узла обязано остаться одним.
 
 /// §463 / контракт §24.6 (`format: url_path`) — путь транспорта, который ядро
 /// разберёт `url.Parse`.

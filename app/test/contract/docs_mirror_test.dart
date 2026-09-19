@@ -33,12 +33,9 @@ const _assetsRoot = 'assets/contract';
 /// Цена послабления — ссылка «Learn more» по этому коду уводит в начало
 /// страницы, пока лаунчер не пересоберёт generated. Список держать пустым:
 /// каждая запись снимается ближайшим синком, который принесёт страницы.
-const _awaitingLauncherGendocs = <String>{
-  // Контракт 1.1.37 (лаунчер 1d32af49): код в реестре есть, а
-  // docs/generated/warnings.md последний раз собран на 1.1.35 и якоря не
-  // несёт. Ждёт пересборки generated у лаунчера, контракт >1.1.37.
-  'password_empty',
-};
+// Пусто с контракта 1.1.42: лаунчер пересобрал docs/generated, и якорь
+// `password_empty` приехал зеркалом. Долгов перед gendocs нет.
+const _awaitingLauncherGendocs = <String>{};
 
 void main() {
   final warningsMd = File('$_docsRoot/warnings.md');
