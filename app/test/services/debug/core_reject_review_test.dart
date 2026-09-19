@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 import 'package:lxbox/services/core_reject/core_reject_state.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
@@ -79,6 +80,41 @@ void main() {
     } on FileSystemException {
       // ignore
     }
+  });
+
+  group('POST /core_reject/reset', () {
+    test('сбрасывает phase/round, вердикт в хранилище остаётся', () async {
+      CoreRejectState.I.finish(const CoreRejectRun(
+        outcome: CoreRejectOutcome.failed,
+        rounds: 3,
+        error: 'oops',
+      ));
+      expect(CoreRejectState.I.phase, CoreRejectPhase.done);
+      expect(CoreRejectState.I.round, 3);
+
+      await controller.addFromInput(
+        'vless://u@h:443?type=ws&security=tls#MyServer',
+      );
+      await controller.generateConfig();
+      final emitted = controller.lastEmittedTagMap.keys.single;
+      expect(await controller.disableNodeByCoreTag(emitted, 'bad'), isTrue);
+
+      final reset = asMap(await coreRejectHandler(
+        req('POST', '/core_reject/reset'),
+        ctx(),
+      ));
+      expect(reset['ok'], isTrue);
+      expect(CoreRejectState.I.phase, CoreRejectPhase.idle);
+      expect(CoreRejectState.I.round, 0);
+
+      final nodes = (await coreRejectHandler(
+        req('GET', '/core_reject/nodes'),
+        ctx(),
+      ) as JsonResponse)
+          .body as List;
+      expect(nodes, hasLength(1));
+      expect(nodes.first['source'], controller.entries.single.displayName);
+    });
   });
 
   group('POST /core_reject/prompt', () {

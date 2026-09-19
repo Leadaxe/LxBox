@@ -115,17 +115,20 @@ POST /action/start-vpn                         Start the tunnel (via Activity, m
 POST /action/start-vpn-headless[?guard=true]   Start WITHOUT Activity/consent (needs permission already granted)
                                                   → {"started":bool,"needs_consent":bool}. For automation/self-test.
                                                   guard=true (feature 478): start through the core-reject GUARD —
-                                                  the same state machine the Start button runs. Returns immediately
-                                                  → {guard:true, started:true, async:true}; read phase/outcome via
-                                                  GET /core_reject (409 if a run is already in flight). A core
-                                                  refusal that names a node disables it and the silent checkConfig
-                                                  loop takes over. No round-limit dialog on screen — queue
-                                                  POST /core_reject/prompt?answer=keep before or while awaiting.
-POST /action/check-config[?timeout_ms=N]       Run Libbox.checkConfig over the CURRENTLY BUILT config (the one on
-                                                  disk, not a fresh rebuild) — the same check the guard loops on,
-                                                  once, without a tunnel. → {config_ok:bool, error, ms, bytes}.
-                                                  error is the core's RAW text (what CANON §9 parses). Waits at most
-                                                  timeout_ms (default 10000, capped by the request timeout) → 409.
+                                                  the same state machine the Start button runs, but real starts go
+                                                  headless (startVpnHeadless, not Activity/startVPN). Returns
+                                                  immediately → {guard:true, started:true, async:true}; read
+                                                  phase/outcome via GET /core_reject (409 if a run is already in
+                                                  flight). A core refusal that names a node disables it and the
+                                                  silent checkConfig loop takes over. No round-limit dialog on
+                                                  screen — queue POST /core_reject/prompt?answer=keep before or
+                                                  while awaiting.
+POST /action/check-config[?timeout_ms=N]       Run Libbox.checkConfig — the same check the guard loops on, once,
+                                                  without a tunnel. With a request body: checks THAT JSON text;
+                                                  without a body: the CURRENTLY BUILT config on disk (not a fresh
+                                                  rebuild). → {config_ok:bool, error, ms, bytes}. error is the
+                                                  core's RAW text (what CANON §9 parses). Waits at most timeout_ms
+                                                  (default 10000, capped by the request timeout) → 409.
 POST /action/stop-vpn                          Stop it
 POST /action/force-stop-vpn                    Hard force-stop (doForceStop): teardown→stopSelf, frees CommandServer
                                                   port 63130 when a normal stop hung. Fire-and-forget.
@@ -196,12 +199,12 @@ GET    /subs[?reveal=true]                     alias /state/subs. reveal=true �
 GET    /subs/{id}[?reveal=true][?warnings=true]  Single entry. reveal=true also returns `raw` for a single
                                                  UserServer (the node's own text, as folder members already do —
                                                  it carries credentials, hence reveal only).
-                                                 warnings=true adds `warnings`: {tag: [{code, severity, path,
-                                                 value, params, title_en, text_en}]} — parse warnings per node,
-                                                 pinned English so the answer does not depend on device locale.
-                                                 Nodes without warnings are absent. code/path/value are null for
-                                                 warnings whose text still lives in the app rather than the
-                                                 registry; text_en is always there.
+                                                 warnings=true adds origin_kind, source_kind (§455/§480) and
+                                                 `warnings`: {tag: [{code, severity, path, value, params,
+                                                 title_en, text_en}]} — parse warnings per node, pinned English.
+                                                 Every node is present; nodes without warnings get [].
+                                                 code/path/value/title_en are null for app-local warnings;
+                                                 text_en is always there.
 POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|WG-conf|JSON-outbounds>"}.
                                                  input runs through the parser pipeline (same as UI paste);
                                                  JSON with multiple outbounds may create several entries.
@@ -483,6 +486,9 @@ POST /core_reject/cancel                       Cancel the running guard — the 
                                                  = stopped_by_user (VPN stays down, disabled nodes stay
                                                  disabled). → {cancelled:true, phase, round}. 409 when
                                                  no run is in flight.
+POST /core_reject/reset                        Reset in-memory run state (phase→idle, round→0).
+                                                 Stored verdicts and the banner are NOT cleared.
+                                                 → {ok:true, action:"core-reject-reset"}.
 POST /core_reject/enable?tag=<tag>             Re-enable a node by its core tag (same as the banner
                                                  button): the verdict is wiped, the node is checked
                                                  again. → {enabled, tag}; 404 when no node carries
@@ -686,8 +692,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
-    {'method': 'POST', 'path': '/action/start-vpn-headless', 'params': {'guard': 'true|false (default false)'}, 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}. guard=true (feature 478): start through the core-reject guard asynchronously → {guard:true, started:true, async:true}; read phase/outcome via GET /core_reject (409 if already running). Queue POST /core_reject/prompt?answer=keep before or while awaiting the round-limit dialog.'},
-    {'method': 'POST', 'path': '/action/check-config', 'params': {'timeout_ms': 'N (default 10000, capped by the request timeout)'}, 'description': 'Run Libbox.checkConfig over the CURRENTLY BUILT config (the one on disk, not a fresh rebuild) — the same check the guard loops on, once, without a tunnel → {config_ok, error, ms, bytes}. error is the core RAW text (what CANON §9 parses). 409 on timeout.'},
+    {'method': 'POST', 'path': '/action/start-vpn-headless', 'params': {'guard': 'true|false (default false)'}, 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}. guard=true (feature 478): start through the core-reject guard asynchronously with headless real starts → {guard:true, started:true, async:true}; read phase/outcome via GET /core_reject (409 if already running). Queue POST /core_reject/prompt?answer=keep before or while awaiting the round-limit dialog.'},
+    {'method': 'POST', 'path': '/action/check-config', 'params': {'timeout_ms': 'N (default 10000, capped by the request timeout)'}, 'body': 'optional raw sing-box config JSON (checks this text; omit → built config on disk)', 'description': 'Run Libbox.checkConfig — the same check the guard loops on, once, without a tunnel → {config_ok, error, ms, bytes}. error is the core RAW text (what CANON §9 parses). 409 on timeout.'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
     {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
     {'method': 'POST', 'path': '/action/reload-vpn', 'description': 'In-place sing-box reload (no service kill) → {applied}'},
@@ -718,7 +724,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/rules/move', 'body': '{"id":"<uuid>","after":"<uuid>"|null}', 'description': '§370 — move one rule along the num axis; mirrors the UI drag (lazy neighbour shift, pinned rules refuse).'},
     // Subscriptions CRUD (user servers + subscriptions)
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
-    {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false', 'warnings': 'true|false (default false)'}, 'description': 'Single entry. warnings=true (feature 478): per-node PARSE warnings under `warnings` — {tag: [{code, severity, path, value, params, title_en, text_en}]}, pinned English, nodes without warnings absent. code/path/value/title_en are null for warnings whose text still lives in the app rather than the registry; text_en is always there. Off by default — on 500 nodes it is dead weight.'},
+    {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false', 'warnings': 'true|false (default false)'}, 'description': 'Single entry. warnings=true (feature 478): adds origin_kind, source_kind and per-node PARSE warnings under `warnings` — {tag: [{code, severity, path, value, params, title_en, text_en}]}, pinned English; every node present, empty list when none. code/path/value/title_en are null for app-local warnings; text_en is always there. Off by default — on 500 nodes it is dead weight.'},
     {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries)'},
     {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
@@ -762,12 +768,13 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/folders/{id}/probe', 'body': 'optional {"url":"...","timeout_ms":N} (defaults = global ping_options)', 'description': 'Headless Test servers run, results in response. Statuses: ok|failed|broken|invalid|not_in_config|pending. Synchronous — lower timeout_ms for big folders (30s request timeout).'},
     // Core-rejected nodes (auto-disable guard, feature 478)
     {'method': 'GET', 'path': '/core_reject', 'description': 'Guard state of the current/last run: {phase, round, round_limit, disabled:[{tag,reason}], outcome, error}. phase: idle|signal_start|checking|awaiting_prompt|final_start|done. outcome (null until a run finished): started_clean|started_with_disabled|failed|stopped_by_user. disabled = nodes THIS run turned off, in the order the core named them. One Start does two real core starts (signal + final) with a silent check loop between them.'},
-    {'method': 'GET', 'path': '/core_reject/nodes', 'description': 'Every verdict standing in storage (survives a process restart, unlike the run state): [{source, tag, reason}]. source = the subscription/folder/server name the node belongs to.'},
+    {'method': 'GET', 'path': '/core_reject/nodes', 'description': 'Every verdict standing in storage (survives a process restart, unlike the run state): [{source, tag, reason}]. source = display name of the subscription/folder/server (for a single server — node label/tag, not the empty list.name).'},
     {'method': 'GET', 'path': '/core_reject/banner', 'description': '"N disabled" banner: {visible, count, nodes:[{tag,reason}]}. Raised only on outcome=started_with_disabled.'},
     {'method': 'POST', 'path': '/core_reject/banner/dismiss', 'description': 'Close the banner (idempotent). Verdicts stay — the message was dismissed, not the decision. → {ok, action, visible, count, nodes}'},
     {'method': 'GET', 'path': '/core_reject/prompt', 'description': 'Round-limit dialog: {pending, count, limit}. count is the number in the dialog text (the round LIMIT, not the disabled tally).'},
     {'method': 'POST', 'path': '/core_reject/prompt', 'params': {'answer': 'stop|keep'}, 'body': '{"answer":"stop|keep"} (alternative to the query param)', 'description': 'Answer the round-limit dialog in place of the user. keep = drop the limit until this Start ends — may be sent BEFORE pending (queued for the next ask); stop = end the run (VPN stays down, disabled nodes stay disabled). → {answered:true, answer} (keep early → queued:true). 409 for stop when nothing is pending.'},
     {'method': 'POST', 'path': '/core_reject/cancel', 'description': 'Cancel the running guard — the same as tapping the button while it says "Checking servers…". The current round finishes, the next one does not start; outcome = stopped_by_user (VPN stays down, disabled nodes stay disabled). → {cancelled:true, phase, round}. 409 when no run is in flight.'},
+    {'method': 'POST', 'path': '/core_reject/reset', 'description': 'Reset in-memory run state (phase→idle, round→0). Stored verdicts and the banner are NOT cleared. → {ok:true, action:"core-reject-reset"}.'},
     {'method': 'POST', 'path': '/core_reject/enable', 'params': {'tag': 'core tag of the node'}, 'body': '{"tag":"..."} (alternative to the query param)', 'description': 'Re-enable a node by its core tag — emitted tag (with subscription prefix) or raw identity tag (same lookup as disable). → {enabled, tag}; 404 when no node carries that tag.'},
     {'method': 'GET', 'path': '/core_reject/notifications', 'params': {'tag': 'core tag (omit for every node with stored warnings)'}, 'description': 'What the node row and card will render, without a screenshot: [{code, severity, params, title_en, text_en}]. Texts come from the contract registry, pinned English (a machine surface must not depend on the device locale). No tag → a map {tag: [...]}. 404 when the given tag has no stored warnings.'},
     // Wi-Fi history (saved networks for routing rule editor)

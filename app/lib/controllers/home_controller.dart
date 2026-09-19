@@ -741,6 +741,36 @@ class HomeController extends ChangeNotifier
     });
   }
 
+  /// §494 — ожидание вердикта headless-старта (`startVpnHeadless`). Тот же
+  /// completer, что [startAndAwaitVerdict], но без Activity: для
+  /// `POST /action/start-vpn-headless?guard=true`.
+  Future<String?> startAndAwaitVerdictHeadless({
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    final existing = _startOutcome;
+    if (existing != null && !existing.isCompleted) {
+      return existing.future.timeout(timeout, onTimeout: () => '');
+    }
+    final c = Completer<String?>();
+    _startOutcome = c;
+    final r = await _vpn.startVpnHeadless();
+    if (!r.started) {
+      _settleStartOutcome(r.needsConsent ? '' : (_state.lastError?.renderEn() ?? ''));
+      return c.future;
+    }
+    if (_state.tunnel == TunnelStatus.connected) {
+      _settleStartOutcome(null);
+      return null;
+    }
+    return c.future.timeout(timeout, onTimeout: () {
+      if (!c.isCompleted) {
+        if (_startOutcome == c) _startOutcome = null;
+        c.complete('');
+      }
+      return '';
+    });
+  }
+
   Future<bool> _startInternal() async {
     await _pushNotificationLabels();
     final ok = await _vpn.startVPN();

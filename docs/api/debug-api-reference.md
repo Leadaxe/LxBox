@@ -226,9 +226,9 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — групповой URLTest ядра (§308: force-тест ВСЕХ членов + переселект на живой узел; fire-and-forget — `ok` значит «команда принята», результат смотреть через `GET /state` → `active_in_group`; URL — из конфига группы, не из ping settings; 409 если tunnel down); `all` — mass-ping всех нод активной группы (concurrency 10); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump; уже запущенные групповые прогоны в ядре не отменяет). → `{ok,action,scope,...}` |
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
-| `POST /action/start-vpn` | — | `home.start()` (через Activity, с VpnService.prepare dance — может показать consent-диалог) |
-| `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
-| `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig` по **текущему собранному** конфигу (тому, что лежит на диске, а не пересобранному на лету): та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает CANON §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
+| `POST /action/start-vpn` | — | `runCoreRejectGuard(guard=false)` → прежний `home.start()` через Activity (может показать consent-диалог), **без** цикла страховки. Публичный Intent API (§047) этот путь не зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую |
+| `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start, но реальные старты — headless (`startVpnHeadless`, не Activity) → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
+| `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig`: с телом запроса проверяет **этот** JSON; без тела — **текущий собранный** конфиг на диске (не пересобранный на лету). Та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает CANON §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
 | `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра) |
 | `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
 | `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
@@ -372,12 +372,14 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 сличить разбор с источником у одиночной записи было нечем. Несёт
 credentials, поэтому симметрично папке: только под `reveal`.
 
-**`?warnings=true`** добавляет ключ `warnings` — предупреждения разбора **по
-узлам**:
+**`?warnings=true`** добавляет `origin_kind`, `source_kind` (§455/§480) и ключ
+`warnings` — предупреждения разбора **по узлам**:
 
 ```jsonc
 {
   "id": "…", "kind": "SubscriptionServers", …,
+  "origin_kind": "uri",
+  "source_kind": "uri_lines",
   "warnings": {
     "🇩🇪 Frankfurt": [
       {
@@ -387,12 +389,13 @@ credentials, поэтому симметрично папке: только по
         "value": "safari",
         "title_en": "…", "text_en": "…"
       }
-    ]
+    ],
+    "Tokyo": []
   }
 }
 ```
 
-Узлы без предупреждений в карту не попадают. Тексты — **пиненный
+Все узлы присутствуют; у узла без предупреждений — пустой список. Тексты — **пиненный
 английский**: ответ не должен зависеть от локали устройства, а проверять надо
 резолв кода и подстановки, а не вёрстку. У предупреждений, чей текст пока
 живёт классом приложения (не кодом реестра), `code`/`path`/`value`/`title_en`
@@ -974,6 +977,7 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 | `/core_reject/prompt` | GET | вопрос про предел кругов: `{pending, count, limit}` |
 | `/core_reject/prompt?answer=stop\|keep` | POST | ответить на него за человека; `keep` можно поставить в очередь заранее |
 | `/core_reject/cancel` | POST | отменить идущий прогон — то же, что нажатие кнопки в фазе цикла |
+| `/core_reject/reset` | POST | сбросить состояние прогона в памяти (`phase→idle`, `round→0`); вердикты в хранилище и плашка не трогаются |
 | `/core_reject/enable?tag=<tag>` | POST | снять вердикт руками (emitted-тег ядра или сырой тег идентичности) |
 | `/core_reject/notifications[?tag=<tag>]` | GET | что нарисуют строка и карточка узла: `[{code, severity, params, title_en, text_en}]` |
 
@@ -1001,8 +1005,8 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 
 **Прогон vs хранение.** `/core_reject` живёт в памяти — после перезапуска
 процесса он пуст. Стоящие вердикты лежат рядом с узлами и перезапуск
-переживают: их отдаёт `/core_reject/nodes`, где `source` — имя подписки,
-папки или сервера, которому узел принадлежит.
+переживают: их отдаёт `/core_reject/nodes`, где `source` — отображаемое имя
+записи (у одиночного сервера — label/tag узла, а не пустой `list.name`).
 
 **Плашка** поднимается только на `outcome=started_with_disabled`: VPN поднят,
 но не тем составом, который задавал человек. `dismiss` закрывает сообщение,

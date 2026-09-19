@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -294,7 +295,7 @@ Future<DebugResponse> _startVpnHeadless(
   // здесь — иначе unawaited-future роняет зону.
   unawaited(() async {
     try {
-      await runCoreRejectGuard(home: home, sub: sub);
+      await runCoreRejectGuard(home: home, sub: sub, headless: true);
     } catch (e) {
       AppLog.I.warning('core reject guard (async): $e');
     }
@@ -319,9 +320,10 @@ Future<DebugResponse> _startVpnHeadless(
 /// вечный висяк.
 Future<DebugResponse> _checkConfig(DebugRequest req, DebugContext ctx) async {
   final home = ctx.requireHome();
-  // Проверяем ровно то, что лежит у ядра: конфиг с диска, а не пересобранный
-  // на лету — иначе ответ был бы про другой конфиг, чем поднимет Start.
-  final config = home.state.configRaw;
+  // §494 — тело запроса: проверить ЭТОТ JSON; без тела — собранный на диске.
+  final config = req.body.isEmpty
+      ? home.state.configRaw
+      : utf8.decode(req.body, allowMalformed: false);
   if (config.isEmpty) {
     throw const Conflict('no config built yet');
   }

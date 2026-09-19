@@ -1,5 +1,6 @@
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/codec/node_link_record.dart';
+import '../../../models/codec/source_record.dart';
 import '../../../models/import_rule.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
@@ -107,12 +108,36 @@ Map<String, Object?> serializeNodeWarning(NodeWarning w) {
   };
 }
 
-/// Фича 478 — предупреждения по узлам записи: `tag` → список.
-/// Узлы без предупреждений в карту не попадают.
+/// §494 — `origin_kind` / `source_kind` записи для `?warnings=true`.
+Map<String, String> entrySourceKinds(SubscriptionEntry e) {
+  final raw = entryRawText(e);
+  if (raw.isEmpty) {
+    return const {'origin_kind': '', 'source_kind': ''};
+  }
+  return {
+    'origin_kind': originKindOf(raw),
+    'source_kind': sourceKindOf(raw),
+  };
+}
+
+/// Текст источника записи для классификации вида (§455/§480).
+String entryRawText(SubscriptionEntry e) {
+  final list = e.list;
+  return switch (list) {
+    UserServer() => list.rawBody,
+    SubscriptionServers() => list.url.isNotEmpty
+        ? list.url
+        : (list.nodes.isNotEmpty ? list.nodes.first.rawSource : ''),
+    FolderServers() =>
+        list.memberRaws.isNotEmpty ? list.memberRaws.first : '',
+  };
+}
+
+/// Фича 478 / §494 — предупреждения по узлам записи: `tag` → список.
+/// Все узлы присутствуют; у узла без предупреждений — пустой список.
 Map<String, Object?> serializeEntryWarnings(SubscriptionEntry e) {
   final byTag = <String, Object?>{};
   for (final n in e.list.nodes) {
-    if (n.warnings.isEmpty) continue;
     byTag[n.tag] = [for (final w in n.warnings) serializeNodeWarning(w)];
   }
   return byTag;

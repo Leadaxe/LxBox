@@ -176,9 +176,11 @@ void main() {
       expect(revealed['raw'], contains('vless://'));
     });
 
-    test('warnings=true даёт ключ warnings, без флага его нет', () async {
+    test('warnings=true — все узлы, origin_kind/source_kind, без флага нет',
+        () async {
       await controller.addFromInput(uri);
       final id = controller.entries.single.id;
+      final tag = controller.entries.single.list.nodes.single.tag;
 
       final plain = asMap(await subsHandler(req('GET', '/subs/$id'), ctx()));
       expect(plain.containsKey('warnings'), isFalse);
@@ -187,13 +189,11 @@ void main() {
         req('GET', '/subs/$id', query: {'warnings': 'true'}),
         ctx(),
       ));
-      expect(withWarnings['warnings'], isA<Map<String, Object?>>());
-      // Узлы без предупреждений в карту не попадают — чистый узел даёт пусто.
-      final map = withWarnings['warnings'] as Map;
-      for (final list in map.values) {
-        expect(list, isA<List>());
-        expect(list as List, isNotEmpty);
-      }
+      expect(withWarnings['origin_kind'], 'uri');
+      expect(withWarnings['source_kind'], 'uri_lines');
+      final map = withWarnings['warnings'] as Map<String, Object?>;
+      expect(map.keys, contains(tag));
+      expect(map[tag], isEmpty);
     });
 
   });

@@ -53,12 +53,20 @@ Future<String?> rebuildConfigSilently(
 /// [askPrompt] — вопрос человеку после предела кругов; `null` — пути без UI
 /// (Debug API): тогда ждём [CoreRejectState.askPrompt] (в т.ч. заранее
 /// поставленный `answer=keep`).
-Future<CoreRejectRun> runCoreRejectGuard({
+Future<CoreRejectRun?> runCoreRejectGuard({
   required HomeController home,
   required SubscriptionController sub,
   Future<String?> Function()? rebuildAndSave,
   Future<CoreRejectPrompt> Function(int limit)? askPrompt,
+  /// §494 — `false` для `POST /action/start-vpn`: прежний путь без страховки.
+  bool guard = true,
+  /// §494 — реальный старт через `startVpnHeadless` (Debug API headless+guard).
+  bool headless = false,
 }) async {
+  if (!guard) {
+    unawaited(home.start());
+    return null;
+  }
   final active = _activeGuardRun;
   if (active != null && !active.isCompleted) return active.future;
 
@@ -69,17 +77,18 @@ Future<CoreRejectRun> runCoreRejectGuard({
   final host = AppCoreRejectHost(
     home: home,
     sub: sub,
+    headless: headless,
     rebuildAndSave:
         rebuildAndSave ?? () => rebuildConfigSilently(home, sub),
     askPrompt: askPrompt,
   );
-  final guard = CoreRejectGuard(host);
+  final automaton = CoreRejectGuard(host);
   // Отмена доступна всегда (спека раздел 3): кнопка Start в фазе тихого цикла
   // и `POST /core_reject/cancel` дотягиваются до автомата только отсюда — сам
   // он живёт ровно этот прогон.
-  CoreRejectState.I.bindCancel(guard.cancel);
+  CoreRejectState.I.bindCancel(automaton.cancel);
   try {
-    final run = await guard.run();
+    final run = await automaton.run();
     CoreRejectState.I.finish(run);
     if (run.outcome == CoreRejectOutcome.failed && run.error.isNotEmpty) {
       // Ошибка показывается обычным путём (экран слушает контроллер): автомат её

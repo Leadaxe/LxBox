@@ -134,7 +134,10 @@ Future<DebugResponse> _single(String id, DebugContext ctx, DebugRequest req) asy
     if (e.id == id) {
       return JsonResponse({
         ...serializeSubEntry(e, reveal: reveal),
-        if (warnings) 'warnings': serializeEntryWarnings(e),
+        if (warnings) ...{
+          ...entrySourceKinds(e),
+          'warnings': serializeEntryWarnings(e),
+        },
       });
     }
   }

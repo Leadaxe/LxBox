@@ -26,12 +26,16 @@ class AppCoreRejectHost implements CoreRejectHost {
     required this.sub,
     required this.rebuildAndSave,
     this.askPrompt,
+    this.headless = false,
     BoxVpnClient? vpn,
   }) : _vpn = vpn ?? BoxVpnClient.I;
 
   final HomeController home;
   final SubscriptionController sub;
   final BoxVpnClient _vpn;
+
+  /// §494 — реальный старт без Activity (`startVpnHeadless`), а не `startVPN`.
+  final bool headless;
 
   /// Пересобрать конфиг и записать его на диск. Возвращает текст конфига или
   /// `null`, если пересобрать нечем (lock §037, fatal-валидация).
@@ -42,7 +46,9 @@ class AppCoreRejectHost implements CoreRejectHost {
 
   @override
   Future<CoreAttempt> realStart() async {
-    final error = await home.startAndAwaitVerdict();
+    final error = headless
+        ? await home.startAndAwaitVerdictHeadless()
+        : await home.startAndAwaitVerdict();
     if (error == null) return const CoreAttempt.accepted();
     if (error.isEmpty) return const CoreAttempt.unavailable();
     return CoreAttempt.rejected(error);

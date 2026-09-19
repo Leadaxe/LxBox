@@ -215,6 +215,18 @@ class CoreRejectState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §494 — сброс состояния прогона в памяти (`POST /core_reject/reset`).
+  /// Вердикты в хранилище и плашка не трогаются.
+  void resetRunState() {
+    _phase = CoreRejectPhase.idle;
+    _round = 0;
+    _disabled = const [];
+    _lastOutcome = null;
+    _lastError = '';
+    _cancel = null;
+    notifyListeners();
+  }
+
   @visibleForTesting
   void resetForTest() {
     _phase = CoreRejectPhase.idle;

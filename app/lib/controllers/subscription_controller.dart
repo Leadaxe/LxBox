@@ -2291,12 +2291,14 @@ class SubscriptionController extends ChangeNotifier {
     final out = <({String source, String tag, String reason})>[];
     for (final e in _entries) {
       final list = e.list;
+      // §494 — displayName: у одиночного сервера list.name пуст (§243).
+      final source = e.displayName;
       switch (list) {
         case SubscriptionServers():
           for (final w in list.nodeWarnings.entries) {
             for (final v in w.value) {
               if (v.isCoreRejected) {
-                out.add((source: list.name, tag: w.key, reason: v.reason));
+                out.add((source: source, tag: w.key, reason: v.reason));
               }
             }
           }
@@ -2305,7 +2307,7 @@ class SubscriptionController extends ChangeNotifier {
             for (final v in m.warnings) {
               if (v.isCoreRejected) {
                 out.add((
-                  source: list.name,
+                  source: source,
                   tag: m.node?.tag ?? m.nameHint,
                   reason: v.reason
                 ));
@@ -2316,8 +2318,8 @@ class SubscriptionController extends ChangeNotifier {
           for (final v in list.warnings) {
             if (v.isCoreRejected) {
               out.add((
-                source: list.name,
-                tag: list.nodes.isEmpty ? list.name : list.nodes.first.tag,
+                source: source,
+                tag: list.nodes.isEmpty ? source : list.nodes.first.tag,
                 reason: v.reason
               ));
             }
