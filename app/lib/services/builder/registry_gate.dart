@@ -12,6 +12,7 @@
 /// зависит (24.1.6). Разбор-время ⚠ — волна W2.
 library;
 
+import '../../models/node_warning.dart';
 import '../../models/singbox_entry.dart';
 import '../contract/body_sanitizer.dart';
 import '../contract/registry.dart';
@@ -38,7 +39,7 @@ final class RegistryGateReport {
 /// `max_when.except_sources` оставляет им значение, которое на прочих входах
 /// заменило бы потолком. Без этой метки гард переписал бы `mtu: 1420`
 /// AmneziaWG-узлу на сборке — то есть ровно то, чего §455 не позволяет:
-/// узел `origin.kind: json` идёт в ядро дословно. Пустое множество —
+/// узел sing-box-источника идёт в ядро дословно. Пустое множество —
 /// поведение как прежде.
 ///
 /// Реестр не загружен — no-op: приложение работает как до §460.
@@ -47,16 +48,43 @@ RegistryGateReport applyRegistryGate(
   required String coreVersion,
   Set<SingboxEntry> verbatim = const {},
 }) {
-  if (!ContractRegistry.I.isLoaded) {
-    return const RegistryGateReport([], []);
-  }
-
   final warnings = <String>[];
   final dropped = <SingboxEntry>[];
 
+  // Д-1 (эмулятор 19.09.2026) — СТРАХОВКА ТИПА, до и помимо реестра.
+  // Запись без строкового непустого `type` — не тело sing-box, и в
+  // `outbounds[]`/`endpoints[]` ей места нет. Реестр её молча пропускал
+  // (`type is! String → continue`), и такое тело уезжало в конфиг как есть:
+  // ядро отвечает `unknown outbound type:` и отказывает ВСЕМУ конфигу, а
+  // узел при этом не назван — автоснятие 478 выключить его не может, и без
+  // связи остаётся всё. Дешевле потерять один узел, чем весь конфиг.
+  //
+  // Код объявленный: `field_missing` с `field: type` — «в записи нет поля,
+  // хотя протокол его требует; узел отброшен, ядро такую запись отвергает и
+  // не запустит весь конфиг». Ровно этот случай, своей строки не нужно.
+  //
+  // Стоит ДО гейта загрузки реестра: страховка обязана работать и без него —
+  // текста у кода тогда нет, и строка остаётся самим кодом (`registryTitle`).
   for (final entry in entries) {
     final type = entry.map['type'];
-    if (type is! String) continue;
+    if (type is String && type.isNotEmpty) continue;
+    dropped.add(entry);
+    const w = RegistryWarning(
+      code: 'field_missing',
+      path: 'type',
+      params: {'field': 'type'},
+    );
+    final line = '${entry.tag}: ${w.message()} [type]';
+    if (!warnings.contains(line)) warnings.add(line);
+  }
+
+  if (!ContractRegistry.I.isLoaded) {
+    return RegistryGateReport(warnings, dropped);
+  }
+
+  for (final entry in entries) {
+    final type = entry.map['type'];
+    if (type is! String || type.isEmpty) continue;
     final tag = entry.tag;
 
     final res = RegistrySanitizer.sanitize(

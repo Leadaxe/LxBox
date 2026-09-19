@@ -157,12 +157,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             ? getLocalText.s("No address")
             : '${node.server}:${node.port}';
     // §455 — источник как есть; предпросмотр JSON — то, что уйдёт в ядро:
-    // у JSON-источника это его объект (дословно), иначе emit() модели.
+    // у sing-box-источника это его объект (дословно), иначе emit() модели.
+    // Д-1 — гейт тот же, что у сборки (`verbatimBodyOf`): у Xray-объекта
+    // вкладка обязана показывать sing-box-тело модели, ведь именно оно и
+    // уйдёт в ядро.
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _originKind = originKindOf(raw);
     _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
-        _originKind == 'json' && node.rawSource.trimLeft().startsWith('{')
+        sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
             ? jsonDecode(node.rawSource)
             : node.emit(TemplateVars.empty).map);
     _tagCtrl.text = _originalTag;

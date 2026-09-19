@@ -19,6 +19,7 @@ library;
 
 import 'dart:convert';
 
+import '../../models/codec/source_record.dart';
 import '../../models/node_spec.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
@@ -131,6 +132,11 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
 /// outbound'а и у голого тела, и у документа) без `detour` (ссылка на чужой
 /// тег ядру неизвестна) под `outbounds` или `endpoints` по типу узла.
 /// `null` — текст не дал узла; об этом скажет контроллер при сохранении.
+///
+/// Д-1 (эмулятор 19.09.2026) — проверяется РОВНО ТО, ЧТО УЙДЁТ В ЯДРО.
+/// Дословно уходит только sing-box-источник (`verbatimBodyOf`); Xray-объект
+/// собирается моделью, и отдать ядру его оригинал значило бы отвергнуть на
+/// Save узел, который в конфиге работает.
 String? checkPayloadFor(String text) {
   final List<NodeSpec> nodes;
   try {
@@ -140,18 +146,25 @@ String? checkPayloadFor(String text) {
   }
   if (nodes.isEmpty) return null;
   final node = nodes.first;
-  final Object? decoded;
-  try {
-    decoded = jsonDecode(node.rawSource);
-  } catch (_) {
-    return null;
-  }
-  if (decoded is! Map) return null;
-  final body = Map<String, dynamic>.from(decoded)..remove('detour');
-  final key = switch (node.emit(TemplateVars.empty)) {
+  final entry = node.emit(TemplateVars.empty);
+  final key = switch (entry) {
     Endpoint() => 'endpoints',
     Outbound() => 'outbounds',
   };
+  Map<String, dynamic> body;
+  if (sourceIsSingbox(text)) {
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(node.rawSource);
+    } catch (_) {
+      return null;
+    }
+    if (decoded is! Map) return null;
+    body = Map<String, dynamic>.from(decoded);
+  } else {
+    body = Map<String, dynamic>.from(entry.map);
+  }
+  body.remove('detour');
   return jsonEncode({
     key: [body],
   });

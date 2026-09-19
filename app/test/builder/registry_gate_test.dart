@@ -273,6 +273,42 @@ void main() {
     }, skip: skip);
   });
 
+  // Д-1 (эмулятор 19.09.2026) — страховка типа. БЕЗ `skip`: она обязана
+  // работать и тогда, когда реестр не синхронизирован, — на том и стоит.
+  group('страховка: запись без type в конфиг не уходит', () {
+    test('тело чужого диалекта снимается с предупреждением на узле', () {
+      // Ровно то, что уезжало в `outbounds[]` до починки: Xray-тело.
+      final bad = Outbound(<String, dynamic>{
+        'tag': 'xray-body',
+        'protocol': 'vless',
+        'settings': {'vnext': []},
+        'streamSettings': {'network': 'tcp'},
+      });
+      final good = Outbound(<String, dynamic>{
+        'type': 'trojan',
+        'tag': 'ok',
+        'server': 'example.com',
+        'server_port': 443,
+        'password': 'p',
+      });
+
+      final report = applyRegistryGate([bad, good], coreVersion: _core);
+
+      expect(report.dropped, contains(bad));
+      expect(report.dropped, isNot(contains(good)));
+      expect(report.warnings.where((w) => w.startsWith('xray-body: ')),
+          hasLength(1));
+    });
+
+    test('пустой и нестроковый type — тоже снимается', () {
+      final empty = Outbound(<String, dynamic>{'type': '', 'tag': 'e'});
+      final num0 = Outbound(<String, dynamic>{'type': 7, 'tag': 'n'});
+      final report =
+          applyRegistryGate([empty, num0], coreVersion: _core);
+      expect(report.dropped, hasLength(2));
+    });
+  });
+
   group('эталоны при загруженном реестре', () {
     for (final name in kStorageFixtures) {
       test('$name: config.json не изменился', () async {

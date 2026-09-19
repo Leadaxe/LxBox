@@ -165,8 +165,13 @@ Map<String, dynamic> _detourPolicyToRecord(DetourPolicy p) => {
 Map<String, dynamic> _originToRecord(String raw) =>
     {'kind': originKindOf(raw), 'raw': raw};
 
-/// §455 — вид источника по тексту. Единственное, от чего зависит режим
-/// сборки узла: `json` уходит в ядро дословно (`verbatim_body.dart`).
+/// §455 — ВИД ЗАПИСИ для хранения: `uri` | `wg_ini` | `json`. Контракт
+/// знает ровно эти три, и `json` здесь значит «источник — JSON-объект», без
+/// различия диалекта: `raw` хранится байт в байт, и перечитывается он тоже
+/// из `raw`.
+///
+/// Режим СБОРКИ по этому значению НЕ решается: дословность включает вид
+/// источника движка ([sourceIsSingbox]) — см. `verbatim_body.dart`.
 String originKindOf(String raw) {
   final t = raw.trim();
   if (t.startsWith('{')) {
@@ -177,6 +182,42 @@ String originKindOf(String raw) {
     }
   }
   return decode(t) is IniConfig ? 'wg_ini' : 'uri';
+}
+
+/// §480/§482 — ВИД ИСТОЧНИКА текста именем реестра (`source_kind`):
+/// `singbox_outbound`, `xray_config`, `uri_lines` и прочие. Пусто — текст ни
+/// на что не похож (пустой, битый JSON).
+///
+/// Опознание одно на всё приложение — движок (`engine/document.dart`): свой
+/// разбор формы здесь завёл бы второй сниффер, и разъехался бы он молча.
+String sourceKindOf(String raw) {
+  if (raw.trim().isEmpty) return '';
+  final decoded = decode(raw);
+  return switch (decoded) {
+    JsonConfig(:final source) => source.kind,
+    IniConfig() => 'wireguard_conf',
+    AmneziaConfig() => 'amnezia_link',
+    UriLines() => 'uri_lines',
+    DecodeFailure() => '',
+  };
+}
+
+/// §455 + Д-1 (эмулятор 19.09.2026) — ТЕЛО ЭТОГО ТЕКСТА НАПИСАНО В ФОРМЕ
+/// ЯДРА.
+///
+/// Дословность §455 держится ровно на этом: «человек написал sing-box-объект
+/// сам». Xray-объект — чужой диалект (`protocol`, `settings.vnext`,
+/// `streamSettings`), и положить его в `outbounds[]` как есть значит уронить
+/// ВЕСЬ конфиг: ядро отвечает `unknown outbound type:` и узел даже не назван,
+/// так что выключить его нечем. Такой источник идёт через модель (маппер →
+/// санитайзер), как и Xray-массив `outbounds[]`.
+///
+/// Судит по СОДЕРЖИМОМУ текста, а не по записи: уже сохранённым записям с
+/// `origin.kind: json` и Xray-телом миграции не нужно — они лечатся на первой
+/// же загрузке.
+bool sourceIsSingbox(String raw) {
+  final decoded = decode(raw);
+  return decoded is JsonConfig && decoded.source.mapper == 'singbox';
 }
 
 String _firstNodeTag(List<NodeSpec> nodes, String raw) {
