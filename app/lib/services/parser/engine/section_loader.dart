@@ -269,10 +269,18 @@ final class MapperSections {
     final proto = ContractRegistry.I.rawProtocol(singboxType);
     if (proto == null) return null;
     final mappers = (proto['mappers'] as Map?)?.cast<String, dynamic>();
+    // Секция под FROZEN-ключом `mappers.<вид>` исполняема ПО ОПРЕДЕЛЕНИЮ —
+    // проверять её записи не нужно и НЕЛЬЗЯ: у секции вида `singbox`
+    // пустая `params` это нормальное конечное состояние (норма §8a, вход
+    // уже в каноне ядра), а вся её работа — `detect`, `body_source` и
+    // `unknown_key`. Требуй мы записи, такая секция считалась бы
+    // отсутствующей, и элемент не достался бы никому.
     final section = (mappers?[kind] as Map?)?.cast<String, dynamic>();
-    if (section != null && _isExecutable(section)) return section;
+    if (section != null) return section;
     // Описательная секция `uri` реестра исполняемой НЕ считается: у её
-    // записей нет `source`, то есть нет способа получить значение.
+    // записей нет `source`, то есть нет способа получить значение. Здесь
+    // проверка обязательна — ключ `<вид>` в корне протокола не FROZEN, и под
+    // ним лежит проза для генератора документации.
     final legacy = (proto[kind] as Map?)?.cast<String, dynamic>();
     if (legacy != null && _isExecutable(legacy)) return legacy;
     return null;

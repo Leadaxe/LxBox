@@ -58,6 +58,23 @@ const kDraftFiles = <String>[
   'xray/shadowsocks',
   'xray/socks',
   'xray/hysteria2',
+  // §480 W5 — вид источника `singbox`. Секции ПОРОЖДЕНЫ МЕХАНИЧЕСКИ по
+  // норме MAPPER_ENGINE §8a: пустая `params` там нормальное конечное
+  // состояние, потому что вход уже в каноне ядра. Две секции (`trojan`,
+  // `vless`) приехали контрактом 1.1.15 и берутся из реестра.
+  'singbox/anytls',
+  'singbox/http',
+  'singbox/hysteria',
+  'singbox/hysteria2',
+  'singbox/masque',
+  'singbox/naive',
+  'singbox/shadowsocks',
+  'singbox/socks',
+  'singbox/ssh',
+  'singbox/tailscale',
+  'singbox/tuic',
+  'singbox/vmess',
+  'singbox/wireguard',
   // §480 W6 — реестр ВИДОВ ДОКУМЕНТА. Лежит в корне черновика: он не
   // принадлежит ни одному виду источника, он их выбирает.
   'documents',
