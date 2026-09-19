@@ -457,7 +457,40 @@
         "param_order": "alphabetical",
         "omit_default": [
           "server_port"
-        ]
+        ],
+        "form_from": {
+          "any_set": {
+            "awg": [
+              "jc",
+              "jmin",
+              "jmax",
+              "s1",
+              "s2",
+              "s3",
+              "s4",
+              "h1",
+              "h2",
+              "h3",
+              "h4",
+              "i1",
+              "i2",
+              "i3",
+              "i4",
+              "i5",
+              "header_protection_key",
+              "content_padding_addition",
+              "rekey_after_time",
+              "rekey_timeout",
+              "reject_after_time",
+              "keepalive_timeout",
+              "max_handshake_attempts",
+              "random_trailers",
+              "disable_cookies"
+            ],
+            "*": "wireguard"
+          }
+        },
+        "$impl": "§480 W7 — ОБРАЩЕНИЕ kind_when: узел с AWG-полями обязан уехать написанием awg://, иначе род, который вход ОБЪЯВИЛ схемой, из отданной нами ссылки уже не прочитается. Набор путей — тот же, что у kind_when.awg, только в написании ТЕЛА (kind_when перечисляет источники, эмит — пути). ОГРАНИЧЕНИЕ, переданное владельцу: узел, у которого вход просил AWG, но НИ ОДНО поле не уцелело (кейсы awg_bad_numeric_skipped, awg_jc_invalid_dropped — в теле только mtu 1280), отсюда неотличим от обычного WireGuard: рода нет ни в каноническом теле, ни в модели NodeSpec, он восстанавливается перепарсом rawSource. Сегодня это безвредно — потолок 1280 уже применён и уезжает в ссылку числом (mtu=1280), identity и тег не двигаются (проверено кругом). Станет вредно, когда правило реестра перейдёт с any_set по телу на when.source_kind: тогда роду нужно место в модели (поле рода у WireguardSpec либо признак в extensionFields), и это решение по МОДЕЛИ, а не по грамматике эмита."
       },
       "kind_when": {
         "awg": {

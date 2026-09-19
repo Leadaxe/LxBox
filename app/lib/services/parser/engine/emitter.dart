@@ -58,6 +58,15 @@ abstract final class EmitNames {
   /// `{"<путь тела>": {"<значение>": "<форма>", "*": "<форма>"}}`.
   static const formFrom = 'form_from';
 
+  /// Ключ-ПРЕДИКАТ внутри [formFrom]: «хоть один из путей заполнен».
+  /// `{"any_set": {"<форма>": ["<путь>", …], "*": "<форма>"}}`.
+  ///
+  /// Зачем: род узла у части схем объявлен НАБОРОМ полей, а не одним
+  /// значением одного пути, и обычная ветка `form_from` его не выражает.
+  /// Имя взято у `kind_when` разбора — тот же предикат в ту же сторону,
+  /// второго словаря не заводится.
+  static const formFromAnySet = 'any_set';
+
   /// Порядок параметров в query. Сегодня единственное значение —
   /// [paramOrderAlphabetical].
   static const paramOrder = 'param_order';
@@ -242,6 +251,12 @@ final class _Emit {
     final scheme = _scheme();
     final userinfo = _userinfo();
 
+    // Пути, которые НЕСЁТ САМО НАПИСАНИЕ СХЕМЫ, засчитываются ДО обхода
+    // записей: иначе запись, ведущая в такой путь, уехала бы параметром —
+    // а параметр этот дублирует то, что уже сказано схемой. У схем, где TLS
+    // включён самим написанием, так появлялся лишний `security=tls`.
+    _consumeSchemeSets(scheme);
+
     // Записи обходятся в порядке объявления. Порядок ВЫХОДА задаёт
     // `param_order`, но порядок ОБХОДА важен для `consumed`: запись,
     // забравшая путь, снимает его у следующей (иначе `sni` уехало бы и
@@ -250,9 +265,8 @@ final class _Emit {
       _emitParam(p);
     }
 
-    // Пути, поставленные `scheme_sets`/`defaults`, в query не едут: их несёт
-    // написание схемы либо умолчание, и запись их дублировала бы.
-    _consumeSchemeSets(scheme);
+    // Умолчания СЕКЦИИ — после записей: они заполняют оставшееся, а не
+    // конкурируют (норма §10.1, тот же порядок, что у разбора).
     _consumeDefaults();
 
     _collectLost();
@@ -302,12 +316,33 @@ final class _Emit {
   /// наличие TLS, вид транспорта — всё это бывает зашито в написание),
   /// обратный ход обязан вернуть то же написание, иначе круг терял бы поле,
   /// которого в query нет вовсе.
+  ///
+  /// Ключ записи — ПУТЬ ТЕЛА, и его значение выбирает ветку. Ключ
+  /// [EmitNames.formFromAnySet] — предикат «хоть один из путей заполнен», тем
+  /// же именем, каким его пишет `kind_when` разбора: род узла у части схем
+  /// объявлен НАБОРОМ полей, а не одним, и одного пути тут не хватает.
   String _scheme() {
     final ff = emit[EmitNames.formFrom];
     if (ff is Map) {
       for (final e in ff.entries) {
-        final actual = _read(e.key as String);
+        final key0 = '${e.key}';
         final branches = (e.value as Map).cast<String, dynamic>();
+
+        if (key0 == EmitNames.formFromAnySet) {
+          // `{any_set: {"<схема>": [<пути>], "*": "<схема>"}}` — первая ветка,
+          // чей набор тело подтвердило хоть одним путём.
+          for (final b in branches.entries) {
+            if (b.key == '*') continue;
+            final paths = b.value;
+            if (paths is! List) continue;
+            if (paths.any((p) => _read('$p') != null)) return b.key;
+          }
+          final star = branches['*'];
+          if (star is String) return star;
+          continue;
+        }
+
+        final actual = _read(key0);
         final key = _fold(actual);
         for (final b in branches.entries) {
           if (b.key == '*') continue;
@@ -325,9 +360,12 @@ final class _Emit {
   }
 
   /// Пути, которые уже назвало написание схемы: в query они не повторяются.
+  ///
+  /// Ключ `*` — «при любом написании»: у схемы, где свойство безусловно
+  /// (шифрование, которое протокол несёт сам), ветка одна и общая.
   void _consumeSchemeSets(String scheme) {
     for (final e in section.schemeSets.entries) {
-      if (_fold(e.key) != _fold(scheme)) continue;
+      if (e.key != '*' && _fold(e.key) != _fold(scheme)) continue;
       final sets = e.value;
       if (sets is! Map) continue;
       for (final s in sets.entries) {
@@ -402,10 +440,15 @@ final class _Emit {
   /// и без двоеточия узел вернулся бы с именем в слоте пароля.
   String _userinfo() {
     final u = section.userinfo;
-    if (u == null) return '';
+    final paths = u?.into ?? const <String>[];
 
-    final paths = u.into;
-    if (paths.isEmpty) return '';
+    // Блок `userinfo` секции пуст (или его нет), но userinfo у схемы ЕСТЬ:
+    // его называет своим первым источником обычная запись таблицы. Так
+    // объявлен ключ у туннельных схем — `source: ["userinfo", "query.<имя>"]`,
+    // где userinfo КАНОН, а параметр запасное написание входа. Не напиши мы
+    // канон, ключ уезжал бы параметром: ссылка осталась бы читаемой, но
+    // сменила бы вид у всех живых узлов схемы.
+    if (paths.isEmpty || u == null) return _userinfoFromParam();
 
     final values = [for (final p in paths) _str(_read(p)) ?? ''];
     for (final p in paths) {
@@ -462,6 +505,27 @@ final class _Emit {
       _encodeParam(first),
       ...rest.map(_encodeParam),
     ].join(sep);
+  }
+
+  /// userinfo, названный ПЕРВЫМ ИСТОЧНИКОМ обычной записи, когда блок
+  /// `userinfo` у секции пуст.
+  ///
+  /// Первым — потому что порядок источников и есть объявление канона: запись
+  /// вида `["userinfo", "query.<имя>"]` говорит «канон в userinfo, параметр
+  /// читается как запасное написание». Записей-кандидатов берётся первая по
+  /// объявлению, чьё значение тело несёт.
+  String _userinfoFromParam() {
+    for (final p in section.params.values) {
+      if (p.isService || _roundTripOff(p)) continue;
+      final path = p.mapsTo;
+      if (path == null || p.source.isEmpty) continue;
+      if (p.source.first != 'userinfo') continue;
+      final v = _str(_read(path));
+      if (v == null || v.isEmpty) continue;
+      _consumed.add(path);
+      return _encodeParam(v);
+    }
+    return '';
   }
 
   /// Форма userinfo на выходе. Короткое написание — строка, полное — объект
@@ -592,12 +656,14 @@ final class _Emit {
     if (value == null) return;
     _consumed.add(path);
 
-    // **`value_map⁻¹`.** Инъективность проверена при загрузке секции
-    // ([invertValueMap]); неинъективная таблица обратного хода не даёт, и
-    // значение уезжает как есть — так у `fp: {random: null}` ветка `null`
-    // просто не имеет обратного написания.
+    // **`value_map⁻¹`.** Написание берётся обращением таблицы — но ТОЛЬКО
+    // если значение не является написанием само по себе.
+    //
+    // Почему проверка обязательна — см. [_isUntranslatedCanon]: у части
+    // записей таблица переводит алиас в канон и тождественной пары не
+    // содержит, и обращение вслепую подменяло бы канон именем алиаса.
     final inv = invertValueMap(p.valueMap);
-    if (inv != null) {
+    if (inv != null && !_isUntranslatedCanon(p, value)) {
       final hit = inv[_fold(value)];
       if (hit != null) value = hit;
     }
@@ -712,6 +778,9 @@ final class _Emit {
   String? _valueFromSets(MapperParam p) {
     String? best;
     var bestScore = -1;
+    // Вес ветки УМОЛЧАНИЯ, если тело её подтвердило: `-1` — не подтвердило.
+    var defaultScore = -1;
+
     for (final e in p.sets.entries) {
       final branch = e.value;
       if (branch is! Map || branch.isEmpty) continue;
@@ -730,20 +799,17 @@ final class _Emit {
         if (s.value != null) score++;
       }
       if (!all) continue;
+
       // Пустой ключ описывает УМОЛЧАНИЕ, а не значение: обратного хода у него
       // нет — параметра в ссылке не будет. Но пути ветка ОБЪЯСНЯЕТ, и
       // засчитать их обязана, иначе они попали бы в «потеряно молча», хотя
       // разбор восстановит их сам, той же веткой умолчания.
       if (e.key.isEmpty) {
         _consumeBranch(branch);
-        // Умолчание СИЛЬНЕЕ ветки-отрицания (см. ниже): когда тело
-        // подтверждает обе, писать параметр не нужно вовсе.
-        if (bestScore <= 0) {
-          bestScore = 0;
-          best = null;
-        }
+        defaultScore = score;
         continue;
       }
+
       // Ветка, которая ТОЛЬКО СНИМАЕТ пути (`none` → `tls: null`), веса не
       // набирает: подтверждается она отсутствием, а отсутствие подтверждает
       // и всякая другая ветка, чьих путей в теле нет. Но обратный ход у неё
@@ -759,6 +825,13 @@ final class _Emit {
       best = e.key;
       _consumeBranch(branch);
     }
+
+    // **Умолчание побеждает равную по весу ветку.** Тело, которое одинаково
+    // объясняется и умолчанием, и явным значением, писать явным значением не
+    // нужно: разбор восстановит его сам. Так снимается лишний параметр у
+    // схем, где свойство безусловно (`scheme_sets` уже поставил тот же путь),
+    // и сохраняется он там, где ветка объясняет БОЛЬШЕ умолчания.
+    if (defaultScore >= bestScore) return null;
     return best;
   }
 
@@ -1262,6 +1335,36 @@ final class _Emit {
 
   static String _encodeFragment(String s) =>
       Uri.encodeComponent(s).replaceAll('+', '%20');
+}
+
+/// Значение тела — КАНОН, которого таблица не переводит, и обращать его
+/// нельзя.
+///
+/// Признак узкий и проверяется по самой таблице: значение встречается в ней
+/// СПРАВА (то есть является каноном, в который переводятся алиасы) и при этом
+/// НЕ СТОИТ СЛЕВА ни у одной пары (то есть написания с таким именем таблица не
+/// знает).
+///
+/// Зачем: у части записей таблица переводит алиас в канон и тождественной
+/// пары не содержит — канон стоит справа, слева его нет. Обрати её вслепую, и
+/// канон уехал бы в ссылку под именем алиаса; а когда алиас вдобавок нагружен
+/// своим `sets` (у живой записи так и есть), узел на обратном чтении получил
+/// бы ещё и поле, которого у него не было.
+///
+/// Там, где канон и написание СОВПАДАЮТ (`true` среди `on|true|1`), признак
+/// не срабатывает — значение стоит и слева тоже, — и написание выбирается
+/// обращением, то есть первым объявленным. Это ровно то, что нужно: канон
+/// написания объявлен ПОРЯДКОМ, а не совпадением с именем значения.
+bool _isUntranslatedCanon(MapperParam p, dynamic value) {
+  final v = '$value'.trim().toLowerCase();
+  var isTarget = false;
+  for (final e in p.valueMap.entries) {
+    if (e.key.trim().toLowerCase() == v) return false;
+    if (e.value != null && '${e.value}'.trim().toLowerCase() == v) {
+      isTarget = true;
+    }
+  }
+  return isTarget;
 }
 
 /// **`value_map⁻¹`.**

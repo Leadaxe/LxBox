@@ -317,4 +317,36 @@ void main() {
             _section(const {'params': <String, dynamic>{}}), const {}, ''),
         isNull);
   });
+  group('§480 W7 · form_from any_set (обращение kind_when)', () {
+    const section = {
+      'detect': {
+        'scheme_in': ['plain', 'special']
+      },
+      'emit': {
+        'form': 'url',
+        'form_from': {
+          'any_set': {
+            'special': ['a', 'b'],
+            '*': 'plain',
+          }
+        },
+      },
+      'params': {
+        'server': {'source': 'host', 'maps_to': 'server'},
+        'server_port': {'source': 'port', 'maps_to': 'server_port'},
+        'a': {'source': 'query.a', 'maps_to': 'a'},
+      },
+    };
+
+    test('заполнен хоть один путь набора → написание набора', () {
+      // Род узла объявлен НАБОРОМ полей, а не одним значением одного пути:
+      // обычная ветка form_from его не выразила бы.
+      expect(_emit(section, {'server': 'h', 'server_port': 1, 'a': 'v'}),
+          'special://h:1?a=v');
+    });
+
+    test('ни одного пути набора → ветка «*»', () {
+      expect(_emit(section, {'server': 'h', 'server_port': 1}), 'plain://h:1');
+    });
+  });
 }
