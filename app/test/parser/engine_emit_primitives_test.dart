@@ -349,4 +349,48 @@ void main() {
       expect(_emit(section, {'server': 'h', 'server_port': 1}), 'plain://h:1');
     });
   });
+
+  group('§480 W8 · emit.names', () {
+    Map<String, dynamic> section(Map<String, dynamic> names) => {
+          'emit': {'form': 'url', 'param_order': 'alphabetical', 'names': names},
+          'params': {
+            'server': {'source': 'host', 'maps_to': 'server'},
+            'server_port': {'source': 'port', 'maps_to': 'server_port'},
+            'insecure': {
+              'source': ['query.insecure', 'query.allowInsecure'],
+              'maps_to': 'tls.insecure',
+              'type': 'bool_spelled',
+            },
+          },
+        };
+    const body = {
+      'server': 'h',
+      'server_port': 1,
+      'tls': {'insecure': true},
+    };
+
+    test('написание из source записи — пишется оно', () {
+      // Выбор выходного написания принадлежит СХЕМЕ: `allowInsecure` читают
+      // все Xray-клиенты, `insecure` читают не все.
+      expect(_emit(section({'insecure': 'allowInsecure'}), body),
+          'x://h:1?allowInsecure=1');
+    });
+
+    test('без объявления — канон записи (первое в aliases)', () {
+      expect(_emit(section({}), body), 'x://h:1?insecure=1');
+    });
+
+    test('написание, которого запись НЕ читает, отвергается', () {
+      // Пиши мы имя вне набора — своя же ссылка обратно не разобралась бы.
+      // Эмит молча откатывается к канону, а вслух об этом говорит линтер.
+      expect(_emit(section({'insecure': 'skipVerify'}), body),
+          'x://h:1?insecure=1');
+    });
+
+    test('readableNames — имя, алиасы и query-написания source', () {
+      final p = MapperSection.fromJson('uri', 'x', section({}))
+          .params['insecure']!;
+      expect(readableNames(p), {'insecure', 'allowInsecure'});
+    });
+  });
 }

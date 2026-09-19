@@ -120,6 +120,51 @@
           "when": {
             "transport.type": "xhttp"
           }
+        },
+        "noGRPCHeader": {
+          "source": [
+            "extra.noGRPCHeader",
+            "extra.no_grpc_header",
+            "query.noGRPCHeader",
+            "query.no_grpc_header"
+          ],
+          "maps_to": "transport.no_grpc_header",
+          "type": "bool_spelled",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "emit_as": "raw",
+          "_why_emit_as": "§480 W8 — `emit_as: raw`: булев уезжает в ссылку СЛОВОМ `true`, а не `1`. Так писал рукописный эмит, так пишет Xray, и так его читают чужие клиенты. Умолчание движка (`1`) для булевых верно у флагов вида insecure, но не здесь: написание булева — свойство параметра, а не его типа. Запись скопирована из реестра ЦЕЛИКОМ: оверлей замещает запись, а не сливает её поля, и оставь мы один `emit_as`, запись потеряла бы source и умерла."
+        },
+        "noSSEHeader": {
+          "source": [
+            "extra.noSSEHeader",
+            "extra.no_sse_header",
+            "query.noSSEHeader",
+            "query.no_sse_header"
+          ],
+          "maps_to": "transport.no_sse_header",
+          "type": "bool_spelled",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "emit_as": "raw",
+          "_why_emit_as": "§480 W8 — `emit_as: raw`: булев уезжает в ссылку СЛОВОМ `true`, а не `1`. Так писал рукописный эмит, так пишет Xray, и так его читают чужие клиенты. Умолчание движка (`1`) для булевых верно у флагов вида insecure, но не здесь: написание булева — свойство параметра, а не его типа. Запись скопирована из реестра ЦЕЛИКОМ: оверлей замещает запись, а не сливает её поля, и оставь мы один `emit_as`, запись потеряла бы source и умерла."
+        },
+        "xPaddingObfsMode": {
+          "source": [
+            "extra.xPaddingObfsMode",
+            "extra.x_padding_obfs_mode",
+            "query.xPaddingObfsMode",
+            "query.x_padding_obfs_mode"
+          ],
+          "maps_to": "transport.x_padding_obfs_mode",
+          "type": "bool_spelled",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "emit_as": "raw",
+          "_why_emit_as": "§480 W8 — `emit_as: raw`: булев уезжает в ссылку СЛОВОМ `true`, а не `1`. Так писал рукописный эмит, так пишет Xray, и так его читают чужие клиенты. Умолчание движка (`1`) для булевых верно у флагов вида insecure, но не здесь: написание булева — свойство параметра, а не его типа. Запись скопирована из реестра ЦЕЛИКОМ: оверлей замещает запись, а не сливает её поля, и оставь мы один `emit_as`, запись потеряла бы source и умерла."
         }
       }
     },

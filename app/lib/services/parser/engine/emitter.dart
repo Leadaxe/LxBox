@@ -137,14 +137,22 @@ abstract final class EmitNames {
   /// Значение [emitAs]: как есть, строкой.
   static const emitAsRaw = 'raw';
 
-  // Имени «написание на выходе» здесь НЕТ, и это решение, а не пропуск.
-  //
-  // НОРМА (сведение 19.09.2026, GRAMMAR_SYNC §5.3): написание имени
-  // параметра на выходе — ПЕРВОЕ имя в `aliases` (имя записи), БЕЗ
-  // исключений. Схема, у которой выход расходится с каноном, чинится
-  // перестановкой `aliases` и строкой в `DELTAS.md`, а не вторым именем:
-  // отдельный атрибут написания позволял бы входу и выходу разъехаться
-  // молча, и «читаем одно, пишем другое» не оставляло бы следа в дельтах.
+  /// Написание имени параметра НА ВЫХОДЕ, объявленное СХЕМОЙ:
+  /// `"names": {"<имя записи>": "<написание в ссылке>"}` внутри `emit`.
+  ///
+  /// Умолчание остаётся прежним — ПЕРВОЕ имя в `aliases` (имя записи). Карта
+  /// её лишь перекрывает, и только там, где схема объявила это сама.
+  ///
+  /// Зачем именно схемой, а не перестановкой `aliases` общего блока: де-факто
+  /// написание — свойство СХЕМЫ, а не поля. Один и тот же признак «не
+  /// проверять сертификат» читается всеми написаниями сразу, но пишется у
+  /// каждой схемы своим: тем, которое читают её клиенты. Перестановка
+  /// `aliases` в общем блоке навязала бы одно написание всем схемам разом.
+  ///
+  /// Выбор ограничен написаниями САМОЙ записи (имя либо алиас) — это судит
+  /// линтер секций: иначе вход и выход разъехались бы молча, а «пишем то,
+  /// чего не читаем» и есть ссылка, которую сами не разберём.
+  static const names = 'names';
 
   /// Порт, который в ссылке ОПУСКАЕТСЯ, будучи равным этому значению.
   ///
@@ -175,6 +183,16 @@ abstract final class EmitNames {
   /// Ключ паддинга внутри объектного написания [userinfo].
   static const userinfoPadding = 'padding';
 
+  /// Ключ внутри объектного написания [userinfo]: писать разделитель `@`
+  /// даже у ПУСТОГО userinfo.
+  ///
+  /// Зачем: у схемы, где userinfo — единственное поле авторизации, «`@` без
+  /// значения» это часть канонического вида ссылки, которую сегодня пишет
+  /// LxBox и читают чужие клиенты. Вывести флаг из разбора нельзя: разбор
+  /// пустой userinfo и отсутствующий userinfo не различает, а тексты ссылок
+  /// различаются побайтово.
+  static const userinfoEmptySeparator = 'empty_separator';
+
   /// Значение формы [userinfo]: percent-кодирование.
   static const userinfoRaw = 'raw';
 
@@ -189,8 +207,14 @@ abstract final class EmitNames {
   /// но сериализация другая: объект, base64.
   static const jsonMap = 'json_map';
 
-  /// Ключи JSON-формы, которые пишутся ВСЕГДА, даже пустыми
-  /// (v2rayN-совместимость: клиенты ждут полный набор).
+  /// Ключи JSON-формы, которые пишутся ВСЕГДА, даже когда тело их не несёт
+  /// (v2rayN-совместимость: клиенты ждут полный набор, и ключа, которого
+  /// нет, часть из них не переживает).
+  ///
+  /// Перечень — значение по умолчанию пустая строка; карта
+  /// `{"<ключ>": "<значение>"}` называет заполнитель явно: `aid` пустой
+  /// строкой чужие клиенты читают хуже, чем нулём, а версия контейнера
+  /// вообще константа.
   static const jsonAlways = 'json_always';
 }
 
@@ -230,6 +254,21 @@ EmitResult? emitViaSection(
 /// форма хранения узла. Лучше отказ, который видно.
 bool sectionEmits(MapperSection section) =>
     section.emit != null && section.params.isNotEmpty;
+
+/// Написания, которыми запись [p] ЧИТАЕТСЯ: имя, алиасы и имена параметров из
+/// её `source`.
+///
+/// Этим набором ограничен выбор [EmitNames.names]: писать можно только то, что
+/// запись же и читает, иначе своя ссылка обратно не разберётся. Набор общий у
+/// эмиттера и линтера секций — одно правило, одно место.
+Set<String> readableNames(MapperParam p) => {
+      ...p.spellings,
+      for (final s in [
+        ...p.source,
+        for (final v in p.sourceByForm.values) ...v,
+      ])
+        if (s.startsWith('query.')) s.substring('query.'.length),
+    };
 
 final class _Emit {
   _Emit(this.section, this.emit, this.body, this.label);
@@ -283,7 +322,9 @@ final class _Emit {
     final portPart = _portPart();
     final qs = _serializeQuery();
     final frag = label.isEmpty ? '' : '#${_encodeFragment(label)}';
-    final ui = userinfo.isEmpty ? '' : '$userinfo@';
+    final ui = userinfo.isEmpty && !_userinfoEmptySeparator()
+        ? ''
+        : '$userinfo@';
 
     return EmitResult(
       uri: '$scheme://$ui$host$portPart'
@@ -555,6 +596,17 @@ final class _Emit {
     return false;
   }
 
+  /// Писать ли `@` у пустого userinfo. Умолчание — НЕТ: разделитель без
+  /// значения пишет только схема, объявившая это сама.
+  bool _userinfoEmptySeparator() {
+    final raw = emit[EmitNames.userinfo];
+    if (raw is Map) {
+      final p = raw[EmitNames.userinfoEmptySeparator];
+      if (p is bool) return p;
+    }
+    return false;
+  }
+
   // ───────────────────────────── записи ─────────────────────────────
 
   /// Обратный ход ОДНОЙ записи таблицы.
@@ -563,8 +615,17 @@ final class _Emit {
     if (p.isService) return;
     // Объявленный отказ от обратного хода.
     if (_roundTripOff(p)) return;
-    // Запись, которая никуда не едет (`maps_to: null`), и обратно не едет.
-    if (p.mapsToPresent && p.mapsTo == null && p.compose == null) return;
+    // Запись, которая никуда не едет (`maps_to: null`), и обратно не едет —
+    // ЕСЛИ она вообще ничего не объясняет. Запись-СЕЛЕКТОР с явным
+    // `maps_to: null` (так написан отказ от общей записи блока) остаётся
+    // селектором: её обратный ход — ветка `sets`, а не `maps_to`, и вырезать
+    // её здесь значило бы потерять параметр, который тело несёт ветками.
+    if (p.mapsToPresent &&
+        p.mapsTo == null &&
+        p.compose == null &&
+        p.sets.isEmpty) {
+      return;
+    }
 
     // **Запись читает НЕ query.** Её значение несёт сама ссылка — authority
     // (`host`, `port`), userinfo, фрагмент, — и повторять его параметром
@@ -645,7 +706,14 @@ final class _Emit {
 
     // `sets` по ЗНАЧЕНИЮ у записи, у которой `maps_to` ЕСТЬ, но тело его не
     // несёт: значение восстанавливается веткой.
-    if (value == null && p.sets.isNotEmpty) {
+    //
+    // НО не тогда, когда путь ветки принадлежит ДРУГОЙ записи напрямую. У
+    // такого пути есть свой хозяин — запись с `maps_to` в него, — и на
+    // ЧТЕНИИ он же и побеждает (priority). Обратный ход обязан повторить тот
+    // же выбор, иначе составное имя ветки («флоу с суффиксом») уезжало бы
+    // вместо прямого параметра, и чужой клиент читал бы поле, которого автор
+    // не писал.
+    if (value == null && p.sets.isNotEmpty && !_setsOwnedByOthers(p)) {
       final back = _valueFromSets(p);
       if (back != null) {
         _add(p, back);
@@ -775,6 +843,31 @@ final class _Emit {
   /// - ветки перебираются в порядке объявления, и первая совпавшая
   ///   побеждает — при двух ветках с одинаковыми присваиваниями (`tls` и
   ///   `""` обе дают `tls.enabled: true`) канон объявлен первым.
+  /// Все ли пути, которые ставят ветки [p], принадлежат ДРУГИМ записям
+  /// напрямую (`maps_to` в тот же путь).
+  ///
+  /// Запись, у которой своего значения в теле нет, а все её ветки объясняются
+  /// чужими записями, обратного хода не имеет: пусть пишет хозяин пути.
+  bool _setsOwnedByOthers(MapperParam p) {
+    final targets = <String>{};
+    for (final branch in p.sets.values) {
+      if (branch is! Map) continue;
+      for (final k in branch.keys) {
+        final path = '$k';
+        if (path.startsWith(DraftNames.serviceParamPrefix)) continue;
+        if (_read(path) != null) targets.add(path);
+      }
+    }
+    if (targets.isEmpty) return false;
+    final owned = <String>{};
+    for (final o in section.params.values) {
+      if (identical(o, p) || o.isService || _roundTripOff(o)) continue;
+      final m = o.mapsTo;
+      if (m != null && targets.contains(m)) owned.add(m);
+    }
+    return owned.length == targets.length;
+  }
+
   String? _valueFromSets(MapperParam p) {
     String? best;
     var bestScore = -1;
@@ -831,7 +924,14 @@ final class _Emit {
     // нужно: разбор восстановит его сам. Так снимается лишний параметр у
     // схем, где свойство безусловно (`scheme_sets` уже поставил тот же путь),
     // и сохраняется он там, где ветка объясняет БОЛЬШЕ умолчания.
-    if (defaultScore >= bestScore) return null;
+    //
+    // ИСКЛЮЧЕНИЕ — `emit_when: always`. «Разбор восстановит сам» верно для
+    // НАШЕГО разбора; у чужого клиента умолчание бывает другим, и тогда
+    // опущенный параметр меняет СМЫСЛ ссылки, а не только её вид: селектор
+    // шифрования, чьё умолчание у соседа «шифрования нет», превращает наш
+    // узел в открытое соединение. Схема, объявившая `always`, пишет ветку
+    // даже равную умолчанию.
+    if (defaultScore >= bestScore && !_alwaysEmitted(p)) return null;
     return best;
   }
 
@@ -1006,6 +1106,17 @@ final class _Emit {
       case EmitNames.emitAsJson:
         return jsonEncode(value);
     }
+
+    // `emit_as: raw`, объявленный ЯВНО, пишет значение своим написанием:
+    // булев уезжает словом `true`, а не `1`. Два написания булева — две
+    // разные ссылки у живых панелей, и выбор между ними принадлежит записи, а
+    // не типу значения. Проверка идёт ЗДЕСЬ, а не веткой switch: `raw` это
+    // ещё и УМОЛЧАНИЕ вывода (`_emitAs`), и веткой она перехватывала бы
+    // каждую необъявленную запись разом.
+    if (value is bool &&
+        _paramEmitAttr(p, EmitNames.emitAs) == EmitNames.emitAsRaw) {
+      return value ? 'true' : null;
+    }
     if (value is bool) return value ? '1' : null;
     if (value is List) {
       if (value.isEmpty) return null;
@@ -1030,14 +1141,18 @@ final class _Emit {
   /// значило бы править модель на каждом переименовании.
   dynamic _paramEmitAttr(MapperParam p, String name) => p.raw[name];
 
-  /// **Каноническое имя параметра в ссылке** — ПЕРВОЕ в `aliases`, то есть имя
-  /// записи (§0.6), БЕЗ ИСКЛЮЧЕНИЙ.
+  /// **Имя параметра в ссылке.** Умолчание — ПЕРВОЕ в `aliases`, то есть имя
+  /// записи (§0.6); схема перекрывает его картой [EmitNames.names].
   ///
-  /// Второго написания «для выхода» здесь нет и не будет (GRAMMAR_SYNC §5.3):
-  /// оно позволяло бы входу и выходу разъехаться молча. Схема, которая пишет
-  /// не канон, чинится ПЕРЕСТАНОВКОЙ `aliases` в секции и строкой в
-  /// `DELTAS.md` — тогда расхождение видно, а не спрятано в коде эмита.
-  String _nameOf(MapperParam p) => p.spellings.first;
+  /// Перекрытие берётся только из написаний САМОЙ записи: то, чего запись не
+  /// читает, писать нельзя — иначе своя же ссылка обратно не разберётся.
+  /// Написание вне набора линтер секций называет ошибкой, а эмит молча
+  /// откатывается к канону.
+  String _nameOf(MapperParam p) {
+    final want = (emit[EmitNames.names] as Map?)?[p.name];
+    if (want is String && readableNames(p).contains(want)) return want;
+    return p.spellings.first;
+  }
 
   void _add(MapperParam p, String value) {
     final name = _nameOf(p);
@@ -1056,17 +1171,25 @@ final class _Emit {
   /// есть значение по умолчанию.
   ///
   /// `emit_when: always` правило снимает целиком.
+  /// Объявлено ли у записи «писать всегда» — своим атрибутом либо
+  /// `emit.emit_when` секции. Имя в карте секции — ВЫХОДНОЕ (`_nameOf`): она
+  /// говорит о том, что видно в ссылке.
+  bool _alwaysEmitted(MapperParam p) {
+    if (_paramEmitAttr(p, EmitNames.emitWhen) == EmitNames.emitWhenAlways) {
+      return true;
+    }
+    final byName = (emit[EmitNames.emitWhen] as Map?)?[_nameOf(p)];
+    return byName == EmitNames.emitWhenAlways;
+  }
+
   bool _omitted(MapperParam p, String name, String value) {
     // Правило У САМОЙ ЗАПИСИ сильнее правила секции: секция говорит за все
     // записи разом, запись — за себя, и конкретное побеждает.
-    final ownWhen = _paramEmitAttr(p, EmitNames.emitWhen);
-    if (ownWhen == EmitNames.emitWhenAlways) return false;
+    if (_alwaysEmitted(p)) return false;
     final ownOmit = _paramEmitAttr(p, EmitNames.omitDefault);
     if (ownOmit == false) return false;
     if (ownOmit == true) return _isDefaultValue(p, value);
 
-    final always = (emit[EmitNames.emitWhen] as Map?)?[name];
-    if (always == EmitNames.emitWhenAlways) return false;
     final omit = emit[EmitNames.omitDefault];
     if (omit is! List || !omit.map((e) => '$e').contains(name)) return false;
     return _isDefaultValue(p, value);
@@ -1140,14 +1263,12 @@ final class _Emit {
   /// разные утверждения.
   String _emitJson(String scheme) {
     final map = <String, dynamic>{};
-    final always = ((emit[EmitNames.jsonAlways] as List?) ?? const [])
-        .map((e) => '$e')
-        .toSet();
+    final always = _jsonAlways();
 
     for (final e in _jsonMap().entries) {
       final v = _read(e.value);
       if (v == null) {
-        if (always.contains(e.key)) map[e.key] = '';
+        if (always.containsKey(e.key)) map[e.key] = always[e.key]!;
         continue;
       }
       _consumed.add(e.value);
@@ -1174,13 +1295,51 @@ final class _Emit {
     final labelKey = _labelJsonKey();
     if (labelKey != null && label.isNotEmpty) map[labelKey] = label;
 
-    for (final k in always) {
-      map.putIfAbsent(k, () => '');
+    for (final e in always.entries) {
+      map.putIfAbsent(e.key, () => e.value);
     }
 
-    final bytes = utf8.encode(jsonEncode(map));
+    final bytes = utf8.encode(jsonEncode(_orderedJson(map)));
     final encoded = base64.encode(bytes);
     return '$scheme://${_userinfoPadding() ? encoded : encoded.replaceAll('=', '')}';
+  }
+
+  /// `json_always` в обоих написаниях: перечень (заполнитель — пустая строка)
+  /// либо карта «ключ → заполнитель».
+  Map<String, String> _jsonAlways() {
+    final raw = emit[EmitNames.jsonAlways];
+    if (raw is Map) {
+      return {for (final e in raw.entries) '${e.key}': '${e.value}'};
+    }
+    if (raw is List) return {for (final k in raw) '$k': ''};
+    return const {};
+  }
+
+  /// Порядок ключей контейнера — ТЕМ ЖЕ `param_order`, что и порядок query:
+  /// правило одно, форм две. Перечень задаёт порядок явно, `alphabetical`
+  /// сортирует, необъявленное — оставляет порядок сборки.
+  ///
+  /// Порядок здесь НЕ косметика: часть клиентов читает v2rayN-контейнер
+  /// позиционно, и ключ, приехавший не на своём месте, они теряют.
+  /// Не перечисленные ключи уезжают в хвост, сохраняя порядок сборки, —
+  /// новое поле не переставляет старые.
+  Map<String, dynamic> _orderedJson(Map<String, dynamic> map) {
+    final order = emit[EmitNames.paramOrder];
+    final keys = map.keys.toList();
+    if (order == EmitNames.paramOrderAlphabetical) {
+      keys.sort();
+    } else if (order is List) {
+      final idx = {for (var i = 0; i < order.length; i++) '${order[i]}': i};
+      final at = {for (var i = 0; i < keys.length; i++) keys[i]: i};
+      keys.sort((a, b) {
+        final ia = idx[a] ?? (1 << 20) + at[a]!;
+        final ib = idx[b] ?? (1 << 20) + at[b]!;
+        return ia.compareTo(ib);
+      });
+    } else {
+      return map;
+    }
+    return {for (final k in keys) k: map[k]};
   }
 
   /// Ключ контейнера, в который уезжает МЕТКА, по `label.source` текущей
@@ -1214,7 +1373,7 @@ final class _Emit {
       if (s.startsWith('json.')) return s.substring('json.'.length);
       if (s.startsWith('query.')) {
         final name = s.substring('query.'.length);
-        return name == p.name ? p.spellings.first : name;
+        return name == p.name ? _nameOf(p) : name;
       }
     }
     return null;
