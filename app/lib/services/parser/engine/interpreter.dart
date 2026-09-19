@@ -876,18 +876,25 @@ final class _SectionPlan {
   /// тай-брейком (норма §7: порядок объявления нормативен).
   static List<MapperParam> _pass(MapperSection s, {required bool selector}) {
     final all = s.params.values.toList();
-    final index = {for (var i = 0; i < all.length; i++) all[i].name: i};
-    final out = [
-      for (final p in all)
-        if (p.selector == selector) p,
+    // Индекс объявления — по МЕСТУ в таблице, а не по ИМЕНИ записи: имя у
+    // записи короткое (`path`), и одноимённых в секции столько, сколько
+    // транспортов её включили (`ws.path`, `http.path`, `xhttp.path`). Пока
+    // индекс считался по имени, все они получали позицию ПОСЛЕДНЕЙ, и
+    // порядок объявления — нормативный по §7 — рассыпался: запись с
+    // уникальным именем обгоняла ту, от которой зависела. Живой случай:
+    // плоское поле early data исполнялось раньше записи пути, чей хвост
+    // обязан был его перебить, и хвост молча проигрывал (§320).
+    final picked = [
+      for (var i = 0; i < all.length; i++)
+        if (all[i].selector == selector) i,
     ];
-    out.sort((a, b) {
-      final pa = a.priority ?? 0;
-      final pb = b.priority ?? 0;
+    picked.sort((a, b) {
+      final pa = all[a].priority ?? 0;
+      final pb = all[b].priority ?? 0;
       if (pa != pb) return pa.compareTo(pb);
-      return index[a.name]!.compareTo(index[b.name]!);
+      return a.compareTo(b);
     });
-    return out;
+    return [for (final i in picked) all[i]];
   }
 
   static Set<String> _declaredOf(MapperSection s) {
