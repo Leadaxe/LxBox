@@ -240,7 +240,8 @@
         },
         "normalize": {
           "type": "string",
-          "description": "Имя общего нормализатора: base64_std, cidr_prefix, port_range_spec, duration_bare_seconds, range_order{swap,strict}, trim, trim_lower."
+          "description": "Имя общего нормализатора: base64_std, cidr_prefix, port_range_spec, duration_bare_seconds, range_order{swap,strict}, trim, trim_lower.",
+          "_awaitingContractSync": "Сведение №2 (GRAMMAR_SYNC 8602a857 §6.1, PRIMITIVES §0.13), норма §6.0 «маппер переносит, санитайзер судит». ПЕРЕЕЗЖАЮТ в body.fields отдельным контрактом лаунчера: cidr_prefix (адрес → адрес/32) и base64_std (url-алфавит → стандартный) — это перевод НАПИСАНИЯ, тело строится и без них. До прихода контракта остаются здесь: снятие сейчас оставило бы поля без нормализации вовсе, а у base64_std перенос вдобавок двигает identity живых узлов (канонизация ключа меняет тело) и требует строки DELTAS.md. ОТКЛОНЁН в маппере как дубль: range_order — правило значения, живёт в body.fields реестра (wireguard.json max_when/normalize); снятие из секций ведёт агент wireguard/INI. port_range_spec и duration_bare_seconds остаются: первый — структурный отказ (без разбора наполнять server_ports нечем), второй — сведённое имя из сведения №1."
         },
         "decode_extra": { "$ref": "#/definitions/decodeExtra" },
         "default_from": {
