@@ -179,19 +179,30 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme,
   return _runPipeline(uri, mapper, dropped: dropped);
 }
 
-/// §472 шаг 7 — тот же конвейер для входа, у которого СХЕМЫ НЕТ: текст INI
-/// (`wg-quick`).
+/// §472 шаг 7 / §480 — тот же конвейер для входа, у которого СХЕМЫ НЕТ:
+/// текст INI (`wg-quick`).
 ///
 /// Отличие от [parseUriViaPipeline] ровно одно — маршрутизация. У ссылки
-/// маппер выбирается по схеме, а INI-текст схемы не несёт вовсе, и выбирает
-/// его вызывающий (`ini_parser.dart`): формат опознан раньше, ещё на входе
-/// приложения (`parse_all.dart`, `body_decoder.dart`). Всё остальное —
-/// санитайзер, тег, `rawSource`, отметка «разобран конвейером» — общее.
+/// секция выбирается по схеме, а INI-текст схемы не несёт вовсе, и тип тела
+/// называет вызывающий (`ini_parser.dart`): формат опознан раньше, реестром
+/// видов документа. Всё остальное — санитайзер, тег, `rawSource`, отметка
+/// «разобран конвейером» — общее.
+///
+/// §480 — карту строит ДВИЖОК по секции вида источника `conf`; рукописного
+/// маппера INI не осталось, и запасного пути у входа нет (критерий 7 спеки).
 ///
 /// [source] уезжает в `rawSource` узла как есть: у INI это текст файла байт в
-/// байт (§456).
-NodeSpec? parseIniViaPipeline(String source, UriMapper mapper) =>
-    _runPipeline(source, mapper);
+/// байт (§456). [nameHint] — имя, предложенное вызывающим; МЕСТО подсказки в
+/// цепочке метки объявляет секция, а не этот код.
+NodeSpec? parseIniViaPipeline(
+  String source,
+  String singboxType, {
+  String? nameHint,
+}) {
+  final mapping = mapIniViaEngine(source, singboxType, nameHint: nameHint);
+  if (mapping == null) return null;
+  return _runPipeline(source, null, mapping: mapping);
+}
 
 /// §472 шаг 8 — конвейер для Xray-JSON.
 ///

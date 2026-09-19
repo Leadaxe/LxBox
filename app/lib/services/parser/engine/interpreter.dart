@@ -27,6 +27,7 @@ import 'dart:convert' show Base64Codec, jsonDecode;
 
 import '../../../models/node_warning.dart';
 import 'decoders.dart';
+import 'ini_space.dart';
 import 'lexer.dart';
 import 'section.dart';
 import 'source_space.dart';
@@ -105,6 +106,48 @@ EngineResult? runSectionOnJson(
   final space = _selectJsonForm(section, doc);
   if (space == null) return null;
   return _Run(section, space, trace).execute();
+}
+
+/// §480 — исполнить секцию на тексте INI (`.conf`).
+///
+/// Третий вход движка. От [runSection] отличается разбором входа: текст
+/// раскладывается адаптером `ini` по диалекту, объявленному САМОЙ СЕКЦИЕЙ
+/// (`ini_dialect`), а не правилами, зашитыми в движок. Всё остальное —
+/// формы, `detect`, записи, оба прохода, метка — общее.
+///
+/// [nameHint] — имя, которое предлагает ВЫЗЫВАЮЩИЙ (имя файла при импорте,
+/// тег записи хранения, поле Tag редактора). INI тега не несёт, и цепочка
+/// метки у него длиннее, чем у ссылки: источник-комментарий → подсказка →
+/// шаблон фолбэка. Подсказка приходит параметром, а не источником текста,
+/// потому что в самом документе её нет; секция адресует её объявленным
+/// именем `hint` в `label.source`, то есть место подсказки в цепочке остаётся
+/// данными.
+EngineResult? runSectionOnIni(
+  MapperSection section,
+  String text, {
+  String? nameHint,
+  MapperTrace? trace,
+}) {
+  final space = _selectIniForm(section, text);
+  if (space == null) return null;
+  final parsed = parseIniSpace(text, section.iniDialect ?? const IniDialect());
+  return _Run(section, space, trace, nameHint: nameHint)
+      .execute(inputCodes: parsed.codes);
+}
+
+/// Форма для входа INI: `detect` формы судится предикатами `ini` над УЖЕ
+/// разобранным пространством — язык предикатов один на оба уровня (§2 НОРМЫ).
+SourceSpace? _selectIniForm(MapperSection section, String text) {
+  final dialect = section.iniDialect ?? const IniDialect();
+  final parsed = parseIniSpace(text, dialect);
+  final forms = section.forms.isEmpty
+      ? const [MapperForm(id: 'ini', space: 'ini')]
+      : section.forms;
+  for (final form in forms) {
+    if (!detectMatchesIni(form.detect, parsed.space)) continue;
+    return SourceSpace(formId: form.id, ini: parsed.space);
+  }
+  return null;
 }
 
 /// Выбрать форму (P1) и построить пространство источников.
@@ -540,6 +583,52 @@ String? _firstIniSection(String text) {
   return null;
 }
 
+/// `detect.ini` по РАЗОБРАННОМУ пространству INI — тот же язык предикатов,
+/// что и у текста, и у объекта (§2 НОРМЫ).
+///
+/// Предикаты:
+///
+/// - `sections: [<Имя>…]` — все названные секции в документе есть;
+/// - `keys_any: [<Ключ>…]` — есть хотя бы ОДИН из названных ключей, в любой
+///   секции. Имя без секции потому, что признак рода («это AmneziaWG»)
+///   ставится ключом, а не его местом: один и тот же `Jc` опознаёт форму,
+///   где бы диалект его ни держал;
+/// - `keys_all: [<Ключ>…]` — есть все названные.
+///
+/// Имена регистронезависимы: пространство сложено в нижнем регистре, и
+/// предикат опускает регистр перед сравнением.
+bool detectMatchesIni(Map<String, dynamic>? d, Map<String, String> space) {
+  if (d == null || d['default'] == true) return true;
+  final ini = (d['ini'] as Map?)?.cast<String, dynamic>();
+  if (ini == null) return d.isEmpty;
+
+  bool hasKey(String key) {
+    final want = key.toLowerCase();
+    // Ключ адресуется либо целиком (`Interface.Jc`), либо одним именем — тогда
+    // подходит любая секция.
+    if (want.contains('.')) return space.containsKey(want);
+    return space.keys.any((k) {
+      final dot = k.lastIndexOf('.');
+      return dot >= 0 && k.substring(dot + 1) == want;
+    });
+  }
+
+  final sections = (ini['sections'] as List?)?.cast<String>();
+  if (sections != null) {
+    for (final s in sections) {
+      final want = '${s.toLowerCase()}.';
+      if (!space.keys.any((k) => k.startsWith(want))) return false;
+    }
+  }
+  final keysAny = (ini['keys_any'] as List?)?.cast<String>();
+  if (keysAny != null && keysAny.isNotEmpty && !keysAny.any(hasKey)) {
+    return false;
+  }
+  final keysAll = (ini['keys_all'] as List?)?.cast<String>();
+  if (keysAll != null && !keysAll.every(hasKey)) return false;
+  return true;
+}
+
 /// `detect.json` по РАЗОБРАННОМУ значению — тот же язык предикатов, что и у
 /// формы, и у вида документа (§2 НОРМЫ).
 ///
@@ -838,11 +927,16 @@ List<String> _segments(String path) => _segCache[path] ??= path.split('.');
 
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
-  _Run(this.section, this.space, this._trace)
+  _Run(this.section, this.space, this._trace, {this.nameHint})
       : _plan = _planCache[section] ??= _SectionPlan(section);
 
   /// План секции: проходы и множество объявленных — посчитаны один раз.
   final _SectionPlan _plan;
+
+  /// Имя, предложенное ВЫЗЫВАЮЩИМ: источник `hint` в `label.source`. В самом
+  /// документе его нет, поэтому оно приходит параметром, а МЕСТО его в
+  /// цепочке метки остаётся данными.
+  final String? nameHint;
 
   /// Коллектор трассы; `null` — трасса не собирается, и ни одна строка не
   /// строится (приложение «ТРАССА»: коллектор не стоит ничего, когда
@@ -882,7 +976,13 @@ final class _Run {
   /// Наложенные слои по имени: `extra` → плоская карта ключей слоя.
   final Map<String, QueryPairs> _overlays = {};
 
-  EngineResult? execute() {
+  /// [inputCodes] — коды, которые поставил САМ РАЗБОР входа, а не запись
+  /// таблицы: у INI это «вторая `[Peer]` отброшена». Ни одна запись о них не
+  /// узнает — ключи отброшенной секции до пространства не доехали вовсе.
+  EngineResult? execute({List<String> inputCodes = const []}) {
+    for (final code in inputCodes) {
+      warnings.add(NodeWarning.byCode(code, path: '', value: ''));
+    }
     body['type'] = section.singboxType;
 
     // Слои (`overlays[]`) строятся ДО записей: запись адресует их обычным
@@ -1606,7 +1706,25 @@ final class _Run {
   void _applyExtract(MapperParam p, String value) {
     final spec = p.extract!;
     final m = _regex(spec.re).firstMatch(value);
-    if (m == null) return;
+    if (m == null) {
+      // `on_no_match: {action: take_all}` — регулярка не разложила значение, и
+      // объявленный ответ на это «взять его ЦЕЛИКОМ в названный путь», а не
+      // потерять. G7: `Endpoint = 2001:db8::1:51820` — голый IPv6, где порт
+      // от адреса неотличим (§219), и адресом становится вся строка, а порт
+      // берётся из `defaults` той же ветки.
+      if (p.onNoMatch['action'] != 'take_all') return;
+      final into = p.onNoMatch['into'] as String?;
+      if (into == null) return;
+      _write(into, value, p);
+      final defaults = (p.onNoMatch['defaults'] as Map?)?.cast<String, dynamic>();
+      if (defaults != null) {
+        for (final e in defaults.entries) {
+          if (_read(e.key) == null) _put(e.key, e.value);
+        }
+      }
+      _applyImplies(p);
+      return;
+    }
 
     // `on_present` у записи с `extract` — код о том, что значение уехало в
     // тело НЕ буквально. Ставится только когда регулярка действительно
@@ -2058,6 +2176,10 @@ final class _Run {
         return space.fragment;
       case 'userinfo':
         return space.userinfo;
+      // Имя, предложенное вызывающим: источника в документе у него нет, но
+      // МЕСТО его в цепочке объявляет секция, как у всякого источника.
+      case 'hint':
+        return nameHint;
     }
     if (src.startsWith('json.')) {
       return jsonPathValue(space.json, _resolveBase(src.substring('json.'.length)));
@@ -2501,24 +2623,38 @@ final class _Run {
         ? (byForm[space.formId] ?? const <String>[])
         : section.label.source;
 
-    var raw = '';
-    var fromFragment = false;
+    // Звено цепочки считается ответившим по ПОСЛЕ-нормализационному значению.
+    // Иначе пробельное имя (`nameHint: "  "`) занимало бы место в цепочке и
+    // глушило следующие звенья: `trim` превратил бы его в пустую строку уже
+    // после выбора, и узел остался бы вовсе без имени.
     for (final src in sources) {
       final v = _readSourceBare(src);
       // Метка бывает НЕ СТРОКОЙ: в контейнере чужого диалекта `ps` приезжает
       // числом ровно так же, как `port`. Отбрасывать её за это значило бы
       // переименовать живой узел в фолбэк.
       final s = v is String ? v : (v == null ? '' : '$v');
-      if (s.isNotEmpty) {
-        raw = s;
-        fromFragment = src == 'fragment';
-        break;
-      }
+      if (s.isEmpty) continue;
+      final label = _normalizeLabel(s, fromFragment: src == 'fragment');
+      if (label.isNotEmpty) return label;
     }
-    if (raw.isEmpty) return '';
-    // Percent снимается ТОЛЬКО с фрагмента: экранирование — свойство ссылки,
-    // а не значения. В контейнере `ps` лежит готовой строкой, и лишний проход
-    // съел бы у имени законный `%` (`50%25` стал бы `50%`).
+    // Шаблон фолбэка БЕЗ подстановок — готовое имя, а не форма адреса. Такой
+    // шаблон исполняется ЗДЕСЬ: он ни от тела, ни от схемы не зависит, а общий
+    // тег-фолбэк вызывающего построил бы `<тип>-<адрес>-<порт>` и переименовал
+    // бы живые узлы. Шаблон С подстановками остаётся вызывающему: адрес он
+    // берёт из тела.
+    final tpl = section.label.fallbackTemplate;
+    if (tpl != null && !tpl.contains('{')) return tpl;
+    return '';
+  }
+
+  /// Объявленная нормализация метки (G8), одна на все звенья цепочки.
+  ///
+  /// Percent снимается ТОЛЬКО с фрагмента: экранирование — свойство ссылки, а
+  /// не значения. В контейнере `ps` лежит готовой строкой, и лишний проход
+  /// съел бы у имени законный `%` (`50%25` стал бы `50%`). Во фрагменте же
+  /// декод идёт с path-семантикой: `+` там литерален (form-encoding во
+  /// фрагменте не действует).
+  String _normalizeLabel(String raw, {bool fromFragment = true}) {
     var label =
         fromFragment ? percentDecodeOnce(raw, mode: DecodeMode.path) : raw;
     for (final n in section.label.normalize) {

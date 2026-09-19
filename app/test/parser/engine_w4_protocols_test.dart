@@ -142,6 +142,12 @@ void main() {
     checkScheme('masque', 'masque');
     checkScheme('wireguard', 'wireguard');
 
+    test('wireguard INI: секция вида conf исполняема и загружена', () {
+      expect(MapperSections.I.has('conf', 'wireguard'), isTrue,
+          reason: '§480 — рукописного mapWireguardIni больше нет, и запасного '
+              'пути у входа .conf не осталось');
+    }, skip: skip);
+
     test('wireguard INI: кейсы ini:* дают прежние identity, тег и тело', () {
       final diffs = <String>[];
       for (final e in _cases('wireguard').entries) {

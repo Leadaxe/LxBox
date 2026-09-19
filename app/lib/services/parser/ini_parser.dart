@@ -1,14 +1,16 @@
 import '../../models/node_spec.dart';
 import 'mappers/uri_pipeline.dart';
-import 'mappers/wireguard_mapper.dart';
 
 /// Разбор WireGuard INI (`wg-quick`) в `WireguardSpec`.
 ///
 /// §472 шаг 7 — INI идёт ТЕМ ЖЕ КОНВЕЙЕРОМ, что и ссылка: маппер переводит
 /// текст INI в сырую карту sing-box, санитайзер реестра судит значения,
 /// `parseSingboxEntry` строит модель. Второй вход той же схемы отличается
-/// ровно разбором входа — выход у обоих один
-/// (`mappers/wireguard_mapper.dart`, [mapWireguardIni]).
+/// ровно разбором входа — выход у обоих один.
+///
+/// §480 — переводит ДВИЖОК по секции `conf` черновика/реестра
+/// (`ini_dialect` объявляет диалект разбора, `params` — таблицу переноса).
+/// Рукописного `mapWireguardIni` больше нет.
 ///
 /// Синтетического `wg://`-URI внутри БОЛЬШЕ НЕТ. Он был промежуточной формой
 /// (§3.3, затем §456) и стоил двух лишних превращений текста — сборки query с
@@ -31,30 +33,9 @@ import 'mappers/wireguard_mapper.dart';
 /// 3. `WireGuard`.
 ///
 /// Тег хранится полем записи, не в тексте.
-WireguardSpec? parseWireguardIni(String config, {String? nameHint}) {
-  final peerName = peerCommentName(config);
-  return parseIniViaPipeline(
-    config,
-    (text) => mapWireguardIni(text, nameHint: peerName ?? nameHint),
-  ) as WireguardSpec?;
-}
-
-/// §456 — имя сервера из комментария под `[Peer]`: первая строка секции,
-/// начинающаяся с `#`, без `=` (иначе это опция вроде `# Bouncing = 0`).
-/// `null` — комментария нет.
-String? peerCommentName(String config) {
-  var inPeer = false;
-  for (final line in config.split(RegExp(r'\r?\n'))) {
-    final t = line.trim();
-    if (t.startsWith('[')) {
-      inPeer = t.toLowerCase() == '[peer]';
-      continue;
-    }
-    if (!inPeer || t.isEmpty) continue;
-    if (!t.startsWith('#')) break; // первая настоящая строка секции — имени нет
-    final name = t.substring(1).trim();
-    if (name.isEmpty || name.contains('=')) continue;
-    return name;
-  }
-  return null;
-}
+/// §480 — цепочка имени (комментарий под `[Peer]` → [nameHint] → `WireGuard`)
+/// объявлена в `label` секции, а не построена здесь: тег И ЕСТЬ identity, и
+/// порядок звеньев обязан быть данными.
+WireguardSpec? parseWireguardIni(String config, {String? nameHint}) =>
+    parseIniViaPipeline(config, 'wireguard', nameHint: nameHint)
+        as WireguardSpec?;

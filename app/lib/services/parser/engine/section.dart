@@ -236,6 +236,82 @@ final class ListSpec {
   final bool coerceScalar;
 }
 
+/// Правило ПОВТОРНОЙ секции INI (`ini_dialect.sections.<Name>`).
+final class IniSectionRule {
+  const IniSectionRule({this.repeat, this.onExtraCode});
+
+  factory IniSectionRule.fromJson(Map<String, dynamic> j) => IniSectionRule(
+        repeat: j['repeat'] as String?,
+        onExtraCode: ((j['on_extra'] as Map?)?['code']) as String?,
+      );
+
+  /// `first_only` — читается первая, прочие отбрасываются.
+  final String? repeat;
+
+  /// Код о том, что повтор отброшен; `null` — отбрасывается молча.
+  final String? onExtraCode;
+}
+
+/// §0.11 DRAFT — ДИАЛЕКТ разбора INI (`ini_dialect`).
+///
+/// Правила входа объявлены данными, а не зашиты в адаптер: «как принято в
+/// wg-quick» — это один диалект из нескольких возможных, и второй (панельный
+/// `.ini`, `.ovpn`) потребовал бы ветки в коде, будь первый умолчанием
+/// движка. Значения по умолчанию здесь — не «правила wg-quick», а
+/// нейтральный разбор INI, который диалект уточняет.
+final class IniDialect {
+  const IniDialect({
+    this.keyCase = 'lower',
+    this.valueCase = 'preserve',
+    this.lineCommentPrefixes = const ['#', ';'],
+    this.inlineComments = false,
+    this.repeatedKey = 'last_wins',
+    this.sections = const {},
+  });
+
+  factory IniDialect.fromJson(Map<String, dynamic> j) => IniDialect(
+        keyCase: j['key_case'] as String? ?? 'lower',
+        valueCase: j['value_case'] as String? ?? 'preserve',
+        // GRAMMAR_SYNC §0.11 — имя `line_comment_prefixes`; у секций волны W4
+        // написано прежнее `comment_prefixes`. Читаются оба, потому что
+        // секция приедет реестром с новым именем, а черновик сегодня несёт
+        // старое, и разъехаться они не должны молча.
+        lineCommentPrefixes: ((j['line_comment_prefixes'] ??
+                    j['comment_prefixes']) as List?)
+                ?.cast<String>() ??
+            const ['#', ';'],
+        inlineComments: j['inline_comments'] as bool? ?? false,
+        repeatedKey: j['repeated_key'] as String? ?? 'last_wins',
+        sections: {
+          for (final e
+              in ((j['sections'] as Map?) ?? const {}).cast<String, dynamic>().entries)
+            e.key.toLowerCase():
+                IniSectionRule.fromJson((e.value as Map).cast<String, dynamic>()),
+        },
+      );
+
+  /// `lower` | `preserve` — регистр ИМЁН ключей в пространстве.
+  final String keyCase;
+
+  /// `lower` | `preserve` — регистр ЗНАЧЕНИЙ.
+  final String valueCase;
+
+  /// Префиксы строчного комментария.
+  final List<String> lineCommentPrefixes;
+
+  /// Комментарий ХВОСТОМ строки значения. У wg-quick его нет: `#` внутри
+  /// значения — часть значения (имя `CH-FREE#11` ровно такое).
+  final bool inlineComments;
+
+  /// `last_wins` | `first_wins` — судьба повторного ключа.
+  final String repeatedKey;
+
+  /// Правила повторных секций, по имени в нижнем регистре.
+  final Map<String, IniSectionRule> sections;
+
+  IniSectionRule? sectionRule(String name) => sections[name.toLowerCase()];
+}
+
 /// Правила повторного percent-декода (FROZEN `decode_extra`).
 final class DecodeExtraSpec {
   const DecodeExtraSpec({
@@ -518,6 +594,7 @@ final class MapperSection {
     this.unknownKeyCode,
     this.ignoredKeys = const {},
     this.kindWhen = const {},
+    this.iniDialect,
     this.emit,
   });
 
@@ -562,6 +639,10 @@ final class MapperSection {
       ignoredKeys:
           ((uk?['ignore'] as List?) ?? const []).cast<String>().toSet(),
       kindWhen: ((j['kind_when'] as Map?) ?? const {}).cast<String, dynamic>(),
+      iniDialect: j[DraftNames.iniDialect] == null
+          ? null
+          : IniDialect.fromJson(
+              (j[DraftNames.iniDialect] as Map).cast<String, dynamic>()),
       emit: (j['emit'] as Map?)?.cast<String, dynamic>(),
     );
   }
@@ -606,6 +687,10 @@ final class MapperSection {
   /// которое читает сборка документа, а не маппер одного узла).
   final Set<String> ignoredKeys;
 
+  /// §0.11 DRAFT — диалект разбора INI; `null` у видов источника, где входом
+  /// служит не текст `.conf`.
+  final IniDialect? iniDialect;
+
   final Map<String, dynamic>? emit;
 
   /// Секция с вмонтированными блоками `include` (общие tls/transports).
@@ -626,6 +711,8 @@ final class MapperSection {
         unknownKeyAction: unknownKeyAction,
         unknownKeyCode: unknownKeyCode,
         ignoredKeys: ignoredKeys,
+        kindWhen: kindWhen,
+        iniDialect: iniDialect,
         emit: emit,
       );
 }

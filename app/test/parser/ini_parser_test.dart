@@ -113,8 +113,10 @@ AllowedIPs = 0.0.0.0/0
 Endpoint = 1.2.3.4:51820
 """;
 
+    // §480 — рукописного `peerCommentName` больше нет: цепочку имени
+    // объявляет `label.source` секции `conf`, и проверяется она по ОТВЕТУ
+    // разбора, а не по внутренней функции.
     test('комментарий под [Peer] сильнее имени файла', () {
-      expect(peerCommentName(proton), 'CH-FREE#11');
       expect(parseWireguardIni(proton, nameHint: 'file')!.tag, 'CH-FREE#11');
       expect(parseWireguardIni(proton)!.rawSource, proton);
     });
@@ -131,7 +133,6 @@ Address = 10.2.0.2/32
 PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
 Endpoint = 1.2.3.4:51820
 """;
-      expect(peerCommentName(noName), isNull);
       expect(parseWireguardIni(noName, nameHint: 'file')!.tag, 'file');
       expect(parseWireguardIni(noName)!.tag, 'WireGuard');
     });

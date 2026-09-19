@@ -214,21 +214,32 @@ void main() {
       expect((noMatch['defaults'] as Map)['peers[].port'], 51820);
     });
 
-    test('читается только ПЕРВАЯ [Peer], прочие — с кодом', () {
+    test('читается только ПЕРВАЯ [Peer]; код повтора ждёт своего текста', () {
       final dialect = section(path, 'conf')['ini_dialect'] as Map;
       final peer = (dialect['sections'] as Map)['Peer'] as Map;
       expect(peer['repeat'], 'first_only');
-      expect((peer['on_extra'] as Map)['code'], 'wgconf_extra_peer_dropped');
-      // Диалект записан дословно по сегодняшнему разбору.
+      final onExtra = peer['on_extra'] as Map;
+      expect(onExtra['code'], isNull, reason: 'текста у кода ещё нет');
+      expect(onExtra[r'$code_pending'], 'wgconf_extra_peer_dropped');
+      // Диалект записан дословно по сегодняшнему разбору; имя префиксов
+      // комментария — по GRAMMAR_SYNC §0.11 (`line_comment_prefixes`).
       expect(dialect['key_case'], 'lower');
       expect(dialect['repeated_key'], 'last_wins');
       expect(dialect['inline_comments'], isFalse);
+      expect(dialect['line_comment_prefixes'], ['#', ';']);
     });
 
-    test('Interface.DNS — лоссы by design, но с кодом', () {
+    // §480 — код ОБЪЯВЛЕН, но не ставится: `wgconf_dns_ignored` приехал
+    // секцией вперёд своего текста, а в `warnings.json` контракта его нет.
+    // Имя лежит под `$code_pending` — вернуть его будет правкой одного ключа,
+    // когда текст приедет синком. Запись обязана остаться в любом случае:
+    // без неё `DNS` уехал бы в `uri_param_unknown`.
+    test('Interface.DNS — лоссы by design; код ждёт своего текста', () {
       final dns = ((section(path, 'conf')['params'] as Map)['dns'] as Map);
       expect(dns['maps_to'], isNull);
-      expect((dns['on_present'] as Map)['code'], 'wgconf_dns_ignored');
+      final onPresent = dns['on_present'] as Map;
+      expect(onPresent['code'], isNull, reason: 'текста у кода ещё нет');
+      expect(onPresent[r'$code_pending'], 'wgconf_dns_ignored');
     });
 
     test('delta480-4 — алиас preshared_key читается (сегодня теряется молча)',

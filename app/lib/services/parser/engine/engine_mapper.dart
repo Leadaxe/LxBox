@@ -44,6 +44,37 @@ UriMapping? mapViaEngine(String uri, String singboxType) {
   );
 }
 
+/// §480 — разобрать текст `.conf` движком по секции вида `conf`.
+///
+/// [singboxType] — тип тела, он же имя секции: вид источника `conf` схемы не
+/// несёт вовсе (INI её не объявляет), и называет секцию вызывающий — формат
+/// опознан раньше, реестром видов документа.
+///
+/// [nameHint] — имя, предложенное вызывающим (имя файла при импорте, тег
+/// записи хранения, поле Tag редактора). Место подсказки в цепочке метки
+/// объявляет секция (`label.source`), а не этот мост.
+///
+/// `null` — секции нет либо запись не построилась.
+UriMapping? mapIniViaEngine(
+  String text,
+  String singboxType, {
+  String? nameHint,
+}) {
+  final section = MapperSections.I.sectionFor('conf', singboxType);
+  if (section == null) return null;
+  final res = runSectionOnIni(section, text, nameHint: nameHint);
+  if (res == null) return null;
+  return UriMapping(
+    body: res.body,
+    label: res.label,
+    warnings: res.warnings,
+    extensionFields: res.extensionFields,
+    tagAddress: res.tagAddress,
+    kinds: res.kinds,
+    bodySource: BodySource.byRegistryName(res.bodySource),
+  );
+}
+
 /// §480 W5 — результат перевода ОБЪЕКТНОГО элемента (Xray/sing-box-JSON).
 ///
 /// Отличается от [UriMapping] тем, что метку сюда движок не отдаёт: имя
