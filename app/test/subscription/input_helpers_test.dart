@@ -86,8 +86,13 @@ void main() {
       const cfg = '[Interface]\nPrivateKey = x\n[Peer]\nPublicKey = y';
       expect(isWireGuardConfig(cfg), isTrue);
     });
-    test('только [Interface] → false', () {
-      expect(isWireGuardConfig('[Interface]\nPrivateKey = x'), isFalse);
+    // §480 — род документа судит грамматика реестра: `wireguard_conf`
+    // опознаётся по ПЕРВОЙ не-комментарной секции `[Interface]`, а `[Peer]`
+    // НЕ требуется (contract_draft/documents.json, сверено с лаунчером —
+    // TASKS_LXBOX §24.27 п.3). Заготовка без пира — законный wg-конфиг, и
+    // прежнее требование обеих секций уронило бы её в URI-ветку.
+    test('только [Interface] → true (заготовка без пира — тоже wg-конфиг)', () {
+      expect(isWireGuardConfig('[Interface]\nPrivateKey = x'), isTrue);
     });
     test('только [Peer] → false', () {
       expect(isWireGuardConfig('[Peer]\nPublicKey = x'), isFalse);
