@@ -178,7 +178,10 @@ class TlsSpec {
   Map<String, dynamic> toSingboxForQuic() => _toSingbox(quic: true);
 
   Map<String, dynamic> _toSingbox({required bool quic}) {
-    if (!enabled) return const {};
+    // Карта уходит в тело outbound, а телом после эмита владеет сборщик:
+    // post-steps правят его на месте. `const {}` ронял сборку ВСЕГО конфига
+    // на QUIC-узле с выключенным TLS («Cannot modify unmodifiable map»).
+    if (!enabled) return <String, dynamic>{};
     final typed = <String, dynamic>{'enabled': true};
     if (serverName != null && serverName!.isNotEmpty) {
       typed['server_name'] = serverName;
