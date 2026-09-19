@@ -1121,7 +1121,7 @@ void main() {
               'явный disabled-блок ронял ядра lx.5..lx.18 в SIGSEGV');
       // Кода нет: запись «настройки нет» — не деградация.
       expect(_codes(r), isEmpty);
-    });
+    }, skip: skip);
 
     test('absent_when судится ДО правил полей: мусор ВНУТРИ снятого блока '
         'кодов не даёт', () {
@@ -1135,7 +1135,7 @@ void main() {
       expect(_codes(r), isEmpty,
           reason: 'иначе человек получил бы коды на поля блока, которого в '
               'теле не будет');
-    });
+    }, skip: skip);
 
     test('absent_when у вложенного: reality{enabled:false} исчезает, '
         'живой tls остаётся', () {
@@ -1150,7 +1150,7 @@ void main() {
       expect(tls['enabled'], true);
       expect(tls.containsKey('reality'), isFalse);
       expect(_codes(r), isEmpty);
-    });
+    }, skip: skip);
 
     test('absent_when: tls БЕЗ ключа `enabled` — тело без флага, а не '
         'выключенный TLS', () {
@@ -1158,7 +1158,7 @@ void main() {
         'tls': {'server_name': 'example.com'}
       }));
       expect(r.body!.containsKey('tls'), isTrue);
-    });
+    }, skip: skip);
 
     test('absent_when сравнивает по печатной форме: строковое "false" '
         'совпадает с булевым', () {
@@ -1166,7 +1166,7 @@ void main() {
         'tls': {'enabled': 'false', 'server_name': 'example.com'}
       }));
       expect(r.body!.containsKey('tls'), isFalse);
-    });
+    }, skip: skip);
 
     test('default_when у allowed_ips: тело без ключа получает дефолт, '
         'а не теряет узел', () {

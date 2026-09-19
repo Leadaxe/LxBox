@@ -186,6 +186,16 @@ bool forbiddenByRegistry(String scheme, String path) {
 /// бампом контракта. Расхождение ловит тест покрытия.
 const _kTransportTypes = <String>['ws', 'grpc', 'http', 'httpupgrade', 'xhttp', 'quic'];
 
+/// Непересекающиеся полосы magic-заголовков AWG: связь реестра
+/// `ranges_disjoint` роняет узел, если диапазоны `h1`–`h4` пересеклись, а
+/// одним образцом на весь тип `awg_range` они совпадали бы все четыре.
+const _kAwgHeaderBands = <String, String>{
+  'h1': '10-20',
+  'h2': '30-40',
+  'h3': '50-60',
+  'h4': '70-80',
+};
+
 final class _Generator {
   _Generator(this.scheme);
 
@@ -598,7 +608,13 @@ final class _Generator {
       case 'duration':
         return '30s';
       case 'awg_range':
-        return '10-20';
+        // Диапазоны magic-заголовков h1–h4 обязаны НЕ пересекаться: связь
+        // реестра `ranges_disjoint` (контракт 1.1.11) иначе роняет узел с
+        // `awg_headers_overlap`, и круг не проверил бы ни одного поля
+        // wireguard. Отсюда своя полоса каждому заголовку — в том же порядке,
+        // каким реестр задаёт их дефолты ядра (h1=1 … h4=4).
+        final band = _kAwgHeaderBands[path.split('.').last];
+        return band ?? '10-20';
       case 'enum':
         // enum без `values` реестр писать не должен, но если написал —
         // выдумывать набор нечего.
