@@ -34,6 +34,24 @@ WarningSeverity? topWarningSeverity(List<NodeWarning> warnings) {
       .reduce((a, b) => a.index > b.index ? a : b);
 }
 
+/// Все уведомления узла по эмитированному config-тегу. Паритет с Servers и
+/// Diagnostics: разбор + хранимый вердикт. [emittedTagMap] — карта последней
+/// сборки ([SubscriptionController.lastEmittedTagMap]); при холодном старте
+/// пуста — узел ищется через [nodeSpecForConfigTag] (§505).
+List<NodeWarning> warningsForConfigTag(
+  String emittedTag,
+  List<SubscriptionEntry> entries, {
+  Map<String, NodeSpec> emittedTagMap = const {},
+}) {
+  final mapped = emittedTagMap[emittedTag];
+  if (mapped != null) {
+    return warningsForEmittedNode(mapped, entries);
+  }
+  final node = nodeSpecForConfigTag(emittedTag, entries);
+  if (node == null) return const [];
+  return warningsForEmittedNode(node, entries);
+}
+
 /// Все уведомления узла по эмитированному [node]: разбор + хранимый вердикт
 /// страховки. Источник — тот же, что вкладка Notifications (§497).
 List<NodeWarning> warningsForEmittedNode(
@@ -144,4 +162,3 @@ class EntryWarningBadge extends StatelessWidget {
 /// У одиночного сервера есть вердикт страховки (подпись протокола заменяется).
 bool userServerHasCoreRejected(UserServer list) =>
     list.warnings.any((w) => w.isCoreRejected);
-

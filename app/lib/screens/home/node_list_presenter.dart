@@ -379,11 +379,17 @@ class NodeListPresenter {
     // (UserServer / без префикса / импорт) фильтруются прочими средствами,
     // отдельный chip только путал.
 
-    // §502 — уведомления узлов: один проход по карте последней сборки, без
-    // чтения хранилища на каждую строку в itemBuilder.
+    // §502/§505 — уведомления узлов: один проход по тегам списка. Карта
+    // последней сборки приоритетна (хоп цепочки, alias); при холодном старте
+    // пуста — тот же источник, что Servers: разбор + вердикт из хранилища.
+    final emittedTagMap = subController.lastEmittedTagMap;
     final warningsByTag = <String, List<NodeWarning>>{
-      for (final e in subController.lastEmittedTagMap.entries)
-        e.key: warningsForEmittedNode(e.value, subController.entries),
+      for (final tag in allTags)
+        tag: warningsForConfigTag(
+          tag,
+          subController.entries,
+          emittedTagMap: emittedTagMap,
+        ),
     };
 
     return NodeListData(

@@ -151,6 +151,39 @@ TagOwner? ownerOfNode(NodeSpec node, List<SubscriptionEntry> entries) {
   return null;
 }
 
+/// §505 — узел хранилища для эмитированного config-тега. Тот же обход, что
+/// [ownerOfTag] (bare-тег, суффикс `-<digits>`, хоп цепочки), но возвращает
+/// [NodeSpec]. `null` — служебная запись или custom JSON без владельца.
+NodeSpec? nodeSpecForConfigTag(
+  String emittedTag,
+  List<SubscriptionEntry> entries,
+) {
+  final candidates = <String>[emittedTag];
+  final m = RegExp(r'^(.*)-\d+$').firstMatch(emittedTag);
+  if (m != null) candidates.add(m.group(1)!);
+
+  for (final cand in candidates) {
+    for (final e in entries) {
+      final list = e.list;
+      final bare = TagResolver.stripPrefix(cand, list.tagPrefix);
+      if (list is FolderServers) {
+        for (final member in list.members) {
+          final n = member.node;
+          if (n != null && n.tag == bare) return n;
+        }
+      } else {
+        for (final n in list.nodes) {
+          if (n.tag == bare) return n;
+          for (var hop = n.chained; hop != null; hop = hop.chained) {
+            if (hop.tag == bare) return hop;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 /// Исходный узел записи, которой принадлежит [node]: хоп цепочки → владелец.
 NodeSpec? sourceNodeOf(NodeSpec node, ServerList list) {
   switch (list) {
