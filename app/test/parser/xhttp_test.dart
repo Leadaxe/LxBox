@@ -14,6 +14,36 @@ import 'engine_test_setup.dart';
 /// §097 — XHTTP (Xray splithttp) нативный transport. По образцу
 /// singbox-launcher SPEC 071: parse (URI camelCase + snake) → emit → round-trip,
 /// httpupgrade остаётся отдельным типом.
+/// §480 W8 — круг транспорта НАСТОЯЩИМ путём: `toUri()` собирает ссылку
+/// движком по секции `uri`, `parseUri` разбирает её обратно той же секцией.
+///
+/// Прежде эти тесты звали `transportToQuery` — рукописную эмиссию, снятую
+/// волной W7. Звать её отдельно от ссылки значило проверять слой, которого в
+/// `lib` больше нет: у транспорта своей ссылки не бывает, он всегда едет
+/// параметрами узла.
+///
+/// Носитель — VLESS: транспорт в его секции объявлен целиком, и схема первой
+/// переехала на движок.
+TransportSpec? _viaUri(TransportSpec t) {
+  final node = VlessSpec(
+    id: 'id-1',
+    tag: 'n',
+    label: 'n',
+    server: '1.2.3.4',
+    port: 443,
+    rawSource: '',
+    uuid: 'u-1',
+    transport: t,
+  );
+  return (parseUri(node.toUri()) as VlessSpec).transport;
+}
+
+/// Тело транспорта, доехавшее до ссылки и обратно. Сравнивать спеки по телу,
+/// а не по полям: тело — то, что уходит в ядро, и именно его круг обязан
+/// сохранить.
+Map<String, dynamic> _bodyViaUri(TransportSpec t) =>
+    _viaUri(t)!.toSingbox(TemplateVars.empty).$1;
+
 void main() {
   // §480 — разбор ссылки и Xray-элемента идёт ДВИЖКОМ по секциям реестра;
   // без них у схемы запасного рукописного пути не осталось (критерий 7).
@@ -65,7 +95,7 @@ void main() {
       expect(w, isEmpty);
     });
 
-    test('round-trip transportToQuery → parseTransport', () {
+    test('круг через ссылку узла: поля доезжают', () {
       const x = XhttpTransport(
         path: '/x',
         host: 'h',
@@ -73,9 +103,7 @@ void main() {
         xPaddingBytes: '100-1000',
         noGrpcHeader: true,
       );
-      final q = transportToQuery(x);
-      expect(q['type'], 'xhttp');
-      final t = parseTransport(q) as XhttpTransport;
+      final t = _viaUri(x) as XhttpTransport;
       expect(t.path, '/x');
       expect(t.host, 'h');
       expect(t.mode, 'packet-up');
@@ -87,7 +115,10 @@ void main() {
       final t =
           parseTransport({'type': 'httpupgrade', 'path': '/u', 'host': 'h'});
       expect(t, isA<HttpUpgradeTransport>());
-      expect(transportToQuery(t!)['type'], 'httpupgrade');
+      // И через ссылку тип не подменяется на xhttp: путаница этих двух
+      // транспортов и есть тот регресс, который сторожит кейс.
+      expect(_viaUri(t!), isA<HttpUpgradeTransport>());
+      expect(_bodyViaUri(t)['type'], 'httpupgrade');
     });
 
     test('mode-матрица парсится дословно', () {
@@ -350,7 +381,7 @@ void main() {
       expect(t.scMaxEachPostBytes, '1000000');
     });
 
-    test('round-trip: parseTransport(transportToQuery(golden)) ≈ golden', () {
+    test('круг через ссылку узла: parseUri(toUri(golden)) ≈ golden', () {
       const golden = XhttpTransport(
         host: 'www.example.com',
         path: '/xhttp',
@@ -373,11 +404,8 @@ void main() {
         scMaxEachPostBytes: '1000000',
         scMinPostsIntervalMs: '30',
       );
-      final q = transportToQuery(golden);
-      final back = parseTransport(q) as XhttpTransport;
       // сравнение по выхлопу toSingbox (= по смыслу spec)
-      expect(back.toSingbox(TemplateVars.empty).$1,
-          golden.toSingbox(TemplateVars.empty).$1);
+      expect(_bodyViaUri(golden), golden.toSingbox(TemplateVars.empty).$1);
     });
 
     test('toUri пишет только не-дефолтные поля (§8.3 — без раздувания)', () {
@@ -388,7 +416,17 @@ void main() {
         uplinkHttpMethod: '', // дефолт POST
         xPaddingObfsMode: false,
       );
-      final q = transportToQuery(x);
+      final node = VlessSpec(
+        id: 'id-1',
+        tag: 'n',
+        label: 'n',
+        server: '1.2.3.4',
+        port: 443,
+        rawSource: '',
+        uuid: 'u-1',
+        transport: x,
+      );
+      final q = Uri.parse(node.toUri()).queryParameters;
       expect(q.containsKey('sessionPlacement'), false);
       expect(q.containsKey('uplinkHTTPMethod'), false);
       expect(q.containsKey('xPaddingObfsMode'), false);
@@ -715,10 +753,8 @@ void main() {
       );
       final expected = golden.toSingbox(TemplateVars.empty).$1;
 
-      // Ветка 1 — URI (camelCase query).
-      final viaUri = parseTransport(transportToQuery(golden))!;
-      expect(viaUri.toSingbox(TemplateVars.empty).$1, expected,
-          reason: 'URI-ветка потеряла поле');
+      // Ветка 1 — URI (ссылка узла: сборка и разбор одной секцией).
+      expect(_bodyViaUri(golden), expected, reason: 'URI-ветка потеряла поле');
 
       // Ветка 2 — Xray-JSON: те же значения, но snake_case ключами в extra.
       final viaXray = xrayTransport({
@@ -749,10 +785,7 @@ void main() {
       );
       final expected = golden.toSingbox(TemplateVars.empty).$1;
 
-      expect(parseTransport(transportToQuery(golden))!
-          .toSingbox(TemplateVars.empty)
-          .$1,
-          expected,
+      expect(_bodyViaUri(golden), expected,
           reason: 'URI-ветка потеряла max_concurrency');
 
       final viaXray = xrayTransport({

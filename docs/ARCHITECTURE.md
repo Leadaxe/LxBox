@@ -692,7 +692,9 @@ parser/                      # Parser v2 (text → NodeSpec)
                              #   (at parity with the Xray branch: two passes, dedup, synonyms)
   ini_parser.dart            #   §472 step 7: WireGuard INI → mapWireguardIni → the same pipeline
                              #   (the synthetic wg:// URI is gone; rawSource stays the INI text, §456)
-  transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
+  transport.dart             #   parseTransport (query→TransportSpec) only — §480 W7/W8: the reverse
+                             #   direction (body→URI) is the mapper section inverting the same table,
+                             #   and the handwritten transportToQuery is gone
   uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding
                              #   an allow-list, normalizeWGKey (32-byte base64 canon, D-030)
                              #   (§473/§472 step 7: the AWG MTU clamp moved to the registry — awgClampMtu is gone)
