@@ -40,7 +40,6 @@ import 'http_mapper.dart';
 import 'masque_mapper.dart';
 import 'naive_mapper.dart';
 import 'shadowsocks_mapper.dart';
-import 'socks_mapper.dart';
 import 'ssh_mapper.dart';
 import 'tuic_mapper.dart';
 import 'uri_mapper.dart';
@@ -116,6 +115,13 @@ const kPipelineSchemes = <String>{
 /// и так есть ([_kMappers] ниже строится по нему же).
 const Map<String, String> _kSchemeToType = <String, String>{
   'trojan': 'trojan',
+  // §480 W4 — socks. Все четыре написания ведут в ОДИН тип тела: версию
+  // протокола несёт схема, и переводит её `scheme_sets` секции, а не эта
+  // таблица (§475 socks_scheme_is_version).
+  'socks': 'socks',
+  'socks5': 'socks',
+  'socks4': 'socks',
+  'socks4a': 'socks',
 };
 
 /// Мапперы переехавших схем, по схеме ссылки.
@@ -133,10 +139,6 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{
   'proxy-https': mapHttpProxyUri,
   'proxy+http': mapHttpProxyUri,
   'proxy+https': mapHttpProxyUri,
-  'socks': mapSocksUri,
-  'socks5': mapSocksUri,
-  'socks4': mapSocksUri,
-  'socks4a': mapSocksUri,
   'ssh': mapSshUri,
   'masque': mapMasqueUri,
   'wireguard': mapWireguardUri,

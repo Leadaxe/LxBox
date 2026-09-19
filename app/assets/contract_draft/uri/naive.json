@@ -1,5 +1,5 @@
 {
-  "_note": "§480 — секция-маппер ссылки naive. У схемы ВСЕГО ДВА собственных query-параметра: extra-headers и padding. Ни sni, ни fp, ни alpn, ни insecure диалект naive не знает — общего TLS-блока здесь НЕТ, блок TLS собирается scheme_sets и урезан самим ядром (forbidden_for в tls.json).",
+  "impl": "§480 — секция-маппер из РЕЕСТРА ЛАУНЧЕРА (contract/registry/protocols/naive.json, его develop). Черновик держит её до прихода зеркалом; правки вносить только синхронно с лаунчером.",
   "mappers": {
     "uri": {
       "body_source": "uri",

@@ -1,5 +1,5 @@
 {
-  "_note": "§480 — секция-маппер ссылки anytls. Форма trojan-подобная, но TLS читается по конвенции VLESS: есть REALITY (pbk/sid), дефолт отпечатка random, алиас fingerprint. Два отличия от vless: TLS обязателен (security игнорируется) и включена эвристика SNI.",
+  "impl": "§480 — секция-маппер из РЕЕСТРА ЛАУНЧЕРА (contract/registry/protocols/anytls.json, его develop). Черновик держит её до прихода зеркалом; правки вносить только синхронно с лаунчером.",
   "mappers": {
     "uri": {
       "body_source": "uri",
@@ -64,10 +64,48 @@
           "required": true,
           "impl": "Пустой пароль — записи нет."
         },
+        "fp": {
+          "source": [
+            "query.fp",
+            "query.fingerprint"
+          ],
+          "maps_to": "tls.utls.fingerprint",
+          "value_map": {
+            "$ref": "tls.fp_dialect"
+          },
+          "implies": {
+            "tls.utls.enabled": true
+          },
+          "materialize_default": true,
+          "sets": {
+            "": {
+              "tls.utls.enabled": true,
+              "tls.utls.fingerprint": "random"
+            }
+          },
+          "when": {
+            "tls.enabled": true
+          },
+          "impl": "D-009, та же конвенция, что у vless: ПУСТОЙ fp означает `random`, и это НЕ дефолт ядра (у него пустой = chrome), а договорённость обеих сторон — отсюда materialize_default, маппер обязан записать значение в тело (node_parser_transport.go:920-929 через utlsFingerprintOrDefault). У trojan/http дефолта нет, и общая запись блока tls#uri там остаётся как есть. Запись перекрывает одноимённую из include, потому что объявлена ПОЗЖЕ него."
+        },
         "security": {
           "source": "query.security",
+          "selector": true,
+          "priority": 10,
           "maps_to": null,
-          "impl": "ИГНОРИРУЕТСЯ до чтения TLS. AnyTLS живёт только поверх TLS (body.fields.tls → required, ядро отвечает C.ErrTLSRequired), и security=none для него бессмысленен: правило security_none_no_tls унесло бы весь блок вместе с sni, alpn и insecure, которые автор написал. Кейс корпуса security_none_params_kept нормирует именно это."
+          "impl": "ИГНОРИРУЕТСЯ до чтения TLS, и это выражается ЯВНО: запись перекрывает одноимённую из блока tls#uri (объявлена позже него, merge overwrite) и во ВСЕХ ветках, включая none, оставляет tls.enabled. AnyTLS живёт только поверх TLS (body.fields.tls → required, ядро отвечает C.ErrTLSRequired), и security=none для него бессмысленен: ветка блока `{\"tls\": null}` унесла бы весь блок вместе с sni, alpn и insecure, которые автор написал, и санитайзер отверг бы узел целиком (field_missing). Кейс корпуса security_none_params_kept нормирует именно это. selector: запись объявляет СТРУКТУРУ (есть ли блок tls), значит её место — проход A, рядом с одноимённой записью блока; priority 10 против умолчания 0 у той ставит её ПОЗЖЕ, и merge overwrite возвращает tls.enabled. Иначе записи блока (sni/alpn/fp/insecure) со своим when: {tls.enabled: true} исполнялись бы в проходе B раньше нашей и видели бы снятый блок.",
+          "sets": {
+            "none": {
+              "tls.enabled": true
+            },
+            "": {
+              "tls.enabled": true
+            },
+            "tls": {
+              "tls.enabled": true
+            }
+          },
+          "merge": "overwrite"
         },
         "idle_session_check_interval": {
           "source": "query.idle_session_check_interval",
@@ -91,6 +129,14 @@
             "code": null
           },
           "impl": "Идёт в карту КАК ПРИШЁЛ — числом если число, иначе строкой: годность («неотрицательное целое») судит реестр, min:0 + on_invalid drop с кодом anytls_min_idle_invalid. Привести здесь к числу значило бы судить."
+        },
+        "key_share": {
+          "source": "query.key_share",
+          "maps_to": "tls.reality.key_share",
+          "when": {
+            "tls.reality.enabled": true
+          },
+          "impl": "Дыра с ОБЕИХ сторон: параметр читает node_parser_anytls.go:66-68 и на нём стоит корпус (uri/anytls/reality_key_share_hybrid), но в черновике LxBox его нет, и в нашем описательном anytls.json тоже нет. SPEC 089, ядро lx.4."
         }
       },
       "include": [

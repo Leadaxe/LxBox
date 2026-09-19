@@ -1,5 +1,5 @@
 {
-  "_note": "§480 — секция-маппер ссылки ssh в замороженной грамматике SPEC 133. Списано построчно с ssh_mapper.dart. Ключевое: PEM многострочный, и '+' внутри него литерален (delta480 — поле формата base64/PEM, decode_extra.plus_literal).",
+  "impl": "§480 — секция-маппер из РЕЕСТРА ЛАУНЧЕРА (contract/registry/protocols/ssh.json, его develop). Черновик держит её до прихода зеркалом; правки вносить только синхронно с лаунчером.",
   "mappers": {
     "uri": {
       "body_source": "uri",
@@ -62,7 +62,7 @@
           "source": "userinfo.user",
           "maps_to": "user",
           "required": true,
-          "impl": "Обязателен: без него маппер отвечает null (Dart — null-skip, ssh_parser.dart:17). Дефолт 'root' реестра НЕ материализуется маппером — узла без user просто нет."
+          "impl": "Обязателен. У нас отбраковка РАНЬШЕ секции — node_parser_core.go:394-400 (ssh в списке схем с обязательным userinfo), корпус uri/ssh/missing_user_rejected ждёт parse_error. Дефолт 'root' реестра не материализуется: ветка node_parser_ssh.go:20-23 с WarnSSHUserDefault МЁРТВАЯ, до неё исполнение не доходит (QUIRKS-кандидат на чистку)."
         },
         "password": {
           "source": "userinfo.pass",
@@ -73,10 +73,10 @@
           "maps_to": "private_key",
           "decode_extra": {
             "mode": "query",
-            "passes": 1,
-            "plus_literal": true
+            "passes": 1
           },
-          "impl": "Многострочный PEM: %0A раскрывается ОДИН раз, раскрутки до стабильной точки нет — она сломала бы ключ, где '%' законен. plus_literal (D133-7): поле PEM/base64-формата, '+' читается буквально. delta480: было — '+' становился пробелом (фикстура b480 pem_raw_plus показывает порчу: '…AAAB w/AAA…' вместо '…AAAB+w/AAA…'), стало — литерал. || ОТКРЫТОЕ МЕСТО ДЛЯ ДВИЖКА, проверять на сверке: plus_literal объявлен на ВСЁ значение, а в PEM '+' встречается ДВАЖДЫ по-разному — в base64-теле (там он данные) и в заголовке '-----BEGIN+OPENSSH+PRIVATE+KEY-----', где ссылка кодирует им ПРОБЕЛ. Фикстура b480 pem_percent_encoded сегодня ЗЕЛЁНАЯ и ждёт '-----BEGIN OPENSSH PRIVATE KEY-----' с пробелами: буквальный '+' на всём значении сломает заголовок и сдвинет identity рабочего кейса. Если движок не различает эти две позиции, запись plus_literal снимается, а D133-7 у ssh откладывается — это баг секции, не дельта."
+          "impl": "Многострочный PEM: %0A раскрывается ОДИН раз, раскрутки до стабильной точки нет — она сломала бы ключ, где '%' законен. format: pem вместо plus_literal (PRIMITIVES §0.4a, DELTAS D133-15): '+' в PEM несёт ДВА смысла — пробел в заголовочных строках -----BEGIN…----- и литерал в base64-теле, — поэтому булев флаг негоден в обоих положениях. Открытое место, помеченное LxBox, закрыто форматом. У нас сегодня заплаты нет вовсе: значение идёт из parsedURL.Query() (node_parser_ssh.go:32), и '+' становится пробелом И в заголовке, И в теле — тело ключа портится молча. QUIRKS Q133-40.",
+          "format": "pem"
         },
         "private_key_path": {
           "source": "query.private_key_path",
@@ -86,7 +86,7 @@
               "present": false
             }
           },
-          "impl": "Учитывается только при пустом private_key (ext: desktop)."
+          "impl": "Учитывается только при пустом private_key — node_parser_ssh.go:32-36. Поле launcher-only, у LxBox его нет: per-app override uri/ssh/private_key_path.expected.lxbox.json."
         },
         "private_key_passphrase": {
           "source": "query.private_key_passphrase",
@@ -116,7 +116,7 @@
         "client_version": {
           "source": "query.client_version",
           "maps_to": "client_version",
-          "impl": "ext: desktop. Наш маппер его сегодня НЕ читает — запись заведена по реестру; если корпус покажет расхождение, снимается."
+          "impl": "ext: desktop. Наш парсер его ЧИТАЕТ — node_parser_ssh.go:72-74, и корпус это фиксирует per-app override'ом: uri/ssh/full_config.expected.launcher.json несёт client_version, .expected.lxbox.json — нет. Прежняя оговорка «если корпус покажет расхождение, снимается» снята приёмкой."
         }
       },
       "include": [

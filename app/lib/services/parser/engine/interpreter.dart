@@ -255,10 +255,32 @@ final class _Run {
 
     final sep = u.splitSep;
     if (sep == null || !raw.contains(sep)) {
-      final single = u.singleInto ?? (u.into.isNotEmpty ? u.into.last : null);
+      // Разделителя нет: значение целиком идёт в ОДНО поле.
+      //
+      // Умолчание — ПЕРВОЕ имя `into`, а не последнее. Так устроен сам
+      // примитив: `into` перечисляет поля по порядку следования в userinfo, и
+      // единственный компонент — это первый из них. `single_into` существует
+      // ровно затем, чтобы умолчание ПЕРЕОПРЕДЕЛИТЬ там, где конвенция
+      // протокола другая, и обе формы живут рядом в секциях волны W4: одна
+      // объявляет первым именем, другая — последним. Будь умолчанием
+      // последнее, вторая запись была бы пустой, а секции, не объявляющие
+      // ничего, читались бы задом наперёд.
+      //
+      // Именно это и показала сверка W4 с эталоном: одинокий userinfo уезжал
+      // в последнее поле вместо первого — пять красных кейсов снимка.
+      //
+      // `userinfo.pass` пространства источников заполняется только когда
+      // значение действительно уехало в ПОСЛЕДНЕЕ имя: иначе запись с
+      // `source: "userinfo.pass"` прочитала бы первый компонент.
+      final single =
+          u.singleInto ?? (u.into.isNotEmpty ? u.into.first : null);
       if (single != null && raw.isNotEmpty) {
         _write(single, raw, null);
-        space = space.copyWith(userinfoPass: raw);
+        if (u.into.isNotEmpty && single == u.into.last) {
+          space = space.copyWith(userinfoPass: raw);
+        } else {
+          space = space.copyWith(userinfoUser: raw);
+        }
       }
       return true;
     }
