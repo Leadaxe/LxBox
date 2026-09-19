@@ -126,14 +126,6 @@ bool _propsEqual(List<Object?> a, List<Object?> b) {
   return true;
 }
 
-/// Первая причина отбраковки по старшему уровню (error → warning → info).
-RegistryWarning? primaryDropReason(List<NodeWarning> dropped) {
-  for (final w in sortedDropWarnings(dropped)) {
-    if (w is RegistryWarning) return w;
-  }
-  return null;
-}
-
 /// Причины отбраковки по старшему уровню (error → warning → info).
 /// §500 — для одиночного ввода без узла: шторка и Debug API.
 List<NodeWarning> sortedDropWarnings(List<NodeWarning> dropped) {
@@ -146,6 +138,14 @@ List<NodeWarning> sortedDropWarnings(List<NodeWarning> dropped) {
     out.addAll(dropped.where((w) => w.severity == level));
   }
   return out;
+}
+
+/// §500 — секретные `value` в причинах отбраковки (шторка и Debug API).
+List<NodeWarning> maskSecretDropWarnings(List<NodeWarning> dropped) {
+  return [
+    for (final w in dropped)
+      if (w is RegistryWarning) w.withSecretValueMasked() else w,
+  ];
 }
 
 // `transport_unsupported` — текст в реестре (`transports.json` → fallback
@@ -741,6 +741,19 @@ final class RegistryWarning extends NodeWarning {
   /// записью», и включение его в идентичность развело бы на два сообщения
   /// один и тот же код об одном и том же поле у соседних узлов.
   final String ownerTag;
+
+  /// §500 — копия с `value: ***`, если путь — секретное поле реестра.
+  RegistryWarning withSecretValueMasked() {
+    final masked = maskRegistrySecretValue(path, value);
+    if (masked == value) return this;
+    return RegistryWarning(
+      code: code,
+      path: path,
+      value: masked,
+      params: params,
+      ownerTag: ownerTag,
+    );
+  }
 
   @override
   List<Object?> get props =>

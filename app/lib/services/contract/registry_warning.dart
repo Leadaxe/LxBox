@@ -100,6 +100,30 @@ WarningSeverity registrySeverity(String code) {
   }
 }
 
+/// §500 — `value` поля с `secret: true` в реестре в шторке и Debug API
+/// не показываем. Санитайзер маскирует сам (24.1.4); здесь тот же суд по
+/// пути — на случай, если причина пришла не из него.
+String? maskRegistrySecretValue(String? path, String? value) {
+  if (value == null || value.isEmpty || value == '***') return value;
+  return registryFieldPathIsSecret(path) ? '***' : value;
+}
+
+bool registryFieldPathIsSecret(String? path) {
+  if (path == null || path.isEmpty) return false;
+  final leaf = path.split('.').last.replaceAll(RegExp(r'\[\]'), '');
+  for (final type in ContractRegistry.I.protocolNames) {
+    if (ContractRegistry.I.schemaFor(type)?.fields[leaf]?.secret == true) {
+      return true;
+    }
+  }
+  for (final shared in const ['tls', 'dialer', 'dialer.common', 'multiplex']) {
+    if (ContractRegistry.I.sharedSchema(shared)?.fields[leaf]?.secret == true) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Подстановки `{path}`, `{value}` и произвольные `{<param>}`.
 ///
 /// Незаполненный плейсхолдер остаётся как есть: текст реестра — источник

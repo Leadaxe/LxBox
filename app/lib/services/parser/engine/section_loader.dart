@@ -22,7 +22,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../../contract/registry.dart';
@@ -88,6 +88,17 @@ final class MapperSections {
       _draft[key] = jsonDecode(text) as Map<String, dynamic>;
     }
     _draftLoaded = true;
+  }
+
+  /// §500 — сброс синглтона после теста, чтобы загруженные секции не
+  /// остались соседям в том же изоляте.
+  @visibleForTesting
+  void resetForTesting() {
+    _cache.clear();
+    _draft.clear();
+    _documents = null;
+    _draftLoaded = false;
+    _draftDir = null;
   }
 
   /// Досыпать черновики С ДИСКА синхронно, когда секция понадобилась раньше

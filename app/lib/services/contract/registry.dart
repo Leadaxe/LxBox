@@ -19,6 +19,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 
 /// Чтение файла реестра. Инъекция ради тестов: прод читает `rootBundle`,
@@ -378,6 +379,19 @@ final class ContractRegistry {
   bool _loaded = false;
 
   bool get isLoaded => _loaded;
+
+  /// §500 — сброс синглтона после теста, чтобы загруженный реестр не
+  /// остался соседям в том же изоляте.
+  @visibleForTesting
+  void resetForTesting() {
+    _loaded = false;
+    _version = '';
+    _protocols.clear();
+    _shared.clear();
+    _warnings.clear();
+    _schemaCache.clear();
+    _transportCache.clear();
+  }
 
   /// Версия контракта из `contract/VERSION` (например `1.1.0`).
   String get version => _version;

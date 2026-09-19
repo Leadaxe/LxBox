@@ -778,7 +778,7 @@ class SubscriptionController extends ChangeNotifier {
       ?verdict,
       ...?dropped,
     ];
-    final sorted = sortedDropWarnings(all);
+    final sorted = maskSecretDropWarnings(sortedDropWarnings(all));
     if (sorted.isEmpty) {
       _lastError = ErrMsg(key);
       return;

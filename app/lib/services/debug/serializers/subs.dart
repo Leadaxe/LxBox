@@ -4,7 +4,6 @@ import '../../../models/codec/source_record.dart';
 import '../../../models/import_rule.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
-import '../../contract/registry.dart';
 import '../../contract/registry_warning.dart';
 import '../../url_mask.dart';
 
@@ -86,7 +85,7 @@ Map<String, Object?> serializeSubEntry(
 /// §500 — причина отбраковки одиночного ввода (`addFromInput`).
 Map<String, Object?> serializeParseDrop(RegistryWarning w) {
   final code = w.code;
-  final value = _parseDropValueForApi(w);
+  final value = maskRegistrySecretValue(w.path, w.value);
   return {
     'code': code,
     'path': w.path,
@@ -94,30 +93,6 @@ Map<String, Object?> serializeParseDrop(RegistryWarning w) {
     'title_en': registryTitle(code, RegistryLang.en,
         path: w.path, value: value, params: w.params),
   };
-}
-
-String? _parseDropValueForApi(RegistryWarning w) {
-  final v = w.value;
-  if (v == null || v.isEmpty) return v;
-  if (v == '***') return v;
-  if (_registryPathIsSecret(w.path)) return '***';
-  return v;
-}
-
-bool _registryPathIsSecret(String? path) {
-  if (path == null || path.isEmpty) return false;
-  final leaf = path.split('.').last.replaceAll(RegExp(r'\[\]'), '');
-  for (final type in ContractRegistry.I.protocolNames) {
-    if (ContractRegistry.I.schemaFor(type)?.fields[leaf]?.secret == true) {
-      return true;
-    }
-  }
-  for (final shared in const ['tls', 'dialer', 'dialer.common', 'multiplex']) {
-    if (ContractRegistry.I.sharedSchema(shared)?.fields[leaf]?.secret == true) {
-      return true;
-    }
-  }
-  return false;
 }
 
 Map<String, Object?> serializeNodeWarning(NodeWarning w) {

@@ -29,14 +29,19 @@ direct link» (или соседние фразы для WG/JSON) — без о�
 - Поле ввода при отказе не очищается.
 - Debug API `POST /subs`: при отказе `addFromInput` в теле ошибки
   `dropped: [{code, path, value, title_en}]` (секреты в `value` — `***`).
+  То же маскирование — в шторке: `value` поля с атрибутом `secret` в реестре
+  не показывается.
 
 ## Критерии приёмки
 
 - [x] Негодный CIDR в `wireguard://` — под полем «Could not parse direct
   link», шторка с `type_invalid` / `address`; метка `wg-bad-cidr`.
 - [x] Ссылка без обязательного поля — `field_missing` в шторке.
-- [x] Мусорная строка — «Input is not…» без шторки.
+- [x] Мусорная строка — без шторки и без `dropped[]` (прежнее сообщение).
 - [x] JSON / `.conf` — тот же путь (`noValidOutboundsInJson` /
   `invalidWireguardConfig`).
 - [x] `POST /subs` при отказе — `dropped[]` в JSON ошибки.
-- [x] Тесты контроллера и виджета; `flutter analyze` без новых issues.
+- [x] Секрет (`private_key`) в шторке и API — `***`.
+- [x] Шторка открывается сразу; поле ввода не очищается.
+- [x] Тесты контроллера и виджета независимы по порядку; `tearDown` снимает
+  реестр; `flutter analyze` без новых issues.

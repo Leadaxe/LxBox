@@ -209,12 +209,7 @@ final class ParseInputRejectedMsg extends UiMsg {
   List<Object?> get props => [key, dropped, sourceLabel];
 
   @override
-  String renderWith(GetLocalText t) => switch (key) {
-        ErrKey.invalidWireguardConfig => t.s("Invalid WireGuard config"),
-        ErrKey.couldNotParseDirectLink => t.s("Could not parse direct link"),
-        ErrKey.noValidOutboundsInJson => t.s("No valid outbounds in JSON"),
-        _ => ErrMsg(key).renderWith(t),
-      };
+  String renderWith(GetLocalText t) => ErrMsg(key).renderWith(t);
 }
 
 final class ErrMsg extends UiMsg {
