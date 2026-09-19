@@ -413,6 +413,7 @@ final class MapperParam {
     this.onWhenFalse = const {},
     this.onImpliesWritten = const {},
     this.onItemInvalid = const {},
+    this.onEmpty = const {},
     this.valueMapCase,
     this.implicit = false,
     this.raw = const {},
@@ -487,6 +488,7 @@ final class MapperParam {
           .cast<String, dynamic>(),
       onItemInvalid:
           ((j['on_item_invalid'] as Map?) ?? const {}).cast<String, dynamic>(),
+      onEmpty: ((j['on_empty'] as Map?) ?? const {}).cast<String, dynamic>(),
       valueMapCase: j['value_map_case'] as String?,
       implicit: j['implicit'] as bool? ?? false,
       raw: j,
@@ -556,6 +558,19 @@ final class MapperParam {
   /// регуляркой `extract` и пропущен. Код ставится ОДИН раз на узел, сколько
   /// бы элементов ни отсеялось.
   final Map<String, dynamic> onItemInvalid;
+
+  /// `on_empty: {code}` — код за ПУСТОЕ значение записи: источник места под
+  /// него не дал вовсе либо дал пустым.
+  ///
+  /// Отличается от [onInvalid] тем, что судит не написание, а НАЛИЧИЕ: пустая
+  /// строка форму значения не нарушает, и ни одна проверка типа её не ловит.
+  /// Отличается от `required` тем, что узел ОСТАЁТСЯ: «значения нет» — это
+  /// цена соединения, о которой человеку говорят, а не приговор записи.
+  ///
+  /// Ставится одинаково на оба написания отсутствия, потому что для тела они
+  /// неразличимы: пустой хвост (`uuid:@host`) и отсутствие хвоста
+  /// (`uuid@host`) дают одно и то же — значения нет.
+  final Map<String, dynamic> onEmpty;
 
   /// `value_map_case: "sensitive"` — регистр значения ЗНАЧИМ. Общее правило
   /// обратное (живые списки шлют `NONE`), но там, где ядро сравнивает литерал

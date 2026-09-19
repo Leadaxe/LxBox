@@ -1587,6 +1587,17 @@ final class _Run {
 
     var raw = _valueOf(p);
     if (raw == null) {
+      // `on_empty` — код за ПУСТОЕ значение записи. Ставится до разбора
+      // `default_when`: спрашивают не «чем заполнить», а «что человеку
+      // сказать», и дефолт этого не отменяет.
+      //
+      // Оба написания отсутствия судятся одинаково и ЗДЕСЬ, потому что до
+      // этой точки они уже сошлись: пустой хвост userinfo (`uuid:@host`) в
+      // тело не пишется (`parts[i].isEmpty → continue`), отсутствие хвоста
+      // (`uuid@host`) не даёт `userinfo.pass` вовсе, и `_valueOf` на обоих
+      // отвечает `null`. Различать их значило бы выдумать разницу, которой
+      // у тела нет.
+      _applyOnEmpty(p);
       // `default_when: {absent: true, value: …}` — «не сказано» ЕСТЬ
       // значение, и дальше запись исполняется как обычная. Без этого
       // селектор рода узла (`version` у форка Xray, где 2 подразумевается)
@@ -2134,6 +2145,17 @@ final class _Run {
     final code = p.onInvalid['code'] as String?;
     if (code == null) return;
     warnings.add(NodeWarning.byCode(code, path: p.name, value: raw.trim()));
+  }
+
+  /// `on_empty` — код за пустое значение записи; узел ОСТАЁТСЯ.
+  ///
+  /// `value` пуст по существу: показывать нечего, и подставить сюда написание
+  /// входа значило бы соврать — у двух написаний отсутствия оно разное, а
+  /// событие одно. Адрес несёт `path`, его и читает текст реестра.
+  void _applyOnEmpty(MapperParam p) {
+    final code = p.onEmpty['code'] as String?;
+    if (code == null) return;
+    warnings.add(NodeWarning.byCode(code, path: p.name, value: ''));
   }
 
   // ─────────────────────────── источники ───────────────────────────

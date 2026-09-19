@@ -280,6 +280,66 @@ void main() {
     }, skip: skip);
   });
 
+  // РЕШЕНИЕ ВЛАДЕЛЬЦА 19.09.2026 — пустой пароль это УЗЕЛ С ПРЕДУПРЕЖДЕНИЕМ,
+  // а не отбраковка. Снимает расхождение строгости, которое лаунчер держал
+  // открытым вопросом (TASKS_LXBOX §32.3, Q133-67). Соединение возможно по
+  // устройству протокола: токен TUIC v5 — TLS-экспортёр, пароль идёт
+  // КОНТЕКСТОМ, и пустой контекст экспортёр не отвергает.
+  group('пустой пароль — узел с кодом, не отбраковка', () {
+    const uuid = '11111111-1111-1111-1111-111111111111';
+    const empty = 'tuic://$uuid:@example-1.com:443#n';
+    const absent = 'tuic://$uuid@example-1.com:443#n';
+
+    test('оба написания дают УЗЕЛ и код password_empty', () {
+      // Написаний отсутствия два — пустой хвост и хвоста нет вовсе, — а
+      // событие одно: значения нет. Для тела они неразличимы, поэтому и
+      // судятся одинаково.
+      for (final u in [empty, absent]) {
+        final spec = parseUri(u);
+        expect(spec, isNotNull, reason: 'узел отбракован: $u');
+        final w = _registry(spec!).where((w) => w.code == 'password_empty');
+        expect(w, hasLength(1), reason: 'один код на узел: $u');
+        expect(w.single.path, 'password');
+      }
+    }, skip: skip);
+
+    test('тело у обоих написаний ОДНО и то же', () {
+      final a = parseUri(empty)!.emit(TemplateVars.empty).map;
+      final b = parseUri(absent)!.emit(TemplateVars.empty).map;
+      expect(b, a, reason: 'написание входа в тело не просачивается');
+      // Форма поля — та же, что у узла с паролем: ключ на месте, значение
+      // пустое. Ядро читает отсутствующий ключ и пустую строку одинаково
+      // (`option/tuic.go Password` с omitempty), и заводить второе написание
+      // «нет пароля» значило бы двигать тела живых узлов без нужды.
+      expect(a['password'], '');
+    }, skip: skip);
+
+    test('круг parse(emit) сходится вместе с кодом', () {
+      for (final u in [empty, absent]) {
+        final a = parseUri(u)!;
+        final b = parseUri(a.toUri());
+        expect(b, isNotNull, reason: 'круг потерял узел: $u');
+        expect(b!.emit(TemplateVars.empty).map, a.emit(TemplateVars.empty).map,
+            reason: 'круг изменил тело: $u');
+        expect(legacyNodeIdentityHash(b), legacyNodeIdentityHash(a),
+            reason: 'круг изменил identity: $u');
+        // Код обязан пережить круг: исходящая ссылка пароля не несёт, и
+        // второй разбор видит ровно то же отсутствие.
+        expect(
+          _registry(b).where((w) => w.code == 'password_empty'),
+          hasLength(1),
+          reason: 'круг потерял код: $u',
+        );
+      }
+    }, skip: skip);
+
+    test('узел С паролем кода не получает', () {
+      final spec = parseUri('tuic://$uuid:pass123@example-1.com:443#n')!;
+      expect(_registry(spec).where((w) => w.code == 'password_empty'), isEmpty);
+      expect(spec.emit(TemplateVars.empty).map['password'], 'pass123');
+    }, skip: skip);
+  });
+
   group('§472 — второй проход по emit() узла конвейера не дублирует коды', () {
     test('annotateAllWithRegistry на разобранном tuic ничего не добавляет', () {
       final spec = parseUri(
