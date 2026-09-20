@@ -56,9 +56,9 @@ phone-only patches.
 | Before | Now |
 |---|---|
 | One bad server in a large subscription blocked the whole VPN; the core message named an index, not a node you recognise | **Start** parses the core's refusal, finds the named server and disables it — the same switch you would use yourself |
-| No way to see which servers were culled | After a clean start, a banner shows how many were disabled; **Show** lists each with the core's text; a tap opens that node's **Diagnostics** (notifications at the bottom) |
+| No way to see which servers were turned off | After a clean start, a banner shows how many were disabled; **Show** lists each with the core's text; a tap opens that node's **Diagnostics** (notifications at the bottom) |
 | A disabled-by-core server stayed disabled after a subscription refresh even if the provider fixed it | When the node's body changes on refresh, it is enabled again for a new check |
-| — | Up to ten silent `checkConfig` rounds before the app asks whether to continue; **Start** turns into **Stop** while the cycle runs |
+| — | Up to ten silent checks of the remaining servers before the app asks whether to continue; **Start** turns into **Stop** while the cycle runs |
 
 Servers you disabled yourself are never touched. Updating the core alone does not
 clear a core verdict — toggle the switch or refresh the subscription. The banner
@@ -71,7 +71,7 @@ auto-start and the watchdog raise the last saved config as before.
 
 | Situation | Before | Now |
 |---|---|---|
-| Xray JSON pasted as a single outbound, a full config with `outbounds`, or an array | Only a config array was accepted; preview showed zero nodes | All four shapes are accepted; preview shows the real count |
+| Xray JSON pasted as a single outbound, a full config with `outbounds`, an array of outbounds, or an array of configs | Only an array of configs was accepted; preview showed zero nodes | All four shapes are accepted; preview shows the real count |
 | Base64 subscription text pasted from the clipboard | Worked only as a URL | The wrapper is stripped on paste too |
 | `type=splithttp` in a share link | Node was built with no transport — dead TCP on an HTTP port, silently | Read as `xhttp`; same node as the canonical name |
 | Hysteria2 `mport` with a port range | Server address landed in the port list → core fatal «bad port range», whole VPN down | Only a number pair is a port-range element; a lone port stays on the server |
@@ -80,19 +80,20 @@ auto-start and the watchdog raise the last saved config as before.
 | VMess over gRPC (**Copy link**) | gRPC service name from v2rayN (`path` in the JSON container) was lost on copy | Emitted back with `serviceName` mapped from `path` |
 | TUIC link with empty password (`tuic://uuid:@host`) | Node disappeared or passed silently | Node stays; a warning marks the empty password |
 | Xray outbound element without `port` | App silently used 443 or 1080 | Element is dropped, as in Xray-core — no fake node |
-| Unknown query parameter on a link | Dropped with a generic message or silently | Named by parameter (`uri_param_unknown` with the parameter name) |
+| Unknown query parameter on a link | Dropped with a generic message or silently | Named by the parameter |
 | WireGuard `[Peer]` without `Endpoint` | Became a node with nowhere to connect | Rejected |
-| Disabled TLS object `tls: {"enabled": false}` in a JSON body | Could crash the core on first dial (lx.5…lx.18) | Removed on input on every path, like links already were |
+| Disabled TLS object `tls: {"enabled": false}` in a JSON body | Could crash the core on first dial | Removed on input on every path, like links already were |
 | Invalid CIDR on a WireGuard address | Whole VPN failed to start | Bad prefix is stripped from that node |
 | Fractional port in JSON (`443.9`) | Truncated to `443` | Node is rejected |
 | Xray `dialerProxy` pointing at a freedom fragment outbound | Whole node dropped as a bad hop | Node stays direct; TLS fragment is set |
+| Naive link `password@host` (no colon in userinfo) | Read as a username with an empty password — auth failed | Read as the password, same as NekoBox / NaiveGUI |
 
 ## 📋 Notifications and the lists
 
 | Before | Now |
 |---|---|
 | One long warning line under a node; info drowned real problems | Error ✖ / warning ⚠ show text; info ⓘ is an icon only — tap opens the full list |
-| No structured explanation | Expandable cards with What / Why / What to do; **Learn more** opens offline contract docs |
+| No structured explanation | Expandable cards **What happened** / **Why it happens** / **What you can do**; **Details** opens offline contract docs |
 | Home screen and a cold start hid badges that Servers already showed | The same badge (highest level) on the home node list, including after a cold start and on a standalone server |
 | A rejected paste on Servers was a red line under the field | The red line stays; a sheet with the same card opens at once |
 | A new source on Servers was easy to miss | The list scrolls to the new row and highlights it as **New** for a few seconds |
@@ -103,13 +104,15 @@ Check / Run output. The Diagnostics tab shows a yellow dot when there is
 something to read (red on error). There is no separate Notifications tab.
 
 **Copy link** on a node whose link carries a private key (SSH, WireGuard/AWG,
-MASQUE) now shows a confirmation dialog instead of refusing or copying silently.
+MASQUE) now asks with **Link contains a private key** / **Copy anyway**, instead
+of refusing or copying silently.
 
 ## ⚙️ Core
 
 `v1.14.1-lx.4` → **`v1.14.1-lx.8`**. A REALITY `short_id` that is too long is an
-error, not a process panic. Init errors name the record type and tag (the
-insurance feature uses that). A gRPC `service_name` is passed through as written.
+error, not a process panic. Init errors name the record type and tag — **Start**
+uses that to find the bad server. A gRPC `service_name` is passed through as
+written.
 
 ## ⚠️ What may change for you
 
@@ -121,8 +124,8 @@ insurance feature uses that). A gRPC `service_name` is passed through as written
 
 ## 🧪 Tests
 
-CI `checks` on this `develop` head is green (analyze, the full test suite, four
-l10n checkers, docs parity).
+CI `checks` (analyze, the full test suite, four l10n checkers, docs parity)
+is the release gate.
 
 </details>
 
@@ -134,7 +137,7 @@ l10n checkers, docs parity).
 | Было | Стало |
 |---|---|
 | Тринадцать рукописных разборщиков ссылок, отдельный разбор Xray, отдельный разбор WireGuard INI и отдельная сборка ссылки | Один движок по таблицам общего реестра для всех схем |
-| Починка на телефоне не доезжала на десктоп, пока не правили обе стороны | Правила живут в общем реестре; оба приложения читают одну таблицу |
+| Починка на телефоне не доезжала до десктопа, пока не правили обе стороны | Правила живут в общем реестре; оба приложения читают одну таблицу |
 | Тексты части предупреждений держались только в коде приложения | Заголовки, объяснения и советы — из `warnings.json` реестра |
 | Узел после **Copy link** на одной стороне мог отличаться на другой | Разбор и сборка — одна таблица |
 
@@ -156,7 +159,7 @@ l10n checkers, docs parity).
 | Один негодный сервер в большой подписке блокировал весь VPN; строка ядра называла индекс, а не узел из списка | **Start** разбирает отказ ядра, находит названный сервер и выключает его — тем же переключателем, что и вы |
 | Не было видно, какие серверы вычистили | После чистого старта плашка с числом отключённых; **Show** — список с текстом ядра по каждому; тап открывает **Diagnostics** этого узла (уведомления снизу) |
 | Сервер, выключенный ядром, оставался выключенным после обновления подписки, даже если провайдер его починил | При смене тела узла на обновлении он включается снова для новой проверки |
-| — | До десяти тихих кругов `checkConfig`, затем вопрос — продолжать или остановиться; **Start** на время цикла становится **Stop** |
+| — | До десяти тихих проверок остальных серверов, затем вопрос — продолжать или остановиться; **Start** на время цикла становится **Stop** |
 
 Серверы, которые выключили вы сами, не трогаются. Одно обновление ядра вердикт
 не снимает — переключатель или обновление подписки. Плашка на главном уходит
@@ -169,7 +172,7 @@ l10n checkers, docs parity).
 
 | Ситуация | Было | Стало |
 |---|---|---|
-| Xray-JSON: один outbound, полный конфиг с `outbounds` или массив | Принимался только массив конфигов; превью показывало ноль узлов | Понятны все четыре формы; превью — настоящее число узлов |
+| Xray-JSON: один outbound, полный конфиг с `outbounds`, массив outbound'ов или массив конфигов | Принимался только массив конфигов; превью показывало ноль узлов | Понятны все четыре формы; превью — настоящее число узлов |
 | Подписка base64 из буфера обмена | Работала только по ссылке | Оболочка снимается и при вставке |
 | `type=splithttp` в ссылке | Узел без транспорта — мёртвое TCP на HTTP-порту, молча | Читается как `xhttp`; тот же узел, что с каноническим именем |
 | Hysteria2: диапазон портов в `mport` | Адрес сервера попадал в список портов → фатал ядра «bad port range», весь VPN | Элементом диапазона считается только пара чисел; одиночный порт остаётся у сервера |
@@ -178,19 +181,20 @@ l10n checkers, docs parity).
 | VMess по gRPC (**Copy link**) | Имя gRPC-сервиса из v2rayN (поле `path` в JSON-контейнере) терялось при копировании | Возвращается с `serviceName`, сопоставленным с `path` |
 | TUIC с пустым паролем (`tuic://uuid:@host`) | Узел исчезал или проходил молча | Узел остаётся; предупреждение о пустом пароле |
 | Элемент Xray без поля `port` | Приложение молча подставляло 443 или 1080 | Элемент отбраковывается, как в Xray-core — фиктивного узла нет |
-| Неизвестный параметр ссылки | Снимался с общим текстом или молча | Называется по имени (`uri_param_unknown` с именем параметра) |
+| Неизвестный параметр ссылки | Снимался с общим текстом или молча | Называется по имени параметра |
 | WireGuard: `[Peer]` без `Endpoint` | Собирался узел без адреса для соединения | Отбраковывается |
-| Выключенный TLS `tls: {"enabled": false}` в JSON-теле | Мог ронять ядро на первом дозвоне (lx.5…lx.18) | Снимается на входе на всех путях, как у ссылок раньше |
+| Выключенный TLS `tls: {"enabled": false}` в JSON-теле | Мог ронять ядро на первом дозвоне | Снимается на входе на всех путях, как у ссылок раньше |
 | Негодный CIDR у адреса WireGuard | Не стартовал весь VPN | Дурной префикс снимается с этого узла |
 | Дробный порт в JSON (`443.9`) | Усекался до `443` | Узел отбраковывается |
 | Xray `dialerProxy` на freedom с fragment | Узел отбрасывался как негодный хоп | Узел остаётся прямым; ставится TLS-фрагментация |
+| Ссылка naive `пароль@хост` (в userinfo нет двоеточия) | Читалась как имя без пароля — авторизация не проходила | Читается как пароль, как в NekoBox / NaiveGUI |
 
 ## 📋 Уведомления и списки
 
 | Было | Стало |
 |---|---|
 | Одна длинная строка предупреждения под узлом; info заглушал настоящие проблемы | Error ✖ / warning ⚠ — текстом; info ⓘ — значком; тап открывает полный список |
-| Не было структурированного объяснения | Раскрывающиеся карточки «Что произошло» / «Почему» / «Что сделать»; **Подробнее** — офлайн-доки контракта |
+| Не было структурированного объяснения | Раскрывающиеся карточки **What happened** / **Why it happens** / **What you can do**; **Details** — офлайн-доки контракта |
 | На главном и после холодного старта значка не было, хотя на Servers предупреждение уже видно | Тот же значок (старший уровень) в списке Nodes на главном — в том числе после холодного старта и у одиночного сервера |
 | Отказ вставки на Servers — красная строка под полем | Строка остаётся; сразу открывается шторка с той же карточкой |
 | Новую запись на Servers легко было не заметить | Список прокручивается к новой строке и подсвечивает её как **New** на несколько секунд |
@@ -201,13 +205,14 @@ Check / Run. На ярлыке Diagnostics — жёлтая точка, если
 (красная при error). Отдельной вкладки Notifications нет.
 
 **Copy link** у узла, чья ссылка несёт приватный ключ (SSH, WireGuard/AWG,
-MASQUE), теперь спрашивает подтверждение вместо отказа или тихого копирования.
+MASQUE), теперь спрашивает **Link contains a private key** / **Copy anyway**,
+а не отказывает и не копирует молча.
 
 ## ⚙️ Ядро
 
 `v1.14.1-lx.4` → **`v1.14.1-lx.8`**. Слишком длинный REALITY `short_id` — ошибка,
-а не паника процесса. В ошибках инициализации ядро называет тип и тег записи
-(на этом стоит страховка). Имя gRPC-сервиса уходит как написано.
+а не паника процесса. В ошибках инициализации ядро называет тип и тег записи —
+**Start** по ним находит негодный сервер. Имя gRPC-сервиса уходит как написано.
 
 ## ⚠️ Что может измениться у вас
 
@@ -219,8 +224,8 @@ MASQUE), теперь спрашивает подтверждение вмест
 
 ## 🧪 Тесты
 
-CI `checks` на этой голове `develop` зелёный (analyze, полный набор тестов,
-четыре l10n-чекера, паритет доков).
+CI `checks` (analyze, полный набор тестов, четыре l10n-чекера, паритет доков) —
+релизный гейт.
 
 </details>
 
