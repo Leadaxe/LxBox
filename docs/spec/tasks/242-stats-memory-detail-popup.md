@@ -35,11 +35,12 @@ Bottom-sheet по образцу `traffic_event_detail_sheet` (grabber / header 
 
 ### Источник данных
 
-Native-метод `getMemoryInfo` в `VpnPlugin.kt` → `Debug.getMemoryInfo` +
-`getMemoryStat("summary.*")` (API 23, KB → ×1024) +
-`getNativeHeapAllocatedSize/Size`. Прокинут через `BoxVpnClient.getMemoryInfo()
-→ MemoryInfo?`. Goroutines/connections берутся из уже существующего
-`CcStatus` (проброшены в `OverviewTab`).
+Native-метод `getMemoryInfo` в `VpnPlugin.kt` →
+`ActivityManager.getProcessMemoryInfo` (§507; `Debug.getMemoryInfo` — запас,
+он не заполняет `summary.*` на Android 10+) + `getMemoryStat("summary.*")`
+(API 23, KB → ×1024) + `getNativeHeapAllocatedSize/Size`. Прокинут через
+`BoxVpnClient.getMemoryInfo() → MemoryInfo?`. Goroutines/connections берутся
+из уже существующего `CcStatus` (проброшены в `OverviewTab`).
 
 ## Ограничение (Go-inuse недоступен)
 

@@ -1029,43 +1029,78 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
 
-            // Разбивка памяти процесса приложения (ядро sing-box живёт в этом
-            // же процессе — VpnService без android:process). Даёт категории,
-            // которых нет в CommandClient-статусе (там только RSS всего
-            // процесса): native heap (сюда попадают Go-буферы ядра), Dalvik/ART,
-            // graphics, code, stack, system. Значения — в байтах (Debug отдаёт
-            // KB → ×1024) для единого formatBytes на Dart-стороне. summary.*
-            // из Debug.MemoryInfo.getMemoryStat доступны с API 23.
+            // §242/§507 — разбивка PSS процесса для Stats → Memory. AMS, не
+            // Debug.getMemoryInfo: на Android 10+ summary.* у Debug — нули.
+            // IO-поток: обход smaps на большом RSS — сотни мс, на main = ANR.
             "getMemoryInfo" -> {
-                try {
-                    val mi = android.os.Debug.MemoryInfo()
-                    android.os.Debug.getMemoryInfo(mi)
-                    fun stat(key: String): Long =
-                        mi.getMemoryStat(key)?.toLongOrNull()?.times(1024) ?: 0L
-                    val out = hashMapOf<String, Any>(
-                        "totalPss" to stat("summary.total-pss"),
-                        "totalSwap" to stat("summary.total-swap"),
-                        "javaHeap" to stat("summary.java-heap"),
-                        "nativeHeap" to stat("summary.native-heap"),
-                        "code" to stat("summary.code"),
-                        "stack" to stat("summary.stack"),
-                        "graphics" to stat("summary.graphics"),
-                        "privateOther" to stat("summary.private-other"),
-                        "system" to stat("summary.system"),
-                        // Аллоцированный native heap (Go-память ядра + прочая
-                        // нативка) — прямой счётчик malloc, не PSS-категория.
-                        "nativeHeapAllocated" to android.os.Debug.getNativeHeapAllocatedSize(),
-                        "nativeHeapSize" to android.os.Debug.getNativeHeapSize(),
-                    )
-                    result.success(out)
-                } catch (t: Throwable) {
-                    Log.e(TAG, "getMemoryInfo failed", t)
-                    result.error("MEMINFO_FAILED", t.message ?: t.javaClass.simpleName, null)
+                val appContext = context
+                pluginScope.launch {
+                    try {
+                        val out = withContext(Dispatchers.IO) {
+                            collectProcessMemoryInfo(appContext)
+                        }
+                        result.success(out)
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "getMemoryInfo failed", t)
+                        result.error("MEMINFO_FAILED",
+                            t.message ?: t.javaClass.simpleName, null)
+                    }
                 }
             }
 
             else -> result.notImplemented()
         }
+    }
+
+    /// §242/§507 — PSS-разбивка своего процесса для Stats → Memory sheet.
+    ///
+    /// `Debug.getMemoryInfo()` читает `/proc/self` и на Android 10+ (тем более
+    /// 15+) не заполняет `otherStats`, из которых `getMemoryStat("summary.*")`
+    /// считает java-heap / native-heap / graphics / …. Документация Android
+    /// прямо говорит брать `ActivityManager.getProcessMemoryInfo`. AMS ходит
+    /// dumpsys-путём и видит protected-аллокации.
+    ///
+    /// Если AMS пуст (rate-limit Q+, эмулятор без memtrack) — запас
+    /// `Debug.getMemoryInfo`. Для нулевых `summary.*` — грубые поля той же
+    /// структуры (`dalvikPss` / `nativePss` / `otherPss` / `totalPss`), чтобы
+    /// sheet не показывал семь нулей при живом RSS.
+    ///
+    /// Значения в байтах (фреймворк отдаёт KB). Звать с IO-потока.
+    private fun collectProcessMemoryInfo(context: Context): Map<String, Any> {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE)
+            as? android.app.ActivityManager
+        val fromAm = runCatching {
+            am?.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid()))
+                ?.firstOrNull()
+        }.getOrNull()
+        val mi = if (fromAm != null && fromAm.totalPss > 0) {
+            fromAm
+        } else {
+            android.os.Debug.MemoryInfo().also { android.os.Debug.getMemoryInfo(it) }
+        }
+
+        fun kb(statName: String, fallbackKb: Int = 0): Long {
+            val parsed = mi.getMemoryStat(statName)?.toLongOrNull() ?: 0L
+            val value = if (parsed > 0L) parsed else fallbackKb.toLong()
+            return value * 1024L
+        }
+
+        return hashMapOf(
+            "totalPss" to kb("summary.total-pss", mi.totalPss),
+            "totalSwap" to kb("summary.total-swap", mi.totalSwappedOutPss),
+            "javaHeap" to kb("summary.java-heap", mi.dalvikPss),
+            "nativeHeap" to kb("summary.native-heap", mi.nativePss),
+            "code" to kb("summary.code"),
+            "stack" to kb("summary.stack"),
+            "graphics" to kb("summary.graphics"),
+            "privateOther" to kb("summary.private-other", mi.otherPss),
+            "system" to kb("summary.system"),
+            // Аллоцированный native heap (Go-память ядра + прочая нативка) —
+            // прямой счётчик malloc, не PSS-категория. На Debug.getMemoryInfo
+            // не завязан, в 2.25 не ломался.
+            "nativeHeapAllocated" to android.os.Debug.getNativeHeapAllocatedSize(),
+            "nativeHeapSize" to android.os.Debug.getNativeHeapSize(),
+        )
     }
 
     /// §038 — `getHistoricalProcessExitReasons` lazy reader. На API <30 →

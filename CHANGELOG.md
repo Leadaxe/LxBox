@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stats → Memory: разбивка PSS снова с цифрами (§507).** После перехода
+  на 2.25 секция Breakdown в шторке памяти была сплошными нулями (RSS и
+  malloc-счётчики Native heap при этом живые). Источник сменился с
+  `Debug.getMemoryInfo` на `ActivityManager.getProcessMemoryInfo`: на
+  Android 10+ первый не заполняет категории `summary.*`.
+
 ## [2.25.0] — 2026-09-20
 
 > Главное — **сближение с лаунчером по

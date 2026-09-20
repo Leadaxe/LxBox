@@ -669,7 +669,8 @@ class BoxVpnClient {
     return v ?? '';
   }
 
-  /// Разбивка памяти процесса приложения (native `Debug.MemoryInfo`). Ядро
+  /// Разбивка памяти процесса приложения (native `ActivityManager`
+  /// `getProcessMemoryInfo`, §507; `Debug.getMemoryInfo` — запас). Ядро
   /// sing-box живёт в этом же процессе, поэтому native heap включает его
   /// Go-буферы. Даёт категории, которых нет в CommandClient-статусе (там —
   /// только суммарный RSS). Все значения в байтах. `null` на ошибку/timeout —
@@ -1014,10 +1015,11 @@ class BoxVpnClient {
   }
 }
 
-/// Разбивка памяти процесса приложения из native `Debug.MemoryInfo`
-/// (`getMemoryInfo`). Все поля — в байтах. Категории `summary.*` (PSS) плюс
-/// прямые счётчики native heap. Ядро sing-box в том же процессе → его память
-/// внутри [nativeHeap]/[nativeHeapAllocated].
+/// Разбивка памяти процесса приложения из native `getMemoryInfo` (§507:
+/// AMS `getProcessMemoryInfo`, не голый `Debug.getMemoryInfo`). Все поля —
+/// в байтах. Категории `summary.*` (PSS) плюс прямые счётчики native heap.
+/// Ядро sing-box в том же процессе → его память внутри [nativeHeap]/
+/// [nativeHeapAllocated].
 class MemoryInfo {
   const MemoryInfo({
     this.totalPss = 0,
