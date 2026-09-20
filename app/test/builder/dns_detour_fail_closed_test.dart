@@ -11,6 +11,8 @@ import 'package:lxbox/services/settings_storage.dart';
 
 import '../storage_migration/golden_harness.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §441/§443 (SPEC 129 Н10, D-118) — вторая линия fail-closed на сборке:
 // DNS-сервер, чей `detour` после подстановки висит, не эмитится; правила на
 // него становятся отказом, `dns.final` снимается с заглушкой `reject`
@@ -19,6 +21,10 @@ import '../storage_migration/golden_harness.dart';
 // `detour: direct-out` снимается, как раньше.
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('healDetourDroppedDnsRefs', () {
     Map<String, dynamic> config() => {
           'outbounds': [

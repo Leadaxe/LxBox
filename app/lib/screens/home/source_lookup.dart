@@ -1,5 +1,8 @@
 import '../../controllers/subscription_controller.dart';
+import '../../models/core_reject_verdict.dart';
+import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
+import '../../services/node_hash.dart';
 import '../../services/tag_resolver.dart';
 
 /// §091/§235 — какие ИСТОЧНИКИ (подписки + папки §234) «владеют» данным
@@ -114,6 +117,140 @@ TagOwner? ownerOfTag(String culpritTag, List<SubscriptionEntry> entries) {
         }
       }
     }
+  }
+  return null;
+}
+
+/// §498 — владелец [node] для навигации из плашки/листа страховки. Сравнение
+/// по идентичности объекта (`identical`), как у [disableNodeByCoreTag];
+/// хоп цепочки принадлежит владельцу (тот же обход, что у [ownerOfTag]).
+bool _nodeOrHop(NodeSpec owner, NodeSpec node) {
+  if (identical(owner, node)) return true;
+  for (var hop = owner.chained; hop != null; hop = hop.chained) {
+    if (identical(hop, node)) return true;
+  }
+  return false;
+}
+
+/// §505 — узел в хранилище и вердикты страховки по финальному config-тегу.
+({NodeSpec node, List<StoredWarning> stored})? storedNodeOfEmittedTag(
+  String emittedTag,
+  List<SubscriptionEntry> entries,
+) {
+  final owner = ownerOfTag(emittedTag, entries);
+  if (owner == null) return null;
+  final list = entries[owner.entryIndex].list;
+  switch (list) {
+    case FolderServers f:
+      final mi = owner.memberIndex;
+      if (mi == null) return null;
+      final m = f.members[mi];
+      final n = m.node;
+      if (n == null) return null;
+      return (node: n, stored: m.warnings);
+    case SubscriptionServers sub:
+      final candidates = <String>[emittedTag];
+      final dedup = RegExp(r'^(.*)-\d+$').firstMatch(emittedTag);
+      if (dedup != null) candidates.add(dedup.group(1)!);
+      for (final cand in candidates) {
+        final bare = TagResolver.stripPrefix(cand, sub.tagPrefix);
+        for (final n in sub.nodes) {
+          if (n.tag == bare) {
+            final id = sourceNodeIdentities(sub.nodes)[n];
+            return (
+              node: n,
+              stored: id == null
+                  ? const <StoredWarning>[]
+                  : sub.nodeWarnings[id] ?? const <StoredWarning>[],
+            );
+          }
+          for (var hop = n.chained; hop != null; hop = hop.chained) {
+            if (hop.tag == bare) {
+              final id = sourceNodeIdentities(sub.nodes)[n];
+              return (
+                node: n,
+                stored: id == null
+                    ? const <StoredWarning>[]
+                    : sub.nodeWarnings[id] ?? const <StoredWarning>[],
+              );
+            }
+          }
+        }
+      }
+      return null;
+    case UserServer us:
+      if (us.nodes.isEmpty) return null;
+      return (node: us.nodes.first, stored: us.warnings);
+  }
+}
+
+TagOwner? ownerOfNode(NodeSpec node, List<SubscriptionEntry> entries) {
+  for (var ei = 0; ei < entries.length; ei++) {
+    final list = entries[ei].list;
+    switch (list) {
+      case FolderServers():
+        for (var mi = 0; mi < list.members.length; mi++) {
+          final n = list.members[mi].node;
+          if (n != null && _nodeOrHop(n, node)) {
+            return TagOwner(ei, memberIndex: mi);
+          }
+        }
+      case SubscriptionServers():
+      case UserServer():
+        if (list.nodes.any((n) => _nodeOrHop(n, node))) {
+          return TagOwner(ei);
+        }
+    }
+  }
+  return null;
+}
+
+/// §505 — узел хранилища для эмитированного config-тега. Тот же обход, что
+/// [ownerOfTag] (bare-тег, суффикс `-<digits>`, хоп цепочки), но возвращает
+/// [NodeSpec]. `null` — служебная запись или custom JSON без владельца.
+NodeSpec? nodeSpecForConfigTag(
+  String emittedTag,
+  List<SubscriptionEntry> entries,
+) {
+  final candidates = <String>[emittedTag];
+  final m = RegExp(r'^(.*)-\d+$').firstMatch(emittedTag);
+  if (m != null) candidates.add(m.group(1)!);
+
+  for (final cand in candidates) {
+    for (final e in entries) {
+      final list = e.list;
+      final bare = TagResolver.stripPrefix(cand, list.tagPrefix);
+      if (list is FolderServers) {
+        for (final member in list.members) {
+          final n = member.node;
+          if (n != null && n.tag == bare) return n;
+        }
+      } else {
+        for (final n in list.nodes) {
+          if (n.tag == bare) return n;
+          for (var hop = n.chained; hop != null; hop = hop.chained) {
+            if (hop.tag == bare) return hop;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/// Исходный узел записи, которой принадлежит [node]: хоп цепочки → владелец.
+NodeSpec? sourceNodeOf(NodeSpec node, ServerList list) {
+  switch (list) {
+    case FolderServers():
+      for (final m in list.members) {
+        final n = m.node;
+        if (n != null && _nodeOrHop(n, node)) return n;
+      }
+    case SubscriptionServers():
+    case UserServer():
+      for (final n in list.nodes) {
+        if (_nodeOrHop(n, node)) return n;
+      }
   }
   return null;
 }

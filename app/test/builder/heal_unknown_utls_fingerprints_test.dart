@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 
 /// §281 — страховочный post-step: fingerprint вне словаря ядра заменяется
@@ -17,6 +18,26 @@ void main() {
 
     Map utlsOf(Map<String, dynamic> config, int i) =>
         ((config['outbounds'] as List)[i] as Map)['tls']['utls'] as Map;
+
+    test('QUIC-узел с выключенным TLS: тело от модели правится, сборка жива',
+        () {
+      for (final type in ['hysteria2', 'tuic']) {
+        final config = {
+          'outbounds': [
+            {
+              'tag': 'q',
+              'type': type,
+              'tls': TlsSpec.disabled.toSingboxForQuic(),
+            },
+          ],
+        };
+        expect(healUnknownUtlsFingerprints(config), isEmpty, reason: type);
+      }
+      // Контракт границы: карта модели изменяема и своя у каждого вызова.
+      final a = TlsSpec.disabled.toSingbox()..['x'] = 1;
+      expect(TlsSpec.disabled.toSingbox(), isEmpty);
+      expect(a, {'x': 1});
+    });
 
     test('мусор → chrome + запись (owner/original)', () {
       final config = {

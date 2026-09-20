@@ -154,8 +154,33 @@ NodeSpec? _findNodeByDisplayTag(
   return null;
 }
 
-void copyNodeUri(
-    BuildContext context, String tag, SubscriptionController subController) {
+/// §466 — подтверждение выдачи ссылки, которая несёт приватный ключ.
+/// `true` — юзер согласился; `false` — Cancel или тап мимо диалога.
+Future<bool> _confirmPrivateKeyInLink(BuildContext context) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(getLocalText.s("Link contains a private key")),
+      content: Text(getLocalText.s(
+          "Anyone who gets this link can use the key. Copy it only to move "
+          "the node to your own device.")),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(getLocalText.s("Cancel")),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(getLocalText.s("Copy anyway")),
+        ),
+      ],
+    ),
+  );
+  return ok ?? false;
+}
+
+Future<void> copyNodeUri(BuildContext context, String tag,
+    SubscriptionController subController) async {
   final node = _findNodeByDisplayTag(tag, subController);
   if (node == null) {
     if (context.mounted) {
@@ -165,9 +190,23 @@ void copyNodeUri(
     }
     return;
   }
+  // §466 / контракт §24.2 п. 7.16 — ссылка с приватным ключом отдаётся, но с
+  // предупреждением (решение владельца; §463 здесь отказывал).
+  //
+  // Приватный ключ в буфере обмена — другая граница доверия, чем локальное
+  // хранение: ссылку пересылают. `toUri()` у нас ОДНОВРЕМЕННО и формат
+  // хранения (`rawBody`, инвариант `parseUri(spec.toUri()) ≈ spec`), поэтому
+  // молча вырезать ключ из неё нельзя — он потерялся бы при перезагрузке
+  // узла. Отказ же ломал перенос своего узла между своими устройствами и был
+  // непоследователен: у SSH ключ не отдавался вовсе, у WireGuard уезжал молча.
+  if (node.linkCarriesPrivateKey) {
+    if (!context.mounted) return;
+    final ok = await _confirmPrivateKeyInLink(context);
+    if (!ok) return;
+  }
   final uri = node.toUri();
   if (uri.isEmpty) return;
-  Clipboard.setData(ClipboardData(text: uri));
+  await Clipboard.setData(ClipboardData(text: uri));
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(getLocalText.s("URI copied"))),

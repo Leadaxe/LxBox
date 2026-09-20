@@ -2,6 +2,8 @@ import 'dart:async';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/import_rule.dart';
+import '../../../models/node_warning.dart';
+import '../../../models/ui_msg.dart';
 import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
 import '../../node_link_address.dart';
@@ -126,9 +128,19 @@ Future<DebugResponse> _list(DebugContext ctx, DebugRequest req) async {
 Future<DebugResponse> _single(String id, DebugContext ctx, DebugRequest req) async {
   final sub = ctx.requireSub();
   final reveal = req.qBool('reveal');
+  // Фича 478 — `?warnings=true` добавляет предупреждения разбора по узлам.
+  // Отдельным ключом, а не вместо записи: сверять код с телом узла надо в
+  // одном ответе. По умолчанию выключено — на 500 узлах это лишний вес.
+  final warnings = req.qBool('warnings');
   for (final e in sub.entries) {
     if (e.id == id) {
-      return JsonResponse(serializeSubEntry(e, reveal: reveal));
+      return JsonResponse({
+        ...serializeSubEntry(e, reveal: reveal),
+        if (warnings) ...{
+          ...entrySourceKinds(e),
+          'warnings': serializeEntryWarnings(e),
+        },
+      });
     }
   }
   throw NotFound('sub: $id');
@@ -146,8 +158,16 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   // Если controller записал lastError — input отвергнут целиком, ничего не добавилось.
   if (sub.lastError != null &&
       sub.entries.map((e) => e.id).toSet().length == before.length) {
-    throw BadRequest(
-        'addFromInput rejected: ${sub.lastError?.renderEn() ?? ''}');
+    final err = sub.lastError!;
+    List<Map<String, Object?>>? dropped;
+    if (err is ParseInputRejectedMsg && err.hasDropped) {
+      dropped = [
+        for (final w in err.dropped)
+          if (w is RegistryWarning) serializeParseDrop(w),
+      ];
+    }
+    throw BadRequest('addFromInput rejected: ${err.renderEn()}',
+        dropped: dropped);
   }
   // Находим новую запись (или записи — JSON outbounds могут создать несколько).
   final added = sub.entries.where((e) => !before.contains(e.id)).toList();

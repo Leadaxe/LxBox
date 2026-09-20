@@ -6,6 +6,7 @@
 /// machine-поверхности (emitWarnings/AppLog) — `renderEn()` (ui_msg.dart).
 library;
 
+import '../services/contract/registry_warning.dart';
 import '../services/l10n/get_local_text.dart';
 import '../services/l10n/locale_controller.dart';
 
@@ -13,6 +14,74 @@ enum WarningSeverity { info, warning, error }
 
 sealed class NodeWarning {
   const NodeWarning();
+
+  /// §480 — предупреждение ПО КОДУ реестра.
+  ///
+  /// Движок маппера знает только код: записи секции называют `on_present`/
+  /// `on_invalid` строкой, и выбирать подкласс ему нечем. Почти всегда ответ
+  /// — [RegistryWarning] с текстом из `warnings.json`; исключения — коды, у
+  /// которых СВОЙ подкласс с собственным текстом и собственным равенством,
+  /// заведённый раньше реестра.
+  ///
+  /// Список исключений держится здесь, одним местом, и короток намеренно:
+  /// каждый такой подкласс — это текст, живущий в коде вместо реестра, то
+  /// есть долг. Новый код заводить сюда не нужно — он получит
+  /// [RegistryWarning] и текст из реестра.
+  ///
+  /// Вторая половина `switch` — не исключения, а перекладывание: код
+  /// получает [RegistryWarning], но с ИМЕНОВАННЫМ параметром, которого
+  /// движку взять неоткуда (см. комментарии у веток).
+  static NodeWarning byCode(
+    String code, {
+    required String path,
+    required String value,
+  }) =>
+      switch (code) {
+        // Тексты реестра ждут подстановку не под общим `{value}`, а под
+        // ИМЕНЕМ, которое код объявил в `params`. Движок же знает про
+        // предупреждение ровно две вещи — путь записи и значение, — потому
+        // что больше ему знать и неоткуда: `on_present`/`on_invalid` несут
+        // только код. Перекладывание здесь и делает из двух общих полей
+        // именованный параметр реестра; таблица короткая ПО ПОСТРОЕНИЮ —
+        // в неё попадает только код, чей текст зовёт своё имя.
+        'ech_ignored' => RegistryWarning(
+            code: code,
+            path: path,
+            value: value,
+            // `query_name` — ИМЯ ПАРАМЕТРА ссылки (`ech`), а не его
+            // значение: так решил лаунчер (контракт 1.1.15, ответ на сверку
+            // §24.26 п.4), и запись `tls.blocks.uri.ech` объявляет ровно это.
+            params: {'query_name': path},
+          ),
+        'ws_early_data_converted' => RegistryWarning(
+            code: code,
+            path: path,
+            value: value,
+            // Значение кода — то, ЧТО получилось из хвоста `?ed=N`
+            // (`_convertedValue` движка), оно же `max_early_data` тела.
+            params: {'max_early_data': value},
+          ),
+        'naive_extra_headers_invalid' => RegistryWarning(
+            code: code,
+            path: path,
+            value: value,
+            params: {'entry': value},
+          ),
+        // Два кода AWG сюда БОЛЬШЕ НЕ ПОПАДАЮТ (контракт 1.1.33). Их текст
+        // держался в коде ровно потому, что реестровый умел подставить одно
+        // лишь `{field}` и давал «field {field} removed» — человеку это не
+        // говорило ничего. Теперь `warnings.json` называет и поле, и
+        // написанное значение (`{path}`/`{value}`, оба подставляются всегда),
+        // и объясняет последствие: ядро откатится на обычный заголовок
+        // WireGuard, и если сервер ждёт AmneziaWG, рукопожатие может не
+        // сойтись. Держать вторую копию этого текста незачем — она разошлась
+        // бы с реестром молча.
+        //
+        // `naive_padding_ignored` сюда не попадает по той же причине: его
+        // текст зовёт `{value}`, а тот подставляется всегда
+        // (`text_params_implicit`).
+        _ => RegistryWarning(code: code, path: path, value: value),
+      };
 
   /// §285 — тело рендера подкласса. [t] — локализатор: активная локаль для
   /// [message], пиненный английский [GetLocalText.en] для [renderEn].
@@ -57,21 +126,30 @@ bool _propsEqual(List<Object?> a, List<Object?> b) {
   return true;
 }
 
-final class UnsupportedTransportWarning extends NodeWarning {
-  final String name;
-  final String fallback;
-  const UnsupportedTransportWarning(this.name, this.fallback);
-
-  @override
-  List<Object?> get props => [name, fallback];
-
-  @override
-  String messageWith(GetLocalText t) =>
-      t.s("Transport \"%1\$s\" is not supported by sing-box; using \"%2\$s\" fallback (node may fail to connect).", name, fallback);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
+/// Причины отбраковки по старшему уровню (error → warning → info).
+/// §500 — для одиночного ввода без узла: шторка и Debug API.
+List<NodeWarning> sortedDropWarnings(List<NodeWarning> dropped) {
+  final out = <NodeWarning>[];
+  for (final level in const [
+    WarningSeverity.error,
+    WarningSeverity.warning,
+    WarningSeverity.info,
+  ]) {
+    out.addAll(dropped.where((w) => w.severity == level));
+  }
+  return out;
 }
+
+/// §500 — секретные `value` в причинах отбраковки (шторка и Debug API).
+List<NodeWarning> maskSecretDropWarnings(List<NodeWarning> dropped) {
+  return [
+    for (final w in dropped)
+      if (w is RegistryWarning) w.withSecretValueMasked() else w,
+  ];
+}
+
+// `transport_unsupported` — текст в реестре (`transports.json` → fallback
+// транспорта). Класс снят (§485): код ставит движок, не парсер.
 
 final class UnsupportedProtocolWarning extends NodeWarning {
   final String scheme;
@@ -87,63 +165,18 @@ final class UnsupportedProtocolWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.error;
 }
 
-final class MissingFieldWarning extends NodeWarning {
-  final String field;
-  const MissingFieldWarning(this.field);
+// `field_missing` — текст в реестре (санитайзер обязательных полей).
+// `flow_deprecated` — текст в реестре (`protocols/vless.json` → `flow`).
+// Классы сняты (§485).
 
-  @override
-  List<Object?> get props => [field];
+// §115 / §472 шаг 9 — `VisionWithTransportWarning` снят: гашение
+// `xtls-rprx-vision` при живом транспорте исполняет санитайзер по реестру
+// (`protocols/vless.json` → `flow`, `conflicts`), код `vision_with_transport`
+// приходит с путём и значением. Производителей в lib/ не осталось после
+// переезда Xray-входа (шаг 8).
 
-  @override
-  String messageWith(GetLocalText t) => t.s("Required field \"%s\" is missing.", field);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.error;
-}
-
-final class DeprecatedFlowWarning extends NodeWarning {
-  final String flow;
-  const DeprecatedFlowWarning(this.flow);
-
-  @override
-  List<Object?> get props => [flow];
-
-  @override
-  String messageWith(GetLocalText t) => t.s("Flow \"%s\" is deprecated.", flow);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
-/// §115 — `xtls-rprx-vision` валиден только на голом TLS; с любым
-/// транспортом (ws/grpc/httpupgrade/xhttp) несовместим — ядро такую
-/// комбинацию не поднимет. Парсер гасит flow, warning сообщает почему.
-final class VisionWithTransportWarning extends NodeWarning {
-  final String transport;
-  const VisionWithTransportWarning(this.transport);
-
-  @override
-  List<Object?> get props => [transport];
-
-  @override
-  String messageWith(GetLocalText t) => t.s("Flow \"xtls-rprx-vision\" is incompatible with \"%s\" transport — flow dropped.", transport);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
-final class InsecureTlsWarning extends NodeWarning {
-  const InsecureTlsWarning();
-
-  @override
-  String messageWith(GetLocalText t) => t.s("TLS certificate verification is disabled.");
-
-  /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
-  /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
-  /// honestly-warning'и. UI красит info серым.
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `tls_insecure` — текст в реестре (`tls.json` → `insecure`, advisory).
+// Класс снят (§485): severity `info` — данные контракта, не константа в коде.
 
 /// libbox без `with_naive_outbound` — выставляется defensively после первой
 /// runtime-ошибки старта sing-box на naive-узле. Точная upstream-строка:
@@ -201,8 +234,12 @@ final class RealityFingerprintWarning extends NodeWarning {
   @override
   String messageWith(GetLocalText t) => t.s("REALITY with uTLS fingerprint \"%s\": Xray servers since v26.9.8 reject this ClientHello. If the connection fails, try \"chrome\".", value);
 
+  /// §468 (контракт 1.1.2) — уровень берётся из реестра, а не из константы:
+  /// владелец понизил код до `info`, и зашитая здесь копия разошлась бы с
+  /// нормативным источником на первом же его изменении. Код узла и его
+  /// severity — данные контракта (24.1.5), а не решение приложения.
   @override
-  WarningSeverity get severity => WarningSeverity.warning;
+  WarningSeverity get severity => registrySeverity('reality_fp_not_chrome');
 }
 
 /// §217 — причина сброса XHTTP-параметра (§279: enum вместо free-text —
@@ -278,29 +315,8 @@ final class XhttpModeForcedPacketUpWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
-/// §320 — `ech` из подписки проигнорирован. Xray-форма `ech=<name>+<resolver>`
-/// не несёт ключа, а лишь имя для DNS-запроса; подписки кладут туда публичные
-/// ECH-пробники (`ip.gs`, `encryptedsni.com`), чьи ключи не принадлежат серверу
-/// узла — включённый ECH ломает рукопожатие. Проверить пригодность до
-/// подключения нельзя, fallback в ядре отсутствует, поэтому параметр не
-/// применяется. Info: узел от этого рабочий, теряется только маскировка SNI.
-final class EchIgnoredWarning extends NodeWarning {
-  /// Имя из левой части `ech` (до `+`), как его написал провайдер.
-  final String queryName;
-
-  const EchIgnoredWarning(this.queryName);
-
-  @override
-  List<Object?> get props => [queryName];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "ECH is not applied: \"%s\" from the link points to a public ECH probe, not to this server — enabling it would break the TLS handshake.",
-      queryName);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `ech_ignored` — текст в реестре (`warnings.json`), класса нет: параметр
+// `ech` Xray-формы несёт ключ чужого клиента, снимается всегда (D-122).
 
 /// §358 — тип hysteria2-обфускации вне словаря ядра (`salamander`, `gecko`)
 /// отброшен. Оставить его нельзя: ядро отказывается сериализовать неизвестный
@@ -517,32 +533,10 @@ final class GroupMemberMissingWarning extends NodeWarning {
 // корпусом contract/corpus/uri/**.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// `ws_early_data_converted` (info) — Xray-хвост `?ed=N` в WebSocket-пути
-/// разложен на sing-box-поля `max_early_data` + `early_data_header_name`.
-/// Путь в конфиг попадает НЕ буквально: без конверсии ядро отдало бы хвост
-/// серверу как часть пути и тот ответил бы 404 (issue #96), причём
-/// `sing-box check` при этом проходит. Узел рабочий — отсюда info.
-///
-/// Ставится ровно на path-tail форму (`path=/x?ed=N`), НЕ на плоские
-/// `ed=`/`eh=` в query: те Go вообще не читает как early data-конверсию.
-/// Go-эталон: `noteWSEarlyDataConverted` (node_parser_core.go).
-final class WsEarlyDataConvertedWarning extends NodeWarning {
-  /// Значение `ed` из хвоста пути — оно уехало в `max_early_data`.
-  final int maxEarlyData;
-
-  const WsEarlyDataConvertedWarning(this.maxEarlyData);
-
-  @override
-  List<Object?> get props => [maxEarlyData];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "WebSocket early data \"?ed=%d\" was moved out of the path into a separate field, as the core requires. The node works; the path in the config is not literally the one from the link.",
-      maxEarlyData);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
+// `ws_early_data_converted` — текст в реестре: хвост `?ed=N` разложен на
+// `max_early_data` + `early_data_header_name`, путь в конфиг уехал не
+// буквально. Ставится ровно на path-tail форму, не на плоские `ed=`/`eh=`
+// (`transports.json` → `blocks.xray.ws.path`, `extract.into.ed.code`).
 
 /// `reality_short_id_invalid` (info) — REALITY `sid` содержит не-hex символы,
 /// нечётной длины или длиннее 16 hex-цифр. Ядро декодирует short_id как hex
@@ -551,53 +545,15 @@ final class WsEarlyDataConvertedWarning extends NodeWarning {
 /// подгоняется: обрезка дала бы валидную форму с ЧУЖИМ идентификатором —
 /// тихая порча (сервер сверяет sid побайтово).
 ///
-/// Go-эталон: `realityShortIDWouldDegrade` (parse_warnings.go:72) —
-/// непустое сырое значение, чья нормализация не совпала с `lower(trim(raw))`.
-final class RealityShortIdInvalidWarning extends NodeWarning {
-  /// Значение, как его написал провайдер.
-  final String value;
+// `reality_short_id_invalid` — текст в реестре (`tls.json` →
+// `reality.short_id`). Класс снят (§485).
 
-  const RealityShortIdInvalidWarning(this.value);
+// `naive_padding_ignored` и `naive_extra_headers_invalid` — текст в реестре
+// (`protocols/naive.json` → `mappers.uri.params.padding` / `extra-headers`).
+// `padding` у naive sing-box-эквивалента не имеет; битая пара
+// `extra-headers` пропускается, остальные живут, код ставится ОДИН раз на
+// узел. Собственный `headers` у http/https-прокси под код не попадает.
 
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "REALITY short id \"%s\" is not valid hex, so it was dropped (keeping it would break the whole config). The node connects without a short id.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
-/// `naive_padding_ignored` (info) — URI-параметр `padding` у naive не имеет
-/// sing-box-эквивалента; игнорируется, узел живёт.
-final class NaivePaddingIgnoredWarning extends NodeWarning {
-  /// Значение параметра, как оно пришло в ссылке.
-  final String value;
-
-  const NaivePaddingIgnoredWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "NaïveProxy parameter \"padding=%s\" has no equivalent in the core and was ignored. The node still works.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
-/// `naive_extra_headers_invalid` (info, D-105) — пара из naive `extra-headers`
-/// отброшена при разборе: нет `:`, имя вне tchar (RFC 7230) или CR/LF/NUL в
-/// значении. Прочие пары той же ссылки целы, узел живёт, но заголовок, которым
-/// часто открывают доступ на сервере, до него не доедет — раньше это было
-/// только в логе. Вешается на узел ОДИН раз при первой отброшенной паре.
-/// Собственный `headers` у http/https-прокси под код не попадает.
-/// Go-эталон: node_parser_naive.go parseNaiveExtraHeaders.
 /// §435 — запись секции узла отброшена при разборе документа
 /// (`{ endpoints: [тело], sections: {…} }`): чужой `kind` или битая форма.
 /// Остальные записи живут (NODE_SECTIONS.md §1). Кода контракта нет — UI.
@@ -632,100 +588,21 @@ final class SectionsConflictWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
-final class NaiveExtraHeadersInvalidWarning extends NodeWarning {
-  /// Отброшенная пара, как она пришла в ссылке (после URL-decode, trim).
-  final String entry;
+// §472 шаг 9 — `TuicCongestionInvalidWarning` снят: `congestion_control` вне
+// {cubic, new_reno, bbr} судит санитайзер по реестру (`tuic.json`, enum +
+// `on_invalid: drop`), код `tuic_congestion_invalid` приходит с путём и
+// значением. Производителей в lib/ не осталось после шага 5.
 
-  const NaiveExtraHeadersInvalidWarning(this.entry);
-
-  @override
-  List<Object?> get props => [entry];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "NaïveProxy extra-headers entry \"%s\" is not a valid header and was dropped. Other headers are kept, but the server will not see this one.",
-      entry);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
-/// `tuic_congestion_invalid` (warning) — TUIC `congestion_control` вне
-/// {cubic, new_reno, bbr}. Поле снимается (ядро подставит свой дефолт),
-/// узел живёт. Go-эталон: node_parser_tuic.go:73.
-final class TuicCongestionInvalidWarning extends NodeWarning {
-  final String value;
-
-  const TuicCongestionInvalidWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "TUIC congestion control \"%s\" is not one of cubic, new_reno, bbr — the setting was dropped and the core default applies.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
-
-/// `awg_header_invalid` (warning) — AmneziaWG magic-header (h1–h4) не uint32
-/// и не диапазон `lo-hi`. Поле снимается, ядро возьмёт WireGuard-дефолт —
-/// а с ним handshake не совпадёт с сервером (тихо сломанный узел: рукопожатие
-/// уходит, ответа нет). Отсюда warning, а не info.
-///
-/// Только h1–h4: битые jc/jmin/jmax/s1–s4 Go пропускает молча (debug-лог).
-/// Go-эталон: `applyAWGFields` (node_parser_wireguard.go:400).
-final class AwgHeaderInvalidWarning extends NodeWarning {
-  /// Имя поля — `h1`…`h4`.
-  final String field;
-
-  /// Значение, как его написал провайдер.
-  final String value;
-
-  const AwgHeaderInvalidWarning(this.field, this.value);
-
-  @override
-  List<Object?> get props => [field, value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "AmneziaWG header \"%1\$s=%2\$s\" is neither a number nor a \"low-high\" range, so it was dropped. The core falls back to the plain WireGuard header and the handshake may not match the server.",
-      field,
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
-
-/// §421 `awg3_field_invalid` (warning) — AWG 3.x тайминг/паддинг
-/// (content_padding_addition, rekey_*, reject_after_time, keepalive_timeout,
-/// max_handshake_attempts) с мусором или перевёрнутым диапазоном `N>M`,
-/// либо булево (random_trailers/disable_cookies) не on/off. Поле снято, узел
-/// живёт: тайминги клиентские, ядро работает на своих дефолтах. Границы НЕ
-/// свопаются (в отличие от h1–h4). Go-эталон: `applyAWG3Fields` (awg3.go).
-final class Awg3FieldInvalidWarning extends NodeWarning {
-  /// URI/.conf-имя параметра (`contentpaddingaddition`, `randomtrailers`…).
-  final String field;
-
-  /// Значение, как его написал провайдер.
-  final String value;
-
-  const Awg3FieldInvalidWarning(this.field, this.value);
-
-  @override
-  List<Object?> get props => [field, value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "AmneziaWG 3 field \"%1\$s=%2\$s\" is neither a number, an ordered \"low-high\" range nor on/off, so it was dropped. The core uses its default for it.",
-      field,
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
+// Контракт 1.1.33 — `AwgHeaderInvalidWarning` и `Awg3FieldInvalidWarning`
+// сняты вместе с `ech_ignored` и соседями (§482): тексты обоих кодов
+// переписаны в `warnings.json` с `{path}` и `{value}` и объясняют
+// последствие — ядро откатится на обычный заголовок WireGuard, и если сервер
+// ждёт AmneziaWG, рукопожатие может не сойтись. Прежняя запись реестра
+// подставляла одно `{field}` и давала «field {field} removed», ради чего
+// текст и жил в коде; теперь копия была бы вторым источником правды.
+//
+// Коды ставит `NodeWarning.byCode` (ветка по умолчанию) — `RegistryWarning` с
+// путём поля и написанным значением, severity `warning` из реестра.
 
 /// §421 `awg3_header_key_invalid` (error) — `header_protection_key` не
 /// base64, не 32 байта или все нули. УЗЕЛ выброшен на разборе, а не помечен:
@@ -786,45 +663,15 @@ final class Awg3RandomTrailersWideHeadersWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
-/// `masque_vhttp_invalid` (warning) — MASQUE `vhttp` вне {h3, h2, auto};
-/// принудительно h3. `auto` принят контрактом 0.11.1 (ядро >= lx.27).
-/// Go-эталон: node_parser_masque.go:100.
-final class MasqueVhttpInvalidWarning extends NodeWarning {
-  final String value;
+// §472 шаг 9 — `MasqueVhttpInvalidWarning` снят: `vhttp` вне {h3, h2, auto}
+// приводит к h3 санитайзер по реестру (`protocols/masque.json`, enum +
+// `on_invalid: coerce h3`), код `masque_vhttp_invalid` приходит с путём и
+// значением. Производителей в lib/ не осталось после шага 7.
 
-  const MasqueVhttpInvalidWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "MASQUE HTTP version \"%s\" is not h3, h2 or auto — h3 was used instead.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
-
-/// `anytls_min_idle_invalid` (warning) — anytls `min_idle_session` не
-/// неотрицательное целое; поле снимается, узел живёт.
-/// Go-эталон: node_parser_anytls.go:40.
-final class AnyTlsMinIdleInvalidWarning extends NodeWarning {
-  final String value;
-
-  const AnyTlsMinIdleInvalidWarning(this.value);
-
-  @override
-  List<Object?> get props => [value];
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "AnyTLS \"min_idle_session=%s\" is not a non-negative whole number — the setting was dropped and the core default applies.",
-      value);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
+// §472 шаг 9 — `AnyTlsMinIdleInvalidWarning` снят: `min_idle_session` судит
+// санитайзер по реестру (`protocols/anytls.json`, `min: 0` +
+// `on_invalid: drop`), код `anytls_min_idle_invalid` приходит с путём и
+// значением. Производителей в lib/ не осталось после шага 6.
 
 /// `packet_encoding_unknown` (warning) — `packet_encoding` вне
 /// {xudp, packetaddr}. Поле снимается: неизвестное значение даёт не ошибку
@@ -848,4 +695,89 @@ final class PacketEncodingUnknownWarning extends NodeWarning {
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
+}
+
+/// §460 — предупреждение санитайзера реестра контракта.
+///
+/// Тексты кодов живут в `contract/registry/warnings.json` (24.1.5), а не в
+/// словарях приложения: реестр нормативен для обеих сторон, и своя таблица
+/// разошлась бы с ним на первом же пине ядра. Поэтому класс один на все коды
+/// санитайзера — `unknown_key`, `type_invalid`, `field_conflict`,
+/// `field_requires`, `tls_field_unsupported_naive`, `ss_method_legacy` и
+/// прочие, — а различает их поле [code].
+///
+/// Здесь класс потому, что `NodeWarning` объявлена `sealed`: Dart 3
+/// разрешает наследование только внутри её библиотеки. Логика рендера —
+/// `services/contract/registry_warning.dart`.
+final class RegistryWarning extends NodeWarning {
+  const RegistryWarning({
+    required this.code,
+    this.path,
+    this.value,
+    this.params = const {},
+    this.ownerTag = '',
+  });
+
+  /// Код из `registry/warnings.json` — он же код конформанса (CANON §6).
+  final String code;
+
+  /// Путь поля в теле узла (`tls.reality.key_share`); `null` у кодов уровня
+  /// записи.
+  final String? path;
+
+  /// Значение, вызвавшее код; у `secret`-полей — `***` (24.1.4).
+  final String? value;
+
+  /// Прочие подстановки текста (`with`, `requires`, `winner`, `method`).
+  final Map<String, String> params;
+
+  /// §477 — тег записи, СНЯТОЙ ЦЕЛИКОМ (`on_invalid: drop_node`), для
+  /// `dropped[].ref` контракта (corpus/README «Отбраковки», D-088). Пусто у
+  /// обычного кода поля: он живёт на узле, и адресовать его нечем, кроме
+  /// [path].
+  ///
+  /// Вне [props] намеренно: `props` — это ИДЕНТИЧНОСТЬ предупреждения, по ней
+  /// идёт дедуп (§279). Тег же говорит не «что случилось», а «с какой
+  /// записью», и включение его в идентичность развело бы на два сообщения
+  /// один и тот же код об одном и том же поле у соседних узлов.
+  final String ownerTag;
+
+  /// §500 — копия с `value: ***`, если путь — секретное поле реестра.
+  RegistryWarning withSecretValueMasked() {
+    final masked = maskRegistrySecretValue(path, value);
+    if (masked == value) return this;
+    return RegistryWarning(
+      code: code,
+      path: path,
+      value: masked,
+      params: params,
+      ownerTag: ownerTag,
+    );
+  }
+
+  @override
+  List<Object?> get props =>
+      [code, path, value, ...params.entries.map((e) => '${e.key}=${e.value}')];
+
+  /// Строка узла — `title_<lang>` реестра. Язык: `ru` при русском UI, иначе
+  /// `en` (`zh` падает в `en`, пока лаунчер не добавит третий набор).
+  /// Пиненный английский [GetLocalText.en] (`renderEn`) всегда даёт `en` —
+  /// иначе machine-поверхности зависели бы от языка UI.
+  @override
+  String messageWith(GetLocalText t) =>
+      registryTitle(code, _langFor(t), path: path, value: value, params: params);
+
+  /// Карточка узла — `text_<lang>` реестра. Пусто = кода в реестре нет.
+  String detailWith(GetLocalText t) =>
+      registryText(code, _langFor(t), path: path, value: value, params: params);
+
+  /// [GetLocalText.en] — const-синглтон пиненного английского, поэтому
+  /// отличить его от локализатора активной локали можно по идентичности:
+  /// тега языка сам `t` не несёт.
+  RegistryLang _langFor(GetLocalText t) => identical(t, GetLocalText.en)
+      ? RegistryLang.en
+      : registryLangForTag(LocaleController.I.effectiveTag);
+
+  @override
+  WarningSeverity get severity => registrySeverity(code);
 }

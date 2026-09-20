@@ -6,13 +6,26 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
+import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
+import 'engine/engine_mapper.dart' show mapJsonViaEngine;
 import 'hysteria2_obfs.dart';
+import 'mappers/uri_pipeline.dart'
+    show parseXrayViaPipeline;
+import 'drop_verdict.dart';
 import 'tcp_keep_alive.dart';
 import 'transport.dart';
 import '../app_log.dart';
 import 'uri_utils.dart';
 import 'utls_fingerprint.dart';
+
+/// Служебные outbound'ы Xray: не серверы, узлами не становятся (§321).
+///
+/// §480 W5 — набор живёт ЗДЕСЬ, а не в маппере: это знание СБОРКИ
+/// ДОКУМЕНТА («какой элемент вообще претендует на узел»), а не перевода
+/// диалекта. Маппер одного узла о соседях по документу не знает; реестр
+/// видов источника заберёт набор волной W6.
+const kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
 
 /// §310 — Парсинг одного элемента Xray JSON array в список узлов.
 ///
@@ -65,7 +78,7 @@ List<NodeSpec> parseXrayElement(
       .whereType<Map<String, dynamic>>()
       .where(
         (o) =>
-            !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
+            !kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
       )
       .toList();
   if (payloadAll.isEmpty) return const [];
@@ -202,7 +215,27 @@ List<NodeSpec> parseXrayElement(
         solo: soloNode,
         tagUses: tagUses,
       );
-      final spec = _xrayToSpec(ob, label);
+      // §477 — реестр вправе снять запись ЦЕЛИКОМ (`on_invalid: drop_node`):
+      // негодная форма `vless.encryption` значит, что ядро не примет конфиг и
+      // не стартует НА ВСЁМ наборе (случай #147). Такой узел обязан исчезнуть
+      // при разборе, а не дожить до гарда сборки, стоя в списке рабочим.
+      final verdict = XrayDropVerdict();
+      var spec = _xrayToSpec(ob, label, dropped: verdict);
+      if (spec == null && verdict.explicit) {
+        // Причина — код реестра с тегом записи: `dropped[].ref` контракта
+        // называет именно тег outbound'а (D-088), как и у прочих отбраковок.
+        final r = verdict.reason;
+        final w = RegistryWarning(
+          code: r?.code ?? 'type_invalid',
+          path: r?.path,
+          value: r?.value,
+          params: r?.params ?? const {},
+          ownerTag: obTag,
+        );
+        dropped?.add(w);
+        rejected.add(w);
+        continue;
+      }
       // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
       // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
       // NodeWarning нет носителя без узла); если соседей нет — элемент выпадает
@@ -226,19 +259,28 @@ List<NodeSpec> parseXrayElement(
       final ref = dialerRefOf[ob];
       NodeSpec? chained;
       if (ref != null) {
-        chained = _xrayBuildChain(ob, byTag, ref);
-        // §404 / D-085 — недостижимая цель роняет ВЛАДЕЛЬЦА целиком. Узел с
-        // прямым путём тут был бы молчаливой деанонимизацией: провайдер
-        // завернул дозвон в релей именно потому, что прямой путь зарезан.
-        if (chained == null) {
-          // `ownerTag` — СОБСТВЕННЫЙ тег outbound'а: им контракт называет
-          // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
-          // не годится — он приходит из `remarks` элемента и на многоузловом
-          // элементе одинаков у всех узлов.
-          final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
-          dropped?.add(w);
-          rejected.add(w);
-          continue;
+        // §488 — цель `freedom` не хоп цепочки (anti-DPI fragment Xray, не
+        // релей). `_xrayBuildChain` любой служебный outbound считает
+        // негодным и роняет владельца — сюда не зовём.
+        final target = byTag[ref];
+        if (target != null &&
+            (target['protocol']?.toString() ?? '') == 'freedom') {
+          spec = _xrayApplyFreedomFragment(spec, target);
+        } else {
+          chained = _xrayBuildChain(ob, byTag, ref);
+          // §404 / D-085 — недостижимая цель роняет ВЛАДЕЛЬЦА целиком. Узел с
+          // прямым путём тут был бы молчаливой деанонимизацией: провайдер
+          // завернул дозвон в релей именно потому, что прямой путь зарезан.
+          if (chained == null) {
+            // `ownerTag` — СОБСТВЕННЫЙ тег outbound'а: им контракт называет
+            // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
+            // не годится — он приходит из `remarks` элемента и на многоузловом
+            // элементе одинаков у всех узлов.
+            final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
+            dropped?.add(w);
+            rejected.add(w);
+            continue;
+          }
         }
       }
 
@@ -408,7 +450,7 @@ int _payloadCount(Map<String, dynamic> element) {
       .whereType<Map<String, dynamic>>()
       .where(
         (o) =>
-            !_kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
+            !kXrayServiceProtocols.contains(o['protocol']?.toString() ?? ''),
       )
       .length;
 }
@@ -503,73 +545,6 @@ List<String>? _stringListOrNull(Object? raw) {
   return out.isEmpty ? null : out;
 }
 
-VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
-  final vnext = (o['settings']?['vnext'] as List?)?.cast<Map>();
-  if (vnext == null || vnext.isEmpty) return null;
-  final v = vnext.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 443;
-  final users = (v['users'] as List?)?.cast<Map>() ?? const [];
-  final user = users.isEmpty ? const {} : users.first;
-  final uuid = user['id']?.toString() ?? '';
-  var flow = user['flow']?.toString() ?? '';
-  // §335 — постквантовый слой VLESS (ядро: SPEC 032). В Xray-JSON лежит внутри
-  // users[0], в конфиге ядра — плоским полем рядом с uuid. Берём как есть.
-  final encryption = user['encryption']?.toString().trim() ?? '';
-  if (server.isEmpty || uuid.isEmpty) return null;
-
-  var port2 = port;
-  var packetEncoding = '';
-  final warnings = <NodeWarning>[];
-  if (flow == 'xtls-rprx-vision-udp443') {
-    flow = 'xtls-rprx-vision';
-    packetEncoding = 'xudp';
-    port2 = 443;
-  }
-
-  final stream = o['streamSettings'] as Map? ?? const {};
-  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
-  final transport = _xrayTransportFromStream(stream);
-
-  // §115 — flow берём из конфига как есть (раньше REALITY+tcp без flow
-  // получал навязанный vision → ломались валидные none-сетапы). vision
-  // несовместим с транспортом → гасим flow + warning.
-  if (flow == 'xtls-rprx-vision' && transport != null) {
-    warnings.add(
-      VisionWithTransportWarning((stream['network'] ?? 'transport').toString()),
-    );
-    flow = '';
-  }
-
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  final tag = tagFromLabel(label, 'vless', server, port2);
-
-  return VlessSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port2,
-    rawSource: _prettyJson(o),
-    uuid: uuid,
-    flow: flow,
-    tls: tls,
-    transport: transport,
-    packetEncoding: packetEncoding,
-    encryption: encryption,
-    warnings: warnings,
-    // §453 — Xray держит keep-alive в sockopt целыми секундами.
-    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
-  );
-}
-
-/// §321 — служебные outbound'ы Xray: не серверы, узлами не становятся.
-const _kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
-
 /// §321 P4 — идентичность узла: `(protocol, server, port, credential)`.
 /// Транспорт и TLS в ключ НЕ входят (решение юзера 30.07.2026): один сервер с
 /// двумя разными SNI схлопывается в один узел — берётся первый по порядку P2.
@@ -592,25 +567,36 @@ String? _xrayIdentity(Map<String, dynamic> o) {
       if (vnext == null || vnext.isEmpty) return null;
       final v = vnext.first;
       server = v['address']?.toString() ?? '';
-      port = (v['port'] as num?)?.toInt() ?? 443;
+      // §480, дельта `vless_default_port` — БЕЗ дефолта 443: элемент без
+      // порта узла не даёт вовсе (запись `port` секции объявлена
+      // `required`), и синоним тега обязан это зеркалить. Иначе балансировщик
+      // держал бы ключ `vless|host|443|id` на узел, которого в подписке нет:
+      // §322 резолвит по нему состав пула, и тег молча уезжал бы в пустоту
+      // либо, хуже, цеплялся к ЧУЖОМУ узлу, у которого порт 443 настоящий.
+      // Это ровно тот инвариант, что объявлен в шапке функции.
+      final rawPort = (v['port'] as num?)?.toInt();
+      if (rawPort == null || rawPort <= 0) return null;
+      port = rawPort;
       final users = (v['users'] as List?)?.cast<Map>() ?? const [];
       cred = users.isEmpty ? '' : (users.first['id']?.toString() ?? '');
-      // Зеркало quirk'а _xrayVlessToSpec: vision-udp443 переписывает порт
-      // узла на 443.
-      if (protocol == 'vless' &&
-          users.isNotEmpty &&
-          users.first['flow']?.toString() == 'xtls-rprx-vision-udp443') {
-        port = 443;
-      }
+      // §459 (контракт §24.2 п. 7.4) — зеркало конвертера: порт узла
+      // `-udp443` больше не переписывает, значит и ключ identity строится по
+      // исходному порту. Прежний код ставил здесь 443.
     case 'trojan':
     case 'shadowsocks':
       final servers = (s['servers'] as List?)?.cast<Map>();
       if (servers == null || servers.isEmpty) return null;
       final v = servers.first;
       server = v['address']?.toString() ?? '';
-      // ss без порта конвертер отбрасывает (port == 0 → null) — ключ с |0|
-      // просто ни с чем не совпадёт, как и узла нет.
-      port = (v['port'] as num?)?.toInt() ?? (protocol == 'trojan' ? 443 : 0);
+      // §480 — ни у trojan, ни у ss дефолта порта НЕТ: элемент без порта
+      // узла не даёт (запись `port` обеих секций `required`), и синоним тега
+      // это зеркалит. У ss так было и раньше — конвертер отбрасывал его сам
+      // (port == 0 → null); у trojan стоял дефолт 443, снятый этой же
+      // дельтой. Сам Xray здесь отбраковывает элемент ЯВНО и первым делом
+      // (infra/conf/trojan.go:67-69 «Invalid Trojan port.»).
+      final rawPort = (v['port'] as num?)?.toInt();
+      if (rawPort == null || rawPort <= 0) return null;
+      port = rawPort;
       cred = v['password']?.toString() ?? '';
     case 'hysteria':
       // Конвертер отдаёт Hysteria2Spec → protocol в ключе 'hysteria2'.
@@ -627,159 +613,47 @@ String? _xrayIdentity(Map<String, dynamic> o) {
   return '$protocol|$server|$port|$cred';
 }
 
-/// §321 — диспетчер по `protocol`. Xray-схема ≠ sing-box-схема
-/// (`settings.vnext`/`streamSettings` против плоских полей), поэтому
-/// `parseSingboxEntry` не переиспользуется — на каждый протокол свой конвертер.
-NodeSpec? _xrayToSpec(Map<String, dynamic> o, String remarks) {
-  switch (o['protocol']?.toString()) {
-    case 'vless':
-      return _xrayVlessToSpec(o, remarks);
-    case 'trojan':
-      return _xrayTrojanToSpec(o, remarks);
-    case 'vmess':
-      return _xrayVmessToSpec(o, remarks);
-    case 'shadowsocks':
-      return _xraySsToSpec(o, remarks);
-    case 'hysteria':
-      return _xrayHy2ToSpec(o, remarks);
-    default:
-      return null;
-  }
-}
-
-TrojanSpec? _xrayTrojanToSpec(Map<String, dynamic> o, String remarks) {
-  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
-  if (servers == null || servers.isEmpty) return null;
-  final v = servers.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 443;
-  final password = v['password']?.toString() ?? '';
-  if (server.isEmpty || password.isEmpty) return null;
-
-  final stream = o['streamSettings'] as Map? ?? const {};
-  final warnings = <NodeWarning>[];
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
+/// §472 шаг 8 — Xray-outbound через ЕДИНЫЙ конвейер.
+///
+/// Раньше здесь стоял диспетчер по `protocol` с отдельным конвертером на
+/// каждый протокол (`_xrayVlessToSpec` и соседи), и каждый нёс свою копию
+/// правил значений. Теперь путь общий: маппер переводит диалект Xray в карту
+/// sing-box, санитайзер по реестру судит значения, `parseSingboxEntry`
+/// строит модель. Снятые отсюда рукописные правила перечислены в
+/// `mappers/xray_mapper.dart`.
+///
+/// `rawSource` узла остаётся pretty-print ИСХОДНОГО объекта Xray байт в байт
+/// (§454): карта sing-box — рабочая форма конвейера, а не то, что прислал
+/// провайдер.
+///
+/// [dropped] — §477: реестр вправе снять запись целиком (`drop_node`), и
+/// вызывающему нужно отличить это от «тела нет».
+NodeSpec? _xrayToSpec(
+  Map<String, dynamic> o,
+  String remarks, {
+  XrayDropVerdict? dropped,
+  bool allowSocks = false,
+}) {
+  // §321 — SOCKS самостоятельным узлом подписки не становится: он бывает
+  // только звеном цепочки `dialerProxy`, и зовут его оттуда явным флагом.
+  // Маппер переводит socks наравне с прочими (звену нужна та же карта), так
+  // что отбор остался здесь, где он и был: прежний диспетчер ветки `socks`
+  // просто не имел.
+  if (!allowSocks && o['protocol']?.toString() == 'socks') return null;
+  // §480 W5 — карту строит ДВИЖОК по секции `mappers.xray` реестра.
+  // Диспетчера по имени протокола здесь больше нет: секцию выбирает `detect`
+  // самой секции, то есть опознание элемента объявлено данными.
+  final mapping = mapJsonViaEngine('xray', o, dropped: dropped);
+  if (mapping == null) return null;
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-
-  return TrojanSpec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'trojan', server, port),
-    label: label,
-    server: server,
-    port: port,
+  return parseXrayViaPipeline(
+    mapping.body,
     rawSource: _prettyJson(o),
-    password: password,
-    tls: tls,
-    transport: _xrayTransportFromStream(stream),
-    warnings: warnings,
-    // §453 — Xray держит keep-alive в sockopt целыми секундами.
-    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
-  );
-}
-
-VmessSpec? _xrayVmessToSpec(Map<String, dynamic> o, String remarks) {
-  final vnext = (o['settings']?['vnext'] as List?)?.cast<Map>();
-  if (vnext == null || vnext.isEmpty) return null;
-  final v = vnext.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 443;
-  final users = (v['users'] as List?)?.cast<Map>() ?? const [];
-  final user = users.isEmpty ? const {} : users.first;
-  final uuid = user['id']?.toString() ?? '';
-  if (server.isEmpty || uuid.isEmpty) return null;
-
-  final stream = o['streamSettings'] as Map? ?? const {};
-  final warnings = <NodeWarning>[];
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  final security = user['security']?.toString() ?? 'auto';
-
-  return VmessSpec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'vmess', server, port),
     label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    uuid: uuid,
-    alterId: (user['alterId'] as num?)?.toInt() ?? 0,
-    security: security.isEmpty ? 'auto' : security,
-    tls: tls,
-    transport: _xrayTransportFromStream(stream),
-    warnings: warnings,
-    // §453 — Xray держит keep-alive в sockopt целыми секундами.
-    tcpKeepAlive: tcpKeepAliveFromXraySockopt(stream['sockopt']),
-  );
-}
-
-ShadowsocksSpec? _xraySsToSpec(Map<String, dynamic> o, String remarks) {
-  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
-  if (servers == null || servers.isEmpty) return null;
-  final v = servers.first;
-  final server = v['address']?.toString() ?? '';
-  final port = (v['port'] as num?)?.toInt() ?? 0;
-  final method = v['method']?.toString() ?? '';
-  final password = v['password']?.toString() ?? '';
-  if (server.isEmpty || method.isEmpty || port == 0) return null;
-
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-  // §453 — у ss-конвертера своего `stream` нет; sockopt достаём отсюда,
-  // `is Map`-проверка живёт внутри tcpKeepAliveFromXraySockopt.
-  final stream = o['streamSettings'];
-  return ShadowsocksSpec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'ss', server, port),
-    label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    method: method,
-    password: password,
-    tcpKeepAlive:
-        tcpKeepAliveFromXraySockopt(stream is Map ? stream['sockopt'] : null),
-  );
-}
-
-/// §321 — `protocol: "hysteria"` с `version: 2` — форма форка Xray (апстрим
-/// hysteria2 не поддерживает вовсе). `finalmask.quicParams` НЕ переносим: у
-/// sing-box нет соответствия, а unknown field валит весь конфиг.
-Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
-  final s = o['settings'] as Map? ?? const {};
-  final stream = o['streamSettings'] as Map? ?? const {};
-  final hy = stream['hysteriaSettings'] as Map? ?? const {};
-
-  final version =
-      (hy['version'] as num?)?.toInt() ?? (s['version'] as num?)?.toInt() ?? 2;
-  if (version != 2) return null; // hysteria v1 — своего Spec у нас нет
-
-  final server = s['address']?.toString() ?? '';
-  final port = (s['port'] as num?)?.toInt() ?? 443;
-  final auth = hy['auth']?.toString() ?? '';
-  if (server.isEmpty) return null;
-
-  final warnings = <NodeWarning>[];
-  final tls = normalizeTlsFingerprint(
-    _xrayTlsFromStream(stream, server),
-    warnings,
-  );
-  final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
-
-  return Hysteria2Spec(
-    id: newUuidV4(),
-    tag: tagFromLabel(label, 'hy2', server, port),
-    label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    password: auth,
-    tls: tls.enabled ? tls : const TlsSpec(enabled: true),
-    warnings: warnings,
+    warnings: mapping.warnings,
+    wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
+    tagScheme: mapping.tagScheme,
+    dropped: dropped,
   );
 }
 
@@ -799,6 +673,8 @@ Hysteria2Spec? _xrayHy2ToSpec(Map<String, dynamic> o, String remarks) {
 ///
 /// Причины негодности: цели нет в элементе; цель — группа или служебный
 /// outbound; цель не конвертируется в узел; кольцо; глубже [kMaxDetourDepth].
+/// Цель `freedom` сюда не попадает: её разбирает [_xrayApplyFreedomFragment]
+/// (§488), до вызова.
 NodeSpec? _xrayBuildChain(
   Map<String, dynamic> owner,
   Map<String, Map<String, dynamic>> byTag,
@@ -823,8 +699,9 @@ NodeSpec? _xrayBuildChain(
     // Служебный outbound (`freedom`/`blackhole`/`dns`) звеном быть не может.
     // `dialerProxy: "direct"` в Xray встречается как «ходи напрямую» — но у
     // нас прямой выход не узел, а подменять релей прямым путём D-085
-    // запрещает: владелец отбраковывается.
-    if (_kXrayServiceProtocols.contains(protocol)) return null;
+    // запрещает: владелец отбраковывается. Цель-freedom обрабатывается
+    // выше (§488); сюда она доходит только как звено СЕРЕДИНЫ цепочки.
+    if (kXrayServiceProtocols.contains(protocol)) return null;
 
     visited.add(ref);
 
@@ -832,14 +709,11 @@ NodeSpec? _xrayBuildChain(
     // провайдера (`ru-upstream`), без украшений. Прежний `⚙ <tag>` уезжал в
     // конфиг ядра как есть и мешался с §274-маркером Направлений, где `⚙`
     // значит совсем другое. Декорация — дело отображения, не разбора.
-    final NodeSpec? spec;
-    if (protocol == 'socks') {
-      spec = _xraySocksToSpec(target, ref);
-    } else {
-      // Все типы, которые умеет конвертер: релей больше не ограничен
-      // socks/vless — в sing-box `detour` живёт на любом outbound'е.
-      spec = _xrayToSpec(target, ref);
-    }
+    // Все типы, которые умеет маппер: релей не ограничен socks/vless — в
+    // sing-box `detour` живёт на любом outbound'е. SOCKS здесь РАЗРЕШЁН
+    // явно: самостоятельным узлом подписки он не становится (§321), а
+    // звеном бывает, и чаще прочих.
+    final spec = _xrayToSpec(target, ref, allowSocks: true);
     if (spec == null) return null;
     // Группа цепочку не несёт (`withChained` вернул бы её как есть) —
     // конвертер её и не отдаёт, но инвариант проверяем явно.
@@ -862,135 +736,96 @@ NodeSpec? _xrayBuildChain(
   return build(firstRef, 0);
 }
 
-/// SOCKS-outbound Xray → узел. Отдельно от `_xrayToSpec`: самостоятельным
-/// узлом подписки socks не становится (§321), он бывает только звеном.
-SocksSpec? _xraySocksToSpec(Map<String, dynamic> o, String label) {
-  final servers = (o['settings']?['servers'] as List?)?.cast<Map>();
-  if (servers == null || servers.isEmpty) return null;
-  final s = servers.first;
-  final server = s['address']?.toString() ?? '';
-  final port = (s['port'] as num?)?.toInt() ?? 1080;
-  if (server.isEmpty) return null;
-  final users = (s['users'] as List?)?.cast<Map>() ?? const [];
-  final user = users.isEmpty ? const {} : users.first;
-  return SocksSpec(
-    id: newUuidV4(),
-    tag: label,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: _prettyJson(o),
-    username: user['user']?.toString() ?? '',
-    password: user['pass']?.toString() ?? '',
-  );
+/// §488 — цель `dialerProxy` с `protocol: freedom`. Не хоп: узел прямой.
+/// При `settings.fragment` и включённом TLS — молча `tls.fragment: true`.
+/// `packets`/`length`/`interval` отбрасываются без кода. Freedom без
+/// fragment — ссылка игнорируется, узел как есть.
+NodeSpec _xrayApplyFreedomFragment(
+  NodeSpec spec,
+  Map<String, dynamic> freedom,
+) {
+  final settings = freedom['settings'];
+  if (settings is! Map || settings['fragment'] is! Map) return spec;
+  if (!_nodeTlsEnabled(spec)) return spec;
+  return _withTlsPassthroughBool(spec, 'fragment', true);
 }
 
-TlsSpec _xrayTlsFromStream(Map stream, String server) {
-  final security = stream['security']?.toString() ?? '';
-  if (security == 'none' || security.isEmpty) return TlsSpec.disabled;
+bool _nodeTlsEnabled(NodeSpec spec) => switch (spec) {
+      VlessSpec s => s.tls.enabled,
+      TrojanSpec s => s.tls.enabled,
+      VmessSpec s => s.tls.enabled,
+      _ => false,
+    };
 
-  if (security == 'reality') {
-    final r = stream['realitySettings'] as Map? ?? const {};
-    final pbk = r['publicKey']?.toString() ?? '';
-    // §169 — REALITY только при валидном X25519-ключе. Битый publicKey →
-    // деградируем до plain TLS (нода рабочая), а не отравляем config.json.
-    return TlsSpec(
-      enabled: true,
-      serverName: r['serverName']?.toString() ?? server,
-      fingerprint: r['fingerprint']?.toString() ?? 'random',
-      reality: isValidRealityPublicKey(pbk)
-          ? RealitySpec(
-              publicKey: pbk,
-              shortId: normalizeRealityShortId(r['shortId']?.toString() ?? ''),
-            )
-          : null,
-    );
-  }
-
-  if (security == 'tls') {
-    final t = stream['tlsSettings'] as Map? ?? const {};
-    return TlsSpec(
-      enabled: true,
-      serverName: t['serverName']?.toString() ?? server,
-      fingerprint: (t['fingerprint']?.toString() ?? '').toLowerCase().isEmpty
-          ? null
-          : t['fingerprint'].toString().toLowerCase(),
-      insecure: t['allowInsecure'] == true,
-    );
-  }
-  return TlsSpec.disabled;
-}
-
-TransportSpec? _xrayTransportFromStream(Map stream) {
-  final net = (stream['network']?.toString() ?? 'tcp').toLowerCase();
-  switch (net) {
-    case 'ws':
-      final ws = stream['wsSettings'] as Map? ?? const {};
-      final headers = (ws['headers'] as Map?)?.cast<String, dynamic>();
-      final host = headers?['Host']?.toString() ?? '';
-      // §303 — Xray кладёт early data хвостом пути (`/x?ed=2560`); в sing-box
-      // это отдельное поле, а хвост в пути даёт 404.
-      // §103 D-016(в) — ключ `path` отсутствовал в исходном JSON → '' (не
-      // эмитим); присутствовал (даже как "/") → пропускаем через сплиттер.
-      final wsHasPath = ws.containsKey('path');
-      final (splitPath, edFromPath) = splitEarlyDataPath(
-        ws['path']?.toString() ?? '',
-      );
-      final path = wsHasPath ? splitPath : '';
-      // §320 — Xray-конфиги также несут early data отдельными полями
-      // `wsSettings.ed` / `.eh` (хвост пути в приоритете). `eh` без `ed`
-      // игнорируем: режим ядро включает по `max_early_data > 0`.
-      final edField = ws['ed'];
-      final ed =
-          edFromPath ??
-          (edField is int && edField > 0
-              ? edField
-              : int.tryParse(edField?.toString().trim() ?? ''));
-      var eh = ws['eh']?.toString().trim() ?? '';
-      // §103 D-008 — как и в URI-ветке: дефолт применим ТОЛЬКО когда early
-      // data взята из хвоста пути `?ed=N` (Go: applyWSEarlyData), не из
-      // плоских wsSettings.ed/eh (тех Go вообще не читает).
-      var ehImplicit = false;
-      if (eh.isEmpty && edFromPath != null) {
-        eh = 'Sec-WebSocket-Protocol';
-        ehImplicit = true;
-      }
-      return WsTransport(
-        path: path,
-        host: host,
-        earlyDataHeaderImplicit: ehImplicit,
-        maxEarlyData: ed != null && ed > 0 ? ed : null,
-        earlyDataHeaderName: (ed != null && ed > 0 && eh.isNotEmpty)
-            ? eh
-            : null,
-      );
-    case 'grpc':
-      final g = stream['grpcSettings'] as Map? ?? const {};
-      return GrpcTransport(serviceName: g['serviceName']?.toString() ?? '');
-    case 'http':
-    case 'h2':
-      final h = stream['httpSettings'] as Map? ?? const {};
-      final hosts =
-          (h['host'] as List?)?.map((e) => e.toString()).toList() ??
-          const <String>[];
-      return HttpTransport(path: h['path']?.toString() ?? '/', hosts: hosts);
-    case 'xhttp': // §097 — Xray xhttpSettings → нативный xhttp
-      final x = stream['xhttpSettings'] as Map? ?? const {};
-      // §399 — состав полей общий с URI-веткой. Xray допускает обе раскладки:
-      // плоско в `xhttpSettings` и вложенным объектом `extra`; при конфликте
-      // выигрывает `extra`. Битый/не-объектный `extra` игнорируется — узел
-      // собирается на плоских полях.
-      return xhttpFromMap(
-        mergeXhttpExtra(xhttpScalarsFromJson(x), raw: x['extra']),
-      );
-    default:
-      return null;
-  }
+NodeSpec _withTlsPassthroughBool(NodeSpec spec, String key, bool value) {
+  TlsSpec patch(TlsSpec tls) =>
+      tls.copyWith(passthrough: {...tls.passthrough, key: value});
+  return switch (spec) {
+    VlessSpec s => VlessSpec(
+        id: s.id,
+        tag: s.tag,
+        label: s.label,
+        server: s.server,
+        port: s.port,
+        rawSource: s.rawSource,
+        uuid: s.uuid,
+        flow: s.flow,
+        tls: patch(s.tls),
+        transport: s.transport,
+        packetEncoding: s.packetEncoding,
+        encryption: s.encryption,
+        chained: s.chained,
+        tcpKeepAlive: s.tcpKeepAlive,
+        warnings: s.warnings,
+      ),
+    TrojanSpec s => TrojanSpec(
+        id: s.id,
+        tag: s.tag,
+        label: s.label,
+        server: s.server,
+        port: s.port,
+        rawSource: s.rawSource,
+        password: s.password,
+        tls: patch(s.tls),
+        transport: s.transport,
+        chained: s.chained,
+        tcpKeepAlive: s.tcpKeepAlive,
+        warnings: s.warnings,
+      ),
+    VmessSpec s => VmessSpec(
+        id: s.id,
+        tag: s.tag,
+        label: s.label,
+        server: s.server,
+        port: s.port,
+        rawSource: s.rawSource,
+        uuid: s.uuid,
+        alterId: s.alterId,
+        security: s.security,
+        tls: patch(s.tls),
+        transport: s.transport,
+        chained: s.chained,
+        tcpKeepAlive: s.tcpKeepAlive,
+        warnings: s.warnings,
+      ),
+    _ => spec,
+  };
 }
 
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).
 /// Используется для JSON-редактора и Smart-Paste одиночного sing-box entry.
-NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
+///
+/// §472 шаг 2 — [label] задаётся явно, когда имя узла НЕ равно тегу. У
+/// JSON-узла имя и есть тег (их источник один), но у ссылки имя — текст
+/// фрагмента, а тег из него вычислен: ссылка без `#` даёт тег-фолбэк
+/// `trojan-host-443` при пустом имени, и подставить его в `label` значило бы
+/// вернуть выдуманное `#trojan-host-443` из `toUri()`.
+NodeSpec? parseSingboxEntry(
+  Map<String, dynamic> entry, {
+  String? rawSource,
+  String? label,
+  bool wsEarlyDataHeaderImplicit = false,
+}) {
   // §454 — источник узла из JSON: его собственный объект outbound'а. Вызов из
   // целого конфига передаёт оригинал (до подмены тега лейблом), одиночный
   // entry — сам себе источник.
@@ -999,10 +834,29 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
   final tag = entry['tag']?.toString() ?? '';
   final server = entry['server']?.toString() ?? '';
   final port = (entry['server_port'] as num?)?.toInt() ?? 0;
-  final label = tag;
+  final label0 = label ?? tag;
   // §453 — dial-поля общие для всех носителей; читаем один раз до switch'а,
   // дальше просто прокидываем. У не-носителей ключи не читаются вовсе.
   final ka = tcpKeepAliveFromSingbox(entry);
+  // §103 D-008 / §472 шаг 3 — заголовок early data подставлен САМОЙ формой
+  // записи (`?ed=N` хвостом пути), а не написан автором. В теле этой разницы
+  // нет: `early_data_header_name` там стоит в обоих случаях, и корпус требует
+  // именно так. Знает о ней только тот, кто видел ИСХОДНУЮ форму, — маппер
+  // ссылки (`mappers/uri_pipeline.dart`). У JSON-входа формы «хвостом пути»
+  // не бывает, поэтому дефолт `false`.
+  TransportSpec? transportOf(Object? raw) {
+    final t = _transportFromSingbox(raw);
+    if (!wsEarlyDataHeaderImplicit) return t;
+    if (t is! WsTransport || t.earlyDataHeaderName == null) return t;
+    return WsTransport(
+      path: t.path,
+      host: t.host,
+      headers: t.headers,
+      maxEarlyData: t.maxEarlyData,
+      earlyDataHeaderName: t.earlyDataHeaderName,
+      earlyDataHeaderImplicit: true,
+    );
+  }
 
   switch (type) {
     case 'vless':
@@ -1011,18 +865,25 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return VlessSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'vless-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         flow: entry['flow']?.toString() ?? '',
         tls: tls,
-        transport: _transportFromSingbox(entry['transport']),
+        transport: transportOf(entry['transport']),
         packetEncoding: normalizePacketEncoding(
           entry['packet_encoding']?.toString() ?? '',
           tag: tag,
         ),
+        // §335 / §472 шаг 3 — постквантовый слой читался ТОЛЬКО из Xray-JSON
+        // (`_vlessFromXray`), а из карты sing-box терялся молча: узел из
+        // JSON-редактора или Smart-Paste уезжал в конфиг без `encryption` и
+        // не поднимался. Обнаружено переездом URI-ветки на конвейер — теперь
+        // через эту карту идёт и ссылка (корпус
+        // `vless/encryption_mlkem768_long_key`).
+        encryption: entry['encryption']?.toString().trim() ?? '',
         tcpKeepAlive: ka,
       );
     case 'vmess':
@@ -1030,15 +891,17 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return VmessSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'vmess-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
         uuid: entry['uuid']?.toString() ?? '',
         alterId: (entry['alter_id'] as num?)?.toInt() ?? 0,
-        security: entry['security']?.toString() ?? 'auto',
+        // §459 (контракт §24.2 п. 7.11) — enum ядра и здесь: JSON-редактор и
+        // Smart-Paste приносят `aes-128-ctr` наравне с подписками.
+        security: normalizeVmessSecurity(entry['security']?.toString() ?? ''),
         tls: _tlsFromSingbox(entry['tls'], server),
-        transport: _transportFromSingbox(entry['transport']),
+        transport: transportOf(entry['transport']),
         tcpKeepAlive: ka,
       );
     case 'trojan':
@@ -1046,13 +909,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return TrojanSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'trojan-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
         password: entry['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
-        transport: _transportFromSingbox(entry['transport']),
+        transport: transportOf(entry['transport']),
         tcpKeepAlive: ka,
       );
     case 'anytls': // §269
@@ -1066,7 +929,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return AnyTlsSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'anytls-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1079,7 +942,14 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
             entry['idle_session_check_interval']?.toString() ?? ''),
         idleSessionTimeout: normalizeSingboxDuration(
             entry['idle_session_timeout']?.toString() ?? ''),
-        minIdleSession: (entry['min_idle_session'] as num?)?.toInt(),
+        // §472 шаг 6 — `_asInt`, а не жёсткий каст. Каст `as num?` бросал на
+        // ЛЮБОМ нечисловом значении, а `parseUri`/`parseSingboxEntry` ловят
+        // исключение и отдают `null`: узел исчезал целиком и молча. Задеть
+        // это могло и тело провайдера (`"min_idle_session": "3"` строкой —
+        // обычное дело у агрегаторов), и ссылку на конвейере, где сырое
+        // значение обязано доехать до санитайзера СО СВОИМ написанием, чтобы
+        // код `anytls_min_idle_invalid` назвал то, что написал автор.
+        minIdleSession: _asInt(entry['min_idle_session']),
         tcpKeepAlive: ka,
       );
     case 'shadowsocks':
@@ -1087,30 +957,57 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return ShadowsocksSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'ss-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
         method: entry['method']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
+        // §472 шаг 4 — поля SIP003 читались ТОЛЬКО URI-парсером, а из карты
+        // sing-box терялись молча: узел, вставленный JSON-объектом или
+        // отредактированный во вкладке JSON, уезжал в ядро без плагина и
+        // соединения не поднимал (эмиссия их пишет — `emitShadowsocks`).
+        // Обнаружено переездом URI-ветки на конвейер: через эту карту теперь
+        // идёт и ссылка. Тот же класс, что `encryption` у vless на шаге 3.
+        plugin: entry['plugin']?.toString() ?? '',
+        pluginOpts: entry['plugin_opts']?.toString() ?? '',
         tcpKeepAlive: ka,
       );
     case 'hysteria2':
       if (server.isEmpty || port == 0) return null;
       // §219 — кастуем entry['obfs'] один раз (было дважды).
       final obfs = entry['obfs'] as Map?;
-      // §358 — тип/пароль канонизируются молча: у parseSingboxEntry нет
-      // warnings-аккумулятора (тот же power-user путь, что у fp выше), а
-      // отдать ядру неизвестный тип нельзя — это fatal всего конфига.
+      // §469 п. 6 (зеркало находки лаунчера в `371448da`) — коды обфускации
+      // ДОХОДЯТ ДО УЗЛА и на JSON-входе тоже.
+      //
+      // Раньше сюда передавался `null` («у parseSingboxEntry нет
+      // warnings-аккумулятора»), и `obfs_unknown`/`obfs_password_missing`
+      // пропадали: один и тот же узел, пришедший ссылкой и телом, нёс разные
+      // наборы кодов, хотя тело у него выходило одинаковым. Аккумулятор
+      // есть — это `NodeSpec.warnings`, куда их кладёт сам spec.
+      final hy2Warnings = <NodeWarning>[];
       final obfsNorm = normalizeHysteria2Obfs(
         obfs?['type']?.toString() ?? '',
         obfs?['password']?.toString() ?? '',
-        null,
+        hy2Warnings,
       );
+      // §472 шаг 5 — рукописного производителя `tls_not_applicable_quic`
+      // здесь БОЛЬШЕ НЕТ.
+      //
+      // §469 ставил его отсюда потому, что санитайзер разбора смотрел на
+      // `emit()`, где `toSingboxForQuic` блоки уже срезал. С шага 1 у
+      // JSON-узла есть проход по ДОСЛОВНОЙ карте (`annotateFromRawBody`), и
+      // правило реестра `forbidden_for` на `tls.utls`/`tls.reality` он
+      // исполняет сам — по тому же телу, которое читала эта ветка, и с тем же
+      // `value`. Дедуп по `(code, path)` дубль снимал, так что видно ничего не
+      // было; лишним производитель от этого быть не перестал.
+      //
+      // Тело узла не меняется: блоки по-прежнему срезает эмиттер.
       return Hysteria2Spec(
+        warnings: hy2Warnings,
         id: newUuidV4(),
         tag: tag.isEmpty ? 'hy2-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1145,7 +1042,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return NaiveSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'naive-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1156,14 +1053,29 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
         // (fatal всего конфига). Зеркало naive_parser: срезаем блок.
         tls: _naiveTlsFromSingbox(entry['tls'], server),
         extraHeaders: extraHeaders,
+        // §472 шаг 6 — поле ЧИТАЕТСЯ из тела. `emitNaive` его пишет
+        // (`quic: true` + `quic_congestion_control: bbr`), а эта ветка не
+        // читала вовсе: узел `naive+quic://`, пересохранённый через JSON или
+        // отредактированный во вкладке JSON, молча возвращался к HTTP/2 и
+        // соединения не поднимал. Тот же класс, что `encryption` у vless
+        // (шаг 3) и `plugin` у shadowsocks (шаг 4).
+        //
+        // `quic_congestion_control` обратно в модель не идёт: у `NaiveSpec`
+        // такого поля нет, значение у ядра одно (`bbr`), и эмиттер ставит его
+        // сам по `quic`. Читать его было бы нечем и некуда.
+        quic: entry['quic'] == true,
         tcpKeepAlive: ka,
       );
     case 'tuic':
       if (server.isEmpty || port == 0) return null;
       return TuicSpec(
+        // §472 шаг 5 — рукописного производителя `tls_not_applicable_quic`
+        // здесь больше нет, по той же причине, что и у hysteria2: с шага 1
+        // правило реестра исполняет проход по ДОСЛОВНОЙ карте
+        // (`annotateFromRawBody`), по тому же телу и с тем же значением.
         id: newUuidV4(),
         tag: tag.isEmpty ? 'tuic-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1186,7 +1098,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return SshSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'ssh-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1195,6 +1107,17 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
         privateKey: entry['private_key']?.toString() ?? '',
         privateKeyPassphrase: entry['private_key_passphrase']?.toString() ?? '',
         hostKey: hk is List ? hk.map((e) => e.toString()).toList() : const [],
+        // §472 шаг 6 — поле ЧИТАЕТСЯ из тела. `emitSsh` его пишет, а эта
+        // ветка не читала вовсе: узел, пересохранённый через JSON или
+        // отредактированный во вкладке JSON, терял список алгоритмов
+        // host-ключа молча. Тот же класс, что `encryption` у vless (шаг 3),
+        // `plugin` у shadowsocks (шаг 4) и `quic` у naive выше.
+        hostKeyAlgorithms: switch (entry['host_key_algorithms']) {
+          final List l => l.map((e) => e.toString()).toList(),
+          // `listable_string` реестра: одиночная строка — законная форма.
+          final String s when s.isNotEmpty => [s],
+          _ => const <String>[],
+        },
         tcpKeepAlive: ka,
       );
     case 'socks':
@@ -1202,10 +1125,20 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return SocksSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'socks-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
+        // §475 — версия ЧИТАЕТСЯ из тела. Раньше ветка её не читала вовсе, и
+        // тело с `version: "4"` из JSON-вкладки уезжало в ядро пятёркой:
+        // поле модели с дефолтом `'5'` никто не заполнял. Годность значения
+        // судит санитайзер (enum реестра + `type_invalid`), сюда оно приходит
+        // уже проверенным; пустое или отсутствующее — дефолт ядра, то есть
+        // прежние `'5'`.
+        version: (entry['version']?.toString().trim().toLowerCase() ?? '')
+                .isEmpty
+            ? '5'
+            : entry['version'].toString().trim().toLowerCase(),
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
         tcpKeepAlive: ka,
@@ -1229,7 +1162,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return HttpSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'http-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1275,34 +1208,23 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
           (p['client_id'] is String
               ? parseReserved(p['client_id'] as String)
               : null);
-      // SPEC 103 D-023/D-030 — та же проверка ключей, что на URI/INI-путях:
-      // мусорный ключ из импортированного конфига валит `sing-box check`
-      // целиком, а неканоническая форма даёт другой identity-хеш той же ноде.
-      final wgPriv = normalizeWGKey(entry['private_key']?.toString() ?? '');
-      final wgPub = normalizeWGKey(p['public_key']?.toString() ?? '');
-      if (wgPriv == null || wgPub == null) return null;
-      // §421 — битый ключ защиты заголовка / короткий паддинг: узел
-      // выброшен, как на URI-пути (ядро отвергло бы конфиг целиком).
-      if (awg != null) {
-        final dropReason = awg3NodeError(awg);
-        if (dropReason != null) {
-          AppLog.I.debug('$wgTag: ${dropReason.renderEn()}');
-          return null;
-        }
-      }
+      // §481 (контракт 1.1.11) — ГОДНОСТЬ ключей и правила AWG 3.x судит
+      // ТОЛЬКО реестр (`wg_key_invalid`, `awg3_header_key_invalid`,
+      // `awg3_padding_too_short` — все с `drop_node`). Здесь остаётся перевод
+      // написания: неканоническая форма даёт другой identity-хеш той же ноде,
+      // а о написании реестр молчит.
+      final wgPrivRaw = entry['private_key']?.toString() ?? '';
+      final wgPubRaw = p['public_key']?.toString() ?? '';
+      final wgPriv = normalizeWGKey(wgPrivRaw) ?? wgPrivRaw;
+      final wgPub = normalizeWGKey(wgPubRaw) ?? wgPubRaw;
+      if (awg != null) normalizeAwgHeaderKey(awg);
       final wgPskRaw = p['pre_shared_key']?.toString() ?? '';
-      final String wgPsk;
-      if (wgPskRaw.isEmpty) {
-        wgPsk = '';
-      } else {
-        final normalized = normalizeWGKey(wgPskRaw);
-        if (normalized == null) return null;
-        wgPsk = normalized;
-      }
+      final wgPsk =
+          wgPskRaw.isEmpty ? '' : (normalizeWGKey(wgPskRaw) ?? wgPskRaw);
       return WireguardSpec(
         id: newUuidV4(),
         tag: wgTag,
-        label: label,
+        label: label0,
         server: peerServer,
         port: peerPort,
         rawSource: src,
@@ -1321,10 +1243,20 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
             reserved: reserved,
           ),
         ],
-        // §421 — AWG3-маркер (ключ корня или диапазонный keepalive) тоже
-        // делает узел AmneziaWG: кламп до 1280, как у AWG2 (SPEC 123).
+        // §473 (контракт 1.1.5) — на входе `singbox` завышенный MTU НЕ
+        // заменяется: тело в собственной форме ядра написали человек или
+        // подписка, и молча переписывать его нельзя (`except_sources`,
+        // решение владельца 18.09.2026). Узел получает info-код
+        // `awg_mtu_high` — его ставит санитайзер по дословной карте
+        // (`annotateFromRawBody`), и второй копии правила здесь не нужно.
+        //
+        // Дефолт 1280 при ОТСУТСТВИИ `mtu` действует и тут: исключение про
+        // ЗАМЕНУ написанного, а не про подстановку недостающего (кейс корпуса
+        // `body/singbox/endpoints_awg_mtu_default`). §421 — AWG3-маркер
+        // (ключ корня или диапазонный keepalive) делает узел AmneziaWG
+        // наравне с AWG2-полями.
         mtu: awg != null || Awg.hasAwg3Json(entry)
-            ? awgClampMtu(rawMtu, wgTag)
+            ? (rawMtu ?? awgMtuCeilingByRegistry())
             : rawMtu,
         awg: awg,
       );
@@ -1359,9 +1291,18 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
           : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ?? '';
       return MasqueSpec(
+        // §472 шаг 7 — рукописного прохода по запрещённым на QUIC блокам
+        // (`tls.utls`/`tls.reality`, §469) здесь БОЛЬШЕ НЕТ, и снят он не как
+        // дубль, а как лишний ПРОИЗВОДИТЕЛЬ: с шага 1 у JSON-узла есть проход
+        // по ДОСЛОВНОЙ карте (`annotateFromRawBody`), и правило
+        // `forbidden_for` санитайзер исполняет по тому же телу, которое читала
+        // эта ветка, с тем же `value`. Дедуп по `(code, path)` дубль снимал,
+        // поэтому видно ничего не было. Ровно так же шаг 5 снял его у
+        // hysteria2 и tuic (спека 472, 11.8); masque был последним
+        // вызывающим, и вместе с ним ушла сама функция.
         id: newUuidV4(),
         tag: tag.isEmpty ? 'masque-$server-$port' : tag,
-        label: label,
+        label: label0,
         server: server,
         port: port,
         rawSource: src,
@@ -1385,7 +1326,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry, {String? rawSource}) {
       return TailscaleSpec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'tailscale' : tag,
-        label: label,
+        label: label0,
         body: entry,
         rawSource: src,
       );
@@ -1440,6 +1381,14 @@ Map<String, Object> tlsPassthroughFromSingbox(Map raw) {
     final v = raw[k];
     if (kTlsBoolKeys.contains(k)) {
       if (v == true) out[k] = true;
+    } else if (kTlsObjectKeys.contains(k)) {
+      // §459 (контракт §24.2 п. 7.2) — объектный сквозной ключ (`tls.ech`):
+      // копируем карту как есть, внутрь не смотрим (состав задаёт ядро).
+      // Не-Map (строка, число) → отброшен молча, как остальные guard'ы.
+      if (v is Map) {
+        final obj = Map<String, dynamic>.from(v.cast<String, dynamic>());
+        if (obj.isNotEmpty) out[k] = obj;
+      }
     } else if (kTlsListableKeys.contains(k)) {
       if (v is String) {
         if (v.isNotEmpty) out[k] = v;
@@ -1468,9 +1417,24 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
   return normalizeTlsFingerprint(
     TlsSpec(
       enabled: true,
-      serverName: raw['server_name']?.toString() ?? server,
-      alpn:
-          (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      // §472 шаг 5 — `disable_sni` отменяет ОТКАТ на адрес сервера, но не
+      // трогает имя, которое автор написал сам.
+      //
+      // Откат существует, чтобы у обычного узла в модели стояло имя, которое
+      // ядро и так подставит. При `disable_sni` ядро не отправляет расширение
+      // SNI вовсе, так что подставлять было бы нечего: `toUri()` вернул бы
+      // `sni=`, которого автор не писал. Тело от этого не меняется — ключ
+      // сквозной (`kTlsPassthroughKeys`) и сохраняется как есть, вместе с
+      // явным `server_name`, если он там был.
+      serverName: raw['server_name']?.toString() ??
+          (raw['disable_sni'] == true ? null : server),
+      // §460 — `alpn` у ядра Listable: массив → типизированный список, строка
+      // → сквозной ключ в форме прибытия (корпус outbound_array_tls_fields
+      // `vless-alpn-str`); раньше `as List` на строке ронял узел целиком.
+      alpn: switch (raw['alpn']) {
+        final List l => [for (final e in l) e.toString()],
+        _ => const [],
+      },
       insecure: raw['insecure'] == true,
       fingerprint: utls?['fingerprint']?.toString(),
       // §454 — пин (D-078) из JSON раньше не читался вовсе: только из
@@ -1483,7 +1447,10 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
           ],
         _ => const [],
       },
-      passthrough: tlsPassthroughFromSingbox(raw),
+      passthrough: {
+        ...tlsPassthroughFromSingbox(raw),
+        if (raw['alpn'] case final String a when a.isNotEmpty) 'alpn': a,
+      },
       // §169 — REALITY только при enabled И валидном X25519 public_key. Битый
       // ключ → reality=null (нода остаётся plain TLS), а не отравляет config.
       reality:
@@ -1492,7 +1459,16 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
               !isValidRealityPublicKey(reality['public_key']?.toString() ?? '')
           ? null
           : RealitySpec(
-              publicKey: reality['public_key']!.toString(),
+              // §480 Д-6 — написание ключа переводится в форму ядра
+              // (RawURL): std-алфавит законен по реестру, но ядро на нём
+              // отвечает `illegal base64 data` и роняет ВЕСЬ конфиг.
+              //
+              // Контракт 1.1.40 объявил это правило реестром —
+              // `normalize: base64_rawurl` у `tls.reality.public_key`, — и
+              // санитайзер исполняет его на ВСЕХ входах. Здесь рукописный
+              // перевод снят: два движка одного правила рано или поздно
+              // разошлись бы, а тело рабочего узла обязано остаться одним.
+              publicKey: reality['public_key']!.toString().trim(),
               shortId: normalizeRealityShortId(
                 reality['short_id']?.toString() ?? '',
               ),
@@ -1503,12 +1479,23 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
   );
 }
 
-/// §457 — `tls.reality.key_share`: только строка из [kRealityKeyShares], без
-/// нормализации регистра. Иное (`"Hybrid"`, `"x"`, число, пусто) — поле
-/// отброшено молча, узел жив: ядро на неизвестном значении отвергает
-/// outbound, а с ним и весь конфиг («деградируй поле, не конфиг»).
-String? _realityKeyShare(dynamic raw) =>
-    raw is String && kRealityKeyShares.contains(raw) ? raw : null;
+/// §457 — `tls.reality.key_share`: только значение из [kRealityKeyShares].
+/// Иное (`"x"`, число, пусто) — поле отброшено, узел жив: ядро на неизвестном
+/// значении отвергает outbound, а с ним и весь конфиг («деградируй поле, не
+/// конфиг»).
+///
+/// §459 (контракт §24.2 п. 7.12) — реестр `tls.json` →
+/// `body.fields.reality.fields.key_share`, `normalize: trim_lower`: ядро
+/// case-sensitive, но `"Hybrid"` из чужого JSON — это явное намерение, а не
+/// мусор; раньше оно терялось молча.
+String? _realityKeyShare(dynamic raw) {
+  if (raw is! String) return null;
+  final v = raw.trim().toLowerCase();
+  if (v.isEmpty) return null;
+  if (kRealityKeyShares.contains(v)) return v;
+  AppLog.I.debug("reality: key_share '$raw' is not a known value, dropping");
+  return null;
+}
 
 TransportSpec? _transportFromSingbox(dynamic raw) {
   if (raw is! Map) return null;
@@ -1530,6 +1517,12 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       return WsTransport(
         path: path,
         host: headers?['Host']?.toString() ?? '',
+        // §476 — прочие заголовки ЧИТАЮТСЯ. `WsTransport.headers` их эмитит, а
+        // эта ветка брала из карты один `Host`: узел с `User-Agent` или
+        // `X-Forwarded-For`, пересохранённый через JSON-вкладку, терял их
+        // молча. `Host` остаётся отдельным полем (его пишет эмиттер сам) и в
+        // карту заголовков не дублируется.
+        headers: _headersExceptHost(headers),
         maxEarlyData: edField is int ? edField : edFromPath,
         earlyDataHeaderName:
             (raw['early_data_header_name']?.toString().isNotEmpty ?? false)
@@ -1544,6 +1537,13 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
         hosts:
             (raw['host'] as List?)?.map((e) => e.toString()).toList() ??
             const [],
+        // §476 — заголовки ЧИТАЮТСЯ: `HttpTransport.headers` их эмитит, а эта
+        // ветка не читала вовсе. У http-транспорта `Host` живёт отдельным
+        // полем `host` (списком), поэтому карта берётся целиком.
+        headers: (raw['headers'] as Map?)?.map(
+              (k, v) => MapEntry(k.toString(), _headerValue(v)),
+            ) ??
+            const {},
       );
     case 'httpupgrade':
       // §303 — early data у httpupgrade нет, но хвост пути всё равно чужой.
@@ -1556,7 +1556,12 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       return HttpUpgradeTransport(
         path: path,
         host: raw['host']?.toString() ?? '',
+        // §476 — заголовки ЧИТАЮТСЯ, как у ws. `Host` идёт отдельным полем.
+        headers: _headersExceptHost(
+            (raw['headers'] as Map?)?.cast<String, dynamic>()),
       );
+    // §463 / контракт §24.2 п. 7.13 — алиас прежнего имени Xray.
+    case 'splithttp':
     case 'xhttp': // §097 — нативный xhttp из sing-box JSON
       // §399 — состав полей общий с URI-веткой: round-trip через JSON-редактор
       // не должен срезать расширенные поля §127. `headers` — Map, идёт отдельно.
@@ -1571,6 +1576,27 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
     default:
       return null;
   }
+}
+
+/// §476 — заголовки транспорта, кроме `Host`: он живёт отдельным полем модели
+/// (`WsTransport.host`) и эмитится ею же, так что в карте он был бы вторым
+/// производителем одного ключа.
+Map<String, String> _headersExceptHost(Map<String, dynamic>? raw) {
+  if (raw == null) return const {};
+  final out = <String, String>{};
+  for (final e in raw.entries) {
+    if (e.key == 'Host') continue;
+    out[e.key] = _headerValue(e.value);
+  }
+  return out;
+}
+
+/// Значение заголовка: sing-box зовёт его `Listable[string]` — строка либо
+/// массив. Модель держит строку, поэтому из списка берётся первый элемент,
+/// ровно как у `naive.extra_headers` и `http.headers` узла.
+String _headerValue(Object? v) {
+  if (v is List) return v.isEmpty ? '' : v.first.toString();
+  return v?.toString() ?? '';
 }
 
 /// §421 — `persistent_keepalive_interval` из JSON: число → `int`,

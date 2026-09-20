@@ -22,8 +22,8 @@ class SubscriptionMeta extends StatelessWidget {
   final Future<void> Function(String) onOpenUrl;
 
   /// §283 — сколько нод выключено per-node toggle'ом («M off» в счётчике).
-  /// §391 — сам bulk-переключатель переехал в строку «Test servers»
-  /// (`_buildProbeBar`), здесь остался только счётчик.
+  /// §391 — bulk-переключатель в probe-баре (`_buildProbeBar`), здесь только
+  /// счётчик.
   final int offCount;
 
   @override

@@ -1,96 +1,34 @@
 import '../../../models/node_spec.dart';
-import '../../../models/node_warning.dart';
-import '../../../models/tls_spec.dart';
-import '../uri_utils.dart';
+import '../mappers/uri_pipeline.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
-// TUIC v5 — новый протокол в v2.
+// TUIC v5
 // ════════════════════════════════════════════════════════════════════════════
 
-TuicSpec? parseTuic(String uri) {
-  final p = Uri.tryParse(uri);
-  if (p == null || p.host.isEmpty || p.userInfo.isEmpty) return null;
-
-  final userParts = p.userInfo.split(':');
-  if (userParts.length < 2) return null;
-  final uuid = Uri.decodeComponent(userParts.first);
-  final password = Uri.decodeComponent(userParts.sublist(1).join(':'));
-  if (uuid.isEmpty || password.isEmpty) return null;
-
-  final server = p.host;
-  final port = p.hasPort ? p.port : 443;
-  final q = Map<String, String>.from(p.queryParameters);
-  final label = decodeFragment(p.fragment);
-  final tag = tagFromLabel(label, 'tuic', server, port);
-
-  // §103 D-016(в) — не подставлять дефолт на разборе: null, если параметра не
-  // было в URI вовсе, иначе нормализованное значение (мусор → тоже null, как
-  // будто параметра не было — эмиттер тогда не пишет поле, ядро подставит
-  // дефолт само).
-  final ccRaw = q['congestion_control'];
-  final cc = _normalizeCongestion(ccRaw);
-  final urmRaw = q['udp_relay_mode'];
-  final urm = urmRaw == null
-      ? null
-      : (urmRaw.toLowerCase().trim() == 'quic' ? 'quic' : 'native');
-  final zeroRtt = (q['reduce_rtt'] ?? q['zero_rtt'] ?? '0') == '1' ||
-      (q['reduce_rtt'] ?? q['zero_rtt'] ?? '').toLowerCase() == 'true';
-
-  var sni = q['sni'] ?? '';
-  if (sni.isEmpty) sni = server;
-  // §103 D-016(в) — alpn=h3 у TUIC это дефолт ПРОТОКОЛА (не эмитится Go, если
-  // в URI не было явного alpn), не наше подставленное значение.
-  final alpnRaw = q['alpn'];
-  final alpn = (alpnRaw == null || alpnRaw.isEmpty)
-      ? const <String>[]
-      : alpnRaw.split(',').map((e) => e.trim()).toList();
-
-  final tls = TlsSpec(
-    enabled: true,
-    serverName: q['disable_sni'] == '1' ? null : sni,
-    alpn: alpn,
-    insecure: isTlsInsecure(q),
-  );
-
-  final warnings = <NodeWarning>[];
-  // SPEC 103 `tuic_congestion_invalid` (Go: node_parser_tuic.go:73) — значение
-  // вне {cubic, new_reno, bbr} снимается, ядро подставит свой дефолт. Пустое
-  // значение = «не задано», деградацией не считается.
-  if (ccRaw != null && ccRaw.trim().isNotEmpty && cc == null) {
-    warnings.add(TuicCongestionInvalidWarning(ccRaw.trim()));
-  }
-  if (tls.insecure) warnings.add(const InsecureTlsWarning());
-
-  // §103 D-024 — heartbeat: голое число (секунды) → duration-строка с
-  // суффиксом `s`; параметра не было в URI вовсе → null (не эмитим).
-  final heartbeatRaw = q['heartbeat'];
-  final heartbeat = (heartbeatRaw == null || heartbeatRaw.trim().isEmpty)
-      ? null
-      : normalizeSingboxDuration(heartbeatRaw.trim());
-
-  return TuicSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: uri,
-    uuid: uuid,
-    password: password,
-    congestionControl: cc,
-    udpRelayMode: urm,
-    zeroRtt: zeroRtt,
-    tls: tls,
-    heartbeat: heartbeat,
-    warnings: warnings,
-  );
-}
-
-/// `null` при отсутствии параметра ИЛИ мусорном значении — оба случая
-/// «не задано явно» для эмиттера (§103 D-016(в)): битое значение не должно
-/// протащить в конфиг псевдо-явный `cubic`.
-String? _normalizeCongestion(String? raw) {
-  if (raw == null) return null;
-  final s = raw.toLowerCase().trim();
-  return {'bbr', 'cubic', 'new_reno'}.contains(s) ? s : null;
-}
+/// §472 шаг 5 — tuic разбирается КОНВЕЙЕРОМ: маппер переводит ссылку в сырую
+/// карту sing-box, санитайзер реестра судит значения, `parseSingboxEntry`
+/// строит модель (`mappers/uri_pipeline.dart`).
+///
+/// Что уехало из этой функции в реестр:
+///
+/// | было рукописным | стало правилом реестра | код |
+/// |---|---|---|
+/// | `forbiddenTlsBlockWarnings` — рукописный проход по `tls.utls` (§469) | `tls.json` → `forbidden_for` + `forbidden_codes`, исполняет САНИТАЙЗЕР | `tls_not_applicable_quic` |
+/// | `_normalizeCongestion` — значение вне `{cubic, new_reno, bbr}` | `tuic.json` → `congestion_control`, enum + `on_invalid: drop` | `tuic_congestion_invalid` (был `TuicCongestionInvalidWarning` без пути) |
+/// | `_normalizeUdpRelayMode` — значение вне `{native, quic}` | `tuic.json` → `udp_relay_mode`, enum + `on_invalid: drop` | `tuic_udp_relay_mode_invalid` (§463; путь и значение были и раньше) |
+/// | `InsecureTlsWarning` при `insecure` | `tls.json` → `insecure`, `advisory` (§474) | `tls_insecure` с путём и значением |
+/// | чтение `fp` «ради кода» (§469) | блок `utls` доезжает до судьи обычным порядком | `tls_not_applicable_quic` |
+///
+/// Рукописным остался ПЕРЕВОД написания — работа маппера по определению:
+/// `uuid:password` в userinfo, три написания 0-RTT, `heartbeat` голым числом,
+/// `disable_sni=1` как отсутствие имени сервера в теле.
+///
+/// **Одно поведение изменилось намеренно** — `uuid` не в форме UUID. Реестр
+/// объявляет у поля `format: uuid` с `on_invalid: drop`, и санитайзер такое
+/// значение снимает; узел остаётся без обязательного поля и отбраковывается.
+/// Прежде он строился и уезжал в ядро, где «invalid uuid» роняет ВЕСЬ конфиг.
+/// Корпус эту границу уже провёл сам (SPEC 131 W2c): заглушки `u` в его
+/// кейсах заменены настоящими UUID с пометкой «ядро отвергает их фаталом на
+/// весь конфиг, то есть кейс нормировал тело, которое не запускается».
+TuicSpec? parseTuic(String uri) =>
+    parseUriViaPipeline(uri, 'tuic') as TuicSpec?;

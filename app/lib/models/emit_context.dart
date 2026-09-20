@@ -50,6 +50,21 @@ abstract class EmitContext {
   /// (`@self` → этот тег); узел, которого здесь нет, секций не даёт.
   void noteEmitted(NodeSpec node, String finalTag) {}
 
+  /// Фича 478 / CANON §9.3 — дополнительный outbound (хоп родной цепочки)
+  /// ведёт к [owner], а не к своему звену. При коллизии с main-тегом того же
+  /// узла побеждает [noteEmitted].
+  void noteEmittedAlias(String finalTag, NodeSpec owner) {}
+
+  /// §473 — запись, чьё тело взято ДОСЛОВНО из JSON-источника (§455,
+  /// `verbatimBodyOf`), а не собрано `emit()` модели.
+  ///
+  /// Нужно гарду реестра на сборке: у такой записи вход — `singbox`, и
+  /// правило `max_when.except_sources` оставляет ей значение, которое на
+  /// прочих входах заменило бы потолком. Гард работает над `SingboxEntry`, а
+  /// он источника не знает и знать не может — карту ведёт тот, кто тело
+  /// подставил.
+  void noteVerbatim(SingboxEntry entry) {}
+
   /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.
   void warn(String line) {}

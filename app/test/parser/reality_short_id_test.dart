@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
+import 'engine_test_setup.dart';
+
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 
@@ -10,6 +12,10 @@ const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 /// string`). Принцип §169: битое значение отбрасывается целиком (`''`),
 /// не подгоняется — обрезка/дополнение дали бы чужой идентификатор.
 void main() {
+  // §480 W2 — vless переехала на ДВИЖОК СЕКЦИЙ: без реестра и секций-мапперов
+  // ссылка не разбирается вовсе, рукописного запасного пути не осталось.
+  setUpAll(loadEngineSections);
+
   group('§343 normalizeRealityShortId', () {
     test('валидные чётные проходят как есть (lower-case)', () {
       expect(normalizeRealityShortId('abcd1234'), 'abcd1234');

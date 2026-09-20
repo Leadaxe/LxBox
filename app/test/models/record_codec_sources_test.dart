@@ -10,6 +10,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §439 §4.2 — кодек записей `sources[]`: подписка, одиночный сервер, папка и
 /// цепочка. Главное свойство — `fromRecord(toRecord(x)) == x` через JSON-текст
 /// файла: на нём держится совпадение `config.json` до и после миграции.
@@ -130,6 +132,10 @@ SubscriptionServers _richSubscription() => SubscriptionServers(
     );
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('круг кодека: fromRecord(toRecord(x)) == x', () {
     test('подписка со всеми полями L и рантаймом', () {
       final s = _richSubscription();

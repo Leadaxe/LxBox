@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android VPN client (sing-box / libbox CommandClient).
 publish_to: 'none'
 
-version: 2.24.4+22404500
+version: 2.25.0+22500500
 # ↑ ФИКСИРОВАННЫЙ placeholder. НЕ редактируется вручную и НЕ бампится в git.
 # Реальная версия вычисляется из git-состояния В МОМЕНТ СБОРКИ и переписывает
 # эту строку прямо перед `flutter build` (файл в репо остаётся 0.0.0+1):
@@ -58,6 +58,26 @@ flutter:
     - assets/donate.json # §362/§423 — способы поддержки: единственный источник, бандлится и раздаётся с GitHub
     - assets/support.json # §356/§422 — лента сообщений автора: единственный источник, бандлится и раздаётся с GitHub
     - assets/warp_endpoints.json # §136 — WARP endpoint/SNI random pools
+    # §460 — реестр контракта (зеркало app/contract/registry, кладёт
+    # tool/sync_contract.sh). Каталоги Flutter не рекурсивны — protocols/
+    # объявлен отдельно. Читает ContractRegistry: схема тела узла и тексты
+    # кодов предупреждений.
+    - assets/contract/VERSION
+    - assets/contract/registry/
+    - assets/contract/registry/protocols/
+    # §480 — ЧЕРНОВЫЕ секции-мапперы, пока лаунчер не влил их в сам реестр:
+    # исполняет движок маппера, и без бандлинга разбор остался бы без таблицы.
+    # Загрузчик берёт секцию из реестра, если она там исполняемая, и только
+    # иначе — отсюда; каталог временный.
+    # Каталоги Flutter не рекурсивны — каждый вид источника отдельной строкой.
+    - assets/contract_draft/uri/
+    # `conf/` больше нет: секция `.conf` приехала реестром целиком (диалект
+    # ini — контракт 1.1.30, код незнакомого ключа — 1.1.32), и последнее
+    # отличие (дефолтный порт пира) сняла ветка `endpoint.on_no_match`.
+    - assets/contract_draft/xray/
+    - assets/contract_draft/singbox/
+    # §480 W6 — реестр ВИДОВ ИСТОЧНИКА приехал нормой (контракт 1.1.41,
+    # `assets/contract/registry/source_kinds.json`), черновик снят.
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)
 

@@ -6,10 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/auto_select.dart';
+import '../models/core_reject_verdict.dart';
 import '../models/import_rule.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
 import '../models/node_spec.dart';
+import '../models/node_warning.dart';
 import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
 import '../models/tailscale_bundle.dart';
@@ -18,6 +20,8 @@ import '../models/subscription_meta.dart';
 import '../models/tunnel_status.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
+import 'subscription_controller/core_reject_ops.dart';
+import '../services/core_reject/core_reject_guard.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
@@ -131,6 +135,28 @@ class SubscriptionController extends ChangeNotifier {
   /// заполняется только из [FatalValidationException].
   List<ValidationIssue> _lastFatalIssues = const [];
   List<ValidationIssue> get lastFatalIssues => _lastFatalIssues;
+
+  /// Фича 478 — обратная карта последней сборки «финальный тег → исходный
+  /// узел» (CANON §9.3). Живёт ровно до следующей сборки: страховка
+  /// пересобирает конфиг перед каждым кругом и читает карту сразу.
+  Map<String, NodeSpec> _lastTagMap = const {};
+  Map<String, NodeSpec> get lastEmittedTagMap => _lastTagMap;
+
+  /// §505 — предупреждения сборки по финальному config-тегу (гард реестра).
+  Map<String, List<NodeWarning>> _lastBuildWarningsByTag = const {};
+  Map<String, List<NodeWarning>> get lastBuildWarningsByTag =>
+      _lastBuildWarningsByTag;
+
+  /// §498 — подмена обратной карты последней сборки в тестах навигации листа.
+  @visibleForTesting
+  void debugSetLastEmittedTagMap(Map<String, NodeSpec> map) {
+    _lastTagMap = map;
+  }
+
+  @visibleForTesting
+  void debugSetLastBuildWarningsByTag(Map<String, List<NodeWarning>> map) {
+    _lastBuildWarningsByTag = map;
+  }
 
   /// §274 — Направления, чей node_filter отсёк все ноды в последней УСПЕШНОЙ
   /// сборке (display-имена; Направление схлопнулось в block-fallback). [stamp]
@@ -255,6 +281,10 @@ class SubscriptionController extends ChangeNotifier {
           // ключи, содержимого которых в теле нет.
           final migrated =
               migrateLegacyDisabledKeys(cur.disabledHashes, nodes);
+          // Фича 478 — вердикт ядра пересчётом по телу не воспроизводится:
+          // дописываем его на разобранные узлы, иначе регидрация из кэша
+          // покажет узел выключенным без причины.
+          stampStoredVerdicts(nodes, cur.nodeWarnings);
           final next = cur.copyWith(
             nodes: nodes,
             lastNodeCount: nodes.length,
@@ -754,6 +784,29 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
+  /// §500 — отказ одиночного ввода: базовая фраза + причины в шторке.
+  void _setParseInputReject(
+    ErrKey key,
+    String input, {
+    RegistryWarning? verdict,
+    List<NodeWarning>? dropped,
+  }) {
+    final all = <NodeWarning>[
+      ?verdict,
+      ...?dropped,
+    ];
+    final sorted = maskSecretDropWarnings(sortedDropWarnings(all));
+    if (sorted.isEmpty) {
+      _lastError = ErrMsg(key);
+      return;
+    }
+    _lastError = ParseInputRejectedMsg(
+      key,
+      dropped: sorted,
+      sourceLabel: inputSourceLabel(input),
+    );
+  }
+
   /// §243 — [nameHint] (имя файла без расширения при импорте из файла)
   /// становится tag'ом узла для WG/AWG INI-ветки (фрагмент синтетического
   /// URI, живёт в rawBody ⇒ переживает рестарт). Ветка `vpn://` hint
@@ -792,9 +845,12 @@ class SubscriptionController extends ChangeNotifier {
         await _persist();
         await _fetchEntry(_entries.length - 1);
       } else if (isWireGuardConfig(trimmed)) {
-        var spec = parseWireguardIni(trimmed, nameHint: nameHint);
+        final verdict = XrayDropVerdict();
+        var spec = parseWireguardIni(trimmed,
+            nameHint: nameHint, dropped: verdict);
         if (spec == null) {
-          _lastError = const ErrMsg(ErrKey.invalidWireguardConfig);
+          _setParseInputReject(ErrKey.invalidWireguardConfig, trimmed,
+              verdict: verdict.reason);
           return;
         }
         // §090 G2b × §456 — в INI тега нет, эмодзи некуда дописать (как в
@@ -856,9 +912,11 @@ class SubscriptionController extends ChangeNotifier {
             list: vpnServer, nodeCount: vpnServer.nodes.length));
         await _persist();
       } else if (isDirectLink(trimmed)) {
-        final spec = parseUri(trimmed);
+        final verdict = XrayDropVerdict();
+        final spec = parseUri(trimmed, dropped: verdict);
         if (spec == null) {
-          _lastError = const ErrMsg(ErrKey.couldNotParseDirectLink);
+          _setParseInputReject(ErrKey.couldNotParseDirectLink, trimmed,
+              verdict: verdict.reason);
           return;
         }
         final dlServer = _autoEmoji(UserServer(
@@ -897,9 +955,9 @@ class SubscriptionController extends ChangeNotifier {
   /// §368 — JSON любой из четырёх форм (одиночный outbound, массив
   /// outbound'ов, полный конфиг, массив конфигов) → одна запись.
   ///
-  /// Гейт один — `decode` + flavor; своей эвристики («начинается с `{` и
-  /// содержит `"type"`») здесь больше нет: она была третьей по счёту и
-  /// разошлась с превью (§368 §1).
+  /// Гейт один — `decode` и ветка, которой опознан документ; своей эвристики
+  /// («начинается с `{` и содержит `"type"`») здесь больше нет: она была
+  /// третьей по счёту и разошлась с превью (§368 §1).
   ///
   /// Одна запись, а не N: раньше массив outbound'ов раскладывался по одной
   /// записи на элемент («v1 behavior parity»). Вставленный файл — один
@@ -907,22 +965,31 @@ class SubscriptionController extends ChangeNotifier {
   Future<_JsonAdd> _addJsonNodes(String text,
       {UserSource origin = UserSource.paste}) async {
     final decoded = decode(text);
-    if (decoded is! JsonConfig) return _JsonAdd.notJson;
-    switch (decoded.flavor) {
-      case JsonFlavor.singboxOutbound:
-      case JsonFlavor.singboxArray:
-      case JsonFlavor.singboxConfig:
-      case JsonFlavor.singboxMulti:
-      case JsonFlavor.xrayArray:
-        break;
-      case JsonFlavor.clashYaml:
-      case JsonFlavor.unknown:
-        return _JsonAdd.notJson;
+    // §480 Д-4 — список ссылок, завёрнутый в base64 целиком. Декодер такое
+    // тело разворачивает и отдаёт `UriLines` (ветка `base64_wrapped`
+    // реестра), но сюда приходит только JSON, и вставка отвечала «не
+    // распознано» — при том, что ТОТ ЖЕ текст без base64 проходил, а
+    // подписка с таким телом по ссылке читается штатно.
+    //
+    // Гейт — `wrapped`, а не «похоже на base64»: голый список ссылок
+    // приезжает тем же `UriLines`, и его разбирают ветки выше (`isDirectLink`
+    // для одной ссылки); перехватывать его здесь значило бы заводить
+    // второй путь для уже работающего входа.
+    if (decoded is UriLines && !_looksLikeUriList(text)) {
+      return _addUriLines(decoded, text, origin: origin);
     }
+    if (decoded is! JsonConfig) return _JsonAdd.notJson;
+    // §483 — «форма даёт узлы» спрашивается у самой ветки: вид без маппера
+    // (Clash, нераспознанный JSON) элементов не имеет по определению.
+    // Перечислять виды здесь незачем — список разъезжался бы с реестром
+    // молча, а новый вид источника получал бы «не распознано».
+    if (decoded.source.mapper == null) return _JsonAdd.notJson;
 
-    final nodes = parseAll(decoded);
+    final dropped = <NodeWarning>[];
+    final nodes = parseAll(decoded, dropped: dropped);
     if (nodes.isEmpty) {
-      _lastError = const ErrMsg(ErrKey.noValidOutboundsInJson);
+      _setParseInputReject(ErrKey.noValidOutboundsInJson, text,
+          dropped: dropped);
       return _JsonAdd.empty;
     }
 
@@ -1004,6 +1071,66 @@ class SubscriptionController extends ChangeNotifier {
     ));
     _entries.add(SubscriptionEntry(
         list: jsonServer, nodeCount: jsonServer.nodes.length));
+    return _JsonAdd.added;
+  }
+
+  /// §480 Д-4 — ввод УЖЕ является списком ссылок, оболочку снимать не с чего.
+  ///
+  /// Спрашивается исходный текст, а не форма ответа: `UriLines` приходит и от
+  /// голого списка, и от завёрнутого в base64, а различать их нужно — голый
+  /// список разбирают ветки выше.
+  static bool _looksLikeUriList(String text) => text.contains('://');
+
+  /// §480 Д-4 — список ссылок из снятой оболочки → запись.
+  ///
+  /// Контейнер выбирается тем же порогом, что и у JSON (§368/§129): один
+  /// узел — сервер, несколько — файловая подписка. В кэш кладётся ИСХОДНЫЙ
+  /// текст (завёрнутый): тело подписки перечитывается на старте тем же
+  /// `decode`, и он развернёт оболочку заново.
+  Future<_JsonAdd> _addUriLines(UriLines decoded, String text,
+      {UserSource origin = UserSource.paste}) async {
+    final dropped = <NodeWarning>[];
+    final nodes = parseAll(decoded, dropped: dropped);
+    if (nodes.isEmpty) {
+      _setParseInputReject(ErrKey.noValidOutboundsInJson, text,
+          dropped: dropped);
+      return _JsonAdd.empty;
+    }
+
+    if (nodes.length > 1) {
+      final url = 'file:${newUuidV4()}';
+      await HttpCache.save(url, text, const {});
+      _entries.add(SubscriptionEntry(
+        list: SubscriptionServers(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: url,
+          lastUpdated: DateTime.now(),
+          lastUpdateStatus: UpdateStatus.ok,
+          lastNodeCount: nodes.length,
+          updateIntervalHours: -1, // §129 — файловая: авто-обновления нет
+          nodes: nodes,
+        ),
+        nodeCount: nodes.length,
+      ));
+      return _JsonAdd.added;
+    }
+
+    final srv = _autoEmoji(UserServer(
+      id: newUuidV4(),
+      name: '',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      origin: origin,
+      rawBody: text,
+      sections: sectionsForNewNode(nodes.first),
+      nodes: nodes,
+    ));
+    _entries.add(SubscriptionEntry(list: srv, nodeCount: srv.nodes.length));
     return _JsonAdd.added;
   }
 
@@ -1654,12 +1781,21 @@ class SubscriptionController extends ChangeNotifier {
     final hash = sourceNodeIdentities(list.nodes)[node];
     if (hash == null) return;
     final next = Map<String, DateTime>.from(list.disabledHashes);
-    if (next.containsKey(hash)) {
+    final enabling = next.containsKey(hash);
+    if (enabling) {
       next.remove(hash);
     } else {
       next[hash] = DateTime.now();
     }
-    entry._replaceList(list.copyWith(disabledHashes: next));
+    // Фича 478 / CANON §9.4 — человек включил узел обратно: вердикт ядра
+    // стирается, следующий старт проверит узел заново. Выключение рукой
+    // вердикта не ставит (его ставит только страховка).
+    var nextList = list.copyWith(disabledHashes: next);
+    if (enabling) {
+      nextList = clearSubscriptionVerdict(nextList, hash);
+      unstampCoreRejected(node);
+    }
+    entry._replaceList(nextList);
     await _persist();
     notifyListeners();
   }
@@ -1681,6 +1817,12 @@ class SubscriptionController extends ChangeNotifier {
     if (enabled) {
       if (list.disabledHashes.isEmpty) return;
       next = const {};
+      // Фича 478 — «включить все» снимает и вердикты: узлы проверятся заново.
+      entry._replaceList(list.copyWith(
+          disabledHashes: const {}, nodeWarnings: const {}));
+      await _persist();
+      notifyListeners();
+      return;
     } else {
       if (list.nodes.isEmpty) return;
       final now = DateTime.now();
@@ -1734,8 +1876,12 @@ class SubscriptionController extends ChangeNotifier {
     if (folder is! FolderServers) return;
     if (memberIndex < 0 || memberIndex >= folder.members.length) return;
     final members = [...folder.members];
-    members[memberIndex] =
-        members[memberIndex].copyWith(enabled: !members[memberIndex].enabled);
+    final on = !members[memberIndex].enabled;
+    members[memberIndex] = members[memberIndex].copyWith(
+      enabled: on,
+      // Фича 478 — ручное включение снимает вердикт ядра.
+      warnings: on ? dropVerdict(members[memberIndex].warnings) : null,
+    );
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     await _persist();
@@ -1773,7 +1919,23 @@ class SubscriptionController extends ChangeNotifier {
       nameHint: hint,
       sections: imported,
     );
-    final current = members[memberIndex].node;
+    var current = members[memberIndex].node;
+    // Фича 478 / CANON §9.4 п. 1 — человек правил тело в редакторе: вердикт
+    // ядра привязан к ТЕЛУ, и на изменённом теле он недействителен. Запись
+    // стирается И узел включается обратно — тем же составом полей, что у
+    // ручного включения (`toggleMemberAt`). Тело то же (правка имени, пробелы)
+    // → вердикт держится.
+    if (verdictDroppedByEdit(
+      warnings: members[memberIndex].warnings,
+      before: previous,
+      after: current,
+    )) {
+      members[memberIndex] = members[memberIndex].copyWith(
+        enabled: true,
+        warnings: dropVerdict(members[memberIndex].warnings),
+      );
+      current = members[memberIndex].node;
+    }
     entry._replaceList(folder.copyWith(members: members));
     entry.nodeCount = entry.list.nodes.length;
     // §439 (D-113) — правка тела могла сменить тег: ссылки идут за узлом.
@@ -2135,8 +2297,14 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
-    _entries[index]._replaceList(
-        _toggleEnabled(_entries[index].list, !_entries[index].enabled));
+    final list = _entries[index].list;
+    final enabling = !list.enabled;
+    final ServerList next = switch (list) {
+      UserServer u when enabling =>
+        u.copyWith(enabled: true, warnings: dropVerdict(u.warnings)),
+      _ => _toggleEnabled(list, enabling),
+    };
+    _entries[index]._replaceList(next);
     await _persist();
     notifyListeners();
   }
@@ -2153,6 +2321,144 @@ class SubscriptionController extends ChangeNotifier {
   /// Замена `entry.list` на новый ServerList (для экранов, меняющих политику
   /// или tagPrefix). Сам ServerList immutable; вызывающий строит новый через
   /// `copyWith` на subscription/user-обёртке.
+  /// Фича 478 / CANON §9.3 — выключить узел, названный ядром, и записать
+  /// рядом вердикт. [tag] — ФИНАЛЬНЫЙ тег собранного конфига; узел ищется
+  /// обратной картой последней сборки ([lastEmittedTagMap]), которую выдала
+  /// та же сборка. Производные записи (хоп цепочки, узел папки, префикс
+  /// подписки, WARP) ведут к своему ИСХОДНОМУ узлу.
+  ///
+  /// `false` — тегу не нашлось узла (служебная запись приложения) либо
+  /// выключить его нечем: автоматики нет, цикл страховки прерывается.
+  Future<CoreRejectNodeRef?> disableNodeByCoreTag(String tag, String reason) async {
+    final node = _lastTagMap[tag];
+    if (node == null) return null;
+    for (var i = 0; i < _entries.length; i++) {
+      final list = _entries[i].list;
+      final ref = nodeRefFor(list, node);
+      final applied = applyVerdict(list, node, reason);
+      if (!applied.changed) continue;
+      _entries[i]._replaceList(applied.list);
+      _entries[i].nodeCount = _entries[i].list.nodes.length;
+      // Список узлов и вкладка Notifications читают `NodeSpec.warnings`;
+      // без штампа вердикт жил бы только в хранилище до следующего разбора.
+      stampNodeWarnings(
+          node, [StoredWarning.coreRejected(reason, ref: ref)]);
+      await _persist();
+      notifyListeners();
+      return ref;
+    }
+    return null;
+  }
+
+  /// §503 — узел из листа страховки по идентичности вердикта, не по карте
+  /// текущей сборки (выключенный узел из сборки исключён).
+  CoreRejectNavigationTarget? resolveCoreRejectNavigation(DisabledNode disabled) =>
+      resolveCoreRejectNode(
+        [
+          for (var i = 0; i < _entries.length; i++)
+            (i, _entries[i].id, _entries[i].list),
+        ],
+        disabled,
+        emittedTagMap: _lastTagMap,
+      );
+
+  /// Фича 478 — все вердикты, стоящие сейчас: тег-идентичность → причина.
+  /// Отдаёт их Debug API и плашка.
+  List<({String source, String tag, String reason})> get coreRejectedNodes {
+    final out = <({String source, String tag, String reason})>[];
+    for (final e in _entries) {
+      final list = e.list;
+      // §494 — displayName: у одиночного сервера list.name пуст (§243).
+      final source = e.displayName;
+      switch (list) {
+        case SubscriptionServers():
+          for (final w in list.nodeWarnings.entries) {
+            for (final v in w.value) {
+              if (v.isCoreRejected) {
+                out.add((source: source, tag: w.key, reason: v.reason));
+              }
+            }
+          }
+        case FolderServers():
+          for (final m in list.members) {
+            for (final v in m.warnings) {
+              if (v.isCoreRejected) {
+                out.add((
+                  source: source,
+                  tag: m.node?.tag ?? m.nameHint,
+                  reason: v.reason
+                ));
+              }
+            }
+          }
+        case UserServer():
+          for (final v in list.warnings) {
+            if (v.isCoreRejected) {
+              out.add((
+                source: source,
+                tag: list.nodes.isEmpty ? source : list.nodes.first.tag,
+                reason: v.reason
+              ));
+            }
+          }
+      }
+    }
+    return out;
+  }
+
+  /// Фича 478 — ручное включение узла ПО ТЕГУ (Debug API, плашка «Show»):
+  /// вердикт стирается, узел проверится заново. `false` — узла нет.
+  ///
+  /// [tag] — финальный тег ядра (с префиксом подписки) либо сырой тег
+  /// идентичности: сначала [lastEmittedTagMap], как у [disableNodeByCoreTag].
+  Future<bool> enableNodeByCoreTag(String tag) async {
+    final mapped = _lastTagMap[tag];
+    if (mapped != null) {
+      for (var i = 0; i < _entries.length; i++) {
+        final applied = revertVerdict(_entries[i].list, mapped);
+        if (!applied.changed) continue;
+        _entries[i]._replaceList(applied.list);
+        _entries[i].nodeCount = _entries[i].list.nodes.length;
+        unstampCoreRejected(mapped);
+        await _persist();
+        notifyListeners();
+        return true;
+      }
+    }
+    for (var i = 0; i < _entries.length; i++) {
+      final list = _entries[i].list;
+      switch (list) {
+        case SubscriptionServers():
+          if (!list.nodeWarnings.containsKey(tag) &&
+              !list.disabledHashes.containsKey(tag)) {
+            continue;
+          }
+          final disabled = Map<String, DateTime>.from(list.disabledHashes)
+            ..remove(tag);
+          _entries[i]._replaceList(clearSubscriptionVerdict(
+              list.copyWith(disabledHashes: disabled), tag));
+        case FolderServers():
+          final at = list.members.indexWhere(
+              (m) => (m.node?.tag ?? m.nameHint) == tag);
+          if (at < 0) continue;
+          final members = [...list.members];
+          members[at] = members[at]
+              .copyWith(enabled: true, warnings: dropVerdict(members[at].warnings));
+          _entries[i]._replaceList(list.copyWith(members: members));
+        case UserServer():
+          final own = list.nodes.isEmpty ? list.name : list.nodes.first.tag;
+          if (own != tag) continue;
+          _entries[i]._replaceList(
+              list.copyWith(enabled: true, warnings: dropVerdict(list.warnings)));
+      }
+      _entries[i].nodeCount = _entries[i].list.nodes.length;
+      await _persist();
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
   Future<void> replaceList(int index, ServerList next) async {
     if (index < 0 || index >= _entries.length) return;
     _entries[index]._replaceList(next);
@@ -2368,6 +2674,8 @@ class SubscriptionController extends ChangeNotifier {
     );
 
     final result = await buildConfig(lists: lists, settings: settings);
+    _lastTagMap = result.nodeByEmittedTag;
+    _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
 
     // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
     // первом запуске). GUI не обязано знать про этот механизм — достаточно
@@ -2577,11 +2885,12 @@ class SubscriptionController extends ChangeNotifier {
       // регидрация из кэша состав не проясняют, file:-подписки сюда не
       // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
       // чистить.
+      final freshIdentities = sourceNodeIdentities(result.nodes).values.toSet();
       final baseDisabled = migrated.isEmpty && ruleMarks.disable.isEmpty
           ? migrated
           : gcDisabledHashes(
               migrated,
-              sourceNodeIdentities(result.nodes).values.toSet(),
+              freshIdentities,
               updateIntervalHours: nextInterval,
               now: ruleNow,
             );
@@ -2593,6 +2902,24 @@ class SubscriptionController extends ChangeNotifier {
         disable: ruleMarks.disable,
         now: ruleNow,
       );
+      // Фича 478 / CANON §9.4 — вердикт привязан к ТЕЛУ узла: здесь старое и
+      // новое тела доступны одновременно. Тело то же → вердикт держится;
+      // тело изменилось ИЛИ старого тела нет (кэш пуст) → вердикт снимается
+      // И узел включается обратно. Обновление ядра вердикты НЕ сбрасывает.
+      final gcWarnings = gcNodeWarnings(
+        current.nodeWarnings,
+        nextDisabled,
+        freshIdentities,
+      );
+      final verdicts = refreshSubscriptionVerdicts(
+        disabled: nextDisabled,
+        warnings: gcWarnings,
+        oldBodies: bodiesByIdentity(current.nodes),
+        newBodies: bodiesByIdentity(result.nodes),
+      );
+      // Фича 478 — уцелевшие вердикты дописываем на свежеразобранные узлы.
+      stampStoredVerdicts(result.nodes, verdicts.warnings);
+
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
@@ -2602,7 +2929,8 @@ class SubscriptionController extends ChangeNotifier {
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
         updateIntervalHours: nextInterval,
-        disabledHashes: nextDisabled,
+        disabledHashes: verdicts.disabled,
+        nodeWarnings: verdicts.warnings,
         nodes: result.nodes,
       );
       entry._replaceList(next);
@@ -2617,7 +2945,7 @@ class SubscriptionController extends ChangeNotifier {
       // списке узлов). Всё прочее в подписке — метаданные, конфиг от них не
       // зависит.
       final sameComposition = _compositionKey(current.nodes, current.disabledHashes.keys) ==
-          _compositionKey(result.nodes, nextDisabled.keys);
+          _compositionKey(result.nodes, verdicts.disabled.keys);
       // §349 — выключенная подписка в конфиг не эмитится (билдер пропускает
       // `!list.enabled`): её состав на конфиг не влияет, флаг не поднимаем.
       // Иначе §337 («обновлять выключенные») давал ложную синюю плашку на
@@ -2729,12 +3057,24 @@ class SubscriptionController extends ChangeNotifier {
       nodes.addAll(parseAll(decoded, nameHint: nameHint));
     }
     final before = _lists();
+    // Фича 478 / CANON §9.4 п. 1 — человек правил тело ручного сервера:
+    // вердикт ядра привязан к ТЕЛУ и на изменённом теле недействителен.
+    // Запись стирается И узел включается обратно — тем же составом полей,
+    // что у ручного включения (`enableNodeByCoreTag`). У `UserServer` узел
+    // один, сравниваем первый: остальные — секции того же документа.
+    final dropVerdictByEdit = verdictDroppedByEdit(
+      warnings: list.warnings,
+      before: list.nodes.isEmpty ? null : list.nodes.first,
+      after: nodes.isEmpty ? null : nodes.first,
+    );
     final next = list.copyWith(
       // §243 — displayName у UserServer name игнорирует (legacy v2.11.0 мог
       // записать туда имя файла); при пересохранении затираем совсем.
       name: '',
       rawBody: connections.join('\n'),
       nodes: nodes,
+      enabled: dropVerdictByEdit ? true : null,
+      warnings: dropVerdictByEdit ? dropVerdict(list.warnings) : null,
       // §435 — голое тело секции не трогает; документ с `sections` или с
       // `dns`/`route` замещает их целиком (NODE_SECTIONS.md §7).
       sections: nodes.isEmpty ? null : nodes.first.importedSections,

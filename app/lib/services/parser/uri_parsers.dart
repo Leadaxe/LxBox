@@ -1,5 +1,9 @@
 import '../../models/node_spec.dart';
 import 'amnezia_link.dart';
+import 'mappers/uri_pipeline.dart';
+export 'drop_verdict.dart' show XrayDropVerdict;
+
+import 'drop_verdict.dart';
 import 'uri_utils.dart';
 import 'uri_parsers/anytls_parser.dart';
 import 'uri_parsers/http_parser.dart';
@@ -31,9 +35,21 @@ export 'uri_parsers/vless_parser.dart';
 export 'uri_parsers/vmess_parser.dart';
 export 'uri_parsers/wireguard_parser.dart';
 
+/// §472 шаг 7 — схемы, у которых конвейер вызывает НЕ `parseUri`, а сам
+/// парсер схемы: у wireguard две формы записи, и вторая
+/// (`awg://<base64 .conf>`, §450) не URI.
+const _kWireguardSchemes = <String>{'wireguard', 'wg', 'awg'};
+
 /// Диспетчер по схеме URI. Возвращает NodeSpec или null (skip).
 /// Ошибки структуры (отсутствие host, uuid) — null, не throw.
-NodeSpec? parseUri(String uri) {
+///
+/// §481 (контракт 1.1.11) — [dropped]: КОД отбраковки наружу. `code` в
+/// `dropped[]` нормативен (D-088), `reason` — нет, а `null` в ответе сам по
+/// себе о причине не говорит: отличить «узел выброшен за негодный ключ WG» от
+/// «за пересечение заголовков» вызывающему было нечем, и проверить перенос
+/// правил в реестр — тоже. Заполняется на схемах конвейера; там, где схема ещё
+/// идёт своим парсером, остаётся пустым, и вызывающий сверяет один `ref`.
+NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
   final t = uri.trim();
   if (t.isEmpty) return null;
   final scheme = t.split('://').first.toLowerCase();
@@ -42,6 +58,17 @@ NodeSpec? parseUri(String uri) {
   // терялась, хотя десктоп её принимал (§103 §9.B12).
   if (scheme != 'vpn' && uri.length > maxURILength) return null;
   try {
+    // §472 шаг 2 — схемы, переехавшие на конвейер «маппер → санитайзер по
+    // реестру → модель», идут им; остальные пока своим парсером. Список
+    // растёт по шагу за протокол (спека 472, раздел 4).
+    //
+    // §472 шаг 7 — wireguard и его алиасы в списке ЕСТЬ (страж покрытия
+    // mapper-правил читает его), но маршрутизируются они по-прежнему через
+    // `parseWireguardUri`: у схемы есть ВТОРАЯ ФОРМА `awg://<base64 .conf>`
+    // (§450), и распознать её надо ДО конвейера — её payload не URI вовсе.
+    if (kPipelineSchemes.contains(scheme) && !_kWireguardSchemes.contains(scheme)) {
+      return parseUriViaPipeline(t, scheme, dropped: dropped);
+    }
     switch (scheme) {
       case 'vless':
         return parseVless(t);
@@ -64,8 +91,11 @@ NodeSpec? parseUri(String uri) {
         return parseTuic(t);
       case 'ssh':
         return parseSsh(t);
+      // §475 — четыре схемы, одно тело: версию несёт схема.
       case 'socks':
       case 'socks5':
+      case 'socks4':
+      case 'socks4a':
         return parseSocks(t);
       case 'proxy-http': // §222 — HTTP(S) CONNECT proxy
       case 'proxy-https':
@@ -75,7 +105,7 @@ NodeSpec? parseUri(String uri) {
       case 'wg':
       case 'wireguard':
       case 'awg': // §097 — AmneziaWG2 алиас (та же endpoint-логика, что WG)
-        return parseWireguardUri(t);
+        return parseWireguardUri(t, dropped: dropped);
       case 'masque': // §130 — MASQUE-WARP (CONNECT-IP)
         return parseMasqueUri(t);
       case 'vpn': // §103 §9.B12 — Amnezia vpn:// строкой внутри URI-списка

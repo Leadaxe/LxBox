@@ -10,6 +10,8 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §439 (D-112), NODE_LINK §5 — резолв ссылок на узлы вторым проходом
 // настоящего `buildConfig`: пара члена папки и узла подписки — финальный тег
 // с префиксом контейнера, корневая ссылка — корневой узел или корневое имя,
@@ -107,6 +109,10 @@ Map<String, dynamic>? _out(BuildResult r, String tag) {
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('разрешается в финальный тег', () {
     test('пара члена папки, пара узла подписки, корневой узел', () async {
       final r = await _build(

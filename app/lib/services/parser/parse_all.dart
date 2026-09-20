@@ -1,6 +1,9 @@
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
+import '../contract/parse_warnings.dart';
+import '../contract/registry.dart';
 import 'body_decoder.dart';
+import 'engine/document.dart';
 import 'ini_parser.dart';
 import 'json_parsers.dart';
 import 'singbox_config.dart';
@@ -24,7 +27,85 @@ import 'uri_parsers.dart';
 /// `nodes.first.warnings`. Параметр не меняет поведения ни одного текущего
 /// вызывающего (все передают его `null`) и нужен конформанс-раннеру корпуса:
 /// конверт контракта несёт `dropped[]` наравне с `nodes[]`.
+///
+/// §460 W2a — узкая общая воронка разбора: ЧЕРЕЗ НЕЁ проходят все входы
+/// (тела подписок, URI-строки, sing-box/Xray JSON, INI, серверы и члены
+/// папок — `ServerList`, `SourceRecord`, контроллер подписок), и здесь же
+/// узел получает предупреждения реестра контракта
+/// ([annotateAllWithRegistry]). Тело узла при этом не меняется — чистит
+/// по-прежнему гард сборки.
+///
+/// §472 шаг 1 — у JSON-входа проходов ДВА, и порядок между ними значим:
+///
+///  1. [annotateAllFromRawBody] — санитайзер по ДОСЛОВНОЙ карте провайдера
+///     (`rawSource`, §455). Он видит то, что типизированный парсер уже снял:
+///     ключ вне схемы, `flow` из чёрного списка, TLS-поле, запрещённое схеме.
+///     Его коды несут `path` и `value`.
+///  2. [annotateAllWithRegistry] — санитайзер по `emit()` модели. Он видит
+///     то, чего в дословной карте не было: значения, которые ПОСТАВИЛ разбор
+///     (нормализация, дефолты `all_or_nothing`), и всё тело URI/INI-узла,
+///     у которого дословной карты нет вовсе.
+///
+/// Первым идёт дословный: при совпадении пары `(code, path)` остаётся запись,
+/// которая пришла раньше, а дословная точнее — её `value` называет то, что
+/// лежало в теле, а не то, во что разбор это превратил.
+///
+/// Поскольку разбор идёт заново при каждой загрузке узла из хранения (узел
+/// хранится текстом `rawSource`), предупреждения переживают перезагрузку по
+/// построению: их никто не сериализует, они каждый раз считаются заново.
 List<NodeSpec> parseAll(
+  DecodedBody decoded, {
+  String? nameHint,
+  List<NodeWarning>? dropped,
+}) {
+  final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
+
+  // §477 — проход по дословной карте выносит и ВЕРДИКТ О ЗАПИСИ, а не только
+  // коды полей: `on_invalid: drop_node` значит, что ядро эту запись не примет
+  // и не стартует НА ВСЁМ конфиге (ровно случай #147 — одна негодная строка
+  // `encryption` в одном узле подписки). Такой узел обязан исчезнуть из
+  // списка здесь же, при разборе: до гарда сборки он дожил бы только затем,
+  // чтобы быть снятым там, а до тех пор стоял бы в списке рабочим.
+  //
+  // Где это делается — тут, а не внутри прохода: `dropped[]` принадлежит
+  // `parseAll`, и конверт контракта (D-088) различает «запись отвергли» и
+  // «тело не распознано» именно этим списком.
+  final byRegistry = annotateAllFromRawBody(nodes);
+  if (byRegistry.isNotEmpty) {
+    nodes.removeWhere(byRegistry.contains);
+    // Причина — код реестра, который проход уже поставил на узел, плюс тег
+    // записи: `dropped[].ref` контракта называет именно тег outbound'а
+    // (corpus/README), а не человеческое имя.
+    dropped?.addAll(byRegistry.map(_dropReasonOf));
+  }
+
+  annotateAllWithRegistry(nodes);
+  return nodes;
+}
+
+/// §477 — причина отбраковки узла реестром: код `error`, который проход по
+/// дословной карте поставил на узел, с приписанным тегом записи.
+///
+/// Кодов `error` на узле может оказаться несколько; берётся ПЕРВЫЙ — порядок
+/// их постановки и есть порядок `body.order` реестра, то есть первый говорит
+/// о самом раннем поле тела. Ни одного не нашлось — вердикт пришёл, а кода
+/// нет, и назвать причину нечем: тогда остаётся сам тег.
+NodeWarning _dropReasonOf(NodeSpec node) {
+  for (final w in node.warnings) {
+    if (w is! RegistryWarning) continue;
+    if (ContractRegistry.I.textFor(w.code)?.severity != 'error') continue;
+    return RegistryWarning(
+      code: w.code,
+      path: w.path,
+      value: w.value,
+      params: w.params,
+      ownerTag: node.tag,
+    );
+  }
+  return RegistryWarning(code: 'type_invalid', ownerTag: node.tag);
+}
+
+List<NodeSpec> _parseAll(
   DecodedBody decoded, {
   String? nameHint,
   List<NodeWarning>? dropped,
@@ -33,24 +114,55 @@ List<NodeSpec> parseAll(
     // §302/§454/§456 — источник узла (`rawSource`) проставляют сами парсеры:
     // для URI-строк это строка, для INI — сам INI-текст (тег — поле записи),
     // для JSON — объект outbound'а.
-    UriLines(lines: final ls) => [
-        for (final l in ls)
-          if (parseUri(l) case final NodeSpec n) n,
-      ],
-    IniConfig(text: final t) => [
-        parseWireguardIni(t, nameHint: nameHint),
-      ].whereType<NodeSpec>().toList(),
+    UriLines(lines: final ls) => _parseUriLines(ls, dropped),
+    IniConfig(text: final t) => _parseIniConfigs([t], nameHint: nameHint, dropped: dropped),
     // §110 — Amnezia vpn://: каждый контейнер → INI → нода (null-skip).
     // §243 — hint с индексным суффиксом (`hint`, `hint 2`, …): фрагмент
     // теперь «собственное имя» raw, суффикс-логика addMembersToFolder до
     // таких нод не дойдёт — разводим коллизии здесь.
-    AmneziaConfig(iniTexts: final ts) => [
-        for (var i = 0; i < ts.length; i++)
-          parseWireguardIni(ts[i], nameHint: _indexedHint(nameHint, i)),
-      ].whereType<NodeSpec>().toList(),
+    AmneziaConfig(iniTexts: final ts) => _parseIniConfigs(
+        ts,
+        nameHint: nameHint,
+        dropped: dropped,
+        indexedHint: true,
+      ),
     JsonConfig() => _parseJson(decoded, dropped),
     DecodeFailure() => const <NodeSpec>[],
   };
+}
+
+List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
+  final nodes = <NodeSpec>[];
+  for (final l in lines) {
+    final verdict = XrayDropVerdict();
+    final n = parseUri(l, dropped: verdict);
+    if (n != null) {
+      nodes.add(n);
+    } else if (verdict.reason != null) {
+      dropped?.add(verdict.reason!);
+    }
+  }
+  return nodes;
+}
+
+List<NodeSpec> _parseIniConfigs(
+  List<String> texts, {
+  String? nameHint,
+  List<NodeWarning>? dropped,
+  bool indexedHint = false,
+}) {
+  final nodes = <NodeSpec>[];
+  for (var i = 0; i < texts.length; i++) {
+    final hint = indexedHint ? _indexedHint(nameHint, i) : nameHint;
+    final verdict = XrayDropVerdict();
+    final n = parseWireguardIni(texts[i], nameHint: hint, dropped: verdict);
+    if (n != null) {
+      nodes.add(n);
+    } else if (verdict.reason != null) {
+      dropped?.add(verdict.reason!);
+    }
+  }
+  return nodes;
 }
 
 // Суффикс — по индексу КОНТЕЙНЕРА, не произведённой ноды: при null-skip
@@ -77,13 +189,45 @@ int _payloadCount(Map<String, dynamic> element) {
 }
 
 List<NodeSpec> _parseJson(JsonConfig j, List<NodeWarning>? out) {
-  switch (j.flavor) {
-    case JsonFlavor.xrayArray:
-      if (j.value is! List) return const [];
+  // §480 — ОБХОД ЭЛЕМЕНТОВ ВЕДЁТ РЕЕСТР. Ветка документа называет и вид
+  // источника элемента (`mapper`), и путь к элементам (`elements`); движок
+  // достаёт по нему группы. Прежний рукописный `switch` по форме документа
+  // был второй копией того же знания: вид источника уже опознан данными, а
+  // путь к его элементам оставался ветвями здесь.
+  //
+  // §483 — ветка есть у ЛЮБОГО опознанного документа, включая опознанный без
+  // реестра (`_detectLegacySource`), и второго обхода под запасной путь
+  // больше нет: формы те же, различать их незачем.
+  //
+  // Группами, а не плоским списком: границы конфига несут смысл для дедупа
+  // (§404) и владения именем (§342).
+  final source = j.source;
+  final spec = source.elements;
+  final mapper = source.mapper;
+  // Вид без маппера узлов не даёт по определению (Clash, нераспознанный
+  // JSON): ноль узлов, как и прежде.
+  if (mapper == null || spec == null) return const [];
+
+  // Форма документа не та, что объявлена веткой, — обойти нечем.
+  final groups = DocumentRegistry.groupsFor(spec, j.value);
+  if (groups == null || groups.isEmpty) return const [];
+
+  return mapper == 'xray'
+      ? _parseXrayDocument(groups, out)
+      : parseSingboxConfigs(groups);
+}
+
+/// §310/§321/§342/§404 — СБОРКА ДОКУМЕНТА Xray из его элементов.
+///
+/// Вынесена из `switch` целиком, без правок: способ ДОБРАТЬСЯ до элементов
+/// теперь называет реестр, а что с ними делать дальше — порядок узлов, дедуп,
+/// владение именем — принадлежит сборке документа и остаётся кодом.
+List<NodeSpec> _parseXrayDocument(
+  List<Map<String, dynamic>> elements,
+  List<NodeWarning>? out,
+) {
       // §310 — элемент массива даёт N узлов (кроме dialer-целей), а не один
       // «main». Порядок узлов внутри элемента задаёт парсер.
-      final elements =
-          (j.value as List).whereType<Map<String, dynamic>>().toList();
       // §321 P4 / §404 D-086 — накопитель ПОДПИСЕЙ дедупа на всю подписку
       // (эмиссия узла без tag/detour + подпись пути дозвона). Между подписками
       // дедуп НЕ работает намеренно: разные источники = разные
@@ -164,33 +308,4 @@ List<NodeSpec> _parseJson(JsonConfig j, List<NodeWarning>? out) {
         }
       }
       return nodes;
-    // §368 — четыре sing-box-формы отличаются только обёрткой; нормализуем к
-    // «массиву конфигов» и отдаём одному ядру. Одиночный outbound больше не
-    // ходит в `parseSingboxEntry` напрямую: общий путь даёт ему то же, что
-    // остальным (detour, warning'и), а массив из одного элемента вырождает
-    // сортировку §342 и дедуп P4.
-    case JsonFlavor.singboxOutbound:
-      if (j.value is! Map<String, dynamic>) return const [];
-      return parseSingboxConfigs([
-        {
-          'outbounds': [j.value],
-        },
-      ]);
-    case JsonFlavor.singboxArray:
-      if (j.value is! List) return const [];
-      return parseSingboxConfigs([
-        {'outbounds': j.value},
-      ]);
-    case JsonFlavor.singboxConfig:
-      if (j.value is! Map<String, dynamic>) return const [];
-      return parseSingboxConfigs([j.value as Map<String, dynamic>]);
-    case JsonFlavor.singboxMulti:
-      if (j.value is! List) return const [];
-      return parseSingboxConfigs(
-        (j.value as List).whereType<Map<String, dynamic>>().toList(),
-      );
-    case JsonFlavor.clashYaml:
-    case JsonFlavor.unknown:
-      return const [];
-  }
 }

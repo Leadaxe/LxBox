@@ -1,0 +1,76 @@
+{
+  "_note": "§472 шаг 6 — снимок identity ssh, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "default_port_22": {
+      "uri": "ssh://admin@example-1.com#Default Port",
+      "identity": "25b77441421c290f4442a87e46c445ce865a459e3373f7048e6ddc2ad5039752"
+    },
+    "full_config": {
+      "uri": "ssh://root:pass123@192.0.2.60:22?private_key_path=/home/user/.ssh/id_rsa&private_key_passphrase=myphrase&host_key=ssh-ed25519%20AAAAC3NzaC1lZDI1NTE5AAAAIFakeSyntheticHostKey00000000000000&client_version=SSH-2.0-OpenSSH_7.4p1#My SSH Server",
+      "identity": "9048e61b25adb33f1c2d274d4009e34bc9ff78f1487c4234c5ec81d0e22bdc53"
+    },
+    "host_key": {
+      "uri": "ssh://testuser:testpass123@example-2.com:22?host_key=ssh-ed25519%20AAAAC3NzaC1lZDI1NTE5AAAAIExamplePlaceholderHostKeyBase64&host_key_algorithms=ssh-ed25519#SSH%20HostKey",
+      "identity": "eee46961ee082be4f731a4be0cc260276041cc062d4ed0c351b35176f63ab8c1"
+    },
+    "missing_hostname_rejected": {
+      "uri": "ssh://user@",
+      "identity": null
+    },
+    "missing_user_rejected": {
+      "uri": "ssh://@example-1.com:22",
+      "identity": null
+    },
+    "multiple_host_keys": {
+      "uri": "ssh://user@example-1.com:22?host_key=key1,key2,key3#Multi Key Server",
+      "identity": "1d128ee153275943c3927ca251d5db3bd9ab8154c8acbca89f19f385de588810"
+    },
+    "non_standard_port": {
+      "uri": "ssh://testuser:testpass123@example-3.com:2222#SSH%20CustomPort",
+      "identity": "101923aef3ffb1137591adce9ebb3827f40991df934a1d2943694050ab2c4ad8"
+    },
+    "password": {
+      "uri": "ssh://testuser:testpass123@example-1.com:22#SSH%20Pass",
+      "identity": "f01fe94e612109b13837d26a57a573142107f0493f40b96583275649dcf4fd63"
+    },
+    "private_key_path": {
+      "uri": "ssh://deploy@git.example-1.com:22?private_key_path=$HOME/.ssh/deploy_key#Git Server",
+      "identity": "c3303d52073a0ffc16c206041deff28905aa9eda463aad880f0273ad7212d04d"
+    },
+    "user_only_custom_port": {
+      "uri": "ssh://user@example-1.com:2222#SSH Server",
+      "identity": "e6e7cd708b5555a07096c85a4af0881595b6c4cccb9f556ff0fc7353378d1f1b"
+    },
+    "user_password": {
+      "uri": "ssh://root:admin@192.0.2.60:22#Local SSH",
+      "identity": "517105c216817977a50e095a3eb589784e91339fa91efbdcb8fbbf400d038c78"
+    },
+    "b480:pem_percent_encoded": {
+      "uri": "ssh://user@example-1.com:22?private_key=-----BEGIN+OPENSSH+PRIVATE+KEY-----%0Ab3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB%2Bw%2FAAAAAAAAA%0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%2Bw%3D%3D%0A-----END+OPENSSH+PRIVATE+KEY-----%0A#pem-pct",
+      "identity": "4ddbe7ff2f8231f172d490a4f6756f27dea261bd1fec79b4913bfe614342fff6",
+      "tag": "pem-pct",
+      "body": {
+        "type": "ssh",
+        "tag": "pem-pct",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      }
+    },
+    "b480:pem_raw_plus": {
+      "uri": "ssh://user@example-1.com:22?private_key=-----BEGIN+OPENSSH+PRIVATE+KEY-----%0Ab3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w%2FAAAAAAAAA%0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w%3D%3D%0A-----END+OPENSSH+PRIVATE+KEY-----%0A#pem-raw-plus",
+      "identity": "4ddbe7ff2f8231f172d490a4f6756f27dea261bd1fec79b4913bfe614342fff6",
+      "tag": "pem-raw-plus",
+      "body": {
+        "type": "ssh",
+        "tag": "pem-raw-plus",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      },
+      "delta480": "delta480 D133-15: было — сырой «+» в query становился пробелом ВЕЗДЕ, и base64-тело ключа портилось ('…AAAB w/AAA…' вместо '…AAAB+w/AAA…'), то есть чужая ссылка привозила неработающий ключ молча; стало — format: \"pem\" читает «+» буквально в теле ключа и оставляет его пробелом внутри строк -----BEGIN…----- / -----END…-----. Зелёный кейс pem_percent_encoded при этом не двигается. Значения сняты прогоном движка."
+    }
+  }
+}

@@ -19,6 +19,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/settings_storage/node_link_registry.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §439 §2.5, D-113/D-114, NODE_LINK §6 — реестр ссылок на узлы: операция,
 // меняющая АДРЕС узла (переименование, перенос), переписывает ссылки во всех
 // носителях — detour источника и члена, позиции цепочек, состав autogroup;
@@ -100,6 +102,10 @@ NodeLinkRelink _relink(
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('реестр ссылок (чистые функции)', () {
     test('переименование члена папки переписывает все носители', () {
       final s = _state();

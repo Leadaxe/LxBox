@@ -7,7 +7,10 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/screens/subscriptions_screen/clipboard_analysis.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
 // §110 — Amnezia vpn://-ссылки. Энкодер-хелпер повторяет формат
@@ -85,6 +88,17 @@ Map<String, dynamic> _export(List<Map<String, dynamic>> containers) => {
     };
 
 void main() {
+  // §480 — разбор `.conf` ведёт СЕКЦИЯ РЕЕСТРА, а наш черновик стал тонким
+  // оверлеем поверх неё. Без загруженного реестра накладывать оверлей не на
+  // что, секция не собирается, и контейнер `vpn://` не даёт ни одного узла.
+  // Прежде файл обходился без загрузки только потому, что черновик был
+  // ПОЛНОЙ копией секции.
+  setUpAll(() async {
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   group('decode vpn:// (§110)', () {
     test('AWG-контейнер → AmneziaConfig → AWG-нода end-to-end', () {
       final link = makeLink(_export([_container('awg', _awgIni)]));

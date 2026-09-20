@@ -4,6 +4,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/screens/home/source_lookup.dart';
 
+import '../../parser/engine_test_setup.dart';
+
 /// §091/§235 — Unit tests для prefix-based `sourcesOfTag` (бывш.
 /// `subscriptionsOfTag`; §235 — источник = подписка ИЛИ папка §234).
 /// Принадлежность ноды источнику = `tag.startsWith('$prefix ')`; пустой
@@ -76,6 +78,10 @@ SubscriptionEntry _folder({
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('prefix match', () {
     test('tag начинается с "\$prefix " → {entry.id}', () {
       final entries = [_sub(id: 's1', tagPrefix: '🇷🇺 RU')];

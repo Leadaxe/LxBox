@@ -5,8 +5,14 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/probe/probe_controller.dart';
 import 'package:lxbox/services/probe/probe_runner.dart';
 
+import '../../parser/engine_test_setup.dart';
+
 /// §296 — чистые decision-хелперы ProbeController (общие для folder/subs/user).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   ProbeResult ok(int ms) => ProbeResult(ProbeStatus.ok, delayMs: ms);
   const failed = ProbeResult(ProbeStatus.failed);
   const broken = ProbeResult(ProbeStatus.broken);

@@ -507,7 +507,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
   Widget _buildProbeBar(ThemeData theme) {
     final muted = theme.colorScheme.onSurfaceVariant;
     final s = _probeSummary();
-    final String info;
+    final String? info;
     if (_testing) {
       info = getLocalText.s("Testing… %d done", s.ok + s.dead);
     } else if (_probe.isNotEmpty) {
@@ -517,7 +517,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         if (s.broken > 0) getLocalText.plural("%d broken", s.broken),
       ].join(' · ');
     } else {
-      info = getLocalText.s("Test servers");
+      info = null;
     }
     final hasNodes = widget.entry.list.nodes.isNotEmpty;
     // §391 — bulk вкл/выкл всех нод: только подписки с загруженными узлами
@@ -530,31 +530,28 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     // все ноды включены → серый «выключено».
     final allOff = hasNodes && _disabledNodes.length >= _togglableNodes.length;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+      // Левый отступ 12 — как у ListView нод (`subscription_node_list`), чтобы
+      // bulk-Switch встал в один столбец с per-node Switch.
+      padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
       child: Row(
         children: [
-          // §391 — переехал сюда из мета-блока (решение юзера): рядом с
-          // «Test servers», в одной строке с прочими действиями над списком.
-          // Компактный (как прежняя иконка 18px, а не полноразмерный тоггл
-          // строки): `Transform.scale` вместо кастомного виджета — Switch
-          // остаётся настоящим (фаза, семантика, accessibility целы), сжат
-          // только рендер. `shrinkWrap`-таргет убирает 48dp-паддинг Material.
+          // §391 — bulk вкл/выкл всех нод: тот же `SizedBox(40)` + Switch,
+          // что и leading строки узла (§283). В простое слева только он;
+          // сводка теста — по центру, только во время/после прогона.
           if (canToggleAll)
             SizedBox(
               width: 40,
-              child: Transform.scale(
-                scale: 0.7,
-                child: Switch(
-                  value: !allOff,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onChanged: (v) => unawaited(_toggleAllNodes(v)),
-                ),
+              child: Switch(
+                value: !allOff,
+                onChanged: (v) => unawaited(_toggleAllNodes(v)),
               ),
             )
           else
             const SizedBox(width: 12),
           Expanded(
-            child: Text(info, style: TextStyle(fontSize: 12, color: muted)),
+            child: info != null
+                ? Text(info, style: TextStyle(fontSize: 12, color: muted))
+                : const SizedBox.shrink(),
           ),
           GestureDetector(
             onTap: hasNodes ? () => unawaited(_toggleProbeTest()) : null,

@@ -114,15 +114,15 @@ void main() {
     });
 
     test('NodeWarning: рендер под обеими локалями, интерполяции verbatim', () {
-      const w = UnsupportedTransportWarning('xhttp', 'httpupgrade');
+      const w = UnknownObfsWarning('salamander');
       expect(
         w.renderEn(),
-        'Transport "xhttp" is not supported by sing-box; using "httpupgrade" '
-        'fallback (node may fail to connect).',
+        'Unknown obfuscation type "salamander" was dropped (the core supports '
+        'salamander and gecko only, and would otherwise break the whole config). '
+        'The node connects without obfuscation.',
       );
       final rendered = w.messageWith(ru);
-      expect(rendered, contains('xhttp'));
-      expect(rendered, contains('httpupgrade'));
+      expect(rendered, contains('salamander'));
       expect(rendered, isNot(w.renderEn()));
     });
 
@@ -151,8 +151,7 @@ void main() {
         expect(m.renderEn(), isNot(contains(RegExp('[а-яА-ЯёЁ]'))));
       }
       // NodeWarning/ValidationIssue/StopReason — та же гарантия.
-      expect(const InsecureTlsWarning().renderEn(),
-          'TLS certificate verification is disabled.');
+      expect(const UnknownObfsWarning('junk').renderEn(), contains('junk'));
       expect(const EmptyUrltestGroup('auto').renderEn(),
           'URL-test group "auto" has no outbounds.');
       expect(const StopError('x').renderEn(), 'Stopped: x');

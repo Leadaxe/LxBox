@@ -6,6 +6,7 @@ import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
 import '../../models/node_sections.dart';
 import '../../models/node_spec.dart' show NodeSpec;
+import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
@@ -27,6 +28,7 @@ import 'if_engine.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
+import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'validator.dart';
@@ -46,6 +48,21 @@ class BuildResult {
   /// direct/block по include-галкам). UI показывает по ним транзиентный
   /// SnackBar; фактический исход — в тексте [emitWarnings]/AppLog.
   final List<String> directionsWithoutNodes;
+
+  /// Фича 478 / CANON §9.3 — обратное отображение «финальный тег собранного
+  /// конфига → исходный узел». Строит его та же сборка, которая теги и
+  /// выдала, поэтому производные записи (хоп цепочки, узел папки, префикс
+  /// подписки, WARP) ведут к своему ИСХОДНОМУ узлу.
+  ///
+  /// Карта НЕ полная: узлы, отсеянные гейтами и разбором, в ней не лежат, а
+  /// служебные записи приложения (direct, block, группы, Направления) своего
+  /// узла не имеют вовсе. Тег без узла сопоставленным не считается —
+  /// автоматики нет (§9.3).
+  final Map<String, NodeSpec> nodeByEmittedTag;
+
+  /// §505 — предупреждения сборки (гард реестра) по финальному config-тегу.
+  final Map<String, List<NodeWarning>> nodeBuildWarningsByEmittedTag;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -53,6 +70,8 @@ class BuildResult {
     required this.emitWarnings,
     required this.generatedVars,
     this.directionsWithoutNodes = const [],
+    this.nodeByEmittedTag = const {},
+    this.nodeBuildWarningsByEmittedTag = const {},
   });
 }
 
@@ -301,10 +320,29 @@ Future<BuildResult> buildConfig({
   final detourReport = resolveDeferredDetours(ctx.deferredDetours, linkTargets);
   ctx.dropEntries(detourReport);
 
+  // §460 — гард реестра контракта: тела всех записей узлов чистятся по схеме
+  // `body` (unknown_key / type_invalid / min_core / platform / forbidden_for).
+  // Идёт ПОСЛЕ материализации источников и ДО пост-шагов: гейты ядра зависят
+  // от запущенной версии, а сами записи дальше только переставляются.
+  // Служебные outbound'ы шаблона и группы Направлений сюда не попадают — в
+  // аккумуляторах ctx лежат только записи из источников узлов.
+  final registryReport = applyRegistryGate(
+    [...ctx.outbounds, ...ctx.endpoints],
+    coreVersion: settings.coreVersion,
+    // §473 — записи с дословным JSON-телом (§455) идут в ядро как написаны:
+    // правило условного потолка (`max_when`) им значение не подменяет.
+    verbatim: ctx.verbatimEntries,
+  );
+  ctx.dropRegistryEntries(registryReport.dropped);
+
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
   // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`
   // (гейт ядра `tailscale_core_unsupported`).
-  final emitWarnings = <String>[...ctx.warnings, ...detourReport.warnings];
+  final emitWarnings = <String>[
+    ...ctx.warnings,
+    ...detourReport.warnings,
+    ...registryReport.warnings,
+  ];
   for (final list in lists) {
     if (!list.enabled) continue;
     // §283 — зеркало фильтра ServerListBuild.build: выключенная нода не
@@ -725,6 +763,11 @@ Future<BuildResult> buildConfig({
     emitWarnings: emitWarnings,
     generatedVars: generatedVars,
     directionsWithoutNodes: directionsWithoutNodes,
+    nodeByEmittedTag: {
+      for (final e in ctx.emittedTagAliases.entries) e.key: e.value,
+      for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
+    },
+    nodeBuildWarningsByEmittedTag: registryReport.warningsByEmittedTag,
   );
 }
 
@@ -819,6 +862,19 @@ class _BuildCtx implements EmitContext {
     emittedTagByNode
         .removeWhere((node, _) => report.droppedNodes.contains(node));
   }
+
+  /// §460 — убрать записи, снятые гардом реестра (`drop_node`): их тело ядро
+  /// не примет, а конфиг падает целиком, не одним узлом. Из `emittedTagByNode`
+  /// ничего не чистим: карта адресуется узлом, а гард работает уже над
+  /// эмитированными телами и исходный `NodeSpec` не знает.
+  void dropRegistryEntries(List<SingboxEntry> dropped) {
+    if (dropped.isEmpty) return;
+    bool gone(SingboxEntry e) => dropped.contains(e);
+    outbounds.removeWhere(gone);
+    endpoints.removeWhere(gone);
+    selectorEntries.removeWhere(gone);
+    autoEntries.removeWhere(gone);
+  }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
   final bool _passiveCheck;
@@ -832,6 +888,16 @@ class _BuildCtx implements EmitContext {
 
   /// §435 — узел → финальный тег (после префикса и `allocateTag`).
   final emittedTagByNode = <NodeSpec, String>{};
+
+  /// Фича 478 — финальный тег хопа цепочки → владелец узла (main outbound).
+  final emittedTagAliases = <String, NodeSpec>{};
+
+  /// §473 — записи с дословным JSON-телом (§455): их вход — `singbox`.
+  ///
+  /// Identity-множество (`identityHashCode`), а не по равенству: тело
+  /// переписывается на месте и ключом карты быть не может, а две записи с
+  /// одинаковым телом — всё равно разные записи.
+  final verbatimEntries = <SingboxEntry>{};
 
   /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
   final warnings = <String>[];
@@ -854,6 +920,16 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmitted(NodeSpec node, String finalTag) {
     emittedTagByNode[node] = finalTag;
+  }
+
+  @override
+  void noteEmittedAlias(String finalTag, NodeSpec owner) {
+    emittedTagAliases[finalTag] = owner;
+  }
+
+  @override
+  void noteVerbatim(SingboxEntry entry) {
+    verbatimEntries.add(entry);
   }
 
   @override

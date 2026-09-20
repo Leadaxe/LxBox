@@ -1,8 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
 // SPEC 103 D-023/D-030 — normalizeWGKey (wireguard_parser.dart) требует
@@ -14,6 +17,17 @@ const _testPriv2 = 'ccccccccccccccccccccccccccccccccccccccccccA=';
 const _testPub2 = 'ddddddddddddddddddddddddddddddddddddddddddA=';
 
 void main() {
+  // Контракт 1.1.24 забрал секцию `wireguard` (виды `uri` и `conf`) В РЕЕСТР,
+  // и черновик из полной копии стал оверлеем. Разбор INI теперь НЕВОЗМОЖЕН
+  // без загруженного реестра: таблица записей лежит там, а оверлей несёт
+  // только отличия. Прежде файл обходился без setUpAll, потому что полная
+  // копия черновика была самодостаточной.
+  setUpAll(() async {
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   group('parseWireguardIni', () {
     test('fixture ini_basic.conf → WireguardSpec with peer', () {
       final text = File('test/fixtures/wireguard/ini_basic.conf').readAsStringSync();
@@ -113,8 +127,10 @@ AllowedIPs = 0.0.0.0/0
 Endpoint = 1.2.3.4:51820
 """;
 
+    // §480 — рукописного `peerCommentName` больше нет: цепочку имени
+    // объявляет `label.source` секции `conf`, и проверяется она по ОТВЕТУ
+    // разбора, а не по внутренней функции.
     test('комментарий под [Peer] сильнее имени файла', () {
-      expect(peerCommentName(proton), 'CH-FREE#11');
       expect(parseWireguardIni(proton, nameHint: 'file')!.tag, 'CH-FREE#11');
       expect(parseWireguardIni(proton)!.rawSource, proton);
     });
@@ -131,7 +147,6 @@ Address = 10.2.0.2/32
 PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
 Endpoint = 1.2.3.4:51820
 """;
-      expect(peerCommentName(noName), isNull);
       expect(parseWireguardIni(noName, nameHint: 'file')!.tag, 'file');
       expect(parseWireguardIni(noName)!.tag, 'WireGuard');
     });

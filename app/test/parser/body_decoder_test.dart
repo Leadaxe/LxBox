@@ -2,8 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/parse_all.dart';
+
+import 'engine_test_setup.dart';
 
 void main() {
+  // §480 — разбор `.conf` идёт ДВИЖКОМ по секции реестра; без него у схемы
+  // запасного рукописного пути не осталось (критерий 7).
+  setUpAll(loadEngineSections);
+
   group('decode', () {
     test('plain URI list', () {
       final r = decode('vless://x@h:1#a\nss://x@h:1#b\n\n# comment\n');
@@ -29,13 +36,13 @@ void main() {
     test('JSON singbox outbound', () {
       final r = decode('{"type":"vless","server":"h","server_port":443,"uuid":"u"}');
       expect(r, isA<JsonConfig>());
-      expect((r as JsonConfig).flavor, JsonFlavor.singboxOutbound);
+      expect((r as JsonConfig).source.kind, SourceKind.singboxOutbound);
     });
 
     test('Xray JSON array', () {
       final r = decode('[{"outbounds":[{"protocol":"vless","tag":"proxy"}]}]');
       expect(r, isA<JsonConfig>());
-      expect((r as JsonConfig).flavor, JsonFlavor.xrayArray);
+      expect((r as JsonConfig).source.kind, SourceKind.xrayConfigArray);
     });
 
     test('empty body → failure', () {
@@ -70,9 +77,21 @@ void main() {
       expect(decode('   \n\t\n  '), isA<DecodeFailure>());
     });
 
-    test('INI без [Peer] → не классифицируется как INI', () {
+    // §480 — норма ИЗМЕНИЛАСЬ, и тест переписан под неё, а не подогнан.
+    //
+    // Реестр видов источника (`contract_draft/source_kinds.json`, вид
+    // `wireguard_conf`) опознаёт `.conf` по ПЕРВОЙ не-комментарной секции
+    // `[Interface]`, и требования `[Peer]` там НЕТ — сверено с лаунчером
+    // (TASKS_LXBOX §24.27 п.3, правда наша): заготовка без пира это законный
+    // `.conf`, и прежнее требование роняло её в ссылочную ветку, где она
+    // становилась мусорной строкой. Узлов такой файл не даёт — пира, то есть
+    // адреса, в нём нет, — но и исключения не бросает.
+    test('INI без [Peer] — законный .conf: ноль узлов, без исключения', () {
       const body = '[Interface]\nPrivateKey = xxx\nAddress = 10.0.0.2/24';
-      expect(decode(body), isNot(isA<IniConfig>()));
+      final r = decode(body);
+      expect(r, isA<IniConfig>());
+      expect(() => parseAll(r), returnsNormally);
+      expect(parseAll(r), isEmpty);
     });
 
     test('INI с [Interface] + [Peer] → IniConfig', () {
@@ -80,11 +99,16 @@ void main() {
       expect(decode(body), isA<IniConfig>());
     });
 
-    test('JSON object с proxies → flavor = clashYaml', () {
+    // §483 — у Clash своей ветки в реестре нет (её убрал GRAMMAR_SYNC):
+    // документ опознаётся веткой «всё остальное», а вид ему даёт запасной
+    // классификатор. Узлов такой вид не даёт — маппера у него нет.
+    test('JSON object с proxies → вид clash_yaml, узлов нет', () {
       const body = '{"proxies": [{"type": "vmess", "server": "h"}]}';
       final r = decode(body);
       expect(r, isA<JsonConfig>());
-      expect((r as JsonConfig).flavor, JsonFlavor.clashYaml);
+      expect((r as JsonConfig).source.kind, SourceKind.clashYaml);
+      expect(r.source.mapper, isNull);
+      expect(parseAll(r), isEmpty);
     });
 
     test('слишком короткая base64 (<16) не декодируется — падает в plain path', () {

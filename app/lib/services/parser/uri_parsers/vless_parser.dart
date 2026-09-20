@@ -1,79 +1,37 @@
 import '../../../models/node_spec.dart';
-import '../../../models/node_warning.dart';
-import '../transport.dart';
-import '../tcp_keep_alive.dart';
-import '../uri_utils.dart';
-import '../utls_fingerprint.dart';
+import '../mappers/uri_pipeline.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // VLESS
 // ════════════════════════════════════════════════════════════════════════════
 
-VlessSpec? parseVless(String uri) {
-  final p = Uri.tryParse(uri);
-  if (p == null || p.host.isEmpty || p.userInfo.isEmpty) return null;
-
-  final uuid = Uri.decodeComponent(p.userInfo.split(':').first);
-  final server = p.host;
-  final port = p.hasPort ? p.port : 443;
-  final q = Map<String, String>.from(p.queryParameters);
-  final label = decodeFragment(p.fragment);
-  final tag = tagFromLabel(label, 'vless', server, port);
-
-  final warnings = <NodeWarning>[];
-  final transport = parseTransport(q, warnings: warnings);
-  // §281 — fp вне словаря ядра = fatal всего конфига; канонизируем на входе.
-  final tls = normalizeTlsFingerprint(
-      parseVlessTls(q, server, port, warnings: warnings), warnings);
-
-  var flow = (q['flow'] ?? '').trim();
-  var packetEncoding = '';
-
-  // v1 quirk: flow=xtls-rprx-vision-udp443 → vision + packet_encoding=xudp.
-  if (flow == 'xtls-rprx-vision-udp443') {
-    flow = 'xtls-rprx-vision';
-    packetEncoding = 'xudp';
-  }
-  // §115 — flow = источник истины ссылка, НЕ угадываем по REALITY (раньше
-  // bare-TCP+REALITY без flow получал навязанный vision → ломались валидные
-  // none-сетапы). vision валиден только на голом TLS: с транспортом
-  // (ws/grpc/xhttp) несовместим → гасим flow + warning (ядро такую
-  // комбинацию не поднимет; XHTTP+Vision — protocol limitation).
-  if (flow == 'xtls-rprx-vision' && transport != null) {
-    warnings.add(VisionWithTransportWarning(q['type'] ?? 'transport'));
-    flow = '';
-  }
-  // packet_encoding: sing-box принимает только {"", xudp, packetaddr};
-  // xray-style `none` и любой мусор → panic в libbox. Allow-list нормализуем
-  // на входе, чтобы emit'ить безопасно. См. normalizePacketEncoding.
-  if (packetEncoding.isEmpty) {
-    final raw = queryParamCI(q, 'packetEncoding') ?? '';
-    packetEncoding = normalizePacketEncoding(raw, tag: tag, warnings: warnings);
-  }
-
-  if (tls.insecure) warnings.add(const InsecureTlsWarning());
-
-  // §335 — постквантовый слой VLESS (ядро: SPEC 032). Берём как есть, без
-  // нормализации и валидации: ключ — base64url до ~1600 символов, любую
-  // порчу строки ядро отвергнет само. `none` = слой выключен, эквивалент
-  // пустого значения (эмит его не пишет).
-  final encryption = (q['encryption'] ?? '').trim();
-
-  return VlessSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: uri,
-    uuid: uuid,
-    flow: flow,
-    tls: tls,
-    transport: transport,
-    packetEncoding: packetEncoding,
-    encryption: encryption,
-    warnings: warnings,
-    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
-    tcpKeepAlive: tcpKeepAliveFromQuery(q),
-  );
-}
+/// §472 шаг 3 — vless разбирается КОНВЕЙЕРОМ: маппер переводит ссылку в сырую
+/// карту sing-box, санитайзер реестра судит значения, `parseSingboxEntry`
+/// строит модель (`mappers/uri_pipeline.dart`, движок по секции реестра).
+///
+/// Своего разбора у этой функции больше нет — осталось имя, под которым её
+/// зовут `parseUri` и тесты. Что уехало из неё в реестр:
+///
+/// | было рукописным | стало правилом реестра | код |
+/// |---|---|---|
+/// | `normalizePacketEncoding` — мусор вне набора ядра снимался вручную | `protocols/vless.json` → `packet_encoding`, enum + `on_invalid: drop` | `packet_encoding_unknown` (был `PacketEncodingUnknownWarning` без адреса) |
+/// | `DeprecatedFlowWarning` — `flow` вне пары `""`/`vision` | `protocols/vless.json` → `flow`, enum + `on_invalid: drop` | `flow_deprecated` (тот же код, теперь с путём) |
+/// | `isValidRealityPublicKey` — гейт REALITY-блока по §169 | `tls.json` → `reality.public_key`, `format: base64_32` | `reality_pbk_invalid` (был рукописный `RegistryWarning` в `transport.dart`) |
+/// | `realityShortIdWouldDegrade` + `normalizeRealityShortId` | `tls.json` → `reality.short_id`, `format: hex`, `normalize: hex_only` | `reality_short_id_invalid` (был `RealityShortIdInvalidWarning`) |
+/// | `realityKeyShareFromQuery` — enum `hybrid`/`classical` | `tls.json` → `reality.key_share`, enum + `normalize: trim_lower` | `reality_key_share_invalid` |
+/// | `normalizeTlsFingerprint` — мусорный `fp` → `chrome` | `tls.json` → `utls.fingerprint`, enum + `on_invalid: coerce chrome` | `utls_fp_unknown` (был `UnknownFingerprintWarning` без адреса) |
+/// | `RealityFingerprintWarning` — отпечаток без гибридного key share | `tls.json` → `utls.fingerprint`, `advisory` с `except` | `reality_fp_not_chrome` (тот же код, теперь с путём) |
+/// | `InsecureTlsWarning` при `insecure` | `tls.json` → `insecure`, `advisory` | `tls_insecure` |
+/// | `_guardUrlPath` — битый percent-путь транспорта | `transports.json` → `path`, `format: url_path` | `type_invalid` |
+/// | `_normalizeAlpn` — drop элемента, не похожего на ALPN-id | `tls.json` → `alpn`, `listable_string` | — (значение проходит) |
+/// | `TlsSpec.disabled` → `tls:{enabled:false}` в эмиссии | маппер блока не кладёт вовсе | — (`security_none_no_tls`, SPEC 045) |
+///
+/// | `VisionWithTransportWarning` — гашение `flow` при живом транспорте | `protocols/vless.json` → `flow`, `conflicts` со своим кодом | `vision_with_transport` (§474, контракт 1.1.6) |
+///
+/// Правил значения рукописными у схемы не осталось: последнее — гашение
+/// vision — уехало в реестр вместе с прочтением `conflicts` (снимается
+/// ДЕКЛАРАНТ, а не младшее по `body.order`, §474). Рукописным остаётся только
+/// ПЕРЕВОД написания: он по определению работа маппера, и реестр описывает
+/// его секцией `mapper`, а не правилами значений.
+VlessSpec? parseVless(String uri) =>
+    parseUriViaPipeline(uri, 'vless') as VlessSpec?;

@@ -8,11 +8,17 @@ import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
+import 'engine_test_setup.dart';
+
 /// §321 — Xray-массив парсится по всем протоколам, а не только по VLESS.
 ///
 /// До §321 фильтр `protocol == 'vless'` отбрасывал элемент целиком и молча:
 /// на подписке Liberty так потерялись три платных hysteria2-узла (GAMING).
 void main() {
+  // §480 — разбор Xray-элемента исполняет секции реестра; без них конвейера
+  // нет вовсе (критерий 7 спеки 480), и узлы не собираются.
+  setUpAll(loadEngineSections);
+
   Map<String, dynamic> element(String remarks, List<Map<String, dynamic>> obs) =>
       {
         'remarks': remarks,

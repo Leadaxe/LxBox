@@ -1,0 +1,185 @@
+{
+  "note": "§472 шаг 4 — identity-хеши shadowsocks-узлов, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). Девять кейсов корпуса плюс одиннадцать ссылок из app/test (ключи с префиксом test:): корпус у схемы маленький, и одного его мало, чтобы поймать сдвиг. legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет shadowsocks_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "base64_userinfo": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMzQ1@example-1.com:8388#ss-b64",
+      "identity": "e222f8449e723acf5c13123ca2dc424eb013de8feb460141b88927891d403e41"
+    },
+    "empty_userinfo_rejected": {
+      "uri": "ss://@",
+      "identity": null
+    },
+    "legacy_base64": {
+      "uri": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjNAZXhhbXBsZS00LmNvbTo4Mzg4#SS%20Legacy",
+      "identity": "2262a3a26d6b58487c96d46dd6590fae60bcb991222de5e0b9c6ee993cdeec17"
+    },
+    "legacy_full_base64": {
+      "uri": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwYXNzMTIzQDE5Mi4wLjIuMTA6ODM4OA==#LegacyTag",
+      "identity": "9e0a22038ac6a6af4d6df0cbac9741a298bde05a8db89746f2734ad6467d706e"
+    },
+    "sip002_aead": {
+      "uri": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM=@example-1.com:8388#SS%20AEAD",
+      "identity": "f12362c18adf3986e007c9478f4a1490bd6688ae926f411ae45fa1bed2f2c7ad"
+    },
+    "sip002_base64_userinfo": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:443#Shadowsocks Server",
+      "identity": "26e6bda3e042eefc0d9285abba791bcd3f55a733ed58d2329153b32bb33a1913"
+    },
+    "sip002_chacha": {
+      "uri": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw==@example-2.com:8388#SS%20Chacha",
+      "identity": "b94d138352b1aef174288b4900cf72746f2714560c83a8c14cef44afbbbade5d"
+    },
+    "sip002_escaped_padding": {
+      "uri": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cHdk@203.0.113.5:990#EscapedPadding",
+      "identity": "6729660f6758cf6baab4cc60ca1fc78ae2dd19eb3f53cf5e1a6789b29fb47616"
+    },
+    "ss2022_blake3": {
+      "uri": "ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0=@example-3.com:8388#SS%202022",
+      "identity": "7b234656b6b8a90b2216550e71f30970a5d53041243723f247a00d554d57753a"
+    },
+    "test:ss://@": {
+      "uri": "ss://@",
+      "identity": null
+    },
+    "test:ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206dGVzdHBhc3MxMjNwYWRkaW5ncGFkZGluZ3BhZA==@example-3.com:8388#SS%202022": {
+      "uri": "ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206dGVzdHBhc3MxMjNwYWRkaW5ncGFkZGluZ3BhZA==@example-3.com:8388#SS%202022",
+      "identity": "2ef33f63cc9e81eceeadd666ad42df81d8b9e62e2659df1952dbaeae3f4da5b1"
+    },
+    "test:ss://Y2hhY2hh@de.example:8388#DE-1": {
+      "uri": "ss://Y2hhY2hh@de.example:8388#DE-1",
+      "identity": null
+    },
+    "test:ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw==@example-2.com:8388#SS%20Chacha": {
+      "uri": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw==@example-2.com:8388#SS%20Chacha",
+      "identity": "b94d138352b1aef174288b4900cf72746f2714560c83a8c14cef44afbbbade5d"
+    },
+    "test:ss://YWVzLTEyOC1nY206cHc@h.example:8388#S": {
+      "uri": "ss://YWVzLTEyOC1nY206cHc@h.example:8388#S",
+      "identity": "a86148b4f20113cc12467bf1e2745a16521bc72f79411dbd71367799d7e51cac"
+    },
+    "test:ss://YWVzLTEyOC1nY206cHc@h.example:8388?tcp_keep_alive=30s#S": {
+      "uri": "ss://YWVzLTEyOC1nY206cHc@h.example:8388?tcp_keep_alive=30s#S",
+      "identity": "00ceea3f66e5b7e58b96e220207e2a1691a29036556ca3a5270332b4b02c99f8"
+    },
+    "test:ss://YWVzLTI1Ni1nY206cGFzcw@ss.example:8388#SS": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzcw@ss.example:8388#SS",
+      "identity": "29a39580bf54b53676ced796e374e5916f3c46dc88bd03c0ce32e0049a736f5e"
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS": {
+      "uri": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS",
+      "identity": "69e846d938465870e7824129d57bc96a7aa2c75093fb918112de4a80b2111073"
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM=@example-1.com:8388#SS%20AEAD": {
+      "uri": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM=@example-1.com:8388#SS%20AEAD",
+      "identity": "f12362c18adf3986e007c9478f4a1490bd6688ae926f411ae45fa1bed2f2c7ad"
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjNAZXhhbXBsZS00LmNvbTo4Mzg4#SS%20Legacy": {
+      "uri": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjNAZXhhbXBsZS00LmNvbTo4Mzg4#SS%20Legacy",
+      "identity": "2262a3a26d6b58487c96d46dd6590fae60bcb991222de5e0b9c6ee993cdeec17"
+    },
+    "test:ss://enc@h:443": {
+      "uri": "ss://enc@h:443",
+      "identity": null
+    },
+    "b480:no_fragment": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388",
+      "identity": "2fdb77820c224c35db712ccc581ef9ec79a0c6cf0fa1ed9602d7cb4db689069d",
+      "tag": "shadowsocks-example-1.com-8388",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "shadowsocks-example-1.com-8388",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "b480:password_with_colon": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGE6c3M6MTIz@example-1.com:8388#pw-colon",
+      "identity": "c91dfc752cbd69cdc8524de4d88977fc8d0af4a2b753da055ace6aaf6317ce3b",
+      "tag": "pw-colon",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "pw-colon",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pa:ss:123"
+      }
+    },
+    "b480:plugin_no_opts": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local#plug-bare",
+      "identity": "c5622b2e59b16810894993ed8f0b70dd2755b01cd25d40f06ea85c27920d01e4",
+      "tag": "plug-bare",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-bare",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local"
+      }
+    },
+    "b480:plugin_obfs_local": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local%3Bobfs%3Dhttp%3Bobfs-host%3Dx.example#plug",
+      "identity": "6d3235fec6d152da33ba4dc0b06f11a536267a06751671b4754cc73b634c731c",
+      "tag": "plug",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      }
+    },
+    "b480:plugin_opts_camel_alias": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local&pluginOpts=obfs%3Dhttp%3Bobfs-host%3Dx.example#plug-camel",
+      "identity": "6d3235fec6d152da33ba4dc0b06f11a536267a06751671b4754cc73b634c731c",
+      "tag": "plug-camel",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-camel",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "delta480": "delta480 D133-1: было — алиас pluginOpts не читался и plugin_opts в теле не появлялся; стало — читается. Значения сняты прогоном движка."
+    },
+    "b480:plugin_opts_separate": {
+      "uri": "ss://YWVzLTI1Ni1nY206cGFzczEyMw==@example-1.com:8388?plugin=obfs-local&plugin_opts=obfs%3Dhttp%3Bobfs-host%3Dx.example#plug-sep",
+      "identity": "6d3235fec6d152da33ba4dc0b06f11a536267a06751671b4754cc73b634c731c",
+      "tag": "plug-sep",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-sep",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      }
+    },
+    "b480:ss2022_cleartext_userinfo": {
+      "uri": "ss://2022-blake3-aes-128-gcm:AAAAAAAAAAAAAAAAAAAAAA%3D%3D@example-1.com:8388#ss2022-clear",
+      "identity": "cbd487e6c4a793c9e37af69c68d8395985745227c193eefef55ab71455277e93",
+      "tag": "ss2022-clear",
+      "body": {
+        "type": "shadowsocks",
+        "tag": "ss2022-clear",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "AAAAAAAAAAAAAAAAAAAAAA=="
+      },
+      "delta480": "delta480 D133-2/D133-12: было — открытый SS2022 method:key@host уходил в безусловный base64-декод, узел отбраковывался (dropped); стало — try-decode base64? читает его как есть. Значения сняты прогоном движка."
+    }
+  }
+}

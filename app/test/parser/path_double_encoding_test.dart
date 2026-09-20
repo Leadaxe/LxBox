@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/transport.dart';
@@ -11,6 +13,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// Тот же корень, что у §151 (ALPN `http%252F1.1`), но валидность здесь НЕ
 /// проверяется: путь может содержать что угодно — эмодзи, `//`, `@`.
 void main() {
+  setUpAll(loadEngineSections);
+
   String pathOf(NodeSpec n) =>
       (n.emitRaw(const TemplateVars()).map['transport'] as Map)['path']
           as String;

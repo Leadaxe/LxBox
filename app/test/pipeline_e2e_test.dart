@@ -5,9 +5,15 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/subscription/sources.dart';
 
+import 'parser/engine_test_setup.dart';
+
 /// E2E: тело подписки → parseFromSource → UserServer → ServerRegistry →
 /// buildConfig → валидный sing-box config без fatal issues.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   final template = WizardTemplate(
     parserConfig: ParserConfigBlock(),
     // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.
@@ -43,7 +49,7 @@ vless://uuid-1@vless.example:443?type=ws&security=tls&path=/v&sni=vless.example#
 trojan://pass-1@trojan.example:443?security=tls&sni=trojan.example#Trojan
 ss://YWVzLTI1Ni1nY206cGFzcw@ss.example:8388#SS
 hysteria2://hp@hy2.example:443?sni=hy2.example#Hy2
-tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=tuic.example#TUIC
+tuic://22222222-2222-2222-2222-222222222222:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=tuic.example#TUIC
 ''';
 
     final r = await parseFromSource(const InlineSource(body));

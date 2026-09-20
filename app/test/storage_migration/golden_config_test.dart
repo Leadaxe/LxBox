@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import '../parser/engine_test_setup.dart';
 import 'golden_harness.dart';
 
 // §439 волна 0 — `config.json` из фикстуры хранения текущим билдером.
@@ -16,6 +17,10 @@ import 'golden_harness.dart';
 // недетерминированность билдера.
 
 void main() {
+  // §480 — узлы хранения пересобираются конвейером, исполняющим секции
+  // реестра; без загрузки секций сборка даёт пустой состав.
+  setUpAll(loadEngineSections);
+
   for (final name in kStorageFixtures) {
     test('$name: config.json совпадает с эталоном', () async {
       final box = await StorageSandbox.create();

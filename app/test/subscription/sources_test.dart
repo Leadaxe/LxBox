@@ -6,7 +6,13 @@ import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/services/subscription/sources.dart';
 import 'package:lxbox/services/subscription/subscription_identity.dart';
 
+import '../parser/engine_test_setup.dart';
+
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   // Нулевые backoff'ы — ретраи без реального сна 1s+3s (см. §101): иначе
   // retry-кейсы спали бы ~4s каждый и flaky'или в параллельном suite.
   setUp(() => fetchBackoffsForTesting = const [Duration.zero, Duration.zero]);

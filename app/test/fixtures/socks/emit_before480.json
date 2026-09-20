@@ -1,0 +1,261 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "auth_userpass": {
+      "body": null,
+      "uri_before": "socks5://testuser:testpass123@example-1.com:1080#SOCKS%20Auth",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "SOCKS Auth",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "testuser",
+        "password": "testpass123"
+      }
+    },
+    "default_port_1080": {
+      "body": null,
+      "uri_before": "socks5://user:pass@example-1.com:1080#NoPort",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "NoPort",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "user",
+        "password": "pass"
+      }
+    },
+    "no_auth": {
+      "body": null,
+      "uri_before": "socks5://example-2.com:1080#SOCKS%20NoAuth",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "SOCKS NoAuth",
+        "server": "example-2.com",
+        "server_port": 1080,
+        "version": "5"
+      }
+    },
+    "socks5_auth_tag": {
+      "body": null,
+      "uri_before": "socks5://myuser:mypass@proxy.example-1.com:1080#Office%20SOCKS5",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "Office SOCKS5",
+        "server": "proxy.example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "myuser",
+        "password": "mypass"
+      }
+    },
+    "socks5_credentials": {
+      "body": null,
+      "uri_before": "socks5://user1:pass123@h.example-1.com:1080#socks-auth",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "socks-auth",
+        "server": "h.example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "user1",
+        "password": "pass123"
+      }
+    },
+    "socks5_no_auth_default_tag": {
+      "body": null,
+      "uri_before": "socks5://proxy.example-1.com:1080",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "socks-proxy.example-1.com-1080",
+        "server": "proxy.example-1.com",
+        "server_port": 1080,
+        "version": "5"
+      }
+    },
+    "socks_alias": {
+      "body": null,
+      "uri_before": "socks5://testuser:testpass123@example-3.com:1080#SOCKS%20Alias",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "SOCKS Alias",
+        "server": "example-3.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "testuser",
+        "password": "testpass123"
+      }
+    },
+    "socks_short_scheme": {
+      "body": null,
+      "uri_before": "socks5://192.0.2.61:1080#Local",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "Local",
+        "server": "192.0.2.61",
+        "server_port": 1080,
+        "version": "5"
+      }
+    },
+    "b480:socks4_no_fragment": {
+      "body": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1"
+      },
+      "uri_before": "socks4://userid1@example-1.com:1080",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4_userid": {
+      "body": {
+        "type": "socks",
+        "tag": "s4-userid",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1"
+      },
+      "uri_before": "socks4://userid1@example-1.com:1080#s4-userid",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "s4-userid",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4_userpass": {
+      "body": {
+        "type": "socks",
+        "tag": "s4-pw",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1",
+        "password": "pass123"
+      },
+      "uri_before": "socks4://userid1:pass123@example-1.com:1080#s4-pw",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "s4-pw",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4",
+        "username": "userid1",
+        "password": "pass123"
+      }
+    },
+    "b480:socks4a_no_fragment": {
+      "body": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1"
+      },
+      "uri_before": "socks4a://userid1@example-1.com:1080",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4a_userid": {
+      "body": {
+        "type": "socks",
+        "tag": "s4a-userid",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1"
+      },
+      "uri_before": "socks4a://userid1@example-1.com:1080#s4a-userid",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "s4a-userid",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1"
+      }
+    },
+    "b480:socks4a_userpass": {
+      "body": {
+        "type": "socks",
+        "tag": "s4a-pw",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1",
+        "password": "pass123"
+      },
+      "uri_before": "socks4a://userid1:pass123@example-1.com:1080#s4a-pw",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "s4a-pw",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "4a",
+        "username": "userid1",
+        "password": "pass123"
+      }
+    },
+    "b480:socks5_base64_userinfo": {
+      "body": {
+        "type": "socks",
+        "tag": "s5-b64",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "dXNlcjE6cGFzczEyMw=="
+      },
+      "uri_before": "socks5://dXNlcjE6cGFzczEyMw%3D%3D@example-1.com:1080#s5-b64",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "s5-b64",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "dXNlcjE6cGFzczEyMw=="
+      }
+    },
+    "b480:socks5_no_fragment": {
+      "body": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "user1",
+        "password": "pass123"
+      },
+      "uri_before": "socks5://user1:pass123@example-1.com:1080",
+      "body_of_old_uri": {
+        "type": "socks",
+        "tag": "socks-example-1.com-1080",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "version": "5",
+        "username": "user1",
+        "password": "pass123"
+      }
+    }
+  }
+}

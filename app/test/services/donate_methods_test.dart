@@ -19,10 +19,10 @@ void main() {
 
     test('link: без адреса — валиден', () {
       final m = DonateMethod.fromJson({
-        'id': 'boosty',
+        'id': 'donate-page',
         'kind': 'link',
-        'title': 'Boosty',
-        'url': 'https://boosty.to/lxbox/donate',
+        'title': 'Donate page',
+        'url': 'https://example.org/donate',
         'note': 'Карты, СБП',
       })!;
       expect(m.isCrypto, false);

@@ -1,107 +1,27 @@
 import '../../../models/node_spec.dart';
-import '../tcp_keep_alive.dart';
-import '../uri_utils.dart';
+import '../mappers/uri_pipeline.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
-// Shadowsocks (SIP002 + legacy base64)
+// Shadowsocks (SIP002 + legacy base64 + SS2022)
 // ════════════════════════════════════════════════════════════════════════════
 
-ShadowsocksSpec? parseShadowsocks(String uri) {
-  var body = uri.substring('ss://'.length);
-  var fragment = '';
-  final hashIdx = body.indexOf('#');
-  if (hashIdx >= 0) {
-    fragment = body.substring(hashIdx + 1);
-    body = body.substring(0, hashIdx);
-  }
-  body = body.trim();
-
-  String method = '';
-  String password = '';
-  String rest = '';
-
-  final atIdx = body.indexOf('@');
-  if (atIdx > 0) {
-    // SIP002: ss://base64(method:password)@host:port
-    final encoded = Uri.decodeComponent(body.substring(0, atIdx));
-    rest = body.substring(atIdx + 1);
-    final decoded = decodeBase64Safe(encoded);
-    if (decoded == null) return null;
-    final s = utf8Lossy(decoded);
-    final colonIdx = s.indexOf(':');
-    if (colonIdx <= 0) return null;
-    method = s.substring(0, colonIdx).trim();
-    password = s.substring(colonIdx + 1);
-  } else {
-    // Legacy: ss://base64(method:password@host:port)
-    final decoded = decodeBase64Safe(Uri.decodeComponent(body));
-    if (decoded == null) return null;
-    final s = utf8Lossy(decoded);
-    final at = s.indexOf('@');
-    if (at <= 0) return null;
-    final left = s.substring(0, at);
-    rest = s.substring(at + 1).trim();
-    final colonIdx = left.indexOf(':');
-    if (colonIdx <= 0) return null;
-    method = left.substring(0, colonIdx).trim();
-    password = left.substring(colonIdx + 1);
-  }
-
-  if (!isValidShadowsocksMethod(method) || password.isEmpty) return null;
-
-  // rest = "host:port?query" or "host:port"
-  final qIdx = rest.indexOf('?');
-  final hostPort = qIdx < 0 ? rest : rest.substring(0, qIdx);
-  final q = qIdx < 0
-      ? const <String, String>{}
-      : Uri.splitQueryString(rest.substring(qIdx + 1));
-
-  // Parse host:port (IPv6 bracketed).
-  String server;
-  int port;
-  if (hostPort.startsWith('[')) {
-    final close = hostPort.indexOf(']');
-    if (close < 0) return null;
-    server = hostPort.substring(1, close);
-    final tail = hostPort.substring(close + 1);
-    port = int.tryParse(tail.startsWith(':') ? tail.substring(1) : tail) ?? 8388;
-  } else {
-    final colonIdx = hostPort.lastIndexOf(':');
-    if (colonIdx <= 0) return null;
-    server = hostPort.substring(0, colonIdx);
-    port = int.tryParse(hostPort.substring(colonIdx + 1)) ?? 8388;
-  }
-
-  final label = decodeFragment(fragment);
-  final tag = tagFromLabel(label, 'shadowsocks', server, port);
-
-  return ShadowsocksSpec(
-    id: newUuidV4(),
-    tag: tag,
-    label: label,
-    server: server,
-    port: port,
-    rawSource: uri,
-    method: method,
-    password: password,
-    plugin: _ssPluginName(q['plugin']),
-    pluginOpts: _ssPluginOpts(q['plugin']) ?? (q['plugin_opts'] ?? ''),
-    // §453 — TCP keep-alive dial-поля (имена = ключи sing-box).
-    tcpKeepAlive: tcpKeepAliveFromQuery(q),
-  );
-}
-
-/// SIP003: `plugin` query содержит `name;k=v;k=v…`. Имя — до первого `;`.
-String _ssPluginName(String? raw) {
-  if (raw == null || raw.isEmpty) return '';
-  final i = raw.indexOf(';');
-  return i < 0 ? raw : raw.substring(0, i);
-}
-
-/// SIP003: всё после первого `;` — opts. Null если отдельного `plugin_opts`
-/// надо взять (старый split не применим).
-String? _ssPluginOpts(String? raw) {
-  if (raw == null || raw.isEmpty) return null;
-  final i = raw.indexOf(';');
-  return i < 0 ? null : raw.substring(i + 1);
-}
+/// §472 шаг 4 — shadowsocks разбирается КОНВЕЙЕРОМ: маппер переводит все три
+/// формы записи в сырую карту sing-box, санитайзер реестра судит значения,
+/// `parseSingboxEntry` строит модель (`mappers/uri_pipeline.dart`,
+/// `mappers/shadowsocks_mapper.dart`).
+///
+/// Своего разбора у этой функции больше нет — осталось имя, под которым её
+/// зовут `parseUri` и тесты. Что уехало из неё в реестр:
+///
+/// | было рукописным | стало правилом реестра | код |
+/// |---|---|---|
+/// | `isValidShadowsocksMethod` — гейт метода, узел молча отбрасывался | `protocols/shadowsocks.json` → `method`, enum из 18 + `on_invalid: drop_node` | `ss_method_invalid` (был БЕЗ кода вовсе: узел просто исчезал) |
+/// | `isLegacyShadowsocksMethod` + рукописный `RegistryWarning` | `protocols/shadowsocks.json` → `method`, `advisory` (D-122) | `ss_method_legacy` (тот же код, теперь из реестра и с `params`) |
+///
+/// Рукописных правил ЗНАЧЕНИЯ у схемы не осталось ни одного — она первая
+/// такая. Рукописным остался только ПЕРЕВОД: выбор формы записи (SIP002
+/// против legacy), снятие percent-кодирования с userinfo перед base64,
+/// пароль как ВСЁ после первого `:` (у SS2022 он составной, `k1:k2`),
+/// раскладка `plugin=name;opts` на два поля тела, адрес IPv6 в скобках.
+ShadowsocksSpec? parseShadowsocks(String uri) =>
+    parseUriViaPipeline(uri, 'ss') as ShadowsocksSpec?;

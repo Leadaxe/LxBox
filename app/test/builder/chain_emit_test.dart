@@ -9,6 +9,8 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §393 C3–C5 — эмиссия источников-цепочек через НАСТОЯЩИЙ `buildConfig`.
 //
 // Корпус (`test/contract/direction_corpus_test.dart`) нормирует те же вещи со
@@ -20,6 +22,10 @@ const _newCore = '1.14.0-lx.27-rc.6';
 const _oldCore = '1.14.0-lx.27-rc.4';
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('§393 C3 — эмиссия цепочки узлом type:chain', () {
     test('порядок хопов = порядок ПАКЕТА, ключ ядра — outbounds', () async {
       final r = await _build(

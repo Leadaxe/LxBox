@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/node_warning.dart';
+
 /// §206 — единый источник theme-aware цветов для всех плашек/предупреждений
 /// в приложении. Раньше каждая плашка хардкодила `Colors.amber.shadeXXX`, что
 /// ломалось в тёмной теме (светлый текст на светлом amber-фоне нечитаем). Здесь
@@ -95,3 +97,40 @@ Color bannerIconColor(BuildContext context, BannerSeverity severity) {
       isDark ? Colors.green.shade300 : Colors.green.shade700,
   };
 }
+
+/// §471 — цвет и значок уровня предупреждения узла. Одно место на всё
+/// приложение: строка под узлом, шторка Warnings, шапка подписки. Раньше
+/// `switch` по [WarningSeverity] повторялся в каждом виджете и расходился:
+/// info был серым (`onSurfaceVariant`) и читался как выключенный текст,
+/// warning — плоский `Colors.orange` без поправки на тему.
+///
+/// error берётся из семантического токена `ColorScheme.error` — он корректен
+/// в обеих темах. warning и info зафиксированы явными light/dark-пресетами по
+/// тем же соображениям, что и [bannerColors]: тема собрана
+/// `ColorScheme.fromSeed`, где `primary` зависит от seed'а и жёлтым/синим не
+/// обязан быть, а уровень должен читаться как уровень, а не как акцент темы.
+/// Шкалы — те же Material-палитры, что у плашек (amber), плюс blue для info.
+(Color, IconData) warningSeverityStyle(BuildContext context,
+    WarningSeverity severity) {
+  final theme = Theme.of(context);
+  final isDark = theme.brightness == Brightness.dark;
+  return switch (severity) {
+    WarningSeverity.error => (theme.colorScheme.error, Icons.error_outline),
+    // amber.300 на тёмном / amber.800 на светлом — как у bannerIconColor:
+    // shade800 ещё жёлтый, но уже держит контраст с белым фоном.
+    WarningSeverity.warning => (
+        isDark ? Colors.amber.shade300 : Colors.amber.shade800,
+        Icons.warning_amber,
+      ),
+    // blue.300 на тёмном / blue.700 на светлом: светлее — сливается с фоном,
+    // темнее — спорит по весу с error.
+    WarningSeverity.info => (
+        isDark ? Colors.blue.shade300 : Colors.blue.shade700,
+        Icons.info_outline,
+      ),
+  };
+}
+
+/// Цвет уровня без значка — для мест, где иконка своя (шапка подписки).
+Color warningSeverityColor(BuildContext context, WarningSeverity severity) =>
+    warningSeverityStyle(context, severity).$1;

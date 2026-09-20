@@ -16,6 +16,8 @@ import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §393 D2 — каскад «источник удалён → из цепочек вычищается ЕГО ПОЗИЦИЯ».
 ///
 /// §439 (D-114) — позиция — ссылка на узел: корневой узел `{tag}`, член папки
@@ -31,6 +33,10 @@ import 'package:lxbox/services/settings_storage.dart';
 /// не вправе молча резать маршруты, написанные руками, — там остаётся
 /// деградация билдера `chain_hop_missing`.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   late Directory tmp;
   const channel = MethodChannel('plugins.flutter.io/path_provider');
 

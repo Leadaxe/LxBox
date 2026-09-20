@@ -1,0 +1,144 @@
+{
+  "_draft": "ОТСТУПЛЕНИЯ LxBox от секций реестра (контракт 1.1.15, 963dc6d6). Файл НЕ дублирует блок целиком: загрузчик накладывает эти записи поверх реестровых, и здесь лежит только то, что у нас обязано вести себя иначе. Каждая запись — красный кейс, переданный лаунчеру: в DELTAS.md его секции дельты на это нет, а тело РАБОЧЕГО узла меняется. Снятие отступления — отдельной дельтой с правкой identity-фикстуры.",
+  "_overlay": true,
+  "blocks": {
+    "uri": {
+      "ech": {
+        "source": "query.ech",
+        "maps_to": null,
+        "when": {
+          "query.ech": {
+            "not_in": [
+              "",
+              "none"
+            ]
+          }
+        },
+        "on_present": {
+          "action": "note",
+          "code": "ech_ignored",
+          "params": {
+            "query_name": "ech"
+          }
+        },
+        "impl": "КРАСНЫЙ КЕЙС ech_import_test/name+resolver. Запись реестра ставит код с ПОЛНЫМ значением `encryptedsni.com+udp://8.8.8.8`, а наш текст кода (и корпусный кейс) называет только имя пробника — левую часть до «+». Правило «до первого +» это форма значения, то есть данные: выражено extract, чтобы не заводить первую схемную функцию в общем движке. || ЕДИНСТВЕННЫЙ параметр ссылки без адреса в теле (D-122): Xray-форма `ech=<public_name>+<resolver>` несёт ключ ЧУЖОГО клиента (public_name ≠ SNI узла), и рукопожатие с ним не состоится. maps_to: null — значение осознанно никуда не едет, но и молчать нельзя, поэтому on_present ставит код. Условие через not_in, а не через отрицание in: `ech=none` — способ подписки сказать «ECH выключен», сообщать не о чем, и пустое значение тоже; not_in по отсутствующему адресу истинен, поэтому пустую строку перечисляем явно. Блок tls.ech из sing-box-JSON НЕ затрагивается: ECH в ядре скомпилирован всегда, и нативная конфигурация рабочая — различить два случая может только маппер, санитайзер видит уже готовое тело (DRIFT §7.2).",
+        "extract": {
+          "re": "^(?P<name>[^+]*)",
+          "into": {
+            "name": null
+          }
+        },
+        "value_map": {
+          "none": null,
+          "": null
+        },
+        "normalize": "trim"
+      }
+    },
+    "xray": {
+      "security": {
+        "source": "json.streamSettings.security",
+        "selector": true,
+        "normalize": "trim_lower",
+        "priority": 10,
+        "sets": {
+          "tls": {
+            "tls.enabled": true
+          },
+          "reality": {
+            "tls.enabled": true,
+            "tls.utls.enabled": true,
+            "tls.utls.fingerprint": "chrome"
+          },
+          "none": {},
+          "": {}
+        },
+        "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода. REALITY требует uTLS-блок («uTLS is required by reality client» — fatal при создании outbound), поэтому у этого написания отпечаток материализуется дефолтом ЯДРА; написанное значение перебивает его записью `fp` (priority 20 против 10)."
+      },
+      "$sni_from_server": {
+        "source": "json.streamSettings.security",
+        "maps_to": null,
+        "when": {
+          "tls.enabled": true
+        },
+        "default_from": [
+          "body.server"
+        ],
+        "impl": "Пустое или отсутствующее имя сервера у живого TLS-блока заполняется АДРЕСОМ УЗЛА. Источник — уже построенное тело (`body.server`), а не путь входа: адрес объектного входа лежит под якорем формы, и общему блоку его путь не известен. Так делали обе прежние ветки (_tls: `sni.isEmpty ? server : sni`)."
+      },
+      "alpn": {
+        "source": "json.streamSettings.tlsSettings.alpn",
+        "maps_to": null,
+        "impl": "КРАСНЫЙ КЕЙС xray/vless_alpn_tls. DELTAS D133-C9 у лаунчера помечен КАНДИДАТОМ («поведение не меняется до решения владельца»), но запись `alpn` в его блоке `tls#xray` уже стоит боевой и ДОБАВЛЯЕТ tls.alpn телу узла, которого там не было: с этого входа ALPN у нас не едет и никогда не ехал. Сдвиг тела — это сдвиг identity у живых узлов Xray-подписок, где ALPN встречается часто. До ответа лаунчера запись перекрыта на `maps_to: null`: параметр остаётся ОБЪЯВЛЕННЫМ (в json_field_unknown не уезжает), но в тело не переносится. Снятие отступления — вместе с дельтой и правкой identity-фикстуры. ОТВЕТ ПОЛУЧЕН (TASKS_LXBOX §24.27 п.1, GRAMMAR_SYNC §3.1): правда наша, ALPN с Xray-входа не читается ни общей веткой TLS, ни REALITY — `maps_to: null` держится у ОБЕИХ сторон до решения владельца, включение оформляется дельтой с фикстурой. Исключение одно — hysteria, где чтение уже есть: там запись включается сразу с `merge: keep_first` и поведения не меняет."
+      },
+      "fp": {
+        "source": [
+          "json.streamSettings.realitySettings.fingerprint",
+          "json.streamSettings.tlsSettings.fingerprint"
+        ],
+        "maps_to": "tls.utls.fingerprint",
+        "priority": 20,
+        "merge": "overwrite",
+        "when": {
+          "tls.enabled": true
+        },
+        "value_map": {
+          "$ref": "tls.fp_dialect"
+        },
+        "implies": {
+          "tls.utls.enabled": true
+        },
+        "impl": "У выключенного TLS отпечатка не бывает: `when` держит блок от появления там, где security=none."
+      },
+      "insecure": {
+        "source": [
+          "json.streamSettings.realitySettings.allowInsecure",
+          "json.streamSettings.tlsSettings.allowInsecure"
+        ],
+        "type": "bool_spelled",
+        "when": {
+          "tls.enabled": true
+        },
+        "maps_to": "tls.insecure"
+      },
+      "pbk": {
+        "source": [
+          "json.streamSettings.realitySettings.publicKey",
+          "json.streamSettings.realitySettings.public_key"
+        ],
+        "maps_to": "tls.reality.public_key",
+        "when": {
+          "tls.enabled": true
+        },
+        "implies": {
+          "tls.reality.enabled": true
+        },
+        "impl": "`pbk_makes_reality_block` — блок появляется при НАЛИЧИИ ключа; годность ключа судит реестр (base64_32, код reality_pbk_invalid). `keyShare` этим входом НЕ читается (vless_reality_key_share): на входе sing-box поле читается (§457), на Xray — никогда не читалось. Разрыв входов вынесен лаунчеру (спека 472, 14.5), дельты на него нет."
+      },
+      "$key_share_not_carried": {
+        "source": [
+          "json.streamSettings.realitySettings.keyShare",
+          "json.streamSettings.realitySettings.key_share"
+        ],
+        "maps_to": null,
+        "impl": "См. `pbk`: с этого входа key_share не едет. Запись объявлена, чтобы ключ не уехал в json_field_unknown."
+      }
+    },
+    "uri_with_host": {
+      "note": "Вариант диалекта uri для схем, у которых `host` адресует TLS, а НЕ транспорт (сегодня — http). Отличается от uri ровно одной записью — цепочкой sni. Заведён вариантом блока, а не третьим источником в общей записи: у vmess и anytls `host` несёт имя транспорта (node_parser_core.go:866-873), и общая цепочка увела бы transport-host в tls.server_name. Подключается вместо \"tls#uri\", не вместе с ним. DELTAS D133-19.",
+      "sni": {
+        "source": [
+          "query.sni",
+          "query.peer",
+          "query.host"
+        ],
+        "maps_to": "tls.server_name",
+        "default_from": "host",
+        "impl": "Цепочка sni→peer→host — наше сегодняшнее поведение у http: trojanTLSFromNode(node, \"http\") читает те же три написания (node_parser_http.go:131-138, node_parser_transport.go:1014-1020). Фолбэк на server — тот же Q133-08, что у trojan: корпус uri/http/proxy_https_default_port_443 ждёт server_name из адреса. when по ТЕЛУ: блок tls у http заводит только написание схемы (scheme_sets у proxy-https/proxy+https), и без гейта запись сочиняла бы tls.server_name простому HTTP-прокси, где блока быть не должно.",
+        "when": {
+          "tls.enabled": true
+        }
+      }
+    }
+  }
+}

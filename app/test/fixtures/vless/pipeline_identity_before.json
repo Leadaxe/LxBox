@@ -1,0 +1,755 @@
+{
+  "note": "§472 шаг 3 — identity-хеши vless-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет vless_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "allowinsecure_lowercase_zero": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.12:52006?security=reality&encryption=none&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&headerType=none&fp=qq&allowinsecure=0&type=tcp&flow=xtls-rprx-vision&sni=example-4.com&sid=d8c6b58bcbb0c323#t",
+      "identity": "2f4817c5267b14c5cee1f94a52ba8a50a6c75eff5e9a809b2f7cb1dbb8b02322"
+    },
+    "alpn_multiply_encoded": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.13:8443?security=reality&alpn=http%2525252F1.1&encryption=none&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&headerType=none&fp=random&type=tcp&flow=xtls-rprx-vision&sni=example-5.com&sid=9083951b754b4254#t",
+      "identity": "91fc9b61576dbde4ebb79ae042e8f0593e3b1abc654475f175faa132338d2994"
+    },
+    "default_port_443": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com#Test",
+      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf"
+    },
+    "ech_ignored_reality_kept": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ab&ech=probe.example-5.com&sni=example-1.com#ech-reality",
+      "identity": "1f06404d5d716ee3a0c198ccb85d6fe485c379c41965163da2b8acc0d37c7c0c"
+    },
+    "empty_authority_rejected": {
+      "uri": "vless://",
+      "identity": null
+    },
+    "encryption_mlkem768_long_key": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:1080?type=ws&path=%2Fws&security=none&encryption=mlkem768x25519plus.native.0rtt.AbCd-EfGh_IjKl0123456789MnOpQrStUvWxYzAb3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9#enc-pq",
+      "identity": "ca2b94c3c8ba3539fff59d568512062545c05ce4daa9e036358dd354cb35e2b0"
+    },
+    "encryption_none_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&encryption=none#enc-none",
+      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf"
+    },
+    "flow_absent_reality_tcp": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com&fp=chrome#flow-absent",
+      "identity": "2c161340176cc73ef70636f6ffd0e4b2016255f12d8c045403d15ba14ce6085b"
+    },
+    "flow_deprecated_direct_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-direct&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-direct",
+      "identity": "f67f7538554791507a9beb8110bbffab96566f162c17ccb9b609e3513154359e"
+    },
+    "flow_none_literal_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=none&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-none",
+      "identity": "f67f7538554791507a9beb8110bbffab96566f162c17ccb9b609e3513154359e"
+    },
+    "flow_udp443_compat": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?flow=xtls-rprx-vision-udp443&sni=example-1.com&fp=chrome#Germany",
+      "identity": "20a0ae2a936b40e56e52f6a058f04273e722e681613c5d64bc80c2cc666acf83"
+    },
+    "flow_vision_bare_tcp_kept": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-vision&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-vision",
+      "identity": "27249e4b9ed4d22560c73a67deae1ce68a3b2125ea4d6f404179e369df93bdd0"
+    },
+    "flow_vision_udp443_xudp": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-vision-udp443&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#flow-udp443",
+      "identity": "95939249d2a5cef115a4b5564bdd7b4544a1e9a8a30c636f93ec629da5533a52"
+    },
+    "flow_vision_ws_suppressed": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=ws&path=%2Fx&security=tls&sni=example-1.com&flow=xtls-rprx-vision#flow-ws",
+      "identity": "cdd04f16936632840fe566876d79928af494c524759694a43952198bb3ce4366"
+    },
+    "flow_vision_xhttp_suppressed": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&host=cdn.example-1.com&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com&flow=xtls-rprx-vision#flow-xhttp",
+      "identity": "9221821bed94e08b2cdf867e07b7762f87969404c4ff2fc868dccd3d78c98c34"
+    },
+    "fp_garbage_fallback_warning": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&fp=garbage&sni=x.example.com#fp-junk",
+      "identity": "e6a5c382e7d697c14089e52b106dc98b6e79924da64b23664b7597ef25673010"
+    },
+    "fp_hellochrome_alias_reality": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&encryption=none&flow=xtls-rprx-vision&fp=hellochrome_120&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw#fp-alias",
+      "identity": "9936fd2ddbf06a5909c5600d8b9944a2dd364b36eebf365fa954a84639e0eb03"
+    },
+    "fragment_control_chars": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@test.example-1.com:443?encryption=none&security=none&type=tcp#MyServer\u0000\u0001\u0002WithNUL",
+      "identity": "2175c646107a9d2cf4756e5a9e166d78fda4286a0f7983ee0046a408e878b57b"
+    },
+    "fragment_plus_literal": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@test.example-1.com:443?encryption=none&security=none&type=tcp#A+B",
+      "identity": "2175c646107a9d2cf4756e5a9e166d78fda4286a0f7983ee0046a408e878b57b"
+    },
+    "grpc_reality_no_flow": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@grpc.example-2.com:443?security=reality&type=grpc&fp=firefox&sni=www.example-3.com&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&serviceName=grpc&sid=d8e0f4c2#t",
+      "identity": "78d3c2d04602aec2fed1eadf7e8ce14af0ca4dd6988ed1d73c5e52be34968e00"
+    },
+    "grpc_service_name_custom_path_one_segment": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&type=grpc&serviceName=%2Fx%2FTun&sni=example-1.com&security=tls&fp=chrome#gr%20one",
+      "identity": "ea17e0009a4722e6733b21d447df367a774be2b2eaa00de7613420abf053c2c5"
+    },
+    "grpc_service_name_custom_path_other_stream": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&type=grpc&serviceName=%2Fa%2FStream&sni=example-1.com&security=tls&fp=chrome#gr%20stream",
+      "identity": "234c36dd6b62159dd3314ceea2179a02deba96e2c6833059cadb913660c9abcc"
+    },
+    "grpc_service_name_custom_path_two_segments": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&type=grpc&serviceName=%2Fa%2Fb%2FTun&sni=example-1.com&security=tls&fp=chrome#gr%20two",
+      "identity": "6154c1098aa1368a5ac68cb36e64275281c1da7e88ffe524167e577adde2866b"
+    },
+    "grpc_service_name_leading_slash": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&type=grpc&serviceName=%2Fabcde%2Fsomething%2FTun&sni=example-1.com&security=tls&fp=chrome#gr%20abs",
+      "identity": "2b1b31b6963e5d7cb365ed3942f3e88c1bfc81ceb84526eda4482df749bc4e8b"
+    },
+    "grpc_service_name_plain_multi_segment": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&type=grpc&serviceName=a%2Fb&sni=example-1.com&security=tls&fp=chrome#gr%20plain",
+      "identity": "ecb56191d3aef210eaf46576c1ea164c97f48cf46e7be885e42511b29ce7181c"
+    },
+    "grpc_service_name_tls": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&type=grpc&serviceName=grpc&sni=example-1.com&security=tls&fp=chrome#gr",
+      "identity": "d4a1398019ef58710995a14c1992e9990824188182f56ea6c54cf43873a993e5"
+    },
+    "grpc_tls": {
+      "uri": "vless://11111111-2222-3333-4444-555555555555@example-3.com:443?type=grpc&security=tls&serviceName=vless-grpc&sni=example-3.com&fp=firefox#VLESS%20gRPC",
+      "identity": "8bc9a357f1ad9415ef7a5a3cc7f1855506b6f3bcc83d1559452b38fbbd510246"
+    },
+    "h2_tls": {
+      "uri": "vless://11111111-2222-3333-4444-555555555555@example-5.com:443?type=h2&security=tls&path=%2Fh2&host=example-5.com&sni=example-5.com#VLESS%20H2",
+      "identity": "f87cd8487922f1fcbd75fafd79bd7cd04e2e8527c1df7747fbd8ed19e7f0ba16"
+    },
+    "http_transport_host_list": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:80?type=http&path=%2Fapi&host=cdn.example-1.com&security=none#h",
+      "identity": "d4aa06a5f6a552bc9f8686aad65f04cc3b75697d83ca58d7dbc4c32a5b83b125"
+    },
+    "httpupgrade_alias": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=httpupgrade&path=%2Fp&host=h2.example-1.com&security=tls&sni=h2.example-1.com#t",
+      "identity": "6cdd47770dda965bcfedfcfb6836a6b8d9032037bff9bb50bd7968592b430416"
+    },
+    "invalid_no_host": {
+      "uri": "vless://invalid",
+      "identity": null
+    },
+    "junk_pair_with_body": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@pair.example-1.com:443?security=reality&encryption=none&sni=cover.example-1.com&fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abc&packetEncoding=teleport&flow=xtls-rprx-direct#junk-pair",
+      "identity": "6048348e0f56c643e4812de6dd20805bddaf7e44613f8ce70d11fc7e96fafe8a"
+    },
+    "packet_encoding_case_normalized": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&encryption=none&security=none&packetEncoding=PacketAddr#t",
+      "identity": "8078112600d20c05bff31a54d4d611066e91a75a821845f331a7b39466701dff"
+    },
+    "packet_encoding_garbage_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&sni=example-1.com&packetEncoding=somethingweird#pe-junk",
+      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf"
+    },
+    "packet_encoding_key_lowercase": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&sni=example-1.com&packetencoding=xudp#pe-key",
+      "identity": "daa9794db805f8fb2bd17fecb5b1a382d845dccbae17020947adb2cd2e540c1f"
+    },
+    "packet_encoding_none_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&sni=example-1.com&packetEncoding=none#pe-none",
+      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf"
+    },
+    "packet_encoding_query_xudp": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@lk.example-6.com:443/?type=ws&encryption=none&flow=&host=lk.example-6.com&path=%2F%2F&security=tls&sni=lk.example-6.com&fp=chrome&packetEncoding=xudp#t",
+      "identity": "e733934e83a757de83c06f3a5cfdc373d4068417684505c58dcba697b7fdfb8e"
+    },
+    "packet_encoding_udp443_quirk_wins": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&flow=xtls-rprx-vision-udp443&packetEncoding=none&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD&sni=w.example.com#pe-quirk",
+      "identity": "95939249d2a5cef115a4b5564bdd7b4544a1e9a8a30c636f93ec629da5533a52"
+    },
+    "packet_encoding_value_case": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&sni=example-1.com&packetEncoding=PacketAddr#pe-case",
+      "identity": "d3c52e12783809ce421d5e8e939e7b6d2bafa1c002e95d39743c45c17b8b5a4e"
+    },
+    "packet_encoding_xudp": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&sni=example-1.com&packetEncoding=xudp#pe-xudp",
+      "identity": "daa9794db805f8fb2bd17fecb5b1a382d845dccbae17020947adb2cd2e540c1f"
+    },
+    "plaintext_port_no_tls": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:8080?type=ws&path=%2Fx#plain",
+      "identity": "26c72a7ed8380347fdfc74f2b39130ed8f63ad52368fdb3444581d7687a66e22"
+    },
+    "query_leading_ampersand": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.19:2053?&security=tls&fp=chrome&sni=ws.example-8.com&type=ws&headerType=none&host=ws.example-8.com&path=%2Fpath#t",
+      "identity": "fa483aecf60b61a23e5b51574ff6e88e562a0cb868215e3488604d87e55f51c7"
+    },
+    "raw_headertype_http": {
+      "uri": "vless://22222222-2222-2222-2222-222222222222@192.0.2.14:58387?encryption=none&type=raw&headerType=http&host=cdn.example-7.com&path=%2F&security=none#t",
+      "identity": "1e7987d50d914e68632a58140030fa5d8191e421934e0987bf5b75ccb7fb2389"
+    },
+    "reality_fp_firefox_kept": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&type=tcp&fp=firefox&sni=www.example-3.com&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ab#reality-fp-firefox",
+      "identity": "3ba5d13503341757b8764a831b3db155bdc57252e049f8a4d7dd033d14dac223"
+    },
+    "reality_key_share_bad_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&key_share=quantum&sni=w.example.com#ks-bad",
+      "identity": "f67f7538554791507a9beb8110bbffab96566f162c17ccb9b609e3513154359e"
+    },
+    "reality_key_share_classical": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&key_share=Classical&sni=w.example.com#ks-classical",
+      "identity": "44c9b3ddd8e31e4b0c8675503b1100cd324601dbd9157a72b4a2e13063daafb0"
+    },
+    "reality_key_share_hybrid": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&key_share=hybrid&sni=w.example.com#ks-hybrid",
+      "identity": "d6d10ab42622e328d5b58e164d1e75fb14e8c2ef57cb66fa54e2df4bbf656df1"
+    },
+    "reality_key_share_without_pbk_ignored": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&pbk=enabled&key_share=hybrid&sni=w.example.com#ks-no-pbk",
+      "identity": "e8ed914cdadef8eb2fcfa3547a50c354063526432f138b0ed86137674506c2bf"
+    },
+    "reality_pbk_junk_degrade": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=true&sni=w.example.com#pbk-true",
+      "identity": "e8ed914cdadef8eb2fcfa3547a50c354063526432f138b0ed86137674506c2bf"
+    },
+    "reality_pbk_junk_on_tls": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=tls&pbk=enabled&sni=w.example.com#pbk-enabled",
+      "identity": "e8ed914cdadef8eb2fcfa3547a50c354063526432f138b0ed86137674506c2bf"
+    },
+    "reality_sid_nbsp_sanitized": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&security=reality&type=tcp&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&sid=48%C2%A0ab12",
+      "identity": "c4fc9373a563d38bd48440631182139dca9ab22e5677c2c14a5f46417a283b18"
+    },
+    "reality_sid_nonhex_cleaned": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=0x1a2&sni=w.example.com#sid-clean",
+      "identity": "5e190be5d08c044eeebaba4f62f6d300f4e9086e059136ff5c979e24d8f53fe4"
+    },
+    "reality_sid_odd_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abc&sni=w.example.com#sid-odd",
+      "identity": "bcb29faa6d8443a304f23f16375c9dee0af3f5f7be69a948adb9914f51820ba4"
+    },
+    "reality_sid_too_long_dropped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=0123456789abcdef0&sni=w.example.com#sid-long",
+      "identity": "bcb29faa6d8443a304f23f16375c9dee0af3f5f7be69a948adb9914f51820ba4"
+    },
+    "reality_tcp_no_flow": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.11:443?security=reality&type=tcp&fp=firefox&sni=www.example-3.com&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&sid=a887fe19&spx=/#t",
+      "identity": "eeea684859ea72e6fa1f376ec26c08205e64aa95df192fe82e489a773bd76652"
+    },
+    "reality_valid_pbk_sid": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=tcp&security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ABCD#pbk-valid",
+      "identity": "e7a90974f0283226b9a23f849a0ba62c36265c94f83cd19d28977e1474c2cb8a"
+    },
+    "reality_vision_full": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.10:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=cdn.example-1.com&fp=chrome&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&sid=48720c&allowInsecure=1&type=tcp&headerType=none#🇦🇪 United Arab Emirates",
+      "identity": "7a795a255e2a1a1bb036d368e88235e2cc6b58dc903e6faea271b4a12e1b00f4"
+    },
+    "reality_xtls_vision": {
+      "uri": "vless://11111111-2222-3333-4444-555555555555@example-1.com:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=abcd1234&sni=www.example.com&fp=chrome#VLESS%20Reality",
+      "identity": "e245cbba950e3d80edb99c05165aa4db9bb4adf356d7fb94e8ff842fa8745ba1"
+    },
+    "tls_pbk_junk_enabled": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.15:2053?security=tls&sni=ez.example-10.com&type=ws&host=ez.example-10.com&path=%2Fsync&fp=chrome&pbk=enabled&allowInsecure=0",
+      "identity": "736c71f0bfa98cc599491393c07506b2e9733a60e19a7edaf1e5f2ff258a12e8"
+    },
+    "tls_server_name_from_peer": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@198.51.100.1:443?encryption=none&security=tls&peer=cdn.example-1.com&type=tcp#t",
+      "identity": "96b12023f7bdadbc4bfb6bcf158fb7849ce7b75a8ead8d324c423c45f8c98982"
+    },
+    "userinfo_raw_space": {
+      "uri": "vless://Promo:Configs @192.0.2.16:80?encryption=none&type=raw&headerType=http&host=play.example-11.com&path=%2F&security=none#node",
+      "identity": "f2985eeb8f15c2f85b943bea1066df6784dfbf6f616037c023db781b87f623e2"
+    },
+    "utls_junk_fp_fallback": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&security=tls&sni=example-1.com&fp=enabled#t",
+      "identity": "98ac797d63c5ccd37aa09335b6ff8a0e52b6418878e7958dcc5a5cffed502d17"
+    },
+    "utls_raw_hello_identifier": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&security=tls&sni=example-1.com&fp=HelloChrome_120#t",
+      "identity": "98ac797d63c5ccd37aa09335b6ff8a0e52b6418878e7958dcc5a5cffed502d17"
+    },
+    "ws_early_data_ed_in_path": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@h.example-1.com:443?type=ws&security=tls&sni=h.example-1.com&host=h.example-1.com&path=%2Fapi%2Fv2%2Fchannel%3Fed%3D2560#ws-ed",
+      "identity": "2460ea303662747f0d5418347349ab5735dd7bf41035023c0bd84fa934e1df1e"
+    },
+    "ws_host_from_obfsparam": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=ws&path=%2F&obfsParam=obs.example-1.com&security=tls#t",
+      "identity": "a9b7b050fbd0fa311df85f86b1183950b25d95e12b55feebec42f2159cb9ac3b"
+    },
+    "ws_security_none": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:80?encryption=none&type=ws&path=%2Fvless%2F&host=cdn.example-1.com&security=none#plain-ws",
+      "identity": "5a7405d01ef2dfdd1c9835129c34cefb1cb47f7efb7fadfef2a22afb766c35fb"
+    },
+    "ws_tls": {
+      "uri": "vless://11111111-2222-3333-4444-555555555555@example-2.com:443?type=ws&security=tls&path=%2Fvless&host=example-2.com&sni=example-2.com#VLESS%20WS",
+      "identity": "c366f653ac3805f65c2c23ac81bc86914274d09f37e6eef3e1206968bd5473d6"
+    },
+    "ws_tls_host_from_sni": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@ws.example-2.com:443?security=tls&type=ws&fp=firefox&sni=ws.example-2.com&path=/websocket#t",
+      "identity": "49387804acb1528839c108056a96e9cdca3daa9b099d8e492db86375305cd305"
+    },
+    "xhttp_basic_padding": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&path=%2F&host=h.example-1.com&mode=stream-one&xPaddingBytes=100-1000&security=tls&sni=h.example-1.com#xh",
+      "identity": "1e31adda395f988559bf5989f80afa24c8a6eeb4ab2a5f61da761138a98dd63c"
+    },
+    "xhttp_extra_broken_json": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&mode=packet-up&path=%2Fp&security=tls&sni=example-1.com&extra=%7Bnot%20valid%20json#xhttp-extra-broken",
+      "identity": "8cd4892ad04fad3e85c2bf37da51ba19dbc32536c33e17fa27c7ab8f43140798"
+    },
+    "xhttp_extra_empty_mode_keeps_flat": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&security=tls&sni=example-1.com&encryption=none&fp=chrome&mode=packet-up&path=%2Fhls%2Fv2%2Ftrack%2F8e31c750%2F&host=media.example-1.com&extra=%7B%22host%22%3A%22%22%2C%22path%22%3A%22%2F%22%2C%22mode%22%3A%22%22%2C%22xPaddingBytes%22%3A%22100-1000%22%2C%22uplinkDataPlacement%22%3A%22header%22%7D#xhttp-flat-wins",
+      "identity": "14d4780d00bd8f26ac89927545bfbe3b411367a15e520da934ddd2dbae83d98b"
+    },
+    "xhttp_extra_full": {
+      "uri": "vless://11111111-2222-3333-4444-555555555555@www.example.com:443?type=xhttp&security=tls&sni=www.example.com&fp=chrome&encryption=none&host=www.example.com&path=%2Fxhttp&mode=packet-up&xPaddingBytes=100-1000&noGRPCHeader=true&sessionPlacement=header&sessionKey=X-Session&seqPlacement=query&seqKey=x_seq&uplinkDataPlacement=header&uplinkDataKey=X-Data&uplinkChunkSize=3000-4000&uplinkHTTPMethod=POST&xPaddingObfsMode=true&xPaddingKey=x_padding&xPaddingHeader=X-Padding&xPaddingPlacement=header&xPaddingMethod=tokenish&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30#golden",
+      "identity": "2fadd5c630023da56d9200e912f9ba8c4c8c0cbf42235c768dffc7d3f08b6af9"
+    },
+    "xhttp_extra_host_path_mode_ignored": {
+      "uri": "vless://22222222-2222-2222-2222-222222222222@example-2.com:443?type=xhttp&security=tls&sni=example-2.com&encryption=none&mode=packet-up&path=%2Fflat&host=flat.example-2.com&extra=%7B%22host%22%3A%22extra.example-2.com%22%2C%22path%22%3A%22%2Ffrom-extra%22%2C%22mode%22%3A%22stream-one%22%2C%22xPaddingBytes%22%3A%22200-400%22%7D#xhttp-extra-trio-ignored",
+      "identity": "ac48489d3f87cca7827267a9f5aac1dfba081a42adf278b6146b112af1b5eb52"
+    },
+    "xhttp_extra_json_query": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&mode=packet-up&security=tls&sni=example-1.com&extra=%7B%22scMaxEachPostBytes%22%3A%221000000%22%2C%22scMaxConcurrentPosts%22%3A100.0%2C%22scMinPostsIntervalMs%22%3A30.0%2C%22xPaddingBytes%22%3A%22100-1000%22%2C%22noGRPCHeader%22%3Afalse%7D#xhttp-extra",
+      "identity": "847db2c97fe0f48490d050c73a85d8bafcbd14a467adbaccc3bad23a289bddba"
+    },
+    "xhttp_fallback_httpupgrade": {
+      "uri": "vless://11111111-2222-3333-4444-555555555555@example-4.com:443?type=xhttp&security=tls&path=%2Fxh&host=example-4.com&sni=example-4.com#VLESS%20XHTTP",
+      "identity": "db18de3fe8d0986ce5c6535c74dd31d88c80d79310915f2273efe80c49dcedc6"
+    },
+    "xhttp_full_15_fields": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&host=www.example.com&path=%2Fxhttp&mode=packet-up&xPaddingBytes=100-1000&noGRPCHeader=true&sessionPlacement=header&sessionKey=X-Session&seqPlacement=query&seqKey=x_seq&uplinkDataPlacement=header&uplinkDataKey=X-Data&uplinkChunkSize=3000-4000&uplinkHTTPMethod=POST&xPaddingObfsMode=true&xPaddingKey=x_padding&xPaddingHeader=X-Padding&xPaddingPlacement=header&xPaddingMethod=tokenish&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30&security=tls&sni=www.example.com#xhttp-full",
+      "identity": "04175390420d7fad668ae3ac0a277669db675915722ebfabe588d5d5914d53a8"
+    },
+    "xhttp_mode_invalid": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&mode=garbage&path=%2Fx&security=tls&sni=example-1.com#xhttp-mode-invalid",
+      "identity": "4fcd9ed01e4c582adaac7b78bbfe74da4337ae38bbf41dd061f03de1c795ecf0"
+    },
+    "xhttp_native_basic": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&path=%2Fx&host=cdn.example-1.com&mode=stream-one&xPaddingBytes=100-1000&noGRPCHeader=true&security=tls&sni=example-1.com#xhttp-basic",
+      "identity": "a30787078c5f937912aac5b475fd0cdaace6c4bc5c634a866ca00beb1f12a02c"
+    },
+    "xhttp_path_ed_tail_stripped": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&path=%2FGaMeOpTiMiZeR%3Fed%3D2048&security=tls&sni=example-1.com#xhttp-ed-tail",
+      "identity": "949f30591dee34b4c60d8ea62456d7a235d0d723183a12ceb855b46f3e65193a"
+    },
+    "xhttp_path_query_tail_trimmed": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@h.example-1.com:443?type=xhttp&path=%2FGaMeOpTiMiZeR%3Fed%3D2048&security=tls&sni=h.example-1.com#t",
+      "identity": "bd55cca341bc93136d2a3bd2beebc1774eec658e0acd7674910055eb46b8e1b5"
+    },
+    "xhttp_placement_bogus_reset": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&sessionPlacement=bogus&security=tls&sni=example-1.com#xhttp-bogus-plc",
+      "identity": "c4a0d50763d7c352dcb3c9441e6ecd42c42d77dd99adf6b8f74bdfe2b1e4d1a3"
+    },
+    "xhttp_reality_mode_auto": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.21:443?type=xhttp&security=reality&encryption=none&fp=chrome&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&sid=7a18cff76f11&sni=example-9.com&path=/xh-fin&mode=auto#t",
+      "identity": "85fe2bd9d235d36eb3e29b16cd1b9ccdaddf50bded6adc4b16ac3d1611f49a87"
+    },
+    "xhttp_uplink_get_packet_up_kept": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&uplinkHTTPMethod=GET&mode=packet-up&security=tls&sni=example-1.com#xhttp-get-ok",
+      "identity": "0703d4d2610426e8dc3ecbdf517c78b973d33c7284bf2c3e5da057aa5b90dca3"
+    },
+    "xhttp_uplink_get_without_packet_up_kept": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&uplinkHTTPMethod=GET&mode=auto&security=tls&sni=example-1.com#xhttp-get-kept",
+      "identity": "026e7a3c51f1a0f38dcfccf467513cd7323e55778014aad60688269ec3ac45fd"
+    },
+    "xhttp_uplink_header_placement_adds_packet_up": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&uplinkDataPlacement=header&security=tls&sni=example-1.com#xhttp-plc-adds-mode",
+      "identity": "9964919a3408308cb319d14fc369d3160a3df6e4824f8f3f9936b08234e75012"
+    },
+    "xhttp_uplink_header_placement_reset": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=xhttp&uplinkDataPlacement=header&mode=stream-up&security=tls&sni=example-1.com#xhttp-plc-reset",
+      "identity": "f58ea38f5d5e15d1c81ff22cd5b79c824f3e7fc9672e87a7b28c7b015b09abc3"
+    },
+    "xhttp_v2_extra_json": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@192.0.2.17:443?type=xhttp&mode=packet-up&security=tls&sni=tls.example-12.com&host=cdn.example-12.com&path=%2F&fp=chrome&encryption=none&extra=%7B%22scMaxEachPostBytes%22%3A%221000000%22%2C%22scMaxConcurrentPosts%22%3A100.0%2C%22scMinPostsIntervalMs%22%3A30.0%2C%22xPaddingBytes%22%3A%22100-1000%22%2C%22noGRPCHeader%22%3Afalse%7D#France",
+      "identity": "f2a7b70936fd7dd06cc7b8f3a79ac234ebd8baa0416b6d1abdae9a221892c64c"
+    },
+    "xhttp_v2_extra_wins_over_flat": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@h.example-1.com:443?type=xhttp&xPaddingBytes=100-1000&security=tls&sni=h.example-1.com&extra=%7B%22xPaddingBytes%22%3A%22500-600%22%7D#t",
+      "identity": "0c7e0136bd23865c6b9aeaf07a2e0bb3dc047ba40a192d3e5c7826b55550b13b"
+    },
+    "xhttp_v2_golden_flat": {
+      "uri": "vless://b831381d-6324-4d53-ad4f-8cda48b30811@www.example.com:443?type=xhttp&security=tls&sni=www.example.com&fp=chrome&encryption=none&host=www.example.com&path=%2Fxhttp&mode=packet-up&xPaddingBytes=100-1000&noGRPCHeader=true&sessionPlacement=header&sessionKey=X-Session&seqPlacement=query&seqKey=x_seq&uplinkDataPlacement=header&uplinkDataKey=X-Data&uplinkChunkSize=3000-4000&uplinkHTTPMethod=POST&xPaddingObfsMode=true&xPaddingKey=x_padding&xPaddingHeader=X-Padding&xPaddingPlacement=header&xPaddingMethod=tokenish&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30#golden",
+      "identity": "e64f04a812629391d82d3912be7a307ecf739d719e1669bee1dbbcc0d879866d"
+    },
+    "b480:path_encoded_slash_raw_plus": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=ws&path=%2Fa+b&security=tls&sni=example-1.com#path-plus-enc",
+      "identity": "69cee512339a6057320a65016735cec34ed4d374d6f1869575e284281dae7fbf",
+      "tag": "path-plus-enc",
+      "body": {
+        "type": "vless",
+        "tag": "path-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/a+b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "_delta480": "delta480 D133-14: то же — было \"/a b\", стало \"/a+b\".",
+      "_before480": {
+        "identity": "7057ac94ccf39e77bc5850bb7b98968596b7a630a5862f8a80868822b0dc98f4",
+        "tag": "path-plus-enc",
+        "body": {
+          "type": "vless",
+          "tag": "path-plus-enc",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "transport": {
+            "type": "ws",
+            "path": "/a b",
+            "headers": {
+              "Host": "example-1.com"
+            }
+          },
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
+          }
+        }
+      }
+    },
+    "b480:path_raw_plus": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?type=ws&path=/a+b&security=tls&sni=example-1.com#path-plus",
+      "identity": "69cee512339a6057320a65016735cec34ed4d374d6f1869575e284281dae7fbf",
+      "tag": "path-plus",
+      "body": {
+        "type": "vless",
+        "tag": "path-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/a+b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "_delta480": "delta480 D133-14: path-семантика на ОБОИХ проходах, «+» в пути литерален. Было: \"/a b\" (сервер отвечал 404). Стало: \"/a+b\". Чинится у обеих сторон.",
+      "_before480": {
+        "identity": "7057ac94ccf39e77bc5850bb7b98968596b7a630a5862f8a80868822b0dc98f4",
+        "tag": "path-plus",
+        "body": {
+          "type": "vless",
+          "tag": "path-plus",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "transport": {
+            "type": "ws",
+            "path": "/a b",
+            "headers": {
+              "Host": "example-1.com"
+            }
+          },
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
+          }
+        }
+      }
+    },
+    "b480:pbk_encoded_plus": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=Awo%2BGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com#pbk-plus-enc",
+      "identity": "df0244c5d77be587aa3a0b684d07be985719526267a1d73f435e3359948ef693",
+      "tag": "pbk-plus-enc",
+      "body": {
+        "type": "vless",
+        "tag": "pbk-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "Awo-GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      },
+      "_delta480": "delta480 Д-6: написание ключа REALITY переводится в форму ядра (RawURL). Было: ключ ехал в тело в std-алфавите («+», «/», «=») как пришёл, и ядро отвечало «decode public_key: illegal base64 data», роняя ВЕСЬ конфиг — узел разбирался, но VPN не поднимался вовсе. Стало: public_key в RawURL, конфиг живой. Ключ, уже написанный RawURL, не трогается — тела рабочих узлов прежние.",
+      "_before480": {
+        "identity": "ade520d1e9c558b07dffa3d6b7d273787f869b400c8153dcfee25dc5963b1955",
+        "tag": "pbk-plus-enc",
+        "body": {
+          "type": "vless",
+          "tag": "pbk-plus-enc",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            },
+            "reality": {
+              "enabled": true,
+              "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+              "short_id": "abcd"
+            }
+          }
+        }
+      }
+    },
+    "b480:pbk_raw_plus": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&pbk=Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=example-1.com#pbk-plus",
+      "identity": "df0244c5d77be587aa3a0b684d07be985719526267a1d73f435e3359948ef693",
+      "tag": "pbk-plus",
+      "body": {
+        "type": "vless",
+        "tag": "pbk-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "Awo-GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      },
+      "_delta480": "delta480 D133-7: поле format base64, сырой «+» в нём читается БУКВАЛЬНО. Было: «+» становился пробелом, ключ не проходил санитайзер и блок reality пропадал целиком. Стало: reality.public_key читается, блок на месте. ВТОРОЙ СЛОЙ, Д-6: написание ключа переводится в форму ядра (RawURL) — std-алфавит ядро не декодирует («illegal base64 data») и роняет ВЕСЬ конфиг. `_before480` ниже остаётся снимком ДО ОБЕИХ правок.",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "pbk-plus",
+        "body": {
+          "type": "vless",
+          "tag": "pbk-plus",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
+          }
+        }
+      }
+    },
+    "b480:upper_allow_insecure": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&AllowInsecure=1&sni=example-1.com#up-ai",
+      "identity": "1502acbe70125c744f7b5a1021ab480a5b54241ae9181a8bb8854c673ba86145",
+      "tag": "up-ai",
+      "body": {
+        "type": "vless",
+        "tag": "up-ai",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true,
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_alpn": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&ALPN=h2&sni=example-1.com#up-alpn",
+      "identity": "161a6af2a3207f116e5c2d6ff78df5f4afda7c51b086bb44caecc1718dd3994e",
+      "tag": "up-alpn",
+      "body": {
+        "type": "vless",
+        "tag": "up-alpn",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "h2"
+          ],
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо. Было: ALPN=h2 не читался. Стало: tls.alpn=[\"h2\"].",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "up-alpn",
+        "body": {
+          "type": "vless",
+          "tag": "up-alpn",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
+          }
+        }
+      }
+    },
+    "b480:upper_fp": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&Fp=chrome&sni=example-1.com#up-fp",
+      "identity": "98ac797d63c5ccd37aa09335b6ff8a0e52b6418878e7958dcc5a5cffed502d17",
+      "tag": "up-fp",
+      "body": {
+        "type": "vless",
+        "tag": "up-fp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо. Было: Fp=chrome не читался, отпечаток оставался дефолтным. Стало: tls.utls.fingerprint=chrome.",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "up-fp",
+        "body": {
+          "type": "vless",
+          "tag": "up-fp",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
+          }
+        }
+      }
+    },
+    "b480:upper_security": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?Security=tls&sni=example-1.com#up-sec",
+      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+      "tag": "up-sec",
+      "body": {
+        "type": "vless",
+        "tag": "up-sec",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_sni": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=tls&SNI=example-1.com#up-sni",
+      "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+      "tag": "up-sni",
+      "body": {
+        "type": "vless",
+        "tag": "up-sni",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_type_ws": {
+      "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?Type=ws&path=%2Fws&security=tls&sni=example-1.com#up-type",
+      "identity": "41f76ceba61e234f2ea3a3eab068799a5505963b2d8f911b09fbf58f3bd36ad8",
+      "tag": "up-type",
+      "body": {
+        "type": "vless",
+        "tag": "up-type",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "_delta480": "delta480: имена параметров регистронезависимо (§0.6 FROZEN). Было: Type=ws не читался — транспорт терялся молча. Стало: transport ws.",
+      "_before480": {
+        "identity": "8364f50b4271a4dd5335177aeab3f74dc84753e2d6e74624de336865895511bf",
+        "tag": "up-type",
+        "body": {
+          "type": "vless",
+          "tag": "up-type",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            }
+          }
+        }
+      }
+    }
+  }
+}

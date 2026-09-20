@@ -1,9 +1,40 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+/// §472 шаг 5 — заглушки `u` и `aaaa-bbbb` в ссылках заменены настоящими
+/// UUID. Причина та же, по которой их заменил у себя корпус контракта (SPEC
+/// 131 W2c): ядро отвечает на мусорный uuid «invalid uuid» фаталом на ВЕСЬ
+/// конфиг, то есть кейсы нормировали тело, которое не запускается. Реестр
+/// объявляет у поля `format: uuid`, и с переездом схемы на конвейер такой
+/// узел отбраковывается разбором. Проверяемое кейсами (congestion, relay
+/// mode, alpn, круг) от формы uuid не зависит.
 void main() {
+  // §472 шаг 5 — схема переехала на конвейер, и значения судит РЕЕСТР. Без
+  // него санитайзер не работает вовсе, то есть тест проверял бы разбор,
+  // которого в приложении не бывает (`main()` грузит реестр до `runApp`).
+  //
+  // §480 W4 — гейт переставлен с вендоренной копии `app/contract/` на ЗЕРКАЛО
+  // `assets/contract`. Копии на CI нет вовсе (она в `.gitignore`), и под её
+  // гейтом тест молча пропускался бы именно там, где нужен. Заодно грузятся
+  // секции-мапперы: с переездом схемы на движок разбор без них не работает —
+  // рукописного запасного пути у tuic больше нет.
+  final mirrored = Directory('assets/contract/registry').existsSync();
+  final skip = mirrored ? null : 'зеркало реестра не найдено';
+
+  setUpAll(() async {
+    if (!mirrored) return;
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   group('TUIC v5 — new in v2', () {
     test('basic URI → TuicSpec with BBR + native UDP', () {
       final spec = parseTuic(
@@ -20,7 +51,8 @@ void main() {
 
     test('cubic + quic relay + alpn CSV', () {
       final spec = parseTuic(
-        'tuic://u:p@h.example:8443?congestion_control=cubic&udp_relay_mode=quic&alpn=h3,h3-29&allow_insecure=1',
+        'tuic://11111111-2222-3333-4444-555555555555:p@h.example:8443?congestion_control=cubic'
+        '&udp_relay_mode=quic&alpn=h3,h3-29&allow_insecure=1',
       );
       expect(spec, isNotNull);
       expect(spec!.udpRelayMode, 'quic');
@@ -30,12 +62,12 @@ void main() {
 
     test('emit produces sing-box outbound with required keys', () {
       final spec = parseTuic(
-        'tuic://u:p@h:443?congestion_control=bbr&alpn=h3&sni=h&reduce_rtt=1',
+        'tuic://11111111-2222-3333-4444-555555555555:p@h:443?congestion_control=bbr&alpn=h3&sni=h&reduce_rtt=1',
       );
       final entry = spec!.emit(TemplateVars.empty);
       final m = entry.map;
       expect(m['type'], 'tuic');
-      expect(m['uuid'], 'u');
+      expect(m['uuid'], '11111111-2222-3333-4444-555555555555');
       expect(m['password'], 'p');
       expect(m['congestion_control'], 'bbr');
       expect(m['zero_rtt_handshake'], true);
@@ -44,7 +76,8 @@ void main() {
 
     test('round-trip parseUri(toUri()) preserves structure', () {
       final spec = parseTuic(
-        'tuic://aaaa-bbbb:secret@srv:443?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=srv',
+        'tuic://11111111-2222-3333-4444-555555555555:secret@srv:443?congestion_control=bbr'
+        '&udp_relay_mode=native&alpn=h3&sni=srv',
       );
       final uri2 = spec!.toUri();
       final spec2 = parseUri(uri2);
@@ -65,11 +98,11 @@ void main() {
     // конфиг вообще не содержит `congestion_control`.
     test('invalid congestion_control → not set (omitted on emit)', () {
       final spec = parseTuic(
-        'tuic://u:p@h:443?congestion_control=bogus',
+        'tuic://11111111-2222-3333-4444-555555555555:p@h:443?congestion_control=bogus',
       );
       expect(spec!.congestionControl, isNull);
       final entry = spec.emit(TemplateVars.empty);
       expect(entry.map.containsKey('congestion_control'), isFalse);
-    });
+    }, skip: skip);
   });
 }

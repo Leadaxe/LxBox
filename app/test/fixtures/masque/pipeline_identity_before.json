@@ -1,0 +1,302 @@
+{
+  "note": "§472 шаг 7 — снимок identity masque, снятый СТАРЫМ путём ДО переезда (18.09.2026) || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "corpus:canonical_dual_stack_sni": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32%2C2001%3Adb8%3A0%3A8db9%3A%3A%2F128&profile=cloudflare&vhttp=h3&sni=masque.example-14.com&mtu=1280&idle_timeout=5m#MASQUE-smoke",
+      "identity": "ad8fd2e931b8a1908c78e0ecc27c73d49cd457398b1acd6b39dfeb20c560038e",
+      "tag": "MASQUE-smoke",
+      "body": {
+        "type": "masque",
+        "tag": "MASQUE-smoke",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "ipv6": "2001:db8:0:8db9::/128",
+        "tls": {
+          "server_name": "masque.example-14.com"
+        },
+        "mtu": 1280,
+        "idle_timeout": "5m"
+      }
+    },
+    "corpus:default_vhttp_h3": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32#x",
+      "identity": "8441db702ab91e3af74a1f5d4a94934766df30fc906ac90b3a7c06e9a0663f36",
+      "tag": "x",
+      "body": {
+        "type": "masque",
+        "tag": "x",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      }
+    },
+    "corpus:legacy_params_ignored": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32&network=h2&server_name=legacy.example-14.com#x",
+      "identity": "8441db702ab91e3af74a1f5d4a94934766df30fc906ac90b3a7c06e9a0663f36",
+      "tag": "x",
+      "body": {
+        "type": "masque",
+        "tag": "x",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      }
+    },
+    "corpus:missing_address_rejected": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D#x",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:missing_publickey_rejected": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?address=172.16.0.2%2F32#x",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:vhttp_auto": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32&vhttp=auto#x",
+      "identity": "fbfb75788cf7bd1b49548e11b7906b622492fc66be2c40399e5ced3436226916",
+      "tag": "x",
+      "body": {
+        "type": "masque",
+        "tag": "x",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "auto",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      }
+    },
+    "corpus:vhttp_h2": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32&vhttp=h2#x",
+      "identity": "b2be968baa7582c942518c7b31e815cb82b906e6863eaf01314df49cb0a9c202",
+      "tag": "x",
+      "body": {
+        "type": "masque",
+        "tag": "x",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h2",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      }
+    },
+    "corpus:vhttp_invalid_forced_h3": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==@192.0.2.44:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32&vhttp=tcp#x",
+      "identity": "8441db702ab91e3af74a1f5d4a94934766df30fc906ac90b3a7c06e9a0663f36",
+      "tag": "x",
+      "body": {
+        "type": "masque",
+        "tag": "x",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      }
+    },
+    "test:masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCC": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCC",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:masque://PRIV=@162.159.198.2:443?publickey=PUB=&address=172.16.0.2/32": {
+      "uri": "masque://PRIV=@162.159.198.2:443?publickey=PUB=&address=172.16.0.2/32",
+      "identity": "b4069167c75ac74e43b5c1976aca1a8f76d9a1c1a27725711d676ca5489ad405",
+      "tag": "masque-162.159.198.2-443",
+      "body": {
+        "type": "masque",
+        "tag": "masque-162.159.198.2-443",
+        "server": "162.159.198.2",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "PRIV=",
+        "public_key": "PUB=",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      }
+    },
+    "test:masque://[^\\": {
+      "uri": "masque://[^\\",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:masque://u@h:443": {
+      "uri": "masque://u@h:443",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "warp:h3": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D@162.159.198.1:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234%2F128&profile=cloudflare&vhttp=h3&mtu=1280&sni=masque.example.com&idle_timeout=5m&keep_alive=30s#%F0%9F%94%A5%F0%9F%8E%AD%20WARP%20(MASQUE)",
+      "identity": "2485f7dcf426b6a36efd78d8868a3e28c4e50273c5ddbbf96b0485af16a8d25d",
+      "tag": "🔥🎭 WARP (MASQUE)",
+      "body": {
+        "type": "masque",
+        "tag": "🔥🎭 WARP (MASQUE)",
+        "server": "162.159.198.1",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "ipv6": "2606:4700:110:8a1b:c0de:cafe:babe:1234/128",
+        "tls": {
+          "server_name": "masque.example.com"
+        },
+        "mtu": 1280,
+        "idle_timeout": "5m",
+        "keep_alive_period": "30s"
+      }
+    },
+    "warp:h2": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D@162.159.198.1:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234%2F128&profile=cloudflare&vhttp=h2&mtu=1280&sni=masque.example.com&idle_timeout=5m&keep_alive=30s#%F0%9F%94%A5%F0%9F%8E%AD%20WARP%20(MASQUE)",
+      "identity": "cb31084a574e9a307acc1863f6b93cfd8d8fa5a1dddb03b44e6e16172cf18085",
+      "tag": "🔥🎭 WARP (MASQUE)",
+      "body": {
+        "type": "masque",
+        "tag": "🔥🎭 WARP (MASQUE)",
+        "server": "162.159.198.1",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h2",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "ipv6": "2606:4700:110:8a1b:c0de:cafe:babe:1234/128",
+        "tls": {
+          "server_name": "masque.example.com"
+        },
+        "mtu": 1280,
+        "idle_timeout": "5m",
+        "keep_alive_period": "30s"
+      }
+    },
+    "warp:auto": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D@162.159.198.1:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234%2F128&profile=cloudflare&vhttp=auto&mtu=1280&sni=masque.example.com&idle_timeout=5m&keep_alive=30s#%F0%9F%94%A5%F0%9F%8E%AD%20WARP%20(MASQUE)",
+      "identity": "051ef935da510c48f690bb42dd245b5a9f5e46a781c24919ad923e6d6eacaa20",
+      "tag": "🔥🎭 WARP (MASQUE)",
+      "body": {
+        "type": "masque",
+        "tag": "🔥🎭 WARP (MASQUE)",
+        "server": "162.159.198.1",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "auto",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "ipv6": "2606:4700:110:8a1b:c0de:cafe:babe:1234/128",
+        "tls": {
+          "server_name": "masque.example.com"
+        },
+        "mtu": 1280,
+        "idle_timeout": "5m",
+        "keep_alive_period": "30s"
+      }
+    },
+    "warp:tcp": {
+      "uri": "masque://MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D@162.159.198.1:443?publickey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I%2F4mNM%2FTfUUnoENKv9qZEWw%3D%3D&address=172.16.0.2%2F32%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234%2F128&profile=cloudflare&vhttp=tcp&mtu=1280&sni=masque.example.com&idle_timeout=5m&keep_alive=30s#%F0%9F%94%A5%F0%9F%8E%AD%20WARP%20(MASQUE)",
+      "identity": "2485f7dcf426b6a36efd78d8868a3e28c4e50273c5ddbbf96b0485af16a8d25d",
+      "tag": "🔥🎭 WARP (MASQUE)",
+      "body": {
+        "type": "masque",
+        "tag": "🔥🎭 WARP (MASQUE)",
+        "server": "162.159.198.1",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "MHcCAQEEIB5oxGzgOdLvTY2aAbRsyJslxnlvPpOzLR076h3cgsncoAoGCCqGSM49AwEHoUQDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDQBTbtpEikpJDklVHdnMhgIR8YatYDJLUILDQWGdwBbqaLiKKiuawVQz6MIaHr0I/4mNM/TfUUnoENKv9qZEWw==",
+        "ip": "172.16.0.2/32",
+        "ipv6": "2606:4700:110:8a1b:c0de:cafe:babe:1234/128",
+        "tls": {
+          "server_name": "masque.example.com"
+        },
+        "mtu": 1280,
+        "idle_timeout": "5m",
+        "keep_alive_period": "30s"
+      }
+    },
+    "b480:publickey_encoded_plus": {
+      "uri": "masque://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@192.0.2.44:443?publickey=%2BgBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI%3D&address=172.16.0.2%2F32#mq-pub-plus-enc",
+      "identity": "e09e956cc3a55d23d036059738e27278d7883cc2dab68b94dad6f708f5ef2dcc",
+      "tag": "mq-pub-plus-enc",
+      "body": {
+        "type": "masque",
+        "tag": "mq-pub-plus-enc",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "public_key": "+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      }
+    },
+    "b480:publickey_raw_plus": {
+      "uri": "masque://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@192.0.2.44:443?publickey=+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=&address=172.16.0.2%2F32#mq-pub-plus",
+      "identity": "e09e956cc3a55d23d036059738e27278d7883cc2dab68b94dad6f708f5ef2dcc",
+      "tag": "mq-pub-plus",
+      "body": {
+        "type": "masque",
+        "tag": "mq-pub-plus",
+        "server": "192.0.2.44",
+        "server_port": 443,
+        "profile": "cloudflare",
+        "vhttp": "h3",
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "public_key": "+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+        "ip": "172.16.0.2/32",
+        "mtu": 1280
+      },
+      "_before480": {
+        "identity": "02f845111ac0b895107695f8a42008d05d40230415a0f85ecac6ea3d06f8196c",
+        "tag": "mq-pub-plus",
+        "body": {
+          "type": "masque",
+          "tag": "mq-pub-plus",
+          "server": "192.0.2.44",
+          "server_port": 443,
+          "profile": "cloudflare",
+          "vhttp": "h3",
+          "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+          "public_key": "gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+          "ip": "172.16.0.2/32",
+          "mtu": 1280
+        }
+      },
+      "_delta480": "delta480-2 (D133-7): поле base64-формата читает сырой «+» буквально. Было — «+» становился пробелом, ключ терял первый символ и узел молча ехал с чужим public_key. Стало — ключ как в ссылке."
+    }
+  }
+}

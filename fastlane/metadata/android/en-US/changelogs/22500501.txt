@@ -1,0 +1,1 @@
+Aligned with desktop launcher 2.0.0: share links, Xray JSON and WireGuard .conf parse from one shared registry. Pressing Start disables a server the core refuses and brings the VPN up on the rest (#147). Node warnings are cards (What / Why / What to do) inside Diagnostics. socks4/4a. Stricter WireGuard, AWG, REALITY, TUIC and Xray checks. Boosty removed from donate options.

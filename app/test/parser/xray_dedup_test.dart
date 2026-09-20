@@ -4,13 +4,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
+import 'engine_test_setup.dart';
+
 /// §321 P2+P4 — порядок обработки и дедуп по идентичности.
 ///
 /// Провайдеры описывают один физический сервер многократно: Xray-элемент —
 /// автономный конфиг со своим `routing`, и чтобы сервер участвовал в трёх
 /// сценариях, его вписывают трижды. У Liberty 64 записи описывают 37 серверов.
 void main() {
-  Map<String, dynamic> vless(String addr, {String uuid = 'u-1', int port = 443, String? tag, String? sni}) => {
+  // §480 — разбор Xray-элемента исполняет секции реестра; без них конвейера
+  // нет вовсе (критерий 7 спеки 480), и узлы не собираются.
+  setUpAll(loadEngineSections);
+
+  // §480 — реестр объявляет у поля `format: uuid`, и заглушка `u-1`
+  // отбраковывается разбором. Проверяемое кейсами (дедупликация) от формы
+  // uuid не зависит.
+  Map<String, dynamic> vless(String addr,
+          {String uuid = '8f2e1c44-0000-4000-8000-000000000001',
+          int port = 443,
+          String? tag,
+          String? sni}) =>
+      {
         'tag': tag ?? 'proxy',
         'protocol': 'vless',
         'settings': {

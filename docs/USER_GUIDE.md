@@ -260,6 +260,40 @@ Tapping a subscription opens its screen with these tabs:
   clears accumulated state at once. A short tap on a node opens its
   **breakdown**: the JSON tab — how the node goes into the config, and the
   Source tab — the original subscription fragment it was built from.
+- **A mark under a node** means the app found something in it worth telling you
+  about: a field the core does not know, a value outside the allowed range, a
+  setting that was cleaned up or dropped. Three levels, told apart by colour:
+  red ✖ — an error, the node will most likely not work as it came; yellow ⚠ —
+  something was cleaned up or substituted, worth a look; blue ⓘ — information
+  only, nothing to do. In the node list only red and yellow get text — a short
+  headline of the topmost one plus a "+N" counter that counts red and yellow
+  alone — because the lines that do need attention drown otherwise. Information
+  is a grey ⓘ with no text: at the start of the protocol line when that is all
+  the node has, and at the end of the warning line when the node also has a
+  warning or an error. The node's name stays clean, and the node never gets a
+  third line.
+- **Tap the warning line or the ⓘ** and the node's **Notifications** open: a
+  header counting the levels (`✖ 1 · ⚠ 2 · ⓘ 3`, levels with nothing to report
+  are left out), then Errors, Warnings and Info. Each notification is one
+  headline; tap it and it unfolds into the field it is about, **What happened**,
+  **Why it happens**, **What you can do**, and **Details** — a link to the full
+  page about that code in a browser. The same list is the **Notifications**
+  section at the bottom of the Settings tab on the node's own screen; a node
+  with nothing to report has no such section. Most notifications do not mean
+  the node is broken: many describe a setting that was quietly dropped because
+  the core would have refused the whole config over it.
+- **"The core rejected this server"** is the one red line that means the server
+  was switched off, not just commented on. The core checks the whole
+  configuration at once and refuses to start on the first server it cannot
+  accept — one bad line would otherwise leave you with no VPN at all. So the app
+  switches that server off, quotes what the core said, and starts again; when
+  several turn out to be bad, a banner on the main screen says how many and
+  **Show** lists them. Two ways back: flip the server's switch on again — the
+  core will check it at the next start, and if it still says no, the server goes
+  off again with the same explanation; or update the subscription — the provider
+  may have fixed the server already, and a server whose contents changed is
+  switched back on by itself. Servers you switched off by hand are never touched
+  by any of this.
 - **Filters** — node processing rules; applied on import and on every update. A
   rule = conditions + an action. A condition is `path operator value` (contains
   / equals / regex, Not and Case-sensitive checkboxes, several conditions
@@ -1015,6 +1049,15 @@ settings are remembered separately for each direction. Pattern syntax — see
 **Emoji labels.** A server carries an emoji label in its tag. You can change it
 in **Node Settings** (the emoji picker button); when a server is added, the label
 is filled in automatically from the country/name.
+
+**Copy URI.** A long press on a server opens its menu; **Copy URI** puts the
+server's link on the clipboard. If that link carries a private key — an SSH node
+with an inline key, any WireGuard or AmneziaWG node, MASQUE — L×Box asks first:
+"Link contains a private key". Anyone who gets the link can use the key, so
+**Copy anyway** is meant for moving the node to your own second device, not for
+sharing. **Cancel** (or a tap outside the dialog) leaves the clipboard untouched.
+The key is not cut out of the link, because that same text is how the node is
+stored — stripping it would destroy the node on reload.
 
 **Each direction has its own pings.** Latency measurements are stored per direction:
 the test URL and timeout are configured per direction, so "180 ms" measured by

@@ -101,7 +101,18 @@ final class HttpTransport extends TransportSpec {
 final class HttpUpgradeTransport extends TransportSpec {
   final String path;
   final String host;
-  const HttpUpgradeTransport({this.path = '', this.host = ''});
+
+  /// §476 — заголовки запроса (`V2RayHTTPUpgradeOptions.Headers` ядра).
+  /// Реестр числит их полем варианта (`transports.json` → `httpupgrade`), а
+  /// модель не знала: узел с `User-Agent`, пересохранённый через JSON-вкладку,
+  /// терял их молча. `Host` сюда не попадает — он живёт полем [host].
+  final Map<String, String> headers;
+
+  const HttpUpgradeTransport({
+    this.path = '',
+    this.host = '',
+    this.headers = const {},
+  });
 
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
@@ -112,6 +123,7 @@ final class HttpUpgradeTransport extends TransportSpec {
       if (path.isNotEmpty) 'path': path,
     };
     if (host.isNotEmpty) m['host'] = host;
+    if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
     return (m, const []);
   }
 }
@@ -226,12 +238,6 @@ final class XhttpTransport extends TransportSpec {
     final m = <String, dynamic>{'type': 'xhttp'};
     if (path.isNotEmpty) m['path'] = path;
     final warnings = <NodeWarning>[];
-    if (host.isNotEmpty) m['host'] = host;
-    if (mode.isNotEmpty) m['mode'] = mode;
-    if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
-    if (noGrpcHeader) m['no_grpc_header'] = true;
-    if (noSseHeader) m['no_sse_header'] = true;
-    if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
     // §217 — нормализация против правил ядра normalizeMeta (transport/v2rayxhttp/
     // meta.go) остаётся для x_padding_placement/x_padding_method/seq_placement
@@ -241,6 +247,8 @@ final class XhttpTransport extends TransportSpec {
     // registry/warnings.json xhttp_param_reset).
 
     // --- placement/method enums: значение вне множества ядро роняет fatal ---
+    // §459 (контракт §24.2 п. 7.14) — регистр НЕ нормализуем: ядро
+    // case-sensitive, `queryInHeader` только camelCase (meta.go:20-35).
     void putEnum(String key, String value, Set<String> allowed) {
       if (value.isEmpty) return;
       if (allowed.contains(value)) {
@@ -251,13 +259,28 @@ final class XhttpTransport extends TransportSpec {
       }
     }
 
+    if (host.isNotEmpty) m['host'] = host;
+    // §459 (контракт §24.2 п. 7.14) — `mode` вне enum'а ядра
+    // (transport/v2rayxhttp/client.go:47-51) роняет ВЕСЬ конфиг; эмит —
+    // единственная воронка для URI, sing-box JSON, Xray JSON и редактора.
+    putEnum('mode', mode,
+        const {'auto', 'packet-up', 'stream-up', 'stream-one'});
+    if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
+    if (noGrpcHeader) m['no_grpc_header'] = true;
+    if (noSseHeader) m['no_sse_header'] = true;
+    if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
+
     // SPEC 103 vless/xhttp_placement_bogus_reset — session_placement, ровно
     // как uplink_data_placement/uplink_http_method ниже, идёт напрямую без
     // enum-гейта: registry/warnings.json xhttp_param_reset документирует
     // "go": null — Go пока не нормализует XHTTP-параметры вовсе
     // (xhttpBuildTransport: "normalization is left to the core", SPEC 102 в
     // работе). Канон = поведение Go (pass-through, core сам роняет мусор).
-    if (sessionPlacement.isNotEmpty) m['session_placement'] = sessionPlacement;
+    // §460 — реестр 1.1.0 (`transports.json` → xhttp.session_placement):
+    // enum path|query|header|cookie, мусор → снять с `xhttp_param_reset`
+    // (корпус vless/xhttp_placement_bogus_reset). Раньше шёл насквозь.
+    putEnum('session_placement', sessionPlacement,
+        const {'path', 'query', 'header', 'cookie'});
     if (sessionKey.isNotEmpty) m['session_key'] = sessionKey;
     putEnum('seq_placement', seqPlacement,
         const {'path', 'query', 'header', 'cookie'});

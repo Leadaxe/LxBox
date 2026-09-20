@@ -14,6 +14,8 @@ import 'package:lxbox/services/subscription/sources.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../parser/engine_test_setup.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   final String tempRoot;
@@ -27,6 +29,10 @@ class _FakePathProvider extends PathProviderPlatform
 /// §129 — файловая подписка (Вариант Б: снапшот в кэш) + транзакционная смена
 /// источника (online↔file).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   late Directory tempDir;
 
   // Два+ ноды → файловая; одна нода → обычная.

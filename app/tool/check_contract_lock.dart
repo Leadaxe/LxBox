@@ -9,6 +9,18 @@
 // Копии нет вовсе — не ошибка: контрактные тесты сами пропускаются, а
 // разработчик синхронизирует локально (tool/sync_contract.sh).
 //
+// §460 — вторая проверка: бандлируемое зеркало реестра assets/contract/ (в
+// git, в отличие от contract/) обязано совпадать с копией файл-в-файл. Оно
+// едет в APK и определяет поведение санитайзера, так что разойтись с
+// контрактом ему нельзя. Проверка идёт только когда есть обе стороны: в CI
+// копии нет, и сверять зеркало не с чем.
+//
+// §460 W2b — третья: зеркало страниц документации ../docs/contract/ против
+// contract/docs/generated/. Туда ведёт ссылка «Learn more» из карточки
+// предупреждения, и страница с текстом от прошлого контракта врала бы
+// уверенно. Сверяется тем же правилом файл-в-файл; README.md зеркала —
+// единственный файл, которого в источнике нет: его пишет сам скрипт.
+//
 // Запуск: dart run tool/check_contract_lock.dart
 
 import 'dart:convert';
@@ -51,6 +63,127 @@ void main(List<String> args) {
   }
 
   stdout.writeln('contract/: совпадает с contract.lock ($actual)');
+
+  final mirrorDiff = _mirrorDiff(dir);
+  if (mirrorDiff.isNotEmpty) {
+    stderr.writeln('§460 — зеркало реестра assets/contract/ разошлось с '
+        'копией контракта:\n${mirrorDiff.map((l) => '  $l').join('\n')}\n'
+        'Зеркало не правят руками — оно кладётся tool/sync_contract.sh. '
+        'Запустите скрипт, чтобы пересобрать зеркало.');
+    exitCode = 1;
+    return;
+  }
+  stdout.writeln('assets/contract/: зеркало реестра совпадает с копией');
+
+  final docsDiff = _docsMirrorDiff(dir);
+  if (docsDiff.isNotEmpty) {
+    stderr.writeln('§460 W2b — зеркало документации ../docs/contract/ '
+        'разошлось с copy contract/docs/generated/:\n'
+        '${docsDiff.map((l) => '  $l').join('\n')}\n'
+        'Зеркало не правят руками — оно кладётся tool/sync_contract.sh. '
+        'Запустите скрипт, чтобы пересобрать зеркало.');
+    exitCode = 1;
+    return;
+  }
+  stdout.writeln('../docs/contract/: зеркало документации совпадает с копией');
+}
+
+/// §460 W2b — расхождения зеркала документации, по строке на файл.
+///
+/// Состав сверяется в обе стороны рекурсивно (страницы протоколов лежат
+/// подкаталогом). `README.md` зеркала из сверки исключён: его нет в
+/// источнике, он про источник — версия, sha, «не править руками».
+List<String> _docsMirrorDiff(Directory contractDir) {
+  final src = Directory('${contractDir.path}/docs/generated');
+  final mirror = Directory('../docs/contract');
+  if (!src.existsSync()) return const [];
+  if (!mirror.existsSync()) {
+    return ['../docs/contract/: зеркала нет вовсе'];
+  }
+
+  Set<String> relFiles(Directory d) => d
+      .listSync(recursive: true)
+      .whereType<File>()
+      .map((f) => f.path.substring(d.path.length + 1))
+      .toSet();
+
+  final diff = <String>[];
+  final srcFiles = relFiles(src);
+  final mirrorFiles = relFiles(mirror)..remove('README.md');
+
+  for (final rel in srcFiles.toList()..sort()) {
+    if (!mirrorFiles.contains(rel)) {
+      diff.add('$rel: в зеркале нет');
+      continue;
+    }
+    final a = File('${src.path}/$rel').readAsBytesSync();
+    final b = File('${mirror.path}/$rel').readAsBytesSync();
+    if (a.length != b.length || !_bytesEqual(a, b)) {
+      diff.add('$rel: содержимое отличается');
+    }
+  }
+  for (final rel in mirrorFiles.difference(srcFiles).toList()..sort()) {
+    diff.add('$rel: в копии контракта нет, а в зеркале есть');
+  }
+  return diff;
+}
+
+/// §460 — расхождения зеркала реестра с вендоренной копией, по одной строке
+/// на файл. Сверяется ровно тот состав, который кладёт sync_contract.sh и
+/// объявляет pubspec: VERSION + registry/*.json + registry/protocols/*.json.
+List<String> _mirrorDiff(Directory contractDir) {
+  final diff = <String>[];
+
+  void compare(String rel) {
+    final src = File('${contractDir.path}/$rel');
+    final mirror = File('assets/contract/$rel');
+    if (!mirror.existsSync()) {
+      diff.add('$rel: в зеркале нет');
+      return;
+    }
+    if (!src.existsSync()) {
+      diff.add('$rel: в копии контракта нет, а в зеркале есть');
+      return;
+    }
+    final a = src.readAsBytesSync();
+    final b = mirror.readAsBytesSync();
+    if (a.length != b.length || !_bytesEqual(a, b)) {
+      diff.add('$rel: содержимое отличается');
+    }
+  }
+
+  compare('VERSION');
+  for (final sub in const ['registry', 'registry/protocols']) {
+    final srcDir = Directory('${contractDir.path}/$sub');
+    if (!srcDir.existsSync()) continue;
+    for (final f in srcDir.listSync().whereType<File>()) {
+      if (!f.path.endsWith('.json')) continue;
+      compare('$sub/${f.uri.pathSegments.last}');
+    }
+  }
+
+  // Обратная сторона: лишний файл в зеркале (источник его удалил, а зеркало
+  // не пересобрали) — такой же разрыв, как отсутствующий.
+  for (final sub in const ['registry', 'registry/protocols']) {
+    final mirrorDir = Directory('assets/contract/$sub');
+    if (!mirrorDir.existsSync()) continue;
+    for (final f in mirrorDir.listSync().whereType<File>()) {
+      if (!f.path.endsWith('.json')) continue;
+      final rel = '$sub/${f.uri.pathSegments.last}';
+      if (!File('${contractDir.path}/$rel').existsSync()) {
+        diff.add('$rel: в копии контракта нет, а в зеркале есть');
+      }
+    }
+  }
+
+  return diff;
+}
+
+bool _bytesEqual(List<int> a, List<int> b) {
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 String? _lockHash(String content) {

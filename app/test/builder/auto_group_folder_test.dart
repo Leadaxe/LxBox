@@ -10,6 +10,8 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/builder/server_list_build.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §322 — узел автовыбора внутри папки: хранится членом `kind: auto`
 /// (§439 N2, `codec/auto_group_record.dart`), а на билде превращается в
 /// `urltest` по членам ЭТОЙ же папки.
@@ -57,6 +59,10 @@ class _FakeCtx extends EmitContext {
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   String vless(String uuid, String ip, String name) =>
       'vless://$uuid@$ip:443?type=tcp&security=none#$name';
 

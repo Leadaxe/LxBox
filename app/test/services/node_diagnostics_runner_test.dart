@@ -5,9 +5,15 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/diagnostics/node_diagnostics_runner.dart';
 import 'package:lxbox/services/platform_channels.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §392 — раннер диагностики узла: выбор ветки probe/live по состоянию VPN,
 /// probe-сессия поднимается и ГАСИТСЯ, узел-группа отсекается до вызова ядра.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const channel = MethodChannel(PlatformChannels.methods);

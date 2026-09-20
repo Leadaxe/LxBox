@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import '../../models/node_warning.dart';
-import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import 'uri_utils.dart';
 
@@ -25,7 +24,7 @@ TransportSpec? parseTransport(
   final headerType = (q['headerType'] ?? '').toLowerCase().trim();
 
   if ((typ == 'raw' || typ == 'tcp') && headerType == 'http') {
-    final path = q['path'] ?? '/';
+    final path = _guardUrlPath(q['path'] ?? '/', warnings);
     final host = q['host'] ?? '';
     return HttpTransport(
       path: path,
@@ -45,7 +44,8 @@ TransportSpec? parseTransport(
       final pathParamPresent = q.containsKey('path');
       final (splitPath, edFromPath) =
           splitEarlyDataPath(decodeResidualPercent(q['path'] ?? ''));
-      final path = pathParamPresent ? splitPath : '';
+      final path =
+          pathParamPresent ? _guardUrlPath(splitPath, warnings) : '';
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       if (host.isEmpty) host = (q['obfsParam'] ?? '').trim();
@@ -71,7 +71,8 @@ TransportSpec? parseTransport(
       // Ровно path-tail форма: плоские `ed=`/`eh=` конверсией не считаются
       // (Go: noteWSEarlyDataConverted читает только хвост пути).
       if (edFromPath != null) {
-        warnings?.add(WsEarlyDataConvertedWarning(edFromPath));
+        warnings?.add(NodeWarning.byCode('ws_early_data_converted',
+            path: 'path', value: '$edFromPath'));
       }
       return WsTransport(
         path: path,
@@ -81,10 +82,16 @@ TransportSpec? parseTransport(
         earlyDataHeaderName: eh,
       );
     case 'grpc':
+      // §468 (контракт 1.1.3, ядро v1.14.1-lx.8) — значение идёт ядру как
+      // есть. Ведущий «/» ядро разбирает само: сегменты экранируются по
+      // отдельности, хвост «|…» отбрасывается, «/a/b/Tun» уезжает на провод
+      // готовым путём. Перевод «/<сервис>/Tun» → «<сервис>», заведённый §464
+      // под ядро без такого разбора, снят целиком — он снимал бы «/» там,
+      // где ядро ждёт путь.
       final sn = (q['serviceName'] ?? q['service_name'] ?? q['path'] ?? '').trim();
       return GrpcTransport(serviceName: sn);
     case 'http':
-      final path = q['path'] ?? '/';
+      final path = _guardUrlPath(q['path'] ?? '/', warnings);
       final host = (q['host'] ?? '').trim();
       return HttpTransport(
         path: path,
@@ -98,7 +105,7 @@ TransportSpec? parseTransport(
       // share-URI Go не распознаёт вовсе (uriTransportFromQuery — нет кейса
       // "h2", падает в default → транспорт не эмитится); тут — то же самое.
       if (networkOverride == null) return null;
-      final path = q['path'] ?? '/';
+      final path = _guardUrlPath(q['path'] ?? '/', warnings);
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       if (host.isEmpty && defaultHost != null) host = defaultHost;
@@ -114,12 +121,17 @@ TransportSpec? parseTransport(
       final hasPathParam = q.containsKey('path');
       final (splitPath, _) =
           splitEarlyDataPath(decodeResidualPercent(q['path'] ?? ''));
-      final path = hasPathParam ? splitPath : '';
+      final path = hasPathParam ? _guardUrlPath(splitPath, warnings) : '';
       // §103 D-016(в) — Go НЕ подставляет sni как фолбэк host для httpupgrade
       // (node_parser_transport.go:183-185, в отличие от ws): только явный
       // `host=`. Фолбэк давал разные конфиги/identity-хеши на пустом host.
       final host = (q['host'] ?? '').trim();
       return HttpUpgradeTransport(path: path, host: host);
+    // §463 / контракт §24.2 п. 7.13 — `splithttp` = прежнее имя `xhttp` в
+    // Xray. Раньше оно не распознавалось, и узел уезжал в конфиг ВООБЩЕ БЕЗ
+    // транспорта: соединение шло голым TCP на порт, который ждёт HTTP, —
+    // узел мёртв без единого сообщения.
+    case 'splithttp':
     case 'xhttp':
       // §097/§127 — нативный xhttp + расширенные поля Xray splithttp (SPEC 002
       // v2). Ключи читаем в обеих формах: camelCase (Xray URI) и snake_case
@@ -133,6 +145,27 @@ TransportSpec? parseTransport(
     default:
       return null;
   }
+}
+
+/// §463 / контракт §24.6 (`format: url_path` в `registry/transports.json`) —
+/// путь с битым percent-кодированием снимается, узел живёт.
+///
+/// Ядро разбирает путь транспорта через `url.Parse`, и «%zz» роняет ВЕСЬ
+/// config.json («ws: parse path: invalid URL escape», проверено на
+/// 1.14.0-lx.39; то же у httpupgrade и http). То есть один такой узел из
+/// подписки оставлял человека без VPN целиком — вердикт B. Раньше путь
+/// проходил в тело как есть: разбор-то не падал.
+///
+/// Код ставится на РАЗБОРЕ, где сырое значение ещё известно: после снятия
+/// поля санитайзер его уже не увидит.
+String _guardUrlPath(String path, List<NodeWarning>? warnings) {
+  if (path.isEmpty || urlPathOk(path)) return path;
+  warnings?.add(RegistryWarning(
+    code: 'type_invalid',
+    path: 'transport.path',
+    value: path,
+  ));
+  return '';
 }
 
 /// §303 — разделить Xray-путь вида `/api/v2/channel?ed=2560` на чистый путь и
@@ -165,10 +198,13 @@ TransportSpec? parseTransport(
 /// `path=%2F%252Fassignment`: `Uri.queryParameters` декодит ровно один раз, и
 /// в путь уходит `/%2Fassignment` вместо `//assignment` → сервер даёт 404.
 ///
-/// Тот же приём, что в `_normalizeAlpn` (§151), но БЕЗ проверки валидности:
-/// путь может содержать что угодно — эмодзи (`path=Telegram🇨🇳`), двойные
-/// слэши (`//assignment`), `@`. Здесь только доводим декодирование до конца,
-/// ничего не отбрасывая. До 2 проходов: больше — почти наверняка мусор.
+/// Тот же приём, что у ALPN в мапперах (§151, `common_parts.dart`), но БЕЗ
+/// проверки валидности: путь может содержать что угодно — эмодзи
+/// (`path=Telegram🇨🇳`), двойные слэши (`//assignment`), `@`. Здесь только
+/// доводим декодирование до конца, ничего не отбрасывая. До 2 проходов:
+/// больше — почти наверняка мусор.
+final _percentSeq = RegExp(r'%[0-9A-Fa-f]{2}');
+
 String decodeResidualPercent(String raw) {
   var v = raw;
   var guard = 0;
@@ -443,275 +479,12 @@ String _normScRange(String v) {
 void warnEchIgnored(Map<String, String> q, List<NodeWarning> warnings) {
   final raw = (q['ech'] ?? '').trim();
   if (raw.isEmpty || raw.toLowerCase() == 'none') return;
-  warnings.add(EchIgnoredWarning(raw.split('+').first.trim()));
-}
-
-/// §457 — `key_share=` из share-URI: только значение из [kRealityKeyShares],
-/// регистр не нормализуем. Иное — `null` (поле отброшено молча): ядро на
-/// неизвестном значении отвергает весь конфиг, а не один узел.
-String? realityKeyShareFromQuery(String? raw) {
-  final v = (raw ?? '').trim();
-  return kRealityKeyShares.contains(v) ? v : null;
-}
-
-/// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).
-TlsSpec parseVlessTls(
-  Map<String, String> q,
-  String server,
-  int port, {
-  List<NodeWarning>? warnings,
-}) {
-  // §320 — ECH из ссылки не включаем (ломает узлы), но предупреждаем.
-  if (warnings != null) warnEchIgnored(q, warnings);
-  final sec = (q['security'] ?? '').toLowerCase().trim();
-  final pbk = (q['pbk'] ?? '').trim();
-
-  if (sec == 'none') return TlsSpec.disabled;
-
-  var sni = q['sni'] ?? q['peer'] ?? '';
-  if (sni.isEmpty) sni = server;
-  var fp = (q['fp'] ?? q['fingerprint'] ?? '').toLowerCase().trim();
-  if (fp.isEmpty) fp = 'random';
-
-  // §169 — REALITY только при ВАЛИДНОМ X25519-ключе, не «pbk непустой».
-  // Мусор (pbk=enabled/true из битых подписок) → проваливаемся ниже в plain
-  // TLS, а не отравляем reality.public_key и весь config.json. См.
-  // isValidRealityPublicKey.
-  if (isValidRealityPublicKey(pbk)) {
-    // SPEC 103 `reality_short_id_invalid` — код ставится ДО нормализации:
-    // после неё исходного значения уже нет, а узел уехал бы с чужим sid.
-    final rawSid = q['sid'] ?? '';
-    if (warnings != null && realityShortIdWouldDegrade(rawSid)) {
-      warnings.add(RealityShortIdInvalidWarning(rawSid.trim()));
-    }
-    return TlsSpec(
-      enabled: true,
-      serverName: sni,
-      fingerprint: fp,
-      reality: RealitySpec(
-        publicKey: pbk,
-        shortId: normalizeRealityShortId(rawSid),
-        // §457 — имя параметра = ключ sing-box (прецедент §453). Читается
-        // только вместе с валидным REALITY; вне enum — молча отброшено.
-        keyShare: realityKeyShareFromQuery(q['key_share']),
-      ),
-      insecure: isTlsInsecure(q),
-      alpn: alpnFromQuery(q),
-      );
-  }
-
-  if (sec == 'reality') {
-    return TlsSpec(
-      enabled: true,
-      serverName: sni,
-      fingerprint: fp,
-      insecure: isTlsInsecure(q),
-      alpn: alpnFromQuery(q),
-      );
-  }
-
-  if (sec.isEmpty && plaintextVlessPorts.contains(port)) return TlsSpec.disabled;
-
-  return TlsSpec(
-    enabled: true,
-    serverName: sni,
-    fingerprint: fp,
-    insecure: isTlsInsecure(q),
-    alpn: alpnFromQuery(q),
-  );
-}
-
-/// TLS parameters for Trojan.
-TlsSpec parseTrojanTls(
-  Map<String, String> q,
-  String server, {
-  List<NodeWarning>? warnings,
-}) {
-  if (warnings != null) warnEchIgnored(q, warnings);
-  final sec = (q['security'] ?? '').toLowerCase().trim();
-  if (sec == 'none') return TlsSpec.disabled;
-
-  var sni = q['sni'] ?? q['peer'] ?? q['host'] ?? '';
-  if (sni.isEmpty) sni = server;
-  final fp = (q['fp'] ?? '').toLowerCase().trim();
-
-  return TlsSpec(
-    enabled: true,
-    serverName: sni,
-    fingerprint: fp.isEmpty ? null : fp,
-    insecure: isTlsInsecure(q),
-    alpn: alpnFromQuery(q),
-  );
-}
-
-/// TLS parameters for VMess (активируется при `tls=tls` или `h2`).
-TlsSpec parseVmessTls(Map<String, dynamic> cfg, String server, String net) {
-  final tlsEnabled = cfg['tls'] == 'tls' || net == 'h2';
-  if (!tlsEnabled) return TlsSpec.disabled;
-
-  var sni = cfg['sni']?.toString() ?? '';
-  if (sni.isEmpty) sni = cfg['host']?.toString() ?? '';
-  if (sni.isEmpty) sni = server;
-
-  final alpn = cfg['alpn']?.toString() ?? '';
-  final fp = (cfg['fp']?.toString() ?? '').toLowerCase().trim();
-
-  return TlsSpec(
-    enabled: true,
-    serverName: sni,
-    fingerprint: fp.isEmpty ? null : fp,
-    insecure: cfg['insecure'] == '1' || cfg['insecure'] == true,
-    alpn: _normalizeAlpn(alpn), // §151 F2 — единый нормализатор ALPN
-  );
+  warnings.add(NodeWarning.byCode('ech_ignored',
+      path: 'ech', value: raw.split('+').first.trim()));
 }
 
 /// §097 — query-bool: `true`/`1` → true (для `no_grpc_header`).
 bool _truthy(String? v) {
   final s = (v ?? '').toLowerCase().trim();
   return s == 'true' || s == '1';
-}
-
-List<String> alpnFromQuery(Map<String, String> q) {
-  return _normalizeAlpn(q['alpn'] ?? '');
-}
-
-/// §151 F2 / SPEC 103 vless/alpn_multiply_encoded — нормализация ALPN-списка
-/// из сырого query/JSON значения.
-///
-/// Корень бага: некоторые подписки-агрегаторы шлют `alpn=http%252F1.1`
-/// (двойное percent-кодирование, а на практике встречается и multiply —
-/// `http%2525252F1.1`, вложенное 4 раза). `Uri.queryParameters` декодит ровно
-/// один раз → остаётся `%XX`-мусор, и он уходил в `tls.alpn` ядра дословно
-/// (валидный ALPN-id = `http/1.1`/`h2`/`h3`). Эталон Go
-/// `normalizePercentDecodeLoop` (node_parser_transport.go) декодирует
-/// БЕЗ ограничения проходов, до стабильной точки (`dec == s`) — элемент
-/// валиден после раскрутки, канон не выбрасывает его. Здесь: split по
-/// запятой, повторный decode до стабильности (с защитным потолком от
-/// патологического ввода — реальные multiply-encoded подписки укладываются
-/// в единицы проходов), и drop значений, которые после де-кода всё ещё
-/// содержат `%` / пробелы / управляющие символы (не валидный protocol-id).
-/// Корректные `h2`/`http/1.1`/`h3` не меняются.
-final _percentSeq = RegExp(r'%[0-9A-Fa-f]{2}');
-final _badAlpnChar = RegExp(r'[%\s\x00-\x1f]');
-
-List<String> _normalizeAlpn(String raw) {
-  if (raw.isEmpty) return const [];
-  final out = <String>[];
-  for (var e in raw.split(',')) {
-    e = e.trim();
-    if (e.isEmpty) continue;
-    // Раскручиваем до стабильности, как Go normalizePercentDecodeLoop;
-    // потолок в 16 проходов — защита от патологического ввода, не от
-    // легитимного multiply-encoding (тот стабилизируется за 3-5 проходов).
-    var guard = 0;
-    while (_percentSeq.hasMatch(e) && guard < 16) {
-      final decoded = Uri.tryParse('x://x?a=$e')?.queryParameters['a'];
-      if (decoded == null || decoded == e) break;
-      e = decoded.trim();
-      guard++;
-    }
-    // Drop значения, не похожие на валидный ALPN-id.
-    if (_badAlpnChar.hasMatch(e)) continue;
-    out.add(e);
-  }
-  return out;
-}
-
-/// Emit TransportSpec → строка query для `toUri()`. Возвращает пары
-/// `type`/`path`/`host`/`serviceName`, игнорируя пустые.
-Map<String, String> transportToQuery(TransportSpec t) {
-  switch (t) {
-    case WsTransport(
-        path: final p,
-        host: final h,
-        maxEarlyData: final ed,
-        earlyDataHeaderName: final eh,
-        earlyDataHeaderImplicit: final ehImplicit
-      ):
-      // §303 — early data возвращаем в URI тем же хвостом пути, каким она в
-      // него пришла (`/x?ed=2560`), иначе round-trip её теряет.
-      final withEd = ed == null ? p : '${p.isEmpty ? '/' : p}?ed=$ed';
-      // §103 D-008 — дефолтный заголовок (подставленный при разборе `?ed=N`
-      // хвоста, см. parseTransport) в URI не возвращаем: он подразумевается
-      // самой path-tail формой, Go тоже никогда не пишет `eh=` обратно
-      // (shareuri_helpers.go — только `?ed=N`, без eh). Явный `eh=`
-      // (даже численно совпавший со значением по умолчанию) сохраняем.
-      final ehForUri = ehImplicit ? null : eh;
-      return {
-        'type': 'ws',
-        if (withEd.isNotEmpty && withEd != '/') 'path': withEd,
-        if (h.isNotEmpty) 'host': h,
-        // §320 — header-режим восстановим только парой с `ed` (в одиночку `eh`
-        // при импорте игнорируется, вернуть его без размера = вернуть мусор).
-        if (ed != null && ehForUri != null && ehForUri.isNotEmpty)
-          'eh': ehForUri,
-      };
-    case GrpcTransport(serviceName: final sn):
-      return {
-        'type': 'grpc',
-        if (sn.isNotEmpty) 'serviceName': sn,
-      };
-    case HttpTransport(path: final p, hosts: final hs):
-      return {
-        'type': 'http',
-        if (p.isNotEmpty && p != '/') 'path': p,
-        if (hs.isNotEmpty) 'host': hs.join(','),
-      };
-    case HttpUpgradeTransport(path: final p, host: final h):
-      return {
-        'type': 'httpupgrade',
-        if (p.isNotEmpty && p != '/') 'path': p,
-        if (h.isNotEmpty) 'host': h,
-      };
-    // §127 — пишем плоско camelCase, и только не-дефолтные значения
-    // (URL_PARSING §8.3) — иначе URI раздувается, а round-trip даёт ту же
-    // spec (на входе пустое поле == дефолтное поле).
-    case XhttpTransport x:
-      return {
-        'type': 'xhttp',
-        if (x.path.isNotEmpty && x.path != '/') 'path': x.path,
-        if (x.host.isNotEmpty) 'host': x.host,
-        if (x.mode.isNotEmpty) 'mode': x.mode,
-        if (x.xPaddingBytes.isNotEmpty) 'xPaddingBytes': x.xPaddingBytes,
-        if (x.noGrpcHeader) 'noGRPCHeader': 'true',
-        if (x.sessionPlacement.isNotEmpty)
-          'sessionPlacement': x.sessionPlacement,
-        if (x.sessionKey.isNotEmpty) 'sessionKey': x.sessionKey,
-        if (x.seqPlacement.isNotEmpty) 'seqPlacement': x.seqPlacement,
-        if (x.seqKey.isNotEmpty) 'seqKey': x.seqKey,
-        if (x.uplinkDataPlacement.isNotEmpty)
-          'uplinkDataPlacement': x.uplinkDataPlacement,
-        if (x.uplinkDataKey.isNotEmpty) 'uplinkDataKey': x.uplinkDataKey,
-        if (x.uplinkChunkSize.isNotEmpty) 'uplinkChunkSize': x.uplinkChunkSize,
-        if (x.uplinkHttpMethod.isNotEmpty)
-          'uplinkHTTPMethod': x.uplinkHttpMethod,
-        if (x.xPaddingObfsMode) 'xPaddingObfsMode': 'true',
-        if (x.xPaddingKey.isNotEmpty) 'xPaddingKey': x.xPaddingKey,
-        if (x.xPaddingHeader.isNotEmpty) 'xPaddingHeader': x.xPaddingHeader,
-        if (x.xPaddingPlacement.isNotEmpty)
-          'xPaddingPlacement': x.xPaddingPlacement,
-        if (x.xPaddingMethod.isNotEmpty) 'xPaddingMethod': x.xPaddingMethod,
-        if (x.scMaxEachPostBytes.isNotEmpty)
-          'scMaxEachPostBytes': x.scMaxEachPostBytes,
-        if (x.scMinPostsIntervalMs.isNotEmpty)
-          'scMinPostsIntervalMs': x.scMinPostsIntervalMs,
-        if (x.scStreamUpServerSecs.isNotEmpty)
-          'scStreamUpServerSecs': x.scStreamUpServerSecs,
-        if (x.scMaxBufferedPosts >= 0)
-          'scMaxBufferedPosts': '${x.scMaxBufferedPosts}',
-        if (x.noSseHeader) 'noSSEHeader': 'true',
-        // xmux пишем теми же плоскими ключами, какими читаем: вложенный
-        // `extra={"xmux":{…}}` понимается на входе, но на выходе он лишний —
-        // плоская форма короче и эквивалентна.
-        if (x.maxConnections.isNotEmpty) 'maxConnections': x.maxConnections,
-        if (x.maxConcurrency.isNotEmpty) 'maxConcurrency': x.maxConcurrency,
-        if (x.cMaxReuseTimes.isNotEmpty) 'cMaxReuseTimes': x.cMaxReuseTimes,
-        if (x.hMaxRequestTimes.isNotEmpty)
-          'hMaxRequestTimes': x.hMaxRequestTimes,
-        if (x.hMaxReusableSecs.isNotEmpty)
-          'hMaxReusableSecs': x.hMaxReusableSecs,
-        if (x.hKeepAlivePeriod >= 0)
-          'hKeepAlivePeriod': '${x.hKeepAlivePeriod}',
-      };
-  }
 }

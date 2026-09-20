@@ -8,6 +8,8 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/storage_migration/migrate_storage.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // §439 §2.3 п. 8 — миграция ссылок 2.23.2 → NodeLink: финальный тег строкой
 // переводится по состоянию до миграции (словарь финальных тегов той же
 // сборкой, `sub_cache` для узлов подписок); не нашлось или неоднозначно —
@@ -66,6 +68,10 @@ List<NodeLink> _hops(StorageMigrationResult r, String tag) => chainFromRecord(
     .hops;
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   final directions = [const Direction(tag: 'vpn-1', label: 'V').toJson()];
 
   group('финальная строка → NodeLink', () {

@@ -18,6 +18,8 @@ import 'package:lxbox/services/storage_migration/migrate_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../parser/engine_test_setup.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   _FakePathProvider(this.root);
@@ -160,6 +162,10 @@ List<Map<String, dynamic>> _records(Object? list) =>
     (list as List).cast<Map<String, dynamic>>();
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('migrateStorageDoc — форма 2.23.2 → записи 1.0 (§3.1 шаг 3)', () {
     test('ключи верхнего уровня: sources/rules/dns на месте легаси, версия '
         'первой, прочие ключи как были', () {

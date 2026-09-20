@@ -1,12 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/node_spec_emit.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
+import '../parser/engine_test_setup.dart';
+
 void main() {
+  // §480 W7 — `toUri()` этой схемы собирает ДВИЖОК по секции реестра, как и
+  // её разбор. Без загруженных секций ссылки нет вовсе (критерий 7 спеки:
+  // рукописного запасного пути у переехавшей схемы не осталось).
+  setUpAll(loadEngineSections);
+
   group('NaïveProxy emit (spec 037 §4)', () {
     NaiveSpec mk({
       String tag = 'naive-test',
@@ -115,6 +121,19 @@ void main() {
       expect(s.toUri(), 'naive+https://p@h:8443#t');
     });
 
+    // §465 — одиночный userinfo читается как password, поэтому форма «только
+    // username» обязана нести двоеточие, иначе собственная ссылка вернулась
+    // бы с именем в слоте пароля.
+    test('username without password → user:@', () {
+      final s = NaiveSpec(
+        id: 'id', tag: 't', label: 't',
+        server: 'h', port: 443, rawSource: '',
+        username: 'u',
+        tls: const TlsSpec(enabled: true, serverName: 'h'),
+      );
+      expect(s.toUri(), 'naive+https://u:@h#t');
+    });
+
     test('anonymous → no userinfo in URI', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
@@ -147,6 +166,11 @@ void main() {
 
     test('dropping invalid header name on encode', () {
       // На входе невозможный header — encoder тихо дропает.
+      //
+      // §480 W7: правило больше не живёт отдельной функцией в коде эмита —
+      // годность пары судит ТА ЖЕ регулярка `extract.re`, какой её читает
+      // разбор. Напиши эмиттер такую пару, разбор пропустил бы её
+      // (`on_item_invalid`), и круг потерял бы её молча.
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
         server: 'h', port: 443, rawSource: '',
@@ -154,7 +178,9 @@ void main() {
         tls: const TlsSpec(enabled: true, serverName: 'h'),
         extraHeaders: const {'X Bad': 'v', 'X-Good': 'ok'},
       );
-      expect(serializeNaiveExtraHeaders(s.extraHeaders), 'X-Good: ok');
+      final uri = s.toUri();
+      expect(uri.contains('X-Good%3A%20ok'), true, reason: uri);
+      expect(uri.contains('X%20Bad'), false, reason: uri);
     });
 
     test('isValidNaiveHeaderName charset', () {
@@ -180,14 +206,33 @@ void main() {
       expect(s2.label, original.label);
     });
 
-    // SPEC 103 п.6 — canon = Go: userinfo без `:` это username. Было
-    // закреплено обратное (password-only) — неканоничное поведение, тест
-    // обновлён.
-    test('round-trip preserves username-only auth (no colon)', () {
+    // §465 / контракт §24.2 п. 7.3 — три формы userinfo держат round-trip
+    // `parseUri(toUri(spec)) ≈ spec`. Раньше форма «только пароль» после
+    // своего же эмита возвращалась именем пользователя.
+    test('round-trip preserves password-only auth (no colon)', () {
       final original = parseNaive('naive+https://onlypass@host.example.com')!;
+      expect(original.username, '');
+      expect(original.password, 'onlypass');
       final s2 = parseUri(original.toUri()) as NaiveSpec;
-      expect(s2.username, 'onlypass');
+      expect(s2.username, '');
+      expect(s2.password, 'onlypass');
+    });
+
+    test('round-trip preserves username-only auth (user:)', () {
+      final original = parseNaive('naive+https://onlyuser:@host.example.com')!;
+      expect(original.username, 'onlyuser');
+      expect(original.password, '');
+      expect(original.toUri(), 'naive+https://onlyuser:@host.example.com');
+      final s2 = parseUri(original.toUri()) as NaiveSpec;
+      expect(s2.username, 'onlyuser');
       expect(s2.password, '');
+    });
+
+    test('round-trip preserves user+pass', () {
+      final original = parseNaive('naive+https://u:p@host.example.com')!;
+      final s2 = parseUri(original.toUri()) as NaiveSpec;
+      expect(s2.username, 'u');
+      expect(s2.password, 'p');
     });
 
     test('round-trip preserves extra-headers (sorted)', () {

@@ -1,0 +1,339 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "bbr_native_udp": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@example-1.com:443?alpn=h3&congestion_control=bbr&sni=example-1.com&udp_relay_mode=native#tuic-bbr",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "tuic-bbr",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "congestion_control": "bbr",
+        "udp_relay_mode": "native",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "h3"
+          ]
+        }
+      }
+    },
+    "canonical_full": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@tuic.example-1.com:443?allow_insecure=1&alpn=h3%2Cspdy%2F3.1&congestion_control=bbr&sni=tuic.example-1.com&udp_relay_mode=native#TUIC-smoke",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "TUIC-smoke",
+        "server": "tuic.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "congestion_control": "bbr",
+        "udp_relay_mode": "native",
+        "tls": {
+          "enabled": true,
+          "server_name": "tuic.example-1.com",
+          "alpn": [
+            "h3",
+            "spdy/3.1"
+          ],
+          "insecure": true
+        }
+      }
+    },
+    "congestion_bogus_default_cubic": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@example-1.com:443?sni=example-1.com#tuic-bogus",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "tuic-bogus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "cubic_quic_relay_insecure": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@h.example-2.com:8443?allow_insecure=1&alpn=h3%2Ch3-29&congestion_control=cubic&sni=h.example-2.com&udp_relay_mode=quic#tuic-cubic",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "tuic-cubic",
+        "server": "h.example-2.com",
+        "server_port": 8443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "congestion_control": "cubic",
+        "udp_relay_mode": "quic",
+        "tls": {
+          "enabled": true,
+          "server_name": "h.example-2.com",
+          "alpn": [
+            "h3",
+            "h3-29"
+          ],
+          "insecure": true
+        }
+      }
+    },
+    "default_port_443": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:p@example-1.com:443?sni=example-1.com",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "tuic-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "p",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "fp_stripped_quic_pair": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@tuic.example-1.com:443?congestion_control=bbr&sni=tuic.example-1.com#tuic-quic-pair",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "tuic-quic-pair",
+        "server": "tuic.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "congestion_control": "bbr",
+        "tls": {
+          "enabled": true,
+          "server_name": "tuic.example-1.com"
+        }
+      }
+    },
+    "heartbeat_bare_seconds": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:p@example-1.com:443?heartbeat=10s&sni=example-1.com#%2F",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "/",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "p",
+        "heartbeat": "10s",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "reduce_rtt_alias": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:p@example-1.com:443?reduce_rtt=1&sni=example-1.com#%2F",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "/",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "p",
+        "zero_rtt_handshake": true,
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "reduce_rtt_zero_rtt": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@example-1.com:443?alpn=h3&congestion_control=bbr&reduce_rtt=1&sni=example-1.com#tuic-0rtt",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "tuic-0rtt",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "congestion_control": "bbr",
+        "zero_rtt_handshake": true,
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "h3"
+          ]
+        }
+      }
+    },
+    "unknown_congestion_dropped": {
+      "body": null,
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:p@example-1.com:443?sni=example-1.com#%2F",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "/",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "p",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "v5_basic": {
+      "body": null,
+      "uri_before": "tuic://11111111-2222-3333-4444-555555555555:testpass123@example-1.com:443?alpn=h3&congestion_control=bbr&sni=example-1.com&udp_relay_mode=native#TUIC%20Basic",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "TUIC Basic",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "password": "testpass123",
+        "congestion_control": "bbr",
+        "udp_relay_mode": "native",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "alpn": [
+            "h3"
+          ]
+        }
+      }
+    },
+    "v5_cubic": {
+      "body": null,
+      "uri_before": "tuic://22222222-3333-4444-5555-666666666666:testpass123@example-2.com:8443?allow_insecure=1&alpn=h3%2Ch3-29&congestion_control=cubic&sni=example-2.com&udp_relay_mode=quic#TUIC%20Cubic",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "TUIC Cubic",
+        "server": "example-2.com",
+        "server_port": 8443,
+        "uuid": "22222222-3333-4444-5555-666666666666",
+        "password": "testpass123",
+        "congestion_control": "cubic",
+        "udp_relay_mode": "quic",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-2.com",
+          "alpn": [
+            "h3",
+            "h3-29"
+          ],
+          "insecure": true
+        }
+      }
+    },
+    "v5_zero_rtt": {
+      "body": null,
+      "uri_before": "tuic://33333333-4444-5555-6666-777777777777:testpass123@example-3.com:443?alpn=h3&congestion_control=new_reno&reduce_rtt=1&sni=example-3.com&udp_relay_mode=native#TUIC%20ZeroRTT",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "TUIC ZeroRTT",
+        "server": "example-3.com",
+        "server_port": 443,
+        "uuid": "33333333-4444-5555-6666-777777777777",
+        "password": "testpass123",
+        "congestion_control": "new_reno",
+        "udp_relay_mode": "native",
+        "zero_rtt_handshake": true,
+        "tls": {
+          "enabled": true,
+          "server_name": "example-3.com",
+          "alpn": [
+            "h3"
+          ]
+        }
+      }
+    },
+    "b480:disable_sni_with_sni": {
+      "body": {
+        "type": "tuic",
+        "tag": "dsni-with",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "disable_sni": true
+        }
+      },
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@example-1.com:443#dsni-with",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "dsni-with",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "b480:disable_sni_without_sni": {
+      "body": {
+        "type": "tuic",
+        "tag": "dsni-without",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "disable_sni": true
+        }
+      },
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@example-1.com:443#dsni-without",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "dsni-without",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "b480:no_fragment": {
+      "body": {
+        "type": "tuic",
+        "tag": "tuic-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      },
+      "uri_before": "tuic://11111111-1111-1111-1111-111111111111:pass123@example-1.com:443?sni=example-1.com",
+      "body_of_old_uri": {
+        "type": "tuic",
+        "tag": "tuic-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    }
+  }
+}

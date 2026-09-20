@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/codec/node_link_record.dart';
@@ -12,6 +13,8 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+
+import '../parser/engine_test_setup.dart';
 
 // Конформанс-раннер корпуса НАПРАВЛЕНИЙ (SPEC 104, §393 A5), сторона LxBox.
 // Тот же корпус гоняет лаунчер — `core/config/contract_direction_test.go`.
@@ -25,7 +28,6 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 //
 // Расхождение expected = модель Направления разъехалась между платформами.
 
-const _contractRoot = 'contract';
 
 // ── Что раннер сверяет, а что нет ───────────────────────────────────────────
 
@@ -126,7 +128,9 @@ const _groupsNotComparable = <String, String>{
 };
 
 void main() {
-  final root = Directory('$_contractRoot/corpus/direction');
+  if (corpusSuiteUnavailable('test/contract/direction_corpus_test.dart')) return;
+
+  final root = Directory('$kVendorRoot/corpus/direction');
   if (!root.existsSync()) {
     // contract/ — вендоренная копия (tool/sync_contract.sh), в git не идёт.
     test('корпус Направлений не синхронизирован', () {},
@@ -151,6 +155,12 @@ void main() {
   }
 
   group('contract corpus: Directions', () {
+    // Узлы кейса раннер строит `parseUri`-ссылкой (`_sourceFor`), а схема,
+    // переехавшая на движок (§480), без секций реестра не разбирается вовсе:
+    // без загрузки кейс падал не расхождением модели Направления, а пустым
+    // составом группы.
+    setUpAll(loadEngineSections);
+
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
       // §393 C — `chain_*` больше не скипаются: цепочки реализованы

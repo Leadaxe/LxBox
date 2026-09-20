@@ -20,11 +20,14 @@ import '../../widgets/node_diagnostics_tab.dart';
 ///
 /// Источник — `NodeSpec.rawSource` (§454: у JSON-нод это их объект outbound'а),
 /// расширенный вид — `sourceExtended`.
+enum NodeInspectTab { json, source, replacements, diagnostics }
+
 class NodeInspectScreen extends StatefulWidget {
   const NodeInspectScreen({
     super.key,
     required this.node,
     this.tagPrefix = '',
+    this.initialTab = NodeInspectTab.json,
   });
 
   final NodeSpec node;
@@ -33,6 +36,23 @@ class NodeInspectScreen extends StatefulWidget {
   /// display-тегом («<префикс> <тег>»), и диагностика при включённом VPN
   /// адресует его именно так. Пусто = узел без префикса.
   final String tagPrefix;
+
+  /// §498/§501 — начальная вкладка (страховка открывает Diagnostics).
+  final NodeInspectTab initialTab;
+
+  /// Индекс вкладки [tab] с учётом наличия Replacements.
+  static int tabIndex(NodeInspectTab tab, {required bool hasReplacements}) {
+    switch (tab) {
+      case NodeInspectTab.json:
+        return 0;
+      case NodeInspectTab.source:
+        return 1;
+      case NodeInspectTab.replacements:
+        return hasReplacements ? 2 : 0;
+      case NodeInspectTab.diagnostics:
+        return hasReplacements ? 3 : 2;
+    }
+  }
 
   @override
   State<NodeInspectScreen> createState() => _NodeInspectScreenState();
@@ -66,8 +86,11 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
   Widget build(BuildContext context) {
     final title = _node.label.isNotEmpty ? _node.label : _node.tag;
     final hasReplacements = _hasReplacements;
+    final warnings = _node.warnings;
     return DefaultTabController(
       length: hasReplacements ? 4 : 3,
+      initialIndex: NodeInspectScreen.tabIndex(widget.initialTab,
+          hasReplacements: hasReplacements),
       child: Scaffold(
         appBar: AppBar(
           title: Text(title.isEmpty ? _node.server : title,
@@ -80,9 +103,9 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
               Tab(text: getLocalText.s("Source")),
               if (hasReplacements)
                 Tab(text: getLocalText.s("Replacements")),
-              // §392 — узел здесь распарсен, поэтому доступны ОБЕ ветки:
-              // probe при выключенном VPN и боевое ядро при включённом.
-              Tab(text: getLocalText.s("Diagnostics")),
+              // §392/§501 — диагностика + уведомления узла; точка на ярлыке
+              // при наличии предупреждений.
+              NodeDiagnosticsTabLabel(warnings: warnings),
             ],
           ),
         ),
@@ -94,6 +117,9 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
             NodeDiagnosticsTab(
               node: _node,
               liveTag: TagResolver.displayTag(widget.tagPrefix, _node.tag),
+              warnings: warnings,
+              scrollToNotifications:
+                  widget.initialTab == NodeInspectTab.diagnostics,
             ),
           ],
         ),

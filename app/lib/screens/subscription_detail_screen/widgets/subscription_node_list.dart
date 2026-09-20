@@ -5,6 +5,7 @@ import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/ui_msg.dart';
 import '../../../services/probe/probe_runner.dart';
+import '../../../widgets/banner_palette.dart';
 import '../../../widgets/probe_badge.dart';
 import 'node_warning_row.dart';
 import '../node_inspect_screen.dart';
@@ -68,6 +69,12 @@ class SubscriptionNodeList extends StatelessWidget {
     return chainHops.contains(node) ? '⚙ $base' : base;
   }
 
+  /// §471 — есть ли у узла то, что требует действия (error/warning). Один
+  /// предикат на три места: счётчик в шапке, строка предупреждения и значок
+  /// info у имени (значок и строка — взаимоисключающие, см. ревизию 1).
+  static bool _hasActionable(NodeSpec node) =>
+      node.warnings.any((w) => w.severity != WarningSeverity.info);
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -104,25 +111,25 @@ class SubscriptionNodeList extends StatelessWidget {
 
     // Считаем только actionable (warning/error). Info (TLS-insecure) тут
     // не учитываем — это часто намеренный выбор провайдера, чтобы не пугать.
-    final actionableCount = nodes
-        .where((n) => n.warnings
-            .any((w) => w.severity != WarningSeverity.info))
-        .length;
+    final actionableCount = nodes.where(_hasActionable).length;
+    // §471 — цвет полосы берётся из общей палитры уровней (был плоский
+    // `Colors.orange`, не считавшийся с темой).
+    final warnColor = warningSeverityColor(context, WarningSeverity.warning);
     return Column(
       children: [
         if (actionableCount > 0)
           Container(
             width: double.infinity,
-            color: Colors.orange.withValues(alpha: 0.15),
+            color: warnColor.withValues(alpha: 0.15),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.warning_amber, size: 16, color: Colors.orange),
+                Icon(Icons.warning_amber, size: 16, color: warnColor),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     getLocalText.plural("%d nodes with warnings (XHTTP fallback etc.)", actionableCount),
-                    style: const TextStyle(fontSize: 12, color: Colors.orange),
+                    style: TextStyle(fontSize: 12, color: warnColor),
                   ),
                 ),
               ],
@@ -192,11 +199,29 @@ class SubscriptionNodeList extends StatelessWidget {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${node.protocol}  ${node.server}:${node.port}',
-                style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+              Row(
+                children: [
+                  // §479 — приглушённый `ⓘ` в НАЧАЛЕ строки протокола: у узла,
+                  // которому нечего сказать кроме info. Когда есть
+                  // warning/error, значок стоит в конце строки предупреждения
+                  // (сам `NodeWarningRow`), и здесь его быть не должно —
+                  // иначе он задваивается. Имя узла остаётся чистым
+                  // (ревизия 1 §471 отменена).
+                  if (node.warnings.isNotEmpty && !_hasActionable(node))
+                    NodeInfoBadge(node.warnings),
+                  Flexible(
+                    child: Text(
+                      '${node.protocol}  ${node.server}:${node.port}',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
               ),
-              if (node.warnings.isNotEmpty) NodeWarningRow(node.warnings),
+              // §471 — в списке info только значком, без текста: строки нет
+              // вовсе, если требующего действия нечего сказать.
+              if (_hasActionable(node)) NodeWarningRow(node.warnings),
             ],
           ),
           // §339 — бейдж результата теста; тап по err — текст ошибки.

@@ -15,6 +15,7 @@ import '../widgets/chain_positions_block.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
 import 'owner_navigation.dart';
+import 'subscriptions_screen/entry_warnings.dart';
 import '../services/l10n/locale_controller.dart';
 
 /// §258 — экран деталей outbound'а («View details» из меню ноды): вкладки
@@ -155,6 +156,13 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final dependents = sickDependents ??
         widget.homeController.directDependentsOf(widget.tag);
     final hasDependents = dependents.isNotEmpty;
+    // §505 — тот же источник, что главный экран и NodeSettingsScreen.
+    final warnings = warningsForConfigTag(
+      widget.tag,
+      widget.subController.entries,
+      emittedTagMap: widget.subController.lastEmittedTagMap,
+      buildWarningsByTag: widget.subController.lastBuildWarningsByTag,
+    );
     return DefaultTabController(
       // §392 — +1 вкладка Diagnostics; Dependents по-прежнему условная, и
       // индекс её открытия (openDependents) не меняется — она перед новой.
@@ -172,7 +180,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               // l10n-exempt: acronym, same in all locales
               const Tab(text: 'JSON'),
               if (hasDependents) Tab(text: getLocalText.s("Dependents")),
-              Tab(text: getLocalText.s("Diagnostics")),
+              NodeDiagnosticsTabLabel(warnings: warnings),
             ],
           ),
           actions: [
@@ -235,6 +243,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               // §394 — у цепочки сверху свой блок: послойная проба.
               NodeDiagnosticsTab(
                 liveTag: widget.tag,
+                warnings: warnings,
                 header: _chainHops == null
                     ? null
                     : ChainPositionsBlock(

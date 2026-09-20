@@ -70,11 +70,12 @@ void main() {
       expect(fromEp.single, isA<TailscaleSpec>());
     });
 
-    test('toUri — JSON-текст с tag, парсится обратно как singboxOutbound', () {
+    test('toUri — JSON-текст с tag, парсится обратно как одиночный outbound',
+        () {
       final ts = parseSingboxEntry(tsBody)! as TailscaleSpec;
       final text = ts.toUri();
       final decoded = decode(text);
-      expect((decoded as JsonConfig).flavor, JsonFlavor.singboxOutbound);
+      expect((decoded as JsonConfig).source.kind, SourceKind.singboxOutbound);
       final back = parseAll(decoded).single as TailscaleSpec;
       expect(back.tag, 'home-ts');
       expect(back.body, ts.body);

@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
+import '../controllers/subscription_controller/core_reject_ops.dart';
 import '../models/direction.dart';
+import '../models/node_warning.dart';
 import '../models/node_link.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
@@ -26,6 +28,8 @@ import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/probe_badge.dart';
+import 'subscription_detail_screen/widgets/node_warning_row.dart';
+import 'subscriptions_screen/entry_warnings.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/file_import.dart';
@@ -1658,11 +1662,16 @@ class _MemberTile extends StatelessWidget {
     if (isChainLink) title = '⚙ $title'; // §239 — авто-маркировка звена
     // §435 — у безадресных (группа §322, Tailscale) адреса нет: только тип,
     // без «:0».
+    final warnings =
+        node == null ? const <NodeWarning>[] : mergedNodeWarnings(node, member.warnings);
+    final hideProto = node != null && member.warnings.any((w) => w.isCoreRejected);
     final subtitle = node == null
         ? getLocalText.s("Tap to edit or delete")
-        : node.isAddressless
-            ? node.protocol.toUpperCase()
-            : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
+        : hideProto
+            ? null
+            : node.isAddressless
+                ? node.protocol.toUpperCase()
+                : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
 
     // §435 — маркер «член несёт секции» (правила/DNS узла, контракт ## 13):
     // видно, у кого связка, не открывая редактор.
@@ -1703,10 +1712,17 @@ class _MemberTile extends StatelessWidget {
           fontStyle: node == null ? FontStyle.italic : null,
         ),
       ),
-      subtitle: Text(subtitle,
-          style: TextStyle(fontSize: 12, color: muted),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (subtitle != null)
+            Text(subtitle,
+                style: TextStyle(fontSize: 12, color: muted),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          if (nodeHasActionableWarnings(warnings)) NodeWarningRow(warnings),
+        ],
+      ),
       trailing: trailing,
       onLongPress: onLongPress,
       onTap: onTap,

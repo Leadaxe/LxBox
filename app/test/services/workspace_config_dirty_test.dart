@@ -7,12 +7,18 @@ import 'package:lxbox/services/config_dirty_check.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/workspaces/workspace_controller.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §447 — загрузка слота Workspaces помечает конфиг грязным явно. Раньше
 /// признаком был только mtime настроек (§417 §2.3 шаг 8), а его гасили flush
 /// перед загрузкой (touch конфига в ту же секунду) и любой `_save()` при
 /// снятом флаге: новый HomeScreen видел `dirty=false`, VPN шёл с конфигом
 /// прежнего слота.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   late Directory docs;
   late Directory support;
   const channel = MethodChannel('plugins.flutter.io/path_provider');

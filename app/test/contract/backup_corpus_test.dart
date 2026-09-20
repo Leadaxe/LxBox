@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/direction.dart';
@@ -17,6 +18,8 @@ import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
 import 'package:lxbox/services/record_vars.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // Конформанс-раннер корпуса LX Backup (SPEC 103, фаза 4), сторона LxBox.
 // Тот же набор гоняет Go (core/backup/corpus_test.go).
 //
@@ -28,7 +31,6 @@ import 'package:lxbox/services/record_vars.dart';
 // §438 — кейсы лежат в двух форматах (`lx_backup: 1` и `2`). Раннер формат не
 // выбирает: импорт опознаёт его сам, дальше одно слияние на оба.
 
-const _contractRoot = 'contract';
 
 /// Кейсы, которые сторона пока не проходит по известной причине: имя кейса →
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
@@ -37,7 +39,17 @@ const Map<String, String> _pendingCases = {};
 
 
 void main() {
-  final root = Directory('$_contractRoot/corpus/backup');
+  if (corpusSuiteUnavailable('test/contract/backup_corpus_test.dart')) return;
+
+  // §480 — секции движка грузятся и здесь. Раннер строит члена папки из его
+  // ссылки (`FolderMember.raw` → `parseAll`), а разбор без загруженного
+  // реестра не даёт НИ ОДНОГО узла: состав папки выходил списком пустых
+  // имён, то есть кейс жаловался на слияние, к которому отношения не имел.
+  // Та же грабля, что у `direction_corpus`; соседние backup-тесты реестр
+  // грузят с самого начала.
+  setUpAll(loadEngineSections);
+
+  final root = Directory('$kVendorRoot/corpus/backup');
   if (!root.existsSync()) return; // контракт не синхронизирован
 
   // §407 — предсостояние (`<case>.pre.backup.json`) кейсом НЕ является:

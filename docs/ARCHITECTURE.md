@@ -245,6 +245,190 @@ HomeController.saveParsedConfig(configJson)  →  native VpnService
 - `EmitContext.allocateTag(baseTag)` guarantees global uniqueness across all lists.
 - Warnings bubble up: at parse time into `NodeSpec.warnings`, at emit time appended by the emit. (The XHTTP fallback to `httpupgrade` was removed in §097 — the transport is now native.)
 
+### Node parse pipeline: mapper → sanitizer → model (spec 472)
+
+A link used to reach the model through a per-protocol parser that carried its
+own value rules, while JSON input carried a second copy of the same rules. The
+pipeline below replaces both with one route — the same one the launcher uses.
+It was rolled out one protocol per step; every scheme and every input has now
+moved (steps 2–8), and `parseUri` dispatches by scheme. What remains outside is
+the **sing-box body** input, and by construction: its body is already a sing-box
+map, so the step-1 pass judges it verbatim — it needs no mapper, only a route
+from the same map into the model.
+
+Since feature 480 the mapper is no longer a set of hand-written translators but
+a single **engine** executing registry sections, and the same table drives the
+reverse direction — the link the app emits:
+
+```
+input ─► detect (registry) ─► engine, by the section of the recognised source kind ─┐
+   link / base64 / list / Xray JSON / INI (wg-quick)                                │
+                                                                                    ▼
+                                   raw map ─► registry sanitizer ─► clean map ─► parseSingboxEntry ─► NodeSpec
+                                       │                                                                  │
+                                       └─► warnings (code, path, value) ──────────────────────────────────┘
+
+NodeSpec ─► emitter, from the SAME table ─► link            (round trip: parse → emit → parse)
+
+sing-box body ──► (already a sing-box map: the step-1 pass judges it verbatim)
+```
+
+- **Detect** picks the **source kind** (a bare link, base64, a list of links,
+  an Xray object, an INI config) from the registry, not from a hand-written
+  chain of `if`s. The kinds themselves are data too — `source_kinds.json`
+  (ours, until the launcher ships its own; the loader also reads the registry's
+  file under that name). "Source" on its own means a *subscription* in this
+  codebase, hence the `kind`. The branches, in the order they are tried —
+  a lower number wins, and the last one is the catch-all:
+
+  | # | Kind | Mapper |
+  |---|---|---|
+  | 10 | `amnezia_link` | — (unwrapped, then re-detected) |
+  | 20 | `base64_wrapped` | — (unwrapped, then re-detected) |
+  | 30 / 32 / 40 / 50 | `singbox_config_array`, `singbox_outbound_array`, `singbox_outbound`, `singbox_config` | `singbox` |
+  | 31 / 33 / 34 / 35 | `xray_config_array`, `xray_outbound_array`, `xray_outbound`, `xray_config` | `xray` |
+  | 60 | `wireguard_conf` | `conf` |
+  | 100 | `uri_lines` | `uri` |
+
+  Xray is told from sing-box by `protocol` against the other's `type`. The
+  numbers, not the markers, settle an ambiguous object: a lone outbound
+  carrying **both** keys is taken by `xray_outbound` (34) before
+  `singbox_outbound` (40) is tried, whereas the two whole-config branches
+  (35, 50) each exclude a top-level `type` explicitly. All four Xray shapes
+  are accepted on paste, not only the array of configs — a lone outbound, a
+  bare array of outbounds and a full config with `outbounds` used to be
+  answered with "No valid outbounds in JSON".
+- **Engine** (`parser/engine/`) translates the dialect and **judges nothing**:
+  parameter aliases, userinfo, port, name, TLS and transport — all in sing-box
+  key layout. It holds **no protocol name at all**, comments included
+  (`test/parser/engine_no_scheme_names_test.dart`): a scheme's rule lives in
+  its registry section, shared with the launcher, so a divergence between the
+  two apps is fixed by editing the table rather than by patching both sides.
+  Deviations LxBox must keep live as overlays in `assets/contract_draft/`, each
+  one a complete copy of the registry entry plus a `_why`.
+  The only warnings the engine raises are about the *translation* losing or
+  relocating something (`ws_early_data_converted`, `ech_ignored`) — the body no
+  longer holds those values, so the sanitizer has nothing to say about them.
+- **Emitter** builds the link from that same table, which is what makes the
+  round trip hold: a field the parser learns to read is a field the emitter
+  writes back, with no second list to keep in step. What a key is *spelled* as
+  on the way out is the entry's own business (`emit_as`, `emit.names`) — the
+  two spellings of a boolean, `1` and `true`, are different links to a live
+  panel.
+- `unknown_key` judges a key by what the **section declares**, not by what the
+  run happened to read: an entry skipped by its `when`, or belonging to another
+  form of the same input, is still a declaration. Otherwise a container form —
+  which the lexer spreads into a flat layer of names — would report the very
+  keys the node was built from.
+- **Sanitizer** (`contract/body_sanitizer.dart`) is the single judge of values.
+  Core gates (`min_core`, `platform`) are off at parse time: they depend on the
+  running core, the node does not.
+- **`parseSingboxEntry`** is the only "map → model" route. It is fed the
+  **clean** map, so the model is a typed view of what will reach the core.
+  It is also, by construction, **the list of body keys LxBox can read** — it
+  reads them one by one, by hand. The launcher has no such list (its body stays
+  a map all the way through the registry), and the asymmetry has a cost: a key
+  nobody wrote a line for vanishes in silence, while the emitter still writes
+  that field back for everything it does know. Five such losses surfaced by
+  accident during spec 472 alone, plus `tls.certificate` in #140. Since §476
+  the list's completeness is a **test**, not a habit:
+  `test/contract/body_fields_roundtrip_test.dart` generates bodies filling every
+  field of every registry schema and runs each through the same round trip —
+  sanitizer, `parseSingboxEntry`, `emit()` — so a field the parser stops reading
+  fails the build and is named. What stays outside the trip is listed with a
+  reason in `kNotModelled`, and the list is checked for staleness too. Details
+  in [`GUARDS.md`](GUARDS.md#the-guard-over-the-guards--no-field-falls-out-of-the-round-trip-476).
+- `rawSource` is unchanged: a link keeps its link, JSON keeps its JSON
+  (§454–§456).
+- A node parsed by the pipeline **skips** the second `emit()`-based annotation
+  pass (`annotateWithRegistry`). Not because of duplicates — those are deduped
+  by `(code, path)` — but because of `value`: the pipeline's sanitizer sees the
+  link's raw value (`fp=HelloChrome_120`), the `emit()` pass sees the
+  canonicalised one (`chrome`), and which survived would be decided by call
+  order rather than by a rule.
+
+- The three §453 TCP keep-alive keys travel in `UriMapping.extensionFields`,
+  which the pipeline merges into the body **before** the sanitizer. They used
+  to bypass it — the registry filed them under `dialer.json` → `skipped` and an
+  unlisted key is dropped with `unknown_key`, which would have cost the user's
+  own setting. Since contract 1.1.6 (§474) `dialer.json` describes them as
+  fields and they are judged like everything else; the separate map stays only
+  because their *source* is separate (link parameters outside the protocol's
+  schema, collected by a shared helper). QUIC schemes pass no such map at all:
+  TCP keep-alive is meaningless over UDP, and `Hysteria2Spec`/`TuicSpec` have
+  no field for it.
+
+Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**,
+**hysteria2**, **tuic**, **anytls**, **naive**, **http(s) proxy**, **socks**
+and **ssh** (`kPipelineSchemes`). The set lists every spelling the dispatcher
+routes by, because a scheme name can carry more than a spelling: `hy2` is a
+plain alias of `hysteria2`, but `naive+quic` differs from `naive+https` by the
+body it produces (`quic: true`), and `proxy-https` differs from `proxy-http` by
+whether the body has a `tls` block at all. Aliases that change nothing —
+`socks5` for `socks`, the `proxy+…` plus-forms of §268 — share one mapper.
+
+Step 7 brought over the last two schemes — **masque** and **wireguard/AWG** —
+and with them the **second input of the same scheme, the INI text**
+(`wg-quick`). A mapper takes the source text, so an INI mapper differs from a
+link mapper only in how it reads the input: the output is the same sing-box
+map. After §480 the table itself is the registry section for the `conf` source
+kind (`registry/protocols/wireguard.json` → `mappers.conf`, our divergences in
+the overlay `contract_draft/conf/wireguard.json`); the engine executes it
+through the bridge `engine/engine_mapper.dart` → `mapIniViaEngine`, entry point
+`parseIniViaPipeline`. The synthetic `wg://` URI that used to stand between
+the INI and the parser is gone; `rawSource` stays the INI text byte for byte
+(§456). Amnezia's `vpn://` is not a third input but a **container**: it unpacks
+the profile into ready INI texts and hands each to the same mapper.
+
+Step 8 brought over the **Xray-JSON** input, and with it the last path that
+carried its own value rules. It is the one input whose source dialect is an
+**object**, not text: the mapper takes a `Map`, so it has its own pair of types
+and its own entry point (`parseXrayViaPipeline`) while the pipeline body stays
+shared. After §480 the per-scheme table is the registry section for the `xray`
+source kind (`registry/protocols/<scheme>.json` → `mappers.xray`, our
+divergences in the overlays `contract_draft/xray/<scheme>.json`), executed
+through the bridge `engine/engine_mapper.dart` → `mapJsonViaEngine`; the
+section's own `detect` picks the record, so there is no dispatcher by protocol
+name left in the code. Three things differ, all of them from the shape of the
+input:
+
+1. The mapper runs **outside** the pipeline — parsing a subscription element
+   (node order §321, dedup §404, `dialerProxy` chains, names §310/§322) belongs
+   to `parseXrayElement`, which calls it and hands the pipeline a ready map.
+2. `label` is computed by the caller: an Xray node is named by its **element**
+   (`remarks` plus the §322 rules), not by a URI fragment.
+3. The `drop_node` verdict travels back out (`XrayDropVerdict`): a bare `null`
+   cannot tell "the registry rejected this record" from "there is no body", and
+   `dropped[]` belongs to the caller.
+
+`rawSource` stays the pretty-printed **Xray** object, byte for byte (§454) —
+the sing-box map is the pipeline's working form, not what the provider sent.
+That is also how the step-1 pass over verbatim bodies still recognises that an
+Xray node is not its business: the object has no `type` key.
+
+One consequence is worth naming: the `encryption` form check now removes the
+node **at parse time** on this input too, as it already did for links and
+sing-box bodies (§477). Before step 8 such a node collected the code but stayed
+in the list as a working one, and only the build gate took it out.
+
+**QUIC brought one structural change** (step 5). `tls.utls` and `tls.reality`
+are forbidden on QUIC schemes, and until this step the *emitter* stripped them
+(`TlsSpec.toSingboxForQuic`) — earlier than the sanitizer, which looked at
+`emit()`. The registry rule therefore never saw the blocks, and a hand-written
+pass (`forbiddenTlsBlockWarnings`, §469) had to report them. On the pipeline
+the blocks reach the sanitizer in the mapper's raw map, `forbidden_for` +
+`forbidden_codes` removes them and reports `tls_not_applicable_quic` itself,
+one code per block. The emitter keeps its strip — a node edited in the Settings
+form can still acquire a fingerprint — but it is no longer the only thing
+standing between the block and the config.
+
+A mapper takes the link's **raw text**, not a `Uri`: for vmess and shadowsocks
+the link is not a URI at all — `vmess://` carries base64 where a URI keeps its
+authority, and `Uri` lower-cases authority, which destroys the payload. The two
+URI-shaped schemes call `Uri.tryParse` in their own first line. For the same
+reason the tag fallback for a nameless link is built from the **body type**
+(`shadowsocks`), not from the scheme (`ss`) — the tag is the node's identity.
+
 ---
 
 ## Wizard template (`assets/wizard_template.json`)
@@ -532,16 +716,75 @@ parser/                      # Parser v2 (text → NodeSpec)
   amnezia_link.dart          #   an Amnezia vpn:// link → WG/AWG INI texts (base64url plus qCompress, §110)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
-  uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque)
+  uri_parsers/<proto>.dart   #   per-protocol entry points: each one only names the pipeline table for its scheme
+                             #   (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque) — since §480 they hold
+                             #   no rules of their own
+  mappers/uri_pipeline.dart  #   §472: the shared pipeline (mapper → RegistrySanitizer → parseSingboxEntry) and its
+                             #   entry points parseUriViaPipeline / parseIniViaPipeline / parseXrayViaPipeline
+  mappers/uri_mapper.dart    #   UriMapping — what a mapper hands the pipeline
+  mappers/draft_sections.dart#   §480: which draft/overlay sections the loader reads (Flutter assets cannot be listed)
+  engine/                    #   §480: the mapper ENGINE — it executes the registry's mapper sections, so a scheme's
+                             #   rule is data (registry/protocols/<scheme>.json → mappers.<source kind>, our
+                             #   divergences in assets/contract_draft/), not Dart. engine_mapper.dart is the bridge
+                             #   (mapViaEngine / mapIniViaEngine / mapJsonViaEngine); section_loader + section read
+                             #   the sections, lexer/decoders/document/source_space parse the input, interpreter
+                             #   executes the records, emitter writes a link back
   json_parsers.dart          #   parseXrayElement + parseSingboxEntry (round-trip)
   singbox_config.dart        #   §368: a sing-box config or an array of them → nodes, groups and detours
                              #   (at parity with the Xray branch: two passes, dedup, synonyms)
-  ini_parser.dart            #   WireGuard INI → wg:// URI → WireguardSpec
-  transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
+  ini_parser.dart            #   §472 step 7: WireGuard INI → the `conf` section of the registry → the same pipeline
+                             #   (the synthetic wg:// URI is gone; rawSource stays the INI text, §456)
+  transport.dart             #   parseTransport (query→TransportSpec) only — §480 W7/W8: the reverse
+                             #   direction (body→URI) is the mapper section inverting the same table,
+                             #   and the handwritten transportToQuery is gone
   uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding
-                             #   an allow-list; awgClampMtu (§097 — the client MTU of AWG nodes is ≤1280)
+                             #   an allow-list, normalizeWGKey (32-byte base64 canon, D-030)
+                             #   (§473/§472 step 7: the AWG MTU clamp moved to the registry — awgClampMtu is gone)
+contract/                    # §460 the contract registry inside the app (contract 1.1.0, TASKS_LXBOX §24)
+  registry.dart              #   ContractRegistry.I — loads assets/contract/ (rootBundle behind an AssetLoader,
+                             #   loadFromDirectory in tests); BodySchema by singbox_type with the refs expanded
+                             #   (tls / multiplex / dialer inlined flat into the `__dialer` slot; transports by
+                             #   the transport.type discriminator); WarningText per code from warnings.json
+  body_sanitizer.dart        #   RegistrySanitizer.sanitize(body, scheme, coreVersion, platform) → SanitizeResult:
+                             #   unknown_key, type/enum/format/bounds, on_invalid (drop/coerce/drop_node),
+                             #   conflicts/requires, forbidden_for, min_core, platform, advisory, all_or_nothing.
+                             #   Defaults are NOT materialised (CANON §2.4), key order stays as it came in
+                             #   (`order` governs the emitter — that is wave W2), `tag`/`detour`/`type` untouched
+  registry_warning.dart      #   the render side of RegistryWarning (the class itself lives in models/node_warning.dart,
+                             #   because NodeWarning is sealed): title_<lang>/text_<lang> from the registry, ru for a
+                             #   Russian UI and en otherwise, {path}/{value}/{param} substitution, severity by code
+  parse_warnings.dart        #   the sanitiser at PARSE time — TWO passes, both appending RegistryWarning(path, value)
+                             #   to node.warnings so the ⚠ on a subscription row names the field:
+                             #     annotateAllFromRawBody  §472 step 1 — over the VERBATIM provider map. A node that
+                             #       came as JSON keeps that map in rawSource (§455), and it still holds what the typed
+                             #       parser strips on the way into the model: a key outside the schema, a blacklisted
+                             #       flow, a TLS field the scheme forbids. Before step 1 such a node carried no codes at
+                             #       all — only the build gate knew them, so the user read them in the build report
+                             #       rather than on the node row (§470). A URI/INI node has no verbatim map (rawSource
+                             #       is a link or an INI text) and this pass skips it; Xray-JSON is skipped too — its
+                             #       rawSource is an XRAY object, and the mapper to a sing-box map is step 8 of §472
+                             #     annotateAllWithRegistry §460 W2a — over emit() of the already built NodeSpec, which
+                             #       is what URI/INI nodes are judged by, and what catches values the PARSE itself put
+                             #       there (normalisation, all_or_nothing defaults)
+                             #   The verbatim pass runs FIRST: on an equal (code, path) the earlier record wins, and its
+                             #   value names what lay in the body rather than what the parse turned it into. The body is
+                             #   NOT touched by either pass (the copy the sanitiser returns is discarded — cleaning stays
+                             #   with the build gate), the core gates are off (applyCoreGates: false — min_core/platform
+                             #   judge a build against a running core, not a parse), and dedup is by (code, path): a
+                             #   hand-written class that names a field closes only that field, one without a path closes
+                             #   its code entirely. Called from parseAll, the one funnel every input goes through
+  warning_codes.dart         #   kWarningCodes: hand-written NodeWarning class → contract code, plus warningCodeOf()
+                             #   and handwrittenWarningPath() — the field a hand-written class stands for, where the
+                             #   class field IS that path. Lives in lib because both the conformance runners and the
+                             #   parse-time dedup read them
+  contract_docs.dart         #   §460 W2b contractWarningDocUrl(code) — the address of the page about a warning
+                             #   code in OUR mirror of the contract docs (docs/contract/warnings.md#<code>, branch
+                             #   main). The anchor is the code verbatim: gendocs emits an explicit <a id="<code>"></a>
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
+  registry_gate.dart         #   §460 applyRegistryGate — the registry sanitiser over every node entry after
+                             #   list.build(ctx) and before the post-steps; warnings → emitWarnings with the
+                             #   registry text, drop_node removes the entry. Registry not loaded → no-op
   server_list_build.dart     #   the per-subscription emit: the detour policy, tag allocation, selector/auto registration
   if_engine.dart             #   the §120 typed template engine: var substitution plus the #if construct
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
@@ -761,6 +1004,53 @@ CommandClient: connectScreen() → the groups push stream (selectors only) plus
 UI updates: group dropdown, node list, traffic bar
 ```
 
+#### When the core refuses the config (feature 478)
+
+The core validates the config **as a whole** and refuses to start on the first
+node it cannot accept, naming it: `initialize outbound[3] vless[🇩🇪 Frankfurt]:
+parse encryption: unknown encryption appearance`. One node from a provider
+would otherwise cost the user every node, so the start above has a second
+branch. There is no pre-start check — a successful start costs nothing:
+
+```
+Start
+└─ реальный старт ядра (первый, сигнальный)
+   ├─ принято → VPN поднят → конец
+   └─ отказ
+      ├─ ошибка не про узел / без тега / тег не сопоставился → ошибка, как сейчас → конец
+      └─ ошибка называет узел → выключить узел + причина
+         └─ цикл check (тихо, без туннеля): пересобрать конфиг → checkConfig
+            ├─ назван узел → выключить + причина → следующий круг
+            │  └─ после 10 кругов → диалог
+            │     ├─ Keep checking → следующий круг, дальше без предела
+            │     └─ Stop → конец, VPN не поднят, выключенные остаются выключенными
+            ├─ ошибка не про узел / тот же тег назван повторно → ошибка → конец
+            └─ чисто → реальный старт ядра (второй, финальный)
+               ├─ принято → VPN поднят → плашка «выключено N» → конец
+               └─ отказ → ошибка, как сейчас → конец
+                  (если ошибка называет узел — он тоже выключается с причиной,
+                   но третьего старта нет: следующее нажатие Start начнёт заново)
+```
+
+Two real core starts per press, signalling and final; everything between them
+is `Libbox.checkConfig` with no tunnel and no service. The loop is finite by
+construction — each round switches one node off, and a round with nothing to
+switch off breaks out (CANON §9.5).
+
+The automaton (`services/core_reject/core_reject_guard.dart`) is pure: the
+core, the config build and the storage reach it through the `CoreRejectHost`
+interface, implemented over the controllers in
+`screens/home/core_reject_host.dart`. The core's error arrives asynchronously
+on the status event, so the real start is awaited through a completer
+(`HomeController.startAndAwaitVerdict`). The error string is parsed by CANON
+§9.1–§9.2 (`core_error_parse.dart`) and the tag is resolved to its source node
+through `BuildResult.nodeByEmittedTag`, the reverse map the same build
+produced (§9.3) — so a derived entry (a chain hop, a folder member, WARP, a
+subscription prefix) leads back to the node the user owns. Starts with no UI
+(auto-start, the §428 watchdog, the QS tile, the §047 Intent API) have no
+dialog, so the round limit stands and the answer is always Stop. The stored
+verdict is in `STORAGE.md`; the invariants are in `GUARDS.md`.
+
 ### 2. Adding a subscription and auto-config
 
 ```
@@ -855,6 +1145,48 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 └── selectable_rules[]      # §033 — the preset catalog: block-ads, ru-direct, and the rest
                             #   ru-inside, bittorrent-direct, private-ip-direct
 ```
+
+#### Contract registry (bundled in APK, §460)
+
+```
+app/assets/contract/VERSION              # the contract version (1.1.0)
+app/assets/contract/registry/*.json      # tls, transports, multiplex, dialer, warnings, allowlists…
+app/assets/contract/registry/protocols/  # the body schema per protocol (vless, naive, wireguard…)
+```
+
+`assets/contract/` is a **mirror** of the vendored copy `app/contract/`, laid down by
+`tool/sync_contract.sh`. The copy itself is gitignored (its source of truth is the launcher
+repo), but the registry has to reach the APK — CI and the F-Droid buildserver have no launcher
+checkout, and a missing asset directory fails `flutter build` outright. So exactly the files the
+app reads live in git, and `tool/check_contract_lock.dart` refuses a mirror that drifted from the
+copy. Flutter asset directories are not recursive, hence `registry/` and `registry/protocols/`
+are declared separately in `pubspec.yaml`.
+
+**The flow.** `main()` calls `ContractRegistry.I.load()` before `runApp` (its own try/catch — a
+load failure is logged and the app runs without the registry, as it did before §460). Then, in
+every `buildConfig`, `applyRegistryGate` runs the schema sanitiser over each `outbounds[]`/
+`endpoints[]` entry produced from node sources: unknown keys and values the core would reject go
+away before the config reaches libbox, and the warnings carry the registry's own text in the UI
+language. Direction groups and the template's service outbounds are not node bodies and are not
+touched. A valid config comes out byte-identical — the gate removes, it does not rewrite or
+reorder.
+
+**The documentation mirror (`docs/contract/`, §460 W2b).** The same script lays down a second
+mirror — the pages `contract/docs/generated/**`, byte for byte, into the committed `docs/contract/`
+at the repo root. These pages are written by the launcher's `tools/gendocs` generator out of the
+registry; we do not keep a generator of our own, because the registry here is the same one under
+the same `contract.lock`. The mirror exists so that the "Learn more" link on a warning card points
+into our repository: the release APK matches `main`, and the launcher's own pages run ahead of the
+contract the installed build was compiled against. The pages do **not** go into the APK — the text,
+the cause and the remedy already live in the registry and are shown offline; the link is for
+someone who wants the whole page. `docs/contract/README.md` is the only file the script writes
+itself (contract version, the `contract.lock` sha, "do not edit by hand"); the pages carry no added
+header, or they would not be byte-identical. `contractWarningDocUrl(code)`
+(`services/contract/contract_docs.dart`) builds the address; the anchor is the code itself, since
+gendocs emits an explicit `<a id="<code>"></a>` before each section. Two guards watch the mirror:
+`tool/check_contract_lock.dart` compares it file-by-file with the copy, and
+`test/contract/docs_mirror_test.dart` checks that every registry code still has an anchor and that
+the README names the version that ships in the APK.
 
 #### The user state (on the device)
 

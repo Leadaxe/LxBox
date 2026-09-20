@@ -25,7 +25,63 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.1-lx.4`** (see `app/android/libbox.version`) — two
+**The current pin: `v1.14.1-lx.8`** (see `app/android/libbox.version`) — lx.7 plus
+one layer. **SPEC 093** (lx.8) teaches the gRPC transport the Xray notation where
+`service_name` starts with a `/` and is therefore a ready-made request path, not a
+name: the core escapes such a value segment by segment, treats the last segment as
+the stream name and drops a `|…` tail, so `/a/b/Tun` goes on the wire as
+`/a/b/Tun`. Without a leading `/` nothing changes — the value is one escaped
+segment and the core appends `/Tun` itself (`a/b` → `/a%2Fb/Tun`). Wire format
+otherwise, config schema, AAR tag sets, Go toolchain and submodules unchanged; the
+Java surface is identical to lx.7 (javap over all 253 classes of `classes.jar`,
+3493 signature lines — diff empty).
+**LxBox depends on this pin for §468**: the value of `transport.grpc.service_name`
+reaches the core verbatim on both the URI and the JSON path, with no normalisation
+of our own. This holds **only for lx.8 and newer** — rolling the core back below
+lx.8 means restoring the §464 translation of the single-segment form
+`/<service>/Tun` → `<service>`, because an older core escapes the whole value as
+one segment and such a node answers 404.
+
+**`v1.14.1-lx.7`** — lx.5 plus
+two more layers; lx.6 was never pinned on its own, it is contained in lx.7.
+**SPEC 091** (lx.6) tightens two validators. `tuic.udp_relay_mode` used to accept
+any string at all: a typo such as `"fast"` went through silently and the node then
+behaved as if the field had not been set. The core now answers
+`unknown udp_relay_mode: fast (expected native or quic)` and fails the config.
+The same commit validates the masque `uri` field, whose only allowed value is
+`standard`. **SPEC 092** (lx.7) names the entry in initialization errors: where
+the core used to say `initialize outbound[0]: invalid short_id` it now says
+`initialize outbound[0] vless[proxy-de-1]: invalid short_id`, i.e. the type and
+the tag next to the index. Six places carry it — DNS server, endpoint, inbound,
+service, outbound and certificate provider. The errors raised *inside* the
+constructors were left alone, and the libbox API surface did not move either.
+This one came from a user request filed against LxBox on 18.09: the app shows the
+core's error text verbatim, and a bare index into an internal config array tells
+nobody with a fifty-node subscription which node broke. The wire format, the
+config schema, the AAR tag sets, the Go toolchain and the submodules are all
+unchanged; the Java surface is identical to lx.5 (javap over all 253 classes of
+`classes.jar` — diff empty).
+LxBox's own guard for `tuic.udp_relay_mode` (§459, contract §24.2 item 7.8) stays
+in place: it rejects the garbage in the node form, before the core is ever
+started, and reports it where the user can fix it.
+
+**`v1.14.1-lx.5`** — a single
+hotfix on top of lx.4. **SPEC 090**: a REALITY `short_id` longer than 16 hex
+characters is now rejected with `invalid short_id` before decoding, on the client
+(`common/tls/reality_client.go`) and on the server (`reality_server.go`) alike.
+Until lx.5 the same input panicked with `index out of range`: `hex.Decode` wrote
+into an `[8]byte` array without checking the input length first, so a node from a
+subscription with an over-long `short_id` took the process down instead of
+failing the config. Found by the contract's DRIFT inventory (TASKS_LXBOX §24.4 г)
+and handed to the core agent on 18.09. The wire format, the config schema, the
+AAR tag sets, the Go toolchain and the submodules are all unchanged, and the
+libbox API did not move: the Java surface is identical to lx.4 (javap over all
+253 classes of `classes.jar` — diff empty).
+LxBox's own guard from §343 (drop a `short_id` over 16 hex characters instead of
+trimming it) stays where it is — it is UX protection at the edge, and with lx.5
+the core behind it answers with an error rather than a panic.
+
+**`v1.14.1-lx.4`** — two
 REALITY changes on top of lx.3. **SPEC 088**: `tls.fragment` and
 `tls.record_fragment` now apply to REALITY too. Until lx.4 the REALITY client
 built its handshake on the bare socket and silently skipped both, including the
@@ -721,6 +777,16 @@ not know, the **entire** config fails to load, not just the one node. The classi
 - §214: rc.15 did not know `sc_max_each_post_bytes` (XHTTP SPEC 002 v2) → bumped to rc.16.
 - Diagnosis: `/device` core_version (§213) — the real core version inside the APK.
 
+**§460 — sync the contract along with the pin.** The set of allowed body fields now lives in the
+contract registry (`registry/protocols/*.json` → `body`, plus `tls`/`transports`/`multiplex`/
+`dialer`), and the registry is refilled from the new core's `option/*.go` **at pin time**, not
+when some garbage shows up (contract §24.1.3). So a bump is two steps: the launcher side adds the
+new fields to the registry, then `bash app/tool/sync_contract.sh` pulls the copy and the bundled
+mirror `app/assets/contract/` across. Skip it and the build-time sanitiser strips the new core's
+fields as `unknown_key` — the node still works, but quietly without them. `min_core` in the
+registry is what keeps a field off an older core, so it is worth checking that a newly described
+field carries it.
+
 ### 3. A gomobile AAR is not byte-reproducible
 
 The sha of a local build ≠ the sha of the release AAR (paths and timestamps inside
@@ -751,6 +817,25 @@ To check on a bump: `archiveCrashReport` is called before `os.Create`, and the
 early return on `len(content) == 0` (`log.go:29`) is still inside it — that is the
 same “non-empty means there was a crash” criterion our detection uses.
 
+### 6. The VLESS `encryption` method name is baked into a registry rule
+
+§477 (contract 1.1.9) checks the **shape** of `vless.encryption` against
+`^mlkem768x25519plus(\.[^.]+){3,}$`, and the method name is the only thing in it
+judged by content. A node whose value does not match is dropped, so a core that
+learns a **new** method without the registry learning it too would have its good
+nodes rejected.
+
+To check on a bump: compare the method name with
+`protocol/vless/lx_encryption.go` (`parseClientEncryption`). A new method or a
+new appearance in the core means the rule has to move first — it lives on the
+launcher side (`registry/protocols/vless.json`), so the bump needs a contract
+sync, not a local edit.
+
+The rest of the grammar (appearance, RTT, padding blocks, key lengths and
+coefficients) is deliberately **not** mirrored here: a copy would drift at the
+first bump and start rejecting working nodes. Anything finer than the shape is
+caught by the core itself.
+
 ## Client versus core: which side to fix a config bug on
 
 Sometimes a “this node kills the config” bug is fixed from both sides
@@ -769,7 +854,10 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.1-lx.4** (current pin) | **REALITY: fragmentation and `key_share`.** Fork SPEC 088 — `tls.fragment` / `tls.record_fragment` now apply to REALITY as well: until lx.4 the REALITY client built its handshake on the bare socket and skipped them silently, including the automatic `record_fragment` under a `detour`. Fork SPEC 089 — a per-node `tls.reality.key_share` (`hybrid` \| `classical`), an unknown value rejects the whole config; LxBox emits it from §457. Wire format, tag sets and toolchain unchanged; Java surface identical to lx.3 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.8** (current pin) | **gRPC `service_name` as a request path** (§468). Fork SPEC 093 — a `service_name` with a leading `/` is Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the stream name and drops a `|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` the old behaviour stands — one escaped segment plus the core's own `/Tun`. This removes the reason for the §464 normalisation, which only ever fixed the single-segment form and would now strip a `/` the core expects: contract 1.1.3 drops the rule, and the value goes to the core verbatim on every input. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.7 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.7** | **Validation and named entries in errors** (§462). Fork SPEC 092 — an initialization error now carries the type and the tag of the entry next to its index: `initialize outbound[0] vless[proxy-de-1]: invalid short_id`; six places (DNS server, endpoint, inbound, service, outbound, certificate provider), errors inside the constructors and the libbox API untouched. Came from a user request of 18.09 — LxBox shows the core's text as is, and a bare index names nothing. Contains lx.6, fork SPEC 091 — `tuic.udp_relay_mode` no longer accepts any string it is given (`unknown udp_relay_mode: X (expected native or quic)`), and the masque `uri` is validated against `standard`. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.5 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.5** | **REALITY `short_id` hotfix** (fork SPEC 090): a `short_id` longer than 16 hex characters is rejected with `invalid short_id` before decoding, on the client and on the server; until lx.5 it panicked with `index out of range` inside `hex.Decode` writing into an `[8]byte`. Found by the contract's DRIFT inventory (§461). Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.4 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.4** | **REALITY: fragmentation and `key_share`.** Fork SPEC 088 — `tls.fragment` / `tls.record_fragment` now apply to REALITY as well: until lx.4 the REALITY client built its handshake on the bare socket and skipped them silently, including the automatic `record_fragment` under a `detour`. Fork SPEC 089 — a per-node `tls.reality.key_share` (`hybrid` \| `classical`), an unknown value rejects the whole config; LxBox emits it from §457. Wire format, tag sets and toolchain unchanged; Java surface identical to lx.3 (javap diff over all 253 classes — empty). |
 | **v1.14.0-lx.39** | **SOCKS5 UDP hotfix** (fork SPEC 085): a UDP ASSOCIATE reply with `BND.ADDR` `0.0.0.0`/`::` no longer makes the client dial the relay at the local system — the proxy server address is used instead. Java surface identical to lx.38. |
 | **v1.14.0-lx.38** | **Tailscale in the AAR** — `with_tailscale` plus the `ts_omit_*` trims (§435, contract ## 13, D-103): the `tailscale` endpoint and the `tailscale` DNS server type; AAR +2.58 MB, build time unchanged. Plus the SPEC 084 hotfix (ABBA deadlock of nested selectors, fork issue #20). Upstream base of lx.37 (`upstream/stable` v1.14.0 + 33). Java surface unchanged from lx.36. |
 | **v1.14.0-lx.37** | Upstream sync: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules wireguard-go v0.0.6 / sing-tun v0.9.3. No config changes. AAR still without Tailscale. |

@@ -11,6 +11,8 @@ import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../parser/engine_test_setup.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   final String tempRoot;
@@ -24,6 +26,10 @@ class _FakePathProvider extends PathProviderPlatform
 /// Меню члена папки: у авто-узла нет «Move out of folder» (одиночным
 /// сервером группа стала бы пустой записью), «Move to folder…» остаётся.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   late Directory tempDir;
 
   setUp(() async {

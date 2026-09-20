@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
+import '../../../models/node_warning.dart';
 import '../../../services/direction_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
@@ -18,6 +19,7 @@ import '../node_filter_view_model.dart';
 import '../../../models/auto_select.dart';
 import '../../../models/node_spec.dart';
 import '../node_list_presenter.dart';
+import '../special_node_display.dart';
 import 'add_server_cta.dart';
 import 'filter_panel.dart';
 import '../../../services/l10n/locale_controller.dart';
@@ -223,6 +225,7 @@ class HomeNodeList extends StatelessWidget {
                 displayList: data.displayList,
                 cache: data.cache,
                 matchingSet: data.matchingSet,
+                warningsByTag: data.warningsByTag,
               ),
             ),
           ),
@@ -241,6 +244,7 @@ class HomeNodeList extends StatelessWidget {
     required List<String> displayList,
     required ParsedConfig cache,
     required Set<String> matchingSet,
+    required Map<String, List<NodeWarning>> warningsByTag,
   }) {
     // §070+§071+§125+§196: pinned-секция = direct/auto/активная (источник —
     // state.pinnedNodeCount). Считаем сколько из них реально в начале
@@ -301,6 +305,12 @@ class HomeNodeList extends StatelessWidget {
         final protoType = protoSrc != null ? cache.protocolOf(protoSrc) : null;
         final transport = protoSrcNode?.transportLabel;
         final security = protoSrcNode?.securityLabel;
+        final outboundType = cache[tag]?.type;
+        final notificationWarnings = _notificationWarningsForRow(
+          outboundType: outboundType,
+          isDirectionAuto: isDirectionAuto,
+          warnings: warningsByTag[tag],
+        );
         final row = DecoratedBox(
           decoration: BoxDecoration(
             border: Border(
@@ -324,7 +334,8 @@ class HomeNodeList extends StatelessWidget {
               urltestNow:
                   cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
               hasDetour: cache[tag]?.detour != null,
-              outboundType: cache[tag]?.type, // §125 — точный тип из конфига
+              outboundType: outboundType, // §125 — точный тип из конфига
+              notificationWarnings: notificationWarnings,
               // §322 — двойник Направления vs узел автовыбора: ядру оба `urltest`.
               isDirectionAuto: isDirectionAuto,
               // §322 — метка режима узла автовыбора (`🎯 [3]` / `🔀 [15/7]`)
@@ -349,7 +360,10 @@ class HomeNodeList extends StatelessWidget {
             onHighlight: () => controller.setHighlightedNode(tag),
             onActivate: () => unawaited(controller.switchNode(tag)),
             onPing: () => unawaited(controller.runNodeUrltest(tag)),
-            onCopyUri: () => copyNodeUri(context, tag, subController),
+            // §466 — copyNodeUri стал async (диалог подтверждения у узла с
+            // приватным ключом в ссылке); пункт меню — VoidCallback.
+            onCopyUri: () =>
+                unawaited(copyNodeUri(context, tag, subController)),
             onViewJson: () => viewOutboundJson(context, tag, state,
                 subController: subController, homeController: controller),
             onRunUrltest: isUrltestGroup
@@ -528,6 +542,23 @@ class HomeNodeList extends StatelessWidget {
         SnackBar(content: Text(getLocalText.s("Restart VPN to apply changes"))),
       );
     }
+  }
+
+  /// §502 — уведомления для строки: служебные (Direct / Auto / Block) без
+  /// значка; у группы автовыбора — только собственные, не агрегат членов.
+  List<NodeWarning>? _notificationWarningsForRow({
+    required String? outboundType,
+    required bool isDirectionAuto,
+    required List<NodeWarning>? warnings,
+  }) {
+    final special = specialNodeDisplayForType(outboundType);
+    if (special != null) {
+      if (outboundType == 'urltest' && !isDirectionAuto) {
+        return warnings ?? const [];
+      }
+      return null;
+    }
+    return warnings ?? const [];
   }
 
   /// §195 — снимок всех node-тегов из ccGroups (union, без самих групп) для
