@@ -11,12 +11,14 @@ import '../handlers/backup.dart';
 import '../handlers/chains.dart';
 import '../handlers/directions.dart';
 import '../handlers/config.dart';
+import '../handlers/core_reject.dart';
 import '../handlers/device.dart';
 import '../handlers/diag.dart';
 import '../handlers/files.dart';
 import '../handlers/folders.dart';
 import '../handlers/logs.dart';
 import '../handlers/help.dart';
+import '../handlers/nodes.dart';
 import '../handlers/ping.dart';
 import '../handlers/pool.dart';
 import '../handlers/profiler.dart';
@@ -72,7 +74,7 @@ class DebugServer {
       return;
     }
 
-    final router = _buildRouter();
+    final router = buildDebugRouter();
     final pipeline = _buildPipeline(config);
 
     final server = await HttpServer.bind(
@@ -146,50 +148,6 @@ class DebugServer {
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
-  // ---------------------------------------------------------------------------
-  // Internal wiring
-  // ---------------------------------------------------------------------------
-
-  /// Двухуровневая маршрутизация:
-  ///
-  /// 1. **Router (здесь)** — prefix-match: `/state/...` → `stateHandler`
-  /// 2. **Handler-файл** — exact `switch (req.path)` по sub-path'ам
-  ///    (`/state` → _root, `/state/subs` → _subs, ...).
-  ///
-  /// Это не случайность — намеренный компромисс. Плюсы:
-  /// - handler-файл держит связанные sub-endpoints рядом (всё `/state/*`
-  ///   в одном `handlers/state.dart`);
-  /// - mount-таблица компактная (8 строк вместо 30);
-  /// - минус один уровень абстракции в сравнении с path-параметрами
-  ///   (`/state/:sub`) или аннотациями.
-  ///
-  /// Trade-off: незнакомый endpoint возвращает `NotFound` через switch
-  /// внутри handler'а, а не из router'а. Для клиента — тот же 404.
-  Router _buildRouter() {
-    return Router()
-      ..mount('/ping', pingHandler)
-      ..mount('/help', helpHandler)
-      ..mount('/state', stateHandler)
-      ..mount('/device', deviceHandler)
-      ..mount('/config', configHandler)
-      ..mount('/pool', poolHandler) // §208 — снапшот пула round_robin
-      ..mount('/logs', logsHandler)
-      ..mount('/action', actionHandler)
-      ..mount('/files', filesHandler)
-      ..mount('/diag', diagHandler)
-      ..mount('/backup', backupHandler)
-      ..mount('/rules', rulesHandler)
-      ..mount('/subs', subsHandler)
-      ..mount('/directions', directionsHandler) // §238 — Направления роутинга §125
-      ..mount('/chains', chainsHandler) // §393 C — источники-цепочки SPEC 110
-      ..mount('/folders', foldersHandler) // §238 — папки серверов §234
-      ..mount('/warp', warpHandler)
-      ..mount('/settings', settingsHandler)
-      ..mount('/wifi_history', wifiHistoryHandler)
-      ..mount('/profiler', profilerHandler)
-      ..mount('/support', supportHandler); // §357 — тест support-ленты
-  }
-
   List<Middleware> _buildPipeline(DebugServerConfig config) {
     // Порядок: внешний → внутренний.
     // errorMapper — самый внешний, ловит всё включая accessLog crash'и.
@@ -248,3 +206,35 @@ class DebugServer {
     }
   }
 }
+
+/// Таблица префиксов Debug API. `DebugServer` и `/help`-тест читают одну.
+Router buildDebugRouter() {
+  return Router()
+    ..mount('/ping', pingHandler)
+    ..mount('/help', helpHandler)
+    ..mount('/state', stateHandler)
+    ..mount('/device', deviceHandler)
+    ..mount('/config', configHandler)
+    ..mount('/pool', poolHandler) // §208 — снапшот пула round_robin
+    ..mount('/logs', logsHandler)
+    ..mount('/action', actionHandler)
+    ..mount('/files', filesHandler)
+    ..mount('/diag', diagHandler)
+    ..mount('/backup', backupHandler)
+    ..mount('/rules', rulesHandler)
+    ..mount('/subs', subsHandler)
+    // Фича 478 — узел глазами эмиттера: ссылка, как у Copy link.
+    ..mount('/nodes', nodesHandler)
+    ..mount('/directions', directionsHandler) // §238 — Направления роутинга §125
+    ..mount('/chains', chainsHandler) // §393 C — источники-цепочки SPEC 110
+    ..mount('/folders', foldersHandler) // §238 — папки серверов §234
+    // Фича 478 — страховка «отказ ядра выключает узел»: фаза автомата,
+    // вердикты, плашка и диалог предела наблюдаемы и управляемы снаружи.
+    ..mount('/core_reject', coreRejectHandler)
+    ..mount('/warp', warpHandler)
+    ..mount('/settings', settingsHandler)
+    ..mount('/wifi_history', wifiHistoryHandler)
+    ..mount('/profiler', profilerHandler)
+    ..mount('/support', supportHandler); // §357 — тест support-ленты
+}
+

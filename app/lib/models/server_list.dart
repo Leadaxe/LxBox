@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
+import 'core_reject_verdict.dart';
 import 'dns_ref.dart';
 import 'import_rule.dart';
 import 'node_link.dart';
@@ -174,6 +175,16 @@ final class SubscriptionServers extends ServerList {
   /// кодеке записи и в copyWith — поле без чтения молча терялось бы.
   final Map<String, DateTime> disabledHashes;
 
+  /// Фича 478 / CANON §9.4 — оверлей ХРАНИМЫХ предупреждений узлов тем же
+  /// ключом, что и [disabledHashes]: тег-идентичность → записи
+  /// `{code, params}`. Сегодня здесь живёт ровно `core_rejected` — вердикт
+  /// ядра, который пересчётом по телу не воспроизводится; прочие
+  /// предупреждения по-прежнему вычисляются при разборе и не хранятся.
+  /// Персистится рядом с `disabled` → обязан жить в кодеке записи и в
+  /// copyWith; ключ в slice-таблице остаётся (§221), в файл вердикт
+  /// страховки не едет (§489).
+  final Map<String, List<StoredWarning>> nodeWarnings;
+
   /// §289 — per-subscription override идентичности фетча. `null` = режим Default
   /// (глобальный `SubscriptionIdentity`); объект = режим Custom (полный слепок).
   /// Персистится → обязан жить в кодеке записи и copyWith (как §283
@@ -210,6 +221,7 @@ final class SubscriptionServers extends ServerList {
     this.lastNodeCount = 0,
     this.consecutiveFails = 0,
     this.disabledHashes = const {},
+    this.nodeWarnings = const {},
     this.identity,
     this.importRules = const [],
     this.importRulesEnabled = true,
@@ -239,6 +251,7 @@ final class SubscriptionServers extends ServerList {
     int? lastNodeCount,
     int? consecutiveFails,
     Map<String, DateTime>? disabledHashes,
+    Map<String, List<StoredWarning>>? nodeWarnings,
     SubscriptionIdentityOverride? identity,
     bool clearIdentity = false,
     List<ImportRule>? importRules,
@@ -261,6 +274,7 @@ final class SubscriptionServers extends ServerList {
         lastNodeCount: lastNodeCount ?? this.lastNodeCount,
         consecutiveFails: consecutiveFails ?? this.consecutiveFails,
         disabledHashes: disabledHashes ?? this.disabledHashes,
+        nodeWarnings: nodeWarnings ?? this.nodeWarnings,
         // §289 — clearIdentity: true снимает Custom (→ Default); иначе обычный
         // ?? (передача identity меняет слепок, null-аргумент сохраняет старый).
         identity: clearIdentity ? null : (identity ?? this.identity),
@@ -291,6 +305,7 @@ final class SubscriptionServers extends ServerList {
           consecutiveFails == other.consecutiveFails &&
           _eq.equals(_disabledSeconds(disabledHashes),
               _disabledSeconds(other.disabledHashes)) &&
+          _eq.equals(nodeWarnings, other.nodeWarnings) &&
           identity == other.identity &&
           _eq.equals(importRules, other.importRules) &&
           importRulesEnabled == other.importRulesEnabled &&
@@ -312,6 +327,7 @@ final class SubscriptionServers extends ServerList {
         lastNodeCount,
         consecutiveFails,
         _eq.hash(_disabledSeconds(disabledHashes)),
+        _eq.hash(nodeWarnings),
         identity,
         _eq.hash(importRules),
         importRulesEnabled,
@@ -342,6 +358,11 @@ final class UserServer extends ServerList {
   /// перечитывании `raw_body`, на старте игнорируются.
   final NodeSections? sections;
 
+  /// Фича 478 / CANON §9.4 — хранимые предупреждения ручного сервера:
+  /// сегодня ровно `core_rejected`. Персистится рядом с `enabled` (ключ
+  /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
+  final List<StoredWarning> warnings;
+
   UserServer({
     required super.id,
     required super.name,
@@ -350,6 +371,7 @@ final class UserServer extends ServerList {
     required super.detourPolicy,
     this.origin = UserSource.manual,
     this.rawBody = '',
+    this.warnings = const [],
     NodeSections? sections,
     super.nodes,
   }) : sections = (sections == null || sections.isEmpty) ? null : sections;
@@ -364,6 +386,7 @@ final class UserServer extends ServerList {
     DetourPolicy? detourPolicy,
     UserSource? origin,
     String? rawBody,
+    List<StoredWarning>? warnings,
     List<NodeSpec>? nodes,
     NodeSections? sections,
     // §435 — `sections ?? this.sections` не позволяет обнулить: явный флаг
@@ -378,6 +401,7 @@ final class UserServer extends ServerList {
         detourPolicy: detourPolicy ?? this.detourPolicy,
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
+        warnings: warnings ?? this.warnings,
         sections: clearSections ? null : (sections ?? this.sections),
         nodes: nodes ?? this.nodes,
       );
@@ -393,11 +417,12 @@ final class UserServer extends ServerList {
           tagPrefix == other.tagPrefix &&
           detourPolicy == other.detourPolicy &&
           rawBody == other.rawBody &&
+          _eq.equals(warnings, other.warnings) &&
           sections == other.sections);
 
   @override
-  int get hashCode =>
-      Object.hash(id, enabled, tagPrefix, detourPolicy, rawBody, sections);
+  int get hashCode => Object.hash(
+      id, enabled, tagPrefix, detourPolicy, rawBody, _eq.hash(warnings), sections);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -407,6 +432,11 @@ final class UserServer extends ServerList {
 final class FolderMember {
   final String raw;
   final bool enabled;
+
+  /// Фича 478 / CANON §9.4 — хранимые предупреждения члена: сегодня ровно
+  /// `core_rejected`. Персистится рядом с [enabled] (ключ `warnings`
+  /// записи члена). В бэкап вердикт страховки не едет (§489).
+  final List<StoredWarning> warnings;
 
   /// §456 — имя члена, хранимое полем записи (`tag`): у INI-источника тега в
   /// тексте нет, и узел разбирается с этим hint'ом. У ссылки/JSON пусто.
@@ -428,6 +458,7 @@ final class FolderMember {
   FolderMember({
     required this.raw,
     this.enabled = true,
+    this.warnings = const [],
     this.detour = NodeLink.none,
     this.nameHint = '',
     NodeSections? sections,
@@ -454,6 +485,7 @@ final class FolderMember {
   FolderMember copyWith({
     String? raw,
     bool? enabled,
+    List<StoredWarning>? warnings,
     NodeLink? detour,
     String? nameHint,
     NodeSections? sections,
@@ -462,6 +494,7 @@ final class FolderMember {
       FolderMember(
         raw: raw ?? this.raw,
         enabled: enabled ?? this.enabled,
+        warnings: warnings ?? this.warnings,
         detour: detour ?? this.detour,
         nameHint: nameHint ?? this.nameHint,
         sections: clearSections ? null : (sections ?? this.sections),
@@ -477,6 +510,7 @@ final class FolderMember {
       (other is FolderMember &&
           raw == other.raw &&
           enabled == other.enabled &&
+          _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
           nameHint == other.nameHint &&
           sections == other.sections &&
@@ -487,7 +521,8 @@ final class FolderMember {
       : b is! AutoSelectSpec;
 
   @override
-  int get hashCode => Object.hash(raw, enabled, detour, nameHint, sections);
+  int get hashCode =>
+      Object.hash(raw, enabled, _eq.hash(warnings), detour, nameHint, sections);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,

@@ -9,6 +9,6 @@
     "lib/controllers/subscription_controller.dart",
     "lib/screens/home_screen.dart",
     "lib/services/parser/json_parsers.dart",
-    "lib/services/parser/uri_parsers/wireguard_parser.dart"
+    "lib/services/parser/mappers/wireguard_mapper.dart"
   ]
 }

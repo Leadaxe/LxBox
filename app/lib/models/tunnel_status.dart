@@ -62,6 +62,7 @@ class TunnelStatusEvent {
     required this.status,
     required this.raw,
     this.errorReason,
+    this.coreError,
   });
 
   /// Парсинг raw-события из native — fail-soft: если status неизвестен →
@@ -75,6 +76,10 @@ class TunnelStatusEvent {
       status: TunnelStatus.fromNative(rawStatus, revoked: raw['revoked'] == true),
       raw: rawStatus,
       errorReason: _extractReason(raw),
+      // Фича 478 / Д-1 — отдельный ключ, НЕ из списка `_extractReason`:
+      // `errorReason` остаётся локализованной витриной для человека, а
+      // страховка разбирает сырой текст ядра.
+      coreError: _nonEmpty(raw[_coreErrorKey]),
     );
   }
 
@@ -95,6 +100,22 @@ class TunnelStatusEvent {
   /// Текст ошибки/причины остановки если native приложил. `null` если событие
   /// без reason-полей (норма для `Started`/`Stopping`).
   final String? errorReason;
+
+  /// Фича 478 / Д-1 — СЫРОЙ текст ядра (`t.message` от
+  /// `startOrReloadService`), без обёртки `stop_alert_start_failed` и без
+  /// чего-либо ещё от приложения. Его и только его разбирает CANON §9:
+  /// [errorReason] локализован, и грамматика по нему зависела бы от языка
+  /// устройства. `null` — отказ не от ядра либо native старше этого поля
+  /// (тогда страховка откатывается на [errorReason], см. HomeController).
+  final String? coreError;
+
+  static const _coreErrorKey = 'core_error';
+
+  static String? _nonEmpty(Object? value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
 
   static String? _extractReason(Map<dynamic, dynamic> raw) {
     const keys = <String>['error', 'message', 'reason', 'details', 'description'];

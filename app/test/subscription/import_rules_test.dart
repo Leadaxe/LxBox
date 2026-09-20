@@ -6,10 +6,16 @@ import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/subscription/import_rules.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §302 — правила работают над готовым JSON узла (`NodeSpec.emit`), а не над
 /// текстом тела: `emit` одинаков для всех форматов подписки, поэтому одно
 /// правило работает и для URI-строк, и для Xray-JSON, и для INI.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   NodeSpec node(String uri) => parseUri(uri)!;
 
   // Узел с TLS-fingerprint. ВАЖНО: парсер канонизирует fp на входе (§281,

@@ -133,11 +133,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             val error = intent.getStringExtra("error")
             // §276 — признак перехвата слота чужим VPN (едет рядом со Stopped).
             val revoked = intent.getBooleanExtra(BoxVpnService.EXTRA_REVOKED, false)
+            // Фича 478 / Д-1 — сырой текст ядра без обёрток приложения.
+            val coreError = intent.getStringExtra(BoxVpnService.EXTRA_CORE_ERROR)
             Log.d(TAG, "[vpn] plugin.statusReceiver.onReceive name=$name${if (error != null) " error=$error" else ""}${if (revoked) " revoked=true" else ""} sink=${statusSink != null}")
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
                 if (revoked) event[BoxVpnService.EXTRA_REVOKED] = true
+                if (!coreError.isNullOrEmpty()) {
+                    event[BoxVpnService.EXTRA_CORE_ERROR] = coreError
+                }
                 // §155 — sink может указывать на мёртвый Dart-engine (process
                 // killed / engine detached между post и доставкой). success()
                 // тогда бросает DeadObjectException на main thread → краш всего

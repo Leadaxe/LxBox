@@ -1,3 +1,5 @@
-source=/Users/macbook/projects/singbox-launcher/contract
-synced_at=2026-09-16T12:08:33Z
-sha256=b90ff80d1d1c073ca30c19cb6186ea64a86aa3406276f049bec3a5c832495911
+source=/tmp/x_1146/contract
+launcher_repo=/Users/macbook/projects/singbox-launcher
+source_sha=7e2945bff0b6fcd0475a1e37808d3a08407dbb44
+synced_at=2026-09-19T11:26:14Z
+sha256=53c9a958ac471751fde4b381422b4e2ee044fd6471766417460595c99199736b

@@ -1,0 +1,84 @@
+{
+  "_note": "§480 — секция-маппер вида источника xray у socks. Списано с xray_mapper.dart (_socks). §321: socks-outbound самостоятельным узлом подписки НЕ становится, он бывает только звеном цепочки dialerProxy — выбор этого решает сборка документа, а не маппер одного узла. Данные: движок W1 вид источника xray сегодня не исполняет.",
+  "mappers": {
+    "xray": {
+      "body_source": "xray",
+      "detect": {
+        "json": {
+          "value_of": {
+            "protocol": "socks"
+          }
+        }
+      },
+      "forms": [
+        {
+          "id": "servers",
+          "detect": {
+            "default": true
+          },
+          "space": "json",
+          "base": "settings.servers.0",
+          "impl": "Единственная форма — ветка default: элемент Xray уже опознан detect секции (protocol), и разбирать его иначе не из чего. Так же записана форма servers у trojan в живом реестре лаунчера (контракт 1.1.13)."
+        }
+      ],
+      "defaults": {
+        "type": "socks",
+        "$_divergence_resolved": "РАСХОЖДЕНИЕ ЗАКРЫТО по арбитру — исходникам XTLS/Xray-core (решение владельца 19.09.2026). Дефолт 1080 снят: канон socks он лишь по традиции, а у Xray его НЕТ — `Port uint16` без подстановки (`infra/conf/socks.go:73,79`), `Build()` свёртывает плоскую форму и порт не проверяет вовсе (`infra/conf/socks.go:87-109`), элемент собирается с нулём и падает при дозвоне. Ни отказ лаунчера, ни ноль Xray рабочего узла не дают — дефолт был единственным поведением, придумывавшим узел. Теперь порт объявлен `required`, и элемент без порта отбраковывается тем же кодом, что у лаунчера. Звено цепочки dialerProxy без порта так же не строится."
+      },
+      "params": {
+        "address": {
+          "source": "json.$base.address",
+          "maps_to": "server",
+          "required": true
+        },
+        "port": {
+          "source": "json.$base.port",
+          "maps_to": "server_port",
+          "type": "int",
+          "required": true,
+          "desc_en": "server port is missing or out of range",
+          "_why": "Пара к снятому дефолту 1080: у socks секция своя (в реестре её нет), поэтому `required` и `desc_en` объявлены ЗДЕСЬ дословно так же, как у записей `port` живых секций vless/vmess/trojan/shadowsocks реестра. Текст дублируется не для нас (наш движок `desc_en` не читает и роняет узел молча — общий остаток всех `required`, развёрнут у vless), а чтобы секция была готова к переносу в реестр без расхождения формулировок."
+        },
+        "user": {
+          "source": "json.$base.users.0.user",
+          "maps_to": "username",
+          "impl": "Диалект Xray зовёт поля users[].user / users[].pass, а не username/password."
+        },
+        "pass": {
+          "source": "json.$base.users.0.pass",
+          "maps_to": "password"
+        },
+        "$version": {
+          "source": "json.$base.version",
+          "maps_to": null,
+          "impl": "ВЕРСИЯ С ЭТОГО ВХОДА НЕ ПИШЕТСЯ ВОВСЕ — в отличие от ссылки, где её несёт схема и она материализуется явно. Прежняя ветка Xray ключ version не ставила; дефолт ядра (5) действует сам."
+        },
+        "$extra_servers": {
+          "source": "json.settings.servers",
+          "maps_to": null,
+          "on_len_gt": {
+            "n": 1,
+            "action": "note",
+            "code": "xray_extra_entries_dropped"
+          }
+        }
+      },
+      "unknown_key": {
+        "action": "drop",
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ],
+        "_impl": "`ignore` — ключи УРОВНЯ ДОКУМЕНТА, полем узла не являющиеся: бухгалтерия элемента (`protocol` — по нему элемент и опознан, `tag`/`remarks` — имя, которое читает сборка документа) плюс контейнеры, чьи листья читают записи таблицы. Список дословно тот же, что у живых секций trojan и vless. Без него КАЖДОЕ звено цепочки получало бы два json_field_unknown на `protocol` и `tag` — проверено прогоном (см. отчёт §480)."
+      },
+      "emit": null
+    }
+  }
+}

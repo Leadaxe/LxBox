@@ -28,12 +28,6 @@
       "title": "Ethereum",
       "address": "0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea",
       "url": "https://link.trustwallet.com/send?coin=60&address=0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea"
-    },
-    {
-      "id": "boosty",
-      "kind": "link",
-      "title": "Boosty",
-      "url": "https://boosty.to/lxbox/donate"
     }
   ]
 }

@@ -145,6 +145,19 @@ sealed class NodeSpec {
   /// Тип протокола — для UI иконок и дебага.
   String get protocol;
 
+  /// §466 — [toUri] этого узла несёт приватный ключ владельца.
+  ///
+  /// Признак для экрана, а не для эмиттера: `toUri()` у нас одновременно и
+  /// форма хранения (инвариант `parseUri(spec.toUri()) ≈ spec`), вырезать из
+  /// неё ключ нельзя — он потерялся бы при перезагрузке узла. Но ссылку
+  /// пересылают, и это другая граница доверия, чем локальное хранение:
+  /// «Copy URI» у такого узла спрашивает подтверждение (§466 заменил отказ
+  /// §463).
+  ///
+  /// Пароли, UUID и PSK признаком НЕ считаются: это секрет доступа к конкретному
+  /// прокси, а не ключ, которым владелец опознаётся где-то ещё.
+  bool get linkCarriesPrivateKey => false;
+
   /// §322 — узел-группа (пул автовыбора), а не соединение. У такого нет
   /// адреса: `server`/`port` пусты, пинг берётся у выбранного члена. Гейт для
   /// операций, требующих `server:port`, и для тех, что раздают ссылку наружу
@@ -235,7 +248,7 @@ final class VlessSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitVless(this, vars);
 
   @override
-  String toUri() => e.toUriVless(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -275,7 +288,7 @@ final class VmessSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitVmess(this, vars);
 
   @override
-  String toUri() => e.toUriVmess(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -309,7 +322,7 @@ final class TrojanSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitTrojan(this, vars);
 
   @override
-  String toUri() => e.toUriTrojan(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -350,7 +363,7 @@ final class AnyTlsSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitAnyTls(this, vars);
 
   @override
-  String toUri() => e.toUriAnyTls(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -386,7 +399,7 @@ final class ShadowsocksSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitShadowsocks(this, vars);
 
   @override
-  String toUri() => e.toUriShadowsocks(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -445,7 +458,7 @@ final class Hysteria2Spec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitHysteria2(this, vars);
 
   @override
-  String toUri() => e.toUriHysteria2(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -495,7 +508,7 @@ final class NaiveSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitNaive(this, vars);
 
   @override
-  String toUri() => e.toUriNaive(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -546,7 +559,7 @@ final class TuicSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitTuic(this, vars);
 
   @override
-  String toUri() => e.toUriTuic(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -586,7 +599,12 @@ final class SshSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitSsh(this, vars);
 
   @override
-  String toUri() => e.toUriSsh(this);
+  String toUri() => e.uriViaEngineRequired(this);
+
+  /// §466 — `toUriSsh` пишет `private_key` в query только когда ключ непустой;
+  /// узел с одним паролем ключа в ссылке не несёт.
+  @override
+  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -620,7 +638,7 @@ final class SocksSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitSocks(this, vars);
 
   @override
-  String toUri() => e.toUriSocks(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -658,7 +676,7 @@ final class HttpSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitHttp(this, vars);
 
   @override
-  String toUri() => e.toUriHttp(this);
+  String toUri() => e.uriViaEngineRequired(this);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -890,11 +908,9 @@ class Awg {
   /// Из URI query (строки). Числа → `int.tryParse` (битое → пропуск поля, не
   /// валим парс — forward-compat, как mtu/keepalive). h1–h4 дополнительно
   /// принимают диапазон `N-M` (§112). `i*` пустые пропускаем.
-  /// [badHeaders] — SPEC 103 `awg_header_invalid`: сюда собираются пары
-  /// (поле, сырое значение) для h1–h4, чьё значение не uint32 и не диапазон.
-  /// Только magic-headers: битые jc/jmin/jmax/s1–s4 Go роняет молча (эталон
-  /// `applyAWGFields`, node_parser_wireguard.go) — тихий дефолт там не ломает
-  /// handshake, а у заголовка ломает.
+  /// §481 (контракт 1.1.11) — параметра `badHeaders` больше нет: годность
+  /// `h1`–`h4` (как и `jc`/`jmin`/`jmax`/`s1`–`s4`) судит РЕЕСТР, и сырое
+  /// значение уезжает в тело как есть.
   ///
   /// §421 — [badAwg3]: пары (параметр, сырое значение) для AWG3-таймингов и
   /// булевых с мусором/перевёрнутым диапазоном — поле снято, узел живёт
@@ -902,23 +918,30 @@ class Awg {
   /// валидирует `awg3NodeError` (на узел, не на поле). Вызывающий обязан
   /// подать `headerprotectionkey` с сохранённым `+` (queryParamPreservePlus):
   /// `Uri.queryParameters` превращает `+` base64 в пробел.
+  ///
+  /// §463 — [droppedRequires]: пути полей, снятых правилом `requires` реестра
+  /// ([applyJunkSizeRequires]); вызывающий ставит на них код с путём.
   static Awg? fromQuery(
     Map<String, String> q, {
-    List<(String, String)>? badHeaders,
     List<(String, String)>? badAwg3,
+    List<String>? droppedRequires,
   }) {
     final f = <String, Object>{};
     final hk = (q[awg3Param(headerKey)] ?? '').trim();
     if (hk.isNotEmpty) f[headerKey] = hk;
+    // §481 (контракт 1.1.11) — тайминги судит РЕЕСТР (`type: awg_range`,
+    // `on_invalid: awg3_field_invalid`), и негодное значение уезжает ему как
+    // есть. Прежде его снимал этот разбор, а код ставил маппер — с ИМЕНЕМ
+    // ПАРАМЕТРА ССЫЛКИ в пути (`rekeyaftertime`), тогда как контракт
+    // адресует поле ТЕЛА (`rekey_after_time`).
+    //
+    // Перевёрнутая пара («180-150») здесь НЕ свопается и не должна: у этих
+    // полей реестр `normalize: range_order` не объявляет — опечатку человек
+    // обязан увидеть (SPEC 123 §2), в отличие от `h1`–`h4`.
     for (final k in awg3RangeKeys) {
       final raw = (q[awg3Param(k)] ?? '').trim();
       if (raw.isEmpty) continue;
-      final v = parseAwg3Range(raw);
-      if (v == null) {
-        badAwg3?.add((awg3Param(k), raw));
-        continue;
-      }
-      f[k] = v;
+      f[k] = parseAwg3Range(raw) ?? raw;
     }
     for (final k in awg3BoolKeys) {
       final raw = (q[awg3Param(k)] ?? '').trim();
@@ -930,20 +953,27 @@ class Awg {
       }
       if (v) f[k] = true;
     }
+    // §481 (контракт 1.1.11) — СУДИТ РЕЕСТР, а не этот разбор.
+    //
+    // Было: битые `jc`/`jmin`/`jmax`/`s1`–`s4` снимались МОЛЧА, а соседи по
+    // тому же циклу `h1`–`h4` код получали. Асимметрия жила внутри одной
+    // функции и расходилась с буквой реестра; выравнивание пошло в сторону
+    // реестра — поле снимается С КОДОМ (`awg_header_invalid`), одинаково у
+    // всех семи.
+    //
+    // Поэтому мусор уезжает в тело КАК ЕСТЬ (строкой), и его судит санитайзер:
+    // `type: int` / `type: awg_range` не сойдутся, сработает `on_invalid`.
+    // Своп перевёрнутой пары у `h1`–`h4` тоже снят отсюда — это
+    // `normalize: range_order` реестра, тихий, как `trim`.
     for (final k in numKeys) {
-      final v = q[k];
-      if (v == null) continue;
-      if (headerKeys.contains(k)) {
-        final h = _parseHeader(v.trim());
-        if (h != null) {
-          f[k] = h;
-        } else if (v.trim().isNotEmpty) {
-          badHeaders?.add((k, v.trim()));
-        }
-        continue;
-      }
-      final n = int.tryParse(v.trim());
-      if (n != null) f[k] = n;
+      final v = q[k]?.trim();
+      if (v == null || v.isEmpty) continue;
+      // Числом кладётся только то, что ЧИСЛОМ и написано в смысле ядра
+      // (`strconv.ParseUint`): `-5` для него не число, а мусор, и подсунуть
+      // санитайзеру `int -5` значило бы выдать мусор за годную форму. Это
+      // граница ТИПА, не суждение о годности: и то и другое доезжает до
+      // реестра, просто в той форме, в какой написано.
+      f[k] = _parseUint32(v) ?? v;
     }
     for (final k in _iTagKeys) {
       final v = q[k];
@@ -957,26 +987,44 @@ class Awg {
         if (v != null && v.isNotEmpty) f[k] = v;
       }
     }
+    applyJunkSizeRequires(f, dropped: droppedRequires);
     return f.isEmpty ? null : Awg(f);
+  }
+
+  /// §463 / контракт §24.6 — `jmin` без `jmax` снимается
+  /// (`requires: [{path: jmax, code: awg_header_invalid}]` в
+  /// `registry/protocols/wireguard.json`).
+  ///
+  /// Отсутствующий `jmax` ядро читает как 0 и валит ВЕСЬ конфиг
+  /// («amneziawg: jmin (50) must be <= jmax (0)», проверено на
+  /// 1.14.0-lx.39) — вердикт B. Раньше одинокий `jmin` доезжал до тела:
+  /// `jc=abc` отбрасывался молча, а `jmin=50` оставался и ронял всё.
+  ///
+  /// Обратная пара (`jmax` без `jmin`) безопасна: `jmin` по умолчанию 0,
+  /// и `0 <= jmax` выполняется — реестр её и не требует.
+  ///
+  /// [dropped] — пути снятых полей для `warnings[]` узла.
+  static void applyJunkSizeRequires(Map<String, Object> f,
+      {List<String>? dropped}) {
+    if (f.containsKey('jmin') && !f.containsKey('jmax')) {
+      f.remove('jmin');
+      dropped?.add('jmin');
+    }
   }
 
   /// Из endpoint-JSON (корень). Числа: `num`→`int`; h1–h4 также `String`
   /// `"N"`/`"N-M"` (§112, контракт ядра lx.6); `i*`: непустые `String`.
   static Awg? fromJson(Map<String, dynamic> m) {
     final f = <String, Object>{};
-    for (final k in numKeys) {
-      final v = m[k];
-      if (v is num) {
-        f[k] = v.toInt();
-      } else if (v is String && headerKeys.contains(k)) {
-        final h = _parseHeader(v.trim());
-        if (h != null) f[k] = h;
-      }
-    }
-    for (final k in strKeys) {
-      final v = m[k];
-      if (v is String && v.isNotEmpty) f[k] = v;
-    }
+    // §472 шаг 7 — ПОРЯДОК ТОТ ЖЕ, ЧТО У [fromQuery]: сначала AWG 3.x, потом
+    // числовые AWG2 и строковые `i*`. Порядок вставки в `fields` становится
+    // порядком ключей в теле узла (`writeInto` — это `addAll`), а тело
+    // сравнивается БАЙТ В БАЙТ golden-эталонами (`avd_v0.config.json`).
+    // Пока ссылка шла своим парсером, обе воронки жили порознь и разный
+    // порядок был не виден; на конвейере ссылка идёт через
+    // `parseSingboxEntry`, то есть через ЭТОТ разбор, и расхождение стало бы
+    // сдвигом эталона на ровном месте. Значения и identity от порядка не
+    // зависят (`legacyNodeIdentityHash` сортирует ключи), но эталон — да.
     // §421 — AWG3: тайминги числом или строкой-диапазоном, булевы только
     // `true`, ключ защиты — непустая строка (валидация — awg3NodeError).
     final hk = m[headerKey];
@@ -994,6 +1042,22 @@ class Awg {
     for (final k in awg3BoolKeys) {
       if (m[k] == true) f[k] = true;
     }
+    for (final k in numKeys) {
+      final v = m[k];
+      if (v is num) {
+        f[k] = v.toInt();
+      } else if (v is String && headerKeys.contains(k)) {
+        final h = _parseHeader(v.trim());
+        if (h != null) f[k] = h;
+      }
+    }
+    for (final k in strKeys) {
+      final v = m[k];
+      if (v is String && v.isNotEmpty) f[k] = v;
+    }
+    // §463 — то же правило `requires`, что и на URI-пути: одинокий `jmin`
+    // роняет весь конфиг независимо от того, откуда тело пришло.
+    applyJunkSizeRequires(f);
     return f.isEmpty ? null : Awg(f);
   }
 
@@ -1082,7 +1146,12 @@ final class WireguardSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitWireguard(this, vars);
 
   @override
-  String toUri() => e.toUriWireguard(this);
+  String toUri() => e.uriViaEngineRequired(this);
+
+  /// §466 — приватный ключ интерфейса уходит в userinfo ссылки. AWG (`awg`
+  /// != null) — тот же класс, тот же эмиттер, потому отдельной ветки нет.
+  @override
+  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 /// §130 — MASQUE (CONNECT-IP over HTTP/3/HTTP-2) для Cloudflare WARP.
@@ -1162,7 +1231,12 @@ final class MasqueSpec extends NodeSpec {
   SingboxEntry emitRaw(TemplateVars vars) => e.emitMasque(this, vars);
 
   @override
-  String toUri() => e.toUriMasque(this);
+  String toUri() => e.uriViaEngineRequired(this);
+
+  /// §466 — `toUriMasque` кладёт [privateKeyDer] (SEC1 DER нашего ECDSA) в
+  /// userinfo ссылки.
+  @override
+  bool get linkCarriesPrivateKey => privateKeyDer.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

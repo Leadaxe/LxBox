@@ -11,6 +11,8 @@ import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import '../parser/engine_test_setup.dart';
+
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   final String tempRoot;
@@ -25,6 +27,10 @@ class _FakePathProvider extends PathProviderPlatform
 /// одиночный путь (B1 — правка tag снова видна в списке) и папочный (B5 —
 /// члены получают имена файлов, а не «WireGuard»).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   late Directory tempDir;
 
   // SPEC 103 D-023/D-030 — normalizeWGKey требует РОВНО 32 байта base64;

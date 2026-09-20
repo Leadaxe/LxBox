@@ -8,6 +8,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/probe/probe_config.dart';
 import 'package:lxbox/services/probe/probe_runner.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §236 — headless probe: конфиг, раннер (probe-сессия; при живом VPN —
 /// маркер-гейт, боевое ядро НЕ зовётся), пороги шкалы.
 /// §439 N2 — член-группа папки (запись `kind: auto`), текста у неё нет.
@@ -15,6 +17,10 @@ FolderMember _group(String tag) => FolderMember.auto(
     AutoSelectSpec(id: tag, tag: tag, label: tag, membership: const RuleMembers()));
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const uriA = 'vless://u1@h1.example:443?type=ws&security=tls#Alpha';

@@ -7,6 +7,8 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §073 — detour APPEND (default) vs REPLACE (toggle) tests на уровне
 /// `buildConfig`. Pure model→config rebuild без UI/storage.
 ///
@@ -15,6 +17,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 ///   2. Empty chain + override + replace=true → 1-hop (same as #1)
 ///   3. Default detour-empty config + override → override at tail of main
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   final template = WizardTemplate(
     parserConfig: ParserConfigBlock(),
     // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.

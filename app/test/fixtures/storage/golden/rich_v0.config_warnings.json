@@ -1,4 +1,5 @@
 [
+  "WireGuard: WireGuard: DNS from the configuration not applied",
   "SRS rule \"Uncached set\" skipped: no cached file (Download first).",
   "Raw-JSON rule \"Json broken\" skipped: empty body.",
   "Raw-JSON rule \"Json comment\": 1 comment key(s) (\"//...\") dropped — the core rejects unknown fields.",

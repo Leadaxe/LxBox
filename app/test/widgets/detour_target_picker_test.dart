@@ -4,11 +4,17 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/widgets/detour_target_picker.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §248 — фильтрация Направления секции пикера цели detour
 /// (pure-хелпер [visibleDetourDirections]): только enabled detour-Направления,
 /// минус омонимы с bare-тегами распарсенных членов текущей папки
 /// (включая выключенных членов — toggle не должен молча менять смысл ссылки).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   const directions = [
     Direction(tag: 'vpn-1', label: 'Main'),
     Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),

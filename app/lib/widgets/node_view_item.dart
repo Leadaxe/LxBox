@@ -1,3 +1,5 @@
+import '../models/node_warning.dart';
+
 /// Immutable view-model для одной node row на главной (или другом screen'е
 /// который захочет переиспользовать `NodeRow`).
 ///
@@ -27,6 +29,7 @@ class NodeViewItem {
     this.autoGroupLabel,
     this.matches = true,
     this.isSickRoot = false,
+    this.notificationWarnings,
   });
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
@@ -97,4 +100,9 @@ class NodeViewItem {
   /// пострадавших (caller передаёт onSickTap). Просто мёртвая нода без
   /// зависимых метку не получает — фильтр от шума.
   final bool isSickRoot;
+
+  /// §502 — уведомления узла для значка в строке протокола. `null` — служебная
+  /// строка (Direct / Auto / Block), значок не рисуется; пустой список — узел
+  /// без уведомлений.
+  final List<NodeWarning>? notificationWarnings;
 }

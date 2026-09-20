@@ -1,0 +1,87 @@
+{
+  "_note": "§472 шаг 6 — снимок identity http(s) CONNECT-прокси, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "proxy_http_default_port_80": {
+      "uri": "proxy-http://p.example-1.com",
+      "identity": "7dce2be23218e6365e4ab716e54e0f30d6715d243be00a5e879daa937bf1b76e"
+    },
+    "proxy_http_ipv6": {
+      "uri": "proxy-http://user1@[2001:db8::1]:8080#http-v6",
+      "identity": "1f7b76273e3dbfb556bed547e16128345011c8e9f62901145f194a5679a393d6"
+    },
+    "proxy_http_pass_only_userinfo": {
+      "uri": "proxy-http://:pass123@h.example-1.com:3128#pass-only",
+      "identity": "3c19f783c11652dd1e9ff9fc4afb13b79c1ab4359e173915c852cf910fa79df4"
+    },
+    "proxy_http_path_headers": {
+      "uri": "proxy-http://h.example-1.com:8080?path=%2Ftunnel&headers=X-Token%3A%20abc%0D%0AUser-Agent%3A%20curl#hdrs",
+      "identity": "2bfa328568b2ba00d99419f4df73e2a46bb7363e80f2babc5ee85ede03cc11b9"
+    },
+    "proxy_http_percent_userinfo": {
+      "uri": "proxy-http://user%40dom:p%3Ass@h.example-1.com:8080#pct-userinfo",
+      "identity": "2eba77a0985300d68eec32a9c9653b79feb6492a25fe50618f3e234eb43cd5b4"
+    },
+    "proxy_http_plain_basic": {
+      "uri": "proxy-http://10.0.0.1:8080#Corp%20proxy",
+      "identity": "8580779ee07fce4792743d0ce0bb19367d1ad802778a4d94e6e734422bb991e5"
+    },
+    "proxy_https_default_port_443": {
+      "uri": "proxy-https://p.example-1.com",
+      "identity": "eee740b44f0d52e8fc7ed0e76e4c19549ea454737acdaf293fd8e0331eccab83"
+    },
+    "proxy_https_full_tls": {
+      "uri": "proxy-https://h.example-1.com:8443?sni=proxy.example-corp.com&fp=chrome&alpn=h2,http/1.1&allowInsecure=1#full-tls",
+      "identity": "00185390d14506f56779be0d2344ca33d58711d4d19391d9001b8100ca57ab50"
+    },
+    "proxy_plus_http_alias": {
+      "uri": "proxy+http://alice:pass123@h.example-1.com:8080#plus-http",
+      "identity": "89bb0b6f0987e9ad966a24b084f861b22f1c9455d2557b40541edd96f398e507"
+    },
+    "proxy_plus_https_alias": {
+      "uri": "proxy+https://alice:pass123@h.example-1.com:8443?sni=proxy.example-corp.com#plus-https",
+      "identity": "c49cdd9d4530f8bb9b14c4852c87e9a916aba862e52a66dc0939616bf0249abf"
+    },
+    "b480:extra_headers_https": {
+      "uri": "proxy-https://user1:pass123@example-1.com:8443?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#https-hdr",
+      "identity": "d5268ec307f162cf8106df1023ee372a9342a92c9048c85e877de579d651dddf",
+      "tag": "https-hdr",
+      "body": {
+        "type": "http",
+        "tag": "https-hdr",
+        "server": "example-1.com",
+        "server_port": 8443,
+        "username": "user1",
+        "password": "pass123",
+        "headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      },
+      "delta480": "delta480 D133-18: было — http читал ТОЛЬКО параметр headers, и ссылка с extra-headers (написание naive, его же шлют реальные ссылки) теряла заголовки молча; стало — extra-headers заведён алиасом, каноническое имя для эмита остаётся headers. Значения сняты прогоном движка."
+    },
+    "b480:extra_headers_unsorted": {
+      "uri": "proxy-http://user1:pass123@example-1.com:8080?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#http-hdr",
+      "identity": "b5c064948da364795123e06426c89db70c116c3ee1eea2c38ddb14b8b1298bf3",
+      "tag": "http-hdr",
+      "body": {
+        "type": "http",
+        "tag": "http-hdr",
+        "server": "example-1.com",
+        "server_port": 8080,
+        "username": "user1",
+        "password": "pass123",
+        "headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        }
+      },
+      "delta480": "delta480 D133-18: то же на http-суффиксе схемы — заголовки больше не теряются. Порядок ключей задаёт sort_keys (G4), он входит в identity. Значения сняты прогоном движка."
+    }
+  }
+}

@@ -77,6 +77,14 @@ final Map<int, int> _b64CharValue = {
 /// needed to match core behavior instead of over-rejecting valid keys.
 /// Accepts std/url-safe chars mixed, with or without `=` padding. Returns
 /// null on any invalid character or on a length that isn't decodable.
+/// Публичное имя того же декодера: им судит ключи САНИТАЙЗЕР
+/// (`format: base64_32`, `normalize: base64_std`). До D133-22 правило жило в
+/// парсере ссылки и звало отсюда, а санитайзер брал строгий
+/// [decodeBase64Safe] — и неканоническая форма `…ccC=`, законная для ядра,
+/// роняла узел кодом `wg_key_invalid` на входе, где ключ лежит в query
+/// (корпус `uri_psk_keepalive`). Двум гардам одного ключа расходиться нельзя.
+List<int>? decodeBase64Lenient(String s) => _decodeBase64Lenient(s);
+
 List<int>? _decodeBase64Lenient(String s) {
   final trimmed = s.replaceAll(RegExp(r'=+$'), '');
   if (trimmed.isEmpty) return null;
@@ -275,27 +283,23 @@ String normalizePacketEncoding(
 /// занижение лишь чуть мельчит пакеты, завышение — тихий облом
 /// (handshake есть, данных нет). Явно заниженный MTU уважаем; обычный
 /// WG не трогаем (вызывать только при наличии AWG-полей).
-/// §421 — проверка AWG3 на УЗЕЛ (не на поле): битый ключ защиты заголовка
-/// или слишком короткий паддинг роняют весь конфиг на загрузке ядра, поэтому
-/// узел выбрасывается (та же политика, что у битого private/public key).
-/// Возвращает причину (`Awg3HeaderKeyInvalidWarning` /
-/// `Awg3PaddingTooShortWarning`) или `null`, если всё в порядке. Валидный
-/// ключ нормализуется В МЕСТЕ (url-safe/без паддинга → std base64 — единственная
-/// форма, которую декодирует ядро; иначе одна нода даёт два identity-хеша).
-/// Эталон Go `validateAWG3` (awg3.go).
-NodeWarning? awg3NodeError(Awg awg) {
+/// §481 (контракт 1.1.11) — только ПЕРЕВОД НАПИСАНИЯ ключа защиты заголовков
+/// AWG 3.x: url-safe / без паддинга → std base64, единственная форма, которую
+/// декодирует ядро (иначе одна нода даёт два identity-хеша).
+///
+/// Годность НЕ судится: прежний `awg3NodeError` роняд узел молча и только на
+/// входе «ссылка», а объявленные коды `awg3_header_key_invalid` и
+/// `awg3_padding_too_short` не ставились никогда. Теперь их ставит реестр —
+/// `pattern` + `format: base64_32` с `on_invalid: drop_node` у
+/// `header_protection_key` и `min_when` у `s1`–`s4`. Значение, которое не
+/// декодируется, остаётся В ТОМ ВИДЕ, В КАКОМ ПРИШЛО: судить его будет реестр,
+/// и в код предупреждения человеку нужно написанное им, а не наша догадка.
+void normalizeAwgHeaderKey(Awg awg) {
   final raw = awg.fields[Awg.headerKey];
-  if (raw is! String || raw.trim().isEmpty) return null;
+  if (raw is! String || raw.trim().isEmpty) return;
   final bytes = _decodeBase64Lenient(raw.trim());
-  if (bytes == null || bytes.length != 32 || bytes.every((b) => b == 0)) {
-    return const Awg3HeaderKeyInvalidWarning();
-  }
+  if (bytes == null || bytes.length != 32) return;
   awg.fields[Awg.headerKey] = base64.encode(bytes);
-  final short = awg.paddingTooShortField;
-  if (short != null) {
-    return Awg3PaddingTooShortWarning(short, Awg.awg3MinPadding);
-  }
-  return null;
 }
 
 /// §421 — `keepalive`/`PersistentKeepalive`: число как раньше, AWG3-диапазон
@@ -308,13 +312,6 @@ Object? parseWgKeepalive(String? raw) {
   if (n != null) return n;
   final r = Awg.parseAwg3Range(v);
   return r is String ? r : null;
-}
-
-int awgClampMtu(int? raw, String tag) {
-  if (raw == null) return 1280;
-  if (raw <= 1280) return raw;
-  AppLog.I.debug('$tag: clamped AWG mtu $raw→1280');
-  return 1280;
 }
 
 /// §106 — bare IP без CIDR-префикса (`172.16.0.2`) ломает sing-box на
@@ -398,6 +395,40 @@ bool isValidRealityPublicKey(String pbk) {
   return bytes != null && bytes.length == 32;
 }
 
+// §480 Д-6 — перевод написания ключа REALITY в форму ядра (RawURLEncoding)
+// жил здесь функцией `normalizeRealityPublicKey`. Контракт 1.1.40 объявил
+// это правило РЕЕСТРОМ — `normalize: base64_rawurl` у
+// `tls.reality.public_key`, — и исполняет его санитайзер тела на всех
+// входах сразу. Рукописный перевод снят: два движка одного правила рано или
+// поздно разошлись бы, а тело рабочего узла обязано остаться одним.
+
+/// §463 / контракт §24.6 (`format: url_path`) — путь транспорта, который ядро
+/// разберёт `url.Parse`.
+///
+/// Ядро отвергает битое percent-кодирование фаталом на ВЕСЬ config.json
+/// («ws: parse path: invalid URL escape "%zz"»; то же у httpupgrade и http),
+/// поэтому такой путь — не порча одного узла, а потеря всего VPN. Проверяется
+/// ровно то, на чём падает `url.Parse`: после `%` обязаны идти две hex-цифры.
+/// Всё остальное (эмодзи, пробелы, кириллица) путь проходит — ядру это
+/// законный путь, и резать его мы не вправе.
+bool urlPathOk(String path) {
+  for (var i = 0; i < path.length; i++) {
+    if (path.codeUnitAt(i) != 0x25) continue; // '%'
+    if (i + 2 >= path.length) return false;
+    if (!_isHexDigit(path.codeUnitAt(i + 1)) ||
+        !_isHexDigit(path.codeUnitAt(i + 2))) {
+      return false;
+    }
+    i += 2;
+  }
+  return true;
+}
+
+bool _isHexDigit(int c) =>
+    (c >= 0x30 && c <= 0x39) || // 0-9
+    (c >= 0x41 && c <= 0x46) || // A-F
+    (c >= 0x61 && c <= 0x66); // a-f
+
 /// Reality short-id canonical form: hex-чар (0-9a-f), чётной длины, max 16.
 ///
 /// §343: ядро декодирует short_id как hex в `[8]byte` — нечётная длина или
@@ -447,26 +478,76 @@ String normalizeSingboxDuration(String v) {
   return isAllDigits ? '${v}s' : v;
 }
 
-/// Нормализация VMess security/cipher к sing-box словарю.
+/// §459 (контракт §24.2 п. 7.11) — enum ядра для `vmess.security`.
+/// `sing-vmess@v0.2.8` `client.go:42-54` принимает ровно эти шесть значений,
+/// на любом другом возвращает `ErrUnsupportedSecurityType` — а это фатал на
+/// ВЕСЬ конфиг, не на один узел.
+const kVmessSecurityMethods = <String>{
+  'auto',
+  'none',
+  'zero',
+  'aes-128-cfb',
+  'aes-128-gcm',
+  'chacha20-poly1305',
+};
+
+/// Нормализация VMess security/cipher к словарю ядра
+/// ([kVmessSecurityMethods]).
+///
+/// §474 (контракт 1.1.7) — воронка осталась только у ДВУХ входов: sing-box
+/// JSON и Xray JSON. Вход URI её больше не зовёт.
+///
+/// На конвейере суждение о значении делает реестр
+/// (`protocols/vmess.json` → `body.fields.security`: enum + `on_invalid:
+/// coerce auto`, код `vmess_security_unknown`), и подмена перестала быть
+/// молчаливой: человек видит, что узел уедет не на том шифре, который просила
+/// подписка. Маппер оставил себе только перевод диалекта и подстановку на
+/// пустом — см. `mappers/vmess_mapper.dart` → `_securitySpelling`.
+///
+/// Здесь сведение ОСТАЁТСЯ намеренно. Ветки JSON санитайзер по телу не
+/// проходят: `annotateAllWithRegistry` судит уже собранный `emit()` модели, и
+/// сними эту воронку сейчас — в модель лёг бы шифр, которого ядро не знает
+/// (`aes-128-ctr` роняет ВЕСЬ конфиг, а не один узел), кода при этом всё
+/// равно не появилось бы. Уйдёт вместе с переездом JSON-входа на конвейер
+/// (шаг 8 фичи 472); до тех пор подмена на этих двух входах пишется в лог.
+///
+/// Раньше пропускался `aes-128-ctr` (ядро его не знает — фатал всего
+/// конфига), а рабочий `aes-128-cfb` схлопывался в `auto`.
 String normalizeVmessSecurity(String raw) {
-  final s = raw.toLowerCase().trim();
+  final s = raw.trim().toLowerCase();
   if (s.isEmpty || s == 'null' || s == 'undefined') return 'auto';
-  switch (s) {
-    case 'auto':
-    case 'none':
-    case 'zero':
-    case 'aes-128-gcm':
-    case 'chacha20-poly1305':
-    case 'aes-128-ctr':
-      return s;
-    case 'chacha20-ietf-poly1305':
-      return 'chacha20-poly1305';
-    default:
-      return 'auto';
-  }
+  if (kVmessSecurityMethods.contains(s)) return s;
+  if (s == 'chacha20-ietf-poly1305') return 'chacha20-poly1305';
+  AppLog.I.warning(
+      "vmess: security '$raw' is not accepted by the core, using 'auto'");
+  return 'auto';
 }
 
-/// Валидные методы Shadowsocks (sing-box).
+/// §463 / контракт §24.2 п. 7.10 — устаревшие stream-шифры Shadowsocks
+/// (shadowstream), которые ядро принимает.
+///
+/// Реестр `protocols/shadowsocks.json` → `body.fields.method.advisory`:
+/// узел на таком шифре ЖИВЁТ и получает info-код `ss_method_legacy`.
+/// Криптографически они слабы (нет AEAD — трафик не аутентифицируется), но
+/// это выбор владельца сервера, а не повод молча выбросить рабочий узел:
+/// раньше оба клиента дропали их без объяснения, и человек видел, что из
+/// подписки «пропали ноды».
+const shadowsocksLegacyMethods = <String>{
+  'aes-128-ctr',
+  'aes-192-ctr',
+  'aes-256-ctr',
+  'aes-128-cfb',
+  'aes-192-cfb',
+  'aes-256-cfb',
+  'rc4-md5',
+  'chacha20-ietf',
+  'xchacha20',
+};
+
+/// Валидные методы Shadowsocks — 18 методов ядра
+/// (`sing-shadowsocks2 v0.2.1 method_registry`, реестр
+/// `protocols/shadowsocks.json` → `body.fields.method.values`). Значение вне
+/// набора = ошибка `CreateMethod` на ВЕСЬ конфиг, поэтому узел дропается.
 const shadowsocksMethods = {
   '2022-blake3-aes-128-gcm',
   '2022-blake3-aes-256-gcm',
@@ -477,13 +558,52 @@ const shadowsocksMethods = {
   'aes-256-gcm',
   'chacha20-ietf-poly1305',
   'xchacha20-ietf-poly1305',
+  ...shadowsocksLegacyMethods,
 };
 
 bool isValidShadowsocksMethod(String method) =>
     shadowsocksMethods.contains(method);
 
+/// §463 — метод принят ядром, но устарел: узел живёт с info-кодом
+/// `ss_method_legacy`.
+bool isLegacyShadowsocksMethod(String method) =>
+    shadowsocksLegacyMethods.contains(method);
+
 /// VLESS-порты, на которых обычно plain HTTP (без TLS) — как в v1.
 const plaintextVlessPorts = {80, 8080, 8880, 2052, 2082, 2086, 2095};
+
+// ════════════════════════════════════════════════════════════════════════════
+// §475 — SOCKS: версию протокола несёт СХЕМА ссылки
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Схема ссылки → значение `version` в теле (mapper-правило
+/// `socks_scheme_is_version`, `registry/protocols/socks.json`).
+///
+/// Своего query-параметра под версию у socks-ссылки нет ни в одном диалекте,
+/// поэтому дискриминатором работает схема — ровно как суффикс
+/// `proxy-https://` работает TLS-дискриминатором у http.
+///
+/// **Таблица одна на оба конца** — её читают маппер ссылки
+/// (`mappers/socks_mapper.dart`) и эмиттер (`toUriSocks`). Живёт она здесь, а
+/// не у маппера, именно поэтому: `node_spec_emit.dart` мапперов не знает и
+/// знать не должен (слой модели ниже слоя разбора), а две копии разъехались
+/// бы на первой же правке — и узел с `version: "4"` перестал бы переживать
+/// круг своей же ссылки, причём молча.
+const kSocksVersionByScheme = <String, String>{
+  'socks': '5',
+  'socks5': '5',
+  'socks4': '4',
+  'socks4a': '4a',
+};
+
+/// Обратное направление той же таблицы: версия тела → схема ссылки.
+///
+/// Версия вне таблицы даёт `socks5://` — ту же форму, что была до §475, и ту
+/// же, какую ядро примет по своему дефолту. Негодное значение сюда не
+/// доезжает: его снимает enum реестра (`type_invalid`), и модель получает
+/// дефолт.
+String socksSchemeForVersion(String version) =>
+    switch (version) { '4' => 'socks4', '4a' => 'socks4a', _ => 'socks5' };
 
 /// URL-encode query-параметра (для `toUri()`). Пробел → `%20`, не `+`.
 String encodeParam(String s) => Uri.encodeQueryComponent(s).replaceAll('+', '%20');

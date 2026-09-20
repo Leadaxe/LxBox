@@ -1,0 +1,305 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "anonymous_no_auth": {
+      "body": null,
+      "uri_before": "naive+https://server.example-1.com",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-server.example-1.com-443",
+        "server": "server.example-1.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "server.example-1.com"
+        }
+      }
+    },
+    "canonical_full": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@server.example-1.com#JP-01",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "JP-01",
+        "server": "server.example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "server.example-1.com"
+        }
+      }
+    },
+    "custom_port": {
+      "body": null,
+      "uri_before": "naive+https://a:b@naive.example-9.com:10443",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-naive.example-9.com-10443",
+        "server": "naive.example-9.com",
+        "server_port": 10443,
+        "username": "a",
+        "password": "b",
+        "tls": {
+          "enabled": true,
+          "server_name": "naive.example-9.com"
+        }
+      }
+    },
+    "default_port_443": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@host.example-1.com",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-host.example-1.com-443",
+        "server": "host.example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "host.example-1.com"
+        }
+      }
+    },
+    "extra_headers_bad_name_dropped": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@example-1.com?extra-headers=X-Good%3A%20ok",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "extra_headers": {
+          "X-Good": "ok"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "extra_headers_colon_in_value": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@example-1.com?extra-headers=X-Trace%3A%20id%3A123",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "extra_headers": {
+          "X-Trace": "id:123"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "extra_headers_crlf": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@example-1.com?extra-headers=X-Token%3A%20xyz%0D%0AX-User%3A%20alice",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "extra_headers": {
+          "X-Token": "xyz",
+          "X-User": "alice"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "extra_headers_encoded": {
+      "body": null,
+      "uri_before": "naive+https://hdr.example-9.com?extra-headers=X-Password%3A%20password%0D%0AX-Username%3A%20user",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-hdr.example-9.com-443",
+        "server": "hdr.example-9.com",
+        "server_port": 443,
+        "extra_headers": {
+          "X-Password": "password",
+          "X-Username": "user"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "hdr.example-9.com"
+        }
+      }
+    },
+    "fragment_utf8_escaped": {
+      "body": null,
+      "uri_before": "naive+https://u:p@naive.example-9.com#%E2%9C%85%20JP-01",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "✅ JP-01",
+        "server": "naive.example-9.com",
+        "server_port": 443,
+        "username": "u",
+        "password": "p",
+        "tls": {
+          "enabled": true,
+          "server_name": "naive.example-9.com"
+        }
+      }
+    },
+    "https_anonymous_padding_true": {
+      "body": null,
+      "uri_before": "naive+https://public.example-9.com#Public-01",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "Public-01",
+        "server": "public.example-9.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "public.example-9.com"
+        }
+      }
+    },
+    "https_userpass_padding_false": {
+      "body": null,
+      "uri_before": "naive+https://what:happened@naive.example-9.com#Naive!",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "Naive!",
+        "server": "naive.example-9.com",
+        "server_port": 443,
+        "username": "what",
+        "password": "happened",
+        "tls": {
+          "enabled": true,
+          "server_name": "naive.example-9.com"
+        }
+      }
+    },
+    "ipv6_host": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@[2001:db8::1]:8443",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-2001:db8::1-8443",
+        "server": "2001:db8::1",
+        "server_port": 8443,
+        "username": "user1",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "2001:db8::1"
+        }
+      }
+    },
+    "password_only_userinfo": {
+      "body": null,
+      "uri_before": "naive+https://onlypass@server.example-1.com",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-server.example-1.com-443",
+        "server": "server.example-1.com",
+        "server_port": 443,
+        "password": "onlypass",
+        "tls": {
+          "enabled": true,
+          "server_name": "server.example-1.com"
+        }
+      }
+    },
+    "quic_userpass": {
+      "body": null,
+      "uri_before": "naive+https://manhole:pass123@quic.example-9.com",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-quic.example-9.com-443",
+        "server": "quic.example-9.com",
+        "server_port": 443,
+        "username": "manhole",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "quic.example-9.com"
+        }
+      }
+    },
+    "unknown_query_ignored": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@example-1.com",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "naive-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "utf8_fragment_label": {
+      "body": null,
+      "uri_before": "naive+https://user1:pass123@example-1.com#%E2%9C%85%20DE",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "✅ DE",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "b480:extra_headers_unsorted": {
+      "body": {
+        "type": "naive",
+        "tag": "nv-hdr",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "extra_headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      },
+      "uri_before": "naive+https://user1:pass123@example-1.com?extra-headers=Alpha%3A%202%0D%0AMid%3A%203%0D%0AZed%3A%201#nv-hdr",
+      "body_of_old_uri": {
+        "type": "naive",
+        "tag": "nv-hdr",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "extra_headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    }
+  }
+}

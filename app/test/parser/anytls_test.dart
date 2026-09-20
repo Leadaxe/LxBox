@@ -1,4 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -7,6 +10,17 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §269 — AnyTLS: `anytls://password@host:port?...#label`.
 void main() {
+  // §480 W4 — схема переехала на ДВИЖОК СЕКЦИЙ, и рукописного запасного пути
+  // у неё больше нет: без реестра (общие блоки `tls#uri`, `dialer#uri`) и без
+  // самих секций разбор не работает вовсе. Гейта здесь НЕТ намеренно: зеркало
+  // `assets/contract` лежит в репозитории и едет в APK, и его отсутствие —
+  // поломка сборки, а не повод молча пропустить тест.
+  setUpAll(() async {
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   group('parseAnyTls — базовый разбор', () {
     test('password/host/port/label, TLS всегда on', () {
       final s = parseUri('anytls://secret@srv.example.com:8443#AT-01');
@@ -62,8 +76,16 @@ void main() {
       expect(a.tls.fingerprint, 'chrome');
       expect(a.tls.alpn, ['h2', 'http/1.1']);
       expect(a.tls.insecure, isTrue);
-      // insecure → InsecureTlsWarning выставлен.
-      expect(a.warnings.whereType<InsecureTlsWarning>(), isNotEmpty);
+      // §472 шаг 6 — код за `insecure` ставит РЕЕСТР (`tls.json` → `insecure`,
+      // `advisory`), а не рукописный `InsecureTlsWarning`. Этот файл реестра
+      // не грузит, поэтому проверка кода живёт там, где он есть:
+      // `anytls_pipeline_invariants_test.dart` («insecure даёт код реестра с
+      // путём и значением»). Здесь остаётся то, ради чего тест писался, —
+      // что `security=none` не затирает параметры.
+      expect(
+          a.warnings.where(
+              (w) => w is RegistryWarning && w.code == 'tls_insecure'),
+          isNotEmpty);
     });
   });
 
@@ -104,6 +126,13 @@ void main() {
     });
 
     test('невалидный min_idle_session → null', () {
+      // §472 шаг 6 — поле снимает САНИТАЙЗЕР (`min: 0` + `on_invalid: drop`,
+      // код `anytls_min_idle_invalid`). Этот файл реестра не грузит, поэтому
+      // здесь проверяется только то, что узел ЖИВ, а поле в модель не
+      // доезжает: жёсткий каст `as num?` в `parseSingboxEntry` прежде бросал
+      // на нечисловом значении, и `parseUri` отдавал `null` — узел исчезал
+      // целиком и молча. Код с путём и значением проверяет
+      // `anytls_pipeline_invariants_test.dart`.
       final a = parseUri('anytls://pw@h.example?min_idle_session=abc')
           as AnyTlsSpec;
       expect(a.minIdleSession, isNull);

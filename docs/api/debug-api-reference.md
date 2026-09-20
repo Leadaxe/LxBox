@@ -78,9 +78,12 @@ auth), а не факт, что за границей всё открыто.
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
   - [identity подписки (§289)](#346--identity-подписки-289)
   - [Import rules CRUD — `/subs/{id}/rules`](#346--import-rules-crud--subsidrules)
+  - [`reveal` и `warnings` у одной записи (478)](#фича-478--reveal-и-warnings-у-одной-записи)
+- [Nodes — `/nodes/*`](#nodes--nodes)
 - [Directions CRUD — `/directions/*`](#directions-crud--directions)
 - [Chains CRUD — `/chains/*`](#chains-crud--chains)
 - [Folders CRUD — `/folders/*`](#folders-crud--folders)
+- [Core-rejected nodes — `/core_reject/*`](#core-rejected-nodes--core_reject)
 - [WARP — `/warp`](#warp--warp)
 - [Pool — `/pool`](#pool--pool)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
@@ -223,8 +226,9 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — групповой URLTest ядра (§308: force-тест ВСЕХ членов + переселект на живой узел; fire-and-forget — `ok` значит «команда принята», результат смотреть через `GET /state` → `active_in_group`; URL — из конфига группы, не из ping settings; 409 если tunnel down); `all` — mass-ping всех нод активной группы (concurrency 10); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump; уже запущенные групповые прогоны в ядре не отменяет). → `{ok,action,scope,...}` |
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
-| `POST /action/start-vpn` | — | `home.start()` (через Activity, с VpnService.prepare dance — может показать consent-диалог) |
-| `POST /action/start-vpn-headless` | — | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}` |
+| `POST /action/start-vpn` | — | `runCoreRejectGuard(guard=false)` → прежний `home.start()` через Activity (может показать consent-диалог), **без** цикла страховки. Публичный Intent API (§047) этот путь не зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую |
+| `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start, но реальные старты — headless (`startVpnHeadless`, не Activity) → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
+| `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig`: с телом запроса проверяет **этот** JSON; без тела — **текущий собранный** конфиг на диске (не пересобранный на лету). Та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает CANON §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
 | `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра) |
 | `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
 | `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
@@ -355,11 +359,51 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 |---|---|---|
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
-| `/subs/{id}` | GET | — |
+| `/subs/{id}` | GET | `?reveal=true`, `?warnings=true` — см. ниже |
 | `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity. **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
 | `/subs/reorder` | POST | `{"order":[id1,...]}` |
+
+### Фича 478 — `reveal` и `warnings` у одной записи
+
+**`?reveal=true`** теперь отдаёт `raw` и у одиночного `UserServer` — текст
+узла, как он сохранён. Раньше сырое тело показывал только член папки, и
+сличить разбор с источником у одиночной записи было нечем. Несёт
+credentials, поэтому симметрично папке: только под `reveal`.
+
+**`?warnings=true`** добавляет `origin_kind`, `source_kind` (§455/§480) и ключ
+`warnings` — предупреждения разбора **по узлам**:
+
+```jsonc
+{
+  "id": "…", "kind": "SubscriptionServers", …,
+  "origin_kind": "uri",
+  "source_kind": "uri_lines",
+  "warnings": {
+    "🇩🇪 Frankfurt": [
+      {
+        "code": "reality_fp_not_chrome",
+        "severity": "warning",
+        "path": "tls.utls.fingerprint",
+        "value": "safari",
+        "title_en": "…", "text_en": "…"
+      }
+    ],
+    "Tokyo": []
+  }
+}
+```
+
+Все узлы присутствуют; у узла без предупреждений — пустой список. Тексты — **пиненный
+английский**: ответ не должен зависеть от локали устройства, а проверять надо
+резолв кода и подстановки, а не вёрстку. У предупреждений, чей текст пока
+живёт классом приложения (не кодом реестра), `code`/`path`/`value`/`title_en`
+— `null`, а `text_en` есть всегда (`NodeWarning.renderEn()`). По мере
+перевода классов на `RegistryWarning` форма ответа не меняется — у кода
+просто появляются `path`/`value`.
+
+По умолчанию выключено: на 500 узлах это лишний вес.
 
 **Добавить подписку:**
 ```bash
@@ -368,6 +412,30 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   "$BASE/subs"
 # → {"ok":true,"action":"subs-add","id":"<new>","kind":"SubscriptionServers"}
 ```
+
+**Отказ `addFromInput` (§500)** — запись не создаётся, `400 bad_request`.
+В теле, кроме `error.message` (базовая фраза без деталей), массив `dropped`
+с причинами отбраковки (код реестра; `value` у секретных полей — `***`):
+
+```json
+{
+  "error": {
+    "code": "bad_request",
+    "message": "addFromInput rejected: Could not parse direct link"
+  },
+  "dropped": [
+    {
+      "code": "type_invalid",
+      "path": "address",
+      "value": "1.2.3.4/64",
+      "title_en": "Field address removed: wrong type"
+    }
+  ]
+}
+```
+
+Если ввод не распознан как ссылка/JSON (нет причины разбора), `dropped`
+отсутствует.
 
 **Inline single server (SS URI):**
 ```bash
@@ -543,6 +611,39 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 - `replace_detour_chain` (§073) — bool detour-флаг, ранее пропущенный в PATCH-маппинге (асимметрия с соседними `register_detour_*`); теперь маппится. Config-significant → `?rebuild=true` чтобы применить.
 - `POST /subs/{id}/refresh` на UserServer → 409 `conflict` (нечего фетчить).
 - `POST /subs` с `?rebuild=true` **не ждёт fetch'а** — fetch асинхронный, rebuild'ит с текущими nodes (которых ещё нет → config без этих outbound'ов). Делай последовательно: `POST /subs` → `POST /subs/{id}/refresh` → wait → `POST /action/rebuild-config`.
+
+---
+
+## Nodes — `/nodes/*`
+
+Фича 478. Узел глазами **эмиттера**, а не хранения. В `/subs/{id}` узел виден
+так, как лежит (`raw`, секции, поля записи); здесь — тем, что приложение
+отдаст наружу. Между двумя сторонами стоит эмиттер, и расхождение заметно
+только когда обе читаются рядом.
+
+| Endpoint | Метод | Что делает |
+|---|---|---|
+| `/nodes/link?tag=<tag>` | GET | экспорт узла ссылкой — ровно то, что кладёт в буфер `Copy link` (`NodeSpec.toUri()`) |
+
+```bash
+curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7&reveal=true" | jq
+# → {"tag":"node-7","protocol":"vless","uri":"vless://…","private_key":false}
+curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7" | jq
+# → {"tag":"node-7","protocol":"vless","private_key":false,"error":"reveal required"}
+```
+
+- `tag` принимается и «как в конфиге» (с префиксом подписки), и голым: экран
+  адресует узлы первым, хранение — вторым. Звенья цепочки (§404) тоже ищутся.
+- `uri` несёт credentials → только с `?reveal=true` (симметрично `/subs/{id}` и
+  `raw` члена папки). Без флага → `{error:"reveal required"}`.
+- `private_key: true` — ссылка несёт приватный ключ владельца. На экране это
+  поднимает диалог (§466); здесь предупреждение не теряется, а становится
+  данными.
+- Узел найден, но ссылкой не выражается (группы §208 и прочие узлы,
+  собранные приложением без текста) → `{tag, protocol, error:"node has no
+  link form"}`, а **не** 404: узел есть, ответ обязан отличать «нет узла» от
+  «нет ссылки».
+- Узла с таким тегом нет → 404.
 
 ---
 
@@ -876,6 +977,116 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
   `override_detour` одиночного сервера; папочные tag_prefix/policy не
   наследуются.
 - URL-снапшот с недоступным URL → 502 `upstream_error` (сетевой fetch).
+
+---
+
+## Core-rejected nodes — `/core_reject/*`
+
+Фича 478 — страховка «узел, который не приняло ядро, выключается сам». Ядро
+отказало, назвав узел → приложение выключает этот узел, кладёт рядом причину
+и тихо перепроверяет конфиг, пока он не станет чистым.
+
+**Одно нажатие Start = ДВА реальных старта ядра** (сигнальный и финальный),
+между ними — тихий цикл `checkConfig` без туннеля; каждый круг цикла выключает
+ровно один узел. Поэтому `phase`, прошедшая
+`signal_start → checking → final_start → done` с непустым `disabled`, —
+нормальный успех, а не сбой.
+
+| Endpoint | Метод | Что |
+|---|---|---|
+| `/core_reject` | GET | состояние автомата текущего (или последнего) прогона |
+| `/core_reject/nodes` | GET | **все** вердикты, стоящие в хранении: `[{source, tag, reason}]` |
+| `/core_reject/banner` | GET | плашка «выключено N»: `{visible, count, nodes:[{tag,reason}]}` |
+| `/core_reject/banner/dismiss` | POST | закрыть плашку (идемпотентно) |
+| `/core_reject/prompt` | GET | вопрос про предел кругов: `{pending, count, limit}` |
+| `/core_reject/prompt?answer=stop\|keep` | POST | ответить на него за человека; `keep` можно поставить в очередь заранее |
+| `/core_reject/cancel` | POST | отменить идущий прогон — то же, что нажатие кнопки в фазе цикла |
+| `/core_reject/reset` | POST | сбросить состояние прогона в памяти (`phase→idle`, `round→0`); вердикты в хранилище и плашка не трогаются. 409 если прогон уже идёт |
+| `/core_reject/enable?tag=<tag>` | POST | снять вердикт руками (emitted-тег ядра или сырой тег идентичности) |
+| `/core_reject/notifications[?tag=<tag>]` | GET | что нарисуют строка и карточка узла: `[{code, severity, params, title_en, text_en}]` |
+
+`GET /core_reject`:
+
+```json
+{
+  "phase": "checking",
+  "round": 3,
+  "round_limit": 10,
+  "disabled": [{"tag": "vpn-1-node-7", "reason": "unknown method: rc4-md5"}],
+  "outcome": null,
+  "error": ""
+}
+```
+
+| Поле | Что |
+|---|---|
+| `phase` | `idle` \| `signal_start` \| `checking` \| `awaiting_prompt` \| `final_start` \| `done` |
+| `round` | круг тихой проверки; `0` — цикл ещё не начинался |
+| `round_limit` | после этого числа кругов автомат спрашивает человека |
+| `disabled` | узлы, выключенные **этим прогоном**, в порядке отказов ядра |
+| `outcome` | `null` до конца прогона, затем `started_clean` \| `started_with_disabled` \| `failed` \| `stopped_by_user` |
+| `error` | текст ошибки прогона; пусто у успеха |
+
+**Прогон vs хранение.** `/core_reject` живёт в памяти — после перезапуска
+процесса он пуст. Стоящие вердикты лежат рядом с узлами и перезапуск
+переживают: их отдаёт `/core_reject/nodes`, где `source` — отображаемое имя
+записи (у одиночного сервера — label/tag узла, а не пустой `list.name`).
+
+**Плашка** поднимается только на `outcome=started_with_disabled`: VPN поднят,
+но не тем составом, который задавал человек. Уходит при × (`dismiss`), Stop/
+Disconnected, следующем Start или перезапуске процесса (§498); вердикты на
+узлах при этом не снимаются. После Stop `GET /core_reject/banner` отдаёт
+`visible: false`. `dismiss` закрывает сообщение, а не отменяет решение.
+
+**Вопрос про предел.** `count` — число ИЗ ТЕКСТА диалога, то есть предел
+кругов, а не счётчик выключенных. `keep` снимает предел до конца этого Start,
+`stop` заканчивает прогон: VPN не поднят, выключенные остаются выключенными.
+Ответ принимается и query-параметром, и телом `{"answer":"..."}`.
+
+**Отмена.** Во время тихого цикла кнопка на главном экране остаётся на своём
+месте и становится отменой — иконка остановки, подпись та же
+(`Checking servers… (N disabled)`). `POST /core_reject/cancel` делает ровно то
+же самое снаружи: текущий круг доигрывает (прерывать ядро на середине
+`checkConfig` нечем), следующий не начинается, исход — `stopped_by_user`. Если
+в этот момент висел вопрос про предел, он закрывается ответом `stop`. Без
+идущего прогона — 409.
+
+**`/core_reject/notifications` — проверка рендера без экрана.** Тексты
+приходят ДАННЫМИ контракта (`registry/warnings.json`), поэтому проверять надо
+резолв кода, а не вёрстку: если `core_rejected` не нашёлся в реестре,
+`title_en` вернётся самим кодом. Ответ пиненно английский — machine-поверхность
+не должна зависеть от локали устройства. Без `tag` — карта `{tag: [...]}` по
+всем узлам, у которых хранимые записи есть.
+
+```bash
+# Довести ядро до отказа и смотреть, что делает автомат
+curl -X POST -H "$HDR" "$BASE/core_reject/prompt?answer=keep"   # снять предел заранее
+curl -X POST -H "$HDR" "$BASE/action/start-vpn-headless?guard=true"
+curl -s -H "$HDR" "$BASE/core_reject" | jq
+
+# Если автомат уперся в предел кругов — ответить за человека
+curl -s -H "$HDR" "$BASE/core_reject/prompt" | jq
+curl -X POST -H "$HDR" "$BASE/core_reject/prompt?answer=keep"
+
+# Что в итоге выключено и почему (переживает перезапуск процесса)
+curl -s -H "$HDR" "$BASE/core_reject/nodes" | jq
+
+# Что увидит человек на строке узла — код, severity и оба текста
+curl -s -H "$HDR" "$BASE/core_reject/notifications?tag=vpn-1-node-7" | jq
+
+# Вернуть узел руками
+curl -X POST -H "$HDR" "$BASE/core_reject/enable?tag=vpn-1-node-7"
+curl -X POST -H "$HDR" "$BASE/core_reject/banner/dismiss"
+```
+
+**Quirks:**
+- `POST /core_reject/prompt?answer=keep` без висящего вопроса → `{queued:true}`
+  (ответ ждёт следующего `askPrompt`). `answer=stop` без вопроса → 409.
+- `POST /action/start-vpn-headless?guard=true` при уже идущем прогоне → 409.
+- `answer` вне `stop|keep` → 400; `keep_checking` принимается синонимом `keep`.
+- `POST /core_reject/enable` с тегом, которого нет ни у одного узла → 404.
+- `GET /core_reject/notifications?tag=` с тегом без хранимых записей → 404
+  (пустой список значил бы «узел есть, записей нет» — это разные факты).
 
 ---
 

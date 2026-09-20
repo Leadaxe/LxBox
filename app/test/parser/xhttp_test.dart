@@ -9,10 +9,46 @@ import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/transport.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import 'engine_test_setup.dart';
+
 /// §097 — XHTTP (Xray splithttp) нативный transport. По образцу
 /// singbox-launcher SPEC 071: parse (URI camelCase + snake) → emit → round-trip,
 /// httpupgrade остаётся отдельным типом.
+/// §480 W8 — круг транспорта НАСТОЯЩИМ путём: `toUri()` собирает ссылку
+/// движком по секции `uri`, `parseUri` разбирает её обратно той же секцией.
+///
+/// Прежде эти тесты звали `transportToQuery` — рукописную эмиссию, снятую
+/// волной W7. Звать её отдельно от ссылки значило проверять слой, которого в
+/// `lib` больше нет: у транспорта своей ссылки не бывает, он всегда едет
+/// параметрами узла.
+///
+/// Носитель — VLESS: транспорт в его секции объявлен целиком, и схема первой
+/// переехала на движок.
+TransportSpec? _viaUri(TransportSpec t) {
+  final node = VlessSpec(
+    id: 'id-1',
+    tag: 'n',
+    label: 'n',
+    server: '1.2.3.4',
+    port: 443,
+    rawSource: '',
+    uuid: 'u-1',
+    transport: t,
+  );
+  return (parseUri(node.toUri()) as VlessSpec).transport;
+}
+
+/// Тело транспорта, доехавшее до ссылки и обратно. Сравнивать спеки по телу,
+/// а не по полям: тело — то, что уходит в ядро, и именно его круг обязан
+/// сохранить.
+Map<String, dynamic> _bodyViaUri(TransportSpec t) =>
+    _viaUri(t)!.toSingbox(TemplateVars.empty).$1;
+
 void main() {
+  // §480 — разбор ссылки и Xray-элемента идёт ДВИЖКОМ по секциям реестра;
+  // без них у схемы запасного рукописного пути не осталось (критерий 7).
+  setUpAll(loadEngineSections);
+
   group('XHTTP', () {
     test('parseTransport xhttp → все поля (Xray camelCase)', () {
       final t = parseTransport({
@@ -59,7 +95,7 @@ void main() {
       expect(w, isEmpty);
     });
 
-    test('round-trip transportToQuery → parseTransport', () {
+    test('круг через ссылку узла: поля доезжают', () {
       const x = XhttpTransport(
         path: '/x',
         host: 'h',
@@ -67,9 +103,7 @@ void main() {
         xPaddingBytes: '100-1000',
         noGrpcHeader: true,
       );
-      final q = transportToQuery(x);
-      expect(q['type'], 'xhttp');
-      final t = parseTransport(q) as XhttpTransport;
+      final t = _viaUri(x) as XhttpTransport;
       expect(t.path, '/x');
       expect(t.host, 'h');
       expect(t.mode, 'packet-up');
@@ -81,7 +115,10 @@ void main() {
       final t =
           parseTransport({'type': 'httpupgrade', 'path': '/u', 'host': 'h'});
       expect(t, isA<HttpUpgradeTransport>());
-      expect(transportToQuery(t!)['type'], 'httpupgrade');
+      // И через ссылку тип не подменяется на xhttp: путаница этих двух
+      // транспортов и есть тот регресс, который сторожит кейс.
+      expect(_viaUri(t!), isA<HttpUpgradeTransport>());
+      expect(_bodyViaUri(t)['type'], 'httpupgrade');
     });
 
     test('mode-матрица парсится дословно', () {
@@ -208,11 +245,89 @@ void main() {
       expect(m3['uplink_data_placement'], 'cookie');
       expect(w3.whereType<XhttpParamResetWarning>(), isEmpty);
 
-      // "невалидный" enum session_placement → тоже pure passthrough.
+      // §460 — session_placement вне enum реестра снимается (xhttp_param_reset),
+      // как seq_placement; см. тест ниже.
       final t4 = parseTransport({'type': 'xhttp', 'session_placement': 'bogus'})!;
       final (m4, w4) = t4.toSingbox(TemplateVars.empty);
-      expect(m4['session_placement'], 'bogus');
-      expect(w4.whereType<XhttpParamResetWarning>(), isEmpty);
+      expect(m4.containsKey('session_placement'), isFalse);
+      expect(w4.whereType<XhttpParamResetWarning>(), isNotEmpty);
+    });
+
+    // §459 (контракт §24.2 п. 7.14) — mode/x_padding_placement/
+    // x_padding_method гейтятся enum'ом ядра в эмите: мусор там даёт fatal на
+    // ВЕСЬ конфиг (transport/v2rayxhttp/client.go:47-51, meta.go:151-160).
+    // Регистр НЕ нормализуем — ядро case-sensitive, `queryInHeader` только
+    // camelCase.
+    group('§459 enum-гейт трёх полей', () {
+      (Map<String, dynamic>, List<NodeWarning>) emit(
+              String key, String value) =>
+          parseTransport({'type': 'xhttp', key: value})!
+              .toSingbox(TemplateVars.empty);
+
+      void expectKept(String key, String value) {
+        final (m, w) = emit(key, value);
+        expect(m[key], value, reason: '$key=$value');
+        expect(w.whereType<XhttpParamResetWarning>(), isEmpty,
+            reason: '$key=$value');
+      }
+
+      void expectDropped(String key, String value) {
+        final (m, w) = emit(key, value);
+        expect(m.containsKey(key), isFalse, reason: '$key=$value');
+        final reset = w.whereType<XhttpParamResetWarning>().single;
+        expect(reset, XhttpParamResetWarning(
+            key, XhttpResetReason.invalidEnumValue, value: value));
+      }
+
+      test('mode: валидные значения ядра проходят', () {
+        for (final v in ['auto', 'packet-up', 'stream-up', 'stream-one']) {
+          expectKept('mode', v);
+        }
+      });
+
+      test('mode: мусор снят + xhttp_param_reset', () {
+        for (final v in ['PACKET-UP', 'Auto', 'packet_up', 'bogus']) {
+          expectDropped('mode', v);
+        }
+      });
+
+      test('x_padding_placement: queryInHeader проходит, queryinheader — нет',
+          () {
+        for (final v in ['cookie', 'header', 'query', 'queryInHeader']) {
+          expectKept('x_padding_placement', v);
+        }
+        for (final v in ['queryinheader', 'QueryInHeader', 'body']) {
+          expectDropped('x_padding_placement', v);
+        }
+      });
+
+      test('x_padding_method: repeat-x/tokenish проходят, fixed — нет', () {
+        for (final v in ['repeat-x', 'tokenish']) {
+          expectKept('x_padding_method', v);
+        }
+        for (final v in ['fixed', 'Repeat-X', 'repeat_x']) {
+          expectDropped('x_padding_method', v);
+        }
+      });
+
+      test('пустое значение — ключа нет и предупреждения нет', () {
+        for (final key in ['mode', 'x_padding_placement', 'x_padding_method']) {
+          final (m, w) = emit(key, '');
+          expect(m.containsKey(key), isFalse, reason: key);
+          expect(w, isEmpty, reason: key);
+        }
+      });
+
+      test('mode-гейт не ломает §416 (header-placement без mode)', () {
+        final (m, w) = parseTransport({
+          'type': 'xhttp',
+          'uplink_data_placement': 'header',
+        })!
+            .toSingbox(TemplateVars.empty);
+        expect(m['mode'], 'packet-up');
+        expect(m['uplink_data_placement'], 'header');
+        expect(w.whereType<XhttpModeForcedPacketUpWarning>(), hasLength(1));
+      });
     });
 
     test('extra (URL-encoded JSON) вливается в transport', () {
@@ -266,7 +381,7 @@ void main() {
       expect(t.scMaxEachPostBytes, '1000000');
     });
 
-    test('round-trip: parseTransport(transportToQuery(golden)) ≈ golden', () {
+    test('круг через ссылку узла: parseUri(toUri(golden)) ≈ golden', () {
       const golden = XhttpTransport(
         host: 'www.example.com',
         path: '/xhttp',
@@ -289,11 +404,8 @@ void main() {
         scMaxEachPostBytes: '1000000',
         scMinPostsIntervalMs: '30',
       );
-      final q = transportToQuery(golden);
-      final back = parseTransport(q) as XhttpTransport;
       // сравнение по выхлопу toSingbox (= по смыслу spec)
-      expect(back.toSingbox(TemplateVars.empty).$1,
-          golden.toSingbox(TemplateVars.empty).$1);
+      expect(_bodyViaUri(golden), golden.toSingbox(TemplateVars.empty).$1);
     });
 
     test('toUri пишет только не-дефолтные поля (§8.3 — без раздувания)', () {
@@ -304,7 +416,17 @@ void main() {
         uplinkHttpMethod: '', // дефолт POST
         xPaddingObfsMode: false,
       );
-      final q = transportToQuery(x);
+      final node = VlessSpec(
+        id: 'id-1',
+        tag: 'n',
+        label: 'n',
+        server: '1.2.3.4',
+        port: 443,
+        rawSource: '',
+        uuid: 'u-1',
+        transport: x,
+      );
+      final q = Uri.parse(node.toUri()).queryParameters;
       expect(q.containsKey('sessionPlacement'), false);
       expect(q.containsKey('uplinkHTTPMethod'), false);
       expect(q.containsKey('xPaddingObfsMode'), false);
@@ -616,8 +738,14 @@ void main() {
         scStreamUpServerSecs: '20-80',
         scMaxBufferedPosts: 30,
         noSseHeader: true,
+        // §480 — `max_concurrency` в эталон НЕ входит, и это не пробел
+        // состава: реестр объявляет его взаимоисключающим с
+        // `max_connections` (`transports.xhttp.xmux.max_concurrency.conflicts`,
+        // код `field_conflict`), и санитайзер снимает ДЕКЛАРАНТА, когда в
+        // теле оба. Узла с обоими полями не бывает — ядро отвергает такой
+        // конфиг, — поэтому эталон «все поля разом» несёт одно из двух.
+        // Само поле читается всеми тремя ветками: отдельный кейс ниже.
         maxConnections: '1',
-        maxConcurrency: '16-32',
         cMaxReuseTimes: '5',
         hMaxRequestTimes: '600',
         hMaxReusableSecs: '1800',
@@ -625,10 +753,8 @@ void main() {
       );
       final expected = golden.toSingbox(TemplateVars.empty).$1;
 
-      // Ветка 1 — URI (camelCase query).
-      final viaUri = parseTransport(transportToQuery(golden))!;
-      expect(viaUri.toSingbox(TemplateVars.empty).$1, expected,
-          reason: 'URI-ветка потеряла поле');
+      // Ветка 1 — URI (ссылка узла: сборка и разбор одной секцией).
+      expect(_bodyViaUri(golden), expected, reason: 'URI-ветка потеряла поле');
 
       // Ветка 2 — Xray-JSON: те же значения, но snake_case ключами в extra.
       final viaXray = xrayTransport({
@@ -644,6 +770,36 @@ void main() {
       expect(singboxTransport(expected).toSingbox(TemplateVars.empty).$1,
           expected,
           reason: 'sing-box-JSON-ветка потеряла поле');
+    });
+
+    // §480 — вторая половина критерия 7: поле, которое в общий эталон войти
+    // не может (оно конфликтует с соседом), всё равно обязано читаться
+    // всеми тремя ветками. Без соседа конфликта нет, и оно доезжает.
+    test('max_concurrency без max_connections читают все три ветки', () {
+      const golden = XhttpTransport(
+        host: 'h',
+        path: '/p',
+        mode: 'packet-up',
+        maxConcurrency: '16-32',
+        cMaxReuseTimes: '5',
+      );
+      final expected = golden.toSingbox(TemplateVars.empty).$1;
+
+      expect(_bodyViaUri(golden), expected,
+          reason: 'URI-ветка потеряла max_concurrency');
+
+      final viaXray = xrayTransport({
+        'host': 'h',
+        'path': '/p',
+        'mode': 'packet-up',
+        'extra': Map<String, dynamic>.from(expected)..remove('type'),
+      });
+      expect(viaXray.toSingbox(TemplateVars.empty).$1, expected,
+          reason: 'Xray-JSON-ветка потеряла max_concurrency');
+
+      expect(singboxTransport(expected).toSingbox(TemplateVars.empty).$1,
+          expected,
+          reason: 'sing-box-JSON-ветка потеряла max_concurrency');
     });
 
     // Паритет с Go (SPEC 102 R2): Xray пишет xmux в `extra` вложенным

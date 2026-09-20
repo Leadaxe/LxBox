@@ -1,0 +1,2887 @@
+{
+  "note": "§472 шаг 7 — снимок identity wireguard/AWG (ссылка, INI, фабрики WARP), снятый СТАРЫМ путём ДО переезда (18.09.2026) || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть. INI-кейсы `b480ini:` сняты с nameHint='file-hint'.",
+  "cases": {
+    "corpus:amnezia_vpn_awg": {
+      "uri": "vpn://AAACwHicfVJtb9owEP4rkT-zYDuB4KhUQqNpoSPKgARNpJrcxAyrIUGJW7oi_vvuXE2bJnVxbD333Jvu5UyKpjZS16rtSLg9_xFJSOShVm9afpKnH6RH8A3PpJKd-Q5WOw0iOefkHeckdHKyndVGtTtZqIc8rydl2aquc8YOo-7IZS7vexz4abxCzrWnB4DCYaBIWv0ijbpXP0GfRvN59hSly9REm_XktJh-eMfgu1inGNTnFIR5AdhHcNA1Qkse5CvgAPGKoTEbIuQAh5j-zpLcE0wEVIyQQR0TXOBng9x5NosQQzoIuPXygRGCB3TIRwEQMwxz9ejQV0opg0s5Y1z6Pr--aiH-NdjAv02UarFNyfNjpYv3or-m8-nyJrtd0v189WSgqEGSRtEqZcssq8pvm6w5Ldazt3iajm3DVLeXrSp_tyz-8p82_duySVU1J1XOEhwRtVOgfdpzwrCPpd7U5bHRtQElpx6OiHluEHojLuywYGV0Z1Rt7pU6ykq_KLQcYHXkAgtzbFoDK2LtyeXy0COl2snnynz-cMf2TWdieVCg-CslQc-uaPXR6KYG3WRz68RNqcjlFxDH0w4",
+      "identity": "3ae375f68897c0ea3e579b8078cb85cbd22868091a8cd750efbfe35138138467",
+      "tag": "AWG Node",
+      "body": {
+        "type": "wireguard",
+        "tag": "AWG Node",
+        "mtu": 1280,
+        "address": [
+          "10.8.1.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "203.0.113.7",
+            "port": 38291,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "pre_shared_key": "UFNLMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 116,
+        "s2": 61,
+        "h1": 1239197098,
+        "h2": 1929999940,
+        "h3": 1499605721,
+        "h4": 992706287,
+        "i1": "<b 0x000100002112a442><r 12>"
+      }
+    },
+    "corpus:amnezia_vpn_awg3": {
+      "uri": "vpn://AAAEanjafVNtb9pADP4rKOq3QSAJKS1SPzAoBdqwLCGgqlTomjPlRnKXJgf0Rfz32aG026ROCJ39PD77iX1-M2IlNRMS8sJo3719ukbbYKmEV8FqbPdoG1UDD6P9ZmQq10g6DffURTTLlVaxShZbTCGUJMq0kNA5kwUFL8oQxDc8QzxhhV5gmaUo0x0t424oNeRLFsP9XHY4z6EoKhcVq2GemZbZqjv2XPbGIUInfjD0OsHtAt1q5SS87P4Y9979ufRzsWUaruEFQ6P-aDRd96Mg0v3ZpLPzel_-L-ZyFOOVJp6pkGVpMtkzmi6aoUWGi4ZNYSgndMggqknhiAwoxsKTQsinCAfP5iHzABiH3MeGQKyxWweV33fN6aDrPXmTx3qwtqKZPcriAf-2un2ZpE9XKm-x82dvG9pAKrs4IpDaZ5wL-YidEpSp1FuzGqgmgDW8dJbYzYlIoSSQsY8MgWqjSVitRdgv1PJXuIvhZxh-DZCxRGzh84pbs7ADHnseMMmLFVtDR2tIM13Oyq2VVZBS6SRnIsE3gbiSODpRsIcEukqtBRzBubzzAXIcuL95SER8aMfPaNQLLqdXQWM1Ctfam0SuH_X7YWQF02nCb2dTtfMmw9dxL7qgeQPqyIEfJz6--c-U_5l4J0nUDvjQJ0UNs_zVG9VKu13HD7mUPFNC0nfbDQc5y3LM83b59LEwPfiCRvHRJwp0aw6S-NBTvcFnbTmtU3RWqtBjlgIif6Si_SnXqUyJzkfKxRpzLsqkdIWS0goe5C5ERttqfAhGihQb91UjTgRdFxnVft8dY7_fI8VhyTaJ7n694l-q5FDEucj0YcE7syunMlYciJGFRaVatmmfm-XhNg-4TXgp0TL2vwEy414z",
+      "identity": "cef22c0d9efdcf29cb131c293f68c9c4ddbc69cc9c543a51a6d47516de19982f",
+      "tag": "AWG3 Node",
+      "body": {
+        "type": "wireguard",
+        "tag": "AWG3 Node",
+        "mtu": 1280,
+        "address": [
+          "10.8.1.7/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "203.0.113.9",
+            "port": 30565,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "pre_shared_key": "UFNLMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+            "persistent_keepalive_interval": "25-35"
+          }
+        ],
+        "header_protection_key": "Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=",
+        "content_padding_addition": "10-100",
+        "rekey_after_time": "100-120",
+        "rekey_timeout": "3-7",
+        "reject_after_time": "150-180",
+        "keepalive_timeout": "5-15",
+        "max_handshake_attempts": "15-20",
+        "random_trailers": true,
+        "disable_cookies": true,
+        "jc": 4,
+        "jmin": 10,
+        "jmax": 50,
+        "s1": 55,
+        "s2": 42,
+        "s3": 40,
+        "s4": 12,
+        "h1": 1,
+        "h2": 2,
+        "h3": 3,
+        "h4": 4
+      }
+    },
+    "corpus:amnezia_vpn_not_base64": {
+      "uri": "vpn://%%%not-base64%%%",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:amnezia_vpn_plain_wg": {
+      "uri": "vpn://AAABonichZBRa8IwFIX_itxnF5s6oRZ8kGmHHUpXTWVYGZm5arCmksaVWfrfTfXBvYyRBO7NzflOOBVscmW4VKgL8FfVowUf-FHhRfKnUmrcnbkW0IZH7VeQ8cJ8WsVW7uzzKoV7nYLfSmE1UQb1lm9wnaZqKITGomgNWtQhHqHE7XRdex9p-c0NvuGPHbEgDJNDwGJmguViWE5Hf56B1U4XrOF1Pcc2dq8iRN2YReevTG7uzHcWjuJx8ho7-3B-MFbTi1gQzBmNkyQTH8skL6eLyWU2Yg1zmGV5iWISNV91yG11Gv5YiVMulWkc-x7pUUIdhzz7Peq5N3-obTynXBsbRddz-xTqet0GgVt-zszLP7nu88LM-BHt-Dce6ivY8oZs",
+      "identity": "1aabea3c807b668982b543a2c5ce63d40bce2939d60818a92e96c139ea81e96d",
+      "tag": "198.51.100.4",
+      "body": {
+        "type": "wireguard",
+        "tag": "198.51.100.4",
+        "mtu": 1380,
+        "address": [
+          "10.8.1.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "198.51.100.4",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:amnezia_vpn_size_bomb": {
+      "uri": "vpn://_____3icAQI",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:amnezia_vpn_truncated": {
+      "uri": "vpn://AAAA",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:awg3_full_params": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@host.example.com:30565?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.8.1.7/32&allowedips=0.0.0.0/0,::/0&mtu=1376&keepalive=25-35&jc=4&jmin=10&jmax=50&s1=55&s2=42&s3=40&s4=12&h1=1&h2=2&h3=3&h4=4&headerprotectionkey=Bw4VHCMqMTg%2FRk1UW2JpcHd%2BhYyTmqGor7a9xMvS2eA%3D&contentpaddingaddition=10-100&rekeyaftertime=100-120&rekeytimeout=3-7&rejectaftertime=150-180&keepalivetimeout=5-15&maxhandshakeattempts=15-20&randomtrailers=on&disablecookies=on#awg3-server",
+      "identity": "934791bd04e27a5a5f6c623d2e7ff3067fb0b521995fafdb18d3e1942789f5cd",
+      "tag": "awg3-server",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg3-server",
+        "mtu": 1280,
+        "address": [
+          "10.8.1.7/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "host.example.com",
+            "port": 30565,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": "25-35"
+          }
+        ],
+        "header_protection_key": "Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=",
+        "content_padding_addition": "10-100",
+        "rekey_after_time": "100-120",
+        "rekey_timeout": "3-7",
+        "reject_after_time": "150-180",
+        "keepalive_timeout": "5-15",
+        "max_handshake_attempts": "15-20",
+        "random_trailers": true,
+        "disable_cookies": true,
+        "jc": 4,
+        "jmin": 10,
+        "jmax": 50,
+        "s1": 55,
+        "s2": 42,
+        "s3": 40,
+        "s4": 12,
+        "h1": 1,
+        "h2": 2,
+        "h3": 3,
+        "h4": 4
+      }
+    },
+    "corpus:awg3_header_key_short_dropped": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@host.example.com:30565?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.8.1.7/32&allowedips=0.0.0.0/0,::/0&mtu=1376&s1=55&s2=42&s3=40&s4=12&headerprotectionkey=AQIDBAUGBwgJCgsMDQ4PEA%3D%3D#awg3-short-key",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:awg_bad_numeric_skipped": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.10.10.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&jc=not-a-number&jmin=50#awg-server",
+      "identity": "7d576b1a0f25d309f8e21585d9836fde993320ce8ddd8cd96eef9fedf0d03a8b",
+      "tag": "awg-server",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-server",
+        "mtu": 1280,
+        "address": [
+          "10.10.10.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:awg_conf_base64": {
+      "uri": "awg://W0ludGVyZmFjZV0KUHJpdmF0ZUtleSA9IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9CkFkZHJlc3MgPSAxMC4xMDEuMC4yLzMyCkROUyA9IDEuMS4xLjEKCkpjID0gMTIwCkptaW4gPSAyMwpKbWF4ID0gOTExCgpTMSA9IDU2ClMyID0gNDgKUzMgPSAzMgpTNCA9IDE2CgpIMSA9IDEKSDIgPSAyCkgzID0gMwpINCA9IDQKCkhlYWRlclByb3RlY3Rpb25LZXkgPSBBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJPQpDb250ZW50UGFkZGluZ0FkZGl0aW9uID0gMTYtNjQKUmVrZXlBZnRlclRpbWUgPSAzMDAwLTQwMDAKUmVrZXlUaW1lb3V0ID0gNS0xMApSZWplY3RBZnRlclRpbWUgPSAxODAtMTkwCktlZXBhbGl2ZVRpbWVvdXQgPSA4LTE1Ck1heEhhbmRzaGFrZUF0dGVtcHRzID0gMTUtMjEKClJhbmRvbVRyYWlsZXJzID0gb24KRGlzYWJsZUNvb2tpZXMgPSBvZmYKCltQZWVyXQpQdWJsaWNLZXkgPSBBUUVCQVFFQkFRRUJBUUVCQVFFQkFRRUJBUUVCQVFFQkFRRUJBUUVCQVFFPQpQcmVzaGFyZWRLZXkgPSBBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNPQpBbGxvd2VkSVBzID0gMC4wLjAuMC8wCkVuZHBvaW50ID0gOTEuMjQ3LjIzNS45NDo1MTgyMQpQZXJzaXN0ZW50S2VlcGFsaXZlID0gMjUK#AmneziaWG-3.1",
+      "identity": "581440a26ae0db9dbd14bd64c1134cab8f63e1072e63d9ca86b00cffc8155db9",
+      "tag": "AmneziaWG-3.1",
+      "body": {
+        "type": "wireguard",
+        "tag": "AmneziaWG-3.1",
+        "mtu": 1280,
+        "address": [
+          "10.101.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "91.247.235.94",
+            "port": 51821,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ],
+            "pre_shared_key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "header_protection_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+        "content_padding_addition": "16-64",
+        "rekey_after_time": "3000-4000",
+        "rekey_timeout": "5-10",
+        "reject_after_time": "180-190",
+        "keepalive_timeout": "8-15",
+        "max_handshake_attempts": "15-21",
+        "random_trailers": true,
+        "jc": 120,
+        "jmin": 23,
+        "jmax": 911,
+        "s1": 56,
+        "s2": 48,
+        "s3": 32,
+        "s4": 16,
+        "h1": 1,
+        "h2": 2,
+        "h3": 3,
+        "h4": 4
+      }
+    },
+    "corpus:awg_conf_base64_no_label": {
+      "uri": "awg://W0ludGVyZmFjZV0KUHJpdmF0ZUtleSA9IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9CkFkZHJlc3MgPSAxMC4xMDEuMC4yLzMyCkROUyA9IDEuMS4xLjEKCkpjID0gMTIwCkptaW4gPSAyMwpKbWF4ID0gOTExCgpTMSA9IDU2ClMyID0gNDgKUzMgPSAzMgpTNCA9IDE2CgpIMSA9IDEKSDIgPSAyCkgzID0gMwpINCA9IDQKCkhlYWRlclByb3RlY3Rpb25LZXkgPSBBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJPQpDb250ZW50UGFkZGluZ0FkZGl0aW9uID0gMTYtNjQKUmVrZXlBZnRlclRpbWUgPSAzMDAwLTQwMDAKUmVrZXlUaW1lb3V0ID0gNS0xMApSZWplY3RBZnRlclRpbWUgPSAxODAtMTkwCktlZXBhbGl2ZVRpbWVvdXQgPSA4LTE1Ck1heEhhbmRzaGFrZUF0dGVtcHRzID0gMTUtMjEKClJhbmRvbVRyYWlsZXJzID0gb24KRGlzYWJsZUNvb2tpZXMgPSBvZmYKCltQZWVyXQpQdWJsaWNLZXkgPSBBUUVCQVFFQkFRRUJBUUVCQVFFQkFRRUJBUUVCQVFFQkFRRUJBUUVCQVFFPQpQcmVzaGFyZWRLZXkgPSBBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdNPQpBbGxvd2VkSVBzID0gMC4wLjAuMC8wCkVuZHBvaW50ID0gOTEuMjQ3LjIzNS45NDo1MTgyMQpQZXJzaXN0ZW50S2VlcGFsaXZlID0gMjUK",
+      "identity": "581440a26ae0db9dbd14bd64c1134cab8f63e1072e63d9ca86b00cffc8155db9",
+      "tag": "91.247.235.94",
+      "body": {
+        "type": "wireguard",
+        "tag": "91.247.235.94",
+        "mtu": 1280,
+        "address": [
+          "10.101.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "91.247.235.94",
+            "port": 51821,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ],
+            "pre_shared_key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "header_protection_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+        "content_padding_addition": "16-64",
+        "rekey_after_time": "3000-4000",
+        "rekey_timeout": "5-10",
+        "reject_after_time": "180-190",
+        "keepalive_timeout": "8-15",
+        "max_handshake_attempts": "15-21",
+        "random_trailers": true,
+        "jc": 120,
+        "jmin": 23,
+        "jmax": 911,
+        "s1": 56,
+        "s2": 48,
+        "s3": 32,
+        "s4": 16,
+        "h1": 1,
+        "h2": 2,
+        "h3": 3,
+        "h4": 4
+      }
+    },
+    "corpus:awg_conf_base64_not_conf": {
+      "uri": "awg://aGVsbG8gd29ybGQsIG5vdCBhIGNvbmY=#junk",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:awg_default_mtu_low": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.0.0.2/32&allowedips=0.0.0.0/0&jc=10#n",
+      "identity": "c5c89f3aab643b43959e60727a635c3f94ccaff346349ff87fabedf64cff2c6c",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "jc": 10
+      }
+    },
+    "corpus:awg_full_fields": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.10.10.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1408&keepalive=25&jc=10&jmin=50&jmax=100&s1=20&s2=20&s3=60&s4=60&h1=1234567890&h2=1234567891&h3=1234567892&h4=1234567893&i1=%3Cb%200x000100002112a442%3E%3Cr%2012%3E&i2=%3Cb%200x010100002112a442%3E%3Cr%2012%3E&i3=%3Cr%2024%3E#awg-server",
+      "identity": "be5a4b9aff3b2a5c23ae41fd8871e895a01db8b53446ea81a7a8043382fc1d9b",
+      "tag": "awg-server",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-server",
+        "mtu": 1280,
+        "address": [
+          "10.10.10.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 10,
+        "jmin": 50,
+        "jmax": 100,
+        "s1": 20,
+        "s2": 20,
+        "s3": 60,
+        "s4": 60,
+        "h1": 1234567890,
+        "h2": 1234567891,
+        "h3": 1234567892,
+        "h4": 1234567893,
+        "i1": "<b 0x000100002112a442><r 12>",
+        "i2": "<b 0x010100002112a442><r 12>",
+        "i3": "<r 24>"
+      }
+    },
+    "corpus:awg_full_params": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@host.example.com:51821?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&allowedips=0.0.0.0/0,::/0&mtu=1408&keepalive=25&jc=10&jmin=50&jmax=100&s1=20&s2=20&s3=60&s4=60&h1=1234567890&h2=1234567891&h3=1234567892&h4=1234567893&i1=%3Cb%200x000100002112a442%3E%3Cr%2012%3E&i3=%3Cr%2024%3E#awg-server",
+      "identity": "0f4e7cfc1578a13d48b714fc78618691e7b569f95a7cbf3fc5bfc5e6ea2d207e",
+      "tag": "awg-server",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-server",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "host.example.com",
+            "port": 51821,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 10,
+        "jmin": 50,
+        "jmax": 100,
+        "s1": 20,
+        "s2": 20,
+        "s3": 60,
+        "s4": 60,
+        "h1": 1234567890,
+        "h2": 1234567891,
+        "h3": 1234567892,
+        "h4": 1234567893,
+        "i1": "<b 0x000100002112a442><r 12>",
+        "i3": "<r 24>"
+      }
+    },
+    "corpus:awg_h1_above_int32": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.10.10.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&jc=10&h1=4000000000&i1=%3Cr%2024%3E#awg-server",
+      "identity": "a22c76dd5ad8c8baee126508fd907d18c8e13b3824f8492cabec59643fb278aa",
+      "tag": "awg-server",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-server",
+        "mtu": 1280,
+        "address": [
+          "10.10.10.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 10,
+        "h1": 4000000000,
+        "i1": "<r 24>"
+      }
+    },
+    "corpus:awg_header_ranges": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.10.10.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&h1=43613244-384550127&h2=300-200&h3=10-x&h4=992706287&jc=10-20#awg-server",
+      "identity": "94c094803ffdcdf38455db8bd623a02d0d50a1f0d496b2c2760e5f7c40f1e535",
+      "tag": "awg-server",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-server",
+        "mtu": 1280,
+        "address": [
+          "10.10.10.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "h1": "43613244-384550127",
+        "h2": "200-300",
+        "h4": 992706287
+      }
+    },
+    "corpus:awg_i1_only_marks_awg": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.0.0.2/32&allowedips=0.0.0.0/0&i1=%3Cr+24%3E&mtu=1500#n",
+      "identity": "28c9981f79d6c53cd4078ffd0a8c45d339c6a9f07851db3be635d36e79a82aa1",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "i1": "<r 24>"
+      }
+    },
+    "corpus:awg_jc_invalid_dropped": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&jc=abc&jmin=50#awg-badjc",
+      "identity": "b72bac98c8bf44008fad2352a8ec3058fb6dec35bcab26baf3d5b78077ce84b0",
+      "tag": "awg-badjc",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-badjc",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:awg_jc_zero_explicit": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&jc=0#awg-jc0",
+      "identity": "5765bac70c5264f6c3b3d2180aacb439dbeb36a388a4a4e506d5c53a0eee1a8a",
+      "tag": "awg-jc0",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-jc0",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 0
+      }
+    },
+    "corpus:awg_jc_zero_preserved": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.10.10.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&jc=0#awg-server",
+      "identity": "801a773a21681b9388732b4e001c566fcdfabab6a68b06c7fc68e90044dfa27e",
+      "tag": "awg-server",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-server",
+        "mtu": 1280,
+        "address": [
+          "10.10.10.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 0
+      }
+    },
+    "corpus:awg_mtu_1200_respected": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&jc=10&mtu=1200#awg-mtu1200",
+      "identity": "dee3e6aa4cb9cbae8f823370ec327da3df1fdf0396610ecfdf935eca536e1863",
+      "tag": "awg-mtu1200",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-mtu1200",
+        "mtu": 1200,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 10
+      }
+    },
+    "corpus:awg_mtu_1420_clamped": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&jc=10&mtu=1420#awg-clamp",
+      "identity": "5ca4527b58b8b3fc9da89a2a4a1968452994f8643f8a2d94783657e90355dbc2",
+      "tag": "awg-clamp",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-clamp",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 10
+      }
+    },
+    "corpus:awg_mtu_clamped_1280": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.0.0.2/32&allowedips=0.0.0.0/0&jc=10&mtu=1420#n",
+      "identity": "c5c89f3aab643b43959e60727a635c3f94ccaff346349ff87fabedf64cff2c6c",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "jc": 10
+      }
+    },
+    "corpus:awg_mtu_lower_honored": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.0.0.2/32&allowedips=0.0.0.0/0&jc=10&mtu=1200#n",
+      "identity": "c3680472862570b8b573e66df8ba750385b5c3cba86ef39cf86ecccf84e077da",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "mtu": 1200,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "jc": 10
+      }
+    },
+    "corpus:awg_no_mtu_default_1280": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&jc=10#awg-nomtu",
+      "identity": "5ca4527b58b8b3fc9da89a2a4a1968452994f8643f8a2d94783657e90355dbc2",
+      "tag": "awg-nomtu",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-nomtu",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 10
+      }
+    },
+    "corpus:awg_ranged_h1_mixed": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&h1=43613244-384550127&h2=826869626#awg-ranged",
+      "identity": "4a50ff5e1abf81dad6e848ac042fcbdbbfc6d3927f565410acdd75ee52524fef",
+      "tag": "awg-ranged",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-ranged",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "h1": "43613244-384550127",
+        "h2": 826869626
+      }
+    },
+    "corpus:awg_ranged_h_broken_dropped": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&h1=10-&h2=a-b&h3=-5&h4=1-2-3&jc=4#awg-badh",
+      "identity": "ee6c02c25c51190635eaf37c2a203785dfb37f4af931e8719e427ae9b1304ba5",
+      "tag": "awg-badh",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-badh",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 4
+      }
+    },
+    "corpus:awg_scheme_alias": {
+      "uri": "awg://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@host.example.com:51821?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&jc=10&jmin=50&jmax=100&h1=1234567890#awg-alias",
+      "identity": "bb08262a470ef281dd2ae5795775808fba26414ff040afcc7e4e09680416c791",
+      "tag": "awg-alias",
+      "body": {
+        "type": "wireguard",
+        "tag": "awg-alias",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "host.example.com",
+            "port": 51821,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 10,
+        "jmin": 50,
+        "jmax": 100,
+        "h1": 1234567890
+      }
+    },
+    "corpus:bare_allowed_ip_prefix": {
+      "uri": "wireguard://QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=10.0.0.2/32&allowedips=10.0.0.5#n",
+      "identity": "06507d386e30fa698c6eec29ae4a5daf4563969066dd1b985943b6665fc0a22c",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+        "peers": [
+          {
+            "address": "192.0.2.71",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "10.0.0.5/32"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:bare_ip_to_cidr": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@h.example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=172.16.0.2&allowedips=10.0.0.5,fd00::2#wg-cidr",
+      "identity": "f63daa40c62fecf35f8516716e88a4837150f0806d31a4a0b8e07b27c30bec97",
+      "tag": "wg-cidr",
+      "body": {
+        "type": "wireguard",
+        "tag": "wg-cidr",
+        "address": [
+          "172.16.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "h.example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "10.0.0.5/32",
+              "fd00::2/128"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:bare_ipv4_address_prefix": {
+      "uri": "wireguard://QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=172.16.0.2&allowedips=0.0.0.0/0#n",
+      "identity": "7383ac61f7a7cbbc572424493803f4b5f9a74cf175a8af3af3e382f559a14069",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "address": [
+          "172.16.0.2/32"
+        ],
+        "private_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+        "peers": [
+          {
+            "address": "192.0.2.71",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:bare_ipv6_address_prefix": {
+      "uri": "wireguard://QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=2001:db8::2&allowedips=::/0#n",
+      "identity": "2194f34e96e00f2f43a34efeabe7a89b4744e1a6c456b7017c0f051e28505705",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "address": [
+          "2001:db8::2/128"
+        ],
+        "private_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+        "peers": [
+          {
+            "address": "192.0.2.71",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:canonical_plus_in_key": {
+      "uri": "wireguard://AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobPj4+q80=@192.0.2.70:51820?publickey=ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5%2FPj4%2Bq80%3D&address=10.10.10.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0#wg-node",
+      "identity": "316a095f95c56e14a69ef77d932c3cea85a894f7ae0ef165f2651dea3459cf2e",
+      "tag": "wg-node",
+      "body": {
+        "type": "wireguard",
+        "tag": "wg-node",
+        "address": [
+          "10.10.10.2/32"
+        ],
+        "private_key": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobPj4+q80=",
+        "peers": [
+          {
+            "address": "192.0.2.70",
+            "port": 51820,
+            "public_key": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/Pj4+q80=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:encoded_slash_in_private_key": {
+      "uri": "wireguard://QUFBQUFBQUFBQUFBQUFBQUFBQUH%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F8=@h.example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32#wg-encslash",
+      "identity": "71b200367c5267d53c53ac40ee3e053f9ae59bc080653bec464101bb85374078",
+      "tag": "wg-encslash",
+      "body": {
+        "type": "wireguard",
+        "tag": "wg-encslash",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "QUFBQUFBQUFBQUFBQUFBQUFBQUH///////////////8=",
+        "peers": [
+          {
+            "address": "h.example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:junk_presharedkey_rejected": {
+      "uri": "wireguard://QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&presharedkey=*****&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:junk_publickey_rejected": {
+      "uri": "wireguard://QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=@192.0.2.71:51820?publickey=enabled&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:masked_private_key_rejected": {
+      "uri": "wireguard://*****@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:masquerade_suppressed_by_i1": {
+      "uri": "wireguard://JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=@192.0.2.73:955?publickey=ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5%2FPj4%2Bq80%3D&address=172.16.0.2%2F32&allowedips=0.0.0.0%2F0&i1=%3Cb%200x11%3E&ip=quic&id=example-1.com#WARP",
+      "identity": "6fa828fe354dba0a5a5ac0420cd8aea34f01a3ca5bd7df4833496a95000e1741",
+      "tag": "WARP",
+      "body": {
+        "type": "wireguard",
+        "tag": "WARP",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32"
+        ],
+        "private_key": "JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=",
+        "peers": [
+          {
+            "address": "192.0.2.73",
+            "port": 955,
+            "public_key": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/Pj4+q80=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "i1": "<b 0x11>"
+      }
+    },
+    "corpus:missing_address_rejected": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@192.0.2.70:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&allowedips=0.0.0.0/0",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:missing_allowedips_rejected": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@192.0.2.70:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.10.10.2/32",
+      "identity": "fbaf5724ddbfc0492574258ff40d65e88dc2ed1b823eba3907a9a0409be014c3",
+      "tag": "wireguard-192.0.2.70-51820",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-192.0.2.70-51820",
+        "address": [
+          "10.10.10.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "192.0.2.70",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:missing_hostname_rejected": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.10.10.2/32&allowedips=0.0.0.0/0",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:missing_publickey_rejected": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@192.0.2.70:51820?address=10.10.10.2/32&allowedips=0.0.0.0/0",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:plain_wg_default_mtu_1408": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32#wg-plain",
+      "identity": "16009e3a74c1db1a9ba752050878ee5eae3f20e27cb8ae48b244341f0c0aebb7",
+      "tag": "wg-plain",
+      "body": {
+        "type": "wireguard",
+        "tag": "wg-plain",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:plain_wg_high_mtu_honored": {
+      "uri": "wireguard://UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=@wg.example-1.com:51821?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU%3D&address=10.0.0.2/32&allowedips=0.0.0.0/0&mtu=1500#n",
+      "identity": "6021d5d332558a7ea11c05b9e70776f68f413b94d381933571052e04ca71efbf",
+      "tag": "n",
+      "body": {
+        "type": "wireguard",
+        "tag": "n",
+        "mtu": 1500,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "UFJJVkFURUtFWTAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+        "peers": [
+          {
+            "address": "wg.example-1.com",
+            "port": 51821,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:plain_wg_mtu_1420_respected": {
+      "uri": "wireguard://AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=@example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32&mtu=1420#wg-1420",
+      "identity": "27e1010fc2ecfc7af3f85357b7114888f4810192ac25ea8646ebe12953abe7f4",
+      "tag": "wg-1420",
+      "body": {
+        "type": "wireguard",
+        "tag": "wg-1420",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:raw_slash_in_private_key": {
+      "uri": "wireguard://QUFBQUFBQUFBQUFBQUFBQUFBQUH///////////////8=@h.example-1.com:51820?publickey=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=&address=10.0.0.2/32#wg-rawslash",
+      "identity": "71b200367c5267d53c53ac40ee3e053f9ae59bc080653bec464101bb85374078",
+      "tag": "wg-rawslash",
+      "body": {
+        "type": "wireguard",
+        "tag": "wg-rawslash",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "QUFBQUFBQUFBQUFBQUFBQUFBQUH///////////////8=",
+        "peers": [
+          {
+            "address": "h.example-1.com",
+            "port": 51820,
+            "public_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:short_private_key_rejected": {
+      "uri": "wireguard://c2hvcnQ=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "corpus:slash_in_private_key_encoded": {
+      "uri": "wireguard://JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL%2FGzdTb4unw9%2F4=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
+      "identity": "485a9baae53d29433a48ba408dae6c3f2ae4ac5d5b2c1ca15543c2b2284b4804",
+      "tag": "node",
+      "body": {
+        "type": "wireguard",
+        "tag": "node",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=",
+        "peers": [
+          {
+            "address": "192.0.2.71",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:slash_in_private_key_raw": {
+      "uri": "wireguard://JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
+      "identity": "485a9baae53d29433a48ba408dae6c3f2ae4ac5d5b2c1ca15543c2b2284b4804",
+      "tag": "node",
+      "body": {
+        "type": "wireguard",
+        "tag": "node",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=",
+        "peers": [
+          {
+            "address": "192.0.2.71",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:uri_basic": {
+      "uri": "wireguard://example-1.com:51820?privatekey=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D&publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=10.0.0.2%2F32&mtu=1420#WG%20Basic",
+      "identity": "cda5927c75327f0a0193ae66e9cee29631c67416ef356750a7528ca6703481ee",
+      "tag": "WG Basic",
+      "body": {
+        "type": "wireguard",
+        "tag": "WG Basic",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:uri_psk_keepalive": {
+      "uri": "wireguard://example-2.com:51820?privatekey=ccccccccccccccccccccccccccccccccccccccccccC%3D&publickey=ddddddddddddddddddddddddddddddddddddddddddD%3D&preshared_key=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE%3D&address=10.0.0.3%2F32,fd00%3A%3A2%2F128&keepalive=25&mtu=1280#WG%20PSK",
+      "identity": "c9ca0848b92bbb4887c68e9ae737c3a9ac768419736ee3821e9f3e3e33c710b1",
+      "tag": "WG PSK",
+      "body": {
+        "type": "wireguard",
+        "tag": "WG PSK",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.3/32",
+          "fd00::2/128"
+        ],
+        "private_key": "ccccccccccccccccccccccccccccccccccccccccccA=",
+        "peers": [
+          {
+            "address": "example-2.com",
+            "port": 51820,
+            "public_key": "ddddddddddddddddddddddddddddddddddddddddddA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "pre_shared_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=",
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      },
+      "_before480": {
+        "identity": "f87253978dcdad75ae7fb808971f9754a131293a6d68b23aef2aca90beccd548",
+        "tag": "WG PSK",
+        "body": {
+          "type": "wireguard",
+          "tag": "WG PSK",
+          "mtu": 1280,
+          "address": [
+            "10.0.0.3/32",
+            "fd00::2/128"
+          ],
+          "private_key": "ccccccccccccccccccccccccccccccccccccccccccA=",
+          "peers": [
+            {
+              "address": "example-2.com",
+              "port": 51820,
+              "public_key": "ddddddddddddddddddddddddddddddddddddddddddA=",
+              "allowed_ips": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "persistent_keepalive_interval": 25
+            }
+          ]
+        }
+      },
+      "_delta480": "delta480-7: алиас `preshared_key` у ССЫЛКИ. Было — ключ молча терялся: URI-путь читал только `presharedkey`, хотя реестр объявляет алиас (wireguard.json uri.query.presharedkey.aliases), и туннель к серверу с PSK не поднимался. Стало — читается, как у INI (delta480-4)."
+    },
+    "corpus:urlsafe_key_normalized": {
+      "uri": "wireguard://JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL_GzdTb4unw9_4=@192.0.2.71:51820?publickey=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=&address=10.0.0.2/32&allowedips=0.0.0.0/0#node",
+      "identity": "485a9baae53d29433a48ba408dae6c3f2ae4ac5d5b2c1ca15543c2b2284b4804",
+      "tag": "node",
+      "body": {
+        "type": "wireguard",
+        "tag": "node",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=",
+        "peers": [
+          {
+            "address": "192.0.2.71",
+            "port": 51820,
+            "public_key": "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVowMTIzNDU=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "corpus:warp_masquerade_ip_id_ib": {
+      "uri": "wireguard://JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=@192.0.2.73:955?publickey=ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5%2FPj4%2Bq80%3D&address=172.16.0.2%2F32&allowedips=0.0.0.0%2F0&jc=4&jmin=40&jmax=70&s1=0&s2=0&h1=1&h2=2&h3=3&h4=4&ip=quic&id=www.example-1.com&ib=chrome#WARP",
+      "identity": "e563e20d50ddbce2b730cbe265f3d9f2be43fdab891b73e7390f95c80a4de134",
+      "tag": "WARP",
+      "body": {
+        "type": "wireguard",
+        "tag": "WARP",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32"
+        ],
+        "private_key": "JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=",
+        "peers": [
+          {
+            "address": "192.0.2.73",
+            "port": 955,
+            "public_key": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/Pj4+q80=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 0,
+        "s2": 0,
+        "h1": 1,
+        "h2": 2,
+        "h3": 3,
+        "h4": 4,
+        "id": "www.example-1.com",
+        "ip": "quic",
+        "ib": "chrome"
+      }
+    },
+    "corpus:warp_reserved_triplet": {
+      "uri": "wireguard://JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=@192.0.2.72:2408?publickey=ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5%2FPj4%2Bq80%3D&address=172.16.0.2%2F32&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&reserved=29%2C172%2C92#WARP",
+      "identity": "c89e11bac476daa15b7b90724ef99ef3b08c7081b02858ab8ce0e1f06776d154",
+      "tag": "WARP",
+      "body": {
+        "type": "wireguard",
+        "tag": "WARP",
+        "address": [
+          "172.16.0.2/32"
+        ],
+        "private_key": "JSwzOkFIT1ZdZGtyeYCHjpWco6qxuL/GzdTb4unw9/4=",
+        "peers": [
+          {
+            "address": "192.0.2.72",
+            "port": 2408,
+            "public_key": "ZWZnaGlqa2xtbm9wcXJzdHV2d3h5ent8fX5/Pj4+q80=",
+            "reserved": [
+              29,
+              172,
+              92
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "test:awg://!!!not": {
+      "uri": "awg://!!!not",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:awg://...": {
+      "uri": "awg://...",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:awg://<base64": {
+      "uri": "awg://<base64",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:awg://aGVsbG8gd29ybGQsIG5vdCBhIGNvbmY=#junk": {
+      "uri": "awg://aGVsbG8gd29ybGQsIG5vdCBhIGNvbmY=#junk",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wg://...": {
+      "uri": "wg://...",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32",
+      "identity": "e013bee467fbe8946a84d00e20779fbbc4903fc16bea34d4fb7770caba93a3c6",
+      "tag": "wireguard-h-51820",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-h-51820",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "h",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32&jc=0": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32&jc=0",
+      "identity": "3fb1aab32d18f71cdec8c35f8296cde92236e1ebd2fbca0aeaf6d3fee6ad9270",
+      "tag": "wireguard-h-51820",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-h-51820",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "h",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 0
+      }
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32&jc=abc&jmin=50": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32&jc=abc&jmin=50",
+      "identity": "ac4f4177f5a81d09c433e5b1e007cd4a13d41a51c597854bf01b607394398626",
+      "tag": "wireguard-h-51820",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-h-51820",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "h",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32&jmin=50&jmax=100": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32&jmin=50&jmax=100",
+      "identity": "0c83fa177b6077e526a8ba7e513076eae3ca7ac54ebb297ca713cb8503a88a38",
+      "tag": "wireguard-h-51820",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-h-51820",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "h",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jmin": 50,
+        "jmax": 100
+      }
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@host.example.com:30565": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@host.example.com:30565",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@host.example.com:51821": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@host.example.com:51821",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://aaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@": {
+      "uri": "wireguard://aaaa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=@h.example:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&": {
+      "uri": "wireguard://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=@h.example:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://...": {
+      "uri": "wireguard://...",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://K%2FEY@h:51820?address=10.0.0.2/32": {
+      "uri": "wireguard://K%2FEY@h:51820?address=10.0.0.2/32",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://K/EY@h:51820?address=10.0.0.2/32": {
+      "uri": "wireguard://K/EY@h:51820?address=10.0.0.2/32",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@engage.cloudflareclient.com:2408": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@engage.cloudflareclient.com:2408",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@example-3.com:51820": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@example-3.com:51820",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=1.1.1.1/32": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=1.1.1.1/32",
+      "identity": "98023c998e1982c34bc855ce24db35bd8232387b258c8179f883187ea892b5ab",
+      "tag": "wireguard-h.example-2408",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-h.example-2408",
+        "address": [
+          "1.1.1.1/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "h.example",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h.example:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2/32",
+      "identity": "d2bc2c7081832d2dbb4fdc53c6bc385265a1c1c0da5af3925c7e1c01ebb1d429",
+      "tag": "wireguard-h.example-51820",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-h.example-51820",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "h.example",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420&keepalive=25#WG": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420&keepalive=25#WG",
+      "identity": "5645242bf6ced3c5de003acf47a48cb351f4d8c3353e6659138ca11a15960fcb",
+      "tag": "WG",
+      "body": {
+        "type": "wireguard",
+        "tag": "WG",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "h",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "test:wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG",
+      "identity": "91df05d7a1a00a51c5d30760ff5b0887f4409cc5e5b21c39c531a27dae1d250f",
+      "tag": "WG",
+      "body": {
+        "type": "wireguard",
+        "tag": "WG",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "wg.example.com",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "test:wireguard://…#WARP": {
+      "uri": "wireguard://…#WARP",
+      "identity": null,
+      "tag": null,
+      "body": null
+    },
+    "ini:fixture_basic/nohint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nEndpoint = example-3.com:51820\nPresharedKey = eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=\nPersistentKeepalive = 25\n",
+      "identity": "d82b4ec8cea52403b189f7baa57e3d1ede4ed2861f386cfe555351c21f1cfec7",
+      "tag": "WireGuard",
+      "body": {
+        "type": "wireguard",
+        "tag": "WireGuard",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32",
+          "fd00::2/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "example-3.com",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "pre_shared_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=",
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "ini:fixture_basic/file-hint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nEndpoint = example-3.com:51820\nPresharedKey = eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=\nPersistentKeepalive = 25\n",
+      "identity": "d82b4ec8cea52403b189f7baa57e3d1ede4ed2861f386cfe555351c21f1cfec7",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32",
+          "fd00::2/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "example-3.com",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "pre_shared_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=",
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "ini:corpus_wgconf/nohint": {
+      "ini": "# wg-quick INI: Interface (PrivateKey/Address dual-stack/DNS/MTU) + Peer\n# (PublicKey/Endpoint/PresharedKey/PersistentKeepalive); ключи — синтетические base64 32 байта.\n# Источник: LxBox app/test/fixtures/wireguard/ini_basic.conf\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nEndpoint = example-3.com:51820\nPresharedKey = eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=\nPersistentKeepalive = 25\n",
+      "identity": "d82b4ec8cea52403b189f7baa57e3d1ede4ed2861f386cfe555351c21f1cfec7",
+      "tag": "WireGuard",
+      "body": {
+        "type": "wireguard",
+        "tag": "WireGuard",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32",
+          "fd00::2/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "example-3.com",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "pre_shared_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=",
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "ini:corpus_wgconf/file-hint": {
+      "ini": "# wg-quick INI: Interface (PrivateKey/Address dual-stack/DNS/MTU) + Peer\n# (PublicKey/Endpoint/PresharedKey/PersistentKeepalive); ключи — синтетические base64 32 байта.\n# Источник: LxBox app/test/fixtures/wireguard/ini_basic.conf\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.0.0.2/32, fd00::2/128\nDNS = 1.1.1.1\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nEndpoint = example-3.com:51820\nPresharedKey = eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=\nPersistentKeepalive = 25\n",
+      "identity": "d82b4ec8cea52403b189f7baa57e3d1ede4ed2861f386cfe555351c21f1cfec7",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "mtu": 1420,
+        "address": [
+          "10.0.0.2/32",
+          "fd00::2/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "example-3.com",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "pre_shared_key": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeE=",
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "ini:proton/nohint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nDNS = 10.2.0.1\nMTU = 1420\n\n[Peer]\n# CH-FREE#11\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "84f1a54c10b2895dee10457518759c0a70fd163c0a63ce7fd03ada287ba64918",
+      "tag": "CH-FREE#11",
+      "body": {
+        "type": "wireguard",
+        "tag": "CH-FREE#11",
+        "mtu": 1420,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:proton/file-hint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nDNS = 10.2.0.1\nMTU = 1420\n\n[Peer]\n# CH-FREE#11\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "84f1a54c10b2895dee10457518759c0a70fd163c0a63ce7fd03ada287ba64918",
+      "tag": "CH-FREE#11",
+      "body": {
+        "type": "wireguard",
+        "tag": "CH-FREE#11",
+        "mtu": 1420,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:awg2/nohint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nMTU = 1420\nJc = 4\nJmin = 40\nJmax = 70\nS1 = 50\nS2 = 100\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = 1.2.3.4:51820\nPersistentKeepalive = 25\n",
+      "identity": "1b0540f2540ec62d57e220ce6d5a148cfe5c0d35247c201a843e284fbf662d47",
+      "tag": "WireGuard",
+      "body": {
+        "type": "wireguard",
+        "tag": "WireGuard",
+        "mtu": 1280,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890
+      }
+    },
+    "ini:awg2/file-hint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nMTU = 1420\nJc = 4\nJmin = 40\nJmax = 70\nS1 = 50\nS2 = 100\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = 1.2.3.4:51820\nPersistentKeepalive = 25\n",
+      "identity": "1b0540f2540ec62d57e220ce6d5a148cfe5c0d35247c201a843e284fbf662d47",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "mtu": 1280,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890
+      }
+    },
+    "ini:awg3/nohint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nJc = 4\nS1 = 50\nS2 = 100\nS3 = 20\nS4 = 20\nHeaderProtectionKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nRandomTrailers = on\nRekeyAfterTime = 100-200\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "0f7685a21ad74d3867a3ab6dcb2d2494a9af93060d8be794e99e1d6d2d2c59d6",
+      "tag": "WireGuard",
+      "body": {
+        "type": "wireguard",
+        "tag": "WireGuard",
+        "mtu": 1280,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "header_protection_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "rekey_after_time": "100-200",
+        "random_trailers": true,
+        "jc": 4,
+        "s1": 50,
+        "s2": 100,
+        "s3": 20,
+        "s4": 20
+      }
+    },
+    "ini:awg3/file-hint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nJc = 4\nS1 = 50\nS2 = 100\nS3 = 20\nS4 = 20\nHeaderProtectionKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nRandomTrailers = on\nRekeyAfterTime = 100-200\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "0f7685a21ad74d3867a3ab6dcb2d2494a9af93060d8be794e99e1d6d2d2c59d6",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "mtu": 1280,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "header_protection_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "rekey_after_time": "100-200",
+        "random_trailers": true,
+        "jc": 4,
+        "s1": 50,
+        "s2": 100,
+        "s3": 20,
+        "s4": 20
+      }
+    },
+    "ini:no_mtu/nohint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "30449f9514f36ce2a2e3cbdcfeae77183cdc17754f3426af4083e4d54ff1a215",
+      "tag": "WireGuard",
+      "body": {
+        "type": "wireguard",
+        "tag": "WireGuard",
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:no_mtu/file-hint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "30449f9514f36ce2a2e3cbdcfeae77183cdc17754f3426af4083e4d54ff1a215",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:plain_wg_1420/nohint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "84f1a54c10b2895dee10457518759c0a70fd163c0a63ce7fd03ada287ba64918",
+      "tag": "WireGuard",
+      "body": {
+        "type": "wireguard",
+        "tag": "WireGuard",
+        "mtu": 1420,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:plain_wg_1420/file-hint": {
+      "ini": "[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 10.2.0.2/32\nMTU = 1420\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 1.2.3.4:51820\n",
+      "identity": "84f1a54c10b2895dee10457518759c0a70fd163c0a63ce7fd03ada287ba64918",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "mtu": 1420,
+        "address": [
+          "10.2.0.2/32"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "1.2.3.4",
+            "port": 51820,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "warp_uri:false/true/null": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280&reserved=171%2C133%2C27#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP",
+      "identity": "6b2b5d3af074c684a0444953004d2858dcdb7c96aee4397a66ba87a98abf9742",
+      "tag": "🔥☁️ WARP",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "warp_conf:false/true/null": {
+      "ini": "# WARP (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\nReserved = 171,133,27\n",
+      "identity": "ac41837b63667b292209f8d719c667f4777fbd8a323db619e69570b3246561e4",
+      "tag": "🔥⛈️ WARP (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "warp_uri:false/true/25": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280&reserved=171%2C133%2C27&keepalive=25#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP",
+      "identity": "38146101cde3d8522d5cbf94e8d04ab10d30d2bab881882d445066abf73d8da3",
+      "tag": "🔥☁️ WARP",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "warp_conf:false/true/25": {
+      "ini": "# WARP (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\nPersistentKeepalive = 25\nReserved = 171,133,27\n",
+      "identity": "c27b827d8bf61cfbfdee97518ab5956b29de5069503c79ae485be06cb39f85af",
+      "tag": "🔥⛈️ WARP (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "warp_uri:false/false/null": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP",
+      "identity": "675420aae86c390fe62abf429f663bd38d2504132a3bcfae4e40e09731380bc3",
+      "tag": "🔥☁️ WARP",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "warp_conf:false/false/null": {
+      "ini": "# WARP (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\n",
+      "identity": "b7c71d58c916dd048f55b748f7fb07528ff93ac2336363accd75e47153d1bc46",
+      "tag": "🔥⛈️ WARP (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "warp_uri:false/false/25": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280&keepalive=25#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP",
+      "identity": "eb8b1f7cdf4a6ced6372cefe1260f4b2ec18ef6bb53e96ea763c97e03cdc9e2c",
+      "tag": "🔥☁️ WARP",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "warp_conf:false/false/25": {
+      "ini": "# WARP (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\nPersistentKeepalive = 25\n",
+      "identity": "7b5eddec2b3402ffd4c02a1a7f15e87f777eedc92cc0c11ef268b7c309141c7e",
+      "tag": "🔥⛈️ WARP (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "warp_uri:true/true/null": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280&reserved=171%2C133%2C27#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP%2B",
+      "identity": "6b2b5d3af074c684a0444953004d2858dcdb7c96aee4397a66ba87a98abf9742",
+      "tag": "🔥☁️ WARP+",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP+",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "warp_conf:true/true/null": {
+      "ini": "# WARP+ (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\nReserved = 171,133,27\n",
+      "identity": "ac41837b63667b292209f8d719c667f4777fbd8a323db619e69570b3246561e4",
+      "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "warp_uri:true/true/25": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280&reserved=171%2C133%2C27&keepalive=25#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP%2B",
+      "identity": "38146101cde3d8522d5cbf94e8d04ab10d30d2bab881882d445066abf73d8da3",
+      "tag": "🔥☁️ WARP+",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP+",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "warp_conf:true/true/25": {
+      "ini": "# WARP+ (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\nPersistentKeepalive = 25\nReserved = 171,133,27\n",
+      "identity": "c27b827d8bf61cfbfdee97518ab5956b29de5069503c79ae485be06cb39f85af",
+      "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "reserved": [
+              171,
+              133,
+              27
+            ],
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "warp_uri:true/false/null": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP%2B",
+      "identity": "675420aae86c390fe62abf429f663bd38d2504132a3bcfae4e40e09731380bc3",
+      "tag": "🔥☁️ WARP+",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP+",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ]
+      }
+    },
+    "warp_conf:true/false/null": {
+      "ini": "# WARP+ (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\n",
+      "identity": "b7c71d58c916dd048f55b748f7fb07528ff93ac2336363accd75e47153d1bc46",
+      "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ]
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "warp_uri:true/false/25": {
+      "uri": "wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA%3D@engage.cloudflareclient.com:2408?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA%3D&address=172.16.0.2%2C2606%3A4700%3A110%3A8a1b%3Ac0de%3Acafe%3Ababe%3A1234&allowedips=0.0.0.0%2F0%2C%3A%3A%2F0&mtu=1280&keepalive=25#%F0%9F%94%A5%E2%98%81%EF%B8%8F%20WARP%2B",
+      "identity": "eb8b1f7cdf4a6ced6372cefe1260f4b2ec18ef6bb53e96ea763c97e03cdc9e2c",
+      "tag": "🔥☁️ WARP+",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥☁️ WARP+",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ]
+      }
+    },
+    "warp_conf:true/false/25": {
+      "ini": "# WARP+ (Amnezia 1.5 obfuscation)\n[Interface]\nPrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=\nAddress = 172.16.0.2, 2606:4700:110:8a1b:c0de:cafe:babe:1234\nMTU = 1280\nH1 = 1234567\nH2 = 2345678\nH3 = 3456789\nH4 = 4567890\nI1 = <b 0xdeadbeef><r 100>\nJC = 4\nJMAX = 70\nJMIN = 40\nS1 = 50\nS2 = 100\n\n[Peer]\nPublicKey = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = engage.cloudflareclient.com:2408\nPersistentKeepalive = 25\n",
+      "identity": "7b5eddec2b3402ffd4c02a1a7f15e87f777eedc92cc0c11ef268b7c309141c7e",
+      "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+      "body": {
+        "type": "wireguard",
+        "tag": "🔥⛈️ WARP+ (AWG 1.5)",
+        "mtu": 1280,
+        "address": [
+          "172.16.0.2/32",
+          "2606:4700:110:8a1b:c0de:cafe:babe:1234/128"
+        ],
+        "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+        "peers": [
+          {
+            "address": "engage.cloudflareclient.com",
+            "port": 2408,
+            "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+            "allowed_ips": [
+              "0.0.0.0/0",
+              "::/0"
+            ],
+            "persistent_keepalive_interval": 25
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70,
+        "s1": 50,
+        "s2": 100,
+        "h1": 1234567,
+        "h2": 2345678,
+        "h3": 3456789,
+        "h4": 4567890,
+        "i1": "<b 0xdeadbeef><r 100>"
+      }
+    },
+    "b480:baseline_no_plus": {
+      "uri": "wireguard://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&presharedkey=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#wg-base",
+      "identity": "9c29b6862b77478629ee836b44b6e32edd08669d0f85c5d46026c641e16b400f",
+      "tag": "wg-base",
+      "body": {
+        "type": "wireguard",
+        "tag": "wg-base",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ],
+            "pre_shared_key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+          }
+        ]
+      }
+    },
+    "b480:presharedkey_encoded_plus": {
+      "uri": "wireguard://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&presharedkey=%2BQBFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUU%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#psk-plus-enc",
+      "identity": "f4642b4c4ac9e4bd2b45f7d363ce59c374e94f5dd16fe85c3712b92a99e86841",
+      "tag": "psk-plus-enc",
+      "body": {
+        "type": "wireguard",
+        "tag": "psk-plus-enc",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ],
+            "pre_shared_key": "+QBFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUU="
+          }
+        ]
+      }
+    },
+    "b480:presharedkey_raw_plus": {
+      "uri": "wireguard://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&presharedkey=+QBFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUU=&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#psk-plus",
+      "identity": "f4642b4c4ac9e4bd2b45f7d363ce59c374e94f5dd16fe85c3712b92a99e86841",
+      "_before480": {
+        "identity": null,
+        "dropped": true
+      },
+      "_delta480": "delta480-3 (D133-7): поле base64-формата читает сырой «+» буквально. Было — УЗЛА НЕТ ВОВСЕ: «+» становился пробелом, ключ переставал быть base64, и узел молча пропадал из подписки. Стало — узел живёт с ключом как в ссылке.",
+      "tag": "psk-plus",
+      "body": {
+        "type": "wireguard",
+        "tag": "psk-plus",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ],
+            "pre_shared_key": "+QBFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRUU="
+          }
+        ]
+      }
+    },
+    "b480:privatekey_encoded_plus_query": {
+      "uri": "wg://example-1.com:51820?privatekey=%2BwBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE%3D&publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#priv-plus-q-enc",
+      "identity": "223acd6f63ee60d9a9dc692164c62dddceaeea8912bb75b30c8f119aa95b6176",
+      "tag": "priv-plus-q-enc",
+      "body": {
+        "type": "wireguard",
+        "tag": "priv-plus-q-enc",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "b480:privatekey_raw_plus_query": {
+      "uri": "wg://example-1.com:51820?privatekey=+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=&publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#priv-plus-q",
+      "identity": "223acd6f63ee60d9a9dc692164c62dddceaeea8912bb75b30c8f119aa95b6176",
+      "_before480": {
+        "identity": null,
+        "dropped": true
+      },
+      "_delta480": "delta480-3 (D133-7): поле base64-формата читает сырой «+» буквально. Было — УЗЛА НЕТ ВОВСЕ: «+» становился пробелом, ключ переставал быть base64, и узел молча пропадал из подписки. Стало — узел живёт с ключом как в ссылке.",
+      "tag": "priv-plus-q",
+      "body": {
+        "type": "wireguard",
+        "tag": "priv-plus-q",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "b480:privatekey_raw_plus_userinfo": {
+      "uri": "wireguard://+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#priv-plus-ui",
+      "identity": "223acd6f63ee60d9a9dc692164c62dddceaeea8912bb75b30c8f119aa95b6176",
+      "tag": "priv-plus-ui",
+      "body": {
+        "type": "wireguard",
+        "tag": "priv-plus-ui",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "+wBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "b480:publickey_encoded_plus": {
+      "uri": "wireguard://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=%2BgBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#pub-plus-enc",
+      "identity": "e9fdd0c7aa1094a223b03556858ce9a84a22195f07de321a9a543ad0523b2ced",
+      "tag": "pub-plus-enc",
+      "body": {
+        "type": "wireguard",
+        "tag": "pub-plus-enc",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "b480:publickey_raw_plus": {
+      "uri": "wireguard://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0#pub-plus",
+      "identity": "e9fdd0c7aa1094a223b03556858ce9a84a22195f07de321a9a543ad0523b2ced",
+      "_before480": {
+        "identity": null,
+        "dropped": true
+      },
+      "_delta480": "delta480-3 (D133-7): поле base64-формата читает сырой «+» буквально. Было — УЗЛА НЕТ ВОВСЕ: «+» становился пробелом, ключ переставал быть base64, и узел молча пропадал из подписки. Стало — узел живёт с ключом как в ссылке.",
+      "tag": "pub-plus",
+      "body": {
+        "type": "wireguard",
+        "tag": "pub-plus",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "+gBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "b480:awg_no_fragment": {
+      "uri": "awg://AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE%3D@example-1.com:51820?publickey=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI%3D&address=10.0.0.2%2F32&allowedips=0.0.0.0%2F0&jc=4&jmin=40&jmax=70",
+      "identity": "9032457053222a66dda2cbc6a8de6978b7dd028ae18eb1d9e4344294d48d6502",
+      "tag": "wireguard-example-1.com-51820",
+      "body": {
+        "type": "wireguard",
+        "tag": "wireguard-example-1.com-51820",
+        "mtu": 1280,
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ],
+        "jc": 4,
+        "jmin": 40,
+        "jmax": 70
+      }
+    },
+    "ini:b480_empty_dns_value": {
+      "ini": "[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.0.0.2/32\nDNS =\n\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nEndpoint = example-1.com:51820\nAllowedIPs = 0.0.0.0/0\n",
+      "identity": "3184ce2c6dc52e583b0cef001d232a615fe11bd5411cf154805650430d0d2749",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:b480_endpoint_bare_ipv6": {
+      "ini": "[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nEndpoint = 2001:db8::1:51820\nAllowedIPs = 0.0.0.0/0\n",
+      "identity": "23b05a59f38cea973937edcd4784e0f70f679164180272465fce0d8a21668c81",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "2001:db8::1:51820",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:b480_name_from_peer_comment": {
+      "ini": "[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.0.0.2/32\n\n[Peer]\n# NL-FREE#7\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nEndpoint = example-1.com:51820\nAllowedIPs = 0.0.0.0/0\n",
+      "identity": "3184ce2c6dc52e583b0cef001d232a615fe11bd5411cf154805650430d0d2749",
+      "tag": "NL-FREE#7",
+      "body": {
+        "type": "wireguard",
+        "tag": "NL-FREE#7",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:b480_preshared_key_snake": {
+      "ini": "[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\npreshared_key = AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=\nEndpoint = example-1.com:51820\nAllowedIPs = 0.0.0.0/0\n",
+      "identity": "3184ce2c6dc52e583b0cef001d232a615fe11bd5411cf154805650430d0d2749",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ]
+          }
+        ]
+      }
+    },
+    "ini:b480_presharedkey_camel": {
+      "ini": "[Interface]\nPrivateKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=\nPresharedKey = AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=\nEndpoint = example-1.com:51820\nAllowedIPs = 0.0.0.0/0\n",
+      "identity": "9c29b6862b77478629ee836b44b6e32edd08669d0f85c5d46026c641e16b400f",
+      "tag": "file-hint",
+      "body": {
+        "type": "wireguard",
+        "tag": "file-hint",
+        "address": [
+          "10.0.0.2/32"
+        ],
+        "private_key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+        "peers": [
+          {
+            "address": "example-1.com",
+            "port": 51820,
+            "public_key": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+            "allowed_ips": [
+              "0.0.0.0/0"
+            ],
+            "pre_shared_key": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM="
+          }
+        ]
+      }
+    }
+  }
+}

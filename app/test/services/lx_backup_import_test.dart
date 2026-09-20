@@ -13,6 +13,8 @@ import 'package:lxbox/services/template_loader.dart';
 
 import '../storage_migration/golden_harness.dart';
 
+import '../parser/engine_test_setup.dart';
+
 // D-117 — импорт в пустое воспроизводит файл.
 //
 // BACKUP.md §3: известные цели импорта — один список после слияния (цели и
@@ -104,6 +106,10 @@ const _expectedEnabled = {
 };
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late WizardTemplate template;

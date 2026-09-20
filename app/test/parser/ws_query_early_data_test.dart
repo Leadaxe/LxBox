@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
@@ -11,6 +13,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `early_data_header_name` ядро дописывает base64 В ПУТЬ (conn.go:172), а
 /// сервер с `eh=Sec-WebSocket-Protocol` ждёт данные в заголовке → 404.
 void main() {
+  setUpAll(loadEngineSections);
+
   Map<String, dynamic> wsMap(TransportSpec? t) =>
       t!.toSingbox(const TemplateVars()).$1;
 
@@ -165,20 +169,51 @@ void main() {
   });
 
   group('round-trip', () {
-    test('toUri несёт и path?ed=, и eh=', () {
+    // §480 W7 — ВИД ССЫЛКИ ИЗМЕНИЛСЯ, тело — нет.
+    //
+    // Было: `path=/x` + `ed=2560` + `eh=Sec-WebSocket-Protocol` — три
+    // параметра. Стало: один хвост `path=/x?ed=2560`, а имя заголовка
+    // восстанавливается `implies` той же записи, которая хвост и читает.
+    //
+    // Почему так вышло и почему это не потеря: «заголовок задан явно» против
+    // «подразумевается формой» — различие, которого В ТЕЛЕ НЕТ. Оно жило
+    // флагом модели (`earlyDataHeaderImplicit`), а эмиттер движка получает
+    // каноническое тело и ничего кроме. При совпадении значения с
+    // подразумеваемым обе формы дают ОДНО тело, что здесь и проверяется;
+    // значение, от подразумеваемого отличное, уезжает отдельной записью `eh`
+    // как и прежде (кейс ниже).
+    test('хвост пути несёт ed, имя заголовка восстанавливается implies', () {
       final src = 'trojan://pw@example.com:443?type=ws&path=%2Fx'
           '&ed=2560&eh=Sec-WebSocket-Protocol&security=tls&sni=example.com#n';
-      final uri = parseUri(src)!.toUri();
+      final a = parseUri(src)!;
+      final uri = a.toUri();
       final q = Uri.parse(uri).queryParameters;
       expect(q['path'], '/x?ed=2560');
-      expect(q['eh'], 'Sec-WebSocket-Protocol');
 
-      // Второй проход не теряет ни размер, ни режим.
+      // Круг не теряет ни размер, ни режим: тело байт в байт.
+      expect(
+        parseUri(uri)!.emitRaw(const TemplateVars()).map,
+        a.emitRaw(const TemplateVars()).map,
+      );
       final tr = parseUri(uri)!.emitRaw(const TemplateVars()).map['transport']
           as Map;
       expect(tr['path'], '/x');
       expect(tr['max_early_data'], 2560);
       expect(tr['early_data_header_name'], 'Sec-WebSocket-Protocol');
+    });
+
+    test('НЕдефолтное имя заголовка уезжает отдельным eh=', () {
+      final src = 'trojan://pw@example.com:443?type=ws&path=%2Fx'
+          '&ed=2560&eh=X-Custom&security=tls&sni=example.com#n';
+      final a = parseUri(src)!;
+      final uri = a.toUri();
+      expect(Uri.parse(uri).queryParameters['eh'], 'X-Custom',
+          reason: 'значение, которого форма-хвост не подразумевает, обязано '
+              'уехать записью — иначе круг потерял бы его: $uri');
+      expect(
+        parseUri(uri)!.emitRaw(const TemplateVars()).map,
+        a.emitRaw(const TemplateVars()).map,
+      );
     });
 
     test('path-режим: eh в ссылку не добавляется', () {

@@ -39,26 +39,28 @@ String? textWithoutTailscale(JsonConfig decoded) {
   }
 
   Object? out;
-  switch (decoded.flavor) {
-    case JsonFlavor.singboxConfig:
+  // §483 — вид источника называет ветка, которой документ опознан
+  // (`JsonConfig.source`), а не отдельное перечисление форм. Вырезание
+  // зависит от ФОРМЫ документа: где у неё лежат записи, там и режем.
+  switch (decoded.source.kind) {
+    case SourceKind.singboxConfig:
       if (copy is! Map<String, dynamic>) return null;
       stripConfig(copy);
       out = copy;
-    case JsonFlavor.singboxMulti:
+    case SourceKind.singboxConfigArray:
       if (copy is! List) return null;
       for (final c in copy.whereType<Map<String, dynamic>>()) {
         stripConfig(c);
       }
       out = copy;
-    case JsonFlavor.singboxArray:
+    case SourceKind.singboxOutboundArray:
       if (copy is! List) return null;
       final kept = [for (final e in copy) if (!isTailscale(e)) e];
       removed = kept.length != copy.length;
       out = kept;
-    case JsonFlavor.singboxOutbound:
-    case JsonFlavor.xrayArray:
-    case JsonFlavor.clashYaml:
-    case JsonFlavor.unknown:
+    // Одиночный outbound, массив Xray, Clash, нераспознанное: вырезать
+    // нечего — узел в документе один либо форма связки не несёт.
+    default:
       return null;
   }
   if (!removed) return null;

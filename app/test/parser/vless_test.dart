@@ -2,7 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта) для тестов.
@@ -10,6 +13,13 @@ import 'package:lxbox/services/parser/uri_utils.dart';
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 
 void main() {
+  // §480 W2 — vless переехала на ДВИЖОК СЕКЦИЙ, и рукописного запасного пути
+  // у неё не осталось: без реестра (секция `vless`, общие блоки `tls#uri`,
+  // `tls#uri_reality`, `transports#uri`) ссылка не разбирается вовсе. Гейта
+  // здесь нет намеренно — зеркало `assets/contract` лежит в репозитории и
+  // едет в APK, его отсутствие это поломка сборки, а не повод пропустить тест.
+  setUpAll(loadEngineSections);
+
   // §115 — эталонная матрица брифа: эмитим flow ТОЛЬКО если (а) явно есть во
   // входе И (б) нет транспорта. Проверяем именно сгенерированный outbound.
   group('§115 flow-эмиссия (эталонная матрица)', () {
@@ -75,27 +85,60 @@ void main() {
       expect(spec.transport, isNull);
     });
 
-    test('§115: vision + транспорт (ws) → flow погашен + warning', () {
+    // §474 — гашение vision при транспорте исполняет РЕЕСТР
+    // (`vless.flow.conflicts` → `transport`, код `vision_with_transport`), а
+    // не рукописное правило маппера. Поэтому обе проверки грузят реестр: без
+    // него санитайзер не работает вовсе и `flow` доезжает до модели как есть.
+    //
+    // Эмиссия при этом не зависит ни от того, ни от другого: §115 в
+    // `node_spec_emit.dart` пишет `flow` только на голом TLS — второй эшелон
+    // над моделью, и он же держит группу «эталонная матрица» выше.
+    test('§115/§474: vision + транспорт (ws) → flow погашен реестром',
+        () async {
+      await ContractRegistry.I.loadFromDirectory('assets/contract');
       final spec = parseVless(
         'vless://u@h:443?type=ws&path=/x&security=tls&flow=xtls-rprx-vision#L',
       );
       expect(spec!.flow, '', reason: 'vision несовместим с транспортом');
       expect(spec.transport, isA<WsTransport>());
-      expect(spec.warnings.whereType<VisionWithTransportWarning>(), isNotEmpty);
+      final w = spec.warnings
+          .whereType<RegistryWarning>()
+          .where((w) => w.code == 'vision_with_transport');
+      expect(w, isNotEmpty, reason: 'код ставит санитайзер по реестру');
+      // Код приезжает с адресом и именем соседа — рукописный их не нёс.
+      expect(w.first.path, 'flow');
+      expect(w.first.params['with'], 'transport');
     });
 
-    test('§115: vision + xhttp → flow погашен (XHTTP+Vision protocol limit)',
-        () {
+    test('§115/§474: vision + xhttp → flow погашен (XHTTP+Vision protocol limit)',
+        () async {
+      await ContractRegistry.I.loadFromDirectory('assets/contract');
       final spec = parseVless(
         'vless://u@h:443?type=xhttp&host=cdn.example&security=reality&pbk=$_validPbk&flow=xtls-rprx-vision#L',
       );
       expect(spec!.flow, '');
-      expect(spec.warnings.whereType<VisionWithTransportWarning>(), isNotEmpty);
+      expect(
+        spec.warnings
+            .whereType<RegistryWarning>()
+            .where((w) => w.code == 'vision_with_transport'),
+        isNotEmpty,
+      );
     });
 
     test('flow=xtls-rprx-vision-udp443 → vision + xudp packet encoding', () {
       final spec = parseVless('vless://u@h:443?type=tcp&flow=xtls-rprx-vision-udp443');
       expect(spec!.flow, 'xtls-rprx-vision');
+      expect(spec.packetEncoding, 'xudp');
+    });
+
+    // §459 (контракт §24.2 п. 7.4) — суффикс `-udp443` нормализует flow и
+    // packet_encoding, но порт узла не трогает: порт — свойство узла, узел
+    // `…:8443` от перезаписи на 443 становился недозваниваемым.
+    test('§459 flow=-udp443 не переписывает порт узла', () {
+      final spec =
+          parseVless('vless://u@h:8443?type=tcp&flow=xtls-rprx-vision-udp443')!;
+      expect(spec.port, 8443);
+      expect(spec.flow, 'xtls-rprx-vision');
       expect(spec.packetEncoding, 'xudp');
     });
 
@@ -135,7 +178,10 @@ void main() {
       expect(tr['mode'], 'stream-one');
       expect(tr['x_padding_bytes'], '100-1000');
       expect(tr['no_grpc_header'], true);
-      expect(spec.warnings.whereType<UnsupportedTransportWarning>(), isEmpty);
+      expect(
+          spec.warnings.where(
+              (w) => w is RegistryWarning && w.code == 'transport_unsupported'),
+          isEmpty);
     });
   });
 

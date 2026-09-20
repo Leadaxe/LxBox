@@ -184,8 +184,9 @@ String? _extractIni(Object? protoObj) {
 
 /// §421 — экспорт AWG3 кладёт MTU не в `[Interface]`, а рядом в
 /// `last_config.mtu` (строкой `"1376"`). Если в `[Interface]` нет `MTU`,
-/// дописываем строку `MTU = N` в INI (текст, не params — одна точка
-/// конвертации, `_iniToUri`). Явный `MTU` в `[Interface]` приоритетнее.
+/// дописываем строку `MTU = N` в ТЕКСТ INI, а не в разобранные поля: точка
+/// конвертации одна (`mapWireguardIni`), и текст же становится `rawSource`
+/// узла (§456). Явный `MTU` в `[Interface]` приоритетнее.
 /// Эталон Go `amneziaPrepareConf`/`amneziaMTUValue`.
 String _withLastConfigMtu(String ini, Object? mtuRaw) {
   int? mtu;

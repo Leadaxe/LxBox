@@ -2,14 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
-import 'contract_test.dart' show warningCodeOf;
+import 'corpus_warnings.dart';
 
 // Конформанс-раннер корпуса ТЕЛ подписки (SPEC 103, фаза 2), сторона LxBox.
 // Аналог core/config/contract_body_test.go — гоняет тот же
@@ -27,7 +30,6 @@ import 'contract_test.dart' show warningCodeOf;
 // кейс `xray/dialer_proxy_missing` проходил бы и при молчаливой потере узла,
 // то есть ровно при том дефекте, ради которого он и заведён.
 
-const _contractRoot = 'contract';
 
 /// Имя этой стороны в `meta.extension` (corpus/README).
 const _thisSide = 'lxbox';
@@ -119,6 +121,9 @@ List<String> _expectedDropped(Map<String, dynamic> data) {
 String _droppedRef(NodeWarning w) => switch (w) {
       DialerProxyUnusableWarning(:final ownerTag, :final label) =>
         ownerTag.isNotEmpty ? ownerTag : label,
+      // §477 — запись, снятую реестром целиком (`on_invalid: drop_node`),
+      // называет тег, который проход по дословной карте приписал коду.
+      RegistryWarning(:final ownerTag) when ownerTag.isNotEmpty => ownerTag,
       _ => w.runtimeType.toString(),
     };
 
@@ -142,12 +147,25 @@ List<String> _expectedChainLabels(Map<String, dynamic> node) {
   return out;
 }
 
+/// §470 — узлы, чьи `warnings[]` сторона пока не сверяет по известной причине:
+/// `<кейс>|<подпись узла>` → причина.
+///
+/// Ожидание НЕ подгоняется и override не заводится (override живёт у
+/// лаунчера): запись означает задокументированное расхождение по существу и
+/// снимается вместе с работой, которая его закрывает. Образец — `_pendingCases`
+/// backup-раннера и `_overrideIgnored` §465.
+///
+/// ПУСТ: при включении сверки (§470) покраснели четыре узла, и все четыре —
+/// одна причина, разрыв между разбором и гардом сборки, плюс один наш дефект
+/// (`unknown_key` без `value`). Расхождений по существу не нашлось. §472 шаг 1
+/// закрыл и разрыв: коды дословного тела ставит сам разбор, и раннер читает
+/// один `node.warnings`.
+const Map<String, String> _pendingWarningNodes = {};
+
 void main() {
-  final root = Directory('$_contractRoot/corpus/body');
-  if (!root.existsSync()) {
-    // Контракт не синхронизирован — прогон пропускается, а не падает.
-    return;
-  }
+  if (corpusSuiteUnavailable('test/contract/body_contract_test.dart')) return;
+
+  final root = Directory('$kVendorRoot/corpus/body');
 
   final cases = root
       .listSync(recursive: true)
@@ -157,6 +175,12 @@ void main() {
     ..sort((a, b) => a.path.compareTo(b.path));
 
   group('contract corpus: subscription bodies', () {
+    setUpAll(() async {
+      if (Directory('$kRegistryRoot/registry').existsSync()) {
+        await ContractRegistry.I.loadFromDirectory(kRegistryRoot);
+      }
+    });
+
     for (final file in cases) {
       final name = file.path.substring(root.path.length + 1);
       final base = file.path.substring(0, file.path.length - '.body'.length);
@@ -226,6 +250,46 @@ void main() {
           expect(_chainLabels(spec), wantChain,
               reason: 'канон хопа: label звеньев обязан быть сырым тегом '
                   'релея (D-085), без маркера ⚙');
+        }
+
+        // §470 — `warnings[]` по тем же правилам, что у URI-раннера
+        // (`corpus_warnings.dart`, CANON §6/§7). Узлы ищутся по подписи: у
+        // многоузловых тел ожидание и результат уже сверены по составу выше.
+        for (final wantNode in wantNodes) {
+          final scheme = '${wantNode['scheme']}';
+          final entry =
+              (wantNode['entry'] as Map?)?.cast<String, dynamic>() ?? {};
+          final srv = entry['server'] ?? _wgPeerServer(entry) ?? '';
+          final prt = entry['server_port'] ?? _wgPeerPort(entry) ?? 0;
+          final sig = '$scheme|$srv|$prt';
+          final pending = _pendingWarningNodes['$name|$sig'];
+          if (pending != null) {
+            markTestSkipped('warnings[] узла $sig: $pending');
+            continue;
+          }
+          final matched = specs.where((s) => _nodeSignature(s) == sig).toList();
+          if (matched.isEmpty) continue;
+
+          // §472 шаг 1 — читается ОДИН источник, `node.warnings`. До него
+          // раннер склеивал здесь два пути (`_allWarningsOf`): санитайзер при
+          // разборе смотрел на `emit()` уже разобранного узла, мусор к тому
+          // моменту был снят, и коды дословного тела знал только гард сборки.
+          // Теперь санитайзер идёт по дословной карте (`rawSource`) в самом
+          // разборе, и раннер сверяет ровно то, что видит пользователь в
+          // строке узла.
+          final gotW = warningListOf(matched.first.warnings, scheme);
+          final gotNode = <String, dynamic>{
+            if (gotW.isNotEmpty) 'warnings': gotW,
+          };
+          final want = deepCopyEnvelope(wantNode) as Map<String, dynamic>;
+          normalizeNodeWarnings(gotNode, want);
+          normalizeNodeWarnings(want, null);
+          final g = canonEncode(gotNode['warnings'] ?? const []);
+          final w = canonEncode(want['warnings'] ?? const []);
+          if (g != w) {
+            fail('warnings[] узла $sig разошлись с контрактом\n'
+                '--- got ---\n$g\n--- want ---\n$w');
+          }
         }
       });
     }

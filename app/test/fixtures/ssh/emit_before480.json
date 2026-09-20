@@ -1,0 +1,162 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "default_port_22": {
+      "body": null,
+      "uri_before": "ssh://admin@example-1.com:22#Default%20Port",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "Default Port",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "admin"
+      }
+    },
+    "full_config": {
+      "body": null,
+      "uri_before": "ssh://root:pass123@192.0.2.60:22?host_key=ssh-ed25519%20AAAAC3NzaC1lZDI1NTE5AAAAIFakeSyntheticHostKey00000000000000&private_key_passphrase=myphrase#My%20SSH%20Server",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "My SSH Server",
+        "server": "192.0.2.60",
+        "server_port": 22,
+        "user": "root",
+        "password": "pass123",
+        "private_key_passphrase": "myphrase",
+        "host_key": [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeSyntheticHostKey00000000000000"
+        ]
+      }
+    },
+    "host_key": {
+      "body": null,
+      "uri_before": "ssh://testuser:testpass123@example-2.com:22?host_key=ssh-ed25519%20AAAAC3NzaC1lZDI1NTE5AAAAIExamplePlaceholderHostKeyBase64&host_key_algorithms=ssh-ed25519#SSH%20HostKey",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "SSH HostKey",
+        "server": "example-2.com",
+        "server_port": 22,
+        "user": "testuser",
+        "password": "testpass123",
+        "host_key": [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExamplePlaceholderHostKeyBase64"
+        ],
+        "host_key_algorithms": [
+          "ssh-ed25519"
+        ]
+      }
+    },
+    "multiple_host_keys": {
+      "body": null,
+      "uri_before": "ssh://user@example-1.com:22?host_key=key1%2Ckey2%2Ckey3#Multi%20Key%20Server",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "Multi Key Server",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "host_key": [
+          "key1",
+          "key2",
+          "key3"
+        ]
+      }
+    },
+    "non_standard_port": {
+      "body": null,
+      "uri_before": "ssh://testuser:testpass123@example-3.com:2222#SSH%20CustomPort",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "SSH CustomPort",
+        "server": "example-3.com",
+        "server_port": 2222,
+        "user": "testuser",
+        "password": "testpass123"
+      }
+    },
+    "password": {
+      "body": null,
+      "uri_before": "ssh://testuser:testpass123@example-1.com:22#SSH%20Pass",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "SSH Pass",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "testuser",
+        "password": "testpass123"
+      }
+    },
+    "private_key_path": {
+      "body": null,
+      "uri_before": "ssh://deploy@git.example-1.com:22#Git%20Server",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "Git Server",
+        "server": "git.example-1.com",
+        "server_port": 22,
+        "user": "deploy"
+      }
+    },
+    "user_only_custom_port": {
+      "body": null,
+      "uri_before": "ssh://user@example-1.com:2222#SSH%20Server",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "SSH Server",
+        "server": "example-1.com",
+        "server_port": 2222,
+        "user": "user"
+      }
+    },
+    "user_password": {
+      "body": null,
+      "uri_before": "ssh://root:admin@192.0.2.60:22#Local%20SSH",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "Local SSH",
+        "server": "192.0.2.60",
+        "server_port": 22,
+        "user": "root",
+        "password": "admin"
+      }
+    },
+    "b480:pem_percent_encoded": {
+      "body": {
+        "type": "ssh",
+        "tag": "pem-pct",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      },
+      "uri_before": "ssh://user@example-1.com:22?private_key=-----BEGIN%20OPENSSH%20PRIVATE%20KEY-----%0Ab3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB%2Bw%2FAAAAAAAAA%0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%2Bw%3D%3D%0A-----END%20OPENSSH%20PRIVATE%20KEY-----%0A#pem-pct",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "pem-pct",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      }
+    },
+    "b480:pem_raw_plus": {
+      "body": {
+        "type": "ssh",
+        "tag": "pem-raw-plus",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      },
+      "uri_before": "ssh://user@example-1.com:22?private_key=-----BEGIN%20OPENSSH%20PRIVATE%20KEY-----%0Ab3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB%2Bw%2FAAAAAAAAA%0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%2Bw%3D%3D%0A-----END%20OPENSSH%20PRIVATE%20KEY-----%0A#pem-raw-plus",
+      "body_of_old_uri": {
+        "type": "ssh",
+        "tag": "pem-raw-plus",
+        "server": "example-1.com",
+        "server_port": 22,
+        "user": "user",
+        "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAAB+w/AAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+w==\n-----END OPENSSH PRIVATE KEY-----\n"
+      }
+    }
+  }
+}

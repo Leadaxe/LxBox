@@ -78,6 +78,40 @@ void main() {
 
       expect(event.status, TunnelStatus.disconnected);
     });
+
+    // Фича 478 / Д-1 — сырой текст ядра едет ОТДЕЛЬНЫМ ключом от
+    // локализованной витрины.
+    test('core_error читается рядом с локализованным error', () {
+      final event = TunnelStatusEvent.fromNative(<dynamic, dynamic>{
+        'status': 'Stopped',
+        'error': 'Не удалось запустить сервис: start or reload service: '
+            'initialize outbound[33] shadowsocks[bad]: bad key length',
+        'core_error': 'start or reload service: '
+            'initialize outbound[33] shadowsocks[bad]: bad key length',
+      });
+
+      expect(event.errorReason, startsWith('Не удалось'));
+      expect(event.coreError, startsWith('start or reload service: '));
+    });
+
+    test('без core_error поле пустое, витрина не подменяется', () {
+      final event = TunnelStatusEvent.fromNative(<dynamic, dynamic>{
+        'status': 'Stopped',
+        'error': 'bind: address already in use',
+      });
+
+      expect(event.coreError, isNull);
+      expect(event.errorReason, 'bind: address already in use');
+    });
+
+    test('пустой core_error равен отсутствию', () {
+      final event = TunnelStatusEvent.fromNative(<dynamic, dynamic>{
+        'status': 'Stopped',
+        'core_error': '   ',
+      });
+
+      expect(event.coreError, isNull);
+    });
   });
 
   group('label', () {

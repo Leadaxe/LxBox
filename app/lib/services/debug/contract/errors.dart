@@ -32,7 +32,16 @@ sealed class DebugError implements Exception {
 
 /// 400 — невалидный ввод (missing required param, bad format).
 class BadRequest extends DebugError {
-  const BadRequest(super.message) : super(status: 400, code: 'bad_request');
+  const BadRequest(super.message, {this.dropped}) : super(status: 400, code: 'bad_request');
+
+  /// §500 — причины отбраковки одиночного ввода (`addFromInput`), если есть.
+  final List<Map<String, Object?>>? dropped;
+
+  @override
+  Map<String, Object?> toJson() => {
+        ...super.toJson(),
+        if (dropped != null) 'dropped': dropped,
+      };
 }
 
 /// 401 — отсутствует/неверный Bearer token.

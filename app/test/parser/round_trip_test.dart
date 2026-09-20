@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'engine_test_setup.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
@@ -7,6 +9,8 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 /// `id`, `rawSource`, `warnings` — это ephemeral поля, не связанные со значением
 /// узла.
 void main() {
+  setUpAll(loadEngineSections);
+
   group('Round-trip URI → Spec → URI → Spec', () {
     test('VLESS Reality: pbk, sid, flow preserved', () {
       final a = parseVless(
@@ -147,7 +151,14 @@ void main() {
         'hysteria2://secret@h:443?obfs=xyz&obfs-password=op&sni=h#H',
       )!;
       expect(a.obfs, isEmpty);
-      expect(a.warnings.whereType<UnknownObfsWarning>(), hasLength(1));
+      // §480 — отбраковку объявляет РЕЕСТР, и код приезжает `RegistryWarning`
+      // с тем же именем, под которым рукописный класс зарегистрирован в
+      // `warning_codes.dart`. Проверяется код, а не класс: классов у кодов
+      // реестра не бывает, а исход (obfs пуст, в теле ключа нет) прежний.
+      expect(
+        a.warnings.whereType<RegistryWarning>().map((w) => w.code),
+        contains('obfs_unknown'),
+      );
       expect(
         a.emitRaw(const TemplateVars()).map.containsKey('obfs'),
         isFalse,
@@ -160,7 +171,11 @@ void main() {
         'hysteria2://secret@h:443?obfs=gecko&sni=h#H',
       )!;
       expect(a.obfs, isEmpty);
-      expect(a.warnings.whereType<MissingObfsPasswordWarning>(), hasLength(1));
+      // §480 — см. выше: код реестра вместо рукописного класса.
+      expect(
+        a.warnings.whereType<RegistryWarning>().map((w) => w.code),
+        contains('obfs_password_missing'),
+      );
       expect(
         a.emitRaw(const TemplateVars()).map.containsKey('obfs'),
         isFalse,
@@ -170,7 +185,13 @@ void main() {
 
     test('TUIC: all core fields preserved', () {
       final a = parseTuic(
-        'tuic://uuid-1:secret@srv:443?congestion_control=bbr&udp_relay_mode=native&alpn=h3,h3-29&sni=srv&reduce_rtt=1#TUIC',
+        // §480 — реестр объявляет у поля `format: uuid`, и заглушка `uuid-1`
+        // отбраковывается разбором (та же причина, что у tuic-кейсов §472
+        // шага 5). Проверяемое кейсом — круг URI → Spec → URI — от формы
+        // uuid не зависит.
+        'tuic://8f2e1c44-0000-4000-8000-000000000001:secret@srv.example:443'
+        '?congestion_control=bbr&udp_relay_mode=native&alpn=h3,h3-29'
+        '&sni=srv.example&reduce_rtt=1#TUIC',
       )!;
       final b = parseTuic(a.toUri())!;
       expect(b.uuid, a.uuid);

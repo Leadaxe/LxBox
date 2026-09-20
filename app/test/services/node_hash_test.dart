@@ -7,6 +7,8 @@ import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §400 (контракт 0.10.0, IDENTITY.md) — идентичность узла = его ТЕГ,
 /// уникализированный внутри источника. Контент-хеш остался shim'ом
 /// ([legacyNodeIdentityHash]) для миграции ключей и отпечатка содержимого.
@@ -40,6 +42,10 @@ NodeSpec _group(String tag) => AutoSelectSpec(
 /// §283 — identity-хеш ноды: стабилен через reparse и переименования,
 /// меняется при смене сути; TTL-порог и GC отметок disable.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('nodeIdentityHash', () {
     const uri = 'vless://0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c@h.example:443'
         '?type=ws&security=tls&sni=x.com&fp=chrome#Label';

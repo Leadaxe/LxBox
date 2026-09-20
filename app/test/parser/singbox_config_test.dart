@@ -31,7 +31,8 @@ Map<String, dynamic> cfg(List<Map<String, dynamic>> outbounds,
 List<NodeSpec> parse(List<Map<String, dynamic>> configs) =>
     parseSingboxConfigs(configs);
 
-/// Разбор через публичный вход (decode → parseAll): проверяет и flavor.
+/// Разбор через публичный вход (decode → parseAll): проверяет и опознание
+/// вида источника.
 List<NodeSpec> parseText(Object json) => parseAll(decode(jsonEncode(json)));
 
 void main() {
@@ -53,19 +54,20 @@ void main() {
       }
     });
 
-    test('flavor распознаётся для каждой формы', () {
-      expect((decode(jsonEncode(ob)) as JsonConfig).flavor,
-          JsonFlavor.singboxOutbound);
-      expect((decode(jsonEncode([ob])) as JsonConfig).flavor,
-          JsonFlavor.singboxArray);
-      expect((decode(jsonEncode(cfg([ob]))) as JsonConfig).flavor,
-          JsonFlavor.singboxConfig);
+    test('вид источника распознаётся для каждой формы', () {
+      expect((decode(jsonEncode(ob)) as JsonConfig).source.kind,
+          SourceKind.singboxOutbound);
+      expect((decode(jsonEncode([ob])) as JsonConfig).source.kind,
+          SourceKind.singboxOutboundArray);
+      expect((decode(jsonEncode(cfg([ob]))) as JsonConfig).source.kind,
+          SourceKind.singboxConfig);
       expect(
           (decode(jsonEncode([
             cfg([ob])
           ])) as JsonConfig)
-              .flavor,
-          JsonFlavor.singboxMulti);
+              .source
+              .kind,
+          SourceKind.singboxConfigArray);
     });
 
     test('массив конфигов: Xray и sing-box различаются по содержимому', () {
@@ -76,15 +78,18 @@ void main() {
           ]
         }
       ]);
-      expect((decode(xray) as JsonConfig).flavor, JsonFlavor.xrayArray);
+      expect((decode(xray) as JsonConfig).source.kind,
+          SourceKind.xrayConfigArray);
 
       final sb = jsonEncode([
         cfg([ob])
       ]);
-      expect((decode(sb) as JsonConfig).flavor, JsonFlavor.singboxMulti);
+      expect((decode(sb) as JsonConfig).source.kind,
+          SourceKind.singboxConfigArray);
     });
 
-    test('неоднозначный элемент остаётся xrayArray (ветка уже работает)', () {
+    test('неоднозначный элемент остаётся массивом Xray (ветка уже работает)',
+        () {
       // Ни `type`, ни `protocol` — классификацию менять нельзя.
       final r = decode(jsonEncode([
         {
@@ -93,7 +98,7 @@ void main() {
           ]
         }
       ]));
-      expect((r as JsonConfig).flavor, JsonFlavor.xrayArray);
+      expect((r as JsonConfig).source.kind, SourceKind.xrayConfigArray);
     });
 
     test('одиночный selector — outbound, а не конфиг (порядок проверок)', () {
@@ -102,7 +107,7 @@ void main() {
         'tag': 'auto',
         'outbounds': ['a']
       }));
-      expect((r as JsonConfig).flavor, JsonFlavor.singboxOutbound);
+      expect((r as JsonConfig).source.kind, SourceKind.singboxOutbound);
     });
   });
 

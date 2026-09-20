@@ -97,6 +97,16 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// единственная детерминированная точка всех teardown-путей).
         const val EXTRA_REVOKED = "revoked"
 
+        /// Фича 478 / Д-1 — СЫРОЙ текст ядра, без единой обёртки приложения.
+        /// Едет рядом с EXTRA_STATUS=Stopped, отдельно от `error`: тот несёт
+        /// локализованный шаблон для человека (`stop_alert_start_failed`,
+        /// в ru префикс другой), и разбирать его грамматикой CANON §9 значило
+        /// бы завязать страховку на язык устройства. Здесь лежит ровно
+        /// `t.message` от `startOrReloadService` — что сказало ядро.
+        /// Пусто/нет ключа — отказ не от ядра (пустой конфиг, нет
+        /// CommandServer): разбирать нечего.
+        const val EXTRA_CORE_ERROR = "core_error"
+
         /// Mirror of the live service status, readable from anywhere.
         /// VpnPlugin.getVpnStatus читает это чтобы Flutter мог пересинхрониться
         /// после re-attach (process killed но service выжил из-за keep-on-exit).

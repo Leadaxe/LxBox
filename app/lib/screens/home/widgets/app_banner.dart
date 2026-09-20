@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../services/core_reject/core_reject_guard.dart';
+import '../core_reject_ui.dart';
+
 import '../../../models/home_state.dart';
 import '../../../services/l10n/locale_controller.dart';
 
@@ -27,10 +30,21 @@ class AppBanner {
     required this.message,
     required this.icon,
     required this.palette,
+    this.title = '',
+    this.actionLabel = '',
+    this.onAction,
     this.autoDismiss,
     this.onTap,
     this.onDismiss,
   });
+
+  /// Фича 478 — заголовок плашки над текстом; пусто = плашка однострочная,
+  /// как все прежние.
+  final String title;
+
+  /// Фича 478 — подпись кнопки действия; пусто = кнопки нет.
+  final String actionLabel;
+  final VoidCallback? onAction;
 
   final String key;
   final String message;
@@ -51,6 +65,8 @@ class BannerActions {
     required this.onClearError,
     required this.onShareCrash,
     required this.onDismissCrash,
+    required this.onShowCoreRejected,
+    required this.onDismissCoreRejected,
   });
 
   final VoidCallback onRebuild;
@@ -62,6 +78,12 @@ class BannerActions {
 
   /// §316 — «понял, больше не напоминай про этот краш».
   final VoidCallback onDismissCrash;
+
+  /// Фича 478 — кнопка Show плашки: список выключенных ядром серверов.
+  final VoidCallback onShowCoreRejected;
+
+  /// Фича 478 — крестик плашки.
+  final VoidCallback onDismissCoreRejected;
 }
 
 /// Чистая проекция: состояние → упорядоченный список активных плашек. Guard'ы
@@ -76,9 +98,25 @@ List<AppBanner> activeBanners(
   required BannerActions actions,
   bool crashPending = false,
   bool autoApplying = false,
+  List<DisabledNode> coreRejected = const [],
 }) {
   final a = actions;
   final out = <AppBanner>[];
+  // Фича 478 — ядро не приняло часть серверов, они выключены, VPN поднят.
+  // Живёт, пока человек не закроет крестиком; состояние плашки в бэкап не
+  // едет. Первой — это итог последнего нажатия Start.
+  if (coreRejected.isNotEmpty) {
+    out.add(AppBanner(
+      key: 'core_rejected',
+      title: coreRejectBannerTitle(coreRejected.length),
+      message: coreRejectBannerText(coreRejected),
+      icon: Icons.warning_amber_outlined,
+      palette: BannerPalette.warning,
+      actionLabel: coreRejectShowLabel(),
+      onAction: a.onShowCoreRejected,
+      onDismiss: a.onDismissCoreRejected,
+    ));
+  }
   // §316 — ядро упало в прошлой сессии. Плашка ОДНА на краш: `crashPending`
   // гаснет, как только `CrashBannerState` записал штамп файла (тап или
   // крестик). Первой в списке — это самое важное, что можно сказать
@@ -236,12 +274,39 @@ class _BannerStackState extends State<BannerStack> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        crossAxisAlignment: b.title.isEmpty
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
           Icon(b.icon, size: 16, color: c.fg),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(b.message,
-                style: TextStyle(fontSize: 13, color: c.fg)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (b.title.isNotEmpty)
+                  Text(b.title,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: c.fg)),
+                Text(b.message,
+                    style: TextStyle(fontSize: 13, color: c.fg)),
+                if (b.actionLabel.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: b.onAction,
+                      style: TextButton.styleFrom(
+                        foregroundColor: c.fg,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: Text(b.actionLabel),
+                    ),
+                  ),
+              ],
+            ),
           ),
           if (b.onDismiss != null)
             IconButton(

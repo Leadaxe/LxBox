@@ -93,8 +93,10 @@ ClipboardAnalysis analyzeClipboard(String text) {
 /// §368 §7.2 — превью JSON-формы. Счётчики берём сухим прогоном парсера, а не
 /// повторной эвристикой: то, что показано, и есть то, что приедет.
 ClipboardAnalysis? _analyzeJson(JsonConfig j) {
-  switch (j.flavor) {
-    case JsonFlavor.singboxOutbound:
+  // §483 — вид источника берётся у ветки, которой документ опознан: превью
+  // и импорт читают ОДИН ответ движка, а не два имени одной формы.
+  switch (j.source.kind) {
+    case SourceKind.singboxOutbound:
       final map = j.value is Map<String, dynamic>
           ? j.value as Map<String, dynamic>
           : const <String, dynamic>{};
@@ -106,7 +108,7 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
         subtitle: '$type${tag.isNotEmpty ? " — $tag" : ""}',
       );
 
-    case JsonFlavor.singboxArray:
+    case SourceKind.singboxOutboundArray:
       final list = j.value is List ? j.value as List : const [];
       final types = list
           .whereType<Map<String, dynamic>>()
@@ -118,9 +120,9 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
         subtitle: '${list.length} outbounds (${types.join(" + ")})',
       );
 
-    case JsonFlavor.singboxConfig:
-    case JsonFlavor.singboxMulti:
-      final configs = j.flavor == JsonFlavor.singboxConfig
+    case SourceKind.singboxConfig:
+    case SourceKind.singboxConfigArray:
+      final configs = j.source.kind == SourceKind.singboxConfig
           ? [
               if (j.value is Map<String, dynamic>)
                 j.value as Map<String, dynamic>,
@@ -128,7 +130,7 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
           : (j.value is List ? j.value as List : const [])
               .whereType<Map<String, dynamic>>()
               .toList();
-      final nodes = parseAll(JsonConfig(j.value, j.flavor));
+      final nodes = parseAll(j);
       final groups = nodes.where((n) => n.isGroup).length;
       final chained = nodes.where((n) => n.chained != null).length;
 
@@ -148,16 +150,25 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
         notImported: ignored,
       );
 
-    case JsonFlavor.xrayArray:
+    // §480 Д-3 — документ Xray бывает и объектом (одиночный outbound,
+    // полный конфиг), а не только массивом конфигов. Счёт по `value` как
+    // по списку дал бы таким формам «0 elements»: пересчитываем по
+    // разобранным узлам, как это делает ветка sing-box выше.
+    case SourceKind.xrayConfigArray:
+    case SourceKind.xrayConfig:
+    case SourceKind.xrayOutbound:
+    case SourceKind.xrayOutboundArray:
       final list = j.value is List ? j.value as List : const [];
+      final count = list.isNotEmpty ? list.length : parseAll(j).length;
       return ClipboardAnalysis(
         type: 'json_outbound',
         title: 'Xray config',
-        subtitle: '${list.length} elements',
+        subtitle: '$count elements',
       );
 
-    case JsonFlavor.clashYaml:
-    case JsonFlavor.unknown:
+    // Clash, нераспознанный JSON и вид, о котором код не знает: превью не
+    // обещает того, чего импорт не сделает — дальше стандартный диалог.
+    default:
       return null;
   }
 }

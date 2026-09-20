@@ -1,0 +1,99 @@
+{
+  "_note": "§472 шаг 6 — снимок identity naive, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "anonymous_no_auth": {
+      "uri": "naive+https://server.example-1.com:443",
+      "identity": "2cf8baba015c60a2872e9c29f141384f6e93fa0d43e30281996839d7e13f9434"
+    },
+    "bare_scheme_rejected": {
+      "uri": "naive://user1:pass123@example-1.com:443",
+      "identity": null
+    },
+    "canonical_full": {
+      "uri": "naive+https://user1:pass123@server.example-1.com:443/?padding=false#JP-01",
+      "identity": "5de122085958f2a60c899bc61fc93a707ccfbfe32e69479dfa01e82ec66555cc"
+    },
+    "custom_port": {
+      "uri": "naive+https://a:b@naive.example-9.com:10443",
+      "identity": "f6f0ea9bf576bfad86948dff0d35c2a29c4665641b8b5f70b60bbf74159a34b8"
+    },
+    "default_port_443": {
+      "uri": "naive+https://user1:pass123@host.example-1.com",
+      "identity": "775022cea7079388cb4633efc291095469df6a2d57cbf04c97fcc5127520bcca"
+    },
+    "empty_host_rejected": {
+      "uri": "naive+https://",
+      "identity": null
+    },
+    "extra_headers_bad_name_dropped": {
+      "uri": "naive+https://user1:pass123@example-1.com?extra-headers=X%20User%3Abad%0D%0AX-Good%3Aok",
+      "identity": "be1069fbff2b1274d301d5f0a8f77d1d1ce2dd2a71e9c625bad0d718f329b228"
+    },
+    "extra_headers_colon_in_value": {
+      "uri": "naive+https://user1:pass123@example-1.com?extra-headers=X-Trace%3A%20id%3A123",
+      "identity": "c2bd83d0e5e0ec7864e40c16b1e46df3ab2270e3ffd6e00c8180e9d7de384860"
+    },
+    "extra_headers_crlf": {
+      "uri": "naive+https://user1:pass123@example-1.com?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz",
+      "identity": "09e3f575a1ca6e327d39b06e8ef0dee2899af5e81bfe91dc544d02cdd14b6d22"
+    },
+    "extra_headers_encoded": {
+      "uri": "naive+https://hdr.example-9.com?extra-headers=X-Username%3Auser%0D%0AX-Password%3Apassword",
+      "identity": "fac140ad426daa569047e2cbc840eeb434c515e869625544bf738479918e888b"
+    },
+    "fragment_utf8_escaped": {
+      "uri": "naive+https://u:p@naive.example-9.com:443/?padding=false#%E2%9C%85%20JP-01",
+      "identity": "228497bfd0aa1ce1f3f602954b6800ffd7f5c42c1a0c904fa07f6185de0269a3"
+    },
+    "https_anonymous_padding_true": {
+      "uri": "naive+https://public.example-9.com?padding=true#Public-01",
+      "identity": "de0e089c4be64541f75c16a6cd2b8717f3fa27537a8c6297d342273dc81e97ce"
+    },
+    "https_userpass_padding_false": {
+      "uri": "naive+https://what:happened@naive.example-9.com?padding=false#Naive!",
+      "identity": "ffad0ef617cd73608bd253a38ea4c826826b253549117e11cf550aea60f6a90a"
+    },
+    "ipv6_host": {
+      "uri": "naive+https://user1:pass123@[2001:db8::1]:8443",
+      "identity": "f9131a0ce44a85f72162882c2bae9eb936d934df0d5113046abefcb939447111"
+    },
+    "password_only_userinfo": {
+      "uri": "naive+https://onlypass@server.example-1.com",
+      "identity": "e9935d711067c2cdb6a64a0774bfbeaa2bbf14d41cfb45218c8abbfe79845cfc"
+    },
+    "quic_userpass": {
+      "uri": "naive+quic://manhole:pass123@quic.example-9.com",
+      "identity": "3667a278343b62b722c9320350feebf7b20aafb7b9e07dacabe424770c7be5a6"
+    },
+    "unknown_query_ignored": {
+      "uri": "naive+https://user1:pass123@example-1.com?unknown=42&also_unknown=foo",
+      "identity": "8333af7c86a585a07dda84c665effdf145a90f68402df7c0f20e2e4873b57dc1"
+    },
+    "utf8_fragment_label": {
+      "uri": "naive+https://user1:pass123@example-1.com:443?#%E2%9C%85%20DE",
+      "identity": "8333af7c86a585a07dda84c665effdf145a90f68402df7c0f20e2e4873b57dc1"
+    },
+    "b480:extra_headers_unsorted": {
+      "uri": "naive+https://user1:pass123@example-1.com:443?extra-headers=Zed%3A+1%0D%0AAlpha%3A+2%0D%0AMid%3A+3#nv-hdr",
+      "identity": "63395e7d7c9a48d03739ab9000331bbf32f884199c0970297b68560747317828",
+      "tag": "nv-hdr",
+      "body": {
+        "type": "naive",
+        "tag": "nv-hdr",
+        "server": "example-1.com",
+        "server_port": 443,
+        "username": "user1",
+        "password": "pass123",
+        "extra_headers": {
+          "Alpha": "2",
+          "Mid": "3",
+          "Zed": "1"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    }
+  }
+}

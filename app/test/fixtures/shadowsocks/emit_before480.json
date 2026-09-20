@@ -1,0 +1,338 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "base64_userinfo": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMzQ1@example-1.com:8388#ss-b64",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "ss-b64",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass12345"
+      }
+    },
+    "legacy_base64": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-4.com:8388#SS%20Legacy",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS Legacy",
+        "server": "example-4.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "testpass123"
+      }
+    },
+    "legacy_full_base64": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwYXNzMTIz@192.0.2.10:8388#LegacyTag",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "LegacyTag",
+        "server": "192.0.2.10",
+        "server_port": 8388,
+        "method": "chacha20-ietf-poly1305",
+        "password": "pass123"
+      }
+    },
+    "sip002_aead": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-1.com:8388#SS%20AEAD",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS AEAD",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "testpass123"
+      }
+    },
+    "sip002_base64_userinfo": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:443#Shadowsocks%20Server",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "Shadowsocks Server",
+        "server": "example-1.com",
+        "server_port": 443,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "sip002_chacha": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw@example-2.com:8388#SS%20Chacha",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS Chacha",
+        "server": "example-2.com",
+        "server_port": 8388,
+        "method": "chacha20-ietf-poly1305",
+        "password": "testpass123"
+      }
+    },
+    "sip002_escaped_padding": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cHdk@203.0.113.5:990#EscapedPadding",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "EscapedPadding",
+        "server": "203.0.113.5",
+        "server_port": 990,
+        "method": "chacha20-ietf-poly1305",
+        "password": "testpwd"
+      }
+    },
+    "ss2022_blake3": {
+      "body": null,
+      "uri_before": "ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQT0@example-3.com:8388#SS%202022",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS 2022",
+        "server": "example-3.com",
+        "server_port": 8388,
+        "method": "2022-blake3-aes-256-gcm",
+        "password": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      }
+    },
+    "test:ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206dGVzdHBhc3MxMjNwYWRkaW5ncGFkZGluZ3BhZA==@example-3.com:8388#SS%202022": {
+      "body": null,
+      "uri_before": "ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206dGVzdHBhc3MxMjNwYWRkaW5ncGFkZGluZ3BhZA@example-3.com:8388#SS%202022",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS 2022",
+        "server": "example-3.com",
+        "server_port": 8388,
+        "method": "2022-blake3-aes-256-gcm",
+        "password": "testpass123paddingpaddingpad"
+      }
+    },
+    "test:ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw==@example-2.com:8388#SS%20Chacha": {
+      "body": null,
+      "uri_before": "ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0ZXN0cGFzczEyMw@example-2.com:8388#SS%20Chacha",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS Chacha",
+        "server": "example-2.com",
+        "server_port": 8388,
+        "method": "chacha20-ietf-poly1305",
+        "password": "testpass123"
+      }
+    },
+    "test:ss://YWVzLTEyOC1nY206cHc@h.example:8388#S": {
+      "body": null,
+      "uri_before": "ss://YWVzLTEyOC1nY206cHc@h.example:8388#S",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "S",
+        "server": "h.example",
+        "server_port": 8388,
+        "method": "aes-128-gcm",
+        "password": "pw"
+      }
+    },
+    "test:ss://YWVzLTEyOC1nY206cHc@h.example:8388?tcp_keep_alive=30s#S": {
+      "body": null,
+      "uri_before": "ss://YWVzLTEyOC1nY206cHc@h.example:8388?tcp_keep_alive=30s#S",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "S",
+        "server": "h.example",
+        "server_port": 8388,
+        "method": "aes-128-gcm",
+        "password": "pw",
+        "tcp_keep_alive": "30s"
+      }
+    },
+    "test:ss://YWVzLTI1Ni1nY206cGFzcw@ss.example:8388#SS": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzcw@ss.example:8388#SS",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS",
+        "server": "ss.example",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass"
+      }
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS",
+        "server": "srv",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "testpass1"
+      }
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM=@example-1.com:8388#SS%20AEAD": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-1.com:8388#SS%20AEAD",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS AEAD",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "testpass123"
+      }
+    },
+    "test:ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjNAZXhhbXBsZS00LmNvbTo4Mzg4#SS%20Legacy": {
+      "body": null,
+      "uri_before": "ss://YWVzLTI1Ni1nY206dGVzdHBhc3MxMjM@example-4.com:8388#SS%20Legacy",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "SS Legacy",
+        "server": "example-4.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "testpass123"
+      }
+    },
+    "b480:no_fragment": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "shadowsocks-example-1.com-8388",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "shadowsocks-example-1.com-8388",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "b480:password_with_colon": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "pw-colon",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pa:ss:123"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGE6c3M6MTIz@example-1.com:8388#pw-colon",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "pw-colon",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pa:ss:123"
+      }
+    },
+    "b480:plugin_no_opts": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-bare",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug-bare",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "plug-bare",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "b480:plugin_obfs_local": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "plug",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "b480:plugin_opts_camel_alias": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-camel",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug-camel",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "plug-camel",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "b480:plugin_opts_separate": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "plug-sep",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123",
+        "plugin": "obfs-local",
+        "plugin_opts": "obfs=http;obfs-host=x.example"
+      },
+      "uri_before": "ss://YWVzLTI1Ni1nY206cGFzczEyMw@example-1.com:8388#plug-sep",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "plug-sep",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "aes-256-gcm",
+        "password": "pass123"
+      }
+    },
+    "b480:ss2022_cleartext_userinfo": {
+      "body": {
+        "type": "shadowsocks",
+        "tag": "ss2022-clear",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "AAAAAAAAAAAAAAAAAAAAAA=="
+      },
+      "uri_before": "ss://MjAyMi1ibGFrZTMtYWVzLTEyOC1nY206QUFBQUFBQUFBQUFBQUFBQUFBQUFBQT09@example-1.com:8388#ss2022-clear",
+      "body_of_old_uri": {
+        "type": "shadowsocks",
+        "tag": "ss2022-clear",
+        "server": "example-1.com",
+        "server_port": 8388,
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "AAAAAAAAAAAAAAAAAAAAAA=="
+      }
+    }
+  }
+}

@@ -1,0 +1,2429 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "allowinsecure_lowercase_zero": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.12:52006?flow=xtls-rprx-vision&fp=qq&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&security=reality&sid=d8c6b58bcbb0c323&sni=example-4.com#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "192.0.2.12",
+        "server_port": 52006,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-4.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "qq"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg",
+            "short_id": "d8c6b58bcbb0c323"
+          }
+        }
+      }
+    },
+    "alpn_multiply_encoded": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.13:8443?alpn=http%2F1.1&flow=xtls-rprx-vision&fp=random&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&security=reality&sid=9083951b754b4254&sni=example-5.com#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "192.0.2.13",
+        "server_port": 8443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-5.com",
+          "alpn": [
+            "http/1.1"
+          ],
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg",
+            "short_id": "9083951b754b4254"
+          }
+        }
+      }
+    },
+    "default_port_443": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#Test",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "Test",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "ech_ignored_reality_kept": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=ab&sni=example-1.com#ech-reality",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "ech-reality",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "ab"
+          }
+        }
+      }
+    },
+    "encryption_mlkem768_long_key": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:1080?encryption=mlkem768x25519plus.native.0rtt.AbCd-EfGh_IjKl0123456789MnOpQrStUvWxYzAb3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9&path=%2Fws&security=none&type=ws#enc-pq",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "enc-pq",
+        "server": "example-1.com",
+        "server_port": 1080,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/ws"
+        },
+        "encryption": "mlkem768x25519plus.native.0rtt.AbCd-EfGh_IjKl0123456789MnOpQrStUvWxYzAb3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9Ab3-Zx_9"
+      }
+    },
+    "encryption_none_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#enc-none",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "enc-none",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "flow_absent_reality_tcp": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#flow-absent",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "flow-absent",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "flow_deprecated_direct_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#flow-direct",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "flow-direct",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "flow_none_literal_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#flow-none",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "flow-none",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "flow_udp443_compat": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?flow=xtls-rprx-vision&fp=chrome&packetEncoding=xudp&security=tls&sni=example-1.com#Germany",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "Germany",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "packet_encoding": "xudp",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "flow_vision_bare_tcp_kept": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?flow=xtls-rprx-vision&fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#flow-vision",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "flow-vision",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "flow_vision_udp443_xudp": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?flow=xtls-rprx-vision&fp=random&packetEncoding=xudp&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#flow-udp443",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "flow-udp443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "packet_encoding": "xudp",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "flow_vision_ws_suppressed": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=example-1.com&path=%2Fx&security=tls&sni=example-1.com&type=ws#flow-ws",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "flow-ws",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/x",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "flow_vision_xhttp_suppressed": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=cdn.example-1.com&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com&type=xhttp#flow-xhttp",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "flow-xhttp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "host": "cdn.example-1.com"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "fp_garbage_fallback_warning": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&sni=x.example.com#fp-junk",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "fp-junk",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "x.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "fp_hellochrome_alias_reality": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?flow=xtls-rprx-vision&fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sni=example-1.com#fp-alias",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "fp-alias",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+          }
+        }
+      }
+    },
+    "fragment_control_chars": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@test.example-1.com:443?security=none#MyServerWithNUL",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "MyServerWithNUL",
+        "server": "test.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111"
+      }
+    },
+    "fragment_plus_literal": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@test.example-1.com:443?security=none#A%2BB",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "A+B",
+        "server": "test.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111"
+      }
+    },
+    "grpc_reality_no_flow": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@grpc.example-2.com:443?fp=firefox&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&security=reality&serviceName=grpc&sid=d8e0f4c2&sni=www.example-3.com&type=grpc#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "grpc.example-2.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "grpc",
+          "service_name": "grpc"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "www.example-3.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "firefox"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg",
+            "short_id": "d8e0f4c2"
+          }
+        }
+      }
+    },
+    "grpc_service_name_custom_path_one_segment": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&serviceName=%2Fx%2FTun&sni=example-1.com&type=grpc#gr%20one",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "gr one",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "grpc",
+          "service_name": "/x/Tun"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "grpc_service_name_custom_path_other_stream": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&serviceName=%2Fa%2FStream&sni=example-1.com&type=grpc#gr%20stream",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "gr stream",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "grpc",
+          "service_name": "/a/Stream"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "grpc_service_name_custom_path_two_segments": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&serviceName=%2Fa%2Fb%2FTun&sni=example-1.com&type=grpc#gr%20two",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "gr two",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "grpc",
+          "service_name": "/a/b/Tun"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "grpc_service_name_leading_slash": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&serviceName=%2Fabcde%2Fsomething%2FTun&sni=example-1.com&type=grpc#gr%20abs",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "gr abs",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "grpc",
+          "service_name": "/abcde/something/Tun"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "grpc_service_name_plain_multi_segment": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&serviceName=a%2Fb&sni=example-1.com&type=grpc#gr%20plain",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "gr plain",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "grpc",
+          "service_name": "a/b"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "grpc_service_name_tls": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&serviceName=grpc&sni=example-1.com&type=grpc#gr",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "gr",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "grpc",
+          "service_name": "grpc"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "grpc_tls": {
+      "body": null,
+      "uri_before": "vless://11111111-2222-3333-4444-555555555555@example-3.com:443?fp=firefox&security=tls&serviceName=vless-grpc&sni=example-3.com&type=grpc#VLESS%20gRPC",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "VLESS gRPC",
+        "server": "example-3.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "transport": {
+          "type": "grpc",
+          "service_name": "vless-grpc"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-3.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "firefox"
+          }
+        }
+      }
+    },
+    "h2_tls": {
+      "body": null,
+      "uri_before": "vless://11111111-2222-3333-4444-555555555555@example-5.com:443?fp=random&security=tls&sni=example-5.com#VLESS%20H2",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "VLESS H2",
+        "server": "example-5.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-5.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "http_transport_host_list": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:80?host=cdn.example-1.com&path=%2Fapi&security=none&type=http#h",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "h",
+        "server": "example-1.com",
+        "server_port": 80,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "http",
+          "path": "/api",
+          "host": [
+            "cdn.example-1.com"
+          ]
+        }
+      }
+    },
+    "httpupgrade_alias": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=h2.example-1.com&path=%2Fp&security=tls&sni=h2.example-1.com&type=httpupgrade#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "httpupgrade",
+          "path": "/p",
+          "host": "h2.example-1.com"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "h2.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "junk_pair_with_body": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@pair.example-1.com:443?fp=chrome&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sni=cover.example-1.com#junk-pair",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "junk-pair",
+        "server": "pair.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "cover.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+          }
+        }
+      }
+    },
+    "packet_encoding_case_normalized": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?packetEncoding=packetaddr&security=none#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "packet_encoding": "packetaddr"
+      }
+    },
+    "packet_encoding_garbage_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#pe-junk",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pe-junk",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "packet_encoding_key_lowercase": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&packetEncoding=xudp&security=tls&sni=example-1.com#pe-key",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pe-key",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "packet_encoding": "xudp",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "packet_encoding_none_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#pe-none",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pe-none",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "packet_encoding_query_xudp": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@lk.example-6.com:443?fp=chrome&host=lk.example-6.com&packetEncoding=xudp&path=%2F%2F&security=tls&sni=lk.example-6.com&type=ws#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "lk.example-6.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "//",
+          "headers": {
+            "Host": "lk.example-6.com"
+          }
+        },
+        "packet_encoding": "xudp",
+        "tls": {
+          "enabled": true,
+          "server_name": "lk.example-6.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "packet_encoding_udp443_quirk_wins": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?flow=xtls-rprx-vision&fp=random&packetEncoding=xudp&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#pe-quirk",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pe-quirk",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "packet_encoding": "xudp",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "packet_encoding_value_case": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&packetEncoding=packetaddr&security=tls&sni=example-1.com#pe-case",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pe-case",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "packet_encoding": "packetaddr",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "packet_encoding_xudp": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&packetEncoding=xudp&security=tls&sni=example-1.com#pe-xudp",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pe-xudp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "packet_encoding": "xudp",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "plaintext_port_no_tls": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:8080?path=%2Fx&security=none&type=ws#plain",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "plain",
+        "server": "example-1.com",
+        "server_port": 8080,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/x"
+        }
+      }
+    },
+    "query_leading_ampersand": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.19:2053?fp=chrome&host=ws.example-8.com&path=%2Fpath&security=tls&sni=ws.example-8.com&type=ws#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "192.0.2.19",
+        "server_port": 2053,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/path",
+          "headers": {
+            "Host": "ws.example-8.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "ws.example-8.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "raw_headertype_http": {
+      "body": null,
+      "uri_before": "vless://22222222-2222-2222-2222-222222222222@192.0.2.14:58387?host=cdn.example-7.com&security=none&type=http#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "192.0.2.14",
+        "server_port": 58387,
+        "uuid": "22222222-2222-2222-2222-222222222222",
+        "transport": {
+          "type": "http",
+          "path": "/",
+          "host": [
+            "cdn.example-7.com"
+          ]
+        }
+      }
+    },
+    "reality_fp_firefox_kept": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=firefox&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=ab&sni=www.example-3.com#reality-fp-firefox",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "reality-fp-firefox",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "www.example-3.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "firefox"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "ab"
+          }
+        }
+      }
+    },
+    "reality_key_share_bad_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#ks-bad",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "ks-bad",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "reality_key_share_classical": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&key_share=classical&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#ks-classical",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "ks-classical",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd",
+            "key_share": "classical"
+          }
+        }
+      }
+    },
+    "reality_key_share_hybrid": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&key_share=hybrid&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=w.example.com#ks-hybrid",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "ks-hybrid",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd",
+            "key_share": "hybrid"
+          }
+        }
+      }
+    },
+    "reality_key_share_without_pbk_ignored": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=w.example.com#ks-no-pbk",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "ks-no-pbk",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "reality_pbk_junk_degrade": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=w.example.com#pbk-true",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pbk-true",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "reality_pbk_junk_on_tls": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=w.example.com#pbk-enabled",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pbk-enabled",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "reality_sid_nbsp_sanitized": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&security=reality&sid=48ab12&sni=example-1.com",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "vless-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg",
+            "short_id": "48ab12"
+          }
+        }
+      }
+    },
+    "reality_sid_nonhex_cleaned": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=01a2&sni=w.example.com#sid-clean",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "sid-clean",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "01a2"
+          }
+        }
+      }
+    },
+    "reality_sid_odd_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sni=w.example.com#sid-odd",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "sid-odd",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+          }
+        }
+      }
+    },
+    "reality_sid_too_long_dropped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sni=w.example.com#sid-long",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "sid-long",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "w.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw"
+          }
+        }
+      }
+    },
+    "reality_tcp_no_flow": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.11:443?fp=firefox&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&security=reality&sid=a887fe19&sni=www.example-3.com#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "192.0.2.11",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "www.example-3.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "firefox"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg",
+            "short_id": "a887fe19"
+          }
+        }
+      }
+    },
+    "reality_valid_pbk_sid": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=example-1.com#pbk-valid",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pbk-valid",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      }
+    },
+    "reality_vision_full": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.10:443?allowInsecure=1&flow=xtls-rprx-vision&fp=chrome&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&security=reality&sid=48720c&sni=cdn.example-1.com#%F0%9F%87%A6%F0%9F%87%AA%20United%20Arab%20Emirates",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "🇦🇪 United Arab Emirates",
+        "server": "192.0.2.10",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "flow": "xtls-rprx-vision",
+        "tls": {
+          "enabled": true,
+          "server_name": "cdn.example-1.com",
+          "insecure": true,
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg",
+            "short_id": "48720c"
+          }
+        }
+      }
+    },
+    "reality_xtls_vision": {
+      "body": null,
+      "uri_before": "vless://11111111-2222-3333-4444-555555555555@example-1.com:443?flow=xtls-rprx-vision&fp=chrome&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&security=reality&sid=abcd1234&sni=www.example.com#VLESS%20Reality",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "VLESS Reality",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "flow": "xtls-rprx-vision",
+        "tls": {
+          "enabled": true,
+          "server_name": "www.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "short_id": "abcd1234"
+          }
+        }
+      }
+    },
+    "tls_pbk_junk_enabled": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.15:2053?fp=chrome&host=ez.example-10.com&path=%2Fsync&security=tls&sni=ez.example-10.com&type=ws",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "vless-192.0.2.15-2053",
+        "server": "192.0.2.15",
+        "server_port": 2053,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/sync",
+          "headers": {
+            "Host": "ez.example-10.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "ez.example-10.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "tls_server_name_from_peer": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@198.51.100.1:443?fp=random&security=tls&sni=cdn.example-1.com#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "198.51.100.1",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "cdn.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "userinfo_raw_space": {
+      "body": null,
+      "uri_before": "vless://Promo@192.0.2.16:80?host=play.example-11.com&security=none&type=http#node",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "node",
+        "server": "192.0.2.16",
+        "server_port": 80,
+        "uuid": "Promo",
+        "transport": {
+          "type": "http",
+          "path": "/",
+          "host": [
+            "play.example-11.com"
+          ]
+        }
+      }
+    },
+    "utls_junk_fp_fallback": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "utls_raw_hello_identifier": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&security=tls&sni=example-1.com#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "ws_early_data_ed_in_path": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@h.example-1.com:443?fp=random&host=h.example-1.com&path=%2Fapi%2Fv2%2Fchannel%3Fed%3D2560&security=tls&sni=h.example-1.com&type=ws#ws-ed",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "ws-ed",
+        "server": "h.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/api/v2/channel",
+          "headers": {
+            "Host": "h.example-1.com"
+          },
+          "max_early_data": 2560,
+          "early_data_header_name": "Sec-WebSocket-Protocol"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "h.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "ws_host_from_obfsparam": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=obs.example-1.com&security=tls&sni=example-1.com&type=ws#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "headers": {
+            "Host": "obs.example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "ws_security_none": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:80?host=cdn.example-1.com&path=%2Fvless%2F&security=none&type=ws#plain-ws",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "plain-ws",
+        "server": "example-1.com",
+        "server_port": 80,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/vless/",
+          "headers": {
+            "Host": "cdn.example-1.com"
+          }
+        }
+      }
+    },
+    "ws_tls": {
+      "body": null,
+      "uri_before": "vless://11111111-2222-3333-4444-555555555555@example-2.com:443?fp=random&host=example-2.com&path=%2Fvless&security=tls&sni=example-2.com&type=ws#VLESS%20WS",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "VLESS WS",
+        "server": "example-2.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "transport": {
+          "type": "ws",
+          "path": "/vless",
+          "headers": {
+            "Host": "example-2.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-2.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "ws_tls_host_from_sni": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@ws.example-2.com:443?fp=firefox&host=ws.example-2.com&path=%2Fwebsocket&security=tls&sni=ws.example-2.com&type=ws#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "ws.example-2.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/websocket",
+          "headers": {
+            "Host": "ws.example-2.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "ws.example-2.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "firefox"
+          }
+        }
+      }
+    },
+    "xhttp_basic_padding": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=h.example-1.com&mode=stream-one&security=tls&sni=h.example-1.com&type=xhttp&xPaddingBytes=100-1000#xh",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xh",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "host": "h.example-1.com",
+          "mode": "stream-one",
+          "x_padding_bytes": "100-1000"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "h.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_extra_broken_json": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&mode=packet-up&path=%2Fp&security=tls&sni=example-1.com&type=xhttp#xhttp-extra-broken",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-extra-broken",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/p",
+          "mode": "packet-up"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_extra_empty_mode_keeps_flat": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=chrome&host=media.example-1.com&mode=packet-up&path=%2Fhls%2Fv2%2Ftrack%2F8e31c750%2F&security=tls&sni=example-1.com&type=xhttp&uplinkDataPlacement=header&xPaddingBytes=100-1000#xhttp-flat-wins",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-flat-wins",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/hls/v2/track/8e31c750/",
+          "host": "media.example-1.com",
+          "mode": "packet-up",
+          "x_padding_bytes": "100-1000",
+          "uplink_data_placement": "header"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "xhttp_extra_full": {
+      "body": null,
+      "uri_before": "vless://11111111-2222-3333-4444-555555555555@www.example.com:443?fp=chrome&host=www.example.com&mode=packet-up&noGRPCHeader=true&path=%2Fxhttp&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30&security=tls&seqKey=x_seq&seqPlacement=query&sessionKey=X-Session&sessionPlacement=header&sni=www.example.com&type=xhttp&uplinkChunkSize=3000-4000&uplinkDataKey=X-Data&uplinkDataPlacement=header&uplinkHTTPMethod=POST&xPaddingBytes=100-1000&xPaddingHeader=X-Padding&xPaddingKey=x_padding&xPaddingMethod=tokenish&xPaddingObfsMode=true&xPaddingPlacement=header#golden",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "golden",
+        "server": "www.example.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "transport": {
+          "type": "xhttp",
+          "path": "/xhttp",
+          "host": "www.example.com",
+          "mode": "packet-up",
+          "x_padding_bytes": "100-1000",
+          "no_grpc_header": true,
+          "session_placement": "header",
+          "session_key": "X-Session",
+          "seq_placement": "query",
+          "seq_key": "x_seq",
+          "uplink_data_placement": "header",
+          "uplink_data_key": "X-Data",
+          "uplink_chunk_size": "3000-4000",
+          "uplink_http_method": "POST",
+          "x_padding_obfs_mode": true,
+          "x_padding_key": "x_padding",
+          "x_padding_header": "X-Padding",
+          "x_padding_placement": "header",
+          "x_padding_method": "tokenish",
+          "sc_max_each_post_bytes": "1000000",
+          "sc_min_posts_interval_ms": "30"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "www.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "xhttp_extra_host_path_mode_ignored": {
+      "body": null,
+      "uri_before": "vless://22222222-2222-2222-2222-222222222222@example-2.com:443?fp=random&host=flat.example-2.com&mode=packet-up&path=%2Fflat&security=tls&sni=example-2.com&type=xhttp&xPaddingBytes=200-400#xhttp-extra-trio-ignored",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-extra-trio-ignored",
+        "server": "example-2.com",
+        "server_port": 443,
+        "uuid": "22222222-2222-2222-2222-222222222222",
+        "transport": {
+          "type": "xhttp",
+          "path": "/flat",
+          "host": "flat.example-2.com",
+          "mode": "packet-up",
+          "x_padding_bytes": "200-400"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-2.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_extra_json_query": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&mode=packet-up&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30&security=tls&sni=example-1.com&type=xhttp&xPaddingBytes=100-1000#xhttp-extra",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-extra",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "mode": "packet-up",
+          "x_padding_bytes": "100-1000",
+          "sc_max_each_post_bytes": "1000000",
+          "sc_min_posts_interval_ms": "30"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_fallback_httpupgrade": {
+      "body": null,
+      "uri_before": "vless://11111111-2222-3333-4444-555555555555@example-4.com:443?fp=random&host=example-4.com&path=%2Fxh&security=tls&sni=example-4.com&type=xhttp#VLESS%20XHTTP",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "VLESS XHTTP",
+        "server": "example-4.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "transport": {
+          "type": "xhttp",
+          "path": "/xh",
+          "host": "example-4.com"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-4.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_full_15_fields": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=www.example.com&mode=packet-up&noGRPCHeader=true&path=%2Fxhttp&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30&security=tls&seqKey=x_seq&seqPlacement=query&sessionKey=X-Session&sessionPlacement=header&sni=www.example.com&type=xhttp&uplinkChunkSize=3000-4000&uplinkDataKey=X-Data&uplinkDataPlacement=header&uplinkHTTPMethod=POST&xPaddingBytes=100-1000&xPaddingHeader=X-Padding&xPaddingKey=x_padding&xPaddingMethod=tokenish&xPaddingObfsMode=true&xPaddingPlacement=header#xhttp-full",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-full",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/xhttp",
+          "host": "www.example.com",
+          "mode": "packet-up",
+          "x_padding_bytes": "100-1000",
+          "no_grpc_header": true,
+          "session_placement": "header",
+          "session_key": "X-Session",
+          "seq_placement": "query",
+          "seq_key": "x_seq",
+          "uplink_data_placement": "header",
+          "uplink_data_key": "X-Data",
+          "uplink_chunk_size": "3000-4000",
+          "uplink_http_method": "POST",
+          "x_padding_obfs_mode": true,
+          "x_padding_key": "x_padding",
+          "x_padding_header": "X-Padding",
+          "x_padding_placement": "header",
+          "x_padding_method": "tokenish",
+          "sc_max_each_post_bytes": "1000000",
+          "sc_min_posts_interval_ms": "30"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "www.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_mode_invalid": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&path=%2Fx&security=tls&sni=example-1.com&type=xhttp#xhttp-mode-invalid",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-mode-invalid",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/x"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_native_basic": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=cdn.example-1.com&mode=stream-one&noGRPCHeader=true&path=%2Fx&security=tls&sni=example-1.com&type=xhttp&xPaddingBytes=100-1000#xhttp-basic",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-basic",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/x",
+          "host": "cdn.example-1.com",
+          "mode": "stream-one",
+          "x_padding_bytes": "100-1000",
+          "no_grpc_header": true
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_path_ed_tail_stripped": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&path=%2FGaMeOpTiMiZeR&security=tls&sni=example-1.com&type=xhttp#xhttp-ed-tail",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-ed-tail",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/GaMeOpTiMiZeR"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_path_query_tail_trimmed": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@h.example-1.com:443?fp=random&path=%2FGaMeOpTiMiZeR&security=tls&sni=h.example-1.com&type=xhttp#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "h.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/GaMeOpTiMiZeR"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "h.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_placement_bogus_reset": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com&type=xhttp#xhttp-bogus-plc",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-bogus-plc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_reality_mode_auto": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.21:443?fp=chrome&mode=auto&path=%2Fxh-fin&pbk=mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg&security=reality&sid=7a18cff76f11&sni=example-9.com&type=xhttp#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "192.0.2.21",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "path": "/xh-fin",
+          "mode": "auto"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-9.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "mLmBhbVFfNuo2eUgBh6r9-5Koz9mUCn3aSzlR6IejUg",
+            "short_id": "7a18cff76f11"
+          }
+        }
+      }
+    },
+    "xhttp_uplink_get_packet_up_kept": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&mode=packet-up&security=tls&sni=example-1.com&type=xhttp&uplinkHTTPMethod=GET#xhttp-get-ok",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-get-ok",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "mode": "packet-up",
+          "uplink_http_method": "GET"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_uplink_get_without_packet_up_kept": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&mode=auto&security=tls&sni=example-1.com&type=xhttp&uplinkHTTPMethod=GET#xhttp-get-kept",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-get-kept",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "mode": "auto",
+          "uplink_http_method": "GET"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_uplink_header_placement_adds_packet_up": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com&type=xhttp&uplinkDataPlacement=header#xhttp-plc-adds-mode",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-plc-adds-mode",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "mode": "packet-up",
+          "uplink_data_placement": "header"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_uplink_header_placement_reset": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&mode=stream-up&security=tls&sni=example-1.com&type=xhttp&uplinkDataPlacement=header#xhttp-plc-reset",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "xhttp-plc-reset",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "mode": "stream-up"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_v2_extra_json": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@192.0.2.17:443?fp=chrome&host=cdn.example-12.com&mode=packet-up&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30&security=tls&sni=tls.example-12.com&type=xhttp&xPaddingBytes=100-1000#France",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "France",
+        "server": "192.0.2.17",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "host": "cdn.example-12.com",
+          "mode": "packet-up",
+          "x_padding_bytes": "100-1000",
+          "sc_max_each_post_bytes": "1000000",
+          "sc_min_posts_interval_ms": "30"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "tls.example-12.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "xhttp_v2_extra_wins_over_flat": {
+      "body": null,
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@h.example-1.com:443?fp=random&security=tls&sni=h.example-1.com&type=xhttp&xPaddingBytes=500-600#t",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "t",
+        "server": "h.example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "xhttp",
+          "x_padding_bytes": "500-600"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "h.example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "xhttp_v2_golden_flat": {
+      "body": null,
+      "uri_before": "vless://b831381d-6324-4d53-ad4f-8cda48b30811@www.example.com:443?fp=chrome&host=www.example.com&mode=packet-up&noGRPCHeader=true&path=%2Fxhttp&scMaxEachPostBytes=1000000&scMinPostsIntervalMs=30&security=tls&seqKey=x_seq&seqPlacement=query&sessionKey=X-Session&sessionPlacement=header&sni=www.example.com&type=xhttp&uplinkChunkSize=3000-4000&uplinkDataKey=X-Data&uplinkDataPlacement=header&uplinkHTTPMethod=POST&xPaddingBytes=100-1000&xPaddingHeader=X-Padding&xPaddingKey=x_padding&xPaddingMethod=tokenish&xPaddingObfsMode=true&xPaddingPlacement=header#golden",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "golden",
+        "server": "www.example.com",
+        "server_port": 443,
+        "uuid": "b831381d-6324-4d53-ad4f-8cda48b30811",
+        "transport": {
+          "type": "xhttp",
+          "path": "/xhttp",
+          "host": "www.example.com",
+          "mode": "packet-up",
+          "x_padding_bytes": "100-1000",
+          "no_grpc_header": true,
+          "session_placement": "header",
+          "session_key": "X-Session",
+          "seq_placement": "query",
+          "seq_key": "x_seq",
+          "uplink_data_placement": "header",
+          "uplink_data_key": "X-Data",
+          "uplink_chunk_size": "3000-4000",
+          "uplink_http_method": "POST",
+          "x_padding_obfs_mode": true,
+          "x_padding_key": "x_padding",
+          "x_padding_header": "X-Padding",
+          "x_padding_placement": "header",
+          "x_padding_method": "tokenish",
+          "sc_max_each_post_bytes": "1000000",
+          "sc_min_posts_interval_ms": "30"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "www.example.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "b480:path_encoded_slash_raw_plus": {
+      "body": {
+        "type": "vless",
+        "tag": "path-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/a b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=example-1.com&path=%2Fa%20b&security=tls&sni=example-1.com&type=ws#path-plus-enc",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "path-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/a b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:path_raw_plus": {
+      "body": {
+        "type": "vless",
+        "tag": "path-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/a b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&host=example-1.com&path=%2Fa%20b&security=tls&sni=example-1.com&type=ws#path-plus",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "path-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "transport": {
+          "type": "ws",
+          "path": "/a b",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:pbk_encoded_plus": {
+      "body": {
+        "type": "vless",
+        "tag": "pbk-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&pbk=Awo%2BGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&security=reality&sid=abcd&sni=example-1.com#pbk-plus-enc",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pbk-plus-enc",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          },
+          "reality": {
+            "enabled": true,
+            "public_key": "Awo-GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+            "short_id": "abcd"
+          }
+        }
+      },
+      "_delta480": "delta480 Д-6: сохранённая старая ссылка читается в ключ, приведённый к форме ядра (RawURL). Было: public_key оставался в std-алфавите и ядро роняло ВЕСЬ конфиг («decode public_key: illegal base64 data»). Стало: «Awo-…». Ключ тот же побайтно — сменилось написание.",
+      "_before480": {
+        "body_of_old_uri": {
+          "type": "vless",
+          "tag": "pbk-plus-enc",
+          "server": "example-1.com",
+          "server_port": 443,
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "tls": {
+            "enabled": true,
+            "server_name": "example-1.com",
+            "utls": {
+              "enabled": true,
+              "fingerprint": "random"
+            },
+            "reality": {
+              "enabled": true,
+              "public_key": "Awo+GB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw",
+              "short_id": "abcd"
+            }
+          }
+        }
+      }
+    },
+    "b480:pbk_raw_plus": {
+      "body": {
+        "type": "vless",
+        "tag": "pbk-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#pbk-plus",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "pbk-plus",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_allow_insecure": {
+      "body": {
+        "type": "vless",
+        "tag": "up-ai",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true,
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?allowInsecure=1&fp=random&security=tls&sni=example-1.com#up-ai",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "up-ai",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "insecure": true,
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_alpn": {
+      "body": {
+        "type": "vless",
+        "tag": "up-alpn",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#up-alpn",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "up-alpn",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_fp": {
+      "body": {
+        "type": "vless",
+        "tag": "up-fp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#up-fp",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "up-fp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_security": {
+      "body": {
+        "type": "vless",
+        "tag": "up-sec",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#up-sec",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "up-sec",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_sni": {
+      "body": {
+        "type": "vless",
+        "tag": "up-sni",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#up-sni",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "up-sni",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    },
+    "b480:upper_type_ws": {
+      "body": {
+        "type": "vless",
+        "tag": "up-type",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      },
+      "uri_before": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?fp=random&security=tls&sni=example-1.com#up-type",
+      "body_of_old_uri": {
+        "type": "vless",
+        "tag": "up-type",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    }
+  }
+}

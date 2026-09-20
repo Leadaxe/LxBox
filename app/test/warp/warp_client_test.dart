@@ -9,8 +9,14 @@ import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 import 'package:lxbox/services/warp/warp_client.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §025 — WarpClient: keygen, register, license. HTTP замокан.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   Map<String, dynamic> regResponse({String? clientId}) => {
         'id': 'device-123',
         'token': 'tok-abc',

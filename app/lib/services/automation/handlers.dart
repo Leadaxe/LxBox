@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../vpn/box_vpn_client.dart';
+import '../core_reject/core_reject_runner.dart';
 import '../debug/context.dart';
 import '../debug/contract/errors.dart';
 import '../settings_storage.dart';
@@ -113,11 +114,15 @@ Future<void> actionUrltestGroup(String group, DebugContext ctx) async {
 }
 
 /// `start-vpn` — запросить старт VPN (идемпотентно: noop если up).
-/// На native стороне `START_VPN` идёт напрямую через `BoxVpnService.start` —
-/// этот хелпер для Debug API (где есть HomeController).
-Future<void> actionStartVpn(DebugContext ctx) async {
+///
+/// §494 — общий вход [runCoreRejectGuard] с `guard=false`: прежний путь
+/// `home.start()` через Activity, без цикла страховки. Публичный Intent API
+/// (§047) этот хелпер не зовёт — native `LxBoxIntentReceiver` идёт в
+/// `BoxVpnService.start` напрямую.
+Future<void> actionStartVpn(DebugContext ctx, {bool guard = false}) async {
   final home = ctx.requireHome();
-  unawaited(home.start());
+  final sub = ctx.requireSub();
+  unawaited(runCoreRejectGuard(home: home, sub: sub, guard: guard));
 }
 
 /// `stop-vpn` — запросить остановку VPN.

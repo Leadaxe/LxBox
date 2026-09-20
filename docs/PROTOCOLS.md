@@ -150,15 +150,16 @@ vless://UUID@host:port?query_params#label
 | SNI | `sni` or `peer` | TLS server name |
 | Fingerprint | `fp` or `fingerprint` | UTLS fingerprint (defaults to `random`) |
 | ALPN | `alpn` | Comma-separated ALPN values |
-| Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → 32 bytes); garbage falls back to plain TLS plus a warning (§169) |
+| Public key | `pbk` | The REALITY public key. REALITY is enabled only for a valid X25519 key (base64/base64url → exactly 32 bytes after decode); garbage falls back to plain TLS and now carries the `reality_pbk_invalid` code on every input — URI, sing-box JSON, Xray JSON (§169, code added in §464) |
 | Short ID | `sid` | REALITY short ID (hex, max 16 chars) |
 | REALITY key share | `key_share` | `hybrid` \| `classical` (sing-box `tls.reality.key_share`, §457). Read only together with a valid `pbk`; anything outside the enum is dropped silently — the core rejects an unknown value along with the whole config. Requires the core pin `v1.14.1-lx.4` or newer |
-| Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp`, `raw` |
+| Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp` (`splithttp` is the same thing under its older Xray name, §463), `raw` |
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
-| Service name | `serviceName` or `service_name` | gRPC service name |
+| Service name | `serviceName` or `service_name` | gRPC service name, passed to the core **verbatim** (§468, contract 1.1.3, core `v1.14.1-lx.8`+). A leading `/` makes the value a ready-made request path in Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the *stream* name and drops a `\|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` it is a service name — one escaped segment plus the core's own `/Tun` (`a/b` → `/a%2Fb/Tun`). The §464 translation `/<service>/Tun` → `<service>` was removed with the lx.8 pin: it only ever fixed the single-segment form and would now strip a `/` the core expects. Note that the URI parser percent-decodes `serviceName`, so a `%2F` inside a segment becomes a separator after parsing — exactly as in Xray |
 | Header type | `headerType` | When `http` with `type=tcp`/`raw`, creates HTTP transport |
 | Packet encoding | `packetEncoding` (case-insensitive) | An allow-list of `xudp` / `packetaddr`. The xray-style `none`, and any garbage, is dropped silently — sing-box `NewOutbound` accepts only those two values, and anything else panics inside libbox. |
+| Encryption | `encryption` | The post-quantum layer (§335, core SPEC 032). Its **shape** is checked against the registry, and a value that fails **drops the node** (§477, contract 1.1.9) — see the note below. |
 | Insecure | `insecure`, `allowInsecure` | Skip certificate verification |
 
 ### sing-box Outbound Mapping
@@ -213,14 +214,14 @@ vless://UUID@host:port?query_params#label
 
 ### TLS Behavior
 
-- If `pbk` is present **and is a valid X25519 public key** (base64/base64url, decodes to exactly 32 bytes): REALITY TLS is enabled. An invalid `pbk` (e.g. `pbk=enabled`/`true` from broken subscriptions) falls back to **plain TLS** with a parse warning instead of emitting a REALITY block the core rejects — before §169 one broken node used to poison the whole `config.json` at startup.
+- If `pbk` is present **and is a valid X25519 public key** (base64/base64url, decodes to exactly 32 bytes): REALITY TLS is enabled. An invalid `pbk` (e.g. `pbk=enabled`/`true` from broken subscriptions — both are legal base64, 5 and 3 bytes long, which is why the length is counted *after* the decode) falls back to **plain TLS** with the `reality_pbk_invalid` code instead of emitting a REALITY block the core rejects — before §169 one broken node used to poison the whole `config.json` at startup. §464 made the code appear on all three inputs: the URI branch used to degrade silently while the JSON import reported it, so the same node arriving two ways carried two different code sets.
 - **REALITY `key_share` (§457, core `v1.14.1-lx.4`+).** `tls.reality.key_share` picks the key share of the REALITY ClientHello: `hybrid` demands `X25519MLKEM768` (~1.5–1.9 KB, two TCP segments — what Xray ≥ v26.9.8 requires), `classical` strips the hybrid out of `key_share` and `supported_groups` (~0.5 KB, one segment — for older servers and networks that drop the large hello). Absent means whatever the fingerprint carries. It arrives from sing-box JSON (`tls.reality.key_share`) and from the share URI (`key_share=`, the same name as the core key, §453); in the URI it is read only when the REALITY block is actually built, i.e. `pbk` is a valid X25519 key. Any value outside `{hybrid, classical}` — including a different case such as `Hybrid`, a number, or an empty string — is **dropped silently**, and the node stays alive: the core answers an unknown value with `unknown reality key_share` and refuses to create the outbound, which takes the whole config down. This is not `reality_fp_not_chrome` (§451): that warning is about the fingerprint, not about `key_share`, and its logic is untouched.
 - `flow` is **never** auto-derived from REALITY (§115): it is taken verbatim from the link. Historically bare-TCP+REALITY without `flow` got a forced Vision, breaking valid `none` setups.
-- `xtls-rprx-vision` is valid only on bare TLS. If a transport (ws/grpc/xhttp/http/httpupgrade) is present, the explicit `flow` is dropped with a `VisionWithTransportWarning` (the core would not bring up that combination). `emit()` writes `flow` only when it is exactly `xtls-rprx-vision` with no transport.
+- `xtls-rprx-vision` is valid only on bare TLS. If a transport (ws/grpc/xhttp/http/httpupgrade) is present, the explicit `flow` is dropped with the registry code `vision_with_transport` (`protocols/vless.json` → `flow`, `conflicts`), which carries the path and the value; the core would not bring up that combination. `emit()` writes `flow` only when it is exactly `xtls-rprx-vision` with no transport.
 - If `security=none`: no TLS block.
 - If port is a known plaintext port (80, 8080, 8880, 2052, 2082, 2086, 2095) and no explicit security: no TLS.
 - Otherwise: TLS enabled with UTLS fingerprint (defaults to `random`).
-- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp` (the URI parser does **not** change the port; `server_port: 443` is forced only on the Xray-JSON path, section 11).
+- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp`. **The node's port is not touched** on any path — URI, sing-box JSON or Xray JSON. Until §459 the Xray-JSON branch forced `server_port: 443`, which made a `…:8443` node unreachable; the port is a property of the node, not of the flow (contract §24.2 item 7.4).
 
 ### packet_encoding allow-list
 
@@ -234,6 +235,48 @@ sing-box `vless.NewOutbound` accepts exactly three forms (see the [docs](https:/
 | anything else | the field is not emitted, plus a warning in the log | protection against a libbox panic |
 
 Xray-style subscriptions (xray-knife and others) put `packetEncoding=none` there meaning “no encoding”. sing-box does not understand that string and panics inside `format.ToString` while trying to report the error (`E.New` receives a `*string` pointer instead of a dereferenced string — an upstream bug). L×Box filters on input against the allow-list so that no invalid value ever leaves the app.
+
+### encryption — shape and order of processing
+
+The post-quantum layer is a **closed grammar** in the core, not a free string,
+and a value the grammar rejects brings down the start of the **entire config**
+— one bad line in one node of a subscription and the VPN comes up on no node at
+all ([#147](https://github.com/Leadaxe/LxBox/issues/147)).
+
+The app checks the **shape only**, by one rule in the registry
+(`vless.body.fields.encryption`, contract 1.1.9):
+
+`^mlkem768x25519plus(\.[^.]+){3,}$` — case-sensitive.
+
+The grammar itself is deliberately **not** duplicated: a copy would drift from
+the core at the next pin bump and start rejecting *working* nodes, which costs
+more than it catches. Anything finer than the shape is left to the core.
+
+The order is normative and identical on every input — link, sing-box body and
+(after step 8 of spec 472) Xray JSON:
+
+1. the link mapper URL-decodes the parameter;
+2. whitespace is trimmed **from both ends of the whole string**, silently, with
+   no code — the core does the same (`strings.TrimSpace`). The **trimmed** value
+   is what goes into the body;
+3. the result being empty or exactly `none` means the layer is off: the field is
+   not written and there is no code. The comparison is **exact** — the core
+   matches its own literal case-sensitively, so `None` is a real value to it,
+   and hiding it as an off-switch would let a node that kills the whole config
+   through;
+4. otherwise the value must match the pattern. It does not → the **node is
+   dropped**, code `vless_encryption_invalid` (error), with the field path and
+   the **raw** value, before trimming.
+
+Spaces **inside** segments are legal on purpose: the core trims segments from
+the fourth onwards, so `….0rtt. KEY` is a good value and travels as is.
+
+Dropping the node rather than the field is the point: a node with no
+`encryption` will not connect to a server that requires the layer anyway, and
+quietly removing encryption would be a silent downgrade of protection.
+
+The method name is the only thing judged by content, and it is baked into the
+expression — see `docs/KERNEL.md` for the check to run when the core pin moves.
 
 ### Reference
 
@@ -288,7 +331,7 @@ Decoded as `method:uuid@host:port`. The method is normalized to a sing-box VMess
 | Port | `port` | Server port |
 | UUID | `id` | User ID |
 | Name | `ps` | Display name |
-| Security | `scy` or `security` | Encryption method |
+| Security | `scy` or `security` | Encryption method. Enum of the core (`sing-vmess` `client.go:42-54`): `auto`, `none`, `zero`, `aes-128-cfb`, `aes-128-gcm`, `chacha20-poly1305`. Normalised with `trim`+`lower`; `chacha20-ietf-poly1305` is an alias for `chacha20-poly1305`; empty/`null`/`undefined` and anything outside the set (including `aes-128-ctr`) become `auto` — the core answers an unknown method with a fatal on the **whole** config. The same funnel serves the URI, sing-box JSON and Xray JSON (§459) |
 | Alter ID | `aid` | Alter ID (0 for AEAD) |
 | Network | `net` | Transport type |
 | Path | `path` | Transport path |
@@ -425,6 +468,12 @@ Both formats are auto-detected. The base64 part before `@` is decoded first; if 
 
 ### Supported Methods
 
+The set is the core's own 18 methods (`sing-shadowsocks2 v0.2.1`
+`method_registry`); anything outside it is a `CreateMethod` error on the whole
+config, so such a node is dropped.
+
+AEAD (recommended):
+
 - `2022-blake3-aes-128-gcm`
 - `2022-blake3-aes-256-gcm`
 - `2022-blake3-chacha20-poly1305`
@@ -434,6 +483,19 @@ Both formats are auto-detected. The base64 part before `@` is decoded first; if 
 - `aes-256-gcm`
 - `chacha20-ietf-poly1305`
 - `xchacha20-ietf-poly1305`
+
+Legacy stream ciphers (accepted since §463; the node lives and carries the
+info code `ss_method_legacy`). They predate AEAD, so the traffic is encrypted
+but **not authenticated** — an attacker in the path can alter it undetected.
+They are accepted because the core accepts them and because dropping a working
+node without explanation is worse: the user simply saw nodes disappear from the
+subscription.
+
+- `aes-128-ctr`, `aes-192-ctr`, `aes-256-ctr`
+- `aes-128-cfb`, `aes-192-cfb`, `aes-256-cfb`
+- `rc4-md5`
+- `chacha20-ietf`
+- `xchacha20`
 
 ### SIP003 Plugins
 
@@ -517,17 +579,42 @@ Both `hysteria2://` and `hy2://` schemes are supported (the latter is normalized
     "enabled": true,
     "server_name": "<sni>",
     "insecure": false,
-    "utls": { "enabled": true, "fingerprint": "<fp>" },
     "alpn": ["h3"]
   }
 }
 ```
 
+No `utls` and no `reality` — see "TLS over QUIC" below. The mapping table above
+used to show a `utls` block; it never reached the config.
+
+### TLS over QUIC (§469, contract 1.1.4)
+
+Hysteria2 runs over QUIC, and the core builds QUIC's TLS through the standard
+engine (`aTLS.Config.STDConfig()`). Neither a uTLS fingerprint nor REALITY can
+be provided that way — `STDConfig()` on those configs returns an error and the
+outbound does not start at all. So `tls.utls` and `tls.reality` are stripped
+whole, and `fp=`/`pbk=`/`sid=` in a link have no effect on the connection.
+
+The same holds for **tuic**, **masque** and **hysteria v1**: one rule, four
+schemes, stated once in the contract registry (`tls.json`,
+`body.fields.utls/reality` → `forbidden_for` + `forbidden_codes`).
+
+Since 1.1.4 the strip is no longer silent: the node gets
+`tls_not_applicable_quic` (severity `info` — the setting would not have applied
+anyway, so nothing is lost), **one code per block**. A stripped REALITY counts
+as one: `short_id` and `key_share` inside it produce no codes of their own.
+The node's body is unchanged by this — the blocks never reached the config.
+
+Everything else in the TLS block is fine over QUIC and is kept:
+`server_name`, `alpn`, `insecure`, `certificate_public_key_sha256` (the
+`pinSHA256=` pin), certificates and TLS versions.
+
 ### Notes
 
 - TLS is always enabled (Hysteria2 runs over QUIC).
-- Port hopping (`mport`/`ports` → `server_ports`) is **not** implemented — the parser does not read those keys and `server_ports` is never emitted.
-- `up_mbps`/`down_mbps` are parsed and round-tripped (URI/JSON), emitted only when present.
+- Port hopping (`mport`/`ports` → `server_ports`) **is** implemented (§103 §9.B2). Both query spellings are read, and so is a multi-port authority (`host:443,20000-30000`), which `Uri.parse` cannot digest at all — the engine's own lexer splits it and the `$multiport` entry prepends the ranges. The core's form uses a **colon** (`"low:high"`); the dash a link is written with would be a `bad port range` fatal over the whole config, and a single port becomes the pair `N:N`. An element that is not a pair of numbers is dropped outright: a rebuilt authority (`host:443`) used to travel through as-is and take the whole VPN down with it, and its single port belongs to `server_port`, not to the ranges. Registry: `protocols/hysteria2.json` → `mappers.uri.params.mport` / `$multiport` (`normalize: port_range_spec`).
+- `up_mbps`/`down_mbps` are parsed and round-tripped (URI/JSON), emitted only when present. Both URI spellings are read — `upmbps`/`downmbps` **and** `up_mbps`/`down_mbps` (registry aliases, §464); emission keeps the canonical `upmbps`/`downmbps`.
+- `obfs-min-packet-size`/`obfs-max-packet-size` are gecko-only. With `obfs=salamander` they are dropped with `field_requires` instead of disappearing silently (§464, registry `requires` + `equals`).
 - Invalid SNI values (e.g. emoji-only) are replaced with the server address.
 
 ### Reference
@@ -551,7 +638,8 @@ Following the [DuckSoft 2020 de-facto specification](https://gist.github.com/Duc
 | `host` | Server address (FQDN or IP, IPv6 in brackets) | required |
 | `port` | TCP port | `443` |
 | userinfo: `user:pass` | HTTP Basic credentials | optional |
-| userinfo: `pass` (no colon) | Treated as **password-only** auth | optional |
+| userinfo: `pass` (no colon) | Treated as **password-only** auth — username stays empty (§465) | optional |
+| userinfo: `user:` (trailing colon) | Username only, empty password | optional |
 | Query: `extra-headers=<urlencoded>` | `Header1: Value1\r\nHeader2: Value2` after URL-decoding (`\r\n` → `%0D%0A`, `:` → `%3A`) | empty |
 | Query: `padding=true\|false` | **Ignored with log warning** — no sing-box equivalent | n/a |
 | Fragment `#label` | Display name (UTF-8, URL-decoded) | derived from `host:port` |
@@ -562,6 +650,7 @@ Following the [DuckSoft 2020 de-facto specification](https://gist.github.com/Duc
 naive+https://user:pass@server.example.com:443/?padding=false#JP-01
 naive+https://server.example.com:8443                                      # anonymous
 naive+https://onlypass@server.example.com                                  # password-only
+naive+https://onlyuser:@server.example.com                                 # username-only
 naive+https://u:p@host?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz
 naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20DE
 ```
@@ -584,8 +673,10 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 ### Behaviour Notes
 
 - TLS is **always** enabled — `tls.enabled = true`, `tls.server_name = host`. NaïveProxy without TLS is meaningless.
+- An **empty host rejects the node** (§463, contract §24.6). Up to that point `naive+https://` stayed a live node with `server: ""`, on the premise that the Go side only validates a non-empty hostname for vless/trojan/ssh/tuic/anytls. The premise was wrong: the core answers an empty server address with a fatal for the *whole* config (`invalid server address`), so a single such node in a subscription left the user with no VPN at all.
 - The naive outbound in sing-box rejects `alpn`, `insecure`, `disable_sni`, `utls`, `reality`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment`, `kernel_*`. The parser deliberately leaves them unset. What naive **does** accept on top of `enabled`/`server_name` is `certificate` (PEM, string or array — its own trusted root, fed to cronet) and `certificate_path`; both survive the JSON round-trip since §454 (issue #140). The pin `certificate_public_key_sha256` is silently ignored by naive and therefore dropped.
 - `network`/`udp_over_tcp`/`quic` fields are **not** emitted in v1 — the URI standard does not carry them and naive QUIC mode is deferred (see spec 037 §10).
+- **A single userinfo without a colon is the password**, not the username (§465, contract §24.2 item 7.3). Until then the rule was the opposite (SPEC 103 item 6, mirroring Go's `url.User.Username()`), and it contradicted every emitter in sight: NekoBox, NaiveGUI and the Go share-URI writer all put the password in that slot, as does `toUriNaive` here — so a link the app handed out came back with the password read as a login, and the node authenticated with none. The colon is what tells the two apart: `pass@host` is password-only, `user:@host` is username-only, `user:pass@host` is both. The emitter keeps that colon for the username-only form, so `parseUri(spec.toUri())` returns the same credentials for all three.
 - `extra_headers` keys are sorted lexicographically when emitted to JSON or back to URI form, for deterministic round-trip.
 - `padding` is silently dropped because sing-box has no corresponding option.
 
@@ -622,7 +713,7 @@ accepts the de-facto Trojan-style form used by Karing / v2rayN mods.
 | userinfo `password` | Auth credential | required (empty → parse fails) |
 | `host` | Server address (FQDN or IP, IPv6 in brackets) | required |
 | `port` | TCP port | `443` |
-| Query: `sni` / `peer` / `host` | TLS server name | `host` |
+| Query: `sni` / `peer` / `host` | TLS server name. Since §463 a value that cannot be a host name — no `.` and no `:` in it, e.g. `🔒` — falls back to the server address: `sing-box check` passes such a node, but the handshake is dead because the server is sent an SNI it does not know (contract §24.2 item 7.5) | `host` |
 | Query: `fp` | uTLS fingerprint | `random` |
 | Query: `pbk` / `sid` | REALITY public key / short ID (valid X25519 → REALITY, else plain TLS, §169) | none |
 | Query: `key_share` | REALITY key share `hybrid` \| `classical` (§457, core lx.4+); read only with a valid `pbk`, outside the enum dropped | none |
@@ -732,15 +823,31 @@ Default port: **22**.
 ```
 socks://user:password@host:port#label
 socks5://user:password@host:port#label
+socks4://userid@host:port#label
+socks4a://userid@host:port#label
 ```
 
-Both `socks://` and `socks5://` are accepted. Default port: **1080**.
+Default port: **1080**.
+
+**The scheme carries the protocol version.** A SOCKS link has no query
+parameter for the version in any dialect, so the scheme itself is the
+discriminator — the way the `proxy-https://` suffix discriminates TLS for the
+HTTP proxy. One table serves both ends, the link mapper and the share-URI
+emitter (`socksSchemeForVersion`, `uri_utils.dart`): a node parsed from
+`socks4://` is emitted back as `socks4://`.
+
+| Scheme | `version` in the body |
+|---|---|
+| `socks://`, `socks5://` | `"5"` |
+| `socks4://` | `"4"` |
+| `socks4a://` | `"4a"` |
 
 ### Parsed Parameters
 
 | Parameter | Source | Description |
 |-----------|--------|-------------|
-| Username | userinfo (before `:`) | SOCKS username |
+| Version | the scheme | SOCKS protocol version |
+| Username | userinfo (before `:`) | SOCKS username; with `socks4` this is the userid |
 | Password | userinfo (after `:`) | SOCKS password |
 
 ### sing-box Outbound Mapping
@@ -759,7 +866,16 @@ Both `socks://` and `socks5://` are accepted. Default port: **1080**.
 
 ### Notes
 
-- Always mapped to SOCKS version 5.
+- `version` is written into the body explicitly, including the `"5"` the core
+  would assume anyway: the value already stands in every live SOCKS node on
+  both sides of the contract, and dropping it would rewrite them all for no
+  difference to the core.
+- A sing-box body is read as written: an explicit `"5"` passes through, a body
+  with no key gets none. A version outside the set is dropped by the registry
+  enum (`type_invalid`) and the node runs as SOCKS5, the core's default.
+- SOCKS4 has no password at all — the userinfo is a userid, which the core
+  sends as `username`. A password written in the link is still carried over as
+  is: the mapper does not judge values, the core does.
 - Username and password are optional.
 
 ### Reference
@@ -792,7 +908,7 @@ and **443** respectively.
 | Password | userinfo (after `:`) | Basic-auth password |
 | Path | `path` | The sing-box `path` (a query parameter rather than a URI path — it round-trips more easily) |
 | Headers | `headers` | Serialized like naive `extra-headers`: `Header1: V1\r\nHeader2: V2`, URL-encoded |
-| SNI | `sni` / `peer` / `host` | `proxy-https://` only; the default is the host (the trojan convention, `parseTrojanTls`) |
+| SNI | `sni` / `peer` / `host` | `proxy-https://` only; the default is the host (the trojan convention, `registry/tls.json` → `blocks.uri_with_host.sni`, included by `registry/protocols/http.json` → `mappers.uri`) |
 | Fingerprint | `fp` | The uTLS fingerprint (`proxy-https://` only) |
 | ALPN | `alpn` | Comma-separated (`proxy-https://` only) |
 | Insecure | `allowInsecure` and its aliases | `tls.insecure` → `InsecureTlsWarning` |
@@ -847,7 +963,7 @@ Scheme aliases: `wireguard://`, `wg://` and `awg://` — all three are parsed by
 | Private key | userinfo | WireGuard private key |
 | Public key | `publickey` | Peer public key (required) |
 | Address | `address` | Comma-separated local addresses (required) |
-| MTU | `mtu` | The MTU value (default 1408; every AmneziaWG node, 3.x included, is clamped to `min(mtu, 1280)` — see [8.5](#85-amneziawg-awg-awg2)) |
+| MTU | `mtu` | The MTU value (default 1408; on every AmneziaWG node, 3.x included, the registry caps it at 1280 — replaced on link/INI inputs, kept with an info code on a sing-box body, see [8.5](#85-amneziawg-awg-awg2)) |
 | Pre-shared key | `presharedkey` | Peer pre-shared key |
 | Keepalive | `keepalive` | Persistent keepalive interval: `N` seconds, or an AWG 3.x range `N-M` (emitted as the string `"N-M"`; the core re-picks the interval on every timer, §421) |
 | Allowed IPs | `allowedips` | Peer allowed IPs (default: `0.0.0.0/0, ::/0`) |
@@ -930,11 +1046,25 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 > In the WireGuard spec `reserved_zero[3]` means bytes `[1..3]` of the packet header, right after the message type at `[0]`; the magic headers `h1`–`h4` write **all 4 bytes** `[0..3]` at once (as a uint32), which is to say they overwrite exactly that `reserved_zero`.
 > The bytes are physically the same; the meaning is not. Conflating them has already caused a real bug: unconditionally clearing `b[1:4]` for the WARP client_id wiped out ranged magic (fixed in core `lx.9`). When working with either field, be explicit about which one you mean.
 
-The model is the `Awg` class in [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, where `null` means ordinary WG). The round trip is complete: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` with no loss.
+The model is the `Awg` class in [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, where `null` means ordinary WG). The round trip is complete: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` with no loss. The order of AWG keys in the body is the same on all three inputs — AWG 3.x first, then the numeric AWG2 fields and `i*` — because golden configs are compared byte for byte.
 
 ### MTU clamp
 
-For AWG nodes the client MTU is **clamped to `min(mtu, 1280)`**; with no explicit `mtu` the default is **1280** (`awgClampMtu` in [`uri_utils.dart`](../app/lib/services/parser/uri_utils.dart)). Ordinary WG is left alone (the default stays 1408).
+Since contract 1.1.5 (§473) the rule lives in the **registry**, not in Dart: the ceiling, the default and the set of marker fields that make a node AmneziaWG all come from `wireguard.body.fields.mtu` (`max_when`, `default_when`). Since §472 step 7 the registry also **executes** it, on every input, through `RegistrySanitizer`; the hand-written `awgClampMtu` / `awgMtuByRegistry` / `awgMtuWarnings` are gone. Two cases the sanitiser cannot reach stay with the pipeline, and both would otherwise fail silently: a node that **asked** for AmneziaWG but kept no valid AWG field (the condition judges keys in the body, and none are left — §463), and a registry that failed to load (`kAwgMtuFallback`). No second copy of the numbers exists in the code.
+
+For AWG nodes the client MTU is **clamped to `min(mtu, 1280)`**, and with no explicit `mtu` the default is **1280**. Ordinary WG is left alone (the core's own default of 1408 applies, and the field is not emitted at all).
+
+**What makes a node AmneziaWG** is the presence of any one of ~27 marker keys (`jc`, `jmin`, `jmax`, `s1`–`s4`, `h1`–`h4`, `i1`–`i5`, `id`, `ip`, `ib`, `header_protection_key`, `content_padding_addition`, the AWG 3.x timers, `random_trailers`, `disable_cookies`). The condition judges the **presence of the key**, not whether the value is non-empty: `jc: 0` means “junk packets off” on a genuine AmneziaWG node, and reading it as “no field” would lift the ceiling off a node that needs it. This is the opposite of how `conflicts`/`requires` are judged (§467, by value) — the two predicates are deliberately separate.
+
+**The input decides whether the value is replaced** (owner's decision of 2026-09-18 — the only place in the contract where the input affects the result):
+
+| Input | `mtu > 1280` on an AWG node | Code |
+|---|---|---|
+| sing-box body (`origin.kind: json`, subscription bodies, a pasted object) | **kept as written** | `awg_mtu_high`, info |
+| link (`wireguard://`, `awg://`), `.conf`, Amnezia export, editor form | replaced with 1280 | `awg_mtu_clamped`, warning |
+| any input, `mtu` not set | 1280 substituted | none — a default is not a replacement |
+
+The grounds are about ownership, not technology: a sing-box body was written in the core's own form by the user or the subscription, and rewriting that silently is not the app's to do; a value in a link or a `.conf` was made up by the provider's generator. The exception survives a restart by construction — the input is derived from `rawSource`, the very text kept in storage, and parsing runs afresh on every load. It is honoured by the build gate too, so §455 (a `json` node reaches the core verbatim) still holds.
 
 Why 1280:
 - it is both AmneziaWG's own recommended client MTU and the minimum IPv6 MTU, so it is safe on any path (PPPoE 1492, mobile, nested tunnels);
@@ -943,7 +1073,7 @@ Why 1280:
 
 An explicitly lower MTU (≤ 1280) is respected as given.
 
-**AWG 3.x is clamped the same way** (§421, decision of 2026-09-05 after the device acceptance: with the 1376 an Amnezia export carries, no data flowed through the owner's server; with 1280 the tunnel worked). An AWG 3.x marker on its own — any AWG 3.x key, even a malformed one, or a ranged `keepalive` — makes the node AmneziaWG even without a single AWG 2.0 field, so it gets the 1280 default and the clamp like any other AWG node. An explicitly lower value (1200) is respected.
+**AWG 3.x is treated the same way** (§421, decision of 2026-09-05 after the device acceptance: with the 1376 an Amnezia export carries, no data flowed through the owner's server; with 1280 the tunnel worked). An AWG 3.x marker on its own — any AWG 3.x key, even a malformed one, or a ranged `keepalive` — makes the node AmneziaWG even without a single AWG 2.0 field, so it gets the 1280 default and the ceiling like any other AWG node. An explicitly lower value (1200) is respected.
 
 ### INI
 
@@ -1121,13 +1251,14 @@ tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
 
 | Key | Value |
 |------|---------|
-| `congestion_control` | `bbr` \| `cubic` \| `new_reno` (default `cubic`) |
-| `udp_relay_mode` | `native` \| `quic` (default `native`) |
+| `congestion_control` | `bbr` \| `cubic` \| `new_reno` (the core's default is `cubic`; a value outside the set is dropped with `tuic_congestion_invalid` rather than coerced) |
+| `udp_relay_mode` | `native` \| `quic` (the core's default is `native`). Since §463 a value outside the set is **dropped** with `tuic_udp_relay_mode_invalid` — it used to be coerced to `native`, which hid the loss of the subscription's intent, and core `lx.6` refuses to load such a config anyway |
 | `alpn` | A CSV list (`h3`, `h3-29`) |
 | `sni` | The SNI for TLS |
 | `allow_insecure` / `insecure` | `1` \| `true` — skip certificate verification |
 | `disable_sni` | `1` — do not send an SNI |
 | `reduce_rtt` | `1` — enable 0-RTT / early data |
+| `fp` / `fingerprint` | Read since §469 — **but only to report the loss**. TUIC runs over QUIC, where a uTLS fingerprint does not apply (see "TLS over QUIC" under Hysteria2); the value goes nowhere and the node gets `tls_not_applicable_quic` (`info`). Before 1.1.4 the parameter was not read at all and vanished without a word |
 
 ### sing-box outbound (emit)
 
@@ -1150,6 +1281,9 @@ tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
   }
 }
 ```
+
+`tls.utls` and `tls.reality` never appear here: see "TLS over QUIC" under
+Hysteria2 — the same rule covers hysteria, hysteria2, tuic and masque.
 
 ### Reference
 
@@ -1219,6 +1353,11 @@ It is emitted as an **Outbound** (not an Endpoint, unlike WireGuard). `ip` and
 
 The core's schema (§393, kernel SPEC 062): the HTTP version under the `vhttp`
 key, and the TLS options in a nested `tls{}`.
+
+MASQUE is a QUIC protocol, so `tls.utls` and `tls.reality` do not apply to it
+either — see "TLS over QUIC" under Hysteria2. The MASQUE link format carries no
+`fp`/`pbk`, so the rule shows up only on a hand-written body: it gets
+`tls_not_applicable_quic` from the registry guard, and the block is stripped.
 
 ```json
 {
@@ -1388,7 +1527,7 @@ Membership uses **explicit identity keys**, not a tag regex as in §322 — insi
 
 - Entries are **re-parsed** into typed `NodeSpec`s via `parseSingboxEntry` — nothing is passed through verbatim. Supported `type` values: `vless`, `vmess`, `trojan`, `anytls`, `shadowsocks`, `hysteria2`, `naive`, `tuic`, `ssh`, `socks`, `http`, `wireguard`, `masque`.
 - Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
-- **TLS block (§454, contract TASKS_LXBOX §22):** the model carries every key of the core's `OutboundTLSOptions` (`option/tls.go`). Typed and gated: `server_name`, `alpn`, `insecure`, `utls`, `reality`, `certificate_public_key_sha256`. Passed through in the form they arrived (a string stays a string, an array stays an array; booleans only when `true`): `disable_sni`, `min_version`, `max_version`, `cipher_suites`, `curve_preferences`, `certificate`, `certificate_path`, `client_certificate`, `client_certificate_path`, `client_key`, `client_key_path`, `fragment`, `fragment_fallback_delay`, `record_fragment`, `kernel_tx`, `kernel_rx`. Not emitted: `ech` (core built without `with_ech`) and unknown keys (the core rejects them on the whole config). Emit order follows the core struct, except that `alpn` stays before `insecure` for byte-parity with earlier releases (the identity hash sorts keys, so it does not care). Naive keeps only `certificate`/`certificate_path` of the passthrough set; QUIC types (hysteria2/tuic) keep it whole and drop `utls`/`reality` as before.
+- **TLS block (§454, contract TASKS_LXBOX §22):** the model carries every key of the core's `OutboundTLSOptions` (`option/tls.go`). Typed and gated: `server_name`, `alpn`, `insecure`, `utls`, `reality`, `certificate_public_key_sha256`. Passed through in the form they arrived (a string stays a string, an array stays an array; booleans only when `true`): `disable_sni`, `min_version`, `max_version`, `cipher_suites`, `curve_preferences`, `certificate`, `certificate_path`, `client_certificate`, `client_certificate_path`, `client_key`, `client_key_path`, `fragment`, `fragment_fallback_delay`, `record_fragment`, `kernel_tx`, `kernel_rx`. `ech` is passed through as an **object**: the map is copied as it arrived and emitted as is, the app never looks inside (the core owns the field set — `enabled`, `config` (Listable), `config_path`, `query_server_name`); a non-object `ech` is dropped like any other bad shape. §454 had excluded `ech` on the premise that the core is built without `with_ech` — that premise was false (`common/tls/ech_tag_stub.go` declares the tag itself deprecated, ECH is always compiled in, and `tls.ech` passes `sing-box check` on the lx.4 pin); §459 revises it. The URI parameter `ech=` of the Xray form is still stripped with `ech_ignored` (§320): it carries the name of a public ECH probe, not this server's key. Not emitted: unknown keys (the core rejects them on the whole config). Emit order follows the core struct, except that `alpn` stays before `insecure` for byte-parity with earlier releases (the identity hash sorts keys, so it does not care). Naive keeps `certificate`/`certificate_path` and `ech` of the passthrough set (`protocol/naive/outbound.go:139-155` reads the ECH block whole); QUIC types (hysteria2/tuic) keep it whole and drop `utls`/`reality` as before.
 - The `tag` field is used for display; an absent tag falls back to `<type>-<server>-<port>`.
 - This is for advanced users who want to specify the exact sing-box configuration, and for migrating from sing-box itself.
 
@@ -1588,7 +1727,7 @@ When `streamSettings.sockopt.dialerProxy` references another outbound tag:
 - `settings.vnext[0].port` -> `server_port`
 - `settings.vnext[0].users[0].id` -> `uuid`
 - `settings.vnext[0].users[0].flow` -> `flow`
-- Special flow `xtls-rprx-vision-udp443` -> `flow: xtls-rprx-vision` + `packet_encoding: xudp` + `server_port: 443`
+- Special flow `xtls-rprx-vision-udp443` -> `flow: xtls-rprx-vision` + `packet_encoding: xudp`. The port stays as the source gave it (§459; before that this branch forced `server_port: 443`)
 
 **TLS (from `streamSettings`):**
 - `security: "reality"` -> `tls.reality.enabled: true` with `realitySettings` mapped to `public_key`, `short_id`. REALITY is only built when the public key is a valid X25519 key (base64/base64url → 32 bytes); an invalid key degrades to plain TLS with a warning (§169).
@@ -1660,7 +1799,7 @@ Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`, `
 
 ### ECH from subscriptions is ignored (§320)
 
-Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. **L×Box does not apply it** — the parameter is dropped with an `EchIgnoredWarning` (info severity: the node stays usable, only SNI masking is lost).
+Xray links carry ECH as `ech=<query-name>+<resolver-URL>` (e.g. `ech=ip.gs+udp://8.8.8.8`), sometimes as a bare `ech=<query-name>`. **L×Box does not apply it** — the parameter is dropped with the code `ech_ignored` (info severity, text from the contract registry: the node stays usable, only SNI masking is lost).
 
 The form carries no ECH key. It says "fetch the ECHConfigList from the DNS HTTPS record of `<query-name>`", and the key so obtained belongs to that name. Subscriptions put **public ECH probes** there. Device-verified: DNS returns the *same* config list for both `ip.gs` and `encryptedsni.com`, decoding to `public_name = cloudflare-ech.com`, while the node's SNI is `www.ignitelimit.com` / `space.byu.id.yxls.eu.cc`. The key does not belong to the node's server, so the encrypted ClientHello is undecryptable and the handshake fails.
 
@@ -1685,13 +1824,34 @@ Suitability cannot be checked before connecting: `public_name` is only visible a
 - sing-box JSON (`transport.type = "xhttp"`) — `parseSingboxEntry`;
 - Xray JSON (`streamSettings.network = "xhttp"` plus `xhttpSettings`) — see section 11.
 
+Since §463 the older name **`splithttp`** is accepted as an alias of `xhttp` on
+all three inputs (in Xray JSON its settings object `splithttpSettings` is read
+alongside `xhttpSettings`). Before that the name was not recognised at all and
+such a node reached the config with **no transport** — a plain TCP dial to a
+port expecting HTTP, dead without a single message. Contract §24.2 item 7.13.
+
+Where each input gets the alias from, and why it is not one place: the registry
+expresses it **only for the Xray dialect** (`transports.json` →
+`blocks.xray.$selector.network.value_map`). For a **link** the set of spellings
+`blocks.uri.$selector.type` is closed by a `when.in` that does not list
+`splithttp`, and a `when.in` suppresses the entry whole — so the selector never
+fires and no transport is built at all. Moving the link input onto the engine
+(§480) therefore brought the old silent breakage back, and the corpus could not
+catch it: only the Xray input is normalised there (`body/xray/vless_splithttp`).
+It is closed in **data** — the `$selector.type` entry of our overlay
+`assets/contract_draft/uri/transports.json`, a verbatim copy of the registry
+entry plus `splithttp` in both `when.in` and `value_map` (delta `delta480-8`).
+Contract **1.1.37** then added the spelling to the registry set itself, so the
+overlay is redundant and is removed with that sync — the behaviour and the
+node bodies do not move, the registry entry says the same thing.
+
 Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 002 v2): beyond the six basic fields there are configurable session/seq/uplink placements, their keys, the upload method, the X-Padding obfuscation mode and packet-up tuning. In a URI these come from flat query parameters **and** from the `extra` parameter (URL-encoded JSON, see below).
 
 | Field (snake_case JSON) | URI query (camelCase / snake) | Default |
 |------|-----------|--------|
 | `path` | `path` | `/` |
 | `host` | `host` (falls back to `sni`) | empty |
-| `mode` | `mode` | empty — the core decides (auto) |
+| `mode` | `mode` | empty — the core decides (auto). Enum, case-sensitive: `auto`, `packet-up`, `stream-up`, `stream-one`; anything else is dropped with `xhttp_param_reset` (§459) |
 | `x_padding_bytes` | `xPaddingBytes` | empty |
 | `no_grpc_header` | `noGRPCHeader` | false |
 | `headers` | — (JSON only) | empty |
@@ -1706,8 +1866,8 @@ Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 00
 | `x_padding_obfs_mode` | `xPaddingObfsMode` | false |
 | `x_padding_key` | `xPaddingKey` | `x_padding` |
 | `x_padding_header` | `xPaddingHeader` | `X-Padding` |
-| `x_padding_placement` | `xPaddingPlacement` | `queryInHeader` |
-| `x_padding_method` | `xPaddingMethod` | `repeat-x` |
+| `x_padding_placement` | `xPaddingPlacement` | `queryInHeader`. Enum, case-sensitive: `cookie`, `header`, `query`, `queryInHeader` (camelCase only — `queryinheader` is dropped); anything else → `xhttp_param_reset` (§459) |
+| `x_padding_method` | `xPaddingMethod` | `repeat-x`. Enum, case-sensitive: `repeat-x`, `tokenish`; anything else → `xhttp_param_reset` (§459) |
 | `sc_max_each_post_bytes` | `scMaxEachPostBytes` | `1000000` |
 | `sc_min_posts_interval_ms` | `scMinPostsIntervalMs` | `30` |
 
@@ -1763,6 +1923,6 @@ A malformed value never kills the config — the field is dropped and the node k
 
 **Incompatible with Vision.** `flow=xtls-rprx-vision` only lives on “bare” TCP — combined with XHTTP (as with ws/grpc/h2) it is invalid by protocol. The parser does not auto-fill `flow` when a transport block is present (see TLS Behavior in section 1); a config with an explicit `flow` plus xhttp will not work against a server.
 
-**Round trip.** `XhttpTransport.toSingbox` produces the transport map (empty fields are not emitted); `transportToQuery` produces a share URI in flat **camelCase** (the Xray form, for interop with v2rayN and Xray), carrying only **non-default** fields — so the URI does not bloat and the invariant `parseUri(toUri(spec)) ≈ spec` holds (on input, an empty field and a default one yield the same spec). No `extra` is generated on output — the fields are expanded flat. `httpupgrade` remains a **separate** transport and is no longer a “receiver” for xhttp.
+**Round trip.** `XhttpTransport.toSingbox` produces the transport map (empty fields are not emitted); the share URI is assembled by the **mapper section** that also parses it (§480 W7 — the handwritten `transportToQuery` is gone), in flat **camelCase** (the Xray form, for interop with v2rayN and Xray), carrying only **non-default** fields (`omit_default` on the entry) — so the URI does not bloat and the invariant `parseUri(toUri(spec)) ≈ spec` holds (on input, an empty field and a default one yield the same spec). No `extra` is generated on output — the fields are expanded flat. `httpupgrade` remains a **separate** transport and is no longer a “receiver” for xhttp.
 
 **A note on the stock core.** On upstream sing-box (without `with_xhttp`) a config containing `"type": "xhttp"` is rejected at load time (`unknown transport type`). The feature works only on releases carrying the bundled fork core — just like AWG (section 8.5).

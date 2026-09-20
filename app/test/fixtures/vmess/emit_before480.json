@@ -1,0 +1,358 @@
+{
+  "_note": "§480 W7 — ссылки РУКОПИСНОГО `toUri`, снятые до его удаления. Проверяется ЧТЕНИЕ: старая ссылка обязана разбираться в то же тело (rawSource ручных узлов). Текст новой ссылки может отличаться — это не ошибка.",
+  "cases": {
+    "base64_json_ws_tls": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3Mtd3MiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUtMS5jb20iLCJwYXRoIjoiL3YiLCJ0bHMiOiJ0bHMiLCJzbmkiOiJleGFtcGxlLTEuY29tIn0",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "vmess-ws",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto",
+        "transport": {
+          "type": "ws",
+          "path": "/v",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "fp_junk_in_json": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3MtZnAiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUtMS5jb20iLCJwYXRoIjoiLyIsInRscyI6InRscyIsInNuaSI6ImV4YW1wbGUtMS5jb20iLCJmcCI6ImNocm9tZSJ9",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "vmess-fp",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto",
+        "transport": {
+          "type": "ws",
+          "path": "/",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "chrome"
+          }
+        }
+      }
+    },
+    "fragment_after_base64": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiZnJhZyIsImFkZCI6ImEuZXhhbXBsZS0yMC5jb20iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwiaG9zdCI6IiIsInBhdGgiOiIiLCJ0bHMiOiIifQ",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "frag",
+        "server": "a.example-20.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "grpc_tls": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgZ1JQQyIsImFkZCI6ImV4YW1wbGUtMy5jb20iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTUiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6ImdycGMiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiIiLCJwYXRoIjoidm1lc3MtZ3JwYyIsInRscyI6InRscyIsInNuaSI6ImV4YW1wbGUtMy5jb20ifQ",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "VMess gRPC",
+        "server": "example-3.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "security": "auto",
+        "transport": {
+          "type": "grpc",
+          "service_name": "vmess-grpc"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-3.com"
+        }
+      }
+    },
+    "json_basic_tls": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiVGVzdCBWTWVzcyIsImFkZCI6InZtLmV4YW1wbGUtMjAuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiIiLCJwYXRoIjoiIiwidGxzIjoidGxzIiwic25pIjoidm0uZXhhbXBsZS0yMC5jb20ifQ",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "Test VMess",
+        "server": "vm.example-20.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto",
+        "tls": {
+          "enabled": true,
+          "server_name": "vm.example-20.com"
+        }
+      }
+    },
+    "json_net_h2_http_transport": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiaDJuIiwiYWRkIjoidm0uZXhhbXBsZS0yMC5jb20iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6Imh0dHAiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiJjZG4uZXhhbXBsZS0yMC5jb20iLCJwYXRoIjoiLyIsInRscyI6InRscyIsInNuaSI6ImNkbi5leGFtcGxlLTIwLmNvbSJ9",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "h2n",
+        "server": "vm.example-20.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto",
+        "transport": {
+          "type": "http",
+          "path": "/",
+          "host": [
+            "cdn.example-20.com"
+          ]
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "cdn.example-20.com"
+        }
+      }
+    },
+    "json_net_xhttp": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoieGgiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOiI0NDMiLCJpZCI6IjExMTExMTExLTExMTEtMTExMS0xMTExLTExMTExMTExMTExMSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0IjoieGh0dHAiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiJoLmV4YW1wbGUtMjAuY29tIiwicGF0aCI6Ii9oeCIsInRscyI6InRscyIsInNuaSI6ImguZXhhbXBsZS0yMC5jb20ifQ",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "xh",
+        "server": "vm.example-20.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto",
+        "transport": {
+          "type": "xhttp",
+          "path": "/hx",
+          "host": "h.example-20.com"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "h.example-20.com"
+        }
+      }
+    },
+    "json_scy_null_to_auto": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoibnVsbC1zY3kiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOiI4MCIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiIiLCJwYXRoIjoiIiwidGxzIjoiIn0",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "null-scy",
+        "server": "vm.example-20.com",
+        "server_port": 80,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "json_security_key_null": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoic2VjLWtleSIsImFkZCI6InZtLmV4YW1wbGUtMjAuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiIiLCJwYXRoIjoiIiwidGxzIjoidGxzIiwic25pIjoidm0uZXhhbXBsZS0yMC5jb20ifQ",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "sec-key",
+        "server": "vm.example-20.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto",
+        "tls": {
+          "enabled": true,
+          "server_name": "vm.example-20.com"
+        }
+      }
+    },
+    "json_ws_early_data_ed": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3MtZWQiLCJhZGQiOiJoLmV4YW1wbGUtMjAuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImguZXhhbXBsZS0yMC5jb20iLCJwYXRoIjoiL2FwaS92Mi9jaGFubmVsIiwidGxzIjoidGxzIiwic25pIjoiaC5leGFtcGxlLTIwLmNvbSJ9",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "vmess-ed",
+        "server": "h.example-20.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto",
+        "transport": {
+          "type": "ws",
+          "path": "/api/v2/channel",
+          "headers": {
+            "Host": "h.example-20.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "h.example-20.com"
+        }
+      }
+    },
+    "legacy_cleartext_userinfo": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiTGVnYWN5Vk1lc3MiLCJhZGQiOiIyMDMuMC4xMTMuNyIsInBvcnQiOiI4NDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwic2N5IjoiYWVzLTEyOC1nY20iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6IiIsInBhdGgiOiIvd3MiLCJ0bHMiOiJ0bHMiLCJzbmkiOiIyMDMuMC4xMTMuNyJ9",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "LegacyVMess",
+        "server": "203.0.113.7",
+        "server_port": 8443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "aes-128-gcm",
+        "transport": {
+          "type": "ws",
+          "path": "/ws",
+          "headers": {
+            "Host": "203.0.113.7"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "203.0.113.7"
+        }
+      }
+    },
+    "tcp_no_tls": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgVENQIiwiYWRkIjoiZXhhbXBsZS0yLmNvbSIsInBvcnQiOiI4MDgwIiwiaWQiOiIxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTUiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwiaG9zdCI6IiIsInBhdGgiOiIiLCJ0bHMiOiIifQ",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "VMess TCP",
+        "server": "example-2.com",
+        "server_port": 8080,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "security": "auto"
+      }
+    },
+    "vmess_security_cfb": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiY2ZiLW5vZGUiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOiI4MCIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImFlcy0xMjgtY2ZiIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJob3N0IjoiIiwicGF0aCI6IiIsInRscyI6IiJ9",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "cfb-node",
+        "server": "vm.example-20.com",
+        "server_port": 80,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "aes-128-cfb"
+      }
+    },
+    "vmess_security_ctr": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiY3RyLW5vZGUiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOiI4MCIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiIiLCJwYXRoIjoiIiwidGxzIjoiIn0",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "ctr-node",
+        "server": "vm.example-20.com",
+        "server_port": 80,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "ws_tls": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgV1MiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUtMS5jb20iLCJwYXRoIjoiL3ZtIiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS0xLmNvbSJ9",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "VMess WS",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "security": "auto",
+        "transport": {
+          "type": "ws",
+          "path": "/vm",
+          "headers": {
+            "Host": "example-1.com"
+          }
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com"
+        }
+      }
+    },
+    "xhttp_fallback_httpupgrade": {
+      "body": null,
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgWEhUVFAiLCJhZGQiOiJleGFtcGxlLTQuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ4aHR0cCIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUtNC5jb20iLCJwYXRoIjoiL3hoIiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS00LmNvbSJ9",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "VMess XHTTP",
+        "server": "example-4.com",
+        "server_port": 443,
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "security": "auto",
+        "transport": {
+          "type": "xhttp",
+          "path": "/xh",
+          "host": "example-4.com"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "example-4.com"
+        }
+      }
+    },
+    "b480:legacy_ipv6_authority": {
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-v6",
+        "server": "[::1]",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      },
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXY2IiwiYWRkIjoiWzo6MV0iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwiaG9zdCI6IiIsInBhdGgiOiIiLCJ0bHMiOiIifQ",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "legacy-v6",
+        "server": "[::1]",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "b480:legacy_tls_1": {
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-tls1",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      },
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXRsczEiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiIiLCJwYXRoIjoiIiwidGxzIjoiIn0",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "legacy-tls1",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "b480:legacy_tls_true": {
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-tlstrue",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      },
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXRsc3RydWUiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiIiLCJwYXRoIjoiIiwidGxzIjoiIn0",
+      "body_of_old_uri": {
+        "type": "vmess",
+        "tag": "legacy-tlstrue",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    }
+  }
+}

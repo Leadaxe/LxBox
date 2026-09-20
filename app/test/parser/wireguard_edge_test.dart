@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
@@ -16,6 +19,14 @@ const _testPrivSlash = 'Bw4VHCMqMTg/Rk1UW2JpcHd+hYyTmqGor7a9xMvS2eA=';
 
 /// §106 — WG/AWG edge cases: raw-`/` в ключе + bare IP без CIDR.
 void main() {
+  // §480 — разбор ведёт СЕКЦИЯ РЕЕСТРА, наш черновик стал тонким оверлеем:
+  // без загруженного реестра накладывать его не на что и секции нет вовсе.
+  setUpAll(() async {
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   group('§106 — raw `/` в private key (userInfo)', () {
     test('сырой `/` в ключе → парсится, privateKey восстановлен', () {
       final spec = parseWireguardUri(

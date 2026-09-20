@@ -3,9 +3,15 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/services/node_emoji.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §090 G2b — unit tests для эмодзи-тегов (палитра / hasEmoji / дефолт по
 /// протоколу / вставка в rawBody с round-trip через парсер).
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   NodeSpec parse(String uri) => parseUri(uri)!;
 
   WireguardSpec wg({String server = '5.6.7.8', String tag = 'wg-node'}) =>
@@ -33,7 +39,7 @@ void main() {
 
   group('defaultEmojiFor — приоритет local → WG → UDP → TCP', () {
     test('vless (TCP) → ⚡', () {
-      expect(defaultEmojiFor(parse('vless://uuid@1.2.3.4:443?security=none#X')),
+      expect(defaultEmojiFor(parse('vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=none#X')),
           '⚡');
     });
     test('hysteria2 (UDP/QUIC) → 🚀', () {
@@ -44,7 +50,7 @@ void main() {
     test('tuic (UDP/QUIC) → 🚀', () {
       expect(
           defaultEmojiFor(parse(
-              'tuic://u:p@h.example:443?congestion_control=bbr&alpn=h3&sni=h.example#TUIC')),
+              'tuic://11111111-1111-1111-1111-111111111111:p@h.example:443?congestion_control=bbr&alpn=h3&sni=h.example#TUIC')),
           '🚀');
     });
     test('wireguard → 🏠', () {
@@ -74,20 +80,20 @@ void main() {
     });
     test('local 127.0.0.1 → 🔁 (приоритет над протоколом)', () {
       expect(
-          defaultEmojiFor(parse('vless://uuid@127.0.0.1:443?security=none#X')),
+          defaultEmojiFor(parse('vless://11111111-1111-1111-1111-111111111111@127.0.0.1:443?security=none#X')),
           '🔁');
       expect(defaultEmojiFor(wg(server: '127.0.0.1')), '🔁'); // local > WG
     });
     test('localhost → 🔁', () {
       expect(
-          defaultEmojiFor(parse('vless://uuid@localhost:443?security=none#X')),
+          defaultEmojiFor(parse('vless://11111111-1111-1111-1111-111111111111@localhost:443?security=none#X')),
           '🔁');
     });
   });
 
   group('withDefaultEmoji / prependEmojiToRawBody — round-trip через парсер', () {
     test('URI без эмодзи → tag получает дефолт (re-parse подтверждает)', () {
-      const uri = 'vless://uuid@1.2.3.4:443?security=none#MyServer';
+      const uri = 'vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=none#MyServer';
       final node = parse(uri);
       final out = withDefaultEmoji(uri, node);
       expect(out, isNot(uri)); // изменился
@@ -96,7 +102,7 @@ void main() {
     });
 
     test('URI уже с эмодзи в имени → без изменений', () {
-      const uri = 'vless://uuid@1.2.3.4:443?security=none#${'🏠'} Home';
+      const uri = 'vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=none#${'🏠'} Home';
       final node = parse(uri);
       expect(withDefaultEmoji(uri, node), uri);
     });
@@ -122,7 +128,7 @@ void main() {
     });
 
     test('idempotent: повторная вставка не дублирует', () {
-      const uri = 'vless://uuid@1.2.3.4:443?security=none#MyServer';
+      const uri = 'vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=none#MyServer';
       final once = withDefaultEmoji(uri, parse(uri));
       final twice = withDefaultEmoji(once, parse(once));
       expect(twice, once);

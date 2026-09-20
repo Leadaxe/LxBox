@@ -1,0 +1,116 @@
+{
+  "note": "§472 шаг 4 — identity-хеши vmess-узлов корпуса, снятые СТАРЫМ путём ДО переезда на конвейер (18.09.2026). legacyNodeIdentityHash = sha256 канонической эмиссии без tag/detour. identity: null — ссылка не разбирается вовсе (тоже свойство, которое обязано сохраниться). Сверяет vmess_pipeline_invariants_test.dart. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "base64_json_ws_tls": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3Mtd3MiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsImhvc3QiOiJleGFtcGxlLTEuY29tIiwicGF0aCI6Ii92IiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS0xLmNvbSJ9",
+      "identity": "5a3ca137f82f879617297b6736811c1c55fa8272105aeafa0e5567381fa924b7"
+    },
+    "fp_junk_in_json": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3MtZnAiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwibmV0Ijoid3MiLCJ0bHMiOiJ0bHMiLCJmcCI6IndhdCIsImhvc3QiOiJleGFtcGxlLTEuY29tIiwicGF0aCI6Ii8ifQ==",
+      "identity": "097aa1bbb3f5cc14291bdb777a5b8e7b6e4dfa1783527abba84db0f3b988a6e1"
+    },
+    "fragment_after_base64": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiZnJhZyIsImFkZCI6ImEuZXhhbXBsZS0yMC5jb20iLCJwb3J0Ijo0NDMsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIn0=#MyNodeName",
+      "identity": "1f80889c2d8bddb5c3a413800f0338b506930ace6909d5e6b7a7bb1bc301170b"
+    },
+    "grpc_tls": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgZ1JQQyIsImFkZCI6ImV4YW1wbGUtMy5jb20iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTUiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6ImdycGMiLCJwYXRoIjoidm1lc3MtZ3JwYyIsInR5cGUiOiJtdWx0aSIsInRscyI6InRscyIsInNuaSI6ImV4YW1wbGUtMy5jb20ifQ==",
+      "identity": "462ed447f18f70136f9f0f23a03201ef9098436c8f41ad286026099f926d0209"
+    },
+    "invalid_base64": {
+      "uri": "vmess://invalid-base64!!!",
+      "identity": null
+    },
+    "json_basic_tls": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiVGVzdCBWTWVzcyIsImFkZCI6InZtLmV4YW1wbGUtMjAuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJ0bHMiOiJ0bHMiLCJzbmkiOiJ2bS5leGFtcGxlLTIwLmNvbSJ9",
+      "identity": "3b10b61e73eed713b1453e957c1934afa5ffab01edff845cc88dc00d162c24e7"
+    },
+    "json_net_h2_http_transport": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiaDJuIiwiYWRkIjoidm0uZXhhbXBsZS0yMC5jb20iLCJwb3J0Ijo0NDMsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwibmV0IjoiaDIiLCJwYXRoIjoiLyIsImhvc3QiOiJjZG4uZXhhbXBsZS0yMC5jb20iLCJ0bHMiOiJ0bHMifQ==",
+      "identity": "c958379446cb25040f124c4d0268d5558f0929c97489d78b94c48168bcf569fc"
+    },
+    "json_net_xhttp": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoieGgiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOjQ0MywiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJuZXQiOiJ4aHR0cCIsInBhdGgiOiIvaHgiLCJob3N0IjoiaC5leGFtcGxlLTIwLmNvbSIsInRscyI6InRscyIsIm1vZGUiOiJzdHJlYW0tb25lIn0=",
+      "identity": "9e80492aebd43fe08c16d46b26a1bd5a89ec2e209dadff0eaaa1c77a47373994"
+    },
+    "json_scy_null_to_auto": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibnVsbC1zY3kiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOiI4MCIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwibmV0IjoidGNwIiwic2N5IjoibnVsbCJ9",
+      "identity": "991135edada9feb621aedf7610748f61a54420b6127f1b377e4d96f7d9afbc57"
+    },
+    "json_security_key_null": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoic2VjLWtleSIsImFkZCI6InZtLmV4YW1wbGUtMjAuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwibmV0IjoidGNwIiwic2VjdXJpdHkiOiJudWxsIiwidGxzIjoidGxzIiwic2VydmVyTmFtZSI6InZtLmV4YW1wbGUtMjAuY29tIn0=",
+      "identity": "3b10b61e73eed713b1453e957c1934afa5ffab01edff845cc88dc00d162c24e7"
+    },
+    "json_ws_early_data_ed": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3MtZWQiLCJhZGQiOiJoLmV4YW1wbGUtMjAuY29tIiwicG9ydCI6NDQzLCJpZCI6IjExMTExMTExLTExMTEtMTExMS0xMTExLTExMTExMTExMTExMSIsImFpZCI6MCwibmV0Ijoid3MiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiJoLmV4YW1wbGUtMjAuY29tIiwicGF0aCI6Ii9hcGkvdjIvY2hhbm5lbD9lZD0yMDQ4IiwidGxzIjoidGxzIn0=",
+      "identity": "00a3ddfa40ff450fcb4d8964bc5d501761f8c8fa4e007f8064f1dfaca3c0bc8d"
+    },
+    "legacy_cleartext_userinfo": {
+      "uri": "vmess://YWVzLTEyOC1nY206MTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExQDIwMy4wLjExMy43Ojg0NDM/dHlwZT13cyZwYXRoPSUyRndzJnRscz0x#LegacyVMess",
+      "identity": "ceaba8e8d369ed4b1b4a3ea763ed1b26ac4193d3a44680c8c03b8247b4d52bcb"
+    },
+    "not_base64_rejected": {
+      "uri": "vmess://not-base64",
+      "identity": null
+    },
+    "tcp_no_tls": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgVENQIiwiYWRkIjoiZXhhbXBsZS0yLmNvbSIsInBvcnQiOiI4MDgwIiwiaWQiOiIxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTUiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwidGxzIjoiIn0=",
+      "identity": "f69ca763ab51d9616ab411e36fab02ab347bda4ee1bf49dceecfcb983b9930b7"
+    },
+    "vmess_security_cfb": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiY2ZiLW5vZGUiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOiI4MCIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwibmV0IjoidGNwIiwic2N5IjoiYWVzLTEyOC1jZmIifQ==",
+      "identity": "d17e33a837d890a65ad149e76746157594bea6090177d4835937b8231bb33945"
+    },
+    "vmess_security_ctr": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiY3RyLW5vZGUiLCJhZGQiOiJ2bS5leGFtcGxlLTIwLmNvbSIsInBvcnQiOiI4MCIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwibmV0IjoidGNwIiwic2N5IjoiYWVzLTEyOC1jdHIifQ==",
+      "identity": "991135edada9feb621aedf7610748f61a54420b6127f1b377e4d96f7d9afbc57"
+    },
+    "ws_tls": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgV1MiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiYWlkIjoiMCIsInNjeSI6ImF1dG8iLCJuZXQiOiJ3cyIsInR5cGUiOiJub25lIiwiaG9zdCI6ImV4YW1wbGUtMS5jb20iLCJwYXRoIjoiL3ZtIiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS0xLmNvbSJ9",
+      "identity": "9594638bbc47096256562c7997f8434fd62a9d7193445f42059174e41a5c8be3"
+    },
+    "xhttp_fallback_httpupgrade": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoiVk1lc3MgWEhUVFAiLCJhZGQiOiJleGFtcGxlLTQuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMjIyMi0zMzMzLTQ0NDQtNTU1NTU1NTU1NTU1IiwiYWlkIjoiMCIsIm5ldCI6InhodHRwIiwicGF0aCI6Ii94aCIsImhvc3QiOiJleGFtcGxlLTQuY29tIiwidGxzIjoidGxzIiwic25pIjoiZXhhbXBsZS00LmNvbSJ9",
+      "identity": "6171a0f7a33ed594a9afd927e8233a596d1f6a1147b4c7fec6d4a0692ea4eb1b"
+    },
+    "b480:legacy_ipv6_authority": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXY2IiwiYWRkIjoiWzo6MV0iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJ0bHMiOiIifQ==",
+      "identity": "922e13d113ccbefe354a699d57f7e52f7fe4d89cab603b8f8194a62118393f53",
+      "tag": "legacy-v6",
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-v6",
+        "server": "[::1]",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "b480:legacy_tls_1": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXRsczEiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwidGxzIjoiMSJ9",
+      "identity": "9773cdfae96135c7b12fe3557ae9370ac5c4f109d49e3e0e4c704b4ed4403a56",
+      "tag": "legacy-tls1",
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-tls1",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    },
+    "b480:legacy_tls_true": {
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXRsc3RydWUiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwidGxzIjoidHJ1ZSJ9",
+      "identity": "9773cdfae96135c7b12fe3557ae9370ac5c4f109d49e3e0e4c704b4ed4403a56",
+      "tag": "legacy-tlstrue",
+      "body": {
+        "type": "vmess",
+        "tag": "legacy-tlstrue",
+        "server": "example-1.com",
+        "server_port": 443,
+        "uuid": "11111111-1111-1111-1111-111111111111",
+        "security": "auto"
+      }
+    }
+  }
+}

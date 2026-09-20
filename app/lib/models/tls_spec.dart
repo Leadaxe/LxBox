@@ -7,11 +7,24 @@ import 'package:collection/collection.dart';
 /// в [TlsSpec], парсер отбрасывает: ядро отвергает unknown field на ВСЁМ
 /// конфиге, а карта tls приходит и из чужого JSON.
 ///
-/// Не в списке намеренно: `ech` (ядро без `with_ech`, D-006/§320 — вычистка
-/// с кодом `ech_ignored`). `kernel_tx`/`kernel_rx` ядро принимает только на
-/// Linux — Android им и является.
+/// §459 (контракт §24.2 п. 7.2) — `ech` в списке ЕСТЬ: посылка D-006 «ядро
+/// собрано без `with_ech`» была ложной. `common/tls/ech_tag_stub.go` объявляет
+/// сам тег устаревшим (ECH переехал в stdlib и компилируется всегда), а
+/// `tls.ech{}` проходит `sing-box check` на пине `v1.14.1-lx.4`. Снимается
+/// только URI-параметр `ech=` Xray-формы (§320, `ech_ignored`): он несёт имя
+/// чужого публичного пробника, а не ключ этого сервера.
+///
+/// `kernel_tx`/`kernel_rx` ядро принимает только на Linux — Android им и
+/// является.
+///
+/// §476 — `engine`, `spoof`, `spoof_method` и `handshake_timeout` добавлены
+/// стражем круга «тело → модель → emit»: реестр числит их полями
+/// `OutboundTLSOptions` (`tls.json`), эмиттер писать их умел, а разбор не
+/// читал — узел, сохранённый через JSON-вкладку, терял их молча. Тот же
+/// класс, что `tls.certificate` в #140.
 const kTlsPassthroughKeys = <String>[
   'disable_sni',
+  'engine',
   'min_version',
   'max_version',
   'cipher_suites',
@@ -25,9 +38,20 @@ const kTlsPassthroughKeys = <String>[
   'fragment',
   'fragment_fallback_delay',
   'record_fragment',
+  'spoof',
+  'spoof_method',
   'kernel_tx',
   'kernel_rx',
+  'handshake_timeout',
+  'ech',
 ];
+
+/// §459 — сквозные ключи-ОБЪЕКТЫ: принимается `Map`, хранится и эмитится как
+/// есть, приложение внутрь не смотрит (состав полей задаёт ядро:
+/// `OutboundECHOptions` — `enabled`, `config` (Listable), `config_path`,
+/// `query_server_name`). Не-Map → отброшен молча, как остальные guard'ы
+/// allowlist'а.
+const kTlsObjectKeys = <String>{'ech'};
 
 /// §454 — `Listable[string]` ядра: строка ИЛИ массив строк.
 const kTlsListableKeys = <String>{
@@ -49,7 +73,13 @@ const kTlsBoolKeys = <String>{
 
 /// §454 — что из allowlist'а принимает naive (`protocol/naive/outbound.go`):
 /// остальное ядро отвергает фаталом при создании outbound'а.
-const kNaiveTlsPassthroughKeys = <String>{'certificate', 'certificate_path'};
+/// §459 — `ech` naive читает целиком (`protocol/naive/outbound.go:139-155`:
+/// `enabled`, `config`, `config_path`, `query_server_name`).
+const kNaiveTlsPassthroughKeys = <String>{
+  'certificate',
+  'certificate_path',
+  'ech',
+};
 
 /// §454 — эмит: типизированные поля и сквозные ключи в одном порядке.
 /// Для узлов без сквозных ключей совпадает с прежним байт в байт (parity):
@@ -58,6 +88,9 @@ const kNaiveTlsPassthroughKeys = <String>{'certificate', 'certificate_path'};
 /// равно). Сквозные — на местах структуры ядра относительно соседей.
 const _kTlsEmitOrder = <String>[
   'enabled',
+  // §476 — `engine` стоит в `OutboundTLSOptions` сразу за `enabled`, до
+  // `disable_sni`; порядок списка = порядок полей структуры ядра.
+  'engine',
   'server_name',
   'alpn',
   'insecure',
@@ -76,8 +109,17 @@ const _kTlsEmitOrder = <String>[
   'fragment',
   'fragment_fallback_delay',
   'record_fragment',
+  // §476 — `spoof`/`spoof_method` стоят в структуре ядра за
+  // `record_fragment`, перед kTLS-парой.
+  'spoof',
+  'spoof_method',
   'kernel_tx',
   'kernel_rx',
+  // §459 — в `OutboundTLSOptions` ECH стоит между `handshake_timeout` и
+  // `utls`. §476 — `handshake_timeout` теперь сквозной, и ECH встал на своё
+  // место структуры: сразу за ним.
+  'handshake_timeout',
+  'ech',
   'utls',
   'reality',
 ];
@@ -136,7 +178,10 @@ class TlsSpec {
   Map<String, dynamic> toSingboxForQuic() => _toSingbox(quic: true);
 
   Map<String, dynamic> _toSingbox({required bool quic}) {
-    if (!enabled) return const {};
+    // Карта уходит в тело outbound, а телом после эмита владеет сборщик:
+    // post-steps правят его на месте. `const {}` ронял сборку ВСЕГО конфига
+    // на QUIC-узле с выключенным TLS («Cannot modify unmodifiable map»).
+    if (!enabled) return <String, dynamic>{};
     final typed = <String, dynamic>{'enabled': true};
     if (serverName != null && serverName!.isNotEmpty) {
       typed['server_name'] = serverName;
@@ -241,7 +286,11 @@ class RealitySpec {
   Map<String, dynamic> toSingbox() => {
         'enabled': true,
         'public_key': publicKey,
-        'short_id': shortId,
+        // §463 / контракт §24.6 — пустой short_id ядру эквивалентен
+        // отсутствующему ключу (`omitempty` в структуре REALITY), и корпус
+        // нормирует именно опущенный. Писать `""` значило бы расходиться с
+        // лаунчером на ровном месте: REALITY без short_id легален.
+        if (shortId.isNotEmpty) 'short_id': shortId,
         // §457 — порядок полей структуры ядра; omitempty: пусто = нет ключа.
         if (keyShare != null && keyShare!.isNotEmpty) 'key_share': keyShare,
       };

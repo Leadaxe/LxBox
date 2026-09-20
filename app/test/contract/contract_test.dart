@@ -2,11 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'package:lxbox/services/parser/uri_utils.dart' show socksSchemeForVersion;
+
+import 'corpus_warnings.dart';
 
 // Конформанс-раннер общего корпуса контракта (SPEC 103, фаза 1), сторона
 // LxBox. Аналог core/config/contract_test.go в singbox-launcher — гоняет тот
@@ -32,8 +36,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 // либо где результат реально расходится с базой — новые бесхозные копии не
 // создаются. Дифф идёт в PR с ревью (contract/README.md §2).
 
-/// Корень скопированного контракта — кладёт tool/sync_contract.sh.
-const _contractRoot = 'contract';
+/// §470 — корень контракта, правила записи `warnings[]` и нормализация
+/// сравнения переехали в `corpus_warnings.dart`: те же правила нужны
+/// body-раннеру, а две копии нормативного кода разошлись бы на первом же
+/// бампе контракта.
 
 /// Соответствие имени каталога корпуса (= scheme из registry/protocols/*.json,
 /// contract/docs/CANON.md §1) типу kind в конверте. Все схемы вне карты —
@@ -53,7 +59,7 @@ const _thisSide = 'lxbox';
 /// а не от списка в тесте: появится вторая desktop-only схема — раннер
 /// узнает о ней сам, без правки кода.
 Set<String> _foreignExtensionSchemes() {
-  final dir = Directory('$_contractRoot/registry/protocols');
+  final dir = Directory('$kRegistryRoot/registry/protocols');
   if (!dir.existsSync()) return const {};
   final out = <String>{};
   for (final f in dir.listSync().whereType<File>()) {
@@ -79,57 +85,38 @@ const _canonScheme = <String, String>{
   'shadowsocks': 'ss',
 };
 
-/// Коды warnings из registry/warnings.json — по runtimeType Dart-класса
-/// (CANON §6: коды, не отрендеренный текст). Список — зеркало
-/// contract/registry/warnings.json (поле "dart"); классы без соответствия
-/// в реестре в корпусе сейчас не встречаются.
-const _warningCodes = <Type, String>{
-  UnsupportedTransportWarning: 'transport_unsupported',
-  UnsupportedProtocolWarning: 'protocol_unsupported',
-  MissingFieldWarning: 'field_missing',
-  DeprecatedFlowWarning: 'flow_deprecated',
-  VisionWithTransportWarning: 'vision_with_transport',
-  InsecureTlsWarning: 'tls_insecure',
-  NaiveBuildTagWarning: 'naive_unavailable',
-  UnknownFingerprintWarning: 'utls_fp_unknown',
-  // D-119 (заменил D-104) — REALITY с явным отпечатком не из chrome-семейства
-  // (SPEC 083 ядра); отпечаток не подменяется, только код на узле.
-  RealityFingerprintWarning: 'reality_fp_not_chrome',
-  XhttpParamResetWarning: 'xhttp_param_reset',
-  // §416 — header-placement без режима: дописан mode: packet-up.
-  XhttpModeForcedPacketUpWarning: 'xhttp_mode_forced_packet_up',
-  EchIgnoredWarning: 'ech_ignored',
-  UnknownObfsWarning: 'obfs_unknown',
-  MissingObfsPasswordWarning: 'obfs_password_missing',
-  DetourCycleBrokenWarning: 'detour_cycle_broken',
-  DetourTargetMissingWarning: 'detour_target_missing',
-  DetourToGroupWarning: 'detour_to_group',
-  DetourChainTooDeepWarning: 'detour_chain_too_deep',
-  SelectorAsAutoWarning: 'selector_as_auto',
-  GroupMemberMissingWarning: 'group_member_missing',
-  WsEarlyDataConvertedWarning: 'ws_early_data_converted',
-  RealityShortIdInvalidWarning: 'reality_short_id_invalid',
-  NaivePaddingIgnoredWarning: 'naive_padding_ignored',
-  // D-105 — отброшенная пара naive extra-headers.
-  NaiveExtraHeadersInvalidWarning: 'naive_extra_headers_invalid',
-  TuicCongestionInvalidWarning: 'tuic_congestion_invalid',
-  AwgHeaderInvalidWarning: 'awg_header_invalid',
-  // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла
-  // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.
-  Awg3FieldInvalidWarning: 'awg3_field_invalid',
-  Awg3HeaderKeyInvalidWarning: 'awg3_header_key_invalid',
-  Awg3PaddingTooShortWarning: 'awg3_padding_too_short',
-  Awg3RandomTrailersWideHeadersWarning: 'awg3_random_trailers_wide_headers',
-  MasqueVhttpInvalidWarning: 'masque_vhttp_invalid',
-  AnyTlsMinIdleInvalidWarning: 'anytls_min_idle_invalid',
-  PacketEncodingUnknownWarning: 'packet_encoding_unknown',
-  // §404 / D-085 — недостижимый `dialerProxy` роняет владельца целиком;
-  // причина уезжает в `dropped[]` конверта (corpus/README, D-088).
-  DialerProxyUnusableWarning: 'dialer_proxy_unusable',
-};
+/// §475 — `scheme` конверта у socks называет ВЕРСИЮ, а не только протокол.
+///
+/// Обычно схема конверта выводится из имени протокола: одному типу ядра
+/// отвечает одна схема ссылки, а её алиасы написания (`socks://`, `awg://`,
+/// `hy2://`) канонизируются к базовой (корпус: `socks_alias`, `awg_scheme_alias`
+/// — все дают `scheme: wireguard`/`socks`).
+///
+/// У socks это не так с контракта 1.1.8: `socks4://` и `socks4a://` — НЕ
+/// написание, а дискриминатор версии протокола. Тип тела у всех четырёх один
+/// (`socks`), различает их поле `version`, и лаунчер пишет в конверт именно ту
+/// схему, которой узел эмитится (`node_parser_core.go:308-334`). Поэтому схему
+/// здесь выбирает та же таблица, что у маппера и эмиттера, — третьей копии
+/// правила не заводим.
+///
+/// `socks5://` в эту ветку не попадает намеренно: у лаунчера он НЕ
+/// канонизируется (тег узла строится из схемы, и переименование сбросило бы
+/// identity живых узлов — IDENTITY §4a-C), у нас канонизируется, и разница
+/// закрыта per-app override'ами корпуса. Версия 5 у нас даёт `socks`, как и
+/// раньше.
+String _envelopeScheme(NodeSpec spec) {
+  if (spec is SocksSpec && spec.version != '5') {
+    return socksSchemeForVersion(spec.version);
+  }
+  return _canonScheme[spec.protocol] ?? spec.protocol;
+}
 
-/// Код warning'а по классу — общий для URI- и body-раннеров.
-String? warningCodeOf(NodeWarning w) => _warningCodes[w.runtimeType];
+// §460 W2a — таблица «класс → код» и `warningCodeOf` переехали в lib
+// (`services/contract/warning_codes.dart`): второй их потребитель — дедуп
+// предупреждений реестра при разборе, и держать две копии значило бы
+// разойтись на первом же новом классе. Раннеры (этот и body-) импортируют
+// имя оттуда. Предупреждения санитайзера несут код ПОЛЕМ, а не типом класса:
+// класс на все коды реестра один.
 
 /// Читает URI из фикстуры: последняя непустая строка, не начинающаяся с '#'
 /// (остальные строки — комментарии/источник, contract/corpus/README).
@@ -155,7 +142,7 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
 
   final node = <String, dynamic>{
     'kind': kind,
-    'scheme': _canonScheme[spec.protocol] ?? spec.protocol,
+    'scheme': _envelopeScheme(spec),
     if (spec.label.isNotEmpty) 'label': spec.label,
     'entry': entry,
   };
@@ -164,17 +151,13 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
     node['chain'] = [_canonNode(spec.chained!)];
   }
 
-  // CANON §6 — конверт несёт КОДЫ, и каждый код в списке ровно один раз:
-  // зеркало Go `ParsedNode.AddWarning` (configtypes/types.go:548), который
-  // отбрасывает повтор. Dart-предупреждения при этом остаются пофакторными
-  // (два битых AWG-заголовка = два разных сообщения пользователю), но код
-  // деградации у них общий.
-  final codes = <String>[];
-  for (final w in spec.warnings) {
-    final code = _warningCodes[w.runtimeType];
-    if (code != null && !codes.contains(code)) codes.add(code);
-  }
-  if (codes.isNotEmpty) node['warnings'] = codes;
+  // §470 — правила записи `warnings[]` (CANON §6: дедуп по `(code, path)`,
+  // порядок `body.order` реестра) живут в `corpus_warnings.dart`, общем с
+  // body-раннером: они нормативны, и вторая копия разошлась бы с контрактом
+  // на первом же бампе.
+  final warnings = warningListOf(
+      spec.warnings, _canonScheme[spec.protocol] ?? spec.protocol);
+  if (warnings.isNotEmpty) node['warnings'] = warnings;
 
   return node;
 }
@@ -190,7 +173,7 @@ Map<String, dynamic> _canonEntryMap(NodeSpec spec) {
 }
 
 /// Рекурсивная канонизация значения: ключи map сортируются при сериализации
-/// ([_canonEncode]), порядок списков сохраняется (CANON §2.3). Числа/bool уже
+/// ([canonEncode]), порядок списков сохраняется (CANON §2.3). Числа/bool уже
 /// приходят типизированными из Dart — отдельного приведения float->int, в
 /// отличие от Go-раннера (JSON round-trip через float64), не требуется.
 Object? _canonValue(Object? v) {
@@ -201,27 +184,6 @@ Object? _canonValue(Object? v) {
   }
   if (v is List) {
     return [for (final val in v) _canonValue(val)];
-  }
-  return v;
-}
-
-/// Сериализация по правилам CANON §2.3/2.6: ключи map отсортированы рекурсивно
-/// (byte-order), компактный JSON. Escaping здесь не проблема — Dart's
-/// `JsonEncoder` не HTML-экранирует `<`/`>`/`&` (в отличие от Go-энкодера по
-/// умолчанию), так что CANON §2.7 (D-007) выполняется без дополнительных мер.
-String _canonEncode(Object? v) => json.encode(_sortKeys(v));
-
-Object? _sortKeys(Object? v) {
-  if (v is Map) {
-    final keys = v.keys.cast<String>().toList()..sort();
-    final out = <String, dynamic>{};
-    for (final k in keys) {
-      out[k] = _sortKeys(v[k]);
-    }
-    return out;
-  }
-  if (v is List) {
-    return [for (final val in v) _sortKeys(val)];
   }
   return v;
 }
@@ -240,33 +202,28 @@ Map<String, dynamic> _buildEnvelope({
   };
 }
 
-/// Pretty-print для файла (читаемость), сравнение всё равно идёт по значению
-/// после канонизации ([_equalCanon]), не по байтам (CANON §7).
-String _prettyPrint(Map<String, dynamic> envelope) {
-  final canon = _sortKeys(envelope);
-  const encoder = JsonEncoder.withIndent('  ');
-  return '${encoder.convert(canon)}\n';
-}
-
 /// Сравнение конвертов по значению — компактная канонизированная форма
 /// (сортировка ключей, сохранённый порядок списков), не байты файла.
+///
+/// `a` — наш результат, `b` — ожидание корпуса: порядок аргументов значим,
+/// потому что объём сверки `warnings[]` задаёт ожидание ([normalizeWarnings]).
 bool _equalCanon(Map<String, dynamic> a, Map<String, dynamic> b) {
-  return _canonEncode(a) == _canonEncode(b);
+  final got = deepCopyEnvelope(a) as Map<String, dynamic>;
+  final want = deepCopyEnvelope(b) as Map<String, dynamic>;
+  normalizeWarnings(got, want);
+  normalizeDrops(got, want);
+  return canonEncode(got) == canonEncode(want);
 }
 
 void main() {
+  if (corpusSuiteUnavailable('test/contract/contract_test.dart')) return;
+
   // §UPDATE_CONTRACT — режим регенерации: переменная окружения вместо флага
   // `--update`, потому что `flutter test` не пробрасывает произвольные флаги
   // в тестовый бинарь так же прямолинейно, как `go test -run ... -update`.
   final updateGolden = Platform.environment['UPDATE_CONTRACT'] == '1';
 
-  final root = Directory('$_contractRoot/corpus/uri');
-  if (!root.existsSync()) {
-    // contract/ — вендоренная копия (tool/sync_contract.sh), в git не идёт.
-    test('корпус контракта не синхронизирован', () {}, skip:
-        'нет $_contractRoot/corpus/uri — запустите tool/sync_contract.sh');
-    return;
-  }
+  final root = Directory('$kVendorRoot/corpus/uri');
 
   final cases = root
       .listSync(recursive: true)
@@ -283,6 +240,17 @@ void main() {
   final foreign = _foreignExtensionSchemes();
 
   group('Contract corpus (URI)', () {
+    // §469 — реестр грузится и здесь. Правила, которые парсер берёт ИЗ
+    // РЕЕСТРА (какие TLS-блоки схема запрещает и с каким кодом —
+    // `forbiddenTlsBlockWarnings`), без него молчат, и раннер проверял бы
+    // поведение, которого в приложении не бывает: `main()` грузит реестр до
+    // `runApp`, то есть любой разбор в проде идёт с загруженным реестром.
+    setUpAll(() async {
+      if (Directory('$kRegistryRoot/registry').existsSync()) {
+        await ContractRegistry.I.loadFromDirectory(kRegistryRoot);
+      }
+    });
+
     for (final file in cases) {
       final rel = file.path
           .substring(root.path.length)
@@ -309,8 +277,13 @@ void main() {
 
         Map<String, dynamic> envelope;
         NodeSpec? spec;
+        // §481 (контракт 1.1.11) — раннер читает КОД отбраковки. `code` в
+        // `dropped[]` нормативен (D-088); без него конверт не отличал «узел
+        // выброшен за негодный ключ WG» от «за пересечение заголовков», то
+        // есть проверить перенос правил в реестр было нечем.
+        final verdict = XrayDropVerdict();
         try {
-          spec = parseUri(uri);
+          spec = parseUri(uri, dropped: verdict);
         } catch (_) {
           spec = null;
         }
@@ -318,7 +291,11 @@ void main() {
         if (spec == null) {
           // CANON §4: битая/нераспознанная нода → dropped, подписка живёт.
           envelope = _buildEnvelope(dropped: [
-            {'ref': uri, 'reason': 'parse_error'},
+            {
+              'ref': uri,
+              'reason': 'parse_error',
+              if (verdict.reason != null) 'code': verdict.reason!.code,
+            },
           ]);
         } else {
           envelope = _buildEnvelope(nodes: [_canonNode(spec)]);
@@ -333,15 +310,15 @@ void main() {
           // расходится с общей базой. Иначе регенерация плодила бы копии —
           // ровно ту лавину, которую снёс аудит 0.8.0.
           if (overrideFile.existsSync()) {
-            overrideFile.writeAsStringSync(_prettyPrint(envelope));
+            overrideFile.writeAsStringSync(prettyPrintEnvelope(envelope));
           } else if (baseFile.existsSync()) {
             final base = json.decode(baseFile.readAsStringSync())
                 as Map<String, dynamic>;
             if (!_equalCanon(envelope, base)) {
-              overrideFile.writeAsStringSync(_prettyPrint(envelope));
+              overrideFile.writeAsStringSync(prettyPrintEnvelope(envelope));
             }
           } else {
-            overrideFile.writeAsStringSync(_prettyPrint(envelope));
+            overrideFile.writeAsStringSync(prettyPrintEnvelope(envelope));
           }
           return;
         }
@@ -362,8 +339,8 @@ void main() {
         if (!_equalCanon(envelope, want)) {
           fail(
             'расхождение с контрактом\n'
-            '--- got ---\n${_prettyPrint(envelope)}'
-            '--- want ---\n${_prettyPrint(want)}',
+            '--- got ---\n${prettyPrintEnvelope(envelope)}'
+            '--- want ---\n${prettyPrintEnvelope(want)}',
           );
         }
       });

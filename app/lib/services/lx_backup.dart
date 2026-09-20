@@ -12,6 +12,7 @@ import '../models/codec/auto_group_record.dart';
 import '../models/codec/chain_record.dart';
 import '../models/codec/node_link_record.dart';
 import '../models/codec/source_record.dart';
+import '../models/core_reject_verdict.dart';
 import '../models/custom_rule.dart';
 import '../models/direction.dart';
 import '../models/dns_ref.dart';
@@ -23,6 +24,7 @@ import '../models/parser_config.dart' show kUserRuleNumStart;
 import '../models/record_codec.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
+import 'core_reject/core_reject_backup.dart';
 import 'lx_backup_slice.dart';
 import 'node_link_address.dart';
 import 'node_hash.dart' show deepSortKeys;
@@ -298,6 +300,7 @@ class LxSubscription {
     this.tagPrefix = '',
     this.updateIntervalHours,
     this.disabled = const {},
+    this.nodeWarnings = const {},
     this.identity,
     this.id = '',
     this.fullSettings = false,
@@ -349,6 +352,11 @@ class LxSubscription {
   /// на приёмнике первым разбором источника (§400).
   final Map<String, int> disabled;
 
+  /// Фича 478 / CANON §9.4 — вердикт ядра оверлеем тем же ключом, что и
+  /// [disabled]: без него узел приехал бы выключенным без объяснения.
+  /// Форма — `{identity: [{code, params}]}`, как в записи хранения.
+  final Map<String, List<StoredWarning>> nodeWarnings;
+
   /// §401 (D-083) — per-source identity: чем подписка представляется
   /// провайдеру. `null` = в файле объекта не было.
   final SubscriptionIdentityOverride? identity;
@@ -366,6 +374,7 @@ class LxServer {
     this.configJson,
     this.name = '',
     this.enabled = true,
+    this.warnings = const [],
     this.folder = '',
     this.folderRef = '',
     this.id = '',
@@ -423,6 +432,10 @@ class LxServer {
   final String name;
 
   final bool enabled;
+
+  /// Фича 478 / CANON §9.4 — вердикт ядра рядом с [enabled]: ручной сервер и
+  /// член папки несут его списком записей `{code, params}`.
+  final List<StoredWarning> warnings;
 
   /// §401 (D-08x) — имя папки, в которую входит эта запись. Пусто = запись
   /// сама себе источник. Схема контейнеров не знает: члены папки едут
@@ -844,15 +857,17 @@ Map<String, dynamic>? _exportSource(
   ServerList list,
   List<LxBackupWarning> warnings,
 ) {
-  final stored = sourceToRecord(list);
-  final (kind, entity) = switch (list) {
-    SubscriptionServers() =>
-      (BackupRecord.subscription, list.name.isEmpty ? list.url : list.name),
-    UserServer() => (
-        BackupRecord.server,
-        _str(stored['tag']).isEmpty ? list.id : _str(stored['tag']),
-      ),
-    FolderServers() => (BackupRecord.folder, list.name),
+  final kind = switch (list) {
+    SubscriptionServers() => BackupRecord.subscription,
+    UserServer() => BackupRecord.server,
+    FolderServers() => BackupRecord.folder,
+  };
+  final stored = sanitizeCoreRejectInBackupRecord(sourceToRecord(list), kind);
+  final entity = switch (list) {
+    SubscriptionServers s => s.name.isEmpty ? s.url : s.name,
+    UserServer u =>
+      _str(stored['tag']).isEmpty ? u.id : _str(stored['tag']),
+    FolderServers f => f.name,
   };
   final record = exportBackupRecord(kind, stored, entity, warnings);
   if (record == null) return null;
@@ -1372,6 +1387,7 @@ const Set<String> _subscriptionKeys = {
   'tag',
   'update',
   'disabled',
+  'warnings',
   'skip',
   'outbounds',
   'fold',
@@ -1705,6 +1721,7 @@ LxSubscription _subscriptionFromJson(
   Map<String, dynamic> j,
   List<LxBackupWarning> warnings,
 ) {
+  j = sanitizeCoreRejectInBackupRecord(j, BackupRecord.subscription);
   final label = (j['label'] as String?) ?? '';
   final where = label.isEmpty ? ((j['url'] as String?) ?? '') : label;
 
@@ -1743,6 +1760,7 @@ LxSubscription _subscriptionFromJson(
     tagPrefix: (tag['prefix'] as String?) ?? '',
     updateIntervalHours: (update['interval_hours'] as num?)?.toInt(),
     disabled: _disabledFromJson(j['disabled']),
+    nodeWarnings: storedWarningsMapFromJson(j['warnings']),
     identity: _identityFromJson(j['identity'], where, warnings),
   );
 }
@@ -2854,6 +2872,10 @@ LxServer? _server10(
   LxFolder? folder,
   int position = 0,
 }) {
+  j = sanitizeCoreRejectInBackupRecord(
+    j,
+    folder == null ? BackupRecord.server : BackupRecord.folderNode,
+  );
   final tag = _trimmed(j['tag']);
   final origin = _obj(j['origin']);
   final hasOrigin = _str(origin?['raw']).trim().isNotEmpty;
@@ -2907,6 +2929,7 @@ LxServer? _server10(
     configJson: configJson,
     name: tag,
     enabled: node.enabled,
+    warnings: storedWarningsFromJson(j['warnings']),
     folder: folder?.name ?? '',
     folderRef: folder?.key ?? '',
     position: position,
@@ -2984,6 +3007,7 @@ LxSubscription _subscription10(
   int position,
   List<LxBackupWarning> warnings,
 ) {
+  j = sanitizeCoreRejectInBackupRecord(j, BackupRecord.subscription);
   final fileId = _trimmed(j['id']);
   final read = sourceFromRecord(
       _sourceForCodec(BackupRecord.subscription, j, fileId));
@@ -3008,6 +3032,7 @@ LxSubscription _subscription10(
       for (final e in sub.disabledHashes.entries)
         e.key: e.value.millisecondsSinceEpoch ~/ 1000,
     },
+    nodeWarnings: sub.nodeWarnings,
     identity: sub.identity,
     detour: _link10(j['detour']),
     detourPolicy: carries('detour_policy') ? _flagsOf(sub.detourPolicy) : null,
@@ -3321,6 +3346,10 @@ const Set<String> _node10Keys = {
   'service',
   'reason',
   'sections',
+  // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
+  // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
+  // срезает санитизация §489.
+  'warnings',
 };
 
 /// Запись `sources[]` любого вида: объединение ключей, как у лаунчера — ключ,
@@ -3583,8 +3612,15 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
         for (final e in sub.disabled.entries)
           if (!existing.disabledHashes.containsKey(e.key)) e.key: at(e.value),
       };
+      // Как у disabled: ключа, которого у нас нет, добавляем. core_rejected
+      // сюда не доезжает — санитизация §489 срезает его до кодека.
+      final addW = <String, List<StoredWarning>>{
+        for (final e in sub.nodeWarnings.entries)
+          if (!existing.nodeWarnings.containsKey(e.key)) e.key: e.value,
+      };
       merged[idx] = existing.copyWith(
         disabledHashes: {...existing.disabledHashes, ...add},
+        nodeWarnings: {...existing.nodeWarnings, ...addW},
         // Пустое имя в файле именем не является — своё не затираем.
         name: sub.label.isNotEmpty ? sub.label : null,
         tagPrefix: sub.tagPrefix,
@@ -3627,6 +3663,7 @@ BackupSubscriptionMerge mergeBackupSubscriptions(
       disabledHashes: {
         for (final e in sub.disabled.entries) e.key: at(e.value),
       },
+      nodeWarnings: sub.nodeWarnings,
       importRules: sub.importRules ?? const [],
       importRulesEnabled: sub.importRulesEnabled ?? true,
       onUpdateAction: sub.onUpdateAction ?? SubscriptionOnUpdateAction.rebuild,
@@ -3975,6 +4012,8 @@ BackupServerMerge mergeBackupServers(
         detourPolicy: srv.detourPolicy ?? DetourPolicy.defaults,
         origin: UserSource.manual,
         rawBody: body,
+        // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
+        warnings: srv.warnings,
         sections: srv.sections,
       ));
       pendingLinks.add((
@@ -4242,6 +4281,8 @@ int _mergeFolderMember(
   final member = FolderMember(
     raw: body,
     enabled: srv.enabled,
+    // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
+    warnings: srv.warnings,
     detour: detour,
     sections: srv.sections,
   );

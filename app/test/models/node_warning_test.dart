@@ -5,8 +5,8 @@ void main() {
   group('NodeWarning equality', () {
     test('same subclass + same fields == equal', () {
       expect(
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade'),
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade'),
+        const UnknownObfsWarning('salamander'),
+        const UnknownObfsWarning('salamander'),
       );
     });
 
@@ -14,8 +14,8 @@ void main() {
     // строке): dedup-гранулярность та же, но переживает смену локали.
     test('same subclass + different fields != equal', () {
       expect(
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade') ==
-            const UnsupportedTransportWarning('xhttp', 'ws'),
+        const UnknownObfsWarning('salamander') ==
+            const UnknownObfsWarning('gecko'),
         isFalse,
       );
       expect(
@@ -44,8 +44,12 @@ void main() {
           'REALITY with uTLS fingerprint "firefox": Xray servers since '
           'v26.9.8 reject this ClientHello. If the connection fails, try '
           '"chrome".');
+      // §468 — severity читается из реестра (`info` в контракте 1.1.2+).
+      // Здесь реестр не загружен, и проверяется именно запасной путь:
+      // незнакомый код не глушится, а остаётся `warning`.
       expect(const RealityFingerprintWarning('firefox').severity,
-          WarningSeverity.warning);
+          WarningSeverity.warning,
+          reason: 'реестр не загружен — фолбэк registrySeverity');
     });
 
     // §279 — XhttpResetReason: message() обязан воспроизводить дословно
@@ -70,29 +74,33 @@ void main() {
 
     test('different subclasses != equal', () {
       expect(
-        const UnsupportedTransportWarning('xhttp', 'httpupgrade') ==
+        const UnknownObfsWarning('salamander') ==
             const UnsupportedProtocolWarning('xhttp'),
         isFalse,
       );
     });
 
     test('severity maps per type', () {
-      expect(const MissingFieldWarning('sni').severity, WarningSeverity.error);
-      // info, не warning — провайдеры часто намеренно ставят флаг (REALITY,
-      // self-signed, IP-литералы); UI красит серым, не пугает.
-      expect(const InsecureTlsWarning().severity, WarningSeverity.info);
-      expect(const DeprecatedFlowWarning('xtls').severity, WarningSeverity.info);
+      expect(const DialerProxyUnusableWarning('n', 't').severity,
+          WarningSeverity.error);
+      // §485 — коды реестра: severity из warnings.json, не константа класса.
+      expect(
+          const RegistryWarning(code: 'tls_insecure', path: 'tls.insecure')
+              .severity,
+          WarningSeverity.warning,
+          reason: 'реестр не загружен — фолбэк registrySeverity');
+      expect(
+          const RegistryWarning(
+                  code: 'flow_deprecated', path: 'flow', value: 'x')
+              .severity,
+          WarningSeverity.warning,
+          reason: 'реестр не загружен — фолбэк registrySeverity');
     });
 
     test('exhaustive switch compiles', () {
-      const NodeWarning w = UnsupportedTransportWarning('xhttp', 'httpupgrade');
+      const NodeWarning w = UnknownObfsWarning('salamander');
       final label = switch (w) {
-        UnsupportedTransportWarning() => 'transport',
         UnsupportedProtocolWarning() => 'protocol',
-        MissingFieldWarning() => 'field',
-        DeprecatedFlowWarning() => 'flow',
-        VisionWithTransportWarning() => 'vision_transport',
-        InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
         XhttpParamResetWarning() => 'xhttp_reset',
         // §416 — header-placement без режима: дописан mode: packet-up
@@ -100,7 +108,6 @@ void main() {
         UnknownFingerprintWarning() => 'fingerprint',
         // SPEC 083 — REALITY принимает только chrome-семейство
         RealityFingerprintWarning() => 'reality_fingerprint',
-        EchIgnoredWarning() => 'ech_ignored',
         UnknownObfsWarning() => 'obfs_unknown',
         MissingObfsPasswordWarning() => 'obfs_no_password',
         // §368 — импорт sing-box JSON
@@ -112,26 +119,84 @@ void main() {
         DialerProxyUnusableWarning() => 'dialer_proxy_unusable',
         SelectorAsAutoWarning() => 'selector_as_auto',
         GroupMemberMissingWarning() => 'group_member_missing',
-        // SPEC 103 — деградации, помеченные кодом на обеих сторонах контракта
-        WsEarlyDataConvertedWarning() => 'ws_early_data_converted',
-        RealityShortIdInvalidWarning() => 'reality_short_id_invalid',
-        NaivePaddingIgnoredWarning() => 'naive_padding_ignored',
-        NaiveExtraHeadersInvalidWarning() => 'naive_extra_headers_invalid',
         // §435 — только UI, кода контракта нет.
         SectionsRecordDroppedWarning() => 'sections_record_dropped',
         SectionsConflictWarning() => 'sections_conflict',
-        TuicCongestionInvalidWarning() => 'tuic_congestion_invalid',
-        AwgHeaderInvalidWarning() => 'awg_header_invalid',
-        Awg3FieldInvalidWarning() => 'awg3_field_invalid',
         Awg3HeaderKeyInvalidWarning() => 'awg3_header_key_invalid',
         Awg3PaddingTooShortWarning() => 'awg3_padding_too_short',
         Awg3RandomTrailersWideHeadersWarning() =>
           'awg3_random_trailers_wide_headers',
-        MasqueVhttpInvalidWarning() => 'masque_vhttp_invalid',
-        AnyTlsMinIdleInvalidWarning() => 'anytls_min_idle_invalid',
         PacketEncodingUnknownWarning() => 'packet_encoding_unknown',
+        // §460 — санитайзер реестра: класс один на все свои коды, различает
+        // их поле `code` (текст берётся из registry/warnings.json).
+        RegistryWarning() => 'registry',
       };
-      expect(label, 'transport');
+      expect(label, 'obfs_unknown');
+    });
+  });
+
+  // Коды, у которых рукописный класс снят: `byCode` обязан не только вернуть
+  // `RegistryWarning`, но и переложить путь/значение под ИМЯ, которое код
+  // объявил в `params` реестра. Без этого текст доехал бы до человека с
+  // буквальным `{query_name}` — реестр тут не поможет, подстановку ставит
+  // приложение.
+  group('byCode — именованные параметры снятых классов', () {
+    test('ech_ignored: query_name = имя параметра ссылки', () {
+      final w = NodeWarning.byCode('ech_ignored',
+          path: 'ech', value: 'encryptedsni.com') as RegistryWarning;
+      expect(w.code, 'ech_ignored');
+      expect(w.path, 'ech');
+      expect(w.value, 'encryptedsni.com');
+      expect(w.params['query_name'], 'ech');
+    });
+
+    test('ws_early_data_converted: max_early_data = что получилось', () {
+      final w = NodeWarning.byCode('ws_early_data_converted',
+          path: 'path', value: '2560') as RegistryWarning;
+      expect(w.params['max_early_data'], '2560');
+    });
+
+    test('naive_extra_headers_invalid: entry = отброшенная пара', () {
+      final w = NodeWarning.byCode('naive_extra_headers_invalid',
+          path: 'extra-headers', value: 'no-colon') as RegistryWarning;
+      expect(w.params['entry'], 'no-colon');
+    });
+
+    test('naive_padding_ignored: своего имени не нужно, хватает value', () {
+      final w = NodeWarning.byCode('naive_padding_ignored',
+          path: 'padding', value: '1') as RegistryWarning;
+      expect(w.value, '1');
+      expect(w.params, isEmpty);
+    });
+
+    // Контракт 1.1.33 переписал тексты обоих кодов AWG с `{path}`/`{value}`
+    // и последствием для рукопожатия; классы сняты. Своего имени им не нужно
+    // — оба плейсхолдера подставляются всегда (`text_params_implicit`).
+    test('awg_header_invalid: RegistryWarning с путём и значением', () {
+      final w = NodeWarning.byCode('awg_header_invalid',
+          path: 'h1', value: '5-1') as RegistryWarning;
+      expect(w.code, 'awg_header_invalid');
+      expect(w.path, 'h1');
+      expect(w.value, '5-1');
+      expect(w.params, isEmpty);
+    });
+
+    test('awg3_field_invalid: RegistryWarning с путём и значением', () {
+      final w = NodeWarning.byCode('awg3_field_invalid',
+          path: 'content_padding_addition', value: '100-10') as RegistryWarning;
+      expect(w.code, 'awg3_field_invalid');
+      expect(w.path, 'content_padding_addition');
+      expect(w.value, '100-10');
+      expect(w.params, isEmpty);
+    });
+
+    // §279 — равенство по данным: два одинаковых кода на одном поле это одно
+    // предупреждение, и дедуп разбора обязан их схлопнуть.
+    test('одинаковые код+путь+значение равны', () {
+      expect(
+        NodeWarning.byCode('ech_ignored', path: 'ech', value: 'ip.gs'),
+        NodeWarning.byCode('ech_ignored', path: 'ech', value: 'ip.gs'),
+      );
     });
   });
 }

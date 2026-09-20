@@ -11,11 +11,17 @@ import 'package:lxbox/services/core_duration.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
+import '../parser/engine_test_setup.dart';
+
 /// §442 — пара `interval`/`idle_timeout` у urltest (эталон — SPEC 128
 /// лаунчера). Ядро достраивает пропуски до 3m/30m и падает на
 /// `interval > idle_timeout` в конструкторе группы; санитайзер поднимает
 /// `idle_timeout` до `interval` и никогда не трогает сам `interval`.
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   group('parseCoreDurationNanos — правила ядра', () {
     const s = 1000000000;
     test('суффикс d, которого нет у time.ParseDuration', () {

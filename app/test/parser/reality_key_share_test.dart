@@ -5,6 +5,8 @@ import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
+import 'engine_test_setup.dart';
+
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 
@@ -30,6 +32,10 @@ Map<String, dynamic> _emittedReality(NodeSpec n) =>
 /// Неизвестное значение ядро не понимает и отвергает outbound целиком, а с
 /// ним и весь конфиг — поэтому вне enum поле молча отбрасывается, узел жив.
 void main() {
+  // §480 W2 — vless переехала на ДВИЖОК СЕКЦИЙ: без реестра и секций-мапперов
+  // ссылка не разбирается вовсе, рукописного запасного пути не осталось.
+  setUpAll(loadEngineSections);
+
   group('§457 sing-box JSON', () {
     test('key_share: hybrid — в модели и в эмите', () {
       final spec = parseSingboxEntry(_vlessEntry({'key_share': 'hybrid'}))!
@@ -52,8 +58,18 @@ void main() {
           ['enabled', 'public_key', 'short_id', 'key_share']);
     });
 
+    test('§459 регистр нормализуется — Hybrid/HYBRID/пробелы дают hybrid', () {
+      for (final good in <String>['Hybrid', 'HYBRID', ' hybrid ', ' Classical']) {
+        final spec = parseSingboxEntry(_vlessEntry({'key_share': good}))!
+            as VlessSpec;
+        final want = good.trim().toLowerCase();
+        expect(spec.tls.reality!.keyShare, want, reason: 'good=$good');
+        expect(_emittedReality(spec)['key_share'], want, reason: 'good=$good');
+      }
+    });
+
     test('вне enum — поле отброшено молча, узел жив', () {
-      for (final bad in <dynamic>['Hybrid', 'x', 1, '', 'HYBRID', true]) {
+      for (final bad in <dynamic>['x', 1, '', '  ', true]) {
         final spec = parseSingboxEntry(_vlessEntry({'key_share': bad}))!
             as VlessSpec;
         expect(spec.tls.reality, isNotNull, reason: 'bad=$bad: REALITY цел');
@@ -63,11 +79,13 @@ void main() {
       }
     });
 
-    test('без поля — эмит прежний (enabled, public_key, short_id)', () {
+    test('без поля — эмит без key_share; пустой short_id не пишется', () {
+      // §463 / контракт §24.6 — пустой short_id ядру эквивалентен
+      // отсутствующему ключу, и корпус нормирует именно опущенный. Фикстура
+      // `short_id` не задаёт, поэтому ключа в эмите быть не должно.
       final spec = parseSingboxEntry(_vlessEntry(const {}))! as VlessSpec;
       expect(spec.tls.reality!.keyShare, isNull);
-      expect(_emittedReality(spec).keys.toList(),
-          ['enabled', 'public_key', 'short_id']);
+      expect(_emittedReality(spec).keys.toList(), ['enabled', 'public_key']);
     });
 
     test('hysteria2 с reality — reality срезан, как и раньше (§282)', () {
@@ -124,8 +142,20 @@ void main() {
       expect(spec.toUri(), isNot(contains('key_share')));
     });
 
+    test('§459 регистр нормализуется — Classical/HYBRID из ссылки принимаются',
+        () {
+      for (final good in <String>['Classical', 'HYBRID', '%20hybrid%20']) {
+        final spec = parseVless(
+            'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
+            '&key_share=$good#L')!;
+        final want = Uri.decodeComponent(good).trim().toLowerCase();
+        expect(spec.tls.reality!.keyShare, want, reason: 'good=$good');
+        expect(spec.toUri(), contains('key_share=$want'), reason: 'good=$good');
+      }
+    });
+
     test('вне enum — поля нет, узел жив', () {
-      for (final bad in ['Classical', 'x', '1', '']) {
+      for (final bad in ['x', '1', '']) {
         final spec = parseVless(
             'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
             '&key_share=$bad#L')!;
@@ -142,7 +172,7 @@ void main() {
       expect(spec.toUri(), isNot(contains('key_share')));
     });
 
-    test('anytls несёт key_share тем же путём (parseVlessTls)', () {
+    test('anytls несёт key_share тем же путём, что и vless', () {
       final spec = parseAnyTls(
           'anytls://p@h:443?security=reality&pbk=$_validPbk'
           '&key_share=hybrid#L')!;

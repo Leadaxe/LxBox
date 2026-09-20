@@ -1,0 +1,73 @@
+{
+  "_note": "§472 шаг 6 — снимок identity anytls, снятый СТАРЫМ путём ДО правки (18.09.2026). Ключ — имя кейса корпуса; identity=null означает, что ссылка не разбирается вовсе. || §480 «до переезда» (19.09.2026): кейсы с префиксом `b480:` дописаны тем же способом — прогоном текущего кода. dropped=true — узел сегодня отбраковывается; заведомо неверные тела фиксируются как есть.",
+  "cases": {
+    "basic_password_host_port": {
+      "uri": "anytls://pass123@srv.example-1.com:8443#AT-01",
+      "identity": "d95365a257c1065e0b3c50c2786a87a40db04e36b7e6b5f84fbdc319763b6142"
+    },
+    "empty_password_rejected": {
+      "uri": "anytls://@example-1.com:443",
+      "identity": null
+    },
+    "fp_alias_hellochrome_131": {
+      "uri": "anytls://pass123@example-1.com:443?fp=hellochrome_131&sni=x.example.com#at-fp",
+      "identity": "ea4cb4340fadf5389465d8c4ba01e6225764f7376e07ea7b22bb6e1751984a24"
+    },
+    "idle_session_fields": {
+      "uri": "anytls://pass123@example-1.com:8443?idle_session_check_interval=15s&idle_session_timeout=45s&min_idle_session=3#at-idle",
+      "identity": "140409de8fd212eca065092afd4c2b7fb672908b2f18ce04f53fca0d5b58873c"
+    },
+    "ipv6_host": {
+      "uri": "anytls://pass123@[2001:db8::1]:8443#at-v6",
+      "identity": "528350fcec960d957df8f63eeab0962c21568afb9f8a64466ebc07ee62cbca11"
+    },
+    "min_idle_session_invalid": {
+      "uri": "anytls://pass123@example-1.com?min_idle_session=abc#at-bad-idle",
+      "identity": "5980b2826eb25dd5cb35d1fd960ba4f8401003ee82d9a480514759deedb8e68f"
+    },
+    "missing_userinfo_rejected": {
+      "uri": "anytls://any.example-1.com:443#x",
+      "identity": null
+    },
+    "percent_encoded_password": {
+      "uri": "anytls://p%40ss%3Aword@example-1.com:443#at-pct",
+      "identity": "2097d8c7adc56d37e64c78de7cd64e7dc2530e0edcb6be2c80a3a51d72c3b45b"
+    },
+    "reality_key_share_hybrid": {
+      "uri": "anytls://pass123@example-1.com:443?security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&key_share=hybrid&sni=cdn.example-1.com&fp=chrome#at-ks-hybrid",
+      "identity": "f0f9fdbae3fc4b533968439c4655e1c2d934826a396336fa952f7a29958de63a"
+    },
+    "reality_pbk_sid": {
+      "uri": "anytls://pass123@example-1.com:443?security=reality&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=abcd&sni=cdn.example-1.com&fp=chrome#at-reality",
+      "identity": "d639ab108c494813dabed8e6451ea3de5240c000e28dfab669e878474c4ac0b3"
+    },
+    "security_none_params_kept": {
+      "uri": "anytls://pass123@example-1.com:8443?security=none&sni=cdn.example-1.com&fp=chrome&alpn=h2,http/1.1&allowInsecure=1#at-none",
+      "identity": "d9b5b303dc3cf7f02d1bbda75f58b9c7fa36ab79de14fe85bd5cf770c5f30583"
+    },
+    "session_fields": {
+      "uri": "anytls://pass123@any.example-1.com:443/?sni=cover.example-1.com&insecure=1&fp=chrome&idle_session_timeout=30&min_idle_session=2#node",
+      "identity": "85e6a036383c9ee10638e436254b79a54b67244e73c7a67693e564ce34f84d2d"
+    },
+    "b480:no_fragment": {
+      "uri": "anytls://pass123@example-1.com:443?sni=example-1.com",
+      "identity": "5980b2826eb25dd5cb35d1fd960ba4f8401003ee82d9a480514759deedb8e68f",
+      "tag": "anytls-example-1.com-443",
+      "body": {
+        "type": "anytls",
+        "tag": "anytls-example-1.com-443",
+        "server": "example-1.com",
+        "server_port": 443,
+        "password": "pass123",
+        "tls": {
+          "enabled": true,
+          "server_name": "example-1.com",
+          "utls": {
+            "enabled": true,
+            "fingerprint": "random"
+          }
+        }
+      }
+    }
+  }
+}

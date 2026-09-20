@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/if_engine.dart';
 
@@ -22,7 +23,6 @@ import 'package:lxbox/services/builder/if_engine.dart';
 //   <case>.expected.json  {"config": {...}, "warnings": [...], "vars_after": {}}
 
 /// Корень скопированного контракта — кладёт tool/sync_contract.sh.
-const _contractRoot = 'contract';
 
 /// Коды warning'ов движка шаблонов (contract/registry/warnings.json).
 const _warnVarUndeclared = 'template_var_undeclared';
@@ -245,7 +245,9 @@ void _runDepsCorpus(Directory root) {
 }
 
 void main() {
-  final root = Directory('$_contractRoot/corpus/template');
+  if (corpusSuiteUnavailable('test/contract/template_contract_test.dart')) return;
+
+  final root = Directory('$kVendorRoot/corpus/template');
   if (!root.existsSync()) {
     // Контракт не синхронизирован — прогон пропускается, а не падает
     // (tool/sync_contract.sh кладёт copy).
@@ -260,7 +262,7 @@ void main() {
       .toList()
     ..sort();
 
-  final depsRoot = Directory('$_contractRoot/corpus/template/deps');
+  final depsRoot = Directory('$kVendorRoot/corpus/template/deps');
   if (depsRoot.existsSync()) _runDepsCorpus(depsRoot);
 
   group('contract corpus: template engine', () {

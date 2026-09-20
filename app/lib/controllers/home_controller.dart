@@ -23,6 +23,7 @@ import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
 import '../services/rule_set_auto_updater.dart';
 import '../services/subscription/auto_updater.dart';
+import '../services/core_reject/core_reject_state.dart';
 
 part 'home_controller/config_io.dart';
 part 'home_controller/heartbeat.dart';
@@ -388,6 +389,8 @@ class HomeController extends ChangeNotifier
     // событие. Теперь один emit, одно rebuild.
 
     if (tunnel == TunnelStatus.connected) {
+      // Фича 478 — ядро приняло конфиг: сигнальный/финальный старт удался.
+      _settleStartOutcome(null);
       _emit(_state.copyWith(
         tunnel: tunnel,
         connectedSince: DateTime.now(),
@@ -452,9 +455,19 @@ class HomeController extends ChangeNotifier
         if (tunnel != prevTunnel) _emit(_state.copyWith(tunnel: tunnel));
         _transientTimeoutTimer?.cancel();
         _transientTimeoutTimer = null;
+        // Фича 478 — error-несущий Stopped резолвит ждущую страховку даже из
+        // stale-terminal: иначе completer висит до таймаута, узел не выключается
+        // (ревью guard_builder_api №10).
+        final rawError = event.coreError ?? event.errorReason;
+        if (rawError != null && rawError.isNotEmpty) {
+          _settleStartOutcome(rawError);
+        }
         return;
       }
       _stopHeartbeat();
+      // §498 — плашка страховки сообщает о прошедшем старте; при Stop/Disconnected
+      // уходит сама. Вердикты на узлах не снимаются.
+      CoreRejectState.I.dismissBanner();
       // §141 P1.2b / §286 — единый контракт «tunnel down»: гасим ВСЁ пробирование
       // (mass-ping + auto-ping-таймер + folder-probe sweep'ы) ПЕРЕД гашением
       // Направления, симметрично `_onTunnelDead`. Иначе воркеры/пробы дописывают
@@ -477,6 +490,17 @@ class HomeController extends ChangeNotifier
           revoked: tunnel == TunnelStatus.revoked,
           errorReason: event.errorReason);
       final reasonEn = stopReason?.renderEn() ?? '';
+      // Фича 478 — отказ ядра: отдать его текст ждущей страховке. Берём
+      // ДОСЛОВНЫЙ текст native-события, а не отрендеренную строку: разбор
+      // CANON §9 работает по формату ядра, а не по обёртке приложения.
+      //
+      // Д-1 — сначала `coreError`: это сырой `t.message` ядра, без единой
+      // обёртки. `errorReason` рядом с ним — локализованный шаблон
+      // `stop_alert_start_failed` («Failed to start service: …», в ru
+      // префикс другой), и он остаётся запасным путём для native старше
+      // этого поля: разбор грамматику §9 находит в нём по вхождению, а не с
+      // начала строки.
+      _settleStartOutcome(event.coreError ?? event.errorReason ?? '');
       _emit(
         _state.copyWith(
           tunnel: tunnel,
@@ -671,6 +695,88 @@ class HomeController extends ChangeNotifier
 
   /// Atomic start: native call + intent-based sticky reset.
   /// Returns true если startVPN принят (reached Starting), false иначе.
+  /// Фича 478 — ожидание ИСХОДА реального старта. `startVPN()` отвечает лишь
+  /// «принято к исполнению», а вердикт ядра приходит асинхронно событием
+  /// статуса: `connected` = приняло, `disconnected` с текстом = отказ.
+  /// Страховке нужен именно исход, поэтому здесь его ждёт completer, который
+  /// разрешает обработчик события.
+  Completer<String?>? _startOutcome;
+
+  /// Разрешить ожидание: `null` — ядро приняло, иначе текст отказа.
+  void _settleStartOutcome(String? error) {
+    final c = _startOutcome;
+    if (c == null || c.isCompleted) return;
+    _startOutcome = null;
+    c.complete(error);
+  }
+
+  /// Фича 478 — реальный старт ядра с ожиданием вердикта. `null` — принято;
+  /// строка — текст отказа ядра (её разбирает CANON §9). Таймаут отдаёт
+  /// пустую строку: ответить нечем, страховка деградирует консервативно.
+  Future<String?> startAndAwaitVerdict({
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    final existing = _startOutcome;
+    if (existing != null && !existing.isCompleted) {
+      return existing.future.timeout(timeout, onTimeout: () => '');
+    }
+    final c = Completer<String?>();
+    _startOutcome = c;
+    await start();
+    if (_state.tunnel == TunnelStatus.connected) {
+      _settleStartOutcome(null);
+      return null;
+    }
+    // Старт не дошёл до ядра (startVPN отказал / нет Activity) — не ждём 45 с.
+    if (!c.isCompleted &&
+        _state.tunnel == TunnelStatus.disconnected &&
+        _state.lastError != null) {
+      _settleStartOutcome(_state.lastError!.renderEn());
+      return c.future;
+    }
+    return c.future.timeout(timeout, onTimeout: () {
+      // Завершаем ИМЕННО этот completer: иначе join-ожидающий висит, а
+      // поздний Stopped не выключит узел; чужой (новый) _startOutcome не трогаем.
+      if (!c.isCompleted) {
+        if (_startOutcome == c) _startOutcome = null;
+        c.complete('');
+      }
+      return '';
+    });
+  }
+
+  /// §494 — ожидание вердикта headless-старта (`startVpnHeadless`). Тот же
+  /// completer, что [startAndAwaitVerdict], но без Activity: для
+  /// `POST /action/start-vpn-headless?guard=true`.
+  Future<String?> startAndAwaitVerdictHeadless({
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    final existing = _startOutcome;
+    if (existing != null && !existing.isCompleted) {
+      return existing.future.timeout(timeout, onTimeout: () => '');
+    }
+    final c = Completer<String?>();
+    _startOutcome = c;
+    final r = await _vpn.startVpnHeadless();
+    if (!r.started) {
+      // Сервис не стартовал — вердикта ядра нет. Пустая строка = unavailable
+      // (как needsConsent): не подставляем stale lastError прошлого старта.
+      _settleStartOutcome('');
+      return c.future;
+    }
+    if (_state.tunnel == TunnelStatus.connected) {
+      _settleStartOutcome(null);
+      return null;
+    }
+    return c.future.timeout(timeout, onTimeout: () {
+      if (!c.isCompleted) {
+        if (_startOutcome == c) _startOutcome = null;
+        c.complete('');
+      }
+      return '';
+    });
+  }
+
   Future<bool> _startInternal() async {
     await _pushNotificationLabels();
     final ok = await _vpn.startVPN();

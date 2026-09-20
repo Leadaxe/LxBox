@@ -54,14 +54,6 @@ bc1qupzrxnyvkccpfuv6pmnt58w8xyx5c0l8a6jue7
 
 ---
 
-## Boosty
-
-One-time support or a subscription — cards, SBP and other familiar options:
-
-**[boosty.to/lxbox/donate](https://boosty.to/lxbox/donate)**
-
----
-
 ## Other ways to help
 
 Just as valuable:

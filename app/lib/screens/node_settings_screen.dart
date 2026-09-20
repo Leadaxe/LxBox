@@ -21,7 +21,7 @@ import '../widgets/emoji_picker_button.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
-import 'subscription_detail_screen/widgets/node_warning_row.dart';
+import 'subscriptions_screen/entry_warnings.dart';
 
 /// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237).
 /// Вкладки: **Settings** (Protocol/Server/Tag + эмодзи-пикер + Detour),
@@ -46,6 +46,7 @@ class NodeSettingsScreen extends StatefulWidget {
     required this.index,
     required this.subController,
     this.memberIndex,
+    this.initialTab = 0,
   });
 
   final SubscriptionEntry entry;
@@ -54,6 +55,12 @@ class NodeSettingsScreen extends StatefulWidget {
 
   /// §237 — индекс члена папки; null = одиночный сервер (старое поведение).
   final int? memberIndex;
+
+  /// §498/§501 — начальная вкладка (страховка открывает Diagnostics = 3).
+  final int initialTab;
+
+  /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics.
+  static const diagnosticsTabIndex = 3;
 
   @override
   State<NodeSettingsScreen> createState() => _NodeSettingsScreenState();
@@ -88,13 +95,21 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// из него временный конфиг).
   NodeSpec? _node;
 
+  /// Разбор + хранимый вердикт (`core_rejected` и др.) для секции
+  /// Notifications во вкладке Diagnostics.
+  List<NodeWarning> _notifications = const [];
+
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController();
     _jsonCtrl = TextEditingController();
     _sourceCtrl = TextEditingController();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 3),
+    );
     unawaited(_load());
   }
 
@@ -141,6 +156,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     }
 
     _node = node; // §392 — источник probe-ветки диагностики
+    final emittedTag =
+        TagResolver.displayTag(widget.entry.list.tagPrefix, node.tag);
+    _notifications = warningsForConfigTag(
+      emittedTag,
+      widget.subController.entries,
+      emittedTagMap: widget.subController.lastEmittedTagMap,
+      buildWarningsByTag: widget.subController.lastBuildWarningsByTag,
+    );
 
     // §130 — AWG-детект: WireguardSpec с непустыми obfuscation-полями.
     _isAwg = node is WireguardSpec && node.awg != null;
@@ -157,12 +180,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             ? getLocalText.s("No address")
             : '${node.server}:${node.port}';
     // §455 — источник как есть; предпросмотр JSON — то, что уйдёт в ядро:
-    // у JSON-источника это его объект (дословно), иначе emit() модели.
+    // у sing-box-источника это его объект (дословно), иначе emit() модели.
+    // Д-1 — гейт тот же, что у сборки (`verbatimBodyOf`): у Xray-объекта
+    // вкладка обязана показывать sing-box-тело модели, ведь именно оно и
+    // уйдёт в ядро.
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _originKind = originKindOf(raw);
     _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
-        _originKind == 'json' && node.rawSource.trimLeft().startsWith('{')
+        sourceIsSingbox(raw) && node.rawSource.trimLeft().startsWith('{')
             ? jsonDecode(node.rawSource)
             : node.emit(TemplateVars.empty).map);
     _tagCtrl.text = _originalTag;
@@ -461,12 +487,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           ],
           bottom: TabBar(
             controller: _tabs,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: getLocalText.s("Settings")),
               Tab(text: getLocalText.s("Source")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
-              Tab(text: getLocalText.s("Diagnostics")),
+              NodeDiagnosticsTabLabel(warnings: _notifications),
             ],
           ),
         ),
@@ -478,12 +506,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   _buildSettingsTab(theme),
                   _buildSourceTab(theme),
                   _buildJsonTab(theme),
-                  // §392 — узел распарсен: доступны обе ветки (probe при
-                  // выключенном VPN, боевое ядро при включённом).
+                  // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
                     node: _node,
                     liveTag: TagResolver.displayTag(
                         widget.entry.list.tagPrefix, _originalTag),
+                    warnings: _notifications,
+                    scrollToNotifications: widget.initialTab ==
+                        NodeSettingsScreen.diagnosticsTabIndex,
                   ),
                 ],
               ),
@@ -512,14 +542,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           title: Text(getLocalText.s("Server")),
           subtitle: Text(_serverInfo, style: theme.textTheme.bodyMedium),
         ),
-        // §435 — предупреждения разбора узла (в т. ч. отброшенные записи
-        // секций и конфликт `sections`/`dns`+`route` из документа); раньше
-        // редактор их не показывал вовсе.
-        if (_node?.warnings.isNotEmpty ?? false)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: NodeWarningRow(_node!.warnings),
-          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: TextField(

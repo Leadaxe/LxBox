@@ -537,8 +537,15 @@ class BoxService(
         try {
             cs.startOrReloadService(config, buildOverrideOptions(config))
         } catch (t: Throwable) {
-            stopAndAlert(L10n.str(
-                service, R.string.stop_alert_start_failed, t.message ?: ""))
+            // Фича 478 / Д-1 — человеку идёт локализованный шаблон, страховке
+            // рядом едет СЫРОЙ `t.message` (EXTRA_CORE_ERROR). Разбирать
+            // витрину нельзя: в ru у неё другой префикс, и грамматика §9
+            // молча не находилась бы.
+            val core = t.message ?: ""
+            stopAndAlert(
+                L10n.str(service, R.string.stop_alert_start_failed, core),
+                coreError = core,
+            )
             return
         }
 
@@ -763,7 +770,10 @@ class BoxService(
         }
     }
 
-    private suspend fun stopAndAlert(message: String) {
+    /// [coreError] — Фича 478 / Д-1: сырой текст ядра без обёрток, если отказ
+    /// пришёл ОТ ЯДРА. [message] для него — лишь локализованная витрина;
+    /// страховка разбирает именно сырой.
+    private suspend fun stopAndAlert(message: String, coreError: String? = null) {
         Log.e(TAG, "stopAndAlert: $message")
         // CRITICAL: full sing-box teardown ДО stopSelf'а. Раньше пропускали
         // closeFileDescriptor / closeCommandServerAtomic / DefaultNetworkMonitor.stop —
@@ -785,7 +795,7 @@ class BoxService(
                 receiverRegistered = false
             }
             notification.stop()
-            setStatus(VpnStatus.Stopped, error = message)
+            setStatus(VpnStatus.Stopped, error = message, coreError = coreError)
             service.stopSelf()
         }
     }
@@ -797,6 +807,7 @@ class BoxService(
         newStatus: VpnStatus,
         error: String? = null,
         revoked: Boolean = false,
+        coreError: String? = null,
     ) {
         // §122 — дедупликация. Несколько teardown-путей (doStop/doForceStop/
         // onRevoke/exit) могут выстрелить `setStatus(Stopped)` повторно, в т.ч.
@@ -847,6 +858,10 @@ class BoxService(
                 putExtra(BoxVpnService.EXTRA_STATUS, newStatus.name)
                 if (error != null) putExtra("error", error)
                 if (revoked) putExtra(BoxVpnService.EXTRA_REVOKED, true)
+                // Фича 478 / Д-1 — сырой текст ядра рядом с локализованным.
+                if (!coreError.isNullOrEmpty()) {
+                    putExtra(BoxVpnService.EXTRA_CORE_ERROR, coreError)
+                }
             }
         )
         runCatching { LxBoxTileService.refreshTile(service.applicationContext) }

@@ -23,6 +23,7 @@ import '../node_link.dart';
 import '../node_sections.dart';
 import '../node_spec.dart';
 import '../record_codec.dart' show RecordRead;
+import '../core_reject_verdict.dart';
 import '../server_list.dart';
 import '../subscription_meta.dart';
 import 'auto_group_record.dart';
@@ -63,6 +64,10 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
           for (final e in s.disabledHashes.entries)
             e.key: e.value.millisecondsSinceEpoch ~/ 1000,
         },
+      // Фича 478 / CANON §9.4 — вердикт ядра оверлеем тем же ключом, что и
+      // `disabled`: рядом с отметкой выключения, симметрично в бэкапе (§221).
+      if (s.nodeWarnings.isNotEmpty)
+        'warnings': storedWarningsMapToJson(s.nodeWarnings),
       ..._detourLinkToRecord(s.detourPolicy),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(s.detourPolicy),
@@ -93,6 +98,8 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     'id': u.id,
     if (tag.isNotEmpty) 'tag': tag,
     'enabled': u.enabled,
+    // Фича 478 — вердикт ядра на ручном сервере: рядом с `enabled`.
+    if (u.warnings.isNotEmpty) 'warnings': storedWarningsToJson(u.warnings),
     if (u.rawBody.isNotEmpty) 'origin': _originToRecord(u.rawBody),
     ..._detourLinkToRecord(u.detourPolicy),
     if (u.sections != null) 'sections': u.sections!.toJson(),
@@ -128,6 +135,8 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     'kind': node == null ? kNodeKindUnsupported : kSourceKindServer,
     if (node != null && node.tag.isNotEmpty) 'tag': node.tag,
     'enabled': m.enabled,
+    // Фича 478 — вердикт ядра на члене папки: рядом с `enabled`.
+    if (m.warnings.isNotEmpty) 'warnings': storedWarningsToJson(m.warnings),
     if (m.raw.isNotEmpty) 'origin': _originToRecord(m.raw),
     if (m.detour.isNotEmpty) 'detour': nodeLinkToRecord(m.detour),
     if (node == null) 'reason': kMemberUnparsedReason,
@@ -156,8 +165,13 @@ Map<String, dynamic> _detourPolicyToRecord(DetourPolicy p) => {
 Map<String, dynamic> _originToRecord(String raw) =>
     {'kind': originKindOf(raw), 'raw': raw};
 
-/// §455 — вид источника по тексту. Единственное, от чего зависит режим
-/// сборки узла: `json` уходит в ядро дословно (`verbatim_body.dart`).
+/// §455 — ВИД ЗАПИСИ для хранения: `uri` | `wg_ini` | `json`. Контракт
+/// знает ровно эти три, и `json` здесь значит «источник — JSON-объект», без
+/// различия диалекта: `raw` хранится байт в байт, и перечитывается он тоже
+/// из `raw`.
+///
+/// Режим СБОРКИ по этому значению НЕ решается: дословность включает вид
+/// источника движка ([sourceIsSingbox]) — см. `verbatim_body.dart`.
 String originKindOf(String raw) {
   final t = raw.trim();
   if (t.startsWith('{')) {
@@ -168,6 +182,42 @@ String originKindOf(String raw) {
     }
   }
   return decode(t) is IniConfig ? 'wg_ini' : 'uri';
+}
+
+/// §480/§482 — ВИД ИСТОЧНИКА текста именем реестра (`source_kind`):
+/// `singbox_outbound`, `xray_config`, `uri_lines` и прочие. Пусто — текст ни
+/// на что не похож (пустой, битый JSON).
+///
+/// Опознание одно на всё приложение — движок (`engine/document.dart`): свой
+/// разбор формы здесь завёл бы второй сниффер, и разъехался бы он молча.
+String sourceKindOf(String raw) {
+  if (raw.trim().isEmpty) return '';
+  final decoded = decode(raw);
+  return switch (decoded) {
+    JsonConfig(:final source) => source.kind,
+    IniConfig() => 'wireguard_conf',
+    AmneziaConfig() => 'amnezia_link',
+    UriLines() => 'uri_lines',
+    DecodeFailure() => '',
+  };
+}
+
+/// §455 + Д-1 (эмулятор 19.09.2026) — ТЕЛО ЭТОГО ТЕКСТА НАПИСАНО В ФОРМЕ
+/// ЯДРА.
+///
+/// Дословность §455 держится ровно на этом: «человек написал sing-box-объект
+/// сам». Xray-объект — чужой диалект (`protocol`, `settings.vnext`,
+/// `streamSettings`), и положить его в `outbounds[]` как есть значит уронить
+/// ВЕСЬ конфиг: ядро отвечает `unknown outbound type:` и узел даже не назван,
+/// так что выключить его нечем. Такой источник идёт через модель (маппер →
+/// санитайзер), как и Xray-массив `outbounds[]`.
+///
+/// Судит по СОДЕРЖИМОМУ текста, а не по записи: уже сохранённым записям с
+/// `origin.kind: json` и Xray-телом миграции не нужно — они лечатся на первой
+/// же загрузке.
+bool sourceIsSingbox(String raw) {
+  final decoded = decode(raw);
+  return decoded is JsonConfig && decoded.source.mapper == 'singbox';
 }
 
 String _firstNodeTag(List<NodeSpec> nodes, String raw) {
@@ -197,14 +247,15 @@ String? _iniTagHint(Map<String, dynamic> j, String raw) {
 
 const Set<String> _subscriptionKeys = {
   'kind', 'id', 'name', 'enabled', 'url', 'tag_policy', 'identity', 'update',
-  'disabled', 'detour', 'detour_policy', 'import_rules',
+  'disabled', 'warnings', 'detour', 'detour_policy', 'import_rules',
   'import_rules_enabled', 'on_update_action', 'meta', 'last_updated',
   'last_update_attempt', 'last_update_status', 'last_node_count',
   'consecutive_fails',
 };
 
 const Set<String> _serverKeys = {
-  'kind', 'id', 'tag', 'enabled', 'origin', 'body', 'detour', 'sections',
+  'kind', 'id', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour',
+  'sections',
   'detour_policy', 'tag_policy',
 };
 
@@ -214,7 +265,8 @@ const Set<String> _folderKeys = {
 };
 
 const Set<String> _memberKeys = {
-  'kind', 'tag', 'enabled', 'origin', 'body', 'detour', 'reason', 'sections',
+  'kind', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour', 'reason',
+  'sections',
 };
 
 const Set<String> _detourPolicyKeys = {
@@ -296,6 +348,7 @@ SubscriptionServers _subscriptionFromRecord(
     lastNodeCount: _int(j['last_node_count'], 0),
     consecutiveFails: _int(j['consecutive_fails'], 0),
     disabledHashes: _disabledFromRecord(j['disabled']),
+    nodeWarnings: storedWarningsMapFromJson(j['warnings']),
     identity: _identityFromRecord(j['identity'], unknown),
     importRules: _importRulesFromRecord(j['import_rules'], where, notes),
     importRulesEnabled: _bool(j['import_rules_enabled'], true),
@@ -324,6 +377,7 @@ UserServer _serverFromRecord(
     id: id,
     name: '',
     enabled: _bool(j['enabled'], true),
+    warnings: storedWarningsFromJson(j['warnings']),
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
     rawBody: raw,
@@ -410,6 +464,7 @@ FolderMember? _memberFromRecord(
   final member = FolderMember(
     raw: text,
     enabled: _bool(j['enabled'], true),
+    warnings: storedWarningsFromJson(j['warnings']),
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     nameHint: hint ?? '',
     sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),

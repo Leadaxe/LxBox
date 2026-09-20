@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/parser/hysteria2_obfs.dart';
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
@@ -14,11 +15,9 @@ import 'package:lxbox/services/parser/utls_fingerprint.dart';
 // стороны расходятся молча. На Go-стороне такой тест сразу нашёл gecko,
 // который добавили в парсер, но забыли внести в allowlists.json.
 
-const _contractRoot = 'contract';
 
-Map<String, dynamic>? _loadAllowlists() {
-  final file = File('$_contractRoot/registry/allowlists.json');
-  if (!file.existsSync()) return null; // контракт не синхронизирован
+Map<String, dynamic> _loadAllowlists() {
+  final file = File('$kRegistryRoot/registry/allowlists.json');
   final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
   return (data['allowlists'] as Map).cast<String, dynamic>();
 }
@@ -61,9 +60,8 @@ const _launcherOnlyBackupCodes = <String>{
   'backup_direction_include_dropped',
 };
 
-Map<String, dynamic>? _loadBackupWarnings() {
-  final file = File('$_contractRoot/registry/backup_warnings.json');
-  if (!file.existsSync()) return null;
+Map<String, dynamic> _loadBackupWarnings() {
+  final file = File('$kRegistryRoot/registry/backup_warnings.json');
   final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
   return (data['warnings'] as Map).cast<String, dynamic>();
 }
@@ -100,7 +98,6 @@ const _codesInCode = <String>{
 
 void main() {
   final allowlists = _loadAllowlists();
-  if (allowlists == null) return;
 
   group('contract registry sync', () {
     // uTLS: чужой отпечаток валит ВЕСЬ конфиг, словарь обязан совпадать.
@@ -118,9 +115,7 @@ void main() {
     // (потеря, о которой пользователю никто не скажет).
     test('backup_warnings ↔ kWarn*', () {
       final registry = _loadBackupWarnings();
-      expect(registry, isNotNull, reason: 'нет registry/backup_warnings.json');
-
-      final registryCodes = registry!.keys.toSet();
+      final registryCodes = registry.keys.toSet();
 
       // Код в приложении, которого нет в реестре, — либо забытая запись
       // реестра, либо самодеятельность: словарь нормативен (D-020).

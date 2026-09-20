@@ -1,12 +1,25 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
+import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §222 — HTTP(S) CONNECT proxy: `proxy-http://` / `proxy-https://`.
 void main() {
+  // §480 W4 — схема переехала на ДВИЖОК СЕКЦИЙ, и рукописного запасного пути
+  // у неё больше нет: без реестра (общие блоки `tls#uri`, `dialer#uri`) и без
+  // самих секций разбор не работает вовсе. Гейта здесь НЕТ намеренно: зеркало
+  // `assets/contract` лежит в репозитории и едет в APK, и его отсутствие —
+  // поломка сборки, а не повод молча пропустить тест.
+  setUpAll(() async {
+    await ContractRegistry.I.loadFromDirectory('assets/contract');
+    await MapperSections.I
+        .loadDrafts(dir: 'assets/contract_draft', files: kDraftFiles);
+  });
+
   group('parseHttpProxy — базовый разбор', () {
     test('plain: host/port/label, TLS выключен', () {
       final s = parseUri('proxy-http://10.0.0.1:8080#Corp proxy');
@@ -112,7 +125,11 @@ void main() {
       expect(h.tls.fingerprint, 'chrome');
       expect(h.tls.alpn, ['h2', 'http/1.1']);
       expect(h.tls.insecure, isTrue);
-      expect(h.warnings.whereType<InsecureTlsWarning>(), isNotEmpty);
+      // §472 шаг 6 — код за `insecure` ставит РЕЕСТР (`tls.json` → `insecure`,
+      // `advisory`), а не рукописный `InsecureTlsWarning`. Этот файл реестра
+      // не грузит, поэтому проверка кода живёт там, где он есть:
+      // `http_pipeline_invariants_test.dart` («insecure и мусорный fp судит
+      // реестр»). Здесь остаётся разбор TLS-параметров по trojan-конвенциям.
     });
 
     test('sni default = server, insecure default = false', () {

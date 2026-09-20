@@ -129,6 +129,10 @@ extension ServerListBuild on ServerList {
         main.map
           ..clear()
           ..addAll(verbatim);
+        // §473 — вход этой записи `singbox`: тело написал автор узла в форме
+        // ядра. Гард реестра на сборке прочтёт метку и не подменит ему
+        // значение, которому реестр ставит условный потолок (`max_when`).
+        ctx.noteVerbatim(main);
       }
 
       // Allocate tags (детуры первыми — чтобы main мог сослаться на tag).
@@ -136,6 +140,8 @@ extension ServerListBuild on ServerList {
       for (final d in detours) {
         detourBases.add(d.tag);
         d.map['tag'] = ctx.allocateTag(TagResolver.displayTag(tagPrefix, d.tag));
+        // Фича 478 — хоп цепочки ведёт к исходному узлу (CANON §9.3).
+        ctx.noteEmittedAlias(d.map['tag'] as String, server);
       }
       final mainBase = main.tag;
       main.map['tag'] =

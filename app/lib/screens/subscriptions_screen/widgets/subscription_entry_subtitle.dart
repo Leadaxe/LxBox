@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
+import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../subscription_detail_screen/widgets/node_warning_row.dart';
+import '../entry_warnings.dart';
 
 /// Строка под именем подписки. Для SubscriptionServers показываем:
 /// `{nodes} · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -12,7 +15,10 @@ import '../../../services/l10n/locale_controller.dart';
 /// Возвращает `null` если показывать нечего (как старый
 /// `_buildEntrySubtitle`).
 Widget? buildSubscriptionEntrySubtitle(
-    BuildContext context, SubscriptionEntry entry) {
+  BuildContext context,
+  SubscriptionEntry entry,
+  SubscriptionController subController,
+) {
   final scheme = Theme.of(context).colorScheme;
   final muted = entry.enabled ? scheme.onSurfaceVariant : scheme.onSurfaceVariant.withValues(alpha: 0.6);
   final parts = <Widget>[];
@@ -22,6 +28,18 @@ Widget? buildSubscriptionEntrySubtitle(
   // SubscriptionServers — нодcount + ⚙ если есть detour-цепочки.
   // FolderServers (§234) — счётчик членов + сколько выключено.
   final isUser = entry.list is UserServer;
+  List<NodeWarning> userWarnings = const [];
+  var hideUserProtocol = false;
+  if (isUser) {
+    final user = entry.list as UserServer;
+    userWarnings = userServerWarnings(
+      user,
+      subController.entries,
+      buildWarningsByTag: subController.lastBuildWarningsByTag,
+    );
+    hideUserProtocol = userServerHasCoreRejected(user);
+  }
+
   String statusText;
   if (entry.list is FolderServers) {
     final folder = entry.list as FolderServers;
@@ -33,10 +51,14 @@ Widget? buildSubscriptionEntrySubtitle(
             ? getLocalText.plural("%1\$d servers · %2\$d off", total, off)
             : getLocalText.plural("%d servers", total);
   } else if (isUser) {
-    final node = entry.list.nodes.isNotEmpty ? entry.list.nodes.first : null;
-    statusText = node != null
-        ? getLocalText.s("%s server", node.protocol.toUpperCase())
-        : '';
+    if (!hideUserProtocol) {
+      final node = entry.list.nodes.isNotEmpty ? entry.list.nodes.first : null;
+      statusText = node != null
+          ? getLocalText.s("%s server", node.protocol.toUpperCase())
+          : '';
+    } else {
+      statusText = '';
+    }
   } else if (entry.status != null) {
     statusText = entry.status!.render();
   } else {
@@ -85,14 +107,34 @@ Widget? buildSubscriptionEntrySubtitle(
     }
   }
 
-  if (parts.isEmpty) return null;
+  final warningRows = <Widget>[];
+  if (isUser && userWarnings.isNotEmpty) {
+    if (nodeHasActionableWarnings(userWarnings)) {
+      warningRows.add(NodeWarningRow(userWarnings));
+    } else {
+      // §479 — только info: значок в строке протокола, третьей строки нет.
+      if (statusText.isNotEmpty) {
+        parts.insert(
+            0, Padding(padding: const EdgeInsets.only(right: 2), child: NodeInfoBadge(userWarnings)));
+      }
+    }
+  }
+
+  if (parts.isEmpty && warningRows.isEmpty) return null;
   return Padding(
     padding: const EdgeInsets.only(top: 2),
-    child: Wrap(
-      spacing: 4,
-      runSpacing: 2,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: parts,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (parts.isNotEmpty)
+          Wrap(
+            spacing: 4,
+            runSpacing: 2,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: parts,
+          ),
+        ...warningRows,
+      ],
     ),
   );
 }

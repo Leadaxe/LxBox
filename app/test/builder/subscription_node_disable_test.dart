@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/emit_context.dart';
@@ -8,7 +10,10 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/builder/server_list_build.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+
+import '../parser/engine_test_setup.dart';
 
 /// §283 — выключенная нода подписки не эмитится в конфиг (но остаётся в
 /// `nodes` для UI), её warnings не сыпятся в emitWarnings.
@@ -61,6 +66,10 @@ class _FakeCtx extends EmitContext {
 }
 
 void main() {
+  // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
+  // (критерий 7 спеки 480).
+  setUpAll(loadEngineSections);
+
   const uriA = 'vless://u1@h1.com:443?type=ws&security=tls&sni=h1.com#A';
   const uriB = 'vless://u2@h2.com:443?type=ws&security=tls&sni=h2.com#B';
 
@@ -209,6 +218,19 @@ void main() {
   });
 
   group('buildConfig §283 интеграция (фильтр + warnings-зеркало)', () {
+    // §474 — код `tls_insecure` ставит РЕЕСТР (`tls.json` → `insecure`,
+    // `advisory` на значении `true`), а не рукописное правило разбора.
+    // Проверка здесь про зеркало фильтра §283 — «warnings выключенной ноды не
+    // сыпем», — но источник самого warning'а ей нужен живой: без реестра у
+    // обеих нод не стало бы кодов вовсе, и тест зеленел бы вхолостую.
+    //
+    // Зеркало `assets/contract` (в git), а не копия `contract/`: последней на
+    // CI нет.
+    setUpAll(() async {
+      if (!Directory('assets/contract/registry').existsSync()) return;
+      await ContractRegistry.I.loadFromDirectory('assets/contract');
+    });
+
     final template = WizardTemplate(
       parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(
