@@ -1087,8 +1087,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
         return hashMapOf(
             "totalPss" to kb("summary.total-pss", mi.totalPss),
-            // getTotalSwappedOutPss() — @hide, в public SDK нет.
-            "totalSwap" to kb("summary.total-swap", mi.totalSwappedOut),
+            // Swap — только summary.total-swap: getTotalSwappedOut{,Pss} @hide,
+            // в public android.jar нет (compileSdk 36).
+            "totalSwap" to kb("summary.total-swap"),
             "javaHeap" to kb("summary.java-heap", mi.dalvikPss),
             "nativeHeap" to kb("summary.native-heap", mi.nativePss),
             "code" to kb("summary.code"),

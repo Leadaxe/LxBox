@@ -32,7 +32,7 @@ Malloc-счётчики и RSS живут другими API, поэтому «�
 
 ## Решение
 
-`VpnPlugin.getMemoryInfo` берёт `MemoryInfo` у AMS по pid процесса (UI и VPN в одном процессе). Если AMS вернул пусто (rate-limit Android Q+, эмулятор без memtrack) — падаем на прежний `Debug.getMemoryInfo`. Для каждой `summary.*`-категории, если она ноль, подставляем грубое поле той же структуры (`totalPss` / `dalvikPss` / `nativePss` / `otherPss` / `totalSwappedOutPss`), чтобы sheet не оставался семью нулями при живом RSS.
+`VpnPlugin.getMemoryInfo` берёт `MemoryInfo` у AMS по pid процесса (UI и VPN в одном процессе). Если AMS вернул пусто (rate-limit Android Q+, эмулятор без memtrack) — падаем на прежний `Debug.getMemoryInfo`. Для каждой `summary.*`-категории, если она ноль, подставляем грубое поле той же структуры (`totalPss` / `dalvikPss` / `nativePss` / `otherPss`). Swap — только `summary.total-swap`: `getTotalSwappedOut{,Pss}` скрыты в SDK.
 
 Сбор на `Dispatchers.IO`: обход smaps на RSS ~400 MB занимает сотни мс, на main это ANR. Контракт карты для Dart не меняется — те же ключи, байты.
 
