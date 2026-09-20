@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done |
+| Статус | **Released в v2.25.1** (20.09.2026) |
 | Дата | 2026-09-20 |
 | Повод | Приёмка v2.25.0: после перехода с 2.24 шторка Statistics → Stats → Memory показывает RSS, Allocated/Reserved и goroutines, а секция Breakdown — все `0 B` |
 | Связанные | [§242](242-stats-memory-detail-popup.md) |

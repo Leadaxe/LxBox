@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | Done |
+| **Статус** | **Released в v2.25.1** (20.09.2026) |
 | **Дата** | 2026-09-20 |
 | **Повод** | Живая vless+xhttp ссылка: extra несёт proto-имена Xray, session id не доезжал |
 | **Связанные** | [§410](410-xhttp-extra-empty-not-clobber.md), [лаунчер #131](https://github.com/Leadaxe/singbox-launcher/issues/131) |
