@@ -73,6 +73,36 @@
           },
           "emit_as": "raw",
           "_why_emit_as": "§480 W8 / синк 1.1.37 — `emit_as: raw`: булев уезжает в ссылку СЛОВОМ `true`, а не `1`. Так писал рукописный эмит, так пишет Xray, и так его читают чужие клиенты. Реестр это объявление СНЯЛ (контракт 1.1.36): у лаунчера словом пишется ЛЮБОЙ необъявленный булев, цифру даёт только явный `emit_as: bool01`, — то есть ему объявлять нечего. У нас умолчание ОБРАТНОЕ (цифра), и без этого ключа записи уехали бы `noGRPCHeader=1`. По типу (`bool_spelled`) это решать нельзя: у лаунчера `bool` и `bool_spelled` на выходе неразличимы, а привязка к типу сменила бы вид ссылок tuic (`reduce_rtt=1` → `=true`). Запись скопирована из реестра ЦЕЛИКОМ: оверлей замещает запись, а не сливает её поля, и оставь мы один `emit_as`, запись потеряла бы source и умерла."
+        },
+        "sessionPlacement": {
+          "source": [
+            "extra.sessionPlacement",
+            "extra.session_placement",
+            "extra.sessionIDPlacement",
+            "query.sessionPlacement",
+            "query.session_placement",
+            "query.sessionIDPlacement"
+          ],
+          "maps_to": "transport.session_placement",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "_why": "§508 / лаунчер #131. Xray proto `sessionIDPlacement`; реестр знает только `sessionPlacement`. Канон extra по-прежнему первый. Снять, когда алиас приедет в реестр."
+        },
+        "sessionKey": {
+          "source": [
+            "extra.sessionKey",
+            "extra.session_key",
+            "extra.sessionIDKey",
+            "query.sessionKey",
+            "query.session_key",
+            "query.sessionIDKey"
+          ],
+          "maps_to": "transport.session_key",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "_why": "§508 / лаунчер #131. Пара к `sessionIDPlacement`: proto `sessionIDKey` → `session_key`. `sessionIDLength`/`sessionIDTable` не маппить."
         }
       }
     },
@@ -145,6 +175,50 @@
             "transport.type": "http"
           },
           "impl": "Корневой путь ключа НЕ даёт: у ядра это умолчание, и прежняя ветка его не писала."
+        }
+      },
+      "xhttp": {
+        "sessionPlacement": {
+          "source": [
+            "json.streamSettings.xhttpSettings.extra.sessionPlacement",
+            "json.streamSettings.xhttpSettings.extra.session_placement",
+            "json.streamSettings.xhttpSettings.extra.sessionIDPlacement",
+            "json.streamSettings.splithttpSettings.extra.sessionPlacement",
+            "json.streamSettings.splithttpSettings.extra.session_placement",
+            "json.streamSettings.splithttpSettings.extra.sessionIDPlacement",
+            "json.streamSettings.xhttpSettings.sessionPlacement",
+            "json.streamSettings.xhttpSettings.session_placement",
+            "json.streamSettings.xhttpSettings.sessionIDPlacement",
+            "json.streamSettings.splithttpSettings.sessionPlacement",
+            "json.streamSettings.splithttpSettings.session_placement",
+            "json.streamSettings.splithttpSettings.sessionIDPlacement"
+          ],
+          "maps_to": "transport.session_placement",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "_why": "§508 / лаунчер #131. Тот же алиас proto-имени, что у URI extra."
+        },
+        "sessionKey": {
+          "source": [
+            "json.streamSettings.xhttpSettings.extra.sessionKey",
+            "json.streamSettings.xhttpSettings.extra.session_key",
+            "json.streamSettings.xhttpSettings.extra.sessionIDKey",
+            "json.streamSettings.splithttpSettings.extra.sessionKey",
+            "json.streamSettings.splithttpSettings.extra.session_key",
+            "json.streamSettings.splithttpSettings.extra.sessionIDKey",
+            "json.streamSettings.xhttpSettings.sessionKey",
+            "json.streamSettings.xhttpSettings.session_key",
+            "json.streamSettings.xhttpSettings.sessionIDKey",
+            "json.streamSettings.splithttpSettings.sessionKey",
+            "json.streamSettings.splithttpSettings.session_key",
+            "json.streamSettings.splithttpSettings.sessionIDKey"
+          ],
+          "maps_to": "transport.session_key",
+          "when": {
+            "transport.type": "xhttp"
+          },
+          "_why": "§508 / лаунчер #131. Пара к `sessionIDPlacement`."
         }
       }
     }

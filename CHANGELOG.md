@@ -10,6 +10,13 @@
 
 ### Fixed
 
+- **XHTTP extra: `sessionIDPlacement` / `sessionIDKey` больше не теряются
+  (§508).** Xray пишет в `extra` proto-имена, реестр знал только
+  `sessionPlacement` / `sessionKey`. Session id уходил в path (дефолт ядра),
+  хотя сервер ждал cookie с кастомным ключом. Пока лаунчер не заберёт алиас
+  ([#131](https://github.com/Leadaxe/singbox-launcher/issues/131)) — оверлей
+  `contract_draft`.
+
 - **Stats → Memory: разбивка PSS снова с цифрами (§507).** После перехода
   на 2.25 секция Breakdown в шторке памяти была сплошными нулями (RSS и
   malloc-счётчики Native heap при этом живые). Источник сменился с
