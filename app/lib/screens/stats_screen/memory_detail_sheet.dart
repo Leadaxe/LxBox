@@ -11,10 +11,11 @@ import '../../widgets/app_bottom_sheet.dart';
 /// Ядро sing-box работает в этом же процессе (VpnService без `android:process`),
 /// поэтому «память» на карточке Stats — это RSS всего процесса, а не только
 /// ядра. Sheet разбивает её на категории: суммарный RSS/PSS из
-/// CommandClient-статуса + `Debug.MemoryInfo` (native heap с Go-буферами ядра,
-/// Dalvik/ART, graphics, code, stack, system) + runtime-показатели ядра
-/// (goroutines, connections). Cifры inuse Go-хипа (как в Clash `/memory`) через
-/// CommandClient нет — она не экспортирована из libbox.
+/// CommandClient-статуса + native `getMemoryInfo` (§507, AMS PSS-разбивка:
+/// native heap с Go-буферами ядра, Dalvik/ART, graphics, code, stack, system)
+/// + runtime-показатели ядра (goroutines, connections). Cifры inuse Go-хипа
+/// (как в Clash `/memory`) через CommandClient нет — она не экспортирована
+/// из libbox.
 Future<void> showMemoryDetailSheet(
   BuildContext context, {
   required int rss,

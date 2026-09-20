@@ -67,13 +67,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
   bool _autoUpdateEnabled = true;
 
-  /// §393 D1 — источники-цепочки. Рисуются СТРОКАМИ ОБЩЕГО СПИСКА наравне с
-  /// подписками ([_rows]), но в хранении это своя часть `sources[]` (записи
-  /// `kind: chain` хвостом), а не `SubscriptionController.entries`: цепочка
-  /// написана пользователем руками и обязана пережить и обновление подписки,
-  /// и её удаление. Отсюда отдельная загрузка — контроллер о них ничего не
-  /// знает.
+  /// §393 D1 / §509 — источники-цепочки. Рисуются СТРОКАМИ ОБЩЕГО СПИСКА
+  /// наравне с подписками. В хранении это записи `kind: chain` в `sources[]`,
+  /// не `SubscriptionController.entries`: цепочка написана пользователем
+  /// руками и обязана пережить и обновление подписки, и её удаление.
   List<SourceChain> _chains = const [];
+
+  /// Порядок `sources[]` (`id:…` / `chain:…`). Пусто до первой загрузки —
+  /// [_rows] тогда рисует записи контроллера, затем цепочки.
+  List<String> _sourceKeys = const [];
 
   /// §375 — есть ли камера. null = ещё не ответил канал; до ответа пункт
   /// «Scan QR code» показываем (проверка мгновенная, на телефоне камера есть
@@ -114,7 +116,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     super.initState();
     unawaited(_loadAutoUpdateFlag());
     unawaited(_loadCameraAvailability());
-    unawaited(_loadChains());
+    unawaited(_loadSourceOrder());
+    widget.subController.addListener(_onControllerForSourceOrder);
     // §357 — prefill поля ввода из lxbox-кнопки `add:<uri>` support-ленты.
     final prefill = widget.initialInput;
     if (prefill != null && prefill.trim().isNotEmpty) {
@@ -287,10 +290,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   // ── §393 C7/D1 — источники-цепочки ─────────────────────────────────────
 
-  Future<void> _loadChains() async {
-    final v = await SettingsStorage.getChains();
+  Future<void> _loadSourceOrder() async {
+    final keys = await SettingsStorage.getSourceKeys();
+    final chains = await SettingsStorage.getChains();
     if (!mounted) return;
-    setState(() => _chains = v);
+    setState(() {
+      _sourceKeys = keys;
+      _chains = chains;
+    });
+  }
+
+  void _onControllerForSourceOrder() {
+    unawaited(_loadSourceOrder());
   }
 
   /// Создание цепочки: тег спрашиваем ДО создания (после он immutable — на
@@ -323,7 +334,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           .showSnackBar(SnackBar(content: Text(e.message)));
       return;
     }
-    await _loadChains();
+    await _loadSourceOrder();
     if (!mounted) return;
     await _editChain(created);
   }
@@ -354,7 +365,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     } else if (result.saved != null) {
       await SettingsStorage.updateChain(result.saved!);
     }
-    await _loadChains();
+    await _loadSourceOrder();
     if (!mounted) return;
     // Укороченный маршрут обязан быть замечен: цепочка ниже двух позиций
     // теперь не эмитится, 3+ хопов эмитится короче — пользователь узнаёт об
@@ -430,7 +441,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   void _drainLinkNotices() {
     final ctrl = widget.subController;
     if (ctrl.takeChainsRelinked()) {
-      unawaited(_loadChains()); // строки цепочек показывают новое число хопов
+      unawaited(_loadSourceOrder()); // строки цепочек показывают новое число хопов
     }
     for (final notice in ctrl.takeLinkNotices()) {
       _notifyLinksCleared(notice);
@@ -440,7 +451,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   Future<void> _toggleChain(SourceChain chain) async {
     await SettingsStorage.updateChain(
         chain.copyWith(enabled: !chain.enabled));
-    await _loadChains();
+    await _loadSourceOrder();
     if (!mounted) return;
     await _regenerateAndSave();
   }
@@ -460,6 +471,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   @override
   void dispose() {
+    widget.subController.removeListener(_onControllerForSourceOrder);
     _inputController.removeListener(_onInputForHighlightDismiss);
     _scrollController.removeListener(_onScrollForHighlightDismiss);
     _inputController.dispose();
@@ -1025,17 +1037,48 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  /// §393 D1 — общий список источников: подписки/серверы/папки и цепочки
-  /// ОДНИМ рядом. Порядок цепочек внутри него и есть их взаимный порядок, по
-  /// которому считается инвариант «позиция ссылается только на цепочку ВЫШЕ».
-  ///
-  /// Цепочки идут ПОСЛЕ записей контроллера: в хранении они лежат хвостом
-  /// `sources[]` (§439), и рисовать их надо там же, где они лежат.
-  List<_SourceRow> _rows(SubscriptionController ctrl) => [
-        for (var i = 0; i < ctrl.entries.length; i++)
-          _SourceRow.entry(ctrl.entries[i], i),
-        for (final c in _chains) _SourceRow.chain(c),
-      ];
+  /// §393 D1 / §509 — общий список источников: подписки, серверы, папки и
+  /// цепочки одним рядом, в порядке `sources[]`. Взаимный порядок цепочек
+  /// внутри него держит инвариант «позиция ссылается только на цепочку ВЫШЕ».
+  List<_SourceRow> _rows(SubscriptionController ctrl) {
+    final byEntry = <String, (SubscriptionEntry, int)>{
+      for (var i = 0; i < ctrl.entries.length; i++)
+        SettingsStorage.sourceKeyForId(ctrl.entries[i].id): (
+          ctrl.entries[i],
+          i
+        ),
+    };
+    final byChain = <String, SourceChain>{
+      for (final c in _chains)
+        SettingsStorage.sourceKeyForChain(c.tag): c,
+    };
+    final seen = <String>{};
+    final rows = <_SourceRow>[];
+    for (final k in _sourceKeys) {
+      final e = byEntry[k];
+      if (e != null) {
+        rows.add(_SourceRow.entry(e.$1, e.$2));
+        seen.add(k);
+        continue;
+      }
+      final c = byChain[k];
+      if (c != null) {
+        rows.add(_SourceRow.chain(c));
+        seen.add(k);
+      }
+    }
+    for (var i = 0; i < ctrl.entries.length; i++) {
+      final k = SettingsStorage.sourceKeyForId(ctrl.entries[i].id);
+      if (seen.add(k)) {
+        rows.add(_SourceRow.entry(ctrl.entries[i], i));
+      }
+    }
+    for (final c in _chains) {
+      final k = SettingsStorage.sourceKeyForChain(c.tag);
+      if (seen.add(k)) rows.add(_SourceRow.chain(c));
+    }
+    return rows;
+  }
 
   Widget _buildList(SubscriptionController ctrl) {
     if (ctrl.entries.isEmpty && _chains.isEmpty) {
@@ -1151,14 +1194,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  /// §393 D1 — перестановка в ОБЩЕМ списке источников.
-  ///
-  /// Ряды двух родов лежат в одном списке, но в двух частях `sources[]`,
-  /// поэтому перестановка раскладывается обратно: подписки — своим
-  /// `moveEntry`, цепочки — своим `reorderChains`. Ключевое свойство (ради него всё и
-  /// затевалось): перетащить подписку МЕЖДУ двумя цепочками ЗАКОННО и
-  /// взаимный порядок цепочек от этого не меняется — значит, ни одна ссылка
-  /// «на цепочку выше» не ломается.
+  /// §393 D1 / §509 — перестановка в общем списке источников: пишет
+  /// `sources[]` как есть. «Цепочка ссылается только вверх» считается по
+  /// взаимному порядку цепочек; сервер между ними ссылок не ломает.
   Future<void> _reorderRows(
       SubscriptionController ctrl, int oldIndex, int newIndex) async {
     if (oldIndex == newIndex) return;
@@ -1168,30 +1206,38 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final moved = [...rows];
     moved.insert(newIndex, moved.removeAt(oldIndex));
 
-    if (rows[oldIndex].chain != null) {
-      // Двигали цепочку: у подписок порядок не изменился, переписываем только
-      // взаимный порядок цепочек — в том виде, в каком они легли в общий ряд.
-      await SettingsStorage.reorderChains(
-          [for (final r in moved) if (r.chain != null) r.chain!]);
-      await _loadChains();
-      // Ссылка «только на цепочку выше» — свойство сборки: изменившийся
-      // порядок мог сделать позицию ссылкой вперёд, и об этом обязан сказать
-      // билдер, а не молчащий storage.
-      if (!mounted) return;
-      await _regenerateAndSave();
-      return;
-    }
-
-    // Двигали подписку: цепочки своего взаимного порядка не меняют, а
-    // контроллер работает в СВОЁМ счёте — переводим индексы, отбросив ряды
-    // цепочек.
-    final entryOrder = [
-      for (final r in moved)
-        if (r.entry != null) r.entryIndex,
+    final oldChainTags = [
+      for (final r in rows)
+        if (r.chain != null) r.chain!.tag,
     ];
-    final to = entryOrder.indexOf(rows[oldIndex].entryIndex);
-    if (to < 0) return;
-    await widget.subController.moveEntry(rows[oldIndex].entryIndex, to);
+    final newChainTags = [
+      for (final r in moved)
+        if (r.chain != null) r.chain!.tag,
+    ];
+
+    await SettingsStorage.reorderSources([
+      for (final r in moved)
+        if (r.chain != null)
+          SettingsStorage.sourceKeyForChain(r.chain!.tag)
+        else
+          SettingsStorage.sourceKeyForId(r.entry!.id),
+    ]);
+    await ctrl.applyEntryOrder([
+      for (final r in moved)
+        if (r.entry != null) r.entry!.id,
+    ]);
+    await _loadSourceOrder();
+    if (!mounted) return;
+    var chainsMoved = oldChainTags.length != newChainTags.length;
+    if (!chainsMoved) {
+      for (var i = 0; i < oldChainTags.length; i++) {
+        if (oldChainTags[i] != newChainTags[i]) {
+          chainsMoved = true;
+          break;
+        }
+      }
+    }
+    if (chainsMoved) await _regenerateAndSave();
   }
 }
 

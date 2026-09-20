@@ -1,0 +1,1 @@
+Patch after v2.25.0 — read that release for the main body of changes (shared registry with launcher 2.0.0, Start-button insurance). Stats → Memory breakdown shows PSS again. XHTTP extra keeps sessionIDPlacement / sessionIDKey. A hop chain on Servers stays where you drop it.

@@ -630,7 +630,7 @@ config_node.dart             # §091 ConfigNode plus ParsedConfig — the struct
                              #   TLS/Reality/+Vision, awg/awg2); parsed once per change of configRaw
 direction.dart               # §125/§393 Direction — the routing directions (arbitrary tags, no cap; vpn-1 cannot be deleted)
 source_chain.dart            # §393 C SourceChain — a hop chain as a SOURCE (SPEC 110): hops (NodeLinks, §439)
-                             #   in packet order, strip/rewrite; the place is the record index at the tail of sources[]
+                             #   in packet order, strip/rewrite; the place is the record index in sources[]
 auto_select.dart             # §322 the membership of an auto-select node (a folder) plus its parameters
 import_rule.dart             # §302 ImportRule — the rules applied to a subscription's nodes on import
 dns_ref.dart                 # §294/§439 typed models of dns.servers[]/rules[] (DnsServerRef, DnsRuleRef)
@@ -819,7 +819,7 @@ settings_storage/io.dart            #   the atomic load/save/recovery (main→.b
                                     #   inside _load() with the one-time lxbox_settings.json.v0.bak copy
 settings_storage/vars.dart          #   the vars domain plus the Wi-Fi history (§051)
 settings_storage/sources_rules.dart #   sources[] without chains (ServerList records), rules[] (§439)
-settings_storage/chains.dart        #   §393 C/§439 the chain records at the tail of sources[]
+settings_storage/chains.dart        #   §393 C/§439/§509 chain records in sources[]
 settings_storage/node_link_registry.dart # §439 (D-113/D-114) rewrite links on rename/move, clear them on delete
 settings_storage/network.dart       #   route_final/dns{} models (DnsServerRef/DnsRuleRef)/ping_options (§040/§061/§439)
 settings_storage/backup_tun.dart    #   the snapshot (§031) plus the tun-apps split tunnel (§046)

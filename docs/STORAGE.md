@@ -22,7 +22,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │   └─ <key>: string                           ─ e.g. log_level, dns_final, debug_token,
 │                                                auto_update_subs, last_known_version, ...
 │
-├─ sources[]                     list          §439 — node sources, then chains, in the user's list order
+├─ sources[]                     list          §439/§509 — sources in the user's list order
 │   └─ <record>                  object          discriminator: kind (contract 1.0 record + LxBox fields)
 │       ├─ kind                  "subscription"|"server"|"folder"|"chain"
 │       │                        — subscription (SubscriptionServers) —
@@ -446,8 +446,8 @@ A full replace (`replaceRaw` with `merge=false`: backup restore in Replace mode,
 
 ## `sources` — [§033], §439: node sources and chains
 
-The list of sources in the order the user sees them: subscriptions, standalone servers
-and folders, then chains (see [`sources[]` — `kind: chain`](#chains--kind-chain-in-sources-393-c-spec-110)).
+The list of sources in the order the user sees them: subscriptions, standalone servers,
+folders and chains interleaved (see [`sources[]` — `kind: chain`](#chains--kind-chain-in-sources-393-c-spec-110)).
 Before §439 the same data lived under `server_lists` (sealed on `type`) and `chains`;
 the migration converts them once (see [Storage form and migration](#storage-form-and-migration-439)).
 
@@ -461,7 +461,8 @@ dropped member or section record) is a note in AppLog. A record without `kind` o
 
 The repositories: `settings_storage/sources_rules.dart` rewrites the part without
 chains (`saveServerLists`), `settings_storage/chains.dart` the chain part
-(`setChains`); neither touches the other part of the array.
+(`setChains`); each writer keeps the other kind's slots. A mixed drag writes
+the whole array (`reorderSources`).
 
 ### `kind: "subscription"` — `SubscriptionServers`
 
@@ -1549,10 +1550,11 @@ and is emitted as one outbound of type `chain`. The model is `SourceChain`
 }
 ```
 
-Chain records sit at the **tail** of `sources[]`, after subscriptions, servers and
-folders, in their own order (BACKUP §4: the record order is normative). There is no
+Chain records sit in `sources[]` among subscriptions, servers and folders, in
+the user's list order (BACKUP §4: the record order is normative). There is no
 separate key and no position field: before §439 the list was `chains[]` with an `order`
-index into the common source list, and the migration placed the records by that order.
+index into the common source list, and the migration placed the records by that order
+(at the tail). §509 stopped collapsing a later save back to that tail.
 
 - `tag` — the future outbound's tag, and the record's id. **Immutable** after
   creation, like `Direction.tag`: direction filters, `route_final` and the
@@ -1594,9 +1596,8 @@ index into the common source list, and the migration placed the records by that 
   key (RFC 7396), so it is stored and round-trips verbatim, with no “empty cleanup”.
 
 The invariant “a position may reference only a chain **above**” is computed over the
-mutual order of chains: dragging a subscription between two chains is legal and breaks
-no reference. The Servers screen draws chains after the controller's records, where
-they lie.
+mutual order of chains: a subscription between two chains is legal and breaks
+no reference. The Servers screen draws the records in `sources[]` order.
 
 **Core requirement**: `type: chain` needs sing-box-lx **v1.14.0-lx.27** or newer.
 

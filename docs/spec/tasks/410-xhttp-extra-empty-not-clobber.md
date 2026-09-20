@@ -95,9 +95,10 @@ Dart-порт этот откат потерял.
   **0.12.7**, кейсы `vless/xhttp_extra_empty_mode_keeps_flat` и
   `vless/xhttp_extra_host_path_mode_ignored`. После публикации хеша —
   `tool/sync_contract.sh` и lock на 0.12.7.
-- `sessionIDPlacement`/`sessionIDKey` из `extra` не читает ни одна сторона
-  (контракт знает `session_placement`/`sessionPlacement`). Не регрессия;
-  отдельный вопрос к контракту.
+- `sessionIDPlacement`/`sessionIDKey` из `extra` не читал ни одна сторона
+  (контракт знает `session_placement`/`sessionPlacement`). Закрыто оверлеем
+  LxBox [§508](508-xhttp-sessionid-aliases.md); в реестр —
+  [лаунчер #131](https://github.com/Leadaxe/singbox-launcher/issues/131).
 - Probe подписки строит один конфиг на все узлы; отказ ядра на одном узле
   валит весь прогон (жалоба HubbyBubby #1758 «пингуются и отключённые»).
   После фикса не воспроизводится; устойчивость probe к одному битому узлу —

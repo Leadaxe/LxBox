@@ -205,7 +205,8 @@ void main() {
     });
   });
 
-  // §439 §2.3 п. 7 — цепочки хвостом `sources[]`, место цепочки — индекс записи.
+  // §439 / §509 — цепочки в `sources[]` среди остальных источников; место —
+  // индекс записи. Миграция со старого `order` по-прежнему кладёт их хвостом.
   group('место в общем списке источников', () {
     test('порядок записей держит порядок чтения', () async {
       await SettingsStorage.setChains(const [
@@ -260,13 +261,77 @@ void main() {
       final records = ((await readFile())['sources'] as List)
           .cast<Map<String, dynamic>>();
       expect(records.map((r) => (r['kind'], r['id'] ?? r['tag'])), [
-        ('server', 'u1'),
         ('chain', 'c2'),
         ('chain', 'c1'),
-      ], reason: 'источники впереди, цепочки хвостом в своём порядке');
+        ('server', 'u1'),
+      ], reason: 'слоты цепочек на месте, новый сервер в конец массива');
       expect((await SettingsStorage.getServerLists()).map((l) => l.id), ['u1']);
       expect((await SettingsStorage.getChains()).map((c) => c.tag),
           ['c2', 'c1']);
+    });
+
+    test('reorderSources ставит цепочку между серверами', () async {
+      await SettingsStorage.saveServerLists([
+        UserServer(
+          id: 'u1',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          rawBody:
+              'vless://11111111-1111-1111-1111-111111111111@198.51.100.1:443#One',
+        ),
+        UserServer(
+          id: 'u2',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          rawBody:
+              'vless://22222222-2222-2222-2222-222222222222@198.51.100.2:443#Two',
+        ),
+      ]);
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c1', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]),
+      ]);
+      await SettingsStorage.reorderSources([
+        SettingsStorage.sourceKeyForId('u1'),
+        SettingsStorage.sourceKeyForChain('c1'),
+        SettingsStorage.sourceKeyForId('u2'),
+      ]);
+      SettingsStorage.resetCacheForTesting();
+      final records = ((await readFile())['sources'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(records.map((r) => (r['kind'], r['id'] ?? r['tag'])), [
+        ('server', 'u1'),
+        ('chain', 'c1'),
+        ('server', 'u2'),
+      ]);
+      expect(await SettingsStorage.getSourceKeys(), [
+        SettingsStorage.sourceKeyForId('u1'),
+        SettingsStorage.sourceKeyForChain('c1'),
+        SettingsStorage.sourceKeyForId('u2'),
+      ]);
+
+      await SettingsStorage.saveServerLists([
+        for (final l in await SettingsStorage.getServerLists())
+          if (l is UserServer && l.id == 'u2')
+            l.copyWith(enabled: false)
+          else
+            l,
+      ]);
+      SettingsStorage.resetCacheForTesting();
+      expect(
+        ((await readFile())['sources'] as List)
+            .cast<Map<String, dynamic>>()
+            .map((r) => (r['kind'], r['id'] ?? r['tag'])),
+        [
+          ('server', 'u1'),
+          ('chain', 'c1'),
+          ('server', 'u2'),
+        ],
+        reason: 'saveServerLists не выносит цепочку в хвост',
+      );
     });
 
     test('форма 2.23.2: цепочки встают хвостом sources[] по старому order, '

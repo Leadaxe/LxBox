@@ -8,6 +8,32 @@
 
 ## [Unreleased]
 
+## [2.25.1] — 2026-09-20
+
+Патч поверх [v2.25.0](docs/releases/v2.25.0.md): основной корпус изменений
+(реестр с лаунчером 2.0.0, страховка Start) — там. Здесь три правки приёмки.
+
+### Changed
+
+- **Servers: цепочка ездит между серверами и подписками (§509).** Запись
+  `kind: chain` в `sources[]` больше не выносится в хвост при сохранении:
+  drag на общем списке пишет порядок массива как есть.
+
+### Fixed
+
+- **XHTTP extra: `sessionIDPlacement` / `sessionIDKey` больше не теряются
+  (§508).** Xray пишет в `extra` proto-имена, реестр знал только
+  `sessionPlacement` / `sessionKey`. Session id уходил в path (дефолт ядра),
+  хотя сервер ждал cookie с кастомным ключом. Пока лаунчер не заберёт алиас
+  ([#131](https://github.com/Leadaxe/singbox-launcher/issues/131)) — оверлей
+  `contract_draft`.
+
+- **Stats → Memory: разбивка PSS снова с цифрами (§507).** После перехода
+  на 2.25 секция Breakdown в шторке памяти была сплошными нулями (RSS и
+  malloc-счётчики Native heap при этом живые). Источник сменился с
+  `Debug.getMemoryInfo` на `ActivityManager.getProcessMemoryInfo`: на
+  Android 10+ первый не заполняет категории `summary.*`.
+
 ## [2.25.0] — 2026-09-20
 
 > Главное — **сближение с лаунчером по

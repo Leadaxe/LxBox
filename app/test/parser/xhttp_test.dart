@@ -646,10 +646,64 @@ void main() {
       expect(m['mode'], 'packet-up');
       expect(m['uplink_data_placement'], 'header');
       expect(m['uplink_http_method'], 'GET');
-      // sessionIDPlacement/sessionIDKey — ключи вне контракта (Go читает
-      // только session_placement/sessionPlacement), сюда не доезжают.
-      expect(m.containsKey('session_placement'), false);
+      // §508 — proto-имена Xray в extra: sessionIDPlacement/sessionIDKey.
+      expect(m['session_placement'], 'cookie');
+      expect(m['session_key'], 'media_sid');
+      expect(m.containsKey('session_length'), false);
       expect(w, isEmpty);
+    });
+
+    test('extra.sessionIDPlacement/sessionIDKey → session_placement/session_key (§508)',
+        () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'path': '/p',
+        'extra': {
+          'sessionIDPlacement': 'cookie',
+          'sessionIDKey': 'stream_auth',
+          'sessionIDLength': '0',
+          'seqPlacement': 'cookie',
+          'seqKey': 'part_index',
+        },
+      });
+      expect(t.sessionPlacement, 'cookie');
+      expect(t.sessionKey, 'stream_auth');
+      expect(t.seqPlacement, 'cookie');
+      expect(t.seqKey, 'part_index');
+      final (m, w) = t.toSingbox(TemplateVars.empty);
+      expect(m['session_placement'], 'cookie');
+      expect(m['session_key'], 'stream_auth');
+      expect(m.containsKey('session_length'), false);
+      expect(w, isEmpty);
+    });
+
+    test('канон extra.sessionPlacement сильнее proto sessionIDPlacement (§508)',
+        () {
+      final t = xrayTransport({
+        'mode': 'packet-up',
+        'extra': {
+          'sessionPlacement': 'header',
+          'sessionIDPlacement': 'cookie',
+          'sessionKey': 'X-Session',
+          'sessionIDKey': 'stream_auth',
+        },
+      });
+      expect(t.sessionPlacement, 'header');
+      expect(t.sessionKey, 'X-Session');
+    });
+
+    test('плоский query.sessionIDPlacement читается (§508)', () {
+      const uri =
+          'vless://11111111-1111-1111-1111-111111111111@192.0.2.1:443'
+          '?encryption=none&type=xhttp&security=tls&sni=example.com'
+          '&path=%2Fp&mode=packet-up'
+          '&sessionIDPlacement=cookie&sessionIDKey=stream_auth'
+          '#t';
+      final node = parseUri(uri);
+      expect(node, isA<VlessSpec>());
+      final t = (node! as VlessSpec).transport as XhttpTransport;
+      expect(t.sessionPlacement, 'cookie');
+      expect(t.sessionKey, 'stream_auth');
     });
 
     // Критерий 5 — R6: деградация вместо поломки.

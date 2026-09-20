@@ -12,8 +12,7 @@ const String kStorageVersionKey = 'storage_version';
 /// Текущая форма: записи `sources[]`, `rules[]`, `dns{}` контракта 1.0.
 const int kStorageVersion = 1;
 
-/// Источники (подписка, сервер, папка), хвостом — цепочки в своём порядке
-/// (§439 §2.3 п. 7).
+/// Источники: подписка, сервер, папка, цепочка — в порядке списка (§509).
 const String kSourcesKey = 'sources';
 
 /// Правила маршрута.

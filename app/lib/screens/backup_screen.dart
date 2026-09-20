@@ -317,6 +317,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §393 C9 — цепочки хопов (SPEC 110, схема v1.2): корневая секция
       // `chains[]`, порядок списка нормативен и не сортируется.
       final chains = await SettingsStorage.getChains();
+      final sourceKeys = await SettingsStorage.getSourceKeys();
       // §393 B6 — route.final: до B6 его разбирали на импорте, но никогда не
       // экспортировали, и круг был односторонним.
       final routeFinal = await SettingsStorage.getRouteFinal();
@@ -358,6 +359,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         directions: directions,
         directionPing: directionPing,
         chains: chains,
+        sourceKeys: sourceKeys,
         routeFinal: routeFinal,
         dns: dns,
         warp: warp,

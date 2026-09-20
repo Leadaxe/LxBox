@@ -1855,8 +1855,8 @@ Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 00
 | `x_padding_bytes` | `xPaddingBytes` | empty |
 | `no_grpc_header` | `noGRPCHeader` | false |
 | `headers` | — (JSON only) | empty |
-| `session_placement` | `sessionPlacement` | `path` |
-| `session_key` | `sessionKey` | placement-dependent |
+| `session_placement` | `sessionPlacement` (Xray proto: `sessionIDPlacement`) | `path` |
+| `session_key` | `sessionKey` (Xray proto: `sessionIDKey`) | placement-dependent |
 | `seq_placement` | `seqPlacement` | `path` |
 | `seq_key` | `seqKey` | placement-dependent |
 | `uplink_data_placement` | `uplinkDataPlacement` | `auto` |
@@ -1873,7 +1873,7 @@ Since §127 the **full client-side set** of Xray splithttp is supported (SPEC 00
 
 Every empty or default field is **not emitted** (omitempty) — the core has its own defaults. NB: VMess (base64 JSON) carries only `path` and `host`; the extended fields are available in the URI forms (VLESS/Trojan) and in JSON.
 
-**The `extra` parameter (URL-encoded JSON).** Real subscriptions often pack some of the fields (especially the `scMaxEachPostBytes` / `scMinPostsIntervalMs` tuning) into a single query parameter, `extra=<urlencoded-json>`. The parser decodes it and merges its keys into the transport (`extra` wins for its own keys). **A malformed or truncated `extra` is ignored** — the link keeps working on the flat parameters. Numbers from `extra` are coerced to strings (`30.0` → `"30"`), and a `path` with a `?` tail is trimmed. The mapping reference is `SPECS/002-XHTTP_CLIENT_TRANSPORT/URL_PARSING.md` in the core's repository.
+**The `extra` parameter (URL-encoded JSON).** Real subscriptions often pack some of the fields (especially the `scMaxEachPostBytes` / `scMinPostsIntervalMs` tuning) into a single query parameter, `extra=<urlencoded-json>`. The parser decodes it and merges its keys into the transport (`extra` wins for its own keys). **A malformed or truncated `extra` is ignored** — the link keeps working on the flat parameters. Numbers from `extra` are coerced to strings (`30.0` → `"30"`), and a `path` with a `?` tail is trimmed. Xray proto names `sessionIDPlacement` / `sessionIDKey` inside `extra` (and as flat query params) map to `session_placement` / `session_key` (§508; launcher [#131](https://github.com/Leadaxe/singbox-launcher/issues/131)). `sessionIDLength` / `sessionIDTable` are not mapped: `"0"` without a table means unset. The mapping reference is `SPECS/002-XHTTP_CLIENT_TRANSPORT/URL_PARSING.md` in the core's repository.
 
 **The modes (`mode`).**
 

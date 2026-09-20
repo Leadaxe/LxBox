@@ -732,11 +732,10 @@ class LxBackupExport {
 /// Собирает LX Backup формата 1.0 (`lx_backup: 2`) из настроек LxBox.
 ///
 /// §439 — файл = срез хранения плюс тонкий слой (BACKUP.md §1). Записи
-/// `sources[]` (подписки, одиночные узлы и папки в порядке списка источников,
-/// следом цепочки — так они лежат хвостом `sources[]` хранения) и `rules[]`
-/// пишет кодек хранения (`models/codec/`); поля LxBox срезает таблица
-/// `lx_backup_slice.dart`. Тонкий слой — `directions[]`, переносимые `vars`,
-/// `route.final`, `warp[]` — той же формы, что в 0.12.
+/// `sources[]` (подписки, одиночные узлы, папки и цепочки в порядке списка
+/// источников) и `rules[]` пишет кодек хранения (`models/codec/`); поля LxBox
+/// срезает таблица `lx_backup_slice.dart`. Тонкий слой — `directions[]`,
+/// переносимые `vars`, `route.final`, `warp[]` — той же формы, что в 0.12.
 ///
 /// [directions] — Направления в порядке списка (§393 B2): они цели правил, и
 /// без них правило приезжало бы на чужую машину выключенным.
@@ -765,6 +764,9 @@ Future<LxBackupExport> buildLxBackup({
   List<Direction> directions = const [],
   Map<String, LxDirectionPing> directionPing = const {},
   List<SourceChain> chains = const [],
+  /// Порядок `sources[]` файла: ключи `id:<uuid>` и `chain:<tag>`.
+  /// Нет — [lists], затем [chains].
+  List<String>? sourceKeys,
   String? routeFinal,
   Map<String, dynamic>? dns,
   List<Map<String, dynamic>> warp = const [],
@@ -779,11 +781,12 @@ Future<LxBackupExport> buildLxBackup({
   }
 
   final warnings = <LxBackupWarning>[];
-  final sources = <Map<String, dynamic>>[
-    for (final list in lists) ?_exportSource(list, warnings),
-    for (final c in chains)
-      ?exportBackupRecord(BackupRecord.chain, chainToRecord(c), c.tag, warnings),
-  ];
+  final sources = _exportSources(
+    lists: lists,
+    chains: chains,
+    sourceKeys: sourceKeys,
+    warnings: warnings,
+  );
 
   final portableVars = <String, String>{
     for (final e in vars.entries)
@@ -853,6 +856,60 @@ Map<String, dynamic>? exportBackupRecord(
 
 /// Источник → запись `sources[]` файла: запись хранения, срез и `body`
 /// узлов с JSON-исходником.
+List<Map<String, dynamic>> _exportSources({
+  required List<ServerList> lists,
+  required List<SourceChain> chains,
+  required List<String>? sourceKeys,
+  required List<LxBackupWarning> warnings,
+}) {
+  Map<String, dynamic>? ofList(ServerList list) =>
+      _exportSource(list, warnings);
+  Map<String, dynamic>? ofChain(SourceChain c) => exportBackupRecord(
+        BackupRecord.chain,
+        chainToRecord(c),
+        c.tag,
+        warnings,
+      );
+  if (sourceKeys == null) {
+    return [
+      for (final list in lists) ?ofList(list),
+      for (final c in chains) ?ofChain(c),
+    ];
+  }
+  final listByKey = {for (final l in lists) 'id:${l.id}': l};
+  final chainByKey = {for (final c in chains) 'chain:${c.tag}': c};
+  final seen = <String>{};
+  final out = <Map<String, dynamic>>[];
+  void takeList(String k, ServerList l) {
+    final rec = ofList(l);
+    if (rec != null) out.add(rec);
+    seen.add(k);
+  }
+
+  void takeChain(String k, SourceChain c) {
+    final rec = ofChain(c);
+    if (rec != null) out.add(rec);
+    seen.add(k);
+  }
+
+  for (final k in sourceKeys) {
+    final l = listByKey[k];
+    if (l != null) {
+      takeList(k, l);
+      continue;
+    }
+    final c = chainByKey[k];
+    if (c != null) takeChain(k, c);
+  }
+  for (final e in listByKey.entries) {
+    if (!seen.contains(e.key)) takeList(e.key, e.value);
+  }
+  for (final e in chainByKey.entries) {
+    if (!seen.contains(e.key)) takeChain(e.key, e.value);
+  }
+  return out;
+}
+
 Map<String, dynamic>? _exportSource(
   ServerList list,
   List<LxBackupWarning> warnings,

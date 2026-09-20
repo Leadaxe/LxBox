@@ -287,4 +287,56 @@ void main() {
       expect(await BoxVpnClient().getVpnStatus(), TunnelStatus.disconnected);
     });
   });
+
+  // §507 — контракт native-карты getMemoryInfo: ключи и байты. Сам AMS vs
+  // Debug — на устройстве; здесь только что Dart не теряет разбивку.
+  group('BoxVpnClient.getMemoryInfo (§507)', () {
+    test('парсит native-карту в MemoryInfo (байты как есть)', () async {
+      late MethodCall captured;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        captured = call;
+        return <String, Object>{
+          'totalPss': 400 * 1024 * 1024,
+          'totalSwap': 0,
+          'javaHeap': 20 * 1024 * 1024,
+          'nativeHeap': 80 * 1024 * 1024,
+          'code': 30 * 1024 * 1024,
+          'stack': 1024 * 1024,
+          'graphics': 40 * 1024 * 1024,
+          'privateOther': 10 * 1024 * 1024,
+          'system': 5 * 1024 * 1024,
+          'nativeHeapAllocated': 51 * 1024 * 1024,
+          'nativeHeapSize': 70 * 1024 * 1024,
+        };
+      });
+      final info = await BoxVpnClient().getMemoryInfo();
+      expect(captured.method, 'getMemoryInfo');
+      expect(info, isNotNull);
+      expect(info!.totalPss, 400 * 1024 * 1024);
+      expect(info.javaHeap, 20 * 1024 * 1024);
+      expect(info.nativeHeap, 80 * 1024 * 1024);
+      expect(info.graphics, 40 * 1024 * 1024);
+      expect(info.nativeHeapAllocated, 51 * 1024 * 1024);
+      expect(info.nativeHeapSize, 70 * 1024 * 1024);
+    });
+
+    test('недостающие ключи → 0, не null MemoryInfo', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        return <String, Object>{
+          'nativeHeapAllocated': 51 * 1024 * 1024,
+          'nativeHeapSize': 70 * 1024 * 1024,
+        };
+      });
+      final info = await BoxVpnClient().getMemoryInfo();
+      expect(info, isNotNull);
+      expect(info!.javaHeap, 0);
+      expect(info.nativeHeap, 0);
+      expect(info.nativeHeapAllocated, 51 * 1024 * 1024);
+    });
+
+    test('null native → null (sheet оставляет RSS и прячет PSS)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => null);
+      expect(await BoxVpnClient().getMemoryInfo(), isNull);
+    });
+  });
 }

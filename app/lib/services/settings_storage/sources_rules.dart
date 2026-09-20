@@ -8,8 +8,9 @@ part of '../settings_storage.dart';
 
 // ---------------------------------------------------------------------------
 // §439 — источники: записи `sources[]` контракта 1.0 кодеком
-// `models/codec/source_record.dart`. Цепочки лежат в том же массиве хвостом
+// `models/codec/source_record.dart`. Цепочки лежат в том же массиве
 // (`chains.dart`); здесь читается и переписывается только часть без них.
+// Слоты цепочек при записи сохраняются (§509).
 // ---------------------------------------------------------------------------
 
 Future<List<ServerList>> _getServerLists() async => _serverListsOf(
@@ -53,17 +54,72 @@ List<ServerList> _serverListsOf(
   return out;
 }
 
-/// Переписать часть `sources[]` без цепочек; записи цепочек остаются
-/// хвостом в своём порядке.
+/// Переписать записи без цепочек, не трогая слоты цепочек: взаимный порядок
+/// `kind: chain` и их места среди остальных источников сохраняются. Новые
+/// источники, которым не хватило слота, встают в конец массива.
 Future<void> _saveServerLists(List<ServerList> lists, {bool flush = true}) async {
   final data = await _load();
-  data[kSourcesKey] = [
-    for (final l in lists) sourceToRecord(l),
-    for (final r in _recordsAt(data[kSourcesKey]))
-      if (_isChainRecord(r)) r,
-  ];
+  data[kSourcesKey] = _spliceSourceKind(
+    existing: _recordsAt(data[kSourcesKey]),
+    ours: [for (final l in lists) sourceToRecord(l)],
+    isOurs: (r) => !_isChainRecord(r),
+  );
   SettingsStorage._cache = data;
   if (flush) await _save();
+}
+
+/// Ключ записи `sources[]` для общего порядка списка: `id:<uuid>` у
+/// подписки/сервера/папки, `chain:<tag>` у цепочки.
+String _sourceRecordKey(Map<String, dynamic> r) => _isChainRecord(r)
+    ? SettingsStorage.sourceKeyForChain('${r['tag'] ?? ''}')
+    : SettingsStorage.sourceKeyForId('${r['id'] ?? ''}');
+
+Future<List<String>> _getSourceKeys() async => [
+      for (final r in _recordsAt((await _load())[kSourcesKey]))
+        _sourceRecordKey(r),
+    ];
+
+/// Полная перестановка `sources[]`. [keys] — перестановка текущих ключей
+/// (`id:…` / `chain:…`); иначе no-op: состав списка эта операция не меняет.
+Future<void> _reorderSources(List<String> keys) async {
+  final data = await _load();
+  final records = _recordsAt(data[kSourcesKey]);
+  final byKey = <String, Map<String, dynamic>>{
+    for (final r in records) _sourceRecordKey(r): r,
+  };
+  if (keys.length != records.length ||
+      keys.length != keys.toSet().length ||
+      byKey.length != keys.length) {
+    return;
+  }
+  for (final k in keys) {
+    if (!byKey.containsKey(k)) return;
+  }
+  data[kSourcesKey] = [for (final k in keys) byKey[k]!];
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty();
+  await _save();
+}
+
+/// Заменяет в [existing] записи, для которых [isOurs], элементами [ours]
+/// по порядку; чужой род остаётся на месте. Лишние [ours] — в хвост;
+/// лишние свои слоты снимаются.
+List<Map<String, dynamic>> _spliceSourceKind({
+  required List<Map<String, dynamic>> existing,
+  required List<Map<String, dynamic>> ours,
+  required bool Function(Map<String, dynamic>) isOurs,
+}) {
+  final queue = [...ours];
+  final out = <Map<String, dynamic>>[];
+  for (final r in existing) {
+    if (isOurs(r)) {
+      if (queue.isNotEmpty) out.add(queue.removeAt(0));
+    } else {
+      out.add(r);
+    }
+  }
+  out.addAll(queue);
+  return out;
 }
 
 /// Объекты-записи массива [raw]; не объекты пропускаются.
