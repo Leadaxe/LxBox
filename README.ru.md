@@ -7,6 +7,12 @@
 
 Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — форке [sing-box](https://sing-box.sagernet.org/) с AmneziaWG 2.0 и нативным XHTTP — для гибкой маршрутизации сетевого трафика. Мульти-подписки, умные правила, встроенный тест скорости. Интерфейс на русском и английском.
 
+<p align="center">
+  <a href="https://f-droid.org/ru/packages/com.leadaxe.lxbox/"><img src="https://f-droid.org/badge/get-it-on-ru.png" alt="Доступно на F-Droid" height="80"></a>
+  <a href="https://play.google.com/store/apps/details?id=com.leadaxe.lxbox"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/ru_badge_web_generic.png" alt="Доступно в Google Play" height="80"></a>
+  <a href="https://github.com/Leadaxe/LxBox"><img src="docs/badges/get-it-on-github.png" alt="Get it on GitHub" height="80"></a>
+</p>
+
 **[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE.ru.md)** | **[Поддержать проект](docs/DONATE.ru.md)**
 
 ---
