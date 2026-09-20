@@ -53,7 +53,7 @@ part 'settings_storage/native_prefs.dart';
 ///   • `io.dart`           — atomic load/save/recovery (§072) + кэш-инфра
 ///   • `vars.dart`         — vars-домен + var-backed feature-флаги
 ///   • `sources_rules.dart`— источники `sources[]`, enabled groups, правила
-///   • `chains.dart`       — цепочки хвостом `sources[]`
+///   • `chains.dart`       — цепочки в `sources[]` (§509 — слоты, не хвост)
 ///   • `network.dart`      — route final, DNS `dns{}`, ping-options
 ///   • `backup_tun.dart`   — backup snapshot (§031) + tun-apps (§046)
 class SettingsStorage {
@@ -298,9 +298,25 @@ class SettingsStorage {
 
   static Future<List<ServerList>> getServerLists() => _getServerLists();
 
-  /// Переписывает источники; цепочки остаются хвостом `sources[]`.
+  /// Переписывает источники-контейнеры; слоты цепочек в `sources[]`
+  /// сохраняются (§509).
   static Future<void> saveServerLists(List<ServerList> lists) =>
       _saveServerLists(lists);
+
+  /// Ключ записи подписки/сервера/папки в общем порядке `sources[]`.
+  static String sourceKeyForId(String id) => 'id:$id';
+
+  /// Ключ записи цепочки в общем порядке `sources[]`.
+  static String sourceKeyForChain(String tag) => 'chain:$tag';
+
+  /// Порядок `sources[]`: `id:<uuid>` и `chain:<tag>` в том виде, как
+  /// лежит массив.
+  static Future<List<String>> getSourceKeys() => _getSourceKeys();
+
+  /// Полная перестановка `sources[]` (drag на Servers). [keys] — перестановка
+  /// текущего [getSourceKeys]; иначе no-op.
+  static Future<void> reorderSources(List<String> keys) =>
+      _reorderSources(keys);
 
   /// Источники документа хранения [doc] — снимка [dumpCache] или блока
   /// `storage` бэкапа — тем же чтением, что [getServerLists]. Нечитаемая
@@ -385,11 +401,11 @@ class SettingsStorage {
       _migrateDirectionsIfNeeded(gt, varDefaults: varDefaults);
 
   // ---------------------------------------------------------------------------
-  // §393 C2 — источники-цепочки: записи `kind: chain` хвостом `sources[]`
-  // (§439). Тип источника рядом с подпиской и сервером (SPEC 110); НЕ
-  // Направление (§393 L5) и НЕ узел подписки. Порядок списка нормативен:
-  // ссылка позиции разрешена только на цепочку, объявленную ВЫШЕ, — этим
-  // исключены циклы между цепочками.
+  // §393 C2 — источники-цепочки: записи `kind: chain` в `sources[]` (§439,
+  // §509 — среди остальных источников, не отдельным хвостом). Тип источника
+  // рядом с подпиской и сервером (SPEC 110); НЕ Направление (§393 L5) и НЕ
+  // узел подписки. Порядок списка нормативен: ссылка позиции разрешена только
+  // на цепочку, объявленную ВЫШЕ, — этим исключены циклы между цепочками.
   // ---------------------------------------------------------------------------
 
   static Future<List<SourceChain>> getChains() => _getChains();
@@ -424,8 +440,8 @@ class SettingsStorage {
   /// Позиция в общем списке источников не меняется.
   static Future<void> updateChain(SourceChain chain) => _updateChain(chain);
 
-  /// §393 D1 — переставить цепочки в их взаимном порядке (drag в общем
-  /// списке источников). Принимает полный список в новом порядке.
+  /// Переставить цепочки в их взаимном порядке, не двигая чужие слоты.
+  /// Смешение с подписками и серверами — [reorderSources].
   static Future<void> reorderChains(List<SourceChain> chains) =>
       _reorderChains(chains);
 

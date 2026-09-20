@@ -113,7 +113,7 @@ auth), а не факт, что за границей всё открыто.
 curl -s -H "$HDR" "$BASE/state" | jq '{tunnel,active_in_group,nodes_count,groups}'
 curl -s -H "$HDR" "$BASE/state/subs" | jq 'map({id,title,enabled,nodes_count})'
 curl -s -H "$HDR" "$BASE/state/storage?reveal=true" | jq '.vars | keys'
-# Форма хранения и источники (§439): цепочки — хвостом sources[]
+# Форма хранения и источники (§439/§509): цепочки в sources[] в порядке списка
 curl -s -H "$HDR" "$BASE/state/storage" | \
   jq '{v: .storage_version, sources: [.sources[] | {kind, id, name, tag}], rules: (.rules | length)}'
 ```
@@ -776,7 +776,7 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 ## Chains CRUD — `/chains/*`
 
 §393 C / SPEC 110 — **цепочки хопов**, третий вид источника рядом с
-подписками и серверами (§439: записи `kind: chain` хвостом `sources[]` в
+подписками и серверами (§439/§509: записи `kind: chain` в `sources[]` в
 storage, отдельного ключа и поля `order` нет). Цепочка — это явный маршрут
 `вы → хоп 1 → хоп 2 → цель`, который эмитится одним outbound'ом
 `type: "chain"`. Не путать с detour: **цепочка — это источник (маршрут)**, а

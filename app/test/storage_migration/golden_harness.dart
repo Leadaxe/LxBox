@@ -247,6 +247,7 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
   final vars = await SettingsStorage.getAllVars();
   final directions = await SettingsStorage.getDirections();
   final chains = await SettingsStorage.getChains();
+  final sourceKeys = await SettingsStorage.getSourceKeys();
   final routeFinal = await SettingsStorage.getRouteFinal();
   final exportWarnings = <LxBackupWarning>[];
   final recordVars = await loadRecordVarDecls();
@@ -275,6 +276,7 @@ Future<({String json, List<LxBackupWarning> warnings})> exportGoldenLxBackup()
     directions: directions,
     directionPing: directionPing,
     chains: chains,
+    sourceKeys: sourceKeys,
     routeFinal: routeFinal,
     dns: dns,
     warp: warp,

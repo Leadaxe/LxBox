@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Servers: цепочка ездит между серверами и подписками (§509).** Запись
+  `kind: chain` в `sources[]` больше не выносится в хвост при сохранении:
+  drag на общем списке пишет порядок массива как есть.
+
 ### Fixed
 
 - **XHTTP extra: `sessionIDPlacement` / `sessionIDKey` больше не теряются

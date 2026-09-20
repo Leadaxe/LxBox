@@ -754,6 +754,37 @@ void main() {
       expect(back.rewrite, source.rewrite);
     });
 
+    test('§509 sourceKeys сохраняет цепочку перед сервером', () async {
+      final server = UserServer(
+        id: 'srv-1',
+        name: 'Manual',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.manual,
+        rawBody:
+            'vless://11111111-1111-1111-1111-111111111111@example-1.com:443#Manual',
+      );
+      const chain = SourceChain(
+        tag: 'chain-1',
+        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
+      );
+      final raw = (await buildLxBackup(
+        lists: [server],
+        rules: const [],
+        vars: const {},
+        chains: const [chain],
+        sourceKeys: ['chain:chain-1', 'id:srv-1'],
+      )).json;
+      expect(
+        [
+          for (final e in (jsonDecode(raw) as Map)['sources'] as List)
+            (e as Map)['kind'],
+        ],
+        ['chain', 'server'],
+      );
+    });
+
     test('§439 — имя цепочки едет полем стороны LxBox (контракт 1.0.1), потерей не названо',
         () async {
       final built = await buildLxBackup(
