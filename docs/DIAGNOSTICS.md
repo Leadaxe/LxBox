@@ -104,23 +104,30 @@ evidence. Every other write endpoint (`POST /action/*`, `PUT /config`,
 `PUT /settings/*`) is destructive — see below.
 
 **Driving the auto-disable guard (feature 478).** The read endpoints above show
-what the guard did; these three write endpoints let you drive it without
+what the guard did; the write endpoints below let you drive it without
 touching the screen. They change stored state — use them on a test device, not
 while collecting evidence for a bug report.
 
 | Endpoint | What it does |
 |---|---|
-| `POST /core_reject/prompt?answer=stop\|keep` | Answers the round-limit dialog in place of the user (the body `{"answer":"..."}` works too). `keep` drops the limit until this Start ends; `stop` ends the run — the VPN stays down and the already-disabled nodes stay disabled. → `{answered:true, answer}`. `409` when nothing is pending |
+| `POST /core_reject/prompt?answer=stop\|keep` | Answers the round-limit dialog in place of the user (the body `{"answer":"..."}` works too). `keep` drops the limit until this Start ends; `stop` ends the run — the VPN stays down and the already-disabled nodes stay disabled. → `{answered:true, answer}`. With no dialog pending, `keep` is **queued** for the next round-limit dialog, the running one or the next one to start (the queue is cleared when a run finishes) → `{answered:true, answer:"keep", queued:true}`; `stop` with nothing pending → `409` |
 | `POST /core_reject/cancel` | Cancels the running guard — the same as tapping the button while it reads “Checking servers…”. The current round finishes, the next one does not start; the outcome is `stopped_by_user`: the VPN stays down and the already-disabled nodes stay disabled. → `{cancelled:true, phase, round}`. `409` when no run is in flight |
+| `POST /core_reject/reset` | Resets the in-memory run state: `phase→idle`, `round→0`, `disabled`, `outcome` and `error` cleared. Stored verdicts and the banner stay. → `{ok:true, action:"core-reject-reset"}`. `409` while a run is in flight |
 | `POST /core_reject/enable?tag=<tag>` | Re-enables a node by its core tag — the same path as the banner button: the verdict is wiped and the node gets checked again on the next Start. → `{enabled, tag}`; `404` when no node carries that tag |
 | `POST /core_reject/banner/dismiss` | Closes the “N disabled” banner (idempotent). The verdicts stay — the message was dismissed, not the decision |
-| `POST /action/start-vpn-headless?guard=true` | Starts the VPN **through the guard** — the same state machine the Start button runs, with no screen involved. → `{guard:true, started, outcome, rounds, disabled:[{tag,reason}], error}`. There is no round-limit dialog here (nobody to ask), so the limit holds; answer it up front with `POST /core_reject/prompt?answer=keep`. Without the flag it is the plain headless start |
-| `POST /action/check-config[?timeout_ms=N]` | Runs `Libbox.checkConfig` over the **currently built** config (the one on disk) — the same check the guard loops on, once and without a tunnel. → `{config_ok, error, ms, bytes}`, where `error` is the core's **raw** text. Waits at most `timeout_ms` (default 10000, capped by the request timeout), then `409`. Read-only in effect, but it does call into the core |
+| `POST /action/start-vpn-headless?guard=true` | Starts the VPN **through the guard** — the same state machine the Start button runs, with no screen involved; the real starts go headless. The call does **not** wait for the run: it answers at once with `{ok:true, action:"start-vpn-headless", guard:true, started:true, async:true}`, and phase, `disabled` and `outcome` are read from `GET /core_reject`. `409` when a run is already in flight. There is no round-limit dialog on screen; answer it with `POST /core_reject/prompt?answer=keep`, up front (queued) or while it is pending. Without the flag it is the plain headless start |
+| `POST /action/check-config[?timeout_ms=N]` | Runs `Libbox.checkConfig` — with a request body, over **that** JSON; without one, over the **currently built** config (the one on disk, not rebuilt on the fly). The same check the guard loops on, once and without a tunnel. → `{config_ok, error, ms, bytes}`, where `error` is the core's **raw** text. Waits at most `timeout_ms` (default 10000, capped by the request timeout), then `409`. Read-only in effect, but it does call into the core |
 
 One Start runs **two** real core starts — a signal one and a final one — with
 the silent `checkConfig` loop in between; each round of that loop disables one
 node. So `phase` walking `signal_start → checking → final_start → done` with a
 non-empty `disabled` is the normal success path, not a fault.
+
+**Any Stop ends a running guard.** `POST /action/stop-vpn`, the Stop button,
+the Quick Settings tile, the Intent API and Locale all cancel the run the same
+way `POST /core_reject/cancel` does: the outcome is `stopped_by_user` and no
+final start follows. The Stop button in the notification exists only during a
+real core start; stopping there ends the run as well, with no further start.
 
 ### ~~Clash API~~ — REMOVED (§122)
 
