@@ -2565,12 +2565,16 @@ final class _Run {
       if (m.containsKey('present')) {
         return (actual != null) == (m['present'] == true);
       }
+      // Через общий [_regex]: перевод Go-группы и кэш — условие исполняется
+      // на каждом узле, а реестр пишется в Go-написании (ревью после
+      // v2.25.1, m2).
       if (m.containsKey('matches')) {
-        return actual is String && RegExp(m['matches'] as String).hasMatch(actual);
+        return actual is String &&
+            _regex(m['matches'] as String).hasMatch(actual);
       }
       if (m.containsKey('not_matches')) {
         return actual is! String ||
-            !RegExp(m['not_matches'] as String).hasMatch(actual);
+            !_regex(m['not_matches'] as String).hasMatch(actual);
       }
       // Числовое сравнение: диалект, где ЗНАК значения несёт смысл
       // («любое отрицательное = выключено совсем»), выразить набором
