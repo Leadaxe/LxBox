@@ -275,15 +275,17 @@ sing-box body ──► (already a sing-box map: the step-1 pass judges it verba
 
 - **Detect** picks the **source kind** (a bare link, base64, a list of links,
   an Xray object, an INI config) from the registry, not from a hand-written
-  chain of `if`s. The kinds themselves are data too — `source_kinds.json`
-  (ours, until the launcher ships its own; the loader also reads the registry's
-  file under that name). "Source" on its own means a *subscription* in this
+  chain of `if`s. The kinds themselves are data too — `source_kinds.json` in
+  the vendored registry (`app/assets/contract/registry/source_kinds.json`; the
+  form started as our draft, there is no copy left in `contract_draft/`). The
+  loader also accepts the older name `sources.json` as a fallback
+  (`engine/section_loader.dart`). "Source" on its own means a *subscription* in this
   codebase, hence the `kind`. The branches, in the order they are tried —
   a lower number wins, and the last one is the catch-all:
 
   | # | Kind | Mapper |
   |---|---|---|
-  | 10 | `amnezia_link` | — (unwrapped, then re-detected) |
+  | 10 | `amnezia_link` | `conf` (unwrapped to one INI text per WG/AWG container, not re-detected) |
   | 20 | `base64_wrapped` | — (unwrapped, then re-detected) |
   | 30 / 32 / 40 / 50 | `singbox_config_array`, `singbox_outbound_array`, `singbox_outbound`, `singbox_config` | `singbox` |
   | 31 / 33 / 34 / 35 | `xray_config_array`, `xray_outbound_array`, `xray_outbound`, `xray_config` | `xray` |
@@ -590,7 +592,8 @@ node_spec.dart               # the sealed NodeSpec (11 variants: Vless/Vmess/Tro
                              #   Hysteria2/Naive/Tuic/Ssh/Socks + Wireguard + Masque §130); getEntries detour-chain;
                              #   the Awg value object (§097): the AWG/AWG2 fields of WireguardSpec (jc/jmin/jmax/
                              #   s1–s4/h1–h4/i1–i5), round-tripping parse/emit; null means ordinary WG
-node_spec_emit.dart          # the emit()/toUri() implementation per variant (NodeSpec → SingboxEntry); parity-tested
+node_spec_emit.dart          # emit() per variant (NodeSpec → SingboxEntry); toUri() goes through the engine emitter
+                             #   (uriViaEngineRequired, registry mapper sections) — hand-written only toUriTailscale
 singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard, Tailscale → Endpoint)
 node_sections.dart           # §435 — NodeSections (rules / dns.servers / dns.rules of a free node), @self substitution
 record_codec.dart            # §435/§439 — re-exports codec/: the contract 1.0 record codec of storage, backup, rules file, Debug API
@@ -712,7 +715,7 @@ lazy_persist_mixin.dart      # LazyPersistMixin — deferred persistence on the 
 
 ```
 parser/                      # Parser v2 (text → NodeSpec)
-  body_decoder.dart          #   Layer-1: raw body → sealed DecodedBody (base64 sniff + JSON-flavor)
+  body_decoder.dart          #   Layer-1: raw body → sealed DecodedBody (source kind from the registry's source_kinds.json, hand-written fallback without a registry; JsonFlavor removed in §483)
   amnezia_link.dart          #   an Amnezia vpn:// link → WG/AWG INI texts (base64url plus qCompress, §110)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
@@ -908,7 +911,8 @@ profile_dump_writer.dart     # §207 — serializing a pprof dump (goroutine/CPU
 #### `widgets/` — the cross-screen widgets
 
 ```
-node_row.dart                # a node's row: the ACTIVE pill, the protocol label and the ping (it takes a NodeViewItem)
+node_row.dart                # a node's row: the ACTIVE pill, the top-severity notification badge (§502, tap → warnings sheet),
+                             #   the protocol label and the ping (it takes a NodeViewItem)
 node_view_item.dart          # NodeViewItem — an immutable view row (static metadata plus the dynamics, §068)
 emoji_picker_button.dart     # §094 — the emoji palette popup (node_settings, the add-server wizard)
 reorder_grab_strip.dart      # §098 — one grab strip for drag-reorder (the routing and DNS rules ·
@@ -1892,7 +1896,7 @@ HomeScreen
   ├─ Traffic bar → tap → StatsScreen
   ├─ Group dropdown (selector groups only)
   └─ Node list:
-       ├─ NodeRow layout: [ACTIVE pill] [PROTOCOL · transport · security (§102)] ... [ping →]
+       ├─ NodeRow layout: [ACTIVE pill] [severity badge (§502) → warnings sheet] [PROTOCOL · transport · security (§102)] ... [ping →]
        └─ long-press: Ping · Use · View JSON · Copy URI
           (§099 — the copy-JSON variants live in a dropdown inside View JSON)
            Copy node JSON / Copy server JSON / Copy server + detours(N))
