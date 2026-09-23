@@ -334,6 +334,72 @@ void main() {
       );
     });
 
+    // §511 M1 — удаление из середины смешанного списка: соседи того же рода
+    // остаются в своих слотах, а не сдвигаются в освободившийся.
+    UserServer server(String id, int n) => UserServer(
+          id: id,
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          rawBody: 'vless://$n$n$n$n$n$n$n$n-1111-1111-1111-111111111111'
+              '@198.51.100.$n:443#S$n',
+        );
+    const hops = [NodeLink(tag: 'a'), NodeLink(tag: 'b')];
+
+    Future<List<String>> keysInFile() async {
+      SettingsStorage.resetCacheForTesting();
+      return [
+        for (final r in ((await readFile())['sources'] as List)
+            .cast<Map<String, dynamic>>())
+          '${r['id'] ?? r['tag']}',
+      ];
+    }
+
+    Future<void> seedMixed(List<String> order) async {
+      await SettingsStorage.saveServerLists([
+        for (final k in order)
+          if (k.startsWith('u')) server(k, int.parse(k.substring(1))),
+      ]);
+      await SettingsStorage.setChains([
+        for (final k in order)
+          if (k.startsWith('c')) SourceChain(tag: k, hops: hops),
+      ]);
+      await SettingsStorage.reorderSources([
+        for (final k in order)
+          k.startsWith('c')
+              ? SettingsStorage.sourceKeyForChain(k)
+              : SettingsStorage.sourceKeyForId(k),
+      ]);
+      expect(await keysInFile(), order);
+    }
+
+    test('удаление цепочки из середины не сдвигает соседнюю цепочку', () async {
+      await seedMixed(['u1', 'c1', 'u2', 'c2']);
+      await SettingsStorage.deleteChain('c1');
+      expect(await keysInFile(), ['u1', 'u2', 'c2']);
+    });
+
+    test('удаление сервера из середины не сдвигает соседние серверы', () async {
+      await seedMixed(['u1', 'c1', 'u2', 'c2', 'u3']);
+      await SettingsStorage.saveServerLists([
+        for (final l in await SettingsStorage.getServerLists())
+          if (l.id != 'u1') l,
+      ]);
+      expect(await keysInFile(), ['c1', 'u2', 'c2', 'u3']);
+    });
+
+    test('перестановка своего рода идёт порядком записи, новая — в хвост',
+        () async {
+      await seedMixed(['u1', 'c1', 'u2', 'c2', 'u3']);
+      await SettingsStorage.setChains(const [
+        SourceChain(tag: 'c2', hops: hops),
+        SourceChain(tag: 'c1', hops: hops),
+        SourceChain(tag: 'c3', hops: hops),
+      ]);
+      expect(await keysInFile(), ['u1', 'c2', 'u2', 'c1', 'u3', 'c3']);
+    });
+
     test('форма 2.23.2: цепочки встают хвостом sources[] по старому order, '
         'без order — в конец в порядке файла', () async {
       final f = File('${tmp.path}/lxbox_settings.json');

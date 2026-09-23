@@ -101,24 +101,43 @@ Future<void> _reorderSources(List<String> keys) async {
   await _save();
 }
 
-/// Заменяет в [existing] записи, для которых [isOurs], элементами [ours]
-/// по порядку; чужой род остаётся на месте. Лишние [ours] — в хвост;
-/// лишние свои слоты снимаются.
+/// Заменяет в [existing] записи, для которых [isOurs], элементами [ours];
+/// чужой род остаётся на месте.
+///
+/// Слоты своего рода сопоставляются по ключу ([_sourceRecordKey]), не по
+/// позиции (§511 M1): слот, чей ключ в [ours] есть, остаётся слотом и
+/// получает уцелевшие записи в порядке [ours] (так перестановка своего рода
+/// по-прежнему пишется этой же функцией); слот, чей ключ пропал, снимается
+/// целиком, и соседи того же рода в него не съезжают. Записи [ours] с новыми
+/// ключами — в хвост массива.
 List<Map<String, dynamic>> _spliceSourceKind({
   required List<Map<String, dynamic>> existing,
   required List<Map<String, dynamic>> ours,
   required bool Function(Map<String, dynamic>) isOurs,
 }) {
-  final queue = [...ours];
+  final slotKeys = {
+    for (final r in existing)
+      if (isOurs(r)) _sourceRecordKey(r),
+  };
+  final survivors = <Map<String, dynamic>>[];
+  final fresh = <Map<String, dynamic>>[];
+  for (final r in ours) {
+    (slotKeys.contains(_sourceRecordKey(r)) ? survivors : fresh).add(r);
+  }
+  final survivorKeys = {for (final r in survivors) _sourceRecordKey(r)};
   final out = <Map<String, dynamic>>[];
+  var next = 0;
   for (final r in existing) {
-    if (isOurs(r)) {
-      if (queue.isNotEmpty) out.add(queue.removeAt(0));
-    } else {
+    if (!isOurs(r)) {
       out.add(r);
+    } else if (survivorKeys.contains(_sourceRecordKey(r)) &&
+        next < survivors.length) {
+      out.add(survivors[next++]);
     }
   }
-  out.addAll(queue);
+  out
+    ..addAll(survivors.skip(next))
+    ..addAll(fresh);
   return out;
 }
 
