@@ -554,6 +554,13 @@ final class MapperSections {
   ///
   /// Замещение целиком, а не слияние полей записи: «снять `implies`» иначе не
   /// выразить, а именно это и нужно в обоих сегодняшних отступлениях.
+  ///
+  /// Запись от группы отличается по `source` у ЛЮБОЙ из сторон, а не только
+  /// у оверлея (ревью после v2.25.1, m3): запись оверлея без `source`
+  /// (запись-`$` с одними `sets`, правка одного `emit_as`/`when`) при
+  /// одноимённой записи реестра иначе считалась группой и сливалась с ней —
+  /// у записи молча оставались `source`/`implies` реестра вопреки «замещает
+  /// целиком».
   static Map<String, dynamic> _mergeOverlay(
     Map<String, dynamic> base,
     Map<String, dynamic> overlay,
@@ -564,7 +571,9 @@ final class MapperSections {
       final b = out[e.key];
       // Группа записей (`ws`, `http`): сливаем поимённо, иначе оверлей одной
       // записи снёс бы всю группу.
-      if (ov is Map && b is Map && !ov.containsKey('source')) {
+      final isEntry = (ov is Map && ov.containsKey('source')) ||
+          (b is Map && b.containsKey('source'));
+      if (ov is Map && b is Map && !isEntry) {
         out[e.key] = {...b.cast<String, dynamic>(), ...ov.cast<String, dynamic>()};
       } else {
         out[e.key] = ov;
@@ -572,6 +581,14 @@ final class MapperSections {
     }
     return out;
   }
+
+  /// Тестовый доступ к [_mergeOverlay] — сверка оверлеев `contract_draft`.
+  @visibleForTesting
+  static Map<String, dynamic> mergeOverlayForTest(
+    Map<String, dynamic> base,
+    Map<String, dynamic> overlay,
+  ) =>
+      _mergeOverlay(base, overlay);
 
   /// Раскрыть `{"$ref": "tls.fp_dialect"}` — именованную таблицу `value_map`.
   ///
