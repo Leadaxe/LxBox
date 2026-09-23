@@ -1,4 +1,5 @@
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import 'amnezia_link.dart';
 import 'mappers/uri_pipeline.dart';
 export 'drop_verdict.dart' show XrayDropVerdict;
@@ -40,6 +41,16 @@ export 'uri_parsers/wireguard_parser.dart';
 /// (`awg://<base64 .conf>`, §450) не URI.
 const _kWireguardSchemes = <String>{'wireguard', 'wg', 'awg'};
 
+/// §506 — СЛУЖЕБНЫЕ схемы панелей провайдера: строки тела подписки, которые
+/// узлами не являются вовсе (правила роутинга Happ/Incy: `incy://routing/…`,
+/// `happ://routing/onadd/…`). Их игнор ТИХИЙ — в отличие от незнакомой схемы
+/// узла, о которой пользователю говорят кодом `protocol_unsupported`.
+///
+/// Разделение нужно именно здесь: без него список причин у обычной подписки
+/// Happ заполнялся бы строками, о которых пользователю решать нечего, и
+/// настоящая потеря узла терялась бы среди них.
+const _kProviderServiceSchemes = <String>{'incy', 'happ'};
+
 /// Диспетчер по схеме URI. Возвращает NodeSpec или null (skip).
 /// Ошибки структуры (отсутствие host, uuid) — null, не throw.
 ///
@@ -56,7 +67,15 @@ NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
   // vpn:// проверяется своим потолком (maxAmneziaLinkLength): профиль везёт
   // целый конфиг и штатно перерастает общий лимит — под ним ссылка молча
   // терялась, хотя десктоп её принимал (§103 §9.B12).
-  if (scheme != 'vpn' && uri.length > maxURILength) return null;
+  if (scheme != 'vpn' && uri.length > maxURILength) {
+    // §506 — раньше молча: длинная строка исчезала, и «0 узлов» ничем не
+    // отличалось от пустого тела. Код реестра для этого уже есть.
+    dropped?.reason = RegistryWarning(
+      code: 'uri_too_long',
+      params: {'length': '${uri.length}', 'limit': '$maxURILength'},
+    );
+    return null;
+  }
   try {
     // §472 шаг 2 — схемы, переехавшие на конвейер «маппер → санитайзер по
     // реестру → модель», идут им; остальные пока своим парсером. Список
@@ -109,8 +128,37 @@ NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
       case 'masque': // §130 — MASQUE-WARP (CONNECT-IP)
         return parseMasqueUri(t);
       case 'vpn': // §103 §9.B12 — Amnezia vpn:// строкой внутри URI-списка
-        return parseAmneziaVpnUri(t);
+        final n = parseAmneziaVpnUri(t, dropped: dropped);
+        // §506 — профиль не разобран: ни контейнера с WG/AWG, ни голого
+        // `.conf`. Причину назвать нечем, кроме рода тела, — но молчать
+        // нельзя: строка была узнана как ссылка на профиль.
+        if (n == null && dropped != null && dropped.reason == null) {
+          dropped.reason = const RegistryWarning(
+            code: 'protocol_unsupported',
+            params: {'scheme': 'vpn'},
+          );
+        }
+        return n;
       default:
+        // §506 — СЛУЖЕБНЫЕ строки провайдера: не узлы по смыслу, и код
+        // «схема не поддержана» на них был бы ложной тревогой. Панели Happ /
+        // Incy кладут их в тело подписки рядом с узлами (правила роутинга,
+        // баннеры), поэтому игнор тихий и намеренный.
+        if (_kProviderServiceSchemes.contains(scheme)) return null;
+        // §506 — строка БЕЗ схемы вовсе (`split('://')` отдал её целиком):
+        // это не «протокол не поддержан», а «ввод не распознан», и код о
+        // протоколе назвал бы мусор именем протокола. Молчим, как и §500:
+        // причины нет, потому что узла тут никто и не обещал.
+        if (!t.contains('://')) return null;
+        // §506 — незнакомая схема: раньше `return null` молча, и строка
+        // исчезала без следа (4 строки `amneziawg://` из подписки — вход D
+        // диагностики). Схему называем в `value`: пользователю нужно знать
+        // ИМЕННО её, чтобы спросить провайдера.
+        dropped?.reason = RegistryWarning(
+          code: 'protocol_unsupported',
+          params: {'scheme': scheme},
+          value: scheme,
+        );
         return null;
     }
   } catch (_) {

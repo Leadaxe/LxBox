@@ -25,6 +25,8 @@ library;
 
 import 'dart:convert' show Base64Codec, jsonDecode, utf8;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../../models/node_warning.dart';
 import '../drop_verdict.dart';
 import 'decoders.dart';
@@ -33,6 +35,44 @@ import 'lexer.dart';
 import 'section.dart';
 import 'source_space.dart';
 import 'trace.dart';
+
+/// §506 — нормализатор `bandwidth_mbps`: `<число><единица?>` → целое в
+/// МЕГАБИТАХ, или `null`, если строка полосой не является.
+///
+/// Зачем: панели пишут полосу с единицей как придётся (`100mbps`, `1 Gbps`,
+/// `50m`), а ядру нужно число. До этого `type: int` на такой строке давал
+/// ОТСУТСТВИЕ значения, и узел приезжал без полосы молча.
+///
+/// Почему нормализатор, а не `extract`-регулярка «ведущие цифры»: единица
+/// здесь не отбрасывается, а ЧИТАЕТСЯ — `1gbps` это 1000 Мбит/с, а не 1, и
+/// ведущие цифры дали бы неверное число.
+///
+/// Единицы десятичные (`mbps` = 10⁶ бит/с), регистр не значим,
+/// пробел между числом и единицей допускается. Дробный результат округляется
+/// ВВЕРХ: `0.5mbps` — это полмегабита, и ноль вместо него значил бы «не
+/// задано», то есть ту же потерю, от которой избавляемся.
+///
+/// Суждение о годности остаётся санитайзеру: незнакомая единица и мусор дают
+/// `null`, и значение уезжает в карту как пришло.
+@visibleForTesting
+int? normalizeBandwidthMbps(String value) {
+  final m = RegExp(r'^\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]*)\s*$').firstMatch(value);
+  if (m == null) return null;
+  final n = double.tryParse(m.group(1)!);
+  if (n == null || !n.isFinite) return null;
+  // Голое число уже в мегабитах — это канон, множитель 1.
+  final factor = switch (m.group(2)!.toLowerCase()) {
+    '' || 'm' || 'mb' || 'mbps' => 1.0,
+    'g' || 'gb' || 'gbps' => 1000.0,
+    'k' || 'kb' || 'kbps' => 1 / 1000,
+    'b' || 'bps' => 1 / 1000000,
+    _ => null,
+  };
+  if (factor == null) return null;
+  final mbps = n * factor;
+  if (mbps <= 0) return null;
+  return mbps.ceil();
+}
 
 /// Итог исполнения секции.
 final class EngineResult {
@@ -2742,6 +2782,17 @@ final class _Run {
       case 'duration_bare_seconds':
         final n = int.tryParse(value.trim());
         return n == null ? value : '${n}s';
+      // §506 — полоса с ЕДИНИЦЕЙ (`100mbps`, `1 Gbps`, `50 m`) → целое в
+      // мегабитах, как ждёт ядро (`up_mbps`/`down_mbps`). Панели пишут
+      // единицу как придётся, а `type: int` на такой строке давал отсутствие
+      // значения — узел приезжал без полосы МОЛЧА.
+      //
+      // Нормализатор, а не `extract`-регулярка (как у v1): единица здесь не
+      // отбрасывается, а ЧИТАЕТСЯ — `1gbps` это 1000, а не 1, и регулярка
+      // «ведущие цифры» дала бы неверное число. Суждение о годности остаётся
+      // санитайзеру: нечисловое значение возвращается как пришло.
+      case 'bandwidth_mbps':
+        return normalizeBandwidthMbps(value)?.toString() ?? value;
       default:
         return value;
     }

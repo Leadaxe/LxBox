@@ -1675,14 +1675,26 @@ class SubscriptionController extends ChangeNotifier {
     if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
 
     List<NodeSpec> nodes;
+    // §506 — причины отбраковки записей: без них «серверов не найдено» не
+    // отличалось от пустого ввода.
+    final dropped = <NodeWarning>[];
     try {
       // §243 — INI-ноды получают имя файла прямо во фрагмент синтетического
       // URI (rawSource) — фолбэк-цикл ниже до них не дойдёт (_rawHasOwnName).
-      nodes = parseAll(decode(input.trim()), nameHint: nameFallback);
+      nodes = parseAll(decode(input.trim()),
+          nameHint: nameFallback, dropped: dropped);
     } catch (e) {
       return humanizeError(e);
     }
-    if (nodes.isEmpty) return const ErrMsg(ErrKey.noServersFoundInInput);
+    if (nodes.isEmpty) {
+      final sorted = maskSecretDropWarnings(sortedDropWarnings(dropped));
+      if (sorted.isEmpty) return const ErrMsg(ErrKey.noServersFoundInInput);
+      return ParseInputRejectedMsg(
+        ErrKey.noServersFoundInInput,
+        dropped: sorted,
+        sourceLabel: inputSourceLabel(input),
+      );
+    }
 
     final usedNames = <String>{};
     final added = <FolderMember>[];
@@ -1734,7 +1746,14 @@ class SubscriptionController extends ChangeNotifier {
       final result = await parseFromSource(UrlSource(url.trim()),
           client: httpClientForTesting);
       if (result.nodes.isEmpty) {
-        return const ErrMsg(ErrKey.noServersFoundAtUrl);
+        // §506 — причины из `dropped[]` разбора доезжают и сюда.
+        final sorted = maskSecretDropWarnings(sortedDropWarnings(result.dropped));
+        if (sorted.isEmpty) return const ErrMsg(ErrKey.noServersFoundAtUrl);
+        return ParseInputRejectedMsg(
+          ErrKey.noServersFoundAtUrl,
+          dropped: sorted,
+          sourceLabel: inputSourceLabel(url),
+        );
       }
       // Guard после await: entry могли удалить/подменить.
       final cur = entry.list;

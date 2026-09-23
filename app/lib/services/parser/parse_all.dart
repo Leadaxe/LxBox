@@ -127,8 +127,23 @@ List<NodeSpec> _parseAll(
         indexedHint: true,
       ),
     JsonConfig() => _parseJson(decoded, dropped),
-    DecodeFailure() => const <NodeSpec>[],
+    // §506 — тело не опознано ВОВСЕ: раньше ветка отдавала пустой список и
+    // причина декодера («vpn://: payload is neither qCompress nor JSON»,
+    // «no parseable content») наружу не выходила. Пользователь видел «0
+    // серверов» без единого слова о том, почему.
+    //
+    // Код `core_rejected` взят намеренно: его текст — «техническое сообщение:
+    // {reason}», то есть ровно форма «причина от нижнего слоя, дословно». Это
+    // код УРОВНЯ ЗАПИСИ, `path` у него нет — здесь записи нет вовсе, тело
+    // целиком и есть запись.
+    DecodeFailure(reason: final r) => _decodeFailed(r, dropped),
   };
+}
+
+/// §506 — тело не декодировано: причина декодера в `dropped[]`, узлов нет.
+List<NodeSpec> _decodeFailed(String reason, List<NodeWarning>? dropped) {
+  dropped?.add(RegistryWarning(code: 'core_rejected', params: {'reason': reason}));
+  return const <NodeSpec>[];
 }
 
 List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
