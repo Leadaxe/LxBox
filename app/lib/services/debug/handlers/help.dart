@@ -67,7 +67,7 @@ GET /state                          HomeState dump (tunnel, groups, nodes_count,
 GET /state/subs[?reveal=true]       Subscriptions. URL masked default; reveal=true — full URL
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (with per-kind fields)
 GET /state/storage                  Raw SettingsStorage._cache JSON (for debugging)
-GET /state/vpn                      { auto_start, keep_on_exit, allow_bypass, background_mode, is_ignoring_battery_optimizations }
+GET /state/vpn                      { auto_start, keep_on_exit, allow_bypass, current_session_allow_bypass, background_mode, is_ignoring_battery_optimizations }
 GET /state/config_locked            { "locked": bool } — auto-rebuild lock state
 
 === Device ===
@@ -208,6 +208,8 @@ GET    /subs/{id}[?reveal=true][?warnings=true]  Single entry. reveal=true also 
 POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|WG-conf|JSON-outbounds>"}.
                                                  input runs through the parser pipeline (same as UI paste);
                                                  JSON with multiple outbounds may create several entries.
+                                                 Rejected input → 400, nothing created; top-level dropped[]
+                                                 lists the parse reasons ({code, path, value, title_en}).
 PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled,name,url,tag_prefix,
                                                  update_interval_hours,override_detour,register_detour_servers,
                                                  register_detour_in_auto,use_detour_servers,replace_detour_chain,
@@ -607,7 +609,8 @@ POST /backup/import?merge=false&rebuild=false  Accepts the same shape export ret
 
 === Errors ===
 
-All error responses: {"error": {"code": "...", "message": "...", "details": {...}}}
+All error responses: {"error": {"code": "...", "message": "..."}}. A rejected POST /subs (400)
+also carries a top-level "dropped": [...] next to "error" — the parse reasons.
 HTTP status codes: 400 BadRequest, 401 Unauthorized (no/wrong token), 403 Forbidden (Host check),
 404 NotFound, 409 Conflict (state precondition fail), 500 Internal.
 
@@ -636,7 +639,7 @@ curl -H "Authorization: Bearer \$TOKEN" -H "Content-Type: application/json" \\
   http://127.0.0.1:9269/rules?rebuild=true
 
 # Logs with a filter
-curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,warn&q=fetch&limit=20'
+curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,warning&q=fetch&limit=20'
 
 === Notes ===
 
@@ -676,7 +679,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/state/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Subscriptions list'},
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},
-    {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, allow_bypass, background_mode, battery_whitelisted'},
+    {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, allow_bypass, current_session_allow_bypass, background_mode, is_ignoring_battery_optimizations'},
     {'method': 'GET', 'path': '/state/config_locked', 'description': '{locked: bool} — auto-rebuild lock state'},
     // Device
     {'method': 'GET', 'path': '/device', 'description': 'Android version, model, ABI, app version, network, uptime'},
@@ -689,7 +692,7 @@ const Map<String, dynamic> _capabilityJson = {
     // Pool (§208)
     {'method': 'GET', 'path': '/pool', 'params': {'tag': '<autoTag> (e.g. vpn-1-auto)'}, 'description': 'Snapshot of a round_robin urltest pool → {tag,count,slots:[{slot,tag,delay,alive}]}. Non-round_robin group → slots:[]; tunnel down → 409'},
     // Logs
-    {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
+    {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warning,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},
     {'method': 'GET', 'path': '/logs/core', 'description': 'Alias for /logs?source=core (same params)'},
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
@@ -728,7 +731,7 @@ const Map<String, dynamic> _capabilityJson = {
     // Subscriptions CRUD (user servers + subscriptions)
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false', 'warnings': 'true|false (default false)'}, 'description': 'Single entry. warnings=true (feature 478): adds origin_kind, source_kind and per-node PARSE warnings under `warnings` — {tag: [{code, severity, path, value, params, title_en, text_en}]}, pinned English; every node present, empty list when none. code/path/value/title_en are null for app-local warnings; text_en is always there. Off by default — on 500 nodes it is dead weight.'},
-    {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries)'},
+    {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries). Rejected input → 400 with top-level dropped[] (parse reasons), nothing created'},
     {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
@@ -842,7 +845,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/preview-empty-state', 'params': {'on': 'true|false'}, 'description': 'Toggle empty-state preview in HomeScreen UI without losing data'},
   ],
   'errors': {
-    'envelope': '{"error": {"code": "...", "message": "...", "details": {...}}}',
+    'envelope': '{"error": {"code": "...", "message": "..."}}',
+    'dropped': 'optional top-level array next to "error" on a rejected POST /subs (400): parse reasons {code, path, value, title_en}',
     // Ключи — строки: JsonEncoder требует String-ключи (int-ключи роняли
     // весь /help?format=json на "Converting object ... failed: _ConstMap").
     'codes': {
