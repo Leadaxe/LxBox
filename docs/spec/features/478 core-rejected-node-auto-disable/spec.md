@@ -151,8 +151,8 @@ Start
   `The core rejected it, so it was turned off to let the VPN start: %s` /
   `The core rejected them, so they were turned off to let the VPN start: %s`;
   хвост списка `+%d more` (имён — до трёх); кнопка `Show` — список
-  выключенных; тап по строке — экран деталей узла на вкладке Notifications
-  (§498); удалённый узел — строка неактивна; крестик закрывает.
+  выключенных; тап по строке — экран деталей узла, секция уведомлений внизу
+  вкладки Diagnostics (§498, §501); удалённый узел — строка неактивна; крестик закрывает.
   ru: «Отключено серверов: %d» (конструкция с двоеточием обходит падежи),
   «Ядро их не приняло — они выключены, чтобы VPN смог запуститься: %s»
   (для одного — «Ядро его не приняло — он выключен, чтобы…»), «и ещё %d»,
@@ -407,7 +407,7 @@ slice-таблице бэкапа (`app/lib/services/lx_backup_slice.dart`, тр
 
 ### Связка и контроллер
 
-`app/lib/screens/home/core_reject_host.dart` — `AppCoreRejectHost`,
+`app/lib/services/core_reject/core_reject_host.dart` — `AppCoreRejectHost`,
 реализация `CoreRejectHost` поверх контроллеров; всё про туннель, сборку и
 хранение живёт здесь. `askPrompt` приходит снаружи: на пути с UI это диалог,
 на старте без UI (автозапуск, сторож §428, плитка QS, Intent API §047) его
@@ -454,8 +454,8 @@ no-op.
 | Список источников — одиночный сервер | [NodeWarningRow] вместо «%s server» при `core_rejected` |
 | Список источников — подписка / папка | Счётчик actionable-узлов (включая вердикт) в trailing |
 | Член папки | [NodeWarningRow]; протокол скрыт при вердикте |
-| Детали узла — вкладка Notifications (§497) | Полный список, заголовок из реестра |
-| Плашка и лист «N servers disabled» (§498) | Сводка прогона; тап → детали на Notifications |
+| Детали узла — секция уведомлений внизу вкладки Diagnostics (§497, §501) | Полный список, заголовок из реестра |
+| Плашка и лист «N servers disabled» (§498) | Сводка прогона; тап → детали, секция уведомлений внизу вкладки Diagnostics (§501) |
 | Главный экран (selector) | Узел disabled не в списке — отдельный значок не нужен |
 
 Ручное включение снимает вердикт: переключатель узла подписки (§283),
@@ -468,8 +468,8 @@ no-op.
 (`coreRejectBannerTitle`, `coreRejectBannerText`, имён до трёх плюс хвост
 `+%d more`), диалог предела (`showCoreRejectPrompt`; закрытие мимо кнопок
 читается как Stop — молчание не согласие на долгую проверку) и лист кнопки
-Show (§498: тап по строке → `NodeInspectScreen` / `NodeSettingsScreen` на
-вкладке Notifications). Кнопка Start во время цикла — `home_controls.dart`,
+Show (§498: тап по строке → `NodeInspectScreen` / `NodeSettingsScreen`,
+секция уведомлений внизу вкладки Diagnostics, §501). Кнопка Start во время цикла — `home_controls.dart`,
 плашка — `widgets/app_banner.dart`; скрытие плашки при Stop — `HomeController`,
 при следующем Start — `CoreRejectState.beginRun`.
 
