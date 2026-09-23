@@ -83,14 +83,17 @@ void main() {
     });
   });
 
-  group('nodeSpecForConfigTag', () {
+  // §513 — отдельный `nodeSpecForConfigTag` снят: в lib/ его никто не звал,
+  // главный экран ищет узел через `storedNodeOfEmittedTag` (§505). Кейс
+  // «префикс записи → bare-тег» проверяется на реальном пути.
+  group('storedNodeOfEmittedTag', () {
     test('одиночный сервер с префиксом — bare-тег', () {
       final node = awgHomeNode();
       final entries = [userServerEntry(node)];
-      expect(
-        identical(nodeSpecForConfigTag('🏠 awg2-home', entries), node),
-        isTrue,
-      );
+      final found = storedNodeOfEmittedTag('🏠 awg2-home', entries);
+      expect(found, isNotNull);
+      expect(identical(found!.node, node), isTrue);
+      expect(found.stored, isEmpty);
     });
   });
 
