@@ -1,5 +1,4 @@
 [
   "WireGuard: WireGuard: DNS from the configuration not applied",
-  "DNS group 'dns_shield': member 'yandex_udp' dropped (unknown)",
   "DNS group 'dns_shield': member 'yandex_dot' dropped (unknown)"
 ]

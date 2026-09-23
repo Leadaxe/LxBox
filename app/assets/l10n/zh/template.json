@@ -149,8 +149,8 @@
  "Default domain resolver": {
   "value": "默认域名解析器"
  },
- "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here.": {
-  "value": "默认兜底 DNS 服务器。当应用的 DNS 查询没有匹配任何 DNS 规则时使用。\n\n  • dns_shield —— 默认；同时向 9 家服务商查询，谁先应答用谁\n  • google_doh、cloudflare_dot —— 加密，单一服务商\n  • cloudflare_udp、google_udp —— 快速明文 UDP\n\nlocal_dns_resolver（系统 DNS）在这里是安全的。"
+ "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here.": {
+  "value": "默认兜底 DNS 服务器。当应用的 DNS 查询没有匹配任何 DNS 规则时使用。\n\n  • dns_shield —— 默认；同时向 6 家加密服务商查询，谁先应答用谁\n  • google_doh、cloudflare_dot —— 加密，单一服务商\n  • cloudflare_udp、google_udp —— 快速明文 UDP\n\nlocal_dns_resolver（系统 DNS）在这里是安全的。"
  },
  "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off stops protocol matching (e.g. BitTorrent, TLS, QUIC), and domain matching too unless FakeIP is on.": {
   "value": "从数据包中识别协议与域名，以实现精确路由。\n⚠️ 警告：关闭后将无法按协议匹配（例如 BitTorrent、TLS、QUIC）；若 FakeIP 未开启，域名匹配也会失效。"
@@ -503,8 +503,8 @@
  "Unknown traffic": {
   "value": "未知流量"
  },
- "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
-  "value": "供路由引擎在内部解析主机名使用（出站地址、路由规则）。不是应用使用的解析器。\n\n  • dns_shield —— 默认；同时向 9 家服务商查询，谁先应答用谁\n  • cloudflare_udp、google_udp —— 快速明文 UDP\n  • google_doh —— 加密\n\n⚠ 这里的 local_dns_resolver 会把查询泄露给运营商——系统 DNS 会绕过 VPN。"
+ "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp, google_udp — fast plain UDP\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+  "value": "供路由引擎在内部解析主机名使用（出站地址、路由规则）。不是应用使用的解析器。\n\n  • dns_shield —— 默认；同时向 6 家加密服务商查询，谁先应答用谁\n  • cloudflare_udp、google_udp —— 快速明文 UDP\n  • google_doh —— 加密\n\n⚠ 这里的 local_dns_resolver 会把查询泄露给运营商——系统 DNS 会绕过 VPN。"
  },
  "Username for proxy auth (when auth is on).": {
   "value": "代理认证用的用户名（认证开启时）。"
@@ -580,6 +580,9 @@
  },
  "OpenDNS UDP (direct)": {
   "value": "OpenDNS UDP（直连）"
+ },
+ "OpenDNS DoH": {
+   "value": "OpenDNS DoH"
  },
  "Quad9 DoH (via VPN, anti-malware)": {
   "value": "Quad9 DoH（经 VPN，防恶意软件）"
