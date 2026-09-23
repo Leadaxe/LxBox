@@ -602,7 +602,12 @@ String? _xrayIdentity(Map<String, dynamic> o) {
       // Конвертер отдаёт Hysteria2Spec → protocol в ключе 'hysteria2'.
       final hy = (o['streamSettings'] as Map?)?['hysteriaSettings'];
       server = s['address']?.toString() ?? '';
-      port = (s['port'] as num?)?.toInt() ?? 443;
+      // §513 — как у vless/trojan выше: запись `port` секции hysteria
+      // `required`, узла без порта нет, и синонима у тега быть не должно.
+      // Прежний `?? 443` держал ключ на несуществующий узел.
+      final rawPort = (s['port'] as num?)?.toInt();
+      if (rawPort == null || rawPort <= 0) return null;
+      port = rawPort;
       cred = hy is Map ? (hy['auth']?.toString() ?? '') : '';
       if (server.isEmpty) return null;
       return 'hysteria2|$server|$port|$cred';
