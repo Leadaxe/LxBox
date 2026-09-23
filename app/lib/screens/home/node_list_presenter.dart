@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
+
 import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
+import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/server_list.dart';
 import '../../services/safe_regex.dart';
@@ -111,7 +114,7 @@ String? autoGroupLabel(Map<String, dynamic>? raw) {
 ///
 /// Читает `controller.state` / `subController.entries` свежими на каждый вызов
 /// (как и раньше в `_HomeScreenState`), поэтому stateless относительно
-/// контроллеров — единственное mutable-состояние = sort cache.
+/// контроллеров — mutable-состояние = sort cache и кэш уведомлений (§511 M3).
 class NodeListPresenter {
   NodeListPresenter({
     required this.controller,
@@ -316,6 +319,59 @@ class NodeListPresenter {
     return _cachedSorted!;
   }
 
+  // §511 M3 — кэш уведомлений по тегу. Тик статистики (раз в секунду при
+  // поднятом VPN) даёт новый HomeState и rebuild экрана, а уровни от трафика
+  // не зависят: пересчёт O(теги × узлы) нужен только при смене состава
+  // (записи и их `list`), карты последней сборки или списка узлов.
+  List<ServerList>? _warningsLists;
+  Map<String, NodeSpec>? _warningsTagMap;
+  Map<String, List<NodeWarning>>? _warningsBuild;
+  List<String>? _warningsNodes;
+  Map<String, List<NodeWarning>>? _warningsByTag;
+
+  /// Сколько раз уведомления узлов пересчитывались целиком (для тестов).
+  @visibleForTesting
+  int debugWarningsPasses = 0;
+
+  Map<String, List<NodeWarning>> _warningsByTagFor(
+      List<String> tags, HomeState state) {
+    final entries = subController.entries;
+    final emittedTagMap = subController.lastEmittedTagMap;
+    final buildWarnings = subController.lastBuildWarningsByTag;
+    final cached = _warningsByTag;
+    final lists = _warningsLists;
+    if (cached != null &&
+        lists != null &&
+        identical(_warningsTagMap, emittedTagMap) &&
+        identical(_warningsBuild, buildWarnings) &&
+        identical(_warningsNodes, state.nodes) &&
+        lists.length == entries.length &&
+        tags.every(cached.containsKey)) {
+      var same = true;
+      for (var i = 0; i < lists.length; i++) {
+        if (!identical(lists[i], entries[i].list)) {
+          same = false;
+          break;
+        }
+      }
+      if (same) return cached;
+    }
+    debugWarningsPasses++;
+    _warningsLists = [for (final e in entries) e.list];
+    _warningsTagMap = emittedTagMap;
+    _warningsBuild = buildWarnings;
+    _warningsNodes = state.nodes;
+    return _warningsByTag = <String, List<NodeWarning>>{
+      for (final tag in tags)
+        tag: warningsForConfigTag(
+          tag,
+          entries,
+          emittedTagMap: emittedTagMap,
+          buildWarningsByTag: buildWarnings,
+        ),
+    };
+  }
+
   /// Aggregated данные для render node-list.
   /// Собирает sorted/pool/split/displayList + chip-options одним проходом.
   NodeListData computeListData(HomeState state) {
@@ -381,17 +437,7 @@ class NodeListPresenter {
 
     // §502/§505 — уведомления по config-тегу: хранилище + сборка; карта
     // lastEmittedTagMap — только fallback для custom JSON без владельца.
-    final emittedTagMap = subController.lastEmittedTagMap;
-    final buildWarnings = subController.lastBuildWarningsByTag;
-    final warningsByTag = <String, List<NodeWarning>>{
-      for (final tag in allTags)
-        tag: warningsForConfigTag(
-          tag,
-          subController.entries,
-          emittedTagMap: emittedTagMap,
-          buildWarningsByTag: buildWarnings,
-        ),
-    };
+    final warningsByTag = _warningsByTagFor(allTags, state);
 
     return NodeListData(
       cache: cache,
