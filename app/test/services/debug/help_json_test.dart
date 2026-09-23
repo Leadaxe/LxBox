@@ -102,4 +102,22 @@ void main() {
     }
     expect(missing, isEmpty, reason: 'help json paths not mounted: $missing');
   });
+
+  // Ревью после v2.25.1, L1: `/pool` был в тексте `/help`, но не в JSON —
+  // инструмент, строящий список путей по JSON, считал роут несуществующим.
+  test('каждый смонтированный префикс роутера есть в /help?format=json',
+      () async {
+    final jsonResp = await helpHandler(req('json'), ctx()) as JsonResponse;
+    final endpoints =
+        ((jsonResp.body as Map)['endpoints'] as List).cast<Map>();
+    final paths = [for (final e in endpoints) e['path'] as String];
+
+    final undocumented = [
+      for (final prefix in buildDebugRouter().prefixes)
+        if (!paths.any((p) => p == prefix || p.startsWith('$prefix/')))
+          prefix,
+    ];
+    expect(undocumented, isEmpty,
+        reason: 'mounted but absent from /help json: $undocumented');
+  });
 }

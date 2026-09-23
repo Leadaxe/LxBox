@@ -686,6 +686,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/config/pretty', 'description': 'Indent-formatted'},
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
     {'method': 'GET', 'path': '/config/running', 'description': 'Config of the running kernel (SPEC 036); 409 when unavailable'},
+    // Pool (§208)
+    {'method': 'GET', 'path': '/pool', 'params': {'tag': '<autoTag> (e.g. vpn-1-auto)'}, 'description': 'Snapshot of a round_robin urltest pool → {tag,count,slots:[{slot,tag,delay,alive}]}. Non-round_robin group → slots:[]; tunnel down → 409'},
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},
