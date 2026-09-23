@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/services/app_log.dart';
 import 'package:lxbox/services/backup_service.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -435,6 +437,36 @@ void main() {
         SettingsStorage.sourceKeyForId('u2'),
       ]);
       expect(await keysInFile(), ['u1', 'c1', 'u2']);
+    });
+
+    // §511 m4 — отказ перестановки виден: `false` и строка в AppLog.
+    test('отказ reorderSources и applyEntryOrder пишется в AppLog', () async {
+      await seedMixed(['u1', 'c1', 'u2']);
+      int rejects(String what) => AppLog.I.entries
+          .where((e) => e.message.startsWith('$what rejected'))
+          .length;
+      final before = rejects('reorderSources');
+      expect(
+        await SettingsStorage.reorderSources(
+            [SettingsStorage.sourceKeyForId('nope')]),
+        isFalse,
+      );
+      expect(rejects('reorderSources'), before + 1);
+      expect(
+        await SettingsStorage.reorderSources(
+            [SettingsStorage.sourceKeyForId('u2')]),
+        isTrue,
+      );
+
+      final ctrl = SubscriptionController()
+        ..debugSetEntries([
+          for (final l in await SettingsStorage.getServerLists())
+            SubscriptionEntry(list: l),
+        ]);
+      final beforeCtrl = rejects('applyEntryOrder');
+      expect(await ctrl.applyEntryOrder(['u1']), isFalse);
+      expect(rejects('applyEntryOrder'), beforeCtrl + 1);
+      expect(ctrl.entries.map((e) => e.id), ['u1', 'u2']);
     });
 
     test('форма 2.23.2: цепочки встают хвостом sources[] по старому order, '

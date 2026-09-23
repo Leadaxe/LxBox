@@ -315,7 +315,8 @@ class SettingsStorage {
 
   /// Перестановка `sources[]` (drag на Servers). [keys] — перестановка
   /// видимых ключей [getSourceKeys]; нечитаемые записи остаются на местах.
-  static Future<void> reorderSources(List<String> keys) =>
+  /// `false` — отвергнута (причина в AppLog).
+  static Future<bool> reorderSources(List<String> keys) =>
       _reorderSources(keys);
 
   /// Источники документа хранения [doc] — снимка [dumpCache] или блока

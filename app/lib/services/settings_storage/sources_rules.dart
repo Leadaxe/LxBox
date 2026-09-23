@@ -88,19 +88,31 @@ Future<List<String>> _getSourceKeys() async => [
 /// (§141 P1.8c), — остаются в своих слотах; слоты записей из [keys]
 /// заполняются в порядке [keys] (§511 M2). Раньше одна такая запись
 /// отвергала любую перестановку: ключей экрана на один меньше, чем записей.
-Future<void> _reorderSources(List<String> keys) async {
+///
+/// `false` — перестановка отвергнута, причина уходит в AppLog (§511 m4):
+/// раньше отказ был тихим, и строка на экране просто отпрыгивала назад.
+Future<bool> _reorderSources(List<String> keys) async {
   final data = await _load();
   final records = _recordsAt(data[kSourcesKey]);
+  bool reject(String why) {
+    AppLog.I.warning('reorderSources rejected: $why '
+        '(keys=${keys.length}, records=${records.length})');
+    return false;
+  }
+
   final want = keys.toSet();
-  if (want.length != keys.length) return;
+  if (want.length != keys.length) return reject('duplicate key');
   final byKey = <String, Map<String, dynamic>>{};
   for (final r in records) {
     final k = _sourceRecordKey(r);
     if (!want.contains(k)) continue;
-    if (byKey.containsKey(k)) return; // неоднозначный слот
+    if (byKey.containsKey(k)) return reject('ambiguous record $k');
     byKey[k] = r;
   }
-  if (byKey.length != keys.length) return; // ключа нет в массиве
+  if (byKey.length != keys.length) {
+    return reject(
+        'unknown key ${want.difference(byKey.keys.toSet()).first}');
+  }
   var next = 0;
   data[kSourcesKey] = [
     for (final r in records)
@@ -109,6 +121,7 @@ Future<void> _reorderSources(List<String> keys) async {
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty();
   await _save();
+  return true;
 }
 
 /// Заменяет в [existing] записи, для которых [isOurs], элементами [ours];

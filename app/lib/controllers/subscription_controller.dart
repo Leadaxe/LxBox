@@ -2340,16 +2340,22 @@ class SubscriptionController extends ChangeNotifier {
   /// §509 — взаимный порядок контейнеров после drag в общем `sources[]`.
   /// Состав [ids] обязан совпасть с текущими записями; слоты цепочек
   /// [SettingsStorage.saveServerLists] не двигает.
-  Future<void> applyEntryOrder(List<String> ids) async {
+  ///
+  /// `false` — состав не совпал, порядок не тронут; причина в AppLog
+  /// (§511 m4: раньше отказ был тихим).
+  Future<bool> applyEntryOrder(List<String> ids) async {
     final byId = {for (final e in _entries) e.id: e};
     if (ids.length != _entries.length || ids.toSet() != byId.keys.toSet()) {
-      return;
+      AppLog.I.warning('applyEntryOrder rejected: '
+          'ids=${ids.length}, entries=${_entries.length}');
+      return false;
     }
     _entries
       ..clear()
       ..addAll([for (final id in ids) byId[id]!]);
     await _persist();
     notifyListeners();
+    return true;
   }
 
   /// Замена `entry.list` на новый ServerList (для экранов, меняющих политику
