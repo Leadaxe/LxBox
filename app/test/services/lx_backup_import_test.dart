@@ -311,6 +311,54 @@ void main() {
     });
   });
 
+  // §511 m2 — смешанный порядок `sources[]` (сервер, цепочка, сервер) после
+  // импорта в пустое хранение.
+  group('§511 m2 порядок sources[] при импорте', () {
+    test('цепочка между серверами остаётся между ними', () async {
+      final box = await StorageSandbox.create();
+      addTearDown(box.dispose);
+      Map<String, dynamic> server(String id, String tag, int n) => {
+            'kind': 'server',
+            'id': id,
+            'tag': tag,
+            'enabled': true,
+            'body': {
+              'type': 'trojan',
+              'server': 'example-$n.com',
+              'server_port': 443,
+              'password': 'testpass$n',
+            },
+          };
+      final raw = jsonEncode({
+        'lx_backup': 2,
+        'exported_by': {'app': 'launcher', 'version': '1.6.0'},
+        'exported_at': '2026-09-15T00:00:00Z',
+        'sources': [
+          server('01SRVM2A000000000000000000', 'srv-a', 1),
+          {
+            'kind': 'chain',
+            'id': '01CHNM2X000000000000000000',
+            'tag': 'mid-chain',
+            'enabled': true,
+            'body': {'type': 'chain', 'idle_timeout': '0s'},
+            'hops': [
+              {'tag': 'srv-a'},
+            ],
+          },
+          server('01SRVM2B000000000000000000', 'srv-b', 2),
+        ],
+      });
+
+      const importer = LxBackupImportService();
+      final result = await importer.apply(await importer.prepare(raw));
+      expect(result.appliedChains, 1);
+
+      final keys = await SettingsStorage.getSourceKeys();
+      expect([for (final k in keys) k.startsWith('chain:') ? k : 'id'],
+          ['id', 'chain:mid-chain', 'id']);
+    });
+  });
+
   group('D-117 голова оси после импорта', () {
     test('несортируемый пресет со сдвинутым номером встаёт на номер шаблона, '
         'сортируемый пресет и правило пользователя держат номер файла', () {
