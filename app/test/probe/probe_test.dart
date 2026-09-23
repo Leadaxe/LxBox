@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/singbox_entry.dart';
+import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/probe/probe_config.dart';
 import 'package:lxbox/services/probe/probe_runner.dart';
 
@@ -107,6 +109,135 @@ void main() {
       expect(cfg.brokenByIndex, {0: 'group', 1: 'group'});
     });
 
+    // ═══ §518 — naive и OOM пробы ══════════════════════════════════════════
+    //
+    // Каждый naive-outbound поднимает Chromium-движок (cronet
+    // `engineCount`), десяток в одном probe-конфиге = OOM процесса при
+    // `oomMemoryLimit` (§173/§271). Гейт: не больше
+    // kProbeMaxNaivePerConfig naive на конфиг.
+    group('§518 naive-гейт probe-конфига', () {
+      String naive(String tag) => 'naive+https://u:p@$tag.example:443#$tag';
+
+      List<Map<String, dynamic>> outboundsOf(ProbeConfig c) =>
+          ((jsonDecode(c.configJson!) as Map)['outbounds'] as List)
+              .cast<Map<String, dynamic>>();
+
+      int naiveCountOf(ProbeConfig c) =>
+          outboundsOf(c).where((o) => o['type'] == 'naive').length;
+
+      test('5 naive + 3 vless: naive ≤ лимита на конфиг, все 8 проверены', () {
+        final nodes = nodesOf(folder(members: [
+          FolderMember(raw: naive('n1')),
+          FolderMember(raw: uriA),
+          FolderMember(raw: naive('n2')),
+          FolderMember(raw: naive('n3')),
+          FolderMember(raw: uriB),
+          FolderMember(raw: naive('n4')),
+          FolderMember(raw: 'vless://u3@h3.example:443?security=tls#Gamma'),
+          FolderMember(raw: naive('n5')),
+        ]));
+        expect(nodes.every((n) => n != null), isTrue, reason: 'фикстуры парсятся');
+
+        final batches = buildProbeBatches(nodes);
+        // 5 naive по kProbeMaxNaivePerConfig(=1) → 5 батчей.
+        expect(batches.length, (5 / kProbeMaxNaivePerConfig).ceil());
+        for (final b in batches) {
+          expect(naiveCountOf(b), lessThanOrEqualTo(kProbeMaxNaivePerConfig));
+        }
+
+        // Полнота и порядок: каждый из 8 индексов проверяется РОВНО один раз,
+        // ни один не потерян и ни один не задублирован.
+        final seen = <int>[];
+        for (final b in batches) {
+          seen.addAll(b.tagByIndex.keys);
+        }
+        expect(seen..sort(), [0, 1, 2, 3, 4, 5, 6, 7]);
+        expect(batches.first.brokenByIndex, isEmpty);
+
+        // Не-naive лежат в первом батче — как до §518 (один конфиг на всё).
+        final firstTags = batches.first.tagByIndex;
+        expect(firstTags.keys, containsAll([1, 4, 6]));
+      });
+
+      test('без naive — один батч, конфиг дословно как buildProbeConfig', () {
+        final nodes = nodesOf(folder(members: [
+          FolderMember(raw: uriA),
+          FolderMember(raw: uriB),
+        ]));
+        final batches = buildProbeBatches(nodes);
+        expect(batches.length, 1);
+        expect(batches.single.configJson, buildProbeConfig(nodes).configJson);
+      });
+
+      test('insecure_concurrency снят у naive в ПРОБЕ, боевой emit цел', () {
+        final node = FolderMember(raw: naive('n1')).node!;
+        // §302 — import-rules кладут в узел патч тела; probe обязан снять
+        // именно из своей копии, не из патча.
+        final patch = node.emit(TemplateVars.empty);
+        (patch as Outbound).map['insecure_concurrency'] = 8;
+        node.patchedJson = patch.map;
+
+        final cfg = buildProbeConfig([node]);
+        final probeOut =
+            outboundsOf(cfg).singleWhere((o) => o['type'] == 'naive');
+        expect(probeOut.containsKey('insecure_concurrency'), isFalse,
+            reason: 'в пробе движки не множим');
+
+        // Боевой emit узла НЕ изменился: патч на месте, поле цело.
+        final live = node.emit(TemplateVars.empty) as Outbound;
+        expect(live.map['insecure_concurrency'], 8);
+        expect(node.patchedJson!['insecure_concurrency'], 8);
+      });
+
+      test('naive c детуром: гейт считает записи, а не узлы', () {
+        // Узел naive + chained naive = ДВЕ naive-записи, оба движка в одном
+        // конфиге — гейт должен видеть обе (детур эмитится тем же конфигом).
+        final chained = FolderMember(raw: naive('inner')).node!;
+        final outer = FolderMember(raw: naive('outer')).node!;
+        final withDetour = NaiveSpec(
+          id: outer.id,
+          tag: outer.tag,
+          label: outer.label,
+          server: outer.server,
+          port: outer.port,
+          rawSource: outer.rawSource,
+          chained: chained,
+        );
+        final batches = buildProbeBatches([withDetour]);
+        // 2 naive-записи > лимит(1), но узел неделим: он один и уходит в
+        // единственный батч — гейт не может разорвать цепочку.
+        expect(batches.length, 1);
+        expect(naiveCountOf(batches.single), 2);
+        expect(batches.single.tagByIndex.keys, [0]);
+      });
+
+      test('внутри батча — исходный порядок узлов (уникализация тегов)', () {
+        // Одноимённые naive-узлы разъезжаются по батчам, и каждый получает
+        // базовый тег: `usedTags` у батчей независим. А не-naive, подсаженный
+        // к первому батчу, не должен перевешивать порядок обхода.
+        final cfg = buildProbeBatches(nodesOf(folder(members: [
+          FolderMember(raw: uriA), // 'Alpha', не naive
+          FolderMember(raw: naive('n1')),
+          FolderMember(raw: uriA), // тоже 'Alpha' → 'Alpha-2' в своём батче
+        ])));
+        expect(cfg.length, 1, reason: '1 naive при лимите 1 → один батч');
+        expect(cfg.single.tagByIndex, {0: 'Alpha', 1: 'n1', 2: 'Alpha-2'});
+      });
+
+      test('битые и группы попадают в вердикты первого батча один раз', () {
+        final nodes = nodesOf(folder(members: [
+          FolderMember(raw: naive('n1')),
+          FolderMember(raw: 'garbage'),
+          FolderMember(raw: naive('n2')),
+          _group('Auto'),
+        ]));
+        final batches = buildProbeBatches(nodes);
+        expect(batches.length, 2);
+        expect(batches.first.brokenByIndex, {1: 'broken', 3: 'group'});
+        expect(batches[1].brokenByIndex, isEmpty);
+      });
+    });
+
     test('коллизия тегов членов уникализируется', () {
       final cfg = cfgOf(folder(members: [
         FolderMember(raw: uriA),
@@ -165,6 +296,34 @@ void main() {
       // Выключенный член тоже протестирован (probe-сессия).
       expect(results[1]!.status, ProbeStatus.failed);
       expect(calls.map((c) => c.method), contains('probeStop'));
+    });
+
+    // §518 — батчи naive прогоняются ПОСЛЕДОВАТЕЛЬНО, каждый своей сессией:
+    // probeStop после каждого батча освобождает Chromium-движки до старта
+    // следующего, иначе гейт не даёт ничего.
+    test('§518: naive-батчи — probeStart/probeStop на каждый, все узлы меряны',
+        () async {
+      final results = <int, ProbeResult>{};
+      final err = await ProbeRunner().run(
+        nodesOf(folder(members: [
+          FolderMember(raw: 'naive+https://u:p@n1.example:443#n1'),
+          FolderMember(raw: uriA),
+          FolderMember(raw: 'naive+https://u:p@n2.example:443#n2'),
+          FolderMember(raw: 'naive+https://u:p@n3.example:443#n3'),
+        ])),
+        url: 'https://example.com/gen204',
+        timeoutMs: 3000,
+        onResult: (i, r) => results[i] = r,
+      );
+      expect(err, '');
+      // Все четыре узла получили вердикт — ни один не потерян батчированием.
+      expect(results.keys.toList()..sort(), [0, 1, 2, 3]);
+      final starts = calls.where((c) => c.method == 'probeStart').length;
+      final stops = calls.where((c) => c.method == 'probeStop').length;
+      expect(starts, 3, reason: '3 naive при лимите 1 → 3 батча');
+      expect(stops, starts, reason: 'сессия гасится после каждого батча');
+      // urlTest — ровно по одному на узел.
+      expect(calls.where((c) => c.method == 'probeUrlTest').length, 4);
     });
 
     test('§336: группа получает вердикт group; папка из одних групп не '

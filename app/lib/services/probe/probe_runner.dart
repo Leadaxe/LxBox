@@ -81,10 +81,21 @@ class ProbeRunner {
     // прекратится, даже если экран деталей папки не в фокусе. Снимаем в finally.
     final canceller = ProbeLifecycle.I.register(cancel);
     try {
-      final cfg = buildProbeConfig(nodes);
+      // §518 — конфигов может быть несколько: naive-узлы гейтятся по
+      // kProbeMaxNaivePerConfig (каждый поднимает Chromium-движок, десяток в
+      // одном конфиге = OOM всего процесса). Батчи прогоняются
+      // ПОСЛЕДОВАТЕЛЬНО, каждый своей probe-сессией: `ProbeSession.start`
+      // поверх живой сессии — рестарт, так что движки предыдущего батча
+      // освобождаются до старта следующего. Без naive батч один, и прогон
+      // дословно как до §518.
+      final batches = buildProbeBatches(nodes);
 
-      // Битые/несобираемые/группы — вердикт сразу, без ядра.
-      cfg.brokenByIndex.forEach((i, why) {
+      // Битые/несобираемые/группы — вердикт сразу, без ядра. Вердикты лежат
+      // в первом батче (§518 `_assemble`), покрывают весь список целиком.
+      final broken = batches.isEmpty
+          ? buildProbeConfig(nodes).brokenByIndex
+          : batches.first.brokenByIndex;
+      broken.forEach((i, why) {
         onResult(
             i,
             ProbeResult(
@@ -96,10 +107,20 @@ class ProbeRunner {
               message: why,
             ));
       });
-      if (cfg.configJson == null) return '';
+      if (batches.isEmpty) return '';
 
-      final err = await _cc.probeStart(cfg.configJson!);
-      if (err.isEmpty) {
+      for (final cfg in batches) {
+        if (_cancelled) return '';
+        if (cfg.configJson == null) continue;
+        final err = await _cc.probeStart(cfg.configJson!);
+        if (err.isNotEmpty) {
+          // VPN активен → probe-сессию не поднять. UI гейтит тест ещё до run()
+          // (getVpnStatus), но между проверкой и probeStart VPN мог стартовать —
+          // ловим здесь маркером, не боевой веткой.
+          if (_looksLikeVpnRunning(err)) return kProbeVpnRunning;
+          AppLog.I.warning('Probe session failed to start: $err');
+          return err;
+        }
         try {
           await _runPool(
             cfg.tagByIndex,
@@ -108,18 +129,13 @@ class ProbeRunner {
             onResult: onResult,
           );
         } finally {
+          // Сессию гасим ПОСЛЕ каждого батча, а не в конце прогона: иначе
+          // движки naive-узлов предыдущего батча жили бы до конца sweep'а и
+          // гейт не давал бы ничего.
           await _cc.probeStop();
         }
-        return '';
       }
-
-      // VPN активен → probe-сессию не поднять. UI гейтит тест ещё до run()
-      // (getVpnStatus), но между проверкой и probeStart VPN мог стартовать —
-      // ловим здесь маркером, не боевой веткой.
-      if (_looksLikeVpnRunning(err)) return kProbeVpnRunning;
-
-      AppLog.I.warning('Probe session failed to start: $err');
-      return err;
+      return '';
     } finally {
       ProbeLifecycle.I.deregister(canceller);
     }
