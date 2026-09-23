@@ -115,14 +115,21 @@ Future<void> actionUrltestGroup(String group, DebugContext ctx) async {
 
 /// `start-vpn` — запросить старт VPN (идемпотентно: noop если up).
 ///
-/// §494 — общий вход [runCoreRejectGuard] с `guard=false`: прежний путь
-/// `home.start()` через Activity, без цикла страховки. Публичный Intent API
-/// (§047) этот хелпер не зовёт — native `LxBoxIntentReceiver` идёт в
-/// `BoxVpnService.start` напрямую.
+/// §494 — `guard=false` (по умолчанию): прежний путь `home.start()` через
+/// Activity, без цикла страховки, — байт в байт как до §494. Контроллер
+/// подписок ему НЕ нужен и требоваться не должен: иначе публичный
+/// `POST /action/start-vpn` отвечал бы 409 там, где раньше стартовал (ревью
+/// после v2.25.1, L2). `guard=true` — через [runCoreRejectGuard], которому
+/// подписки нужны для пересборки. Публичный Intent API (§047) этот хелпер не
+/// зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую.
 Future<void> actionStartVpn(DebugContext ctx, {bool guard = false}) async {
   final home = ctx.requireHome();
+  if (!guard) {
+    unawaited(home.start());
+    return;
+  }
   final sub = ctx.requireSub();
-  unawaited(runCoreRejectGuard(home: home, sub: sub, guard: guard));
+  unawaited(runCoreRejectGuard(home: home, sub: sub));
 }
 
 /// `stop-vpn` — запросить остановку VPN.
