@@ -623,27 +623,6 @@ void main() {
       expect(spec.mtu, 1280);
     });
 
-    test('round-trip writeQuery → fromQuery без потерь (булевы → on)', () {
-      final awg = Awg({
-        'jc': 4,
-        's1': 55, 's2': 42, 's3': 40, 's4': 12,
-        'h1': '1000-2000',
-        'header_protection_key': hk,
-        'content_padding_addition': '10-100',
-        'rekey_after_time': 100,
-        'random_trailers': true,
-      });
-      final q = <String, String>{};
-      awg.writeQuery(q);
-      expect(q['randomtrailers'], 'on');
-      expect(q['contentpaddingaddition'], '10-100');
-      expect(q['rekeyaftertime'], '100');
-      expect(q['headerprotectionkey'], hk);
-      expect(q.containsKey('random_trailers'), false);
-      final again = Awg.fromQuery(q)!;
-      expect(again.fields, awg.fields);
-    });
-
     test('round-trip share-URI: spec → toUri → parse сохраняет AWG3-набор', () {
       final spec = parseWireguardUri(uri(
           '&mtu=1200&keepalive=25-35&jc=4$s&h1=1&headerprotectionkey=$hkQ'

@@ -154,7 +154,21 @@ List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
     if (n != null) {
       nodes.add(n);
     } else if (verdict.reason != null) {
-      dropped?.add(verdict.reason!);
+      // §512 — `ref` отбраковки у СТРОКИ состава это САМА СТРОКА (corpus/
+      // README: «ref — то, что видно глазами»; тег у JSON-тел, ссылка у
+      // построчных). Без этого отбраковка называлась именем класса
+      // предупреждения, и кейс `uri_list/service_scheme_routing_ignored`
+      // сверить было нечем.
+      final r = verdict.reason!;
+      dropped?.add(r.ownerTag.isEmpty
+          ? RegistryWarning(
+              code: r.code,
+              path: r.path,
+              value: r.value,
+              params: r.params,
+              ownerTag: l.trim(),
+            )
+          : r);
     }
   }
   return nodes;

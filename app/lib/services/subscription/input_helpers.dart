@@ -5,7 +5,7 @@
 import 'dart:convert';
 
 import '../parser/engine/section_loader.dart' show MapperSections;
-import '../parser/mappers/uri_pipeline.dart' show kPipelineSchemes;
+import '../parser/mappers/uri_pipeline.dart' show pipelineSchemes;
 
 bool isSubscriptionUrl(String input) {
   final t = input.trim();
@@ -19,7 +19,7 @@ bool isFileSubscription(String url) => url.startsWith('file:');
 
 /// Ссылка на ОДИН узел — по набору схем, которые разбирает конвейер.
 ///
-/// §480 W6 — список схем ОДИН на приложение ([kPipelineSchemes]): раньше
+/// §480 W6 — список схем ОДИН на приложение ([pipelineSchemes]): раньше
 /// здесь лежала вторая его копия, и она успела разъехаться с первой —
 /// `naive+quic://` конвейер разбирал, а классификатор ввода не знал, и
 /// вставка такой ссылки из буфера падала на «not a subscription URL, proxy
@@ -30,11 +30,15 @@ bool isFileSubscription(String url) => url.startsWith('file:');
 /// `http(s)://` в набор не входит: голые схемы заняты [isSubscriptionUrl],
 /// который проверяется раньше в `addFromInput` (§222), а прокси-формы
 /// приходят своими написаниями (`proxy-https://`).
+///
+/// §512 — набор берётся у РЕЕСТРА (`detect.scheme_in` секций `mappers.uri`):
+/// написание, приехавшее контрактом, вставляется из буфера без правки кода.
+/// `amneziawg://` (1.1.48) — первый такой случай.
 bool isDirectLink(String input) {
   final t = input.trim();
   final sep = t.indexOf('://');
   if (sep <= 0) return false;
-  return kPipelineSchemes.contains(t.substring(0, sep).toLowerCase());
+  return pipelineSchemes().contains(t.substring(0, sep).toLowerCase());
 }
 
 /// §480 W6 — вид источника по РЕЕСТРУ: `kind` ветки, опознавшей ввод, либо

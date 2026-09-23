@@ -5,7 +5,8 @@
   "singbox_type": "wireguard",
   "aliases": [
     "wg",
-    "awg"
+    "awg",
+    "amneziawg"
   ],
   "sources": [
     "uri",
@@ -14,7 +15,7 @@
     "amnezia"
   ],
   "extension": null,
-  "note": "Endpoint (sing-box >= 1.11): в конфиге живёт в endpoints[], не в outbounds[]. awg:// — алиас обоих проектов (нормализуется в wireguard, AWG-поля промоутятся в корень endpoint); вторая форма awg://<base64 .conf>#label (панели раздают AmneziaWG 3.x целым wg-quick в base64; авторитет без '@'/':') — payload декодируется, первый [Interface]-блок конвертируется тем же путём, что вставленный .conf (SPEC 076), метка = фрагмент, без фрагмента — комментарий пира или хост Endpoint (кейсы awg_conf_base64*; Go с 1.6.2, Dart — задача §20 TASKS_LXBOX); алиас wg:// знает только Dart (Go IsDirectLink его не принимает — разрыв). D-010: дефолтные name=\"singbox-wg0\" и system=false НЕ эмитятся (Go убирает из parseWireGuardURI). Multi-peer: URI/share-URI — строго один peer; sing-box импорт: Go сохраняет всех peers как есть, Dart берёт только peers.first (тихая потеря — разрыв).",
+  "note": "Endpoint (sing-box >= 1.11): в конфиге живёт в endpoints[], не в outbounds[]. awg:// — алиас обоих проектов (нормализуется в wireguard, AWG-поля промоутятся в корень endpoint); amneziawg:// — ПОЛНОЕ имя той же схемы, третий алиас: панели (rrtrg и соседи) пишут его целиком, и без литерала такая ссылка отбраковывалась как «unsupported scheme», хотя все её поля секция уже умела читать — те же узлы приезжали рядом через vpn:// (контракт 1.1.48); вторая форма awg://<base64 .conf>#label (панели раздают AmneziaWG 3.x целым wg-quick в base64; авторитет без '@'/':') — payload декодируется, первый [Interface]-блок конвертируется тем же путём, что вставленный .conf (SPEC 076), метка = фрагмент, без фрагмента — комментарий пира или хост Endpoint (кейсы awg_conf_base64*; Go с 1.6.2, Dart — задача §20 TASKS_LXBOX); алиас wg:// знает только Dart (Go IsDirectLink его не принимает — разрыв). D-010: дефолтные name=\"singbox-wg0\" и system=false НЕ эмитятся (Go убирает из parseWireGuardURI). Multi-peer: URI/share-URI — строго один peer; sing-box импорт: Go сохраняет всех peers как есть, Dart берёт только peers.first (тихая потеря — разрыв).",
   "uri": {
     "userinfo": {
       "maps_to": "private_key",
@@ -270,7 +271,8 @@
       "detect": {
         "scheme_in": [
           "wireguard",
-          "awg"
+          "awg",
+          "amneziawg"
         ]
       },
       "body_source": "uri",
@@ -333,6 +335,10 @@
             "hint",
             "peers[].address"
           ]
+        },
+        "comment": {
+          "take": "first",
+          "require_no": "="
         },
         "normalize": [
           "strip_control",
@@ -999,6 +1005,10 @@
           "hint",
           "peers[].address"
         ],
+        "comment": {
+          "take": "first",
+          "require_no": "="
+        },
         "normalize": [
           "strip_control",
           "trim"
@@ -1008,7 +1018,7 @@
           "server_path": "peers[].address",
           "port_path": "peers[].port"
         },
-        "impl": "Провайдеры пишут локацию голым комментарием сразу под [Peer] («# US-FREE#137») — это единственное человекочитаемое имя в .conf, и узел с таким файлом не должен называться «194.180.34.8». Второе звено «hint» — имя ОТ ВЫЗЫВАЮЩЕГО (файл, импорт, сохранённый тег); источник НЕОБЯЗАТЕЛЬНЫЙ, лаунчер его не передаёт, и звено пропускается. Третье звено, хост Endpoint, — НАШЕ (per-app): корпус ждёт именно его (awg_conf_base64_no_label → «91.247.235.94»), у LxBox безымянный .conf становится литералом «WireGuard». Открытый пункт DELTAS."
+        "impl": "Провайдеры пишут локацию голым комментарием сразу под [Peer] («# US-FREE#137») — это единственное человекочитаемое имя в .conf, и узел с таким файлом не должен называться «194.180.34.8». Второе звено «hint» — имя ОТ ВЫЗЫВАЮЩЕГО (файл, импорт, сохранённый тег); источник НЕОБЯЗАТЕЛЬНЫЙ, лаунчер его не передаёт, и звено пропускается. Третье звено, хост Endpoint, — НАШЕ (per-app): корпус ждёт именно его (awg_conf_base64_no_label → «91.247.235.94»), у LxBox безымянный .conf становится литералом «WireGuard». Открытый пункт DELTAS. Звено ini.$comment судится атрибутом comment (PRIMITIVES §0.8): take first — первый подходящий комментарий секции до первого поля; require_no \"=\" — строка с «=» это отключённая настройка («# Bouncing = 0»), а не имя. Прежде этот предикат жил в движке частным случаем (strings.Contains(name, \"=\")), то есть разделитель wg-quick был зашит в общий лексер; с 1.1.49 своего умолчания у движка нет — без comment годится первый непустой комментарий как есть."
       },
       "params": {
         "privatekey": {

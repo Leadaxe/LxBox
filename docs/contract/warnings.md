@@ -22,6 +22,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`awg_headers_overlap`](#awg_headers_overlap) · `error` — AmneziaWG: headers {a} and {b} overlap
 - [`awg_mtu_clamped`](#awg_mtu_clamped) · `warning` — AmneziaWG: MTU lowered to 1280
 - [`awg_mtu_high`](#awg_mtu_high) · `info` — AmneziaWG: MTU above 1280
+- [`body_dialect_unrecognized`](#body_dialect_unrecognized) · `error` — Subscription: config dialect was read as the wrong one
 - [`chain_cycle_through_direction`](#chain_cycle_through_direction) · `warning` — Chain {chain} excluded from {direction}
 - [`chain_hop_missing`](#chain_hop_missing) · `error` — Chain: hop {position} not found
 - [`chain_invalid`](#chain_invalid) · `error` — Chain is malformed
@@ -41,9 +42,11 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`field_missing`](#field_missing) · `error` — Required field {field} is missing
 - [`field_requires`](#field_requires) · `warning` — Field {path} removed: {requires} is missing
 - [`flow_deprecated`](#flow_deprecated) · `info` — Obsolete flow removed
+- [`form_unrecognized`](#form_unrecognized) · `error` — Entry could not be read
 - [`group_empty`](#group_empty) · `warning` — Group {tag} left without members
 - [`group_member_missing`](#group_member_missing) · `warning` — {count} group members not imported
 - [`hysteria2_server_ports_item_invalid`](#hysteria2_server_ports_item_invalid) · `warning` — Hysteria2: port hopping range dropped
+- [`hysteria_server_ports_item_invalid`](#hysteria_server_ports_item_invalid) · `warning` — Hysteria: port hopping range dropped
 - [`json_field_unknown`](#json_field_unknown) · `info` — Configuration: field {query_name} not read
 - [`masque_vhttp_invalid`](#masque_vhttp_invalid) · `warning` — MASQUE: HTTP version {value} set to h3
 - [`max_nodes_exceeded`](#max_nodes_exceeded) · `warning` — {skipped} nodes over the limit skipped
@@ -60,7 +63,9 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`reality_key_share_invalid`](#reality_key_share_invalid) · `info` — REALITY: key_share removed
 - [`reality_pbk_invalid`](#reality_pbk_invalid) · `warning` — REALITY disabled: invalid public key
 - [`reality_short_id_invalid`](#reality_short_id_invalid) · `info` — REALITY: short_id cleaned up
+- [`scheme_unsupported`](#scheme_unsupported) · `error` — Link: scheme {scheme} is not supported
 - [`selector_as_auto`](#selector_as_auto) · `info` — Manual selector imported as auto-select
+- [`service_record_ignored`](#service_record_ignored) · `info` — Subscription: service record {scheme} skipped
 - [`source_detour_missing`](#source_detour_missing) · `error` — Source chain broken: {target} not found
 - [`ss_method_invalid`](#ss_method_invalid) · `error` — Unsupported encryption method {method}
 - [`ss_method_legacy`](#ss_method_legacy) · `info` — Shadowsocks: legacy cipher
@@ -326,6 +331,23 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 - [`wireguard`](protocols/wireguard.md)
   - [`mtu`](protocols/wireguard.md#body-mtu) — the value is above `1280` when any of `jc`, `jmin`, `jmax` is set (and 25 more), but the body came from `singbox` → kept with a notice
+
+<a id="body_dialect_unrecognized"></a>
+### body_dialect_unrecognized
+
+**severity:** `error`
+
+**Subscription: config dialect was read as the wrong one**
+
+- **What happened:** The subscription body is a whole config, but its dialect was determined incorrectly, and the entries were read by a parser meant for another dialect. No nodes were imported.
+- **Why it happens:** An Xray config and a sing-box config have the same shape (`outbounds` with a list of entries) and differ only in what the entry itself is called: `protocol` for Xray, `type` for sing-box. A classifier that asks only for `outbounds` hands an Xray config to the sing-box parser, which finds no `type` in a single entry.
+- **What you can do:**
+  - Update the application: the dialect check is part of the parser.
+  - As a workaround, wrap the config in a JSON array of one element — an array of configs is recognised correctly.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
 <a id="chain_cycle_through_direction"></a>
 ### chain_cycle_through_direction
@@ -726,6 +748,23 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`vless`](protocols/vless.md)
   - [`flow`](protocols/vless.md#body-flow) — the value does not fit the field → removed
 
+<a id="form_unrecognized"></a>
+### form_unrecognized
+
+**severity:** `error`
+
+**Entry could not be read**
+
+- **What happened:** The entry is not a link or a configuration this app can read: it is not a link at all, or its encoded part (base64, a compressed profile) does not decode. The node was dropped; the rest of the subscription was read as usual.
+- **Why it happens:** The link was cut short or damaged when it was copied, a panel produced a broken payload, or the line is not a node link at all — a stray word or a piece of HTML.
+- **What you can do:**
+  - Copy the link again from the provider's page — a truncated link is the usual cause.
+  - Ask the provider to fix the entry in the subscription.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
 <a id="group_empty"></a>
 ### group_empty
 
@@ -767,8 +806,25 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **Hysteria2: port hopping range dropped**
 
-- **What happened:** The port hopping list holds {value} at {path}, which is not a pair of port numbers. That single entry was dropped; the remaining ranges were kept and port hopping still works on them. Had it been kept, the core would have refused to load the whole configuration.
-- **Why it happens:** The provider wrote the address and the ports as one string in the `mport` parameter (`mport=198.51.100.24:443,20000-30000`), so the host name ended up inside the port list.
+- **What happened:** The port hopping list holds {value} at {path}, which is not a pair of port numbers from 0 to 65535. That single entry was dropped; the remaining ranges were kept and port hopping still works on them. Had it been kept, the core would have refused to load the whole configuration.
+- **Why it happens:** The provider wrote the address and the ports as one string in the `mport` parameter (`mport=198.51.100.24:443,20000-30000`), so the host name ended up inside the port list; or the panel wrote a port above 65535 or with leading zeros (`99999:99999`, `00443:00444`).
+- **What you can do:**
+  - Nothing to do: the node works, and port hopping uses the ranges that were written correctly.
+  - If the node does not connect, take the link from the provider again — their panel writes the port list in a form the core does not accept.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="hysteria_server_ports_item_invalid"></a>
+### hysteria_server_ports_item_invalid
+
+**severity:** `warning` · **params:** `path`, `value`
+
+**Hysteria: port hopping range dropped**
+
+- **What happened:** The port hopping list holds {value} at {path}, which is not a pair of port numbers from 0 to 65535. That single entry was dropped; the remaining ranges were kept and port hopping still works on them. Had it been kept, the core would have refused to load the whole configuration.
+- **Why it happens:** The provider wrote the address and the ports as one string in the `mport` parameter (`mport=198.51.100.24:443,20000-30000`), so the host name ended up inside the port list; or the panel wrote a port above 65535 or with leading zeros (`99999:99999`, `00443:00444`).
 - **What you can do:**
   - Nothing to do: the node works, and port hopping uses the ranges that were written correctly.
   - If the node does not connect, take the link from the provider again — their panel writes the port list in a form the core does not accept.
@@ -1066,6 +1122,23 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`reality.short_id`](protocols/_tls.md#body-reality-short-id) — the value does not fit the field → removed
   - [`reality.short_id`](protocols/_tls.md#body-reality-short-id) — the value had to be cleaned up (hex_only) → value cleaned up
 
+<a id="scheme_unsupported"></a>
+### scheme_unsupported
+
+**severity:** `error` · **params:** `scheme`
+
+**Link: scheme {scheme} is not supported**
+
+- **What happened:** The composition line starts with the scheme {scheme}, which no protocol section of the registry describes. The record was dropped: there is nothing to read it with.
+- **Why it happens:** The link belongs to another client's world, or it is a newer scheme than this application knows. Aggregated public subscriptions collect links from different panels, and a panel sometimes writes the protocol's full name where the short alias was expected.
+- **What you can do:**
+  - Update the application: a newer version may know this scheme.
+  - Ask the provider for a link to the same server in a supported protocol.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
 <a id="selector_as_auto"></a>
 ### selector_as_auto
 
@@ -1077,6 +1150,23 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - **Why it happens:** The imported config contains a group with manual server selection. That group type exists in sing-box configs, but this application has no equivalent of it, so the group is taken in as an auto-select one.
 - **What you can do:**
   - Nothing to do: all the servers of the group stayed available, only the way one of them is chosen changed.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="service_record_ignored"></a>
+### service_record_ignored
+
+**severity:** `info` · **params:** `scheme`
+
+**Subscription: service record {scheme} skipped**
+
+- **What happened:** The subscription body carries a record with the service scheme {scheme}, which is a routing command for a neighbouring client rather than a server. It was skipped; every other entry of the subscription was imported as usual.
+- **Why it happens:** Panels hand one body to several clients at once and mix routing commands (`incy://routing/…`, `happ://routing/…`) in with the links, and repeat them in the `Routing:` header. Such a record never claimed to be a node, and this application does not execute another client's routing rules.
+- **What you can do:**
+  - Nothing to do: the subscription is healthy and its nodes were imported.
+  - Set up routing rules in the application itself — the provider's command was not applied.
 
 **Where it comes from:**
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/engine/interpreter.dart'
     show normalizeBandwidthMbps;
@@ -132,47 +133,63 @@ void main() {
   });
 
   group('§506 п.2 — причина вместо молчания', () {
-    test('незнакомая схема: код protocol_unsupported со схемой в value', () {
+    // §512 — схемой примера БОЛЬШЕ НЕ `amneziawg`: контракт 1.1.48 объявил её
+    // в `scheme_in` секции wireguard, и теперь она даёт УЗЕЛ (регресс-тест —
+    // `task_512_registry_schemes_test.dart`). Незнакомой берётся схема, которой
+    // не ведёт ни одна секция реестра.
+    // §512 (контракт 1.1.49, CANON §4.1) — код у НЕЗНАКОМОЙ СХЕМЫ теперь
+    // `scheme_unsupported`: `protocol_unsupported` остался за записью, чей ТИП
+    // неизвестен внутри опознанного тела.
+    test('незнакомая схема: код scheme_unsupported со схемой в value', () {
       final verdict = XrayDropVerdict();
-      final n = parseUri('amneziawg://k@h.example:51820?jc=5', dropped: verdict);
+      final n = parseUri('nosuchproto://k@h.example:51820?jc=5',
+          dropped: verdict);
 
-      expect(n, isNull, reason: 'схему объявит реестр 1.1.48, не код');
+      expect(n, isNull);
       final w = verdict.reason;
       expect(w, isA<RegistryWarning>());
-      expect((w as RegistryWarning).code, 'protocol_unsupported');
-      expect(w.value, 'amneziawg',
+      expect((w as RegistryWarning).code, 'scheme_unsupported');
+      expect(w.value, 'nosuchproto',
           reason: 'пользователю нужна ИМЕННО схема — с ней он идёт к провайдеру');
     });
 
     test('незнакомая схема в теле подписки доезжает до dropped[]', () {
-      const body = 'amneziawg://k@h.example:51820?jc=5\n'
-          'amneziawg://k@h2.example:51821?jc=5\n';
+      const body = 'nosuchproto://k@h.example:51820?jc=5\n'
+          'nosuchproto://k@h2.example:51821?jc=5\n';
       final dropped = <NodeWarning>[];
       final nodes = parseAll(decode(body), dropped: dropped);
 
       expect(nodes, isEmpty);
-      expect(_codes(dropped), ['protocol_unsupported', 'protocol_unsupported'],
+      expect(_codes(dropped), ['scheme_unsupported', 'scheme_unsupported'],
           reason: 'четыре такие строки входа D исчезали без следа');
     });
 
-    test('служебные строки провайдера — ТИХИЙ игнор', () {
+    // §512 — игнор служебных строк остался ТИХИМ ДЛЯ UI, но перестал быть
+    // безымянным: реестр 1.1.48 дал info-код `service_record_ignored`.
+    // Шторка §500 показывает причины только при нуле узлов, поэтому у живой
+    // подписки код не виден, а у пустой отличает «команда панели» от
+    // «потерянный узел».
+    test('служебные строки провайдера — info-код, не ошибка', () {
       for (final line in [
         'incy://routing/onadd/eyJhIjoxfQ',
         'happ://routing/onadd/eyJhIjoxfQ',
       ]) {
         final verdict = XrayDropVerdict();
         expect(parseUri(line, dropped: verdict), isNull);
-        expect(verdict.reason, isNull,
-            reason: '$line — не узел по смыслу, код был бы ложной тревогой');
+        final w = verdict.reason;
+        expect(w, isA<RegistryWarning>(), reason: '$line — реестр 1.1.48');
+        expect((w as RegistryWarning).code, 'service_record_ignored');
+        expect(ContractRegistry.I.textFor(w.code)?.severity, 'info',
+            reason: 'ошибкой команда соседнего клиента не является');
       }
     });
 
-    test('служебные строки не засоряют dropped[] подписки', () {
-      const body = 'incy://routing/onadd/eyJhIjoxfQ\n'
-          'happ://routing/onadd/eyJhIjoxfQ\n';
-      final dropped = <NodeWarning>[];
-      expect(parseAll(decode(body), dropped: dropped), isEmpty);
-      expect(dropped, isEmpty);
+    test('служебная схема БЕЗ хвоста routing/ тихого игнора не заслуживает', () {
+      // Реестр требует `path_prefix_fold: routing/`: про схему, объявившую
+      // иное, не известно ничего.
+      final verdict = XrayDropVerdict();
+      expect(parseUri('incy://somethingelse/x', dropped: verdict), isNull);
+      expect(verdict.reason?.code, 'scheme_unsupported');
     });
 
     test('строка без схемы вовсе — молчим (ввод не распознан, §500)', () {

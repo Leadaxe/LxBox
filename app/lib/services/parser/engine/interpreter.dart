@@ -124,7 +124,16 @@ final class EngineResult {
 EngineResult? runSection(MapperSection section, String text,
     {MapperTrace? trace, XrayDropVerdict? dropped}) {
   final space = _selectForm(section, text);
-  if (space == null) return null;
+  if (space == null) {
+    // §512 (контракт 1.1.49, CANON §4.1) — ФОРМА не опознана: схему секция
+    // ведёт, но ни одна её форма текст не прочитала (оболочка не раскрылась,
+    // пейлоад не JSON и не ini). Отличается от `field_missing` ниже: там
+    // форма сработала, а обязательного значения в ней не нашлось.
+    if (dropped != null && dropped.reason == null) {
+      dropped.reason = const RegistryWarning(code: 'form_unrecognized');
+    }
+    return null;
+  }
   return _Run(section, space, trace, dropped: dropped).execute();
 }
 
