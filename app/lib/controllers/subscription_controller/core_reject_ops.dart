@@ -67,7 +67,15 @@ CoreRejectNodeRef? nodeRefFor(ServerList list, NodeSpec node) {
   return CoreRejectNodeRef(sourceId: list.id, nodeKey: key);
 }
 
-/// Ключ узла внутри источника: идентичность подписки, bare-тег сервера/члена.
+/// Ключ узла внутри источника: идентичность подписки, адрес члена папки,
+/// bare-тег ручного сервера.
+///
+/// Ключ обязан быть УНИКАЛЬНЫМ внутри источника — по нему лист страховки
+/// открывает узел (§503). У члена папки это сырой тег, уникализированный по
+/// источнику (`X`, `X-2`, [folderMemberKeys]) — тот же адрес, что у ссылки
+/// `{folder_id, tag}` (NODE_LINK §2.2). Голый тег (как было до ревью после
+/// v2.25.1, M3) у двух тёзок совпадал, и тап по второму открывал первого.
+/// У члена с уникальным именем ключ прежний — старые вердикты читаются.
 String? nodeKeyFor(ServerList list, NodeSpec node) {
   switch (list) {
     case SubscriptionServers():
@@ -75,7 +83,7 @@ String? nodeKeyFor(ServerList list, NodeSpec node) {
     case FolderServers():
       for (final m in list.members) {
         if (identical(m.node, node)) {
-          return m.node?.tag ?? m.nameHint;
+          return folderMemberKeys(list)[node] ?? m.nameHint;
         }
       }
       return null;
@@ -84,6 +92,12 @@ String? nodeKeyFor(ServerList list, NodeSpec node) {
       return null;
   }
 }
+
+/// Уникальные ключи членов папки (см. [nodeKeyFor]).
+Map<NodeSpec, String> folderMemberKeys(FolderServers list) => sourceNodeRawTags([
+      for (final m in list.members)
+        if (m.node != null) m.node!,
+    ]);
 
 bool _nodeOrHop(NodeSpec owner, NodeSpec node) {
   if (identical(owner, node)) return true;
@@ -131,37 +145,41 @@ CoreRejectNavigationTarget? resolveCoreRejectNode(
   return _resolveByTagAmongDisabled(entries, disabled.tag);
 }
 
+/// Ref из хранимого вердикта — для строки листа без своего ref.
+///
+/// Причина — текст ядра, и узла она НЕ называет: провайдер, выкативший
+/// негодное поле, выкатывает его на пачку узлов, и у всех причина одна.
+/// Поэтому ref берётся, только если причина ОДНОЗНАЧНА — ровно один узел с
+/// таким вердиктом. Иначе `null`, и узел ищется по тегу строки (ревью после
+/// v2.25.1, M3: первый совпавший по тексту вёл на чужой узел).
 CoreRejectNodeRef? _refFromStoredVerdict(
   List<(int index, String id, ServerList list)> entries,
   DisabledNode disabled,
 ) {
+  final found = <CoreRejectNodeRef>{};
+  void take(Iterable<StoredWarning> ws) {
+    for (final w in ws) {
+      if (!w.isCoreRejected || w.reason != disabled.reason) continue;
+      final ref = w.coreRejectRef;
+      if (ref != null) found.add(ref);
+    }
+  }
+
   for (final (_, _, list) in entries) {
     switch (list) {
       case SubscriptionServers():
         for (final e in list.nodeWarnings.entries) {
-          for (final w in e.value) {
-            if (!w.isCoreRejected || w.reason != disabled.reason) continue;
-            final ref = w.coreRejectRef;
-            if (ref != null) return ref;
-          }
+          take(e.value);
         }
       case FolderServers():
         for (final m in list.members) {
-          for (final w in m.warnings) {
-            if (!w.isCoreRejected || w.reason != disabled.reason) continue;
-            final ref = w.coreRejectRef;
-            if (ref != null) return ref;
-          }
+          take(m.warnings);
         }
       case UserServer():
-        for (final w in list.warnings) {
-          if (!w.isCoreRejected || w.reason != disabled.reason) continue;
-          final ref = w.coreRejectRef;
-          if (ref != null) return ref;
-        }
+        take(list.warnings);
     }
   }
-  return null;
+  return found.length == 1 ? found.single : null;
 }
 
 CoreRejectNavigationTarget? _resolveByRef(
@@ -184,17 +202,24 @@ CoreRejectNavigationTarget? _resolveByRef(
           }
         }
       case FolderServers():
-        for (var mi = 0; mi < list.members.length; mi++) {
-          final m = list.members[mi];
-          final key = m.node?.tag ?? m.nameHint;
-          if (key == ref.nodeKey && m.node != null) {
-            return (
-              entryIndex: index,
-              memberIndex: mi,
-              node: m.node!,
-              source: m.node!,
-              list: list,
-            );
+        // Уникальный ключ члена ([nodeKeyFor]); голый тег — запасной путь
+        // для ключей, записанных до ревью после v2.25.1 (M3).
+        final keys = folderMemberKeys(list);
+        for (final byKey in [true, false]) {
+          for (var mi = 0; mi < list.members.length; mi++) {
+            final m = list.members[mi];
+            final n = m.node;
+            if (n == null) continue;
+            final key = byKey ? keys[n] : n.tag;
+            if (key == ref.nodeKey) {
+              return (
+                entryIndex: index,
+                memberIndex: mi,
+                node: n,
+                source: n,
+                list: list,
+              );
+            }
           }
         }
       case UserServer():

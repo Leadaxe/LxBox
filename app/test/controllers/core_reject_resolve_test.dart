@@ -205,6 +205,112 @@ void main() {
       expect(hit?.source.tag, 'Main');
     });
 
+    // Ревью после v2.25.1, M3: узел ищется по идентичности, не по тексту.
+    test('M3: одна причина у двух узлов подписки, строка без ref → свой узел',
+        () {
+      final a = node(tag: 'Alpha');
+      final b = node(tag: 'Beta');
+      var list = SubscriptionServers(
+        id: 's1',
+        name: 'Sub',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://example.com/sub',
+        nodes: [a, b],
+      );
+      const reason = 'parse encryption: unknown encryption appearance';
+      list = applyVerdict(list, a, reason).list as SubscriptionServers;
+      list = applyVerdict(list, b, reason).list as SubscriptionServers;
+
+      final hit = resolveCoreRejectNode(
+        entriesOf(list),
+        const DisabledNode(tag: 'Beta', reason: reason),
+      );
+      expect(hit?.source.tag, 'Beta',
+          reason: 'причина одна на двоих — узла она не называет');
+    });
+
+    test('M3: тёзки в папке — ключи разные, открывается выключенный член', () {
+      final a = node(tag: 'Dup');
+      final b = node(tag: 'Dup');
+      final folder = FolderServers(
+        id: 'f1',
+        name: 'Folder',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        createdAt: DateTime.utc(2026, 9, 19),
+        members: [
+          FolderMember(raw: 'x', node: a, enabled: true),
+          FolderMember(raw: 'y', node: b, enabled: true),
+        ],
+      );
+      expect(nodeKeyFor(folder, a), isNot(nodeKeyFor(folder, b)));
+      expect(nodeKeyFor(folder, a), 'Dup',
+          reason: 'у первого (и у уникального) ключ прежний — старые '
+              'вердикты читаются');
+
+      final applied = applyVerdict(folder, b, 'bad b').list as FolderServers;
+      expect(applied.members.map((m) => m.enabled), [true, false]);
+      final ref = nodeRefFor(folder, b)!;
+
+      final hit = resolveCoreRejectNode(
+        [(0, 'f1', applied)],
+        DisabledNode(tag: 'Dup', reason: 'bad b', ref: ref),
+      );
+      expect(hit?.memberIndex, 1);
+      expect(identical(hit?.node, b), isTrue);
+    });
+
+    test('M3: две папки с одинаковыми тегами и причинами → верная папка', () {
+      FolderServers folder(String id, NodeSpec n) => FolderServers(
+            id: id,
+            name: id,
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            createdAt: DateTime.utc(2026, 9, 19),
+            members: [FolderMember(raw: 'x', node: n, enabled: true)],
+          );
+      final n1 = node(tag: 'Dup');
+      final n2 = node(tag: 'Dup');
+      final f1 = applyVerdict(folder('f1', n1), n1, 'bad').list;
+      final f2 = applyVerdict(folder('f2', n2), n2, 'bad').list;
+      final entries = [(0, 'f1', f1), (1, 'f2', f2)];
+
+      // Строка с ref второй папки.
+      final hit = resolveCoreRejectNode(
+        entries,
+        DisabledNode(tag: 'Dup', reason: 'bad', ref: nodeRefFor(f2, n2)),
+      );
+      expect(hit?.entryIndex, 1);
+      expect(identical(hit?.node, n2), isTrue);
+    });
+
+    test('M3: две подписки с одинаковыми тегами и причинами → верная', () {
+      SubscriptionServers sub(String id, NodeSpec n) => SubscriptionServers(
+            id: id,
+            name: id,
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            url: 'https://example.com/$id',
+            nodes: [n],
+          );
+      final n1 = node(tag: 'Dup');
+      final n2 = node(tag: 'Dup');
+      final s1 = applyVerdict(sub('s1', n1), n1, 'bad').list;
+      final s2 = applyVerdict(sub('s2', n2), n2, 'bad').list;
+
+      final hit = resolveCoreRejectNode(
+        [(0, 's1', s1), (1, 's2', s2)],
+        DisabledNode(tag: 'Dup', reason: 'bad', ref: nodeRefFor(s2, n2)),
+      );
+      expect(hit?.entryIndex, 1);
+      expect(identical(hit?.node, n2), isTrue);
+    });
+
     test('узел удалён — null', () {
       const disabled = DisabledNode(tag: 'gone', reason: 'bad');
       expect(resolveCoreRejectNode(const [], disabled), isNull);
