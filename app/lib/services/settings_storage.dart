@@ -313,8 +313,8 @@ class SettingsStorage {
   /// лежит массив.
   static Future<List<String>> getSourceKeys() => _getSourceKeys();
 
-  /// Полная перестановка `sources[]` (drag на Servers). [keys] — перестановка
-  /// текущего [getSourceKeys]; иначе no-op.
+  /// Перестановка `sources[]` (drag на Servers). [keys] — перестановка
+  /// видимых ключей [getSourceKeys]; нечитаемые записи остаются на местах.
   static Future<void> reorderSources(List<String> keys) =>
       _reorderSources(keys);
 

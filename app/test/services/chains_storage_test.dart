@@ -400,6 +400,43 @@ void main() {
       expect(await keysInFile(), ['u1', 'c2', 'u2', 'c1', 'u3', 'c3']);
     });
 
+    // §511 M2 — запись, которую кодек пропускает, экран не видит: ключей
+    // перестановки на один меньше, чем записей. Перестановка видимых
+    // применяется, нечитаемая остаётся в своём слоте.
+    test('нечитаемая запись не блокирует перестановку и остаётся на месте',
+        () async {
+      await seedMixed(['u1', 'c1', 'u2']);
+      final file = File('${tmp.path}/lxbox_settings.json');
+      final doc = await readFile();
+      (doc['sources'] as List)
+          .insert(1, <String, dynamic>{'kind': 'bogus', 'id': 'junk'});
+      file.writeAsStringSync(jsonEncode(doc));
+      SettingsStorage.resetCacheForTesting();
+      expect((await SettingsStorage.getServerLists()).map((l) => l.id),
+          ['u1', 'u2'],
+          reason: 'кодек пропускает запись — экран её не видит');
+
+      await SettingsStorage.reorderSources([
+        SettingsStorage.sourceKeyForId('u2'),
+        SettingsStorage.sourceKeyForId('u1'),
+        SettingsStorage.sourceKeyForChain('c1'),
+      ]);
+      expect(await keysInFile(), ['u2', 'junk', 'u1', 'c1']);
+    });
+
+    test('перестановка с неизвестным или повторным ключом — no-op', () async {
+      await seedMixed(['u1', 'c1', 'u2']);
+      await SettingsStorage.reorderSources([
+        SettingsStorage.sourceKeyForId('u2'),
+        SettingsStorage.sourceKeyForId('nope'),
+      ]);
+      await SettingsStorage.reorderSources([
+        SettingsStorage.sourceKeyForId('u2'),
+        SettingsStorage.sourceKeyForId('u2'),
+      ]);
+      expect(await keysInFile(), ['u1', 'c1', 'u2']);
+    });
+
     test('форма 2.23.2: цепочки встают хвостом sources[] по старому order, '
         'без order — в конец в порядке файла', () async {
       final f = File('${tmp.path}/lxbox_settings.json');

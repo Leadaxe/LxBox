@@ -79,23 +79,33 @@ Future<List<String>> _getSourceKeys() async => [
         _sourceRecordKey(r),
     ];
 
-/// Полная перестановка `sources[]`. [keys] — перестановка текущих ключей
-/// (`id:…` / `chain:…`); иначе no-op: состав списка эта операция не меняет.
+/// Перестановка `sources[]`. [keys] — новый порядок записей, которые видит
+/// список (`id:…` / `chain:…`): каждый ключ есть в массиве ровно один раз и
+/// не повторяется в [keys]; иначе no-op — состав списка эта операция не
+/// меняет.
+///
+/// Записи вне [keys] — те, что кодек не читает и экран не показывает
+/// (§141 P1.8c), — остаются в своих слотах; слоты записей из [keys]
+/// заполняются в порядке [keys] (§511 M2). Раньше одна такая запись
+/// отвергала любую перестановку: ключей экрана на один меньше, чем записей.
 Future<void> _reorderSources(List<String> keys) async {
   final data = await _load();
   final records = _recordsAt(data[kSourcesKey]);
-  final byKey = <String, Map<String, dynamic>>{
-    for (final r in records) _sourceRecordKey(r): r,
-  };
-  if (keys.length != records.length ||
-      keys.length != keys.toSet().length ||
-      byKey.length != keys.length) {
-    return;
+  final want = keys.toSet();
+  if (want.length != keys.length) return;
+  final byKey = <String, Map<String, dynamic>>{};
+  for (final r in records) {
+    final k = _sourceRecordKey(r);
+    if (!want.contains(k)) continue;
+    if (byKey.containsKey(k)) return; // неоднозначный слот
+    byKey[k] = r;
   }
-  for (final k in keys) {
-    if (!byKey.containsKey(k)) return;
-  }
-  data[kSourcesKey] = [for (final k in keys) byKey[k]!];
+  if (byKey.length != keys.length) return; // ключа нет в массиве
+  var next = 0;
+  data[kSourcesKey] = [
+    for (final r in records)
+      want.contains(_sourceRecordKey(r)) ? byKey[keys[next++]]! : r,
+  ];
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty();
   await _save();
