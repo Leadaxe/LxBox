@@ -426,6 +426,21 @@ slice-таблице бэкапа (`app/lib/services/lx_backup_slice.dart`, тр
 папки, WARP, префикс подписки) приводят к исходному узлу без догадок; тег без
 узла (служебная запись приложения) автоматики не получает.
 
+**Любой Stop гасит идущий прогон (§510 M2).** Отмена прогона — не только
+кнопка Start в фазе цикла и `POST /core_reject/cancel`: Stop — жест «туннель
+не нужен», и финальный старт после него поднимал бы VPN вопреки намерению.
+Воронок две. Dart — `HomeController.stop()` первой строкой зовёт
+`CoreRejectState.cancelRun()` (кнопка Stop, `POST /action/stop-vpn`). Native
+— `BoxVpnService.stop(context)` (плитка QS, ярлык, Intent API §047,
+Locale-плагин): мимо Dart, поэтому он шлёт событие `vpn-stop-requested`
+(`VpnPlugin.notifyStopRequested` → `automation_dispatcher.dart` →
+`cancelRun`). Особенно важен native-путь в фазе тихого цикла: сервиса там
+нет, `ACTION_STOP` принять некому, и без события Stop терялся бы вовсе.
+Кнопка Stop в шторке идёт в сервис напрямую, но шторка живёт только в фазах
+реального старта, где Stop и так кончает прогон: `realStart` отдаёт
+unavailable → `failed`, следующего старта нет. `cancelRun()` без прогона —
+no-op.
+
 `HomeController.startAndAwaitVerdict` — реальный старт с ожиданием вердикта:
 текст отказа приходит асинхронно событием статуса, поэтому старт ждётся через
 `Completer`. `null` — принято, строка — текст отказа, пустая строка — таймаут

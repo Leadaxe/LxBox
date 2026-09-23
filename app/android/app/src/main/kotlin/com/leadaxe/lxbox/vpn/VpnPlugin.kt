@@ -80,6 +80,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
         }
 
+        /// Фича 478, ревью после v2.25.1 (M2) — сообщить Dart о нативном Stop
+        /// (`BoxVpnService.stop`): Dart гасит идущий прогон страховки. Имя —
+        /// `kVpnStopRequestedAction` в `automation_dispatcher.dart`. Нет
+        /// движка — нет и прогона, пропуск молча.
+        fun notifyStopRequested() = handleAutomationAction("vpn-stop-requested", emptyMap())
+
         /// §047 outgoing emit: Dart (`AutomationEventEmitter`) шлёт событие
         /// наружу. action — короткое имя (`VPN_CONNECTED`), namespace'ится в
         /// `com.leadaxe.lxbox.event.<action>`. Открыт всем подписчикам — события

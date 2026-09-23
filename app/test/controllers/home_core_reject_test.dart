@@ -1,12 +1,15 @@
 // ignore_for_file: depend_on_referenced_packages
 
 // Фича 478 — ревью guard_builder_api: ожидание вердикта и stale-terminal.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
+import 'package:lxbox/models/core_reject_verdict.dart';
 import 'package:lxbox/models/home_state.dart';
+import 'package:lxbox/services/automation/automation_dispatcher.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
 import 'package:lxbox/services/core_reject/core_reject_state.dart';
 import 'package:lxbox/services/haptic_service.dart';
@@ -200,4 +203,114 @@ void main() {
     expect(startVpn, 0);
     expect(err, contains('bad key'));
   });
+
+  // Ревью после v2.25.1, M2: Stop мимо кнопки фазы цикла тоже гасит прогон.
+  group('M2 — любой Stop гасит идущий прогон страховки', () {
+    Future<CoreRejectRun> startRun(_GatedCheckCore core) {
+      final guard = CoreRejectGuard(core);
+      CoreRejectState.I.beginRun();
+      CoreRejectState.I.bindCancel(guard.cancel);
+      return guard.run().then((r) {
+        CoreRejectState.I.finish(r);
+        return r;
+      });
+    }
+
+    test('HomeController.stop() в фазе checking → финального старта нет',
+        () async {
+      messenger.setMockMethodCallHandler(methods, (call) async {
+        if (call.method == 'stopVPN') return true;
+        return null;
+      });
+      final core = _GatedCheckCore();
+      final fut = startRun(core);
+      await core.checkEntered.future;
+      expect(CoreRejectState.I.phase, CoreRejectPhase.checking);
+
+      // `POST /action/stop-vpn` и кнопка Stop сходятся сюда.
+      await controller.stop();
+      core.release.complete();
+      final run = await fut;
+
+      expect(run.outcome, CoreRejectOutcome.stoppedByUser);
+      expect(core.realStarts, 1, reason: 'только сигнальный старт');
+      expect(CoreRejectState.I.guardActive, isFalse);
+      expect(CoreRejectState.I.phase, CoreRejectPhase.done);
+    });
+
+    test('нативный Stop (vpn-stop-requested) в фазе checking → старта нет',
+        () async {
+      registerAutomationBridge();
+      final core = _GatedCheckCore();
+      final fut = startRun(core);
+      await core.checkEntered.future;
+
+      // Плитка QS / Intent API / Locale: BoxVpnService.stop → VpnPlugin.
+      // notifyStopRequested → automationAction на канале методов.
+      final done = Completer<void>();
+      await messenger.handlePlatformMessage(
+        'com.leadaxe.lxbox/methods',
+        const StandardMethodCodec().encodeMethodCall(const MethodCall(
+          'automationAction',
+          {'name': kVpnStopRequestedAction, 'args': <String, dynamic>{}},
+        )),
+        (_) => done.complete(),
+      );
+      await done.future;
+      core.release.complete();
+      final run = await fut;
+
+      expect(run.outcome, CoreRejectOutcome.stoppedByUser);
+      expect(core.realStarts, 1);
+      expect(CoreRejectState.I.guardActive, isFalse);
+    });
+  });
+}
+
+/// Один негодный узел; `check` ждёт [release] — окно, в котором человек жмёт
+/// Stop. Фазы уходят в [CoreRejectState], как у живого хоста.
+class _GatedCheckCore implements CoreRejectHost {
+  final checkEntered = Completer<void>();
+  final release = Completer<void>();
+  final disabled = <String>[];
+  var realStarts = 0;
+
+  @override
+  Future<CoreAttempt> realStart() async {
+    realStarts++;
+    if (disabled.contains('Bad')) return const CoreAttempt.accepted();
+    return const CoreAttempt.rejected(
+        'initialize outbound[0] vless[Bad]: bad node');
+  }
+
+  @override
+  Future<RebuiltConfig?> rebuild() async => RebuiltConfig(
+      configJson: '{}',
+      tags: disabled.contains('Bad') ? {'Good'} : {'Bad', 'Good'});
+
+  @override
+  Future<CoreAttempt> check(String configJson) async {
+    if (!checkEntered.isCompleted) checkEntered.complete();
+    await release.future;
+    return const CoreAttempt.accepted();
+  }
+
+  @override
+  Future<CoreRejectNodeRef?> disableNode(String tag, String reason) async {
+    disabled.add(tag);
+    return CoreRejectNodeRef(sourceId: 's', nodeKey: tag);
+  }
+
+  @override
+  Future<CoreRejectPrompt> askKeepChecking(int n) async =>
+      CoreRejectPrompt.stop;
+
+  @override
+  void onProgress(
+    CoreRejectPhase phase,
+    int round, {
+    List<DisabledNode> disabledNodes = const [],
+  }) =>
+      CoreRejectState.I
+          .onProgress(phase, round, disabledNodes: disabledNodes);
 }
