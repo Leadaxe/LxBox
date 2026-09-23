@@ -247,5 +247,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 450));
       expect(find.text('New', skipOffstage: false), findsNothing);
     });
+
+    // §511 m1 — подсвеченная запись ушла: подсветка снимается сразу, ключ
+    // строки не копится до закрытия экрана.
+    testWidgets('удаление подсвеченной записи снимает подсветку и её ключ',
+        (tester) async {
+      await openScreen(tester, [_entry('seed', _seedUri)]);
+      await _submitNewEntry(tester);
+      final screen =
+          tester.state(find.byType(SubscriptionsScreen)) as dynamic;
+      expect(screen.debugHighlightedEntryId, 'added-0');
+      expect(screen.debugTileKeyIds, contains('added-0'));
+
+      controller.dropEntry('added-0');
+      await tester.pump();
+      expect(screen.debugHighlightedEntryId, isNull);
+      expect(screen.debugTileKeyIds, isNot(contains('added-0')));
+      expect(screen.debugTileKeyIds, contains('seed'));
+    });
   });
 }

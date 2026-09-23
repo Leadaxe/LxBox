@@ -309,8 +309,25 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   void _onControllerForSourceOrder() {
+    _forgetGoneEntries();
     unawaited(_loadSourceOrder());
   }
+
+  /// §511 m1 — запись ушла (удалена из меню, пропала при обновлении
+  /// подписки): подсветка с её id снимается, а не живёт до таймера, и
+  /// `GlobalKey` строки не копится в [_tileKeys] до закрытия экрана.
+  void _forgetGoneEntries() {
+    final ids = _entryIds(widget.subController);
+    _tileKeys.removeWhere((id, _) => !ids.contains(id));
+    final hl = _highlightedEntryId;
+    if (hl != null && !ids.contains(hl)) _dismissHighlight(animated: false);
+  }
+
+  @visibleForTesting
+  String? get debugHighlightedEntryId => _highlightedEntryId;
+
+  @visibleForTesting
+  Iterable<String> get debugTileKeyIds => _tileKeys.keys;
 
   /// Создание цепочки: тег спрашиваем ДО создания (после он immutable — на
   /// него ссылаются фильтры Направлений, `route_final` и позиции ДРУГИХ
