@@ -16,6 +16,14 @@
   "%1$d of %2$d nodes match": {
     "value": "Совпадений: %1$d из %2$d узлов"
   },
+  "%1$d outbounds (%2$s)": {
+    "value": {
+      "one": "%1$d исходящий канал (%2$s)",
+      "few": "%1$d исходящих канала (%2$s)",
+      "many": "%1$d исходящих каналов (%2$s)",
+      "other": "%1$d исходящего канала (%2$s)"
+    }
+  },
   "%1$d selected · %2$d shown": {
     "value": "%1$d выбрано · %2$d показано"
   },
@@ -62,6 +70,14 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
+  "%d chained": {
+    "value": {
+      "one": "%d в цепочке",
+      "few": "%d в цепочке",
+      "many": "%d в цепочке",
+      "other": "%d в цепочке"
+    }
+  },
   "%d DNS rules": {
     "value": {
       "one": "%d DNS-правило",
@@ -76,6 +92,22 @@
       "few": "%d DNS-сервера",
       "many": "%d DNS-серверов",
       "other": "%d DNS-серверов"
+    }
+  },
+  "%d elements": {
+    "value": {
+      "one": "%d элемент",
+      "few": "%d элемента",
+      "many": "%d элементов",
+      "other": "%d элемента"
+    }
+  },
+  "%d groups": {
+    "value": {
+      "one": "%d группа",
+      "few": "%d группы",
+      "many": "%d групп",
+      "other": "%d группы"
     }
   },
   "%d MB": {
@@ -373,6 +405,9 @@
       "other": "Удалено %d сервера"
     }
   },
+  "%s link": {
+    "value": "Ссылка %s"
+  },
   "1 server disabled": {
     "value": "Отключено серверов: 1"
   },
@@ -636,6 +671,9 @@
   },
   "ACTIVE": {
     "value": "АКТИВЕН"
+  },
+  "Amnezia VPN config": {
+    "value": "Конфиг Amnezia VPN"
   },
   "AND": {
     "value": "И"
@@ -3862,6 +3900,9 @@
   "Runtime HTTP server for adb-forwarded debugging.": {
     "value": "HTTP-сервер для отладки через adb forward."
   },
+  "sing-box config": {
+    "value": "Конфиг sing-box"
+  },
   "SOCKS5": {
     "value": "SOCKS5"
   },
@@ -4869,6 +4910,9 @@
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
   },
+  "WireGuard config": {
+    "value": "Конфиг WireGuard"
+  },
   "WireGuard config: saved as is. The tag is stored separately.": {
     "value": "Конфиг WireGuard: сохраняется как есть. Тег хранится отдельно."
   },
@@ -4898,6 +4942,9 @@
   },
   "XHTTP padding": {
     "value": "набивка XHTTP"
+  },
+  "Xray config": {
+    "value": "Конфиг Xray"
   },
   "Yellow up to, ms": {
     "value": "Жёлтый до, мс"

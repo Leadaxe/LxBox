@@ -13,6 +13,11 @@
   "%1$d of %2$d nodes match": {
     "value": "%2$d 个节点中匹配 %1$d 个"
   },
+  "%1$d outbounds (%2$s)": {
+    "value": {
+      "other": "%1$d 个出站（%2$s）"
+    }
+  },
   "%1$d selected · %2$d shown": {
     "value": "已选 %1$d · 显示 %2$d"
   },
@@ -53,6 +58,11 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d 个事件"
   },
+  "%d chained": {
+    "value": {
+      "other": "%d 个链式"
+    }
+  },
   "%d DNS rules": {
     "value": {
       "other": "%d 条 DNS 规则"
@@ -61,6 +71,16 @@
   "%d DNS servers": {
     "value": {
       "other": "%d 个 DNS 服务器"
+    }
+  },
+  "%d elements": {
+    "value": {
+      "other": "%d 个元素"
+    }
+  },
+  "%d groups": {
+    "value": {
+      "other": "%d 个分组"
     }
   },
   "%d MB": {
@@ -252,6 +272,9 @@
     "value": {
       "other": "已删除 %d 个服务器"
     }
+  },
+  "%s link": {
+    "value": "%s 链接"
   },
   "1 server disabled": {
     "value": "已关闭 1 个服务器"
@@ -482,6 +505,9 @@
   },
   "ACTIVE": {
     "value": "在用"
+  },
+  "Amnezia VPN config": {
+    "value": "Amnezia VPN 配置"
   },
   "AND": {
     "value": "AND"
@@ -3665,6 +3691,9 @@
   "Runtime HTTP server for adb-forwarded debugging.": {
     "value": "用于 adb forward 调试的运行时 HTTP 服务器。"
   },
+  "sing-box config": {
+    "value": "sing-box 配置"
+  },
   "SOCKS5": {
     "value": "SOCKS5"
   },
@@ -4673,6 +4702,9 @@
   "Wipes existing data in selected categories.": {
     "value": "会清除所选类别中的现有数据。"
   },
+  "WireGuard config": {
+    "value": "WireGuard 配置"
+  },
   "WireGuard config: saved as is. The tag is stored separately.": {
     "value": "WireGuard 配置：原样保存。标签单独存储。"
   },
@@ -4702,6 +4734,9 @@
   },
   "XHTTP padding": {
     "value": "XHTTP 填充"
+  },
+  "Xray config": {
+    "value": "Xray 配置"
   },
   "Yellow up to, ms": {
     "value": "黄色上限，ms"
