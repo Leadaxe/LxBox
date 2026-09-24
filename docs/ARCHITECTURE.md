@@ -210,6 +210,18 @@ parseFromSource(source)  ─┐
   │ body_decoder + parsers│
   └───────────────────────┘
   ▼
+SourceEntry (sealed, §524)  —  ContainerEntry | ChainEntry | OpaqueEntry
+  │  ONE ordered list of `sources[]` records in memory, all genera together:
+  │  subscriptions, servers, folders and chains, in the order the user sees.
+  │  `sourceKey` = `id:<uuid>` (container) / `chain:<tag>` (chain); identity is
+  │  unchanged — the key only covers both. OpaqueEntry carries a record the codec
+  │  cannot read (§141 P1.8c) verbatim and keeps its slot. The order IS the data:
+  │  chain acyclicity ("a hop may only point UP") is read off this list.
+  │
+  ├─ ContainerEntry → ServerList (sealed)
+  │                     SubscriptionServers | UserServer | FolderServers
+  └─ ChainEntry     → SourceChain (the chain outbound, SPEC 110)
+  ▼
 ServerList (sealed)  —  SubscriptionServers | UserServer | FolderServers
   │ .build(ctx: EmitContext)
   │   ├─ applies tagPrefix + allocateTag
@@ -617,6 +629,8 @@ validation.dart              # sealed ValidationIssue + ValidationResult (dangli
 parser_config.dart           # the wizard_template.json models: WizardTemplate/PresetGroup/SelectableRule/WizardVar
 custom_rule.dart             # the sealed CustomRule = Inline|Srs|Preset (routing rules; →§090, see the Overview)
 server_list.dart             # sealed ServerList = SubscriptionServers | UserServer | FolderServers; DetourPolicy.overrideDetour
+source_entry.dart            # §524 sealed SourceEntry = ContainerEntry | ChainEntry | OpaqueEntry — ONE list
+                             #   record over sources[]; sourceKey/kind/enabled; the supertype the order lives on
                              #   and FolderMember.detour are NodeLinks (§439)
 subscription_meta.dart       # SubscriptionMeta — the userinfo headers (traffic/expire/title/update-interval)
 app_info.dart                # AppInfo — the metadata of installed applications (fetched natively)
@@ -821,8 +835,10 @@ settings_storage.dart        # the facade over lxbox_settings.json — thin dele
 settings_storage/io.dart            #   the atomic load/save/recovery (main→.bak→{}, §072); §439 the storage migration
                                     #   inside _load() with the one-time lxbox_settings.json.v0.bak copy
 settings_storage/vars.dart          #   the vars domain plus the Wi-Fi history (§051)
-settings_storage/sources_rules.dart #   sources[] without chains (ServerList records), rules[] (§439)
-settings_storage/chains.dart        #   §393 C/§439/§509 chain records in sources[]
+settings_storage/sources_rules.dart #   §524 the ONE reader (_sourceEntriesOf) and the ONE writer (_writeEntries)
+                                    #   of sources[]; getServerLists/getChains are slices of it. rules[] (§439)
+settings_storage/chains.dart        #   §393 C/§439/§509 chain records in sources[] — §524: a FACADE by genus
+                                    #   (chain tag gate, hop heal); _spliceSourceKind is gone
 settings_storage/node_link_registry.dart # §439 (D-113/D-114) rewrite links on rename/move, clear them on delete
 settings_storage/network.dart       #   route_final/dns{} models (DnsServerRef/DnsRuleRef)/ping_options (§040/§061/§439)
 settings_storage/backup_tun.dart    #   the snapshot (§031) plus the tun-apps split tunnel (§046)
@@ -1851,7 +1867,7 @@ user data, and the OS/core payloads (the `RawMsg.detail` passthrough). The units
 | Controller | Responsibility |
 |-----------|---------------|
 | `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
-| `SubscriptionController` | CRUD entries (`sources[]` records), `refreshEntry`/persist, node-link registry calls on rename/move/delete (§439), `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed) |
+| `SubscriptionController` | CRUD entries (`sources[]` records), `refreshEntry`/persist, node-link registry calls on rename/move/delete (§439), `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed). **§524** — `sourceEntries()` returns the WHOLE list (every genus, disk order); `applySourceOrder(keys)` writes the order ONCE, for keys of any genus |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
 | `AutoUpdater` | Owned by HomeScreen; wraps SubscriptionController for 4-trigger auto-update with spam gates (spec 027) |

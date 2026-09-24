@@ -451,6 +451,27 @@ folders and chains interleaved (see [`sources[]` — `kind: chain`](#chains--kin
 Before §439 the same data lived under `server_lists` (sealed on `type`) and `chains`;
 the migration converts them once (see [Storage form and migration](#storage-form-and-migration-439)).
 
+**§524 — ONE reader, ONE writer.** The file form has NOT changed; what changed is
+above it. `settings_storage/sources_rules.dart` holds `_sourceEntriesOf(doc)` — the
+single read of the array — and `_writeEntries(entries)` — the single writer.
+`getServerLists()` and `getChains()` are *slices* of that read
+(`whereType<ContainerEntry>` / `whereType<ChainEntry>`), not independent passes.
+In memory the list is one ordered `List<SourceEntry>` (`models/source_entry.dart`,
+members `ContainerEntry` / `ChainEntry` / `OpaqueEntry`).
+
+Before §524 there were TWO writers over this one array — one for the records
+without chains, one for the chain records — and each had to splice its own genus
+into a context it could not see. Recovering that lost information cost a
+key-matched slot algorithm (`_spliceSourceKind`), which produced §511 M1
+(deleting shifted same-genus neighbours) and §511 M2 (one unreadable record
+vetoed every drag). Both are impossible by construction now: the writer is handed
+the whole list. `saveServerLists` / `setChains` survive as facades (they receive
+half a list) and are the only callers that still match slots by key.
+
+A record the codec cannot read (§141 P1.8c — a foreign or future `kind`, broken
+JSON) is an `OpaqueEntry`: a full member of the list that keeps its slot and is
+written back byte for byte, including keys no model holds.
+
 The discriminator is `kind`. The record is read by `sourceFromRecord` /
 `chainFromRecord` (`lib/models/codec/`). Reading is tolerant: a link given as a
 string is a root link, a record with `body` and no `origin` (the launcher's form) is
@@ -1554,7 +1575,15 @@ Chain records sit in `sources[]` among subscriptions, servers and folders, in
 the user's list order (BACKUP §4: the record order is normative). There is no
 separate key and no position field: before §439 the list was `chains[]` with an `order`
 index into the common source list, and the migration placed the records by that order
-(at the tail). §509 stopped collapsing a later save back to that tail.
+(at the tail). §509 stopped collapsing a later save back to that tail. §524 removed
+the last reason it could come back: a chain is an ordinary member of the one
+in-memory list (`ChainEntry`), so a save writes the array whole, in list order.
+
+**A chain is a source, the same genus of thing as a standalone or auto server**
+(owner, 24.09.2026). In a backup export it therefore rides the **Server lists**
+category, not Routing (`services/backup_service.dart`). Reading an
+older archive that was exported under Routing is unchanged: the chains live in
+the same `sources[]` key either way.
 
 - `tag` — the future outbound's tag, and the record's id. **Immutable** after
   creation, like `Direction.tag`: direction filters, `route_final` and the
