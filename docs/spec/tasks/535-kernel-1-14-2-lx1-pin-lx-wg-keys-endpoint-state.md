@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Реализовано** (бамп пина, переезд ключей, биндинг endpointState). Проверено: javap-дельта, `option/`-дифф, golden, `flutter analyze`, эмулятор — см. «Проверка на устройстве». **Не снято:** см. «Что осталось» |
+| Статус | **Реализовано** (бамп пина, переезд ключей, биндинг endpointState). Проверено: javap-дельта, `option/`-дифф, golden, `flutter analyze`, l10n-чекеры, CI зелёный, эмулятор (а–д все сняты) — см. «Проверка на устройстве». **Не снято:** см. «Что осталось» |
 | Дата | 2026-09-24 |
 | Ядро | `v1.14.2-lx.1` — lx.13 (**SPEC 097** ленивая сборка WG, **SPEC 098** корневой блок `lx`, **SPEC 101** шум GSO) плюс апстрим sing-box `1.14.2` (**SPEC 102**: сброс сети только по реальной смене интерфейса, `route/network.go` переписан; hysteria2 realm; resolved D-Bus) |
 | Связанные | §526 (предыдущий бамп, lx.10), §215/§272/§128 (ключи сна), §519 (таймаут connecting), §122 (CommandClient), `docs/KERNEL.md` («Gotchas when bumping the version»), память `kernel-bump-emulator-verify` |
@@ -211,6 +211,7 @@ AmneziaWG 3 из демо-набора. APK собран регламентом 
 | **(а)** версия ядра | `1.14.2-lx.1` в APK и на устройстве | `strings` по `lib/arm64-v8a/libbox.so` — **ровно одна** строка `1.14.2-lx.1`, `lx.10` не встречается; `GET /device` → `core_version: 1.14.2-lx.1`, app `2.25.3-dev.14` (build 22503502) ✅ |
 | **(б)** старт с AWG-узлом | лог ядра без WARN о `lx_idle_*`, без ошибок старта | Сначала туннель поднялся на **сохранённом старом** конфиге — и ядро честно написало обе строки `route.lx_idle_suspend[_reachable] is deprecated`. После `POST /action/rebuild-config` конфиг стал `lx.wg.{idle_suspend: 30s, idle_suspend_reachable: 5m}`, `route.lx_idle_*` — пусто. На перезапуске туннеля в свежем логе (418 записей): `lx_idle` — **0**, `deprecated` — **0**, `conflicts with` — **0**, `panic` — **0**, `unknown field` — **0**, `mobile-only feature` — **0** ✅ |
 | **(в)** смена сети при живом туннеле | туннель переживает, одно обновление интерфейса на смену | `svc wifi disable` → `enable`: `tunnel: connected` до, между и после. В логе окна **одна** строка `network: updated default interface wlan0, index 16, type wifi` — не на каждый тик ✅ (SPEC 102) |
+| **(г)** `endpointState` виден для WG-узла | `up` → после `idle_suspend` → `asleep` | `GET /state` → `endpoint_states` сразу после старта: все три WG/AWG-узла `up`. На t≈100 с два простаивающих ушли в **`asleep`** (`WARP (AWG 1.5)`, `WireGuard-1`), а несущий трафик `WireGuard` остался `up` ✅ Цепочка целиком: ядро `GetOutbounds` → Kotlin `getOutbounds()` → канал → Dart `CcOutbound.endpointState` → pull на heartbeat → `HomeState.endpointStates` → Debug API |
 | **(д)** heap сессии ядра | цифра в отчёт | `GET /diag/pprof?profile=heap&query=debug=1` при живом туннеле, 12 узлов: **HeapAlloc 85,4 МБ**, HeapInuse 92,5 МБ, HeapSys 125,4 МБ, Sys 135,4 МБ, HeapReleased 24,5 МБ, NumGC 13 |
 
 **Шум GSO (SPEC 101) — подтверждён попутно.** В свежем логе три строки
@@ -228,22 +229,16 @@ headless наблюдать их было нечем — `GET /state` их не 
 
 ## Что осталось
 
-**(г) `endpointState` на живом WG-узле не снят.** Поле `endpoint_states` в
-Debug API добавлено уже после сборки проверочного APK, поэтому на стенде
-крутился бинарь без него, а второй сборки задача не дождалась. Что при этом
-**доказано и от стенда не зависит**: поле есть в Java-поверхности AAR
-(`javap`: `getEndpointState`/`getIdleSinceSeconds` на `OutboundGroupItem`),
-путь заполнения прочитан в исходниках ядра (`GetOutbounds` заполняет,
-`SubscribeOutbounds` и дерево групп — нет), Kotlin-вызов `client.getOutbounds()`
-скомпилирован в составе релизного APK (сборка прошла), `flutter analyze` чист.
-Не снята именно связка «живой WG-узел → `up` → после `idle_suspend` → `asleep`»
-на устройстве.
+**Подпись в UI глазами не снята.** `Node not built yet` / `Node asleep`
+проверены по коду и по данным (состояние `asleep` до виджета доезжает —
+`endpoint_states` тому подтверждение), но скриншота списка узлов с подписью в
+этом прогоне нет: состояние снималось через Debug API, а не тапами по экрану.
 
-**Переход `up → asleep` требует времени и тишины.** `idle_suspend` = 30 с
-считается от последнего дайла **недостижимого** узла; чтобы увидеть `asleep`,
-узел должен быть вне активного дерева маршрутизации и без трафика. На стенде с
-одним активным узлом и живыми пробами это отдельный сценарий, а не побочный
-эффект старта.
+**`never_built` / `torn_down` на стенде не воспроизводились.** Оба требуют
+`lx.wg.lazy_build` либо разборки по `idle_teardown`, а приложение ни того, ни
+другого по умолчанию не пишет (решение владельца отложено). Ветка UI для них
+написана и разобрана тестом компилятора, но живого состояния на стенде не было —
+только `up` и `asleep`.
 
 ## Вопросы владельцу
 
