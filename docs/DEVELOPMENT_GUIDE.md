@@ -274,6 +274,23 @@ cd app && dart run tool/check_contract_lock.dart   # when the contract copy is i
 **0 issues** in analyze, **green on your own tests** and **zero failures in the
 checkers** are all mandatory before pushing.
 
+#### Who reads the test and linter output
+
+Maintainer's decision, 2026-09-24: the raw output of `flutter test`,
+`flutter analyze`, the l10n checkers and CI logs is **not read by the reasoning
+agent** (Fable/Opus). A cheap sub-agent (Sonnet, low effort) runs the command,
+greps the result and hands up a **short digest**: green/red, the failing
+tests or issues with file and line, the first stack trace of each failure, the
+counts. The raw log never enters the expensive context.
+
+- The reasoning agent gets the digest and decides: fix, redo, commit. Finding
+  the cause and the fix is its job, not the grepper's.
+- The minimal set is the rule at every step: one test file while iterating, the
+  task's own files before a commit. Big suites run on CI, and their verdict is
+  read by the same kind of cheap agent on duty, by `head_sha`.
+- Every task brief to an executor states this in one explicit line: “tests and
+  analyze run through a Sonnet sub-agent; only the digest goes into context”.
+
 #### After the push: the CI result is not optional
 
 A push is not done until its run is green. Wait for the run on your `head_sha`
