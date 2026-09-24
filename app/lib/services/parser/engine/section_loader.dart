@@ -381,10 +381,33 @@ final class MapperSections {
   /// не спор. Живой случай: у одной схемы `security` читает шифр из данных
   /// пользователя, у общего блока `security` — вид TLS из настроек потока, и
   /// обе записи обязаны отработать.
+  ///
+  /// **Запись ПОД УСЛОВИЕМ (`when`) переопределением НЕ считается**
+  /// (MAPPER_ENGINE §7.1, эталон `linkmap/plan.go:529-563` — пропуск записей
+  /// с непустым `when`). Условная запись исполняется лишь в ЧАСТИ случаев, и
+  /// изъять за неё запись блока значит оставить остальные случаи без правила
+  /// вовсе: параметр, объявленный схемой под гейтом, при снятом гейте не
+  /// прочтётся ничем.
+  ///
+  /// Правило было отложено задачей 532 (дефект 3) и взято здесь, после синка
+  /// 1.1.53. Откладывалось оно из-за живого узла одной из QUIC-схем: запись
+  /// `sni` схемы условна (гейт по `query.disable_sni`), её неизъятие
+  /// оставляло в таблице запись блока `tls#uri.sni` с тем же набором
+  /// `source`, и `default_from: host` у дожившей блочной возвращал
+  /// `tls.server_name`, снятый записью `disable_sni` — узел уезжал с обоими
+  /// полями, identity кейса `b480:disable_sni_with_sni` менялась.
+  ///
+  /// Дыру закрыл РЕЕСТР, а не движок: контракт 1.1.53 повесил тот же гейт
+  /// `query.disable_sni.not_in` на саму блочную запись `tls#uri.sni`
+  /// (`registry/tls.json`, находка задачи 532, §49 п.25 TASKS_LXBOX). Теперь
+  /// при `disable_sni=1` блочная запись не исполняется вовсе, имя сервера не
+  /// возвращается, и identity остаётся прежней — проверено
+  /// `before_480_identity_snapshot`.
   MapperSection _withIncludes(MapperSection section) {
     final merged = <String, MapperParam>{};
     final own = <String>{
-      for (final p in section.params.values) ..._overrideKeys(p),
+      for (final p in section.params.values)
+        if (p.when.isEmpty) ..._overrideKeys(p),
     };
     for (final ref in section.include) {
       for (final e in _blockParams(ref).entries) {

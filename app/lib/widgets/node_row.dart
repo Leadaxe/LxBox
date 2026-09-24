@@ -6,6 +6,8 @@ import '../screens/home/special_node_display.dart';
 import '../screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'node_view_item.dart';
 import '../services/l10n/locale_controller.dart';
+// §535 — CcEndpointState: имена состояний endpoint'а приходят из ядра.
+import '../vpn/cc_channel.dart' show CcEndpointState;
 
 /// One row в node list на главной screen'е. Read-only widget от
 /// [NodeViewItem] data + callbacks.
@@ -70,6 +72,21 @@ class NodeRow extends StatelessWidget {
     return delay < 0 ? '${prefix}ERR' : '$prefix${delay}MS';
   }
 
+  /// §535/§540 (ядро SPEC 097) — однословная подпись состояния WG/AWG-
+  /// endpoint'а: `up` / `sleep` / `down`. Детали (полное состояние ядра и
+  /// простой) — в свойствах узла. Узел в `down` — это НЕ таймаут: ядро
+  /// поднимет его на первом дайле за 0,5–1 с. Пусто = узел не endpoint,
+  /// состояние неизвестно или идёт сборка (`building`).
+  String get _endpointStateLabel {
+    final st = item.endpointState;
+    if (st == CcEndpointState.up) return getLocalText.s("up");
+    if (st == CcEndpointState.asleep) return getLocalText.s("sleep");
+    if (CcEndpointState.isNotBuilt(st) || st == CcEndpointState.down) {
+      return getLocalText.s("down");
+    }
+    return '';
+  }
+
   Color? _delayColor(BuildContext context) {
     final delay = item.delay;
     if (delay == null || item.pingBusy) return null;
@@ -104,12 +121,16 @@ class NodeRow extends StatelessWidget {
         notificationWarnings.isNotEmpty;
     // §201 — у block нет осмысленного delay (всегда ERR): бейдж не рисуем.
     final dl = _isBlock ? '' : _delayLabel;
+    // §535 — подпись «узел не поднят / спит» живёт в левой части строки:
+    // правый бейдж узкий и моноширинный, фраза туда не влезает.
+    final stateLabel = _isBlock ? '' : _endpointStateLabel;
 
     if (!hasActive &&
         !hasArrow &&
         !hasProto &&
         !hasAuto &&
         !hasNotificationBadge &&
+        stateLabel.isEmpty &&
         dl.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -149,6 +170,22 @@ class NodeRow extends StatelessWidget {
             ),
           )
         : null;
+
+    final Widget? endpointStateText = stateLabel.isEmpty
+        ? null
+        : Flexible(
+            child: Text(
+              stateLabel,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontStyle: FontStyle.italic,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          );
 
     final Widget? proto = (hasProto || hasNotificationBadge)
         ? Row(
@@ -223,6 +260,13 @@ class NodeRow extends StatelessWidget {
                     fit: FlexFit.loose,
                     child: proto,
                   ),
+                // §535 — состояние endpoint'а идёт последним в левой части:
+                // при нехватке ширины уступает протоколу и выбранному серверу.
+                if (endpointStateText != null) ...[
+                  if (proto != null || arrow != null)
+                    const SizedBox(width: 6),
+                  endpointStateText,
+                ],
               ],
             ),
           ),

@@ -543,7 +543,7 @@ void main() {
         // Узел с полным телом (tls + ws + fp) — худший случай обхода схемы.
         body.writeln(
           'vless://11111111-1111-1111-1111-111111111111@example.com:443'
-          '?security=tls&encryption=none&sni=a.example&type=ws&path=/p'
+          '?security=tls&encryption=none&sni=a.example&type=ws&path=/p$i'
           '&fp=chrome#node$i',
         );
       }

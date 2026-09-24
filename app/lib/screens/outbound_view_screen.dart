@@ -416,7 +416,25 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       if (_isBalancer && poolTolerance is int && poolTolerance > 0)
         _kvRow(context, 'Pool tolerance', '$poolTolerance ms'),
       if (members is List) _membersTile(context, members),
+      if (_endpointStateValue(node) case final v?)
+        _kvRow(context, 'Endpoint state', v),
     ];
+  }
+
+  /// §540 — полное состояние WG/AWG-endpoint'а (строка ядра, не переводится)
+  /// и простой для `asleep`. Источник — та же карта `HomeState`, что кормит
+  /// короткую подпись в строке списка (§535); второго pull'а нет.
+  /// `null` = узел не WG/AWG либо ядро состояния не дало.
+  String? _endpointStateValue(ConfigNode node) {
+    if (node.type != 'wireguard' && node.type != 'awg') return null;
+    final hs = widget.homeController.state;
+    final st = hs.endpointStates[widget.tag];
+    if (st == null || st.isEmpty) return null;
+    final idle = hs.endpointIdleSince[widget.tag];
+    if (st == CcEndpointState.asleep && idle != null && idle > 0) {
+      return '$st · idle for $idle s';
+    }
+    return st;
   }
 
   /// §344 — состав группы разворачиваемым списком (было мёртвое число).

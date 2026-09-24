@@ -1256,8 +1256,8 @@
     {
       "preset_id": "ru-direct",
       "ui": {
-        "label": "Russian domains & IPs",
-        "description": "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.",
+        "label": "Ru internet segment",
+        "description": "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc), Russian IP ranges and Russian apps (by package name) directly.",
         "default": true,
         "num": 1120,
         "isSortable": true
@@ -1334,6 +1334,13 @@
           "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."
         },
         {
+          "name": "apps_enabled",
+          "type": "bool",
+          "default_value": "true",
+          "title": "Russian apps by package",
+          "tooltip": "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use."
+        },
+        {
           "name": "force_ipv4",
           "type": "bool",
           "default_value": "true",
@@ -1402,6 +1409,16 @@
           "format": "binary",
           "update_interval": "168h",
           "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs"
+        },
+        {
+          "tag": "ru-apps",
+          "#enable": [
+            "@apps_enabled"
+          ],
+          "type": "remote",
+          "format": "binary",
+          "update_interval": "168h",
+          "url": "https://raw.githubusercontent.com/legiz-ru/sb-rule-sets/main/ru-app-list.srs"
         }
       ],
       "rules": [
@@ -1425,7 +1442,8 @@
           "rule_set": [
             "ru-domains",
             "ru-services",
-            "geoip-ru"
+            "geoip-ru",
+            "ru-apps"
           ],
           "outbound": "@outbound"
         }

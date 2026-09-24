@@ -32,7 +32,25 @@
           "none": null,
           "": null
         },
-        "normalize": "trim"
+        "normalize": "trim",
+        "_delta_id": "D133-21"
+      }
+    },
+    "uri_with_host": {
+      "note": "Вариант диалекта uri для схем, у которых `host` адресует TLS, а НЕ транспорт (сегодня — http). Отличается от uri ровно одной записью — цепочкой sni. Заведён вариантом блока, а не третьим источником в общей записи: у vmess и anytls `host` несёт имя транспорта (node_parser_core.go:866-873), и общая цепочка увела бы transport-host в tls.server_name. Подключается вместо \"tls#uri\", не вместе с ним. DELTAS D133-19.",
+      "sni": {
+        "source": [
+          "query.sni",
+          "query.peer",
+          "query.host"
+        ],
+        "maps_to": "tls.server_name",
+        "default_from": "host",
+        "impl": "Цепочка sni→peer→host — наше сегодняшнее поведение у http: trojanTLSFromNode(node, \"http\") читает те же три написания (node_parser_http.go:131-138, node_parser_transport.go:1014-1020). Фолбэк на server — тот же Q133-08, что у trojan: корпус uri/http/proxy_https_default_port_443 ждёт server_name из адреса. when по ТЕЛУ: блок tls у http заводит только написание схемы (scheme_sets у proxy-https/proxy+https), и без гейта запись сочиняла бы tls.server_name простому HTTP-прокси, где блока быть не должно.",
+        "when": {
+          "tls.enabled": true
+        },
+        "_delta_id": "D133-19"
       }
     },
     "xray": {
@@ -53,86 +71,9 @@
           "none": {},
           "": {}
         },
-        "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода. REALITY требует uTLS-блок («uTLS is required by reality client» — fatal при создании outbound), поэтому у этого написания отпечаток материализуется дефолтом ЯДРА; написанное значение перебивает его записью `fp` (priority 20 против 10)."
-      },
-      "$sni_from_server": {
-        "source": "json.streamSettings.security",
-        "maps_to": null,
-        "when": {
-          "tls.enabled": true
-        },
-        "default_from": [
-          "body.server"
-        ],
-        "impl": "Пустое или отсутствующее имя сервера у живого TLS-блока заполняется АДРЕСОМ УЗЛА. Источник — уже построенное тело (`body.server`), а не путь входа: адрес объектного входа лежит под якорем формы, и общему блоку его путь не известен. Так делали обе прежние ветки (_tls: `sni.isEmpty ? server : sni`)."
-      },
-      "fp": {
-        "source": [
-          "json.streamSettings.realitySettings.fingerprint",
-          "json.streamSettings.tlsSettings.fingerprint"
-        ],
-        "maps_to": "tls.utls.fingerprint",
-        "priority": 20,
-        "merge": "overwrite",
-        "when": {
-          "tls.enabled": true
-        },
-        "value_map": {
-          "$ref": "tls.fp_dialect"
-        },
-        "implies": {
-          "tls.utls.enabled": true
-        },
-        "impl": "У выключенного TLS отпечатка не бывает: `when` держит блок от появления там, где security=none."
-      },
-      "insecure": {
-        "source": [
-          "json.streamSettings.realitySettings.allowInsecure",
-          "json.streamSettings.tlsSettings.allowInsecure"
-        ],
-        "type": "bool_spelled",
-        "when": {
-          "tls.enabled": true
-        },
-        "maps_to": "tls.insecure"
-      },
-      "pbk": {
-        "source": [
-          "json.streamSettings.realitySettings.publicKey",
-          "json.streamSettings.realitySettings.public_key"
-        ],
-        "maps_to": "tls.reality.public_key",
-        "when": {
-          "tls.enabled": true
-        },
-        "implies": {
-          "tls.reality.enabled": true
-        },
-        "impl": "`pbk_makes_reality_block` — блок появляется при НАЛИЧИИ ключа; годность ключа судит реестр (base64_32, код reality_pbk_invalid). `keyShare` этим входом НЕ читается (vless_reality_key_share): на входе sing-box поле читается (§457), на Xray — никогда не читалось. Разрыв входов вынесен лаунчеру (спека 472, 14.5), дельты на него нет."
-      },
-      "$key_share_not_carried": {
-        "source": [
-          "json.streamSettings.realitySettings.keyShare",
-          "json.streamSettings.realitySettings.key_share"
-        ],
-        "maps_to": null,
-        "impl": "См. `pbk`: с этого входа key_share не едет. Запись объявлена, чтобы ключ не уехал в json_field_unknown."
-      }
-    },
-    "uri_with_host": {
-      "note": "Вариант диалекта uri для схем, у которых `host` адресует TLS, а НЕ транспорт (сегодня — http). Отличается от uri ровно одной записью — цепочкой sni. Заведён вариантом блока, а не третьим источником в общей записи: у vmess и anytls `host` несёт имя транспорта (node_parser_core.go:866-873), и общая цепочка увела бы transport-host в tls.server_name. Подключается вместо \"tls#uri\", не вместе с ним. DELTAS D133-19.",
-      "sni": {
-        "source": [
-          "query.sni",
-          "query.peer",
-          "query.host"
-        ],
-        "maps_to": "tls.server_name",
-        "default_from": "host",
-        "impl": "Цепочка sni→peer→host — наше сегодняшнее поведение у http: trojanTLSFromNode(node, \"http\") читает те же три написания (node_parser_http.go:131-138, node_parser_transport.go:1014-1020). Фолбэк на server — тот же Q133-08, что у trojan: корпус uri/http/proxy_https_default_port_443 ждёт server_name из адреса. when по ТЕЛУ: блок tls у http заводит только написание схемы (scheme_sets у proxy-https/proxy+https), и без гейта запись сочиняла бы tls.server_name простому HTTP-прокси, где блока быть не должно.",
-        "when": {
-          "tls.enabled": true
-        }
+        "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода. REALITY требует uTLS-блок («uTLS is required by reality client» — fatal при создании outbound), поэтому у этого написания отпечаток материализуется дефолтом ЯДРА; написанное значение перебивает его записью `fp` (priority 20 против 10).",
+        "_why_kept_533": "Синк 1.1.53 — ОСТАЁТСЯ (не снят вместе с прочими записями blocks.xray). REALITY требует uTLS-блок: ядро отвечает fatal «uTLS is required by reality client» при создании outbound, поэтому у написания reality отпечаток материализуется дефолтом ядра (chrome), а написанное значение перебивает его записью fp реестра (priority 20 против 10). У реестра ветка reality ставит только tls.enabled, и без этой записи reality-узел БЕЗ realitySettings.fingerprint уезжает без utls вовсе — реестр сам судит это предупреждением field_requires (tls.reality.enabled requires tls.utls.enabled), то есть признаёт тело неполным. Кейса корпуса на «reality без fingerprint» НЕТ (ревизия зеркала §3 п.15 прямо просит его завести), поэтому снятие здесь опиралось бы не на корпус, а на догадку.",
+        "_delta_id": "D533-xray-reality-utls-required"
       }
     }
   }

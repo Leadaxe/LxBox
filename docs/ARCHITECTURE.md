@@ -399,8 +399,8 @@ carried its own value rules. It is the one input whose source dialect is an
 **object**, not text: the mapper takes a `Map`, so it has its own pair of types
 and its own entry point (`parseXrayViaPipeline`) while the pipeline body stays
 shared. After §480 the per-scheme table is the registry section for the `xray`
-source kind (`registry/protocols/<scheme>.json` → `mappers.xray`, our
-divergences in the overlays `contract_draft/xray/<scheme>.json`), executed
+source kind (`registry/protocols/<scheme>.json` → `mappers.xray`; the xray
+overlays were removed in §533, so the registry is the only source), executed
 through the bridge `engine/engine_mapper.dart` → `mapJsonViaEngine`; the
 section's own `detect` picks the record, so there is no dispatcher by protocol
 name left in the code. Three things differ, all of them from the shape of the
@@ -1744,7 +1744,7 @@ Two patterns: a **contextual banner** (a state-dependent hint) and an **overflow
 
 - **Statistics → Live and Per-app → the contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart))
 - **Routing → Tunnel apps → ⋮ → “VPN settings (Core)”** → `SettingsScreen(initialTab: 1)`. State-independent. |
-- **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 1)` — a fast path. |
+- **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 3)` — a fast path (tabs: 0 General, 1 Appearance, 2 Subscriptions, 3 Diagnostics, 4 Automation; §541). |
 
 ---
 
@@ -2054,7 +2054,7 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **125** | **Configurable directions** (CRUD directions over directions[]; enabled_groups is DEPRECATED) |
 | 126 | First-run wizard |
 | **127** | **XHTTP full URL params** (native XHTTP: mode/x_padding_bytes/no_grpc_header) |
-| **128** | **Idle-suspend** (`route.lx_idle_suspend`, the core's SPEC 020; default `30s`) |
+| **128** | **Idle-suspend** (`lx.wg.idle_suspend`, the core's SPEC 020; default `30s`; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535) |
 | **129** | **File subscriptions** (url=file:<uuid>, an HttpCache snapshot, a transactional source switch) |
 | **130** | **The MASQUE WARP transport** (the flagship of v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP) |
 | **234** | **Server folders** (folders of manual servers: FolderMember plus a per-member toggle and tag_prefix) |

@@ -875,6 +875,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §535 (ядро SPEC 097) — unary pull плоского списка: единственный
+            // источник endpointState/idleSinceSeconds (дерево групп и поток
+            // SubscribeOutbounds их не несут). null = не смогли прочитать.
+            // Dispatchers.IO — unary RPC на main = ANR (§122).
+            "ccGetOutbounds" -> {
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getOutbounds() }
+                    result.success(r)
+                }
+            }
             // §311/SPEC036 — unary снапшот конфига работающего ядра. null =
             // недоступен (down / не-STARTED / attached / ядро < lx.16-rc.3) —
             // обёртка BoxCommandClient no-throw (runCatching внутри), Dart

@@ -103,68 +103,15 @@ PresetFragments expandPreset(
 }) {
   final warnings = <String>[];
 
-  final varsMap = <String, dynamic>{};
-  for (final v in preset.vars) {
-    // §265 — ref-var: значение НЕ в rule.varsValues (оно в глобальном
-    // userVars). Локальный varsMap пресета его не несёт: `@<ref>` в правилах
-    // пресета резолвится позже из flat-vars build_config'а (globalVars,
-    // передаются отдельно — см. параметр globalVars ниже).
-    if (v.isRef) continue;
-    // Семантика (spec §033):
-    // - varsValues содержит ключ → юзер явно выбрал значение (включая "")
-    //     - непустое → используется
-    //     - пустое → "explicit none" (только для optional; required валидация
-    //       не даст дойти сюда через UI)
-    // - varsValues НЕ содержит ключ → юзер не трогал → применяется
-    //   `default_value` (если пустой + required → error; пустой + optional
-    //   → null = фрагменты с `@name` dropped)
-    final hasExplicit = rule.varsValues.containsKey(v.name);
-    final explicit = rule.varsValues[v.name];
-    if (hasExplicit) {
-      if (explicit == null || explicit.isEmpty) {
-        if (v.required) {
-          warnings.add(
-            'preset "${preset.presetId}": required var "${v.name}" set to empty',
-          );
-          return PresetFragments(warnings: warnings);
-        }
-        varsMap[v.name] = null;
-      } else {
-        varsMap[v.name] = explicit;
-      }
-    } else if (v.defaultValue.isNotEmpty) {
-      varsMap[v.name] = v.defaultValue;
-    } else if (v.required) {
-      warnings.add(
-        'preset "${preset.presetId}": required var "${v.name}" unset',
-      );
-      return PresetFragments(warnings: warnings);
-    } else {
-      varsMap[v.name] = null;
-    }
+  // §534 — словарь переменных собирает [presetVarsMap]: тот же, по которому
+  // путь скачивания/UI (`isRuleSetEnabledFor`) решает гейт наборов.
+  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  final varsError = resolvedVars.error;
+  if (varsError != null) {
+    warnings.add(varsError);
+    return PresetFragments(warnings: warnings);
   }
-
-  // §265 — ref-vars: подмешиваем значение из глобального userVars по имени
-  // (globalVars) в локальный varsMap, чтобы `@<ref>` в правилах пресета
-  // резолвился глобальным значением (напр. `@resolve_strategy` в route-resolve
-  // = та же настройка, что и `config.dns.strategy`). Пустое/отсутствующее →
-  // null (фрагмент с `@ref` выпадет, как optional-var).
-  for (final v in preset.vars) {
-    if (!v.isRef) continue;
-    final gv = globalVars[v.ref];
-    varsMap[v.name] = (gv != null && gv.isNotEmpty) ? gv : null;
-  }
-
-  // §264 — глобальные vars как FALLBACK: правила пресета могут содержать
-  // глобальные плейсхолдеры, не объявленные среди preset.vars — прежде всего
-  // `@vpn_mode` в `#if`-гейте inbound (`tun-in`/`mixed-in`). Раньше эти правила
-  // жили в `config.route.rules` (глобальный substitute, где vpn_mode есть);
-  // переехав в пресет traffic-processing (§264), они потеряли бы доступ →
-  // `#if @vpn_mode` не резолвится → inbound[] пустеет. Подмешиваем globalVars,
-  // НЕ перетирая локальные preset-vars (putIfAbsent).
-  for (final e in globalVars.entries) {
-    varsMap.putIfAbsent(e.key, () => e.value);
-  }
+  final varsMap = resolvedVars.vars;
 
   final expandedRuleSets = <Map<String, dynamic>>[];
   for (final rs in preset.ruleSets) {
@@ -673,6 +620,93 @@ dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
 }
 
 
+
+/// §534 — единый словарь переменных пресета: по нему и сборка
+/// ([expandPreset]), и гейт наборов на пути скачивания/UI
+/// (`isRuleSetEnabledFor` в `models/preset_rule_set.dart`). Одна сборка
+/// словаря — одна семантика гейта; до §534 путь скачивания разбирал `@var`
+/// сам и расходился с билдером.
+///
+/// Порядок и источники значений (spec §033, §264, §265):
+/// 1. Обычные vars пресета: `rule.varsValues[name]` — явный выбор юзера
+///    (пустая строка = «explicit none» → `null`, фрагменты с `@name`
+///    выпадают); ключа нет → `default_value`; пустой дефолт → `null`.
+/// 2. Ref-vars (§265): значение не в `varsValues`, а в глобальном userVars —
+///    `globalVars[v.ref]`; пустое/отсутствующее → `null`.
+/// 3. `globalVars` как fallback (§264): глобальные плейсхолдеры, не
+///    объявленные среди `preset.vars` (напр. `@vpn_mode`), без перетирания
+///    переменных пресета.
+///
+/// Required-var без значения (пустой явный выбор или пустой дефолт) →
+/// `error` с тем же текстом, что [expandPreset] пишет в warnings; первая
+/// такая ошибка побеждает. Словарь при этом всё равно собирается целиком
+/// (у сломанной переменной — `null`): [expandPreset] на ошибке ничего не
+/// выпускает и словарём не пользуется, а гейт пути скачивания вычисляется на
+/// частичном словаре.
+({Map<String, dynamic> vars, String? error}) presetVarsMap(
+  CustomRulePreset rule,
+  SelectableRule preset, {
+  Map<String, String> globalVars = const {},
+}) {
+  final varsMap = <String, dynamic>{};
+  String? error;
+  for (final v in preset.vars) {
+    // §265 — ref-var: значение НЕ в rule.varsValues (оно в глобальном
+    // userVars) — подмешивается вторым проходом ниже из globalVars.
+    if (v.isRef) continue;
+    // Семантика (spec §033):
+    // - varsValues содержит ключ → юзер явно выбрал значение (включая "")
+    //     - непустое → используется
+    //     - пустое → "explicit none" (только для optional; required валидация
+    //       не даст дойти сюда через UI)
+    // - varsValues НЕ содержит ключ → юзер не трогал → применяется
+    //   `default_value` (если пустой + required → error; пустой + optional
+    //   → null = фрагменты с `@name` dropped)
+    final hasExplicit = rule.varsValues.containsKey(v.name);
+    final explicit = rule.varsValues[v.name];
+    if (hasExplicit) {
+      if (explicit == null || explicit.isEmpty) {
+        if (v.required) {
+          error ??=
+              'preset "${preset.presetId}": required var "${v.name}" set to empty';
+        }
+        varsMap[v.name] = null;
+      } else {
+        varsMap[v.name] = explicit;
+      }
+    } else if (v.defaultValue.isNotEmpty) {
+      varsMap[v.name] = v.defaultValue;
+    } else {
+      if (v.required) {
+        error ??= 'preset "${preset.presetId}": required var "${v.name}" unset';
+      }
+      varsMap[v.name] = null;
+    }
+  }
+
+  // §265 — ref-vars: подмешиваем значение из глобального userVars по имени
+  // (globalVars) в локальный varsMap, чтобы `@<ref>` в правилах пресета
+  // резолвился глобальным значением (напр. `@resolve_strategy` в route-resolve
+  // = та же настройка, что и `config.dns.strategy`). Пустое/отсутствующее →
+  // null (фрагмент с `@ref` выпадет, как optional-var).
+  for (final v in preset.vars) {
+    if (!v.isRef) continue;
+    final gv = globalVars[v.ref];
+    varsMap[v.name] = (gv != null && gv.isNotEmpty) ? gv : null;
+  }
+
+  // §264 — глобальные vars как FALLBACK: правила пресета могут содержать
+  // глобальные плейсхолдеры, не объявленные среди preset.vars — прежде всего
+  // `@vpn_mode` в `#if`-гейте inbound (`tun-in`/`mixed-in`). Раньше эти правила
+  // жили в `config.route.rules` (глобальный substitute, где vpn_mode есть);
+  // переехав в пресет traffic-processing (§264), они потеряли бы доступ →
+  // `#if @vpn_mode` не резолвится → inbound[] пустеет. Подмешиваем globalVars,
+  // НЕ перетирая локальные preset-vars (putIfAbsent).
+  for (final e in globalVars.entries) {
+    varsMap.putIfAbsent(e.key, () => e.value);
+  }
+  return (vars: varsMap, error: error);
+}
 
 /// SPEC 107 — гейт фрагмента пресета: `#enable` (канон) плюс легаси
 /// `enabled: "@var"` (§045). Оба присутствуют → and.

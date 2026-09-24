@@ -6,7 +6,7 @@ here and bring the rest into line.
 
 Related documents:
 - **`.github/workflows/ci.yml`** — the CI mechanics: triggers, jobs, versioning, publishing the release and `docs/latest.json`.
-- **`AGENTS.md`** — the agent's general scope and the rules for working with git and branches.
+- **`DEVELOPMENT_GUIDE.md`** — the rules for working with git and branches (“Commits and push”, “Branches”); `AGENTS.md` is the agent's router and lists what needs the operator's explicit command.
 - **`RELEASE_NOTES.md`** — the release body (in the repo root) that CI uploads as `body_path` for the GitHub Release.
 - **`docs/releases/vX.Y.Z.md`** — the archive of per-version release notes.
 - **[`FDROID.md`](FDROID.md)** — publishing on F-Droid: the catalogue picks up new tags on its own; fastlane (changelogs, screenshots, descriptions) is read from the tag's commit, not from the branch, so it must be in place **before** the tag.

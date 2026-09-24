@@ -20,6 +20,8 @@ mixin _HeartbeatMixin on ChangeNotifier {
   /// 1s). Watchdog считает туннель мёртвым, если снапшотов нет дольше порога.
   DateTime? get lastCcStatusAt;
   void _stopCcStreams();
+  // §535 — обновление карты состояний endpoint'ов (реализация в HomeController).
+  Future<void> _refreshEndpointStates();
 
   Timer? _heartbeat;
   int _heartbeatFailures = 0;
@@ -75,6 +77,11 @@ mixin _HeartbeatMixin on ChangeNotifier {
     if (silence <= _heartbeatTimeout) {
       _heartbeatFailures = 0;
       _skipNextHeartbeatFail = false;
+      // §535 — на здоровом тике обновляем состояния WG/AWG-endpoint'ов.
+      // Живут они только в unary-ответе GetOutbounds (ни поток, ни дерево
+      // групп их не несут), поэтому это отдельный дешёвый pull, а не подписка.
+      // Ошибок не бросает: недоступность = карта не меняется.
+      unawaited(_refreshEndpointStates());
       return;
     }
 

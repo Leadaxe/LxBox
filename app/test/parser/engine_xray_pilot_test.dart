@@ -46,6 +46,23 @@ const Map<String, String> _expectedChanges = {
   'vless_default_port': 'delta480: дефолт 443 снят по арбитру Xray — было: '
       'узел на 443; стало: ноль узлов и одна отбраковка '
       '(server port is missing or out of range)',
+  // §533 / контракт 1.1.53 (§49 п.5, 6 TASKS_LXBOX) — ТРИ ИСПРАВЛЕНИЯ, где
+  // корпус объявил наше прежнее поведение ошибочным, а снимок снят ДО них.
+  // Каждое подтверждено кейсом корпуса тел, который теперь зелёный.
+  'vless_ws_ed_fields': 'delta533: плоские wsSettings.ed/eh больше НЕ читаются '
+      '(кейс body/xray/vless_ws_ed_fields — прав корпус, реестр даёт '
+      'json_field_unknown) — было: transport.max_early_data + '
+      'early_data_header_name; стало: их нет',
+  'b480_ws_ed_flat_only':
+      'delta533: то же — плоские ed/eh сняты, узел остаётся ws без early data '
+      '(кейс body/xray/ws_ed_flat_only)',
+  'b480_ws_ed_path_tail_beats_flat':
+      'delta533: то же — плоские ed/eh сняты, хвост пути читается как прежде '
+      '(кейс body/xray/ws_ed_path_tail_beats_flat)',
+  'b480_sockopt_keepalive_negative_interval':
+      'delta533: пара idle: 30 + interval: -5 даёт tcp_keep_alive: 30s БЕЗ '
+      'флага disable_tcp_keep_alive — наш флаг на этой паре был ошибкой '
+      '(кейс body/xray/sockopt_keepalive_negative_interval)',
 };
 
 /// §480 — ДВУСТОРОННЯЯ ПОМЕТКА: кейсы, добавленные ЭТОЙ правкой, и чем их

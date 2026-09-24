@@ -220,6 +220,8 @@ Future<GoldenBuild> buildGoldenConfig(StorageSandbox box) async {
     vpnMode: await SettingsStorage.getVpnMode(),
     idleSuspend: await SettingsStorage.getIdleSuspend(),
     idleSuspendReachable: await SettingsStorage.getIdleSuspendReachable(),
+    wgBuildMax: await SettingsStorage.getWgBuildMax(),
+    wgLazyBuild: await SettingsStorage.getWgLazyBuild(),
     passiveCheck: await SettingsStorage.getPassiveCheck(),
     tailscaleStateRoot: kGoldenTailscaleStateRoot,
   );

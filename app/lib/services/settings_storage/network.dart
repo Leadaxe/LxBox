@@ -24,7 +24,7 @@ Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
-// §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020)
+// §215 — idle-suspend threshold (lx.wg.idle_suspend, kernel SPEC 020)
 //
 // Duration-строка ("30s", "5m"). Пусто = feature off (поле не попадёт в
 // route, idle-тик ядра не запустится). Config-significant → markConfigDirty.
@@ -45,7 +45,7 @@ Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
-// §272 — reachable idle-suspend window (route.lx_idle_suspend_reachable,
+// §272 — reachable idle-suspend window (lx.wg.idle_suspend_reachable,
 // kernel SPEC 020 rev. 2026-07-15)
 //
 // Второе, ДЛИННОЕ окно простоя для ДОСТИЖИМЫХ эндпоинтов (члены пула,
@@ -55,7 +55,7 @@ Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
 // агрессивная экономия; цена — при значении < idle_timeout каналов возможны
 // 1-2 probe-флапа в хвосте засыпания (пробы ещё живы, когда туннель уже спит)
 // — не поломка, см. docs-lx/lx-energy.ru.md §8 ядра.
-// Ядро требует lx_idle_suspend включённым и reachable >= lx_idle_suspend —
+// Ядро требует idle_suspend включённым и reachable >= idle_suspend —
 // генератор эмитит поле только при непустом базовом пороге.
 // ---------------------------------------------------------------------------
 
@@ -68,6 +68,49 @@ Future<void> _saveIdleSuspendReachable(String threshold,
     {bool flush = true}) async {
   final data = await _load();
   data['route_idle_suspend_reachable'] = threshold;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
+// ---------------------------------------------------------------------------
+// §542 — WG/AWG lazy build + build budget (lx.wg.lazy_build / build_max,
+// kernel SPEC 097)
+//
+// `wg_lazy_build` (bool, дефолт true): эндпоинт собирается при первом дайле.
+// false → в конфиг не пишутся ни lazy_build, ни build_max.
+//
+// Сколько WG/AWG эндпоинтов ядро держит собранными одновременно; сверх лимита
+// самый давний разбирается и пересобирается по требованию. `0` = без потолка.
+// Дефолт 5 (значение бывшей константы §536). Пишется в конфиг только вместе
+// с idle_suspend (ядро требует его для lazy_build/build_max).
+// Config-significant → markConfigDirty.
+// ---------------------------------------------------------------------------
+
+const int kWgBuildMaxDefault = 5;
+
+Future<int> _getWgBuildMax() async {
+  final data = await _load();
+  final v = data['wg_build_max'];
+  return (v is int && v >= 0) ? v : kWgBuildMaxDefault;
+}
+
+Future<void> _saveWgBuildMax(int value, {bool flush = true}) async {
+  final data = await _load();
+  data['wg_build_max'] = value;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
+Future<bool> _getWgLazyBuild() async {
+  final data = await _load();
+  return (data['wg_lazy_build'] as bool?) ?? true;
+}
+
+Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
+  final data = await _load();
+  data['wg_lazy_build'] = enabled;
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();

@@ -1,25 +1,26 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.52",
+  "contract_version": "1.1.53",
   "subscriptions": {
     "01-github-vless-universal": {
-      "nodes_total": 97,
-      "dropped": {},
+      "nodes_total": 96,
+      "dropped": {
+        "duplicate": 1
+      },
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "02-github-vless-lite": {
-      "nodes_total": 97,
+      "nodes_total": 96,
       "dropped": {
+        "duplicate": 1,
         "provider_banner_link": 4
       },
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "03-github-vless": {
@@ -44,10 +45,12 @@
       "warnings": {}
     },
     "06-github-black-vless-rus-mobile": {
-      "nodes_total": 142,
-      "dropped": {},
+      "nodes_total": 134,
+      "dropped": {
+        "duplicate": 8
+      },
       "warnings": {
-        "reality_fp_not_chrome": 15,
+        "reality_fp_not_chrome": 14,
         "tls_insecure": 5,
         "tls_not_applicable_quic": 5,
         "unknown_key": 2,
@@ -55,19 +58,22 @@
       }
     },
     "07-github-byewhitelists2": {
-      "nodes_total": 1031,
-      "dropped": {},
+      "nodes_total": 495,
+      "dropped": {
+        "duplicate": 536
+      },
       "warnings": {
-        "reality_fp_not_chrome": 351,
-        "uri_param_unknown": 2
+        "reality_fp_not_chrome": 215
       }
     },
     "08-github-whitelist": {
-      "nodes_total": 45,
-      "dropped": {},
+      "nodes_total": 27,
+      "dropped": {
+        "duplicate": 18
+      },
       "warnings": {
         "tls_insecure": 1,
-        "uri_param_unknown": 5
+        "uri_param_unknown": 1
       }
     },
     "09-github-26": {
@@ -85,40 +91,43 @@
         "ss_method_legacy": 4,
         "tls_alpn_item_invalid": 14,
         "unknown_key": 5,
-        "uri_param_unknown": 489,
+        "uri_param_unknown": 427,
         "ws_early_data_converted": 5
       }
     },
     "10-github-whitelist": {
-      "nodes_total": 63,
-      "dropped": {},
+      "nodes_total": 56,
+      "dropped": {
+        "duplicate": 7
+      },
       "warnings": {
-        "tls_insecure": 16,
-        "tls_not_applicable_quic": 4
+        "tls_insecure": 14,
+        "tls_not_applicable_quic": 2
       }
     },
     "11-github-blacklist": {
-      "nodes_total": 3052,
+      "nodes_total": 2865,
       "dropped": {
+        "duplicate": 187,
         "field_missing": 12
       },
       "warnings": {
         "ech_ignored": 3,
-        "tls_insecure": 34,
+        "tls_insecure": 27,
         "tls_not_applicable_quic": 6
       }
     },
     "12-github-kizyakbeta7": {
-      "nodes_total": 94,
+      "nodes_total": 75,
       "dropped": {
+        "duplicate": 19,
         "service_record_ignored": 1
       },
       "warnings": {
         "field_conflict": 1,
         "reality_fp_not_chrome": 8,
-        "tls_insecure": 6,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 6,
+        "tls_insecure": 5,
+        "uri_param_unknown": 2,
         "utls_fp_unknown": 1
       }
     },
@@ -131,8 +140,10 @@
       }
     },
     "14-github-kizyakbeta6bl": {
-      "nodes_total": 34,
-      "dropped": {},
+      "nodes_total": 33,
+      "dropped": {
+        "duplicate": 1
+      },
       "warnings": {
         "tls_insecure": 16,
         "tls_not_applicable_quic": 5,
@@ -141,12 +152,13 @@
       }
     },
     "15-github-rkn-white-list": {
-      "nodes_total": 101,
-      "dropped": {},
+      "nodes_total": 98,
+      "dropped": {
+        "duplicate": 3
+      },
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 7,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 6
       }
     },
     "16-github-aetrisvpn": {
@@ -158,73 +170,83 @@
         "ss_method_legacy": 3,
         "tls_insecure": 2,
         "unknown_key": 28,
-        "uri_param_unknown": 35
+        "uri_param_unknown": 32
       }
     },
     "17-github-configs": {
-      "nodes_total": 217,
-      "dropped": {},
+      "nodes_total": 207,
+      "dropped": {
+        "duplicate": 10
+      },
       "warnings": {
         "reality_fp_not_chrome": 6,
         "tls_insecure": 3,
-        "unknown_key": 8,
-        "uri_param_unknown": 11,
+        "unknown_key": 5,
+        "uri_param_unknown": 6,
         "ws_early_data_converted": 1
       }
     },
     "18-github-whitelist-all": {
-      "nodes_total": 316,
+      "nodes_total": 211,
       "dropped": {
+        "duplicate": 105,
         "vless_encryption_invalid": 2
       },
       "warnings": {
-        "reality_fp_not_chrome": 26,
-        "tls_alpn_item_invalid": 20,
-        "uri_param_unknown": 9
+        "reality_fp_not_chrome": 25,
+        "tls_alpn_item_invalid": 6,
+        "uri_param_unknown": 1
       }
     },
     "19-github-bypass-all": {
-      "nodes_total": 702,
-      "dropped": {},
+      "nodes_total": 624,
+      "dropped": {
+        "duplicate": 78
+      },
       "warnings": {
-        "reality_fp_not_chrome": 50,
+        "reality_fp_not_chrome": 42,
         "tls_insecure": 1,
         "unknown_key": 75,
-        "uri_param_unknown": 145,
-        "utls_fp_unknown": 72,
-        "ws_early_data_converted": 37
+        "uri_param_unknown": 132,
+        "utls_fp_unknown": 71,
+        "ws_early_data_converted": 36
       }
     },
     "20-github-bypass-1": {
-      "nodes_total": 300,
-      "dropped": {},
+      "nodes_total": 287,
+      "dropped": {
+        "duplicate": 13
+      },
       "warnings": {
-        "reality_fp_not_chrome": 11,
+        "reality_fp_not_chrome": 10,
         "unknown_key": 5,
-        "uri_param_unknown": 20,
+        "uri_param_unknown": 14,
         "utls_fp_unknown": 29,
         "ws_early_data_converted": 20
       }
     },
     "21-github-bypass-2": {
-      "nodes_total": 300,
-      "dropped": {},
+      "nodes_total": 264,
+      "dropped": {
+        "duplicate": 36
+      },
       "warnings": {
-        "reality_fp_not_chrome": 34,
+        "reality_fp_not_chrome": 28,
         "tls_insecure": 1,
         "unknown_key": 70,
-        "uri_param_unknown": 92,
+        "uri_param_unknown": 88,
         "utls_fp_unknown": 2,
         "ws_early_data_converted": 10
       }
     },
     "22-github-bypass-3": {
-      "nodes_total": 299,
+      "nodes_total": 278,
       "dropped": {
+        "duplicate": 21,
         "field_missing": 1
       },
       "warnings": {
-        "reality_fp_not_chrome": 36,
+        "reality_fp_not_chrome": 31,
         "unknown_key": 34,
         "uri_param_unknown": 78,
         "utls_fp_unknown": 50,
@@ -232,10 +254,12 @@
       }
     },
     "23-github-bypass-4": {
-      "nodes_total": 300,
-      "dropped": {},
+      "nodes_total": 281,
+      "dropped": {
+        "duplicate": 19
+      },
       "warnings": {
-        "reality_fp_not_chrome": 17,
+        "reality_fp_not_chrome": 14,
         "tls_insecure": 1,
         "unknown_key": 3,
         "uri_param_unknown": 37,
@@ -244,21 +268,25 @@
       }
     },
     "24-github-bypass-5": {
-      "nodes_total": 300,
-      "dropped": {},
+      "nodes_total": 25,
+      "dropped": {
+        "duplicate": 275
+      },
       "warnings": {
-        "reality_fp_not_chrome": 21,
-        "uri_param_unknown": 1166
+        "reality_fp_not_chrome": 6,
+        "uri_param_unknown": 23
       }
     },
     "25-github-bypass-6": {
-      "nodes_total": 300,
-      "dropped": {},
+      "nodes_total": 280,
+      "dropped": {
+        "duplicate": 20
+      },
       "warnings": {
-        "reality_fp_not_chrome": 32,
+        "reality_fp_not_chrome": 30,
         "tls_insecure": 4,
         "unknown_key": 45,
-        "uri_param_unknown": 89,
+        "uri_param_unknown": 60,
         "utls_fp_unknown": 1
       }
     },
@@ -274,44 +302,49 @@
         "reality_fp_not_chrome": 86,
         "tls_alpn_item_invalid": 1,
         "tls_insecure": 40,
-        "uri_param_unknown": 327,
+        "uri_param_unknown": 314,
         "utls_fp_unknown": 2,
         "ws_early_data_converted": 50
       }
     },
     "27-github-ru-white-all-white": {
-      "nodes_total": 6048,
+      "nodes_total": 4102,
       "dropped": {
+        "duplicate": 1946,
         "field_missing": 2,
         "ss_method_invalid": 1,
         "transport_header_unsupported": 56,
         "vless_encryption_invalid": 2
       },
       "warnings": {
-        "field_missing": 26,
-        "reality_fp_not_chrome": 486,
-        "ss_method_legacy": 16,
-        "tls_alpn_item_invalid": 9,
-        "tls_insecure": 129,
-        "uri_param_unknown": 386,
+        "field_missing": 22,
+        "reality_fp_not_chrome": 399,
+        "ss_method_legacy": 14,
+        "tls_alpn_item_invalid": 2,
+        "tls_insecure": 118,
+        "uri_param_unknown": 250,
         "utls_fp_unknown": 1,
         "vision_with_transport": 11,
         "ws_early_data_converted": 13,
-        "xhttp_param_reset": 16
+        "xhttp_param_reset": 12
       }
     },
     "28-github-whitelist": {
-      "nodes_total": 354,
-      "dropped": {},
+      "nodes_total": 199,
+      "dropped": {
+        "duplicate": 155
+      },
       "warnings": {
-        "reality_fp_not_chrome": 22,
+        "reality_fp_not_chrome": 18,
         "unknown_key": 7,
-        "uri_param_unknown": 17
+        "uri_param_unknown": 9
       }
     },
     "29-github-blacklist": {
-      "nodes_total": 109,
-      "dropped": {},
+      "nodes_total": 106,
+      "dropped": {
+        "duplicate": 3
+      },
       "warnings": {}
     },
     "30-github-non-ru": {
@@ -332,62 +365,69 @@
       "warnings": {}
     },
     "33-github-229": {
-      "nodes_total": 229,
-      "dropped": {},
+      "nodes_total": 70,
+      "dropped": {
+        "duplicate": 159
+      },
       "warnings": {
-        "reality_fp_not_chrome": 21,
-        "ss_method_legacy": 4,
-        "unknown_key": 49,
-        "uri_param_unknown": 64
+        "reality_fp_not_chrome": 11,
+        "ss_method_legacy": 3,
+        "unknown_key": 28,
+        "uri_param_unknown": 34
       }
     },
     "34-github-antinet": {
-      "nodes_total": 1109,
+      "nodes_total": 643,
       "dropped": {
+        "duplicate": 466,
         "field_missing": 7,
         "scheme_unsupported": 14,
         "transport_header_unsupported": 1
       },
       "warnings": {
         "awg_mtu_clamped": 1,
-        "reality_fp_not_chrome": 102,
+        "reality_fp_not_chrome": 38,
         "ss_method_legacy": 2,
-        "tls_insecure": 21,
-        "unknown_key": 95,
-        "uri_param_unknown": 193,
+        "tls_insecure": 14,
+        "unknown_key": 78,
+        "uri_param_unknown": 154,
         "wgconf_dns_ignored": 1,
-        "ws_early_data_converted": 88,
-        "xhttp_param_reset": 8
+        "ws_early_data_converted": 46,
+        "xhttp_param_reset": 3
       }
     },
     "35-github-premium": {
-      "nodes_total": 200,
-      "dropped": {},
+      "nodes_total": 167,
+      "dropped": {
+        "duplicate": 33
+      },
       "warnings": {
-        "reality_fp_not_chrome": 15,
+        "reality_fp_not_chrome": 14,
         "ss_method_legacy": 3,
-        "tls_alpn_item_invalid": 7,
+        "tls_alpn_item_invalid": 5,
         "tls_insecure": 6,
-        "uri_param_unknown": 3
+        "uri_param_unknown": 2
       }
     },
     "36-github-alive-full": {
-      "nodes_total": 720,
+      "nodes_total": 625,
       "dropped": {
+        "duplicate": 95,
         "transport_header_unsupported": 9
       },
       "warnings": {
         "field_missing": 3,
-        "reality_fp_not_chrome": 36,
+        "reality_fp_not_chrome": 35,
         "reality_short_id_invalid": 2,
         "tls_insecure": 4,
-        "unknown_key": 89,
-        "uri_param_unknown": 121
+        "unknown_key": 69,
+        "uri_param_unknown": 98
       }
     },
     "37-github-sub": {
-      "nodes_total": 3966,
+      "nodes_total": 2912,
       "dropped": {
+        "duplicate": 1054,
         "field_missing": 103,
         "form_unrecognized": 2,
         "provider_banner_link": 2,
@@ -395,44 +435,47 @@
         "transport_header_unsupported": 59
       },
       "warnings": {
-        "ech_ignored": 13,
-        "field_missing": 82,
-        "reality_fp_not_chrome": 174,
+        "ech_ignored": 10,
+        "field_missing": 59,
+        "reality_fp_not_chrome": 144,
         "ss_method_legacy": 13,
         "tls_alpn_item_invalid": 1,
-        "tls_insecure": 70,
-        "unknown_key": 419,
-        "uri_param_unknown": 3270,
+        "tls_insecure": 59,
+        "unknown_key": 294,
+        "uri_param_unknown": 2140,
         "utls_fp_unknown": 48,
         "vision_with_transport": 1,
-        "ws_early_data_converted": 72
+        "ws_early_data_converted": 67
       }
     },
     "38-codeberg-vless-universal": {
-      "nodes_total": 97,
-      "dropped": {},
+      "nodes_total": 96,
+      "dropped": {
+        "duplicate": 1
+      },
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "39-moshub-list-universal": {
-      "nodes_total": 97,
-      "dropped": {},
+      "nodes_total": 96,
+      "dropped": {
+        "duplicate": 1
+      },
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "40-gitverse-list-universal": {
-      "nodes_total": 97,
-      "dropped": {},
+      "nodes_total": 96,
+      "dropped": {
+        "duplicate": 1
+      },
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "41-gitlab-vless-reality-white-lists-rus-mobile": {
@@ -454,20 +497,20 @@
       }
     },
     "47-domain-whitelist": {
-      "nodes_total": 131,
+      "nodes_total": 95,
       "dropped": {
+        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
-        "reality_fp_not_chrome": 5,
-        "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "reality_fp_not_chrome": 4,
+        "tls_insecure": 3
       }
     },
     "48-domain-1": {
-      "nodes_total": 4456,
+      "nodes_total": 3683,
       "dropped": {
+        "duplicate": 773,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -475,18 +518,19 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 77,
+        "reality_fp_not_chrome": 71,
         "ss_method_legacy": 91,
-        "tls_insecure": 115,
-        "tls_not_applicable_quic": 11,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "49-domain-2": {
-      "nodes_total": 4456,
+      "nodes_total": 3683,
       "dropped": {
+        "duplicate": 773,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -494,30 +538,30 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 77,
+        "reality_fp_not_chrome": 71,
         "ss_method_legacy": 91,
-        "tls_insecure": 115,
-        "tls_not_applicable_quic": 11,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "50-domain-whitelist": {
-      "nodes_total": 131,
+      "nodes_total": 95,
       "dropped": {
+        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
-        "reality_fp_not_chrome": 5,
-        "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "reality_fp_not_chrome": 4,
+        "tls_insecure": 3
       }
     },
     "51-domain-other": {
-      "nodes_total": 4325,
+      "nodes_total": 3588,
       "dropped": {
+        "duplicate": 737,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -525,18 +569,19 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 72,
+        "reality_fp_not_chrome": 67,
         "ss_method_legacy": 91,
-        "tls_insecure": 112,
-        "tls_not_applicable_quic": 10,
+        "tls_insecure": 109,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 90,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "52-domain-1": {
-      "nodes_total": 4456,
+      "nodes_total": 3683,
       "dropped": {
+        "duplicate": 773,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -544,18 +589,19 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 77,
+        "reality_fp_not_chrome": 71,
         "ss_method_legacy": 91,
-        "tls_insecure": 115,
-        "tls_not_applicable_quic": 11,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "53-domain-2": {
-      "nodes_total": 4456,
+      "nodes_total": 3683,
       "dropped": {
+        "duplicate": 773,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -563,83 +609,87 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 77,
+        "reality_fp_not_chrome": 71,
         "ss_method_legacy": 91,
-        "tls_insecure": 115,
-        "tls_not_applicable_quic": 11,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "54-gitverse-whitelist": {
-      "nodes_total": 135,
+      "nodes_total": 120,
       "dropped": {
+        "duplicate": 15,
         "provider_banner_link": 1,
         "transport_header_unsupported": 7
       },
       "warnings": {
-        "reality_fp_not_chrome": 16,
-        "uri_param_unknown": 4
+        "reality_fp_not_chrome": 15,
+        "uri_param_unknown": 1
       }
     },
     "55-gitverse-other": {
-      "nodes_total": 1248,
+      "nodes_total": 883,
       "dropped": {
+        "duplicate": 365,
         "provider_banner_link": 1,
         "transport_header_unsupported": 13
       },
       "warnings": {
         "field_missing": 12,
-        "reality_fp_not_chrome": 23,
+        "reality_fp_not_chrome": 21,
         "ss_method_legacy": 1,
-        "tls_insecure": 17,
-        "uri_param_unknown": 86
+        "tls_insecure": 16,
+        "uri_param_unknown": 46
       }
     },
     "56-gitverse-1": {
-      "nodes_total": 1383,
+      "nodes_total": 995,
       "dropped": {
+        "duplicate": 388,
         "provider_banner_link": 1,
         "transport_header_unsupported": 20
       },
       "warnings": {
         "field_missing": 12,
-        "reality_fp_not_chrome": 39,
+        "reality_fp_not_chrome": 36,
         "ss_method_legacy": 1,
-        "tls_insecure": 17,
-        "uri_param_unknown": 90
+        "tls_insecure": 16,
+        "uri_param_unknown": 47
       }
     },
     "57-gitverse-2": {
-      "nodes_total": 1383,
+      "nodes_total": 995,
       "dropped": {
+        "duplicate": 388,
         "provider_banner_link": 1,
         "transport_header_unsupported": 20
       },
       "warnings": {
         "field_missing": 12,
-        "reality_fp_not_chrome": 39,
+        "reality_fp_not_chrome": 36,
         "ss_method_legacy": 1,
-        "tls_insecure": 17,
-        "uri_param_unknown": 90
+        "tls_insecure": 16,
+        "uri_param_unknown": 47
       }
     },
     "58-domain-whitelist": {
-      "nodes_total": 131,
+      "nodes_total": 95,
       "dropped": {
+        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
-        "reality_fp_not_chrome": 5,
-        "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "reality_fp_not_chrome": 4,
+        "tls_insecure": 3
       }
     },
     "59-domain-other": {
-      "nodes_total": 4325,
+      "nodes_total": 3588,
       "dropped": {
+        "duplicate": 737,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -647,18 +697,19 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 72,
+        "reality_fp_not_chrome": 67,
         "ss_method_legacy": 91,
-        "tls_insecure": 112,
-        "tls_not_applicable_quic": 10,
+        "tls_insecure": 109,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 90,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "60-domain-1": {
-      "nodes_total": 4456,
+      "nodes_total": 3683,
       "dropped": {
+        "duplicate": 773,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -666,18 +717,19 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 77,
+        "reality_fp_not_chrome": 71,
         "ss_method_legacy": 91,
-        "tls_insecure": 115,
-        "tls_not_applicable_quic": 11,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "61-domain-2": {
-      "nodes_total": 4456,
+      "nodes_total": 3683,
       "dropped": {
+        "duplicate": 773,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
@@ -685,72 +737,72 @@
       },
       "warnings": {
         "ech_ignored": 5,
-        "reality_fp_not_chrome": 77,
+        "reality_fp_not_chrome": 71,
         "ss_method_legacy": 91,
-        "tls_insecure": 115,
-        "tls_not_applicable_quic": 11,
+        "tls_insecure": 112,
+        "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 32,
         "utls_fp_unknown": 13
       }
     },
     "62-domain-whitelist-etoneya-baby": {
-      "nodes_total": 131,
+      "nodes_total": 95,
       "dropped": {
+        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
-        "reality_fp_not_chrome": 5,
-        "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "reality_fp_not_chrome": 4,
+        "tls_insecure": 3
       }
     },
     "63-domain-whitelist": {
-      "nodes_total": 131,
+      "nodes_total": 95,
       "dropped": {
+        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
-        "reality_fp_not_chrome": 5,
-        "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "reality_fp_not_chrome": 4,
+        "tls_insecure": 3
       }
     },
     "64-domain-gen": {
-      "nodes_total": 255,
+      "nodes_total": 200,
       "dropped": {
+        "duplicate": 55,
         "provider_banner_link": 1
       },
       "warnings": {
-        "reality_fp_not_chrome": 18,
+        "reality_fp_not_chrome": 17,
         "tls_insecure": 1,
-        "tls_not_applicable_quic": 4,
-        "uri_param_unknown": 5
+        "tls_not_applicable_quic": 4
       }
     },
     "65-codeberg-sub": {
-      "nodes_total": 50,
-      "dropped": {},
+      "nodes_total": 28,
+      "dropped": {
+        "duplicate": 22
+      },
       "warnings": {
-        "reality_fp_not_chrome": 16,
-        "uri_param_unknown": 2
+        "reality_fp_not_chrome": 7
       }
     },
     "66-gitverse-wl": {
-      "nodes_total": 1678,
+      "nodes_total": 1616,
       "dropped": {
+        "duplicate": 62,
         "field_missing": 9,
         "ss_method_invalid": 2
       },
       "warnings": {
         "field_missing": 12,
-        "reality_fp_not_chrome": 284,
+        "reality_fp_not_chrome": 274,
         "ss_method_legacy": 4,
         "tls_insecure": 7,
         "unknown_key": 5,
-        "uri_param_unknown": 52,
+        "uri_param_unknown": 14,
         "ws_early_data_converted": 2
       }
     },
@@ -764,18 +816,20 @@
         "reality_fp_not_chrome": 7,
         "tls_insecure": 2,
         "unknown_key": 7,
-        "uri_param_unknown": 19
+        "uri_param_unknown": 18
       }
     },
     "68-gitverse-outlinevpn-outlinevpn": {
-      "nodes_total": 275,
-      "dropped": {},
+      "nodes_total": 165,
+      "dropped": {
+        "duplicate": 110
+      },
       "warnings": {
         "ech_ignored": 2,
-        "reality_fp_not_chrome": 41,
+        "reality_fp_not_chrome": 17,
         "tls_alpn_item_invalid": 1,
         "tls_insecure": 1,
-        "uri_param_unknown": 4,
+        "uri_param_unknown": 2,
         "ws_early_data_converted": 9
       }
     },
@@ -795,7 +849,7 @@
         "field_missing": 59,
         "reality_fp_not_chrome": 72,
         "type_invalid": 2,
-        "uri_param_unknown": 749
+        "uri_param_unknown": 746
       }
     },
     "71-domain-bypass-all": {
@@ -809,21 +863,22 @@
         "field_missing": 59,
         "reality_fp_not_chrome": 72,
         "type_invalid": 2,
-        "uri_param_unknown": 749
+        "uri_param_unknown": 746
       }
     },
     "72-gitverse-alive-full": {
-      "nodes_total": 720,
+      "nodes_total": 625,
       "dropped": {
+        "duplicate": 95,
         "transport_header_unsupported": 9
       },
       "warnings": {
         "field_missing": 3,
-        "reality_fp_not_chrome": 36,
+        "reality_fp_not_chrome": 35,
         "reality_short_id_invalid": 2,
         "tls_insecure": 4,
-        "unknown_key": 89,
-        "uri_param_unknown": 121
+        "unknown_key": 69,
+        "uri_param_unknown": 98
       }
     }
   }

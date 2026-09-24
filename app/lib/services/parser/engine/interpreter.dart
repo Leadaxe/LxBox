@@ -777,6 +777,12 @@ bool detectMatchesIni(Map<String, dynamic>? d, Map<String, String> space) {
 /// - `value_in: {<путь>: [<значения>]}` — вхождение в набор;
 /// - `required_keys: [<путь>…]` — путь существует (значение любое, включая
 ///   пустое); прежнее написание `has_key` читается, но не пишется;
+/// - `any_keys: [<путь>…]` — существует ХОТЯ БЫ ОДИН из путей (дизъюнкция);
+///   пустой список условием не является;
+/// - `key_absent: [<путь>…]` — НИ ОДНОГО из путей нет. Отрицание
+///   `required_keys`, и именно им реестр отличает версии одной схемы друг от
+///   друга: ветка старшей версии объявляется как «поля версии нет ни по
+///   одному из путей» (§532 дефект 1);
 /// - `array_elem_any_keys: ["outbounds[].protocol", …]` — хотя бы у ОДНОГО
 ///   элемента массива есть этот путь. Массив назван явно (`[]` в пути), а не
 ///   угадывается: «первый элемент решает за весь массив» — ровно тот
@@ -856,6 +862,23 @@ bool detectMatchesJson(Map<String, dynamic>? d, dynamic value) {
       if (jsonPathValue(value, path) == null) return false;
     }
   }
+  // `any_keys` — дизъюнкция существования: хотя бы один путь есть. Пустой
+  // список условием НЕ является (иначе секция без вариантов отсекала бы всё).
+  final anyOfKeys = (j['any_keys'] as List?)?.cast<String>();
+  if (anyOfKeys != null && anyOfKeys.isNotEmpty) {
+    if (!anyOfKeys.any((p) => jsonPathValue(value, p) != null)) return false;
+  }
+  // `key_absent` — отрицание `required_keys`: НИ ОДНОГО из путей нет (§532
+  // дефект 1). Прежде предикат не исполнялся вовсе, и «ключа нет» читалось
+  // как истина при ЛЮБОМ содержимом: элемент с ЧУЖОЙ версией протокола
+  // проходил ветку, объявленную как «поля версии нет», и уезжал в секцию
+  // старшей версии. Семантика Go — `linkmap/detect.go:293`.
+  final keyAbsent = (j['key_absent'] as List?)?.cast<String>();
+  if (keyAbsent != null) {
+    for (final path in keyAbsent) {
+      if (jsonPathValue(value, path) != null) return false;
+    }
+  }
   final anyKeys = (j['array_elem_any_keys'] as List?)?.cast<String>();
   if (anyKeys != null) {
     for (final path in anyKeys) {
@@ -865,17 +888,26 @@ bool detectMatchesJson(Map<String, dynamic>? d, dynamic value) {
   final type = j['type'] as String?;
   if (type != null && !_isJsonType(value, type)) return false;
 
-  // `type_of: {<путь>: object|array|string|number}` — ФОРМА значения по
+  // `type_of: {<путь>: object|array|string|number|bool}` — ФОРМА значения по
   // пути. Нужна там, где мусорный ТИП поля делает элемент нечитаемым
   // целиком: `streamSettings: "none"` это не «транспорта нет», а битая
   // запись, и собрать из неё рабочий узел без транспорта и TLS значило бы
-  // выдать узел, которого провайдер не присылал. Отсутствующий путь условию
-  // НЕ противоречит: ключа может не быть вовсе.
+  // выдать узел, которого провайдер не присылал.
+  //
+  // ПУТЬ ОБЯЗАН СУЩЕСТВОВАТЬ (§532 дефект 2, семантика Go —
+  // `linkmap/detect.go:298`): предикат отвечает на вопрос «что это за
+  // значение», и у отсутствующего значения ответа нет. Прежде отсутствующий
+  // путь условию не противоречил, и предикат вырождался в «либо нужный тип,
+  // либо ничего» — тем самым `type_of` перестал отличать форму от её
+  // отсутствия, а реестр это различие несёт СВОИМИ средствами: «объект ИЛИ
+  // ключа нет» пишется через `any` + `key_absent` — так объявлены формы
+  // xray-секций, у которых контейнер потока законно отсутствует, — и подмена
+  // предиката делала вторую ветку мёртвой.
   final typeOf = (j['type_of'] as Map?)?.cast<String, dynamic>();
   if (typeOf != null) {
     for (final e in typeOf.entries) {
       final actual = jsonPathValue(value, e.key);
-      if (actual == null) continue;
+      if (actual == null) return false;
       if (!_isJsonType(actual, '${e.value}')) return false;
     }
   }
@@ -908,11 +940,15 @@ bool detectMatchesJson(Map<String, dynamic>? d, dynamic value) {
   return true;
 }
 
+/// Тип значения JSON — набор имён тот же, что у Go (`jsonTypeOf`,
+/// `linkmap/detect.go:495`): `bool` в нём есть, и без него предикат о булевом
+/// поле молча не сходился бы ни с чем.
 bool _isJsonType(dynamic value, String type) => switch (type) {
       'object' => value is Map,
       'array' => value is List,
       'string' => value is String,
       'number' => value is num,
+      'bool' => value is bool,
       _ => false,
     };
 
@@ -948,6 +984,12 @@ bool _scalarEq(dynamic actual, dynamic expected) {
 /// скаляр, берёт значение как есть (`list`, `coerce`, `flatten`). Склейка
 /// массива в строку — источник живого дефекта у Go (Q133-16).
 dynamic jsonPathValue(dynamic root, String path) {
+  // `$root` — САМ документ, а не ключ в нём (Go: `linkmap/detect.go:445`).
+  // Нужен предикатам о форме документа целиком: `type_of: {"$root": "array"}`
+  // в `source_kinds.json` отличает массив от объекта, и выразить это именем
+  // ключа нельзя. Разбирается ЗДЕСЬ, а не в предикате: путь один и тот же на
+  // всех примитивах, читающих путь.
+  if (path.trim() == r'$root') return root;
   dynamic cur = root;
   for (final seg in path.split('.')) {
     if (seg.isEmpty) continue;
@@ -2742,6 +2784,15 @@ final class _Run {
       if (m.containsKey('not')) return !_matches(actual, m['not']);
       if (m.containsKey('present')) {
         return (actual != null) == (m['present'] == true);
+      }
+      // `absent` — зеркало `present` (эталон `linkmap/exec.go:2159-2161`:
+      // `present != v`). Контракт 1.1.53 объявил им гейт «выключение
+      // keep-alive отрицательным ИНТЕРВАЛОМ считается только тогда, когда
+      // idle не задан вовсе» (`registry/dialer.json`,
+      // `disable_tcp_keep_alive_by_interval`), и без предиката запись не
+      // исполнялась НИ РАЗУ: неизвестный ключ уходил в `return false`.
+      if (m.containsKey('absent')) {
+        return (actual == null) == (m['absent'] == true);
       }
       // Через общий [_regex]: перевод Go-группы и кэш — условие исполняется
       // на каждом узле, а реестр пишется в Go-написании (ревью после

@@ -539,9 +539,7 @@
     ],
     "final": "vpn-1",
     "auto_detect_interface": true,
-    "rule_set": [],
-    "lx_idle_suspend": "30s",
-    "lx_idle_suspend_reachable": "5m"
+    "rule_set": []
   },
   "experimental": {
     "cache_file": {
@@ -554,5 +552,13 @@
     {
       "type": "oom-killer"
     }
-  ]
+  ],
+  "lx": {
+    "wg": {
+      "idle_suspend": "30s",
+      "idle_suspend_reachable": "5m",
+      "lazy_build": true,
+      "build_max": 5
+    }
+  }
 }

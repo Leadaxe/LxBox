@@ -19,10 +19,18 @@ import 'corpus_warnings.dart';
 // contract/corpus/body/**/*.body через decode() → parseAll() и сравнивает
 // состав узлов с ожиданиями лаунчера.
 //
-// Сравнивается СОСТАВ (схема + сервер + порт), а не полный конверт: эмиссия
-// сторон нормируется корпусом URI, а здесь проверяется классификация тела и
-// то, что ни один узел не потерян. Иначе один и тот же дефект ловился бы
-// дважды, а падал бы в обоих местах — и чинить пришлось бы вслепую.
+// Сравнивается ТЕЛО УЗЛА ЦЕЛИКОМ (задача 514 контракта, §49 п.«Механизм»
+// ревизии зеркала): состав (схема + сервер + порт) ловил только потерю узла,
+// а расхождения ВНУТРИ тела — плоские `wsSettings.ed/eh`, `sockopt` с
+// отрицательным интервалом, подстановку адреса в `server_name`, плоский
+// `ws.host` — не видел вовсе. Ровно они и накопились в оверлеях
+// `contract_draft/**`, которые ревизия перечисляет пунктами 10–13: раннер
+// молчал, и отступление жило годами.
+//
+// `entry` берётся как у URI-раннера — `spec.emit(TemplateVars.empty).map`
+// минус `tag`/`detour` (CANON §2.1-2.2), и сверяется глубоким сравнением
+// через `canonEncode` (ключи сортируются, порядок списков сохраняется,
+// CANON §2.3).
 //
 // D-088 / §404 — к составу добавлена ОТБРАКОВКА (`dropped[]`). Пустой
 // `nodes[]` без `dropped[]` и пустой с ним — разные вещи: первое значит «тело
@@ -82,6 +90,31 @@ String _nodeSignature(NodeSpec spec) {
   final server = map['server'] ?? _wgPeerServer(map) ?? '';
   final port = map['server_port'] ?? _wgPeerPort(map) ?? 0;
   return '${_canonScheme(spec.protocol)}|$server|$port';
+}
+
+/// `entry` узла: `spec.emit(TemplateVars.empty).map` минус `tag`/`detour`
+/// (CANON §2.1-2.2), рекурсивно канонизованный. Тот же вид, в каком тело
+/// лежит в ожиданиях корпуса, и тот же, что строит URI-раннер.
+Map<String, dynamic> _canonEntryMap(NodeSpec spec) {
+  final SingboxEntry raw = spec.emit(TemplateVars.empty);
+  final copy = Map<String, dynamic>.from(raw.map);
+  copy.remove('tag');
+  copy.remove('detour');
+  return _canonValue(copy) as Map<String, dynamic>;
+}
+
+/// Рекурсивная канонизация значения (CANON §2.3): ключи map сортируются уже
+/// при сериализации [canonEncode], порядок списков сохраняется как есть.
+Object? _canonValue(Object? v) {
+  if (v is Map) {
+    final out = <String, dynamic>{};
+    v.forEach((k, val) => out[k as String] = _canonValue(val));
+    return out;
+  }
+  if (v is List) {
+    return [for (final val in v) _canonValue(val)];
+  }
+  return v;
 }
 
 /// WireGuard держит адрес сервера внутри peers[], а не на верхнем уровне.
@@ -237,6 +270,36 @@ void main() {
         expect(got, want,
             reason: 'состав узлов тела разошёлся с лаунчером\n'
                 '  получено: $got\n  ожидалось: $want');
+
+        // Задача 514 контракта — ТЕЛО УЗЛА ЦЕЛИКОМ. Состав сверен выше, так
+        // что узлы соотносятся по подписи; у тел с несколькими одинаковыми
+        // подписями (один сервер, один порт, разные транспорты) сверяются
+        // списки тел этой подписи, а не первый попавшийся узел.
+        final gotBySig = <String, List<String>>{};
+        for (final spec in specs) {
+          (gotBySig[_nodeSignature(spec)] ??= [])
+              .add(canonEncode(_canonEntryMap(spec)));
+        }
+        final wantBySig = <String, List<String>>{};
+        for (final wantNode
+            in ((expected['nodes'] as List?) ?? const [])
+                .cast<Map<String, dynamic>>()) {
+          final entry =
+              (wantNode['entry'] as Map?)?.cast<String, dynamic>() ?? {};
+          final srv = entry['server'] ?? _wgPeerServer(entry) ?? '';
+          final prt = entry['server_port'] ?? _wgPeerPort(entry) ?? 0;
+          final sig = '${wantNode['scheme']}|$srv|$prt';
+          (wantBySig[sig] ??= []).add(canonEncode(_canonValue(entry)));
+        }
+        for (final sig in wantBySig.keys) {
+          final g = (gotBySig[sig] ?? const <String>[]).toList()..sort();
+          final w = wantBySig[sig]!.toList()..sort();
+          if (canonEncode(g) != canonEncode(w)) {
+            fail('тело узла $sig разошлось с контрактом\n'
+                '--- got ---\n${g.join('\n')}\n'
+                '--- want ---\n${w.join('\n')}');
+          }
+        }
 
         // D-088 — отбраковка сверяется по (ref, code); code сравнивается
         // только там, где ожидание его объявило.

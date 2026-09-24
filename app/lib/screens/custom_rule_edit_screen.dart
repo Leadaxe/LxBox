@@ -280,7 +280,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
 
   Future<void> _openWifiPermissionsScreen() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => const AppSettingsScreen(initialTab: 2),
+      builder: (_) => const AppSettingsScreen(initialTab: 3),
     ));
   }
 

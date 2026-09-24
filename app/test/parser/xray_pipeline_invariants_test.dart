@@ -52,6 +52,22 @@ const Map<String, String> _expectedChanges = {
   'vless_default_port': 'delta480: дефолт 443 снят по арбитру Xray — было: '
       'узел на 443; стало: ноль узлов и одна отбраковка '
       '(server port is missing or out of range)',
+  // §533 / контракт 1.1.53 (§49 п.5, 6 TASKS_LXBOX) — ЧЕТЫРЕ ИСПРАВЛЕНИЯ,
+  // где корпус объявил наше прежнее поведение ошибочным. Оверлеи, которые
+  // его держали, сняты; каждый кейс корпуса тел теперь зелёный.
+  'vless_ws_ed_fields': 'delta533: плоские wsSettings.ed/eh больше НЕ '
+      'читаются — Xray таких полей у wsSettings не объявляет, и корпус ждёт '
+      'json_field_unknown (body/xray/vless_ws_ed_fields). Было: '
+      'transport.max_early_data + early_data_header_name; стало: их нет',
+  'b480_ws_ed_flat_only': 'delta533: то же (body/xray/ws_ed_flat_only) — '
+      'узел остаётся ws без early data',
+  'b480_ws_ed_path_tail_beats_flat': 'delta533: то же '
+      '(body/xray/ws_ed_path_tail_beats_flat) — early data читается только '
+      'из ХВОСТА ПУТИ, как и прежде',
+  'b480_sockopt_keepalive_negative_interval':
+      'delta533: пара idle: 30 + interval: -5 даёт tcp_keep_alive: 30s БЕЗ '
+      'флага disable_tcp_keep_alive — наш флаг на этой паре был ошибкой '
+      '(body/xray/sockopt_keepalive_negative_interval)',
 };
 
 Map<String, dynamic> _fixture() =>

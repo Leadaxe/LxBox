@@ -39,6 +39,8 @@ hand”. Both describe the same operations from opposite sides.
 | Document | Description |
 |---|---|
 | [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | Philosophy, principles, critical gotchas, how specs are organised |
+| [SUBAGENT_BRIEF.md](SUBAGENT_BRIEF.md) | Brief for a sub-agent executing a task brief: files not to touch, checks, l10n and naming traps |
+| [CONTRACT.md](CONTRACT.md) | The launcher contract: what it is, where the copy and mirrors live, sync tests, corpus, overrides, syncing |
 | [BUILD.md](BUILD.md) | flutter build commands, CI, signing, the local-build marker |
 | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Versions, tags, GitHub Releases, post-flight |
 | [FDROID.md](FDROID.md) | Publishing in the F-Droid catalogue: metadata, reproducible builds, the versionCode scheme |

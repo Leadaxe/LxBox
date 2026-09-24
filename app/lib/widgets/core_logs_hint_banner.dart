@@ -68,7 +68,7 @@ class _CoreLogsHintBannerState extends State<CoreLogsHintBanner>
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => const AppSettingsScreen(
-          initialTab: 2, // §118 — Diagnostics сдвинут на 2 (вставлен Subscriptions)
+          initialTab: 3, // §541 — Diagnostics = 3 (General, Appearance, Subscriptions)
           highlightCoreLogs: true,
         ),
       ),

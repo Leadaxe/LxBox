@@ -30,6 +30,7 @@ class NodeViewItem {
     this.matches = true,
     this.isSickRoot = false,
     this.notificationWarnings,
+    this.endpointState = '',
   });
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
@@ -53,6 +54,15 @@ class NodeViewItem {
 
   /// True если ping in-flight для этой ноды (`state.pingBusy[tag] == '…'`).
   final bool pingBusy;
+
+  /// §535 (ядро SPEC 097) — состояние WG/AWG-endpoint'а: `never_built`,
+  /// `building`, `up`, `asleep`, `torn_down`, `down`. Пусто = узел не
+  /// endpoint либо состояние неизвестно; тогда бейдж ведёт себя как раньше.
+  ///
+  /// `never_built`/`torn_down`/`asleep` — это НЕ сбой: ядро поднимет узел
+  /// на первом дайле (0,5–1 с), поэтому вместо таймаута показываем словами,
+  /// что узел ещё не собран или спит.
+  final String endpointState;
 
   /// Tunnel up — определяет enabled state кнопок ping/activate.
   final bool tunnelUp;

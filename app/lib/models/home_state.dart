@@ -69,6 +69,8 @@ class HomeState {
     this.highlightedNode,
     this.delayByDirection = const <String, Map<String, int>>{},
     this.pingBusy = const <String, String>{},
+    this.endpointStates = const <String, String>{},
+    this.endpointIdleSince = const <String, int>{},
     this.sickRoots = const <String, List<DependentRef>>{},
     this.debugEvents = const <DebugEntry>[],
     this.sortMode = NodeSortMode.latencyAsc,
@@ -181,6 +183,20 @@ class HomeState {
   /// надо — см. [delayOf] / [delayIsForeign], они дают фоллбэк-семантику.
   final Map<String, Map<String, int>> delayByDirection;
   final Map<String, String> pingBusy;
+
+  /// §535 (ядро SPEC 097) — состояние WG/AWG-endpoint'а по тегу узла
+  /// (`never_built` / `building` / `up` / `asleep` / `torn_down` / `down`),
+  /// снятое unary-pull'ом `CcChannel.getOutbounds`. Тега нет в карте = узел не
+  /// endpoint, либо ядро состояния не дало: «неизвестно», а не «сломан».
+  ///
+  /// Глобально на endpoint, а не per-Направление (в отличие от
+  /// [delayByDirection]): одно устройство обслуживает все Направления сразу.
+  final Map<String, String> endpointStates;
+
+  /// §540 — сколько секунд endpoint простаивает (`idleSinceSeconds` ядра),
+  /// только для узлов в `asleep`. Тот же pull, что и [endpointStates];
+  /// показывается в свойствах узла («idle for N s»).
+  final Map<String, int> endpointIdleSince;
 
   /// §355 — «корни беды»: мёртвая нода → её транзитивные пострадавшие (DNS и
   /// ноды, зависящие через detour/Направления). Пересчитывается HomeController'ом
@@ -470,6 +486,8 @@ class HomeState {
     Object? highlightedNode = _unset,
     Map<String, Map<String, int>>? delayByDirection,
     Map<String, String>? pingBusy,
+    Map<String, String>? endpointStates,
+    Map<String, int>? endpointIdleSince,
     Map<String, List<DependentRef>>? sickRoots,
     List<DebugEntry>? debugEvents,
     NodeSortMode? sortMode,
@@ -528,6 +546,8 @@ class HomeState {
           : highlightedNode as String?,
       delayByDirection: delayByDirection ?? this.delayByDirection,
       pingBusy: pingBusy ?? this.pingBusy,
+      endpointStates: endpointStates ?? this.endpointStates,
+      endpointIdleSince: endpointIdleSince ?? this.endpointIdleSince,
       sickRoots: sickRoots ?? this.sickRoots,
       debugEvents: debugEvents ?? this.debugEvents,
       sortMode: sortMode ?? this.sortMode,

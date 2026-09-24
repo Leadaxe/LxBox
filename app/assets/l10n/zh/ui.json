@@ -1654,6 +1654,12 @@
   "Drop existing detours — every node connects through this outbound": {
     "value": "清除已有 detour —— 所有节点都经此出站连接"
   },
+  "Duplicate entry: the same node is already in this subscription.": {
+    "value": "重复条目：该节点已在本订阅中。"
+  },
+  "Duplicate of %s": {
+    "value": "与「%s」重复"
+  },
   "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
     "value": "每个来源用自己的密钥签名，所以不同来源的安装包无法互相覆盖安装。切换方法：先备份设置，卸载 L×Box，从新来源安装后再恢复备份。"
   },
@@ -2833,6 +2839,24 @@
   },
   "Node": {
     "value": "节点"
+  },
+  "down": {
+    "value": "down"
+  },
+  "Layout": {
+    "value": "布局"
+  },
+  "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
+    "value": "窗口宽度不小于 600 dp 时（平板、横屏、分屏），节点列表以双栏显示。"
+  },
+  "sleep": {
+    "value": "sleep"
+  },
+  "Two columns on wide screens": {
+    "value": "宽屏时双栏显示"
+  },
+  "up": {
+    "value": "up"
   },
   "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
     "value": "节点「%1$s」已丢弃：它的 relay「%2$s」缺失、不可用或成环。直连会绕过 relay。"
@@ -4133,6 +4157,21 @@
   },
   "Suspend idle tunnels": {
     "value": "挂起空闲隧道"
+  },
+  "Lazy tunnel build": {
+    "value": "延迟构建隧道"
+  },
+  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
+    "value": "仅在首次使用时构建 WireGuard 隧道，而不是在启动时构建。节点较多时可节省内存；首次连接某个节点会稍慢一些。"
+  },
+  "Built tunnels limit": {
+    "value": "已构建隧道上限"
+  },
+  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
+    "value": "同时最多保持这么多个已构建的 WireGuard 隧道；其余的会被拆除，需要时再重新构建。0 = 不限制。"
+  },
+  "0 (no limit)": {
+    "value": "0（不限制）"
   },
   "Switch": {
     "value": "切换"

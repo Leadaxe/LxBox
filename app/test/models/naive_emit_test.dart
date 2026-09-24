@@ -101,14 +101,18 @@ void main() {
   });
 
   group('NaïveProxy toUri (spec 037 §5)', () {
-    test('omits :443 default port', () {
+    // §533 / контракт 1.1.53 (§49 п.12) — ПОРТ ПИШЕТСЯ ВСЕГДА. Оверлей
+    // `emit.omit_port: 443` снят: реестр порт пишет, и у лаунчера `hostPort`
+    // писал его всегда. Ссылка БЕЗ порта по-прежнему читается — дефолт
+    // разбора 443 объявлен секцией (кейсы round-trip ниже это держат).
+    test('пишет :443 — порт больше не опускается', () {
       final s = NaiveSpec(
         id: 'id', tag: 't', label: 't',
         server: 'h.example.com', port: 443, rawSource: '',
         username: 'u', password: 'p',
         tls: const TlsSpec(enabled: true, serverName: 'h.example.com'),
       );
-      expect(s.toUri(), 'naive+https://u:p@h.example.com#t');
+      expect(s.toUri(), 'naive+https://u:p@h.example.com:443#t');
     });
 
     test('keeps non-default port', () {
@@ -131,7 +135,7 @@ void main() {
         username: 'u',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
       );
-      expect(s.toUri(), 'naive+https://u:@h#t');
+      expect(s.toUri(), 'naive+https://u:@h:443#t');
     });
 
     test('anonymous → no userinfo in URI', () {
@@ -140,7 +144,7 @@ void main() {
         server: 'h', port: 443, rawSource: '',
         tls: const TlsSpec(enabled: true, serverName: 'h'),
       );
-      expect(s.toUri(), 'naive+https://h#t');
+      expect(s.toUri(), 'naive+https://h:443#t');
     });
 
     test('serializes extra-headers sorted, CRLF-encoded', () {
@@ -222,7 +226,9 @@ void main() {
       final original = parseNaive('naive+https://onlyuser:@host.example.com')!;
       expect(original.username, 'onlyuser');
       expect(original.password, '');
-      expect(original.toUri(), 'naive+https://onlyuser:@host.example.com');
+      // Вход БЕЗ порта, выход С портом (§49 п.12): дефолт разбора 443
+      // подставляется секцией, и круг сходится по ТЕЛУ, а не по строке.
+      expect(original.toUri(), 'naive+https://onlyuser:@host.example.com:443');
       final s2 = parseUri(original.toUri()) as NaiveSpec;
       expect(s2.username, 'onlyuser');
       expect(s2.password, '');

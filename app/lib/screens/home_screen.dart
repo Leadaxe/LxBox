@@ -697,9 +697,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       case 'app-settings':
         return AppSettingsScreen(
           initialTab: switch (tab) {
-            'subscriptions' => 1,
-            'diagnostics' => 2,
-            'automation' => 3,
+            'appearance' => 1,
+            'subscriptions' => 2,
+            'diagnostics' => 3,
+            'automation' => 4,
             _ => 0,
           },
         );
@@ -941,11 +942,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // Если уже активен VPN другого приложения — наш старт молча отзовёт его
     // (onRevoke). Спросим подтверждение перед перебиванием чужого туннеля.
     // Только для ручного старта из UI; фоновые точки (tile/automation) не трогаем.
-    if (await _vpn.isForeignVpnActive()) {
-      if (!mounted) return;
-      final ok = await showForeignVpnDialog(context);
-      if (ok != true) return;
+    // §528 — в proxy-режиме (без TUN) наш старт чужой туннель не трогает: там
+    // `VpnService.prepare()` не зовётся (§192). Гейт и сам опрос native живут
+    // в `confirmForeignVpnOverride` — один признак `hasTun` на оба гейта.
+    if (!await confirmForeignVpnOverride(
+      context: context,
+      loadVpnMode: SettingsStorage.getVpnMode,
+      isForeignVpnActive: _vpn.isForeignVpnActive,
+    )) {
+      return;
     }
+    if (!mounted) return;
     // §107 гейт: pending-изменения или пересборка в полёте — сначала довести
     // конфиг на диске до актуального, потом стартовать. При ошибке сборки
     // (configDirty остаётся true) стартуем со старым конфигом — banner

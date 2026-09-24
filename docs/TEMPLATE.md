@@ -857,8 +857,9 @@ In the UI a ref-var **is rendered** in the rule editor (`preset_params_tab.dart`
 > subtitle showed `resolve_enabled: true` while the global was already `false`).
 > `stripRefVarsFromVarsValues` (`rule_order.dart`) clears the ref keys out of `varsValues`
 > when the Routing screen loads; every reader of `varsValues` by var name **must** skip
-> `v.isRef` (the subtitle, the Debug serializer, the rule_set.enabled gate — see
-> `366beec`).
+> `v.isRef` (the subtitle, the Debug serializer, the rule_set gate — see
+> `366beec`; since §534 the Routing screen and the downloader read `#enable` and
+> legacy `enabled` through the builder's `fragmentGateSatisfied` + `presetVarsMap`).
 
 **§264 — the new vars of the `traffic-processing` preset.** `sniff_timeout` (an enum of 100ms/300ms/500ms/1s/3s) replaced the hardcoded `timeout:"1s"` on the sniff rule. `hijack_dns_enabled` (a bool) toggles the hijack-dns rule; ⚠ its tooltip warns that turning it off lets DNS out past the tunnel.
 

@@ -85,6 +85,15 @@ class _RoutingScreenState extends State<RoutingScreen>
         SnackHelper<RoutingScreen> {
   @override
   WizardTemplate? _template;
+  // §534 — снимок глобального userVars (`SettingsStorage.getAllVars()`) для
+  // гейта rule_set'ов пресетов на ref-переменной (§265): гейт на пути
+  // скачивания/UI считается по тому же словарю, что у билдера. Обновляется в
+  // начале каждого `_refreshSrsCache` (сейчас он зовётся из `_load` — на
+  // открытии экрана). Может отстать, если глобальную переменную поменяли, не
+  // покидая Routing; у наборов текущего шаблона ref-гейтов нет, а появится
+  // такой — пересчёт на следующем `_refreshSrsCache`.
+  @override
+  Map<String, String> _userVars = const {};
   @override
   final _directions = <Direction>[]; // §125 — source-of-truth Направлений (storage)
   // §219 — кэш опций outbound: _outboundOptions() звался в itemBuilder на КАЖДЫЙ
@@ -217,7 +226,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   List<PresetRemoteRuleSet> _remoteRuleSetsOf(
     SelectableRule preset, [
     CustomRulePreset? rule,
-  ]) => RoutingHelpers.remoteRuleSetsOf(preset, rule);
+  ]) => RoutingHelpers.remoteRuleSetsOf(preset, rule, _userVars);
 
   /// См. [RoutingHelpers.presetSrsKey].
   @override
@@ -227,7 +236,8 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// См. [RoutingHelpers.presetNeedsDownload].
   @override
   bool _presetNeedsDownload(CustomRulePreset rule, SelectableRule preset) =>
-      RoutingHelpers.presetNeedsDownload(rule, preset, _srsCached);
+      RoutingHelpers.presetNeedsDownload(rule, preset, _srsCached,
+          globalVars: _userVars);
 
   /// §219 — сбросить кэш опций после мутации `_directions`.
   @override

@@ -186,6 +186,19 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             stopCompleter = null
         }
 
+        /// §539 — сводная строка per-app для лога (только debug-режим).
+        /// `mode` = null, если ядро не прислало ни include, ни exclude.
+        @JvmStatic
+        fun perAppDebugLine(
+            mode: String?,
+            allowBypass: Boolean,
+            applied: List<String>,
+            missing: List<String>,
+        ): String =
+            "INFO per-app: mode=${mode ?: "off"} allow_bypass=$allowBypass " +
+                "applied=${applied.size} [${applied.joinToString(",")}] " +
+                "not_installed=${missing.size} [${missing.joinToString(",")}]"
+
         /// §043: Sink для core logs от sing-box → Flutter EventChannel.
         @Volatile
         var coreLogSink: io.flutter.plugin.common.EventChannel.EventSink? = null
@@ -426,6 +439,17 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         protect(fd)
     }
 
+    /// §539 — debug-only: пакет, принятый Builder'ом, в `applied`, если он
+    /// виден PackageManager'у (QUERY_ALL_PACKAGES), иначе в `missing`.
+    private fun sortPerApp(pkg: String, applied: MutableList<String>, missing: MutableList<String>) {
+        try {
+            packageManager.getApplicationInfo(pkg, 0)
+            applied.add(pkg)
+        } catch (_: NameNotFoundException) {
+            missing.add(pkg)
+        }
+    }
+
     override fun openTun(options: TunOptions): Int {
         if (prepare(this) != null) error("android: missing vpn permission")
 
@@ -477,10 +501,39 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                 if (r6.hasNext()) { while (r6.hasNext()) { val a = r6.next(); builder.addRoute(a.address(), a.prefix()) } }
             }
 
+            // §539 — в debug-режиме (verbose core-логи, §345) собираем применённые
+            // и отвергнутые (не установлены) пакеты для одной сводной строки лога.
+            // Штатный режим: списки не собираются, лог не пишется.
+            // Builder на API 34 принимает и неустановленный пакет без
+            // NameNotFoundException (проверено на эмуляторе), поэтому в debug
+            // пакет, принятый Builder'ом, дополнительно сверяется с PackageManager.
+            val perAppDebug = BootReceiver.isCoreLogsVerbose(this)
+            val applied = if (perAppDebug) mutableListOf<String>() else null
+            val missing = if (perAppDebug) mutableListOf<String>() else null
+            var perAppMode: String? = null
             val incl = options.includePackage
-            if (incl.hasNext()) { while (incl.hasNext()) { try { builder.addAllowedApplication(incl.next()) } catch (_: NameNotFoundException) {} } }
+            if (incl.hasNext()) {
+                perAppMode = "allow"
+                while (incl.hasNext()) {
+                    val pkg = incl.next()
+                    try { builder.addAllowedApplication(pkg); if (perAppDebug) sortPerApp(pkg, applied!!, missing!!) }
+                    catch (_: NameNotFoundException) { missing?.add(pkg) }
+                }
+            }
             val excl = options.excludePackage
-            if (excl.hasNext()) { while (excl.hasNext()) { try { builder.addDisallowedApplication(excl.next()) } catch (_: NameNotFoundException) {} } }
+            if (excl.hasNext()) {
+                perAppMode = if (perAppMode == null) "deny" else "allow+deny"
+                while (excl.hasNext()) {
+                    val pkg = excl.next()
+                    try { builder.addDisallowedApplication(pkg); if (perAppDebug) sortPerApp(pkg, applied!!, missing!!) }
+                    catch (_: NameNotFoundException) { missing?.add(pkg) }
+                }
+            }
+            if (perAppDebug) {
+                val line = perAppDebugLine(perAppMode, allowBypass, applied!!, missing!!)
+                Log.i(TAG, line)
+                service.writeDebugMessage(line)
+            }
         }
 
         // §049 F17: треккаем state HTTP-proxy для CommandServerHandler.getSystemProxyStatus.

@@ -223,9 +223,11 @@ void main() {
       expect(result.config, isNot(contains('external_controller')));
     });
 
-    // §215 — idle-suspend (ядро SPEC 020, route.lx_idle_suspend). Порог
-    // прокидывается в route только когда задан; пусто = omitempty (поля нет).
-    test('§215 idleSuspend="30s" → route.lx_idle_suspend', () async {
+    // §215 — idle-suspend (ядро SPEC 020). Порог прокидывается только когда
+    // задан; пусто = omitempty (блока нет).
+    // §535 — ключи переехали из route в корневой блок lx.wg (ядро SPEC 098):
+    // старые имена не пишем, иначе ядро даёт WARN на каждый ключ.
+    test('§535 idleSuspend="30s" → lx.wg.idle_suspend, route чист', () async {
       final wg = parseWireguardUri(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
@@ -246,11 +248,15 @@ void main() {
           idleSuspend: '30s',
         ),
       );
+      final wgBlock =
+          (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['idle_suspend'], '30s');
+      // Старый ключ не эмитится — иначе WARN «deprecated» на каждом старте.
       final route = result.config['route'] as Map;
-      expect(route['lx_idle_suspend'], '30s');
+      expect(route.containsKey('lx_idle_suspend'), false);
     });
 
-    test('§215 idleSuspend="" (default) → нет route.lx_idle_suspend', () async {
+    test('§535 idleSuspend="" (default) → блока lx нет вовсе', () async {
       final wg = parseWireguardUri(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
@@ -270,13 +276,14 @@ void main() {
           userVars: {'clash_api': '127.0.0.1:9090'},
         ),
       );
+      // Kill-switch: блок не пишется, дефолт ядра (идл-тик не запущен).
+      expect(result.config.containsKey('lx'), false);
       final route = result.config['route'] as Map;
-      // Kill-switch: поле не пишется, дефолт ядра (idle-тик не запущен).
       expect(route.containsKey('lx_idle_suspend'), false);
     });
 
-    // §272 — reachable-окно (route.lx_idle_suspend_reachable) эмитится только
-    // вместе с базовым порогом: ядро отвергает reachable без lx_idle_suspend.
+    // §272 — reachable-окно (lx.wg.idle_suspend_reachable) эмитится только
+    // вместе с базовым порогом: ядро отвергает reachable без idle_suspend.
     test('§272 reachable пишется только при включённом idleSuspend', () async {
       final wg = parseWireguardUri(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
@@ -300,9 +307,17 @@ void main() {
           idleSuspendReachable: '30m',
         ),
       );
-      final bothRoute = both.config['route'] as Map;
-      expect(bothRoute['lx_idle_suspend'], '30s');
-      expect(bothRoute['lx_idle_suspend_reachable'], '30m');
+      final bothWg = (both.config['lx'] as Map)['wg'] as Map;
+      expect(bothWg['idle_suspend'], '30s');
+      expect(bothWg['idle_suspend_reachable'], '30m');
+      // §536 — lazy_build/build_max пишутся всегда рядом с порогом сна
+      // (ядро: lazy_build требует idle_suspend). build_overflow не пишем —
+      // дефолт ядра `wait`.
+      expect(bothWg['lazy_build'], true);
+      expect(bothWg['build_max'], 5);
+      expect(bothWg.containsKey('build_overflow'), false);
+      // §535 — глобальный masque.idle_timeout не пишем (у узлов свой).
+      expect((both.config['lx'] as Map).containsKey('masque'), false);
 
       // Базовый выключен → reachable подавлен (иначе ядро упало бы на старте).
       final orphan = await buildConfig(
@@ -313,9 +328,96 @@ void main() {
           idleSuspendReachable: '30m',
         ),
       );
+      expect(orphan.config.containsKey('lx'), false);
       final orphanRoute = orphan.config['route'] as Map;
       expect(orphanRoute.containsKey('lx_idle_suspend'), false);
       expect(orphanRoute.containsKey('lx_idle_suspend_reachable'), false);
+    });
+
+    // §536 — lazy_build/build_max едут вместе с базовым порогом, даже когда
+    // reachable-окно не задано: ядро требует lazy_build при idle_suspend, а
+    // build_max самостоятелен, но держим оба в одном месте.
+    test('§536 lazy_build/build_max пишутся при одном лишь idleSuspend',
+        () async {
+      final wg = parseWireguardUri(
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u8',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        nodes: [wg],
+      );
+      final result = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          idleSuspend: '30s',
+        ),
+      );
+      final wgBlock = (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['idle_suspend'], '30s');
+      expect(wgBlock.containsKey('idle_suspend_reachable'), false);
+      expect(wgBlock['lazy_build'], true);
+      expect(wgBlock['build_max'], 5);
+    });
+
+    // §542 — build_max берётся из настройки `wg_build_max`; 0 пишется как 0
+    // (ядро: без потолка); без порога сна блока lx (и ключа) нет.
+    Future<BuildResult> build542(
+        {required String idle, required int max, bool lazy = true}) {
+      final wg = parseWireguardUri(
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u542',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        nodes: [wg],
+      );
+      return buildConfig(
+        lists: [list],
+        template: template,
+        settings: BuildSettings(
+          userVars: const {'clash_api': '127.0.0.1:9090'},
+          idleSuspend: idle,
+          wgBuildMax: max,
+          wgLazyBuild: lazy,
+        ),
+      );
+    }
+
+    test('§542 настройка 0 → build_max: 0', () async {
+      final result = await build542(idle: '30s', max: 0);
+      final wgBlock = (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['lazy_build'], true);
+      expect(wgBlock['build_max'], 0);
+    });
+
+    test('§542 настройка 8 → build_max: 8', () async {
+      final result = await build542(idle: '30s', max: 8);
+      final wgBlock = (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['build_max'], 8);
+    });
+
+    test('§542 сон выключен → ключа build_max нет', () async {
+      final result = await build542(idle: '', max: 8);
+      expect(result.config.containsKey('lx'), false);
+    });
+
+    test('§542 lazy_build выключен → нет lazy_build и нет build_max', () async {
+      final result = await build542(idle: '30s', max: 8, lazy: false);
+      final wgBlock = (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['idle_suspend'], '30s');
+      expect(wgBlock.containsKey('lazy_build'), false);
+      expect(wgBlock.containsKey('build_max'), false);
     });
   });
 

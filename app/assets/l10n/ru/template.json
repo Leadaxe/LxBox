@@ -200,6 +200,12 @@
   "GeoIP IP-range fallback": {
     "value": "GeoIP-диапазоны (резерв)"
   },
+  "Russian apps by package": {
+    "value": "Российские приложения по пакету"
+  },
+  "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use.": {
+    "value": "Направляет Android-приложения из списка legiz-ru (банки, маркетплейсы, госуслуги, Яндекс/VK и другие) по имени пакета, независимо от домена, к которому они обращаются. Набор ru-app-list.srs (~4 КБ) скачивается при первом включении."
+  },
   "Google 204": {
     "value": "Google 204"
   },
@@ -395,8 +401,8 @@
   "Route BitTorrent traffic. Direct by default, or send it to a separate direction.": {
     "value": "Маршрутизация BitTorrent-трафика. По умолчанию — напрямую; можно направить в отдельное Направление."
   },
-  "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.": {
-    "value": "Направляет напрямую российские TLD (.ru/.su/IDN), CDN сервисов (Яндекс/VK/Авито/2ГИС/банки и др.) и российские диапазоны IP."
+  "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc), Russian IP ranges and Russian apps (by package name) directly.": {
+    "value": "Направляет напрямую российские TLD (.ru/.su/IDN), CDN сервисов (Яндекс/VK/Авито/2ГИС/банки и др.), российские диапазоны IP и российские приложения (по имени пакета)."
   },
   "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why.": {
     "value": "Направлять все DNS-запросы через DNS-движок туннеля.\n⚠️ ВНИМАНИЕ: выключение отключает FakeIP и все DNS-правила — приложения будут напрямую и бесконтрольно обращаться к своим DNS. Не выключайте, если точно не знаете, зачем."
@@ -410,8 +416,8 @@
   "Russia-only services": {
     "value": "Сервисы только для России"
   },
-  "Russian domains & IPs": {
-    "value": "Российские домены и IP"
+  "Ru internet segment": {
+    "value": "Российский сегмент интернета"
   },
   "SOCKS5 only": {
     "value": "Только SOCKS5"

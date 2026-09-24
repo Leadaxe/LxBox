@@ -122,6 +122,8 @@ void main() {
         // §435 — только UI, кода контракта нет.
         SectionsRecordDroppedWarning() => 'sections_record_dropped',
         SectionsConflictWarning() => 'sections_conflict',
+        // §538 — повтор узла в одной подписке, код per-app.
+        DuplicateNodeWarning() => 'duplicate',
         Awg3HeaderKeyInvalidWarning() => 'awg3_header_key_invalid',
         Awg3PaddingTooShortWarning() => 'awg3_padding_too_short',
         Awg3RandomTrailersWideHeadersWarning() =>

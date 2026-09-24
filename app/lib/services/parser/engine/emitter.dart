@@ -1276,12 +1276,19 @@ final class _Emit {
     // Написание истины берётся у САМОЙ ЗАПИСИ — первым ключом её `value_map`,
     // который ведёт в истину. У записи с таблицей `{"on": "true", "true":
     // "true", "1": "true", …}` каноном объявлено `on`, и писать вместо него
-    // `1` значит менять СОХРАНЁННЫЙ rawSource ручного узла и то, что уезжает
-    // по Copy link в чужие клиенты (страж вида ссылки ловит это как класс).
-    // Таблицы нет — остаётся общее `1`.
+    // общее написание значит менять СОХРАНЁННЫЙ rawSource ручного узла и то,
+    // что уезжает по Copy link в чужие клиенты (страж вида ссылки ловит это
+    // как класс).
+    //
+    // Таблицы нет — остаётся СЛОВО `true` (§532 дефект 4, семантика Go:
+    // `linkmap/emit.go:988`). Прежде здесь стояла цифра `1`, и запись без
+    // объявленного `emit_as` писала булев иначе, чем эталон, — расхождение
+    // вида ссылки на ровном месте. Цифру даёт только явный
+    // `emit_as: bool01`. Ложь по-прежнему не пишется вовсе: «параметра нет» и
+    // есть её написание в ссылке.
     if (value is bool) {
       if (!value) return null;
-      return _firstTruthySpelling(p) ?? '1';
+      return _firstTruthySpelling(p) ?? 'true';
     }
     if (value is List) {
       if (value.isEmpty) return null;
@@ -1297,7 +1304,12 @@ final class _Emit {
     final declared = _paramEmitAttr(p, EmitNames.emitAs);
     if (declared is String) return declared;
     if (p.list != null) return EmitNames.emitAsJoin;
-    if (p.type == 'bool') return EmitNames.emitAsBool01;
+    // `type: "bool"` в `bool01` НЕ выводится (§532 дефект 4). Написание булева
+    // на выходе — свойство ДИАЛЕКТА, а не типа значения: `1` и `true` это две
+    // разные ссылки у живых панелей, и выбор между ними принадлежит записи
+    // (`emit_as`), а не движку. Умолчание — СЛОВО, как у Go
+    // (`linkmap/emit.go:988`): `emit_as: bool01` объявляется там, где схема
+    // цифру действительно хочет (`tls.json` его несёт).
     return EmitNames.emitAsRaw;
   }
 
@@ -1408,8 +1420,63 @@ final class _Emit {
     if (ownOmit == true) return _isDefaultValue(p, value);
 
     final omit = emit[EmitNames.omitDefault];
-    if (omit is! List || !omit.map((e) => '$e').contains(name)) return false;
-    return _isDefaultValue(p, value);
+    if (omit is! List) return false;
+    // Написание с ДВОЕТОЧИЕМ (`fp:random`) сужает правило до ОДНОГО значения.
+    for (final raw in omit) {
+      final n = '$raw';
+      final i = n.indexOf(':');
+      if (i > 0 && n.substring(0, i) == name) {
+        if (_fold(n.substring(i + 1)) == _fold(value)) return true;
+        continue;
+      }
+      if (n != name) continue;
+      // ГОЛОЕ имя. Эталон (`linkmap/emit.go:604-612`) здесь возвращает истину
+      // БЕЗУСЛОВНО, у нас же правило сужено до «значение равно умолчанию» —
+      // и сужение это НЕ косметика: ветка-ОТРИЦАНИЕ обязана уехать в ссылку,
+      // иначе разбор поднимет её веткой умолчания и узел БЕЗ шифрования
+      // станет узлом с ним (страж `engine_emit_primitives_test`, группа
+      // «sets⁻¹»). Оставлено как есть.
+      //
+      // Но у параметра, чью истину несёт САМО НАПИСАНИЕ СХЕМЫ, отрицание уже
+      // сказано схемой, и повторять его параметром незачем: у http
+      // `omit_default: ["security"]` при `emit.form_from` по `tls.enabled`
+      // (`proxy-http` / `proxy-https`). Пока запись `security` схемы изымала
+      // одноимённую запись блока, до `omit_default` дело не доходило; с
+      // правилом §7.1 блочная дожила до эмита, её ветка `none` умолчанием не
+      // считалась — и каждая proxy-http-ссылка получала хвост
+      // `?security=none`, которого эталон не пишет (сверено прогоном
+      // `linkmap.Emit` на origin/develop лаунчера).
+      if (_schemeSpellsBranch(p, value)) return true;
+      return _isDefaultValue(p, value);
+    }
+    return false;
+  }
+
+  /// Несёт ли САМО НАПИСАНИЕ СХЕМЫ ту же истину, что ветка [value] записи [p].
+  ///
+  /// `emit.form_from` объявляет пути тела, по которым выбирается написание
+  /// схемы. Если ветка `sets` под [value] трогает ровно такой путь, параметр
+  /// в ссылке дублирует написание — и чужой клиент прочтёт ту же истину и без
+  /// него.
+  bool _schemeSpellsBranch(MapperParam p, String value) {
+    final ff = emit[EmitNames.formFrom];
+    if (ff is! Map || ff.isEmpty) return false;
+    final branch = p.sets[value];
+    if (branch is! Map || branch.isEmpty) return false;
+    for (final k in branch.keys) {
+      final key = '$k';
+      if (key.startsWith(DraftNames.serviceParamPrefix)) continue;
+      // Путь ветки назван в `form_from` либо лежит под ним (`tls` против
+      // `tls.enabled`): написание схемы выбирается по нему же.
+      final spelled = ff.keys.any((f) {
+        final path = '$f';
+        return path == key ||
+            path.startsWith('$key.') ||
+            key.startsWith('$path.');
+      });
+      if (!spelled) return false;
+    }
+    return true;
   }
 
   /// Равно ли [value] умолчанию записи.
@@ -1650,24 +1717,47 @@ final class _Emit {
     }
     final out = <String, String>{};
     _jsonOwners.clear();
-    for (final p in section.params.values) {
-      if (p.isService || _roundTripOff(p)) continue;
-      // Запись, чьё условие ТЕЛО ОПРОВЕРГАЕТ, ключ не занимает. Ключ
-      // контейнера бывает общим у нескольких записей, разведённых `when` по
-      // роду транспорта: `path` читают и запись ws (`transport.path`), и
-      // запись grpc (`transport.service_name`). Тело подтверждает ровно одну
-      // из них, и без этой проверки ключ доставался первой по обходу — у
-      // grpc-узла в контейнер уезжал пустой `transport.path`, а имя сервиса
-      // терялось. Разбор такие записи различает (`_whenHolds`), обратный ход
-      // обязан различать так же.
-      if (!_whenAgreesWithBody(p.when)) continue;
-      final path = p.mapsTo;
-      if (path == null) continue;
-      final key = _jsonKeyOf(p);
-      if (key == null) continue;
-      if (out.containsKey(key)) continue;
-      out[key] = path;
-      _jsonOwners[key] = p;
+    // ДВА ПРОХОДА: сперва БЕЗУСЛОВНЫЕ записи, потом условные (`when`).
+    //
+    // Ключ контейнера достаётся первой записи по обходу, а порядок обхода —
+    // это порядок ОБЪЯВЛЕНИЯ в реестре, то есть вещь, которой владеет чужая
+    // сторона. Пока ключ читала ровно одна запись, это было безразлично;
+    // контракт 1.1.53 завёл у схемы-КОНТЕЙНЕРА ФОЛБЭК адреса на хост
+    // транспорта — вторую запись над тем же ключом, ведущую в
+    // `transport.host` под `when.transport.type`, и объявлена она ВЫШЕ
+    // записи, читающей адрес сервера. Условие фолбэка тело узла без
+    // транспорта не опровергает (пути `transport.type` у него нет вовсе, а
+    // отсутствие условие не опровергает — иначе терялись бы поля, не
+    // доехавшие по другой причине), и ключ адреса уходил фолбэку: ссылка
+    // уезжала БЕЗ АДРЕСА СЕРВЕРА — узел, которым нельзя поделиться.
+    //
+    // Разводить два прохода правильнее, чем ужесточать `_whenAgreesWithBody`:
+    // условная запись — по построению УТОЧНЕНИЕ, она добавляет случай, а не
+    // отменяет общий. Безусловная запись над тем же ключом и есть общий
+    // случай, и спорить за ключ они не должны вовсе (то же правило, по
+    // которому запись под условием не переопределяет запись блока,
+    // MAPPER_ENGINE §7.1).
+    for (final conditional in const [false, true]) {
+      for (final p in section.params.values) {
+        if (p.when.isEmpty == conditional) continue;
+        if (p.isService || _roundTripOff(p)) continue;
+        // Запись, чьё условие ТЕЛО ОПРОВЕРГАЕТ, ключ не занимает. Ключ
+        // контейнера бывает общим у нескольких записей, разведённых `when` по
+        // роду транспорта: `path` читают и запись ws (`transport.path`), и
+        // запись grpc (`transport.service_name`). Тело подтверждает ровно одну
+        // из них, и без этой проверки ключ доставался первой по обходу — у
+        // grpc-узла в контейнер уезжал пустой `transport.path`, а имя сервиса
+        // терялось. Разбор такие записи различает (`_whenHolds`), обратный ход
+        // обязан различать так же.
+        if (!_whenAgreesWithBody(p.when)) continue;
+        final path = p.mapsTo;
+        if (path == null) continue;
+        final key = _jsonKeyOf(p);
+        if (key == null) continue;
+        if (out.containsKey(key)) continue;
+        out[key] = path;
+        _jsonOwners[key] = p;
+      }
     }
     return out;
   }
@@ -1864,6 +1954,18 @@ final class _Emit {
 /// которого у узла не было. Два правила здесь решают РАЗНЫЕ задачи: №3 — спор
 /// двух записей за один путь, этот признак — неинъективность таблицы без
 /// тождественной пары. Вопрос возвращён лаунчеру (спека 514, §4в).
+///
+/// §533 / контракт 1.1.53 (§49 п.15 просит снять по §46 п.7) — СНЯТИЕ
+/// ПРОВЕРЕНО ЕЩЁ РАЗ И СНОВА ОТКАЧЕНО, теперь уже сверкой С ЭТАЛОНОМ, а не
+/// со своим снимком. Без признака вид ссылок расходится на 9 кейсах:
+/// `flow=xtls-rprx-vision` → `xtls-rprx-vision-udp443`, `type=xhttp` →
+/// `splithttp`. Прогон `linkmap.Emit` на origin/develop лаунчера (f3cd4c93)
+/// на тех же телах даёт РОВНО ТО, что пишем мы с признаком:
+/// `…&flow=xtls-rprx-vision&…` и `…&type=xhttp#t`. То есть признак не
+/// отступление LxBox, а недостающая у нас часть общего поведения: снять его
+/// значило бы РАЗОЙТИСЬ с эталоном, а не сойтись. Снятие возможно только
+/// вместе с тем, чем эту неинъективность выражает Go, — и это работа
+/// лаунчера, потому что грамматика FROZEN.
 bool _isUntranslatedCanon(MapperParam p, dynamic value) {
   final v = '$value'.trim().toLowerCase();
   var isTarget = false;
