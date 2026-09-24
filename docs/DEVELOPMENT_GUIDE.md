@@ -5,7 +5,8 @@ link, not a copy.
 
 | Topic | Source of truth |
 |-------|-----------------|
-| Git, branches, commits, UI language, testing policy, sub-agent brief | [`AGENTS.md`](../AGENTS.md) |
+| Git, branches, commits, UI language, testing policy, lazy reading | this guide |
+| Sub-agent (executor) brief | [`SUBAGENT_BRIEF.md`](SUBAGENT_BRIEF.md) |
 | Architecture, config pipeline, detour, module map | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Sanitiser/guard registry | [`GUARDS.md`](GUARDS.md) |
 | Storage format, NodeLink | [`STORAGE.md`](STORAGE.md) |
@@ -14,7 +15,22 @@ link, not a copy.
 | Build, signing, CI jobs, worktree bootstrap | [`BUILD.md`](BUILD.md) |
 | Core (libbox fork), version bumps | [`KERNEL.md`](KERNEL.md) |
 | Release, versioning, tags | [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md) |
-| Launcher contract | [`docs/contract`](contract/), `AGENTS.md` → SPEC 103 |
+| Launcher contract: what it is, how to work with it | [`CONTRACT.md`](CONTRACT.md); generated docs mirror — [`docs/contract`](contract/) |
+
+---
+
+## Lazy reading: save CPU and tokens
+
+Owner's decision, 2026-09-24.
+
+- Do not read a file whole when `grep` / `sed -n` over the needed lines is enough.
+- Do not read documents “just in case” — only the one the task's link leads to.
+- Do not run heavy commands (tests, checkers, builds) to verify what CI will
+  verify anyway.
+- Cap command output (`tail`, `grep`); raw logs do not go into context.
+- Reconnaissance and output grepping go to cheap sub-agents (Sonnet); reasoning
+  models are for decisions.
+- Repeat runs cover only the one affected file.
 
 ---
 
@@ -31,12 +47,36 @@ link, not a copy.
 - Index of live features: [`docs/spec/features/README.md`](spec/features/README.md).
   Demoted/superseded specs live in `docs/spec/tasks/` (§054).
 
-### 2. Commits
+### 2. Commits and push
 
+Operator's decision, 2026-07-24.
+
+- Finished work is committed at once: an atomic commit to `develop` with a
+  meaningful message, as soon as the change is done and checked (tests/analyze).
 - One commit = one logical unit; prefixes `feat:` `fix:` `refactor:` `docs:` `ci:` `release:`.
-- When and what to commit/push — `AGENTS.md`.
+- `git add` only your own files, never `git add .` — parallel sessions leave
+  someone else's uncommitted work in the tree; do not touch it.
+- Unfinished/unchecked work is not committed: code → check first (for device
+  features: APK → operator confirmation).
+- Push to `develop` is fine together with finishing the work.
+- **Only on the operator's explicit command:**
+  - `git push --force` and any rewrite of published history;
+  - anything touching `main` and `vX.Y.Z` tags (the release process —
+    `RELEASE_PROCESS.md`);
+  - `gh pr create` and any other outward publication.
 
-### 3. Build and release
+### 3. Branches
+
+- **`develop`** — the main development branch. All features/fixes land here
+  (directly or via feature branches → PR into `develop`).
+- **`main`** — the release branch. Written to **only when preparing a release**:
+  merge from `develop`, final notes / `pubspec.yaml` edits, the `vX.Y.Z` tag, the
+  bot commit of `docs/latest.json`. No feature work in `main`.
+- **`vX.Y.Z` tags** — only on commits in `main`. Full protocol — `RELEASE_PROCESS.md`.
+- Unless told otherwise, assume the current branch is `develop` (or a feature
+  branch off it). Switch to `main` only for release preparation.
+
+### 4. Build and release
 
 - Local build: `./scripts/build-local-apk.sh`; details — `BUILD.md`.
 - Release, version in `pubspec.yaml`, build code from `scripts/version-code.sh`
@@ -75,11 +115,18 @@ link, not a copy.
 
 ### Interface language
 
-- UI text is English only, through `getLocalText.s("English text")`; the English
-  string is the key (§285).
+- The base interface language is English, and the only source language. All
+  user-facing text — screens, menus, buttons, labels, hints, dialogs,
+  snackbars, push notifications, error messages, empty states — is written in
+  English, never in Russian or another language.
+- Other languages appear only as translations of the English source (§285), not
+  as source strings.
+- UI text goes through `getLocalText.s("English text")`; the English string is
+  the key (§285).
 - A hardcoded literal in a display position fails `hardcoded_check`.
 - Translations: `assets/l10n/<tag>/ui.json`; everything else — `l10n.md`.
-- Docs are English; code comments, commits and chat may be Russian.
+- This applies only to product text in the app. Docs are English; code
+  comments, commits and chat may be Russian.
 
 ---
 
@@ -87,7 +134,7 @@ link, not a copy.
 
 ### Where the tests run
 
-Owner's decision, 2026-09-18 (policy — `AGENTS.md`).
+Owner's decision, 2026-09-18.
 
 - A full `flutter test` is **never** run locally — not while working, not before
   a commit, not in release pre-flight. CI's `checks` job runs it on every push to
@@ -124,6 +171,8 @@ Owner's decision, 2026-09-18 (policy — `AGENTS.md`).
   APK builds or corpus tests (`BUILD.md` → “Git worktree bootstrap”).
   `bash app/tool/sync_contract.sh` restores `app/contract/` from the lock; a bump
   needs `--to <sha>` or `LX_CONTRACT_SRC`.
+- Release pre-flight for tests = **green CI on the `develop` head**, re-checked
+  through the API by `head_sha`, not a local run (`RELEASE_PROCESS.md` §2.1).
 - Test tree mirrors `lib/` by area (models, parser, builder, subscription,
   contract, …); the case count is in the CI log.
 
@@ -139,7 +188,7 @@ Owner's decision, 2026-09-24.
 - The reasoning agent decides on fix / redo / commit; diagnosis is its job.
 - Minimal set at every step: one test file while iterating, the task's own files
   before a commit; big suites only on CI, read by the on-duty agent by `head_sha`.
-- Every executor brief states it explicitly: “tests and analyze run through a
+- Every executor brief (Opus/Cursor) states it explicitly: “tests and analyze run through a
   Sonnet sub-agent; only the digest goes into context”.
 
 ### Manual smoke on a device (before a release)
@@ -185,4 +234,5 @@ Owner's decision, 2026-09-24.
 ## AI assistants
 
 - `app/CLAUDE.md` is gitignored: each developer/agent keeps a local copy
-  (generate with `/init` if missing). Shared rules live in `AGENTS.md`.
+  (generate with `/init` if missing). `AGENTS.md` is a short router to this
+  guide, [`SUBAGENT_BRIEF.md`](SUBAGENT_BRIEF.md) and [`CONTRACT.md`](CONTRACT.md).
