@@ -56,8 +56,14 @@ final class ContainerEntry extends SourceEntry {
   @override
   String get sourceKey => sourceKeyForIdOf(list.id);
 
+  /// `kind` записи НА ДИСКЕ, а не `ServerList.type`: у одиночного сервера это
+  /// `server`, а `type` отдаёт историческое `user` (имя формы 2.23.2).
   @override
-  String get kind => list.type;
+  String get kind => switch (list) {
+        SubscriptionServers() => 'subscription',
+        UserServer() => 'server',
+        FolderServers() => 'folder',
+      };
 
   @override
   bool get enabled => list.enabled;

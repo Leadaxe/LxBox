@@ -4,11 +4,62 @@ import '../../../models/codec/source_record.dart';
 import '../../../models/import_rule.dart';
 import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
+import '../../../models/source_chain.dart';
+import '../../../models/source_entry.dart';
 import '../../contract/registry_warning.dart';
 import '../../node_link_address.dart';
 import '../../url_mask.dart';
 
 export '../../url_mask.dart' show maskSubscriptionUrl;
+
+/// §524 — ЗАПИСЬ ОБЩЕГО СПИСКА для `GET /subs`: контейнер, цепочка или
+/// нечитаемая запись — в порядке `sources[]`, том же, что видит пользователь.
+///
+/// До §524 `/subs` отдавал только контейнеры, и смешанный порядок диска этим
+/// API нельзя было ни прочитать, ни выразить: цепочки жили в отдельном
+/// `/chains`. Теперь список один — `/chains` остался для ПРАВКИ маршрута
+/// (позиции, strip, rewrite), а состав и порядок видны здесь.
+///
+/// Ключ порядка — `source_key` (`id:<uuid>` / `chain:<tag>`): его принимает
+/// `POST /subs/reorder`. Цепочка несёт `kind: "SourceChain"` — рядом с
+/// `SubscriptionServers`/`UserServer`/`FolderServers`, потому что род записи
+/// читается одним полем.
+Map<String, Object?> serializeSourceEntry(
+  SourceEntry entry, {
+  required bool reveal,
+  SubscriptionEntry? liveEntry,
+}) =>
+    switch (entry) {
+      ContainerEntry() => {
+          'source_key': entry.sourceKey,
+          ...serializeSubEntry(liveEntry!, reveal: reveal),
+        },
+      ChainEntry(:final chain) => _serializeChainAsSource(entry, chain),
+      OpaqueEntry() => {
+          'source_key': entry.sourceKey,
+          'kind': 'Unreadable',
+          // §141 P1.8c — запись, которую кодек не читает: показываем только
+          // то, что есть. Её `kind` с диска — единственная зацепка.
+          'record_kind': entry.kind,
+          'enabled': false,
+        },
+    };
+
+/// Цепочка как запись общего списка. Маршрут (позиции, strip, rewrite) здесь
+/// НЕ разворачивается — это `/chains/{tag}`; `/subs` отвечает за состав и
+/// порядок списка.
+Map<String, Object?> _serializeChainAsSource(
+        ChainEntry entry, SourceChain chain) =>
+    {
+      'source_key': entry.sourceKey,
+      'id': chain.tag, // у цепочки идентичность — тег (§509)
+      'kind': 'SourceChain',
+      'title': chain.displayLabel,
+      'enabled': chain.enabled,
+      // §520 — счётчик узлов записи: у цепочки это её позиции.
+      'nodes_count': chain.hops.length,
+      'hops_count': chain.hops.length,
+    };
 
 /// Одна запись подписки / пользовательского сервера для `/state/subs`.
 Map<String, Object?> serializeSubEntry(
