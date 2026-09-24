@@ -71,20 +71,63 @@ List<PresetRemoteRuleSet> remoteRuleSetsOfPreset(
 ]) {
   final out = <PresetRemoteRuleSet>[];
   for (final rs in preset.ruleSets) {
-    if (rs['type'] != 'remote') continue;
-    final tag = rs['tag'];
-    final url = rs['url'];
-    if (tag is! String || tag.isEmpty) continue;
-    if (url is! String || url.isEmpty) continue;
+    final remote = _asRemote(rs);
+    if (remote == null) continue;
     if (rule != null &&
         !isRuleSetEnabledFor(rs, preset, rule, globalVars: globalVars)) {
       continue;
     }
-    out.add(PresetRemoteRuleSet(
-      tag: tag,
-      url: url,
-      updateIntervalHours: parseUpdateIntervalHours(rs['update_interval']),
-    ));
+    out.add(remote);
+  }
+  return out;
+}
+
+/// Remote `rule_set` шаблона (type=remote + непустые tag/url) → описание для
+/// скачивания; иначе `null`.
+PresetRemoteRuleSet? _asRemote(Map<String, dynamic> rs) {
+  if (rs['type'] != 'remote') return null;
+  final tag = rs['tag'];
+  final url = rs['url'];
+  if (tag is! String || tag.isEmpty) return null;
+  if (url is! String || url.isEmpty) return null;
+  return PresetRemoteRuleSet(
+    tag: tag,
+    url: url,
+    updateIntervalHours: parseUpdateIntervalHours(rs['update_interval']),
+  );
+}
+
+/// §534 — remote-наборы пресета, которые включает bool-переменная `varName`:
+/// гейт набора ложен при `varName = false` и истинен при `varName = true`,
+/// остальные переменные — как в `rule`. Нужен редактору правила: включение
+/// галки докачивает именно эти наборы.
+///
+/// Обе формы гейта (`#enable` §107, легаси `enabled` §045) — через
+/// [isRuleSetEnabledFor], без синтаксического поиска `"@varName"`. Составной
+/// гейт, которому одной `varName` мало (`["@x", "@y"]` при `y = false`), в
+/// список не попадает: включением `x` его не включить, качать нечего. Набор
+/// без гейта или с гейтом на другую переменную тоже не попадает — его
+/// состояние от `varName` не зависит.
+List<PresetRemoteRuleSet> ruleSetsEnabledByVar(
+  SelectableRule preset,
+  CustomRulePreset rule,
+  String varName, {
+  Map<String, String> globalVars = const {},
+}) {
+  CustomRulePreset withVar(String value) => CustomRulePreset(
+        name: rule.name,
+        presetId: rule.presetId,
+        varsValues: {...rule.varsValues, varName: value},
+      );
+  final off = withVar('false');
+  final on = withVar('true');
+  final out = <PresetRemoteRuleSet>[];
+  for (final rs in preset.ruleSets) {
+    final remote = _asRemote(rs);
+    if (remote == null) continue;
+    if (isRuleSetEnabledFor(rs, preset, off, globalVars: globalVars)) continue;
+    if (!isRuleSetEnabledFor(rs, preset, on, globalVars: globalVars)) continue;
+    out.add(remote);
   }
   return out;
 }

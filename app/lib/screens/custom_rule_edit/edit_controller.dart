@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../../models/preset_rule_set.dart' show ruleSetsEnabledByVar;
 import '../../services/l10n/locale_controller.dart';
 import '../../services/preset_on_change.dart';
 import '../../services/record_vars.dart';
@@ -671,10 +672,10 @@ class CustomRuleEditController extends ChangeNotifier {
 
   // ─── §045 bool-var toggle (preset rendering) ─────────────────────────
 
-  /// Toggle bool-var. Если var управляет remote rule_set'ом
-  /// (`enabled: "@<v.name>"` convention в шаблоне) — toggle-on
-  /// auto-downloads .srs; на fail toggle откатывается и метод
-  /// возвращает `true` (caller покажет snackbar).
+  /// Toggle bool-var. Если var управляет remote rule_set'ом (гейт набора —
+  /// `#enable` или легаси `enabled`, отбор через [ruleSetsEnabledByVar],
+  /// §534) — toggle-on auto-downloads .srs; на fail toggle откатывается и
+  /// метод возвращает `true` (caller покажет snackbar).
   ///
   /// Toggle-off — без downloads, всегда `false`.
   Future<bool> onBoolVarToggle(WizardVar v, bool val) async {
@@ -696,10 +697,17 @@ class CustomRuleEditController extends ChangeNotifier {
       return false;
     }
 
-    final controlled = p.ruleSets.where((rs) {
-      final raw = rs['enabled'];
-      return raw is String && raw == '@${v.name}';
-    }).toList();
+    final initial = this.initial;
+    final presetId =
+        initial is CustomRulePreset ? initial.presetId : p.presetId;
+    // §534 — наборы, которые включает эта переменная: семантика гейта
+    // билдера (обе формы, составные условия), а не поиск строки "@<name>".
+    final controlled = ruleSetsEnabledByVar(
+      p,
+      CustomRulePreset(name: '', presetId: presetId, varsValues: _varsValues),
+      v.name,
+      globalVars: _globalVars,
+    );
 
     if (controlled.isEmpty) {
       _putVarValue(v.name, 'true');
@@ -708,19 +716,11 @@ class CustomRuleEditController extends ChangeNotifier {
       return false;
     }
 
-    final initial = this.initial;
-    final presetId =
-        initial is CustomRulePreset ? initial.presetId : p.presetId;
     final missing = <_PendingDownload>[];
     for (final rs in controlled) {
-      if (rs['type'] != 'remote') continue;
-      final tag = rs['tag'];
-      final url = rs['url'];
-      if (tag is! String || tag.isEmpty) continue;
-      if (url is! String || url.isEmpty) continue;
       final cached =
-          await RuleSetDownloader.cachedPathForPreset(presetId, tag) != null;
-      if (!cached) missing.add(_PendingDownload(tag: tag, url: url));
+          await RuleSetDownloader.cachedPathForPreset(presetId, rs.tag) != null;
+      if (!cached) missing.add(_PendingDownload(tag: rs.tag, url: rs.url));
     }
     if (_disposed) return false;
 

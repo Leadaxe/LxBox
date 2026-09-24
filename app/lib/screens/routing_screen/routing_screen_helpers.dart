@@ -4,6 +4,7 @@ import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../../models/preset_rule_set.dart';
 import '../../services/rule_display_names.dart';
+import '../../services/rule_set_downloader.dart' show RuleSetDownloader;
 import '../../services/l10n/locale_controller.dart';
 
 // §366 — `PresetRemoteRuleSet` и `parseUpdateIntervalHours` переехали в
@@ -92,6 +93,28 @@ class RoutingHelpers {
   /// чтобы не путаться между несколькими rule_set'ами одного пресета.
   static String presetSrsKey(CustomRulePreset rule, String tag) =>
       '${rule.id}|$tag';
+
+  /// §534 — что `_refreshSrsCache` делает с кэшем preset-правила.
+  ///
+  /// - `keepCacheIds` — файлы ВСЕХ remote-наборов пресета, в том числе
+  ///   выключенных гейтом: такой файл не сирота для `pruneOrphans` — вернут
+  ///   галку, качать заново не придётся; свежесть при возврате обеспечит
+  ///   автообновление по TTL. Так же держатся файлы выключенного правила.
+  /// - `required` — только включённые гейтом наборы: без их файлов правило
+  ///   гаснет (task 011), иконка ☁ считается по ним же.
+  static ({Set<String> keepCacheIds, List<PresetRemoteRuleSet> required})
+      presetCachePlan(
+    CustomRulePreset rule,
+    SelectableRule preset, {
+    Map<String, String> globalVars = const {},
+  }) =>
+          (
+            keepCacheIds: {
+              for (final rs in remoteRuleSetsOf(preset))
+                RuleSetDownloader.presetCacheId(rule.presetId, rs.tag),
+            },
+            required: remoteRuleSetsOf(preset, rule, globalVars),
+          );
 
   /// `true` если у preset-правила есть remote rule_set'ы и хотя бы один из
   /// них НЕ закэширован. Используется для disabled-switch (switch auto-

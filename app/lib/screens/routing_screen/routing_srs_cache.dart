@@ -12,7 +12,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   List<Direction> get _directions; // §125
   void _invalidateOutboundOptions(); // §219 — сброс кэша опций outbound
   set _template(WizardTemplate? value);
-  set _userVars(Map<String, String> value); // §534 — userVars для гейта наборов
+  Map<String, String> get _userVars; // §534 — userVars для гейта наборов
+  set _userVars(Map<String, String> value);
   String get _routeFinal;
   set _routeFinal(String value);
   set _loading(bool value);
@@ -126,7 +127,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   /// - `CustomRulePreset` — remote rule_set'ы пресета
   ///   (`preset__<presetId>__<tag>`), включённые гейтом (§534: `#enable` и
   ///   легаси `enabled`, семантика билдера). Выключенный гейтом набор не
-  ///   требуется в кэше и правило из-за него не гаснет.
+  ///   требуется в кэше и правило из-за него не гаснет, но его файл от
+  ///   `pruneOrphans` защищён ([RoutingHelpers.presetCachePlan]).
   Future<void> _refreshSrsCache() async {
     // §534 — свежий снимок userVars до пересчёта: гейт набора на
     // ref-переменной (§265) читает значение из глобального словаря.
@@ -158,12 +160,15 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
       } else if (r is CustomRulePreset) {
         final preset = _presetFor(r.presetId);
         if (preset == null) continue;
+        // §534 — файл выключенного гейтом набора не сирота: вернут галку —
+        // качать заново не придётся; свежесть при возврате обеспечит
+        // автообновление по TTL. Требуются только включённые гейтом.
+        final plan = RoutingHelpers.presetCachePlan(r, preset,
+            globalVars: _userVars);
+        activeDiskIds.addAll(plan.keepCacheIds);
+        final remotes = plan.required;
         var allCached = true;
-        // §045/§107/§534: только наборы, включённые гейтом.
-        final remotes = _remoteRuleSetsOf(preset, r);
         for (final rs in remotes) {
-          activeDiskIds.add(
-              RuleSetDownloader.presetCacheId(r.presetId, rs.tag));
           final cached = await RuleSetDownloader.cachedPathForPreset(
                   r.presetId, rs.tag) !=
               null;

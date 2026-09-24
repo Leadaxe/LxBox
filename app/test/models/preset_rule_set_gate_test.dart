@@ -200,6 +200,88 @@ void main() {
     });
   });
 
+  group('ruleSetsEnabledByVar — какие наборы включает галка', () {
+    List<String> enabledBy(
+      List<Map<String, dynamic>> ruleSets,
+      String varName, [
+      Map<String, String> values = const {},
+    ]) {
+      final preset = presetOf(ruleSets, vars: [boolVar('x'), boolVar('y')]);
+      return ruleSetsEnabledByVar(
+        preset,
+        ruleWith(values),
+        varName,
+      ).map((e) => e.tag).toList();
+    }
+
+    test('#enable: ["@x"] — в списке', () {
+      final sets = [
+        remote('a', {
+          '#enable': ['@x'],
+        }),
+      ];
+      expect(enabledBy(sets, 'x', {'x': 'false'}), ['a']);
+    });
+
+    test('легаси enabled: "@x" — в списке', () {
+      final sets = [
+        remote('a', {'enabled': '@x'}),
+      ];
+      expect(enabledBy(sets, 'x', {'x': 'false'}), ['a']);
+    });
+
+    test('без гейта и с гейтом на другую переменную — не в списке', () {
+      final sets = [
+        remote('plain'),
+        remote('other', {
+          '#enable': ['@y'],
+        }),
+        remote('legacy-other', {'enabled': '@y'}),
+      ];
+      expect(enabledBy(sets, 'x', {'x': 'false'}), isEmpty);
+    });
+
+    test(
+      'составной ["@x", "@y"] при y=false — не в списке, при y=true — в',
+      () {
+        final sets = [
+          remote('both', {
+            '#enable': ['@x', '@y'],
+          }),
+        ];
+        expect(enabledBy(sets, 'x', {'x': 'false', 'y': 'false'}), isEmpty);
+        expect(enabledBy(sets, 'x', {'x': 'false', 'y': 'true'}), ['both']);
+      },
+    );
+  });
+
+  group('RoutingHelpers.presetCachePlan — что держать, что требовать', () {
+    final preset = presetOf([
+      remote('gated', {
+        '#enable': ['@x'],
+      }),
+      remote('plain'),
+    ]);
+
+    test('файл выключенного гейтом набора держим, но не требуем', () {
+      final plan = RoutingHelpers.presetCachePlan(
+        ruleWith({'x': 'false'}),
+        preset,
+      );
+      expect(plan.keepCacheIds, {'preset__p__gated', 'preset__p__plain'});
+      expect(plan.required.map((e) => e.tag), ['plain']);
+    });
+
+    test('гейт включён — требуются оба', () {
+      final plan = RoutingHelpers.presetCachePlan(
+        ruleWith({'x': 'true'}),
+        preset,
+      );
+      expect(plan.keepCacheIds, {'preset__p__gated', 'preset__p__plain'});
+      expect(plan.required.map((e) => e.tag), ['gated', 'plain']);
+    });
+  });
+
   group('боевой шаблон: ru-direct (geoip-ru, ru-apps)', () {
     late SelectableRule ruDirect;
 
