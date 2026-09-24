@@ -325,6 +325,16 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (hl != null && !ids.contains(hl)) _dismissHighlight(animated: false);
   }
 
+  /// §524 — жест перестановки общего списка в виджет-тесте: адресуется
+  /// индексами строк, как `onReorderItem`, минус drag-механика.
+  @visibleForTesting
+  Future<void> debugReorderRows(int oldIndex, int newIndex) =>
+      _reorderRows(widget.subController, oldIndex, newIndex);
+
+  /// §524 — перечитать общий список (как это делает слушатель контроллера).
+  @visibleForTesting
+  Future<void> debugReloadSources() => _loadSourceOrder();
+
   @visibleForTesting
   String? get debugHighlightedEntryId => _highlightedEntryId;
 
