@@ -495,6 +495,45 @@ class BoxCommandClient {
         }
     }
 
+    /// §535 (ядро SPEC 097) — unary pull плоского списка outbound'ов и
+    /// endpoint'ов. Единственный путь, по которому доезжают `endpointState` и
+    /// `idleSinceSeconds`: ядро заполняет их ТОЛЬКО в ответе `GetOutbounds`.
+    /// Ни дерево групп (`getGroups`/`writeGroups` — конвертер ядра эти поля не
+    /// копирует), ни поток `SubscribeOutbounds` (его список ядро собирает
+    /// апстримным кодом) их не несут, поэтому `serializeGroup` трогать нечего.
+    ///
+    /// §209 — через `ensurePingClient()`: pingClient lifecycle-независим, так
+    /// что состояние узлов читается и из фона. КОНТРАКТ тот же, что у
+    /// `getGroups`: `null` = не смогли прочитать (клиент/RPC), `[]` = список
+    /// пуст. `endpointState` пуст у всего, кроме WG/AWG-endpoint'ов — это не
+    /// ошибка, а «состояние неизвестно», и UI такой узел не подсвечивает.
+    fun getOutbounds(): List<Map<String, Any>>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getOutbounds: no command client (paused/down)")
+            return null
+        }
+        return runCatching {
+            val out = ArrayList<Map<String, Any>>()
+            val it = client.getOutbounds()
+            while (it.hasNext()) {
+                val item = it.next()
+                out.add(mapOf(
+                    "tag" to item.tag,
+                    "type" to item.type,
+                    "urlTestDelay" to item.urlTestDelay,
+                    "urlTestTime" to item.urlTestTime,
+                    "endpointState" to item.endpointState,
+                    "idleSinceSeconds" to item.idleSinceSeconds,
+                ))
+            }
+            out
+        }.getOrElse {
+            // не-STARTED / транспорт — не ошибка приложения, просто нет данных.
+            Log.d(TAG, "getOutbounds unavailable: ${it.message}")
+            null
+        }
+    }
+
     /// §208 (SPEC 019 V2) — unary snapshot пула round_robin-группы. Возвращает
     /// слоты `[{slot, tag, delay}]`. Не-round_robin группа (selector/least_test/
     /// urltest без balancer) → ПУСТОЙ список (не ошибка). `delay` мс, `0`=мёртвая

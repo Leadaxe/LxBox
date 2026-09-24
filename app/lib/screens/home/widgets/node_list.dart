@@ -326,6 +326,9 @@ class HomeNodeList extends StatelessWidget {
               // §325 — замер не этого Направления: рисуем приглушённо со значком.
               delayIsForeign: state.delayIsForeign(tag),
               pingBusy: state.pingBusy[tag] == '…',
+              // §535 — состояние WG/AWG-endpoint'а: не собран / спит вместо
+              // пустого бейджа. Тега нет в карте = узел не endpoint.
+              endpointState: state.endpointStates[tag] ?? '',
               tunnelUp: state.tunnelUp,
               busy: state.busy,
               // §322 — у round_robin одного «выбранного» нет: трафик

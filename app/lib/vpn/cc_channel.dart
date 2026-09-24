@@ -328,6 +328,17 @@ class CcChannel {
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
+  /// §535 (ядро SPEC 097) — unary pull плоского списка outbound'ов и
+  /// endpoint'ов. ЕДИНСТВЕННЫЙ источник `endpointState`/`idleSinceSeconds`:
+  /// ядро заполняет их только в ответе `GetOutbounds`, поток `outbounds` и
+  /// дерево `groups` их не несут. `null` = не смогли прочитать (не-STARTED /
+  /// нет клиента), `[]` = список пуст — caller различает, как в [getGroups].
+  Future<List<CcOutbound>?> getOutbounds() async {
+    final r = await _methods.invokeMethod<List<dynamic>>('ccGetOutbounds');
+    if (r == null) return null;
+    return r.map((m) => CcOutbound.fromMap(_asMap(m))).toList();
+  }
+
   /// §311 — unary снапшот конфига РАБОТАЮЩЕГО ядра (kernel SPEC 036
   /// `GetRunningConfig`; javap rc.3: `String getRunningConfig() throws`).
   /// Захвачен ядром один раз на старте, отдача — копия строки.
@@ -467,6 +478,8 @@ class CcOutbound {
     required this.type,
     required this.urlTestDelay,
     required this.urlTestTime,
+    this.endpointState = '',
+    this.idleSinceSeconds = 0,
   });
 
   final String tag;
@@ -478,12 +491,52 @@ class CcOutbound {
   /// Unix-время последнего теста (0 = не тестирован).
   final int urlTestTime;
 
+  /// §535 (ядро SPEC 097) — состояние WG/AWG-endpoint'а:
+  /// `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`.
+  ///
+  /// Пусто у всего остального И на любом пути, кроме `getOutbounds()`: поток
+  /// `writeOutbounds` и дерево групп поле не несут (ядро заполняет его только
+  /// в ответе `GetOutbounds`). Пусто = «состояние неизвестно», не ошибка.
+  final String endpointState;
+
+  /// §535 — секунд с последнего дайла через endpoint (0 вне `getOutbounds()`).
+  final int idleSinceSeconds;
+
   factory CcOutbound.fromMap(Map<String, dynamic> m) => CcOutbound(
     tag: m['tag']?.toString() ?? '',
     type: m['type']?.toString() ?? '',
     urlTestDelay: _int(m['urlTestDelay']),
     urlTestTime: _int(m['urlTestTime']),
+    // no-throw: старое ядро/поток без ключей → '' и 0 (состояние неизвестно).
+    endpointState: m['endpointState']?.toString() ?? '',
+    idleSinceSeconds: _int(m['idleSinceSeconds']),
   );
+}
+
+/// §535 — состояния WG/AWG-endpoint'а из `CcOutbound.endpointState`
+/// (ядро SPEC 097). Строки ядра, не переводятся и в UI не показываются.
+abstract final class CcEndpointState {
+  /// Ленивый endpoint, дайлов ещё не было.
+  static const neverBuilt = 'never_built';
+
+  /// Идёт сборка (включая ожидание бюджета).
+  static const building = 'building';
+
+  /// Устройство собрано и бодрствует.
+  static const up = 'up';
+
+  /// Устройство собрано, уведено в Down.
+  static const asleep = 'asleep';
+
+  /// Устройство освобождено (разборка по idle_teardown или бюджетом).
+  static const tornDown = 'torn_down';
+
+  /// Ещё не стартовал или закрыт.
+  static const down = 'down';
+
+  /// Узел не поднят: ядро соберёт его при первом дайле (0,5–1 с).
+  /// Это состояние, а не сбой, — UI не показывает тут таймаут.
+  static bool isNotBuilt(String s) => s == neverBuilt || s == tornDown;
 }
 
 /// §2.4 — группа из `writeGroups` (дерево). `selectable` заменяет `type=='Selector'`,

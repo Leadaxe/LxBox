@@ -1267,6 +1267,33 @@ class HomeController extends ChangeNotifier
     });
   }
 
+  /// §535 (ядро SPEC 097) — снять состояния WG/AWG-endpoint'ов unary-pull'ом.
+  ///
+  /// Единственный путь: `endpointState`/`idleSinceSeconds` ядро заполняет
+  /// только в ответе `GetOutbounds`; поток `outbounds` и дерево групп их не
+  /// несут. Зовётся с heartbeat-тика (5 с) при живом туннеле.
+  ///
+  /// no-throw и не трогает state зря: `null` (ядро не-STARTED / нет клиента)
+  /// оставляет прошлую карту — «неизвестно» не должно стирать показанное.
+  /// Узлы без состояния (не endpoint'ы) в карту не кладём.
+  @override
+  Future<void> _refreshEndpointStates() async {
+    final list = await _cc.getOutbounds();
+    if (_disposed || !_state.tunnelUp) return; // §219 — ушли за await
+    if (list == null) return; // недоступно — прошлую карту не трогаем
+    final next = <String, String>{};
+    for (final o in list) {
+      if (o.endpointState.isNotEmpty) next[o.tag] = o.endpointState;
+    }
+    // Ровно та же карта — не будим UI лишним emit'ом (тик идёт каждые 5 с).
+    final prev = _state.endpointStates;
+    if (next.length == prev.length &&
+        next.entries.every((e) => prev[e.key] == e.value)) {
+      return;
+    }
+    _emit(_state.copyWith(endpointStates: next));
+  }
+
   /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.
   @override
   void _stopCcStreams() {
