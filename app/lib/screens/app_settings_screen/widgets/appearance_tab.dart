@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../main.dart';
 import '../../../services/l10n/locale_controller.dart';
 
-/// §541 — Appearance tab для App Settings: всё про внешний вид (тема, язык,
-/// поворот, раскладка списка узлов).
+/// §541 — Appearance tab для App Settings: всё про внешний вид (тема,
+/// компоновка — поворот и две колонки списка узлов, язык).
 ///
 /// Stateless, как [GeneralTab]: значения и callback'и приходят от
 /// `_AppSettingsScreenState`; тема и язык читаются из своих контроллеров
@@ -61,6 +61,11 @@ class AppearanceTab extends StatelessWidget {
             }).toList(),
           ),
         ),
+        const SizedBox(height: 8),
+        // §541 — компоновка: поворот и две колонки списка узлов в одном месте.
+        Text(getLocalText.s("Layout"),
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
         // §220 — снятие портретной фиксации (планшетный фидбэк). Применяется
         // сразу, без рестарта; уважает системный auto-rotate.
         SwitchListTile(
@@ -69,6 +74,15 @@ class AppearanceTab extends StatelessWidget {
           secondary: const Icon(Icons.screen_rotation),
           value: allowRotation,
           onChanged: loaded ? onAllowRotationChanged : null,
+        ),
+        // §541 — гейт двухколоночной раскладки §537; применяется сразу через
+        // SettingsStorage.nodeListTwoColumns.
+        SwitchListTile(
+          title: Text(getLocalText.s("Two columns on wide screens")),
+          subtitle: Text(getLocalText.s("Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).")),
+          secondary: const Icon(Icons.view_column_outlined),
+          value: nodeListTwoColumns,
+          onChanged: loaded ? onNodeListTwoColumnsChanged : null,
         ),
         const SizedBox(height: 8),
         // §279 — выбор языка приложения; смена применяется мгновенно через
@@ -102,19 +116,6 @@ class AppearanceTab extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        const Divider(height: 32),
-        Text(getLocalText.s("Node list"),
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        // §541 — гейт двухколоночной раскладки §537; применяется сразу через
-        // SettingsStorage.nodeListTwoColumns.
-        SwitchListTile(
-          title: Text(getLocalText.s("Two columns on wide screens")),
-          subtitle: Text(getLocalText.s("Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).")),
-          secondary: const Icon(Icons.view_column_outlined),
-          value: nodeListTwoColumns,
-          onChanged: loaded ? onNodeListTwoColumnsChanged : null,
         ),
       ],
     );

@@ -22,8 +22,9 @@
   Automation. Вкладка — `app_settings_screen/widgets/appearance_tab.dart`,
   stateless по образцу `GeneralTab`.
 - Из General в Appearance перенесены: секция «Appearance» (тема), тумблер
-  «Allow rotation» (стоит сразу под темой), секция «Language». Новая секция
-  «Node list» с тумблером «Two columns on wide screens». Строки не менялись.
+  «Allow rotation», секция «Language». Порядок на вкладке: Appearance (тема),
+  Layout («Allow rotation», затем «Two columns on wide screens» — оба тумблера
+  в одной секции), Language. Строки тумблеров не менялись.
 - Ключ storage `node_list_two_columns` (`'true'`/`'false'`, дефолт `true`) —
   тот же механизм `getVar`/`setVar`, что у `allow_rotation`; добавлен в
   allowlist `_appFeatureFlagVars`, поэтому едет в бэкап и restore.

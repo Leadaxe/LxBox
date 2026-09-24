@@ -2843,8 +2843,8 @@
   "down": {
     "value": "down"
   },
-  "Node list": {
-    "value": "节点列表"
+  "Layout": {
+    "value": "布局"
   },
   "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
     "value": "窗口宽度不小于 600 dp 时（平板、横屏、分屏），节点列表以双栏显示。"
