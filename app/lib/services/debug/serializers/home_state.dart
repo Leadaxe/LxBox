@@ -28,6 +28,11 @@ Map<String, Object?> serializeHomeState(HomeState s) {
         if (s.delayOf(tag) != null) tag: s.delayOf(tag),
     },
     'ping_busy': s.pingBusy,
+    // §535 (ядро SPEC 097) — состояние WG/AWG-endpoint'ов по тегу
+    // (never_built/building/up/asleep/torn_down/down), снятое pull'ом
+    // `GetOutbounds` на heartbeat-тике. Пусто = состояний нет (туннель down,
+    // ядро не отдало, либо endpoint'ов в конфиге нет).
+    'endpoint_states': s.endpointStates,
     'traffic': {
       'up_total': s.traffic.uploadTotal,
       'down_total': s.traffic.downloadTotal,
