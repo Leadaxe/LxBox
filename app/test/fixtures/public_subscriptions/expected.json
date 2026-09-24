@@ -1,6 +1,6 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.53",
+  "contract_version": "1.1.54",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 96,
@@ -35,8 +35,7 @@
       "dropped": {},
       "warnings": {
         "reality_fp_not_chrome": 7,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "05-github-white-cidr-ru-checked": {
@@ -127,7 +126,6 @@
         "field_conflict": 1,
         "reality_fp_not_chrome": 8,
         "tls_insecure": 5,
-        "uri_param_unknown": 2,
         "utls_fp_unknown": 1
       }
     },
@@ -148,7 +146,7 @@
         "tls_insecure": 16,
         "tls_not_applicable_quic": 5,
         "unknown_key": 2,
-        "uri_param_unknown": 7
+        "uri_param_unknown": 5
       }
     },
     "15-github-rkn-white-list": {
@@ -322,7 +320,7 @@
         "ss_method_legacy": 14,
         "tls_alpn_item_invalid": 2,
         "tls_insecure": 118,
-        "uri_param_unknown": 250,
+        "uri_param_unknown": 248,
         "utls_fp_unknown": 1,
         "vision_with_transport": 11,
         "ws_early_data_converted": 13,
@@ -373,7 +371,7 @@
         "reality_fp_not_chrome": 11,
         "ss_method_legacy": 3,
         "unknown_key": 28,
-        "uri_param_unknown": 34
+        "uri_param_unknown": 32
       }
     },
     "34-github-antinet": {
@@ -390,7 +388,7 @@
         "ss_method_legacy": 2,
         "tls_insecure": 14,
         "unknown_key": 78,
-        "uri_param_unknown": 154,
+        "uri_param_unknown": 126,
         "wgconf_dns_ignored": 1,
         "ws_early_data_converted": 46,
         "xhttp_param_reset": 3
@@ -483,8 +481,7 @@
       "dropped": {},
       "warnings": {
         "reality_fp_not_chrome": 7,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "42-bitbucket-vless-reality-white-lists-rus-mobile": {
@@ -492,8 +489,7 @@
       "dropped": {},
       "warnings": {
         "reality_fp_not_chrome": 7,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "47-domain-whitelist": {
@@ -523,7 +519,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
@@ -543,7 +539,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
@@ -574,7 +570,7 @@
         "tls_insecure": 109,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
@@ -594,7 +590,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
@@ -614,7 +610,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
@@ -702,7 +698,7 @@
         "tls_insecure": 109,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
@@ -722,7 +718,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
@@ -742,7 +738,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 7,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 32,
+        "uri_param_unknown": 20,
         "utls_fp_unknown": 13
       }
     },
