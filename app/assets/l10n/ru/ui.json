@@ -4365,6 +4365,15 @@
   "Suspend idle tunnels": {
     "value": "Усыплять неактивные туннели"
   },
+  "Built tunnels limit": {
+    "value": "Лимит собранных туннелей"
+  },
+  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
+    "value": "Сколько туннелей WireGuard держать собранными одновременно; остальные разбираются и собираются заново по требованию. 0 — без ограничения."
+  },
+  "0 (no limit)": {
+    "value": "0 (без ограничения)"
+  },
   "Switch": {
     "value": "Переключиться"
   },

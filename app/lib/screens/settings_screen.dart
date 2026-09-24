@@ -92,6 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _idleSuspend = ''; // §215 — lx.wg.idle_suspend threshold ("" = off)
   // §272 — lx.wg.idle_suspend_reachable ("" = reachable never suspend)
   String _idleSuspendReachable = '';
+  int _wgBuildMax = 5; // §542 — lx.wg.build_max (0 = no cap)
   bool _passiveCheck = true; // §272 — urltest.passive_check
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
   String _memoryLimit = MemoryLimitSetting.auto;
@@ -171,6 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final idleSuspend = await SettingsStorage.getIdleSuspend(); // §215
     final idleSuspendReachable =
         await SettingsStorage.getIdleSuspendReachable(); // §272
+    final wgBuildMax = await SettingsStorage.getWgBuildMax(); // §542
     final passiveCheck = await SettingsStorage.getPassiveCheck(); // §272
     final memoryLimit = await SettingsStorage.getNativeMemoryLimit(); // §271
     setState(() {
@@ -179,6 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _interruptOnSwitch = interruptOnSwitch;
       _idleSuspend = idleSuspend;
       _idleSuspendReachable = idleSuspendReachable;
+      _wgBuildMax = wgBuildMax;
       _passiveCheck = passiveCheck;
       _memoryLimit = memoryLimit;
       _vpnLoaded = true;
@@ -226,6 +229,25 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// продуктовая, а не косметическая.
   bool get _idleSuspendReachableEnabled =>
       _vpnLoaded && _idleSuspend.isNotEmpty;
+
+  /// §542 — lx.wg.build_max. Ядро принимает lazy_build/build_max только
+  /// вместе с idle_suspend, поэтому пункт гаснет, пока сон выключен (как
+  /// reachable-окно, §277).
+  bool get _wgBuildMaxEnabled => _vpnLoaded && _idleSuspend.isNotEmpty;
+
+  Future<void> _applyWgBuildMax(int value) async {
+    if (value == _wgBuildMax) return;
+    setState(() => _wgBuildMax = value);
+    await SettingsStorage.saveWgBuildMax(value);
+    widget.subController.configDirty = true;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(getLocalText.s("Applies on next connect.")),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   /// §272 — reachable idle window (lx.wg.idle_suspend_reachable).
   /// Config-significant, применяется на следующем подключении.
@@ -492,6 +514,56 @@ class _SettingsScreenState extends State<SettingsScreen>
                 : (String? v) {
                     if (v == null) return;
                     unawaited(_applyIdleSuspendReachable(v));
+                  },
+          ),
+        ),
+        // §542 — бюджет собранных WG/AWG туннелей (lx.wg.build_max, SPEC 097).
+        // Было константой 5 (§536); 0 = без потолка. Гаснет вместе с
+        // reachable-окном: без idle_suspend ядро ключ не примет.
+        dimmedWhenDisabled(
+          enabled: _wgBuildMaxEnabled,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  getLocalText.s("Built tunnels limit"),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  getLocalText.s("Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit."),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: DropdownButtonFormField<int>(
+            initialValue: const [0, 3, 5, 8, 12].contains(_wgBuildMax)
+                ? _wgBuildMax
+                : null,
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              isDense: true,
+              enabled: _wgBuildMaxEnabled,
+            ),
+            items: [
+              DropdownMenuItem<int>(
+                  value: 0, child: Text(getLocalText.s("0 (no limit)"))),
+              for (final n in const [3, 5, 8, 12])
+                DropdownMenuItem<int>(value: n, child: Text(n.toString())),
+            ],
+            onChanged: !_wgBuildMaxEnabled
+                ? null
+                : (int? v) {
+                    if (v == null) return;
+                    unawaited(_applyWgBuildMax(v));
                   },
           ),
         ),

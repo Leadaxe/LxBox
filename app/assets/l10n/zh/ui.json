@@ -4158,6 +4158,15 @@
   "Suspend idle tunnels": {
     "value": "挂起空闲隧道"
   },
+  "Built tunnels limit": {
+    "value": "已构建隧道上限"
+  },
+  "Keep at most this many WireGuard tunnels built at once; the rest are torn down and rebuilt on demand. 0 = no limit.": {
+    "value": "同时最多保持这么多个已构建的 WireGuard 隧道；其余的会被拆除，需要时再重新构建。0 = 不限制。"
+  },
+  "0 (no limit)": {
+    "value": "0（不限制）"
+  },
   "Switch": {
     "value": "切换"
   },

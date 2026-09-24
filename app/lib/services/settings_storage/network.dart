@@ -74,6 +74,32 @@ Future<void> _saveIdleSuspendReachable(String threshold,
 }
 
 // ---------------------------------------------------------------------------
+// §542 — WG/AWG build budget (lx.wg.build_max, kernel SPEC 097)
+//
+// Сколько WG/AWG эндпоинтов ядро держит собранными одновременно; сверх лимита
+// самый давний разбирается и пересобирается по требованию. `0` = без потолка.
+// Дефолт 5 (значение бывшей константы §536). Пишется в конфиг только вместе
+// с idle_suspend (ядро требует его для lazy_build/build_max).
+// Config-significant → markConfigDirty.
+// ---------------------------------------------------------------------------
+
+const int kWgBuildMaxDefault = 5;
+
+Future<int> _getWgBuildMax() async {
+  final data = await _load();
+  final v = data['wg_build_max'];
+  return (v is int && v >= 0) ? v : kWgBuildMaxDefault;
+}
+
+Future<void> _saveWgBuildMax(int value, {bool flush = true}) async {
+  final data = await _load();
+  data['wg_build_max'] = value;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
+// ---------------------------------------------------------------------------
 // §272 — passive health check (urltest.passive_check, kernel SPEC 019)
 //
 // Успешный TCP-дайл через узел = доказательство живости; пока оно свежо

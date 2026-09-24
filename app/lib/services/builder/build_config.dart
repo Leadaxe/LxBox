@@ -38,11 +38,6 @@ import 'validator.dart';
 /// тумблера в UI у неё нет — значение одно для всех сборок.
 const bool kLxWgLazyBuild = true;
 
-/// §536 — `lx.wg.build_max`: сколько WG/AWG эндпоинтов держать собранными
-/// одновременно. Сверх лимита самый давний усыпляется. `build_overflow` не
-/// пишем — дефолт ядра (`wait`) нас устраивает.
-const int kLxWgBuildMax = 5;
-
 /// Результат сборки — готовый JSON + валидация + warnings + generated-vars
 /// которые контроллеру надо записать обратно в storage (Clash API port/secret
 /// — рандомизируются здесь на первом запуске).
@@ -132,6 +127,13 @@ class BuildSettings {
   /// [idleSuspend] — ядро отвергает reachable без базового порога.
   final String idleSuspendReachable;
 
+  /// §542 — `lx.wg.build_max` (ядро SPEC 097): сколько WG/AWG эндпоинтов
+  /// держать собранными одновременно; сверх лимита самый давний разбирается.
+  /// `0` = без потолка (пишется как `0`, ядро это допускает). Было константой
+  /// §536 (5), теперь настройка `wg_build_max`. Эмитится только вместе с
+  /// [idleSuspend]. `build_overflow` не пишем — дефолт ядра `wait`.
+  final int wgBuildMax;
+
   /// §272: passive health check (ядро SPEC 019, `urltest.passive_check`) —
   /// пишется в urltest-двойники Направлений. Пока свежий успешный TCP-дайл
   /// подтверждает узел, периодические пробы группы пропускаются.
@@ -162,6 +164,7 @@ class BuildSettings {
     this.vpnMode,
     this.idleSuspend = '',
     this.idleSuspendReachable = '',
+    this.wgBuildMax = 5,
     this.passiveCheck = false,
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
@@ -625,7 +628,8 @@ Future<BuildResult> buildConfig({
     // `lx.masque.idle_timeout` тоже: у WARP MASQUE-узлов свой idle_timeout
     // внутри самого узла.
     wg['lazy_build'] = kLxWgLazyBuild;
-    wg['build_max'] = kLxWgBuildMax;
+    // §542 — число из настройки, `0` пишется как есть (ядро: без потолка).
+    wg['build_max'] = settings.wgBuildMax < 0 ? 0 : settings.wgBuildMax;
     config['lx'] = <String, dynamic>{'wg': wg};
   }
 

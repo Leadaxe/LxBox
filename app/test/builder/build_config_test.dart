@@ -365,6 +365,50 @@ void main() {
       expect(wgBlock['lazy_build'], true);
       expect(wgBlock['build_max'], 5);
     });
+
+    // §542 — build_max берётся из настройки `wg_build_max`; 0 пишется как 0
+    // (ядро: без потолка); без порога сна блока lx (и ключа) нет.
+    Future<BuildResult> build542({required String idle, required int max}) {
+      final wg = parseWireguardUri(
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u542',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        nodes: [wg],
+      );
+      return buildConfig(
+        lists: [list],
+        template: template,
+        settings: BuildSettings(
+          userVars: const {'clash_api': '127.0.0.1:9090'},
+          idleSuspend: idle,
+          wgBuildMax: max,
+        ),
+      );
+    }
+
+    test('§542 настройка 0 → build_max: 0', () async {
+      final result = await build542(idle: '30s', max: 0);
+      final wgBlock = (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['lazy_build'], true);
+      expect(wgBlock['build_max'], 0);
+    });
+
+    test('§542 настройка 8 → build_max: 8', () async {
+      final result = await build542(idle: '30s', max: 8);
+      final wgBlock = (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['build_max'], 8);
+    });
+
+    test('§542 сон выключен → ключа build_max нет', () async {
+      final result = await build542(idle: '', max: 8);
+      expect(result.config.containsKey('lx'), false);
+    });
   });
 
   group('buildConfig — §161 empty required-var → default backstop', () {
