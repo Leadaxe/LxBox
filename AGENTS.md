@@ -44,8 +44,13 @@ Push в `develop` допустим вместе с завершением раб
   **только те тест-файлы, что написал или правил в этой задаче**, и точечно
   кейсы, прямо относящиеся к правке. Каталог `test/` целиком, корпус контракта
   целиком, golden целиком — не гонять.
-- Секундные чекеры остаются локальными: четыре `tool/l10n/*_check.dart
-  --strict`, `tool/docs/parity_check.dart`, `tool/check_contract_lock.dart`.
+- Чекеры (`tool/l10n/*_check.dart`, `tool/docs/parity_check.dart`,
+  `tool/check_contract_lock.dart`) локально не обязательны — их гоняет тот же
+  `checks` в CI (решение владельца, 24.09.2026; локально ui+hardcoded ≈ 1 мин).
+  Единственное исключение: задача правила UI-строки или шаблон — один раз перед
+  коммитом только относящийся к правке чекер (`hardcoded_check` /
+  `template_check`), через Sonnet-греппера. Красный чекер в CI чинится
+  отдельным коммитом, как красный тест.
 - После пуша результат CI проверить обязательно: дождаться прогона по своему
   `head_sha` и перечитать через API — `gh api
   repos/Leadaxe/LxBox/actions/runs/<id> -q '"\(.status) \(.conclusion)
@@ -128,8 +133,9 @@ bash app/tool/sync_contract.sh --to <sha>   # бамп с коммита лау�
   (последний бывший исключением `test/contract/backup_corpus_test.dart:
   directions_created_on_import` закрыт мини-фазой B спеки 393). Любой красный в
   CI после твоего пуша — твой.
-- После правки UI-строк / шаблона: `dart run tool/l10n/ui_check.dart`,
-  `template_check`, `hardcoded_check` — 0 failures / 0 warnings.
+- После правки UI-строк / шаблона: один раз перед коммитом только относящийся
+  к правке чекер (`hardcoded_check` или `template_check`) — 0 failures /
+  0 warnings. Остальные чекеры — CI.
 - UI-тексты только EN; русский каталог `app/assets/l10n/ru/*` ключуется
   английским исходником — смена строки = перемап ключа + перевод со
   склонением (Направление — средний род).

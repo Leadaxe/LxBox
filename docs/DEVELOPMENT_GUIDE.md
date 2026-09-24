@@ -98,10 +98,13 @@ Owner's decision, 2026-09-18 (policy — `AGENTS.md`).
   - `flutter test` on the test files this task wrote or changed, plus cases that
     bear directly on the change. Not a whole `test/` directory, not the whole
     contract corpus, not all goldens.
-- Fast checkers stay local (seconds), 0 failures required:
-  - `dart run tool/l10n/{ui,template,hardcoded,kotlin}_check.dart --strict`
-  - `dart run tool/docs/parity_check.dart --strict`
-  - `dart run tool/check_contract_lock.dart` — when the contract copy is involved.
+- Checkers (`tool/l10n/*_check.dart`, `tool/docs/parity_check.dart`,
+  `tool/check_contract_lock.dart`) are not required locally — the same `checks`
+  job runs them on CI (owner's decision, 2026-09-24; ui + hardcoded take about a
+  minute locally). One exception: a task that edits UI strings or the template
+  runs the one relevant checker (`hardcoded_check` / `template_check`) once
+  before the commit, through the Sonnet grepper. A red checker on CI is fixed as
+  its own commit, like a red test.
 - After a push the CI verdict is mandatory: find the run by `head_sha` and read it
   through the API:
   ```bash
