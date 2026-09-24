@@ -68,7 +68,7 @@ void main() {
             'tls': {'insecure': true},
           },
         ),
-        'x://h:1?allowInsecure=1',
+        'x://h:1?allowInsecure=true',
       );
     });
   });

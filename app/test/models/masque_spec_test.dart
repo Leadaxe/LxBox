@@ -137,8 +137,14 @@ void main() {
       disableSni: true,
     );
     expect(parseMasqueUri(s.toUri())!.disableSni, isTrue);
-    expect(parseMasqueUri(s.toUri().replaceAll('disable_sni=1', ''))!.disableSni,
-        isFalse);
+    // Параметр снимается ПО ИМЕНИ, а не по написанию значения: написание
+    // булева на выходе — дело записи реестра (§532 дефект 4, умолчание —
+    // слово `true`), и `replaceAll('disable_sni=1')` молча превращался в
+    // no-op, как только оно сменилось, — проверка вырождалась в «то же самое
+    // ещё раз».
+    final stripped = s.toUri().replaceAll(RegExp(r'[?&]disable_sni=[^&#]*'), '');
+    expect(stripped, isNot(contains('disable_sni')));
+    expect(parseMasqueUri(stripped)!.disableSni, isFalse);
   });
 
   // §402 / контракт 0.11.1 — `vhttp=auto` (h3 с откатом на h2). Ядро понимает
