@@ -4,26 +4,6 @@
   "mappers": {
     "uri": {
       "params": {
-        "sni": {
-          "source": [
-            "query.sni",
-            "query.peer"
-          ],
-          "maps_to": "tls.server_name",
-          "default_from": "host",
-          "on_invalid": {
-            "action": "default_from",
-            "when": {
-              "value": {
-                "not_matches": "[.:]"
-              }
-            }
-          },
-          "when": {
-            "tls.enabled": true
-          },
-          "_why": "§472 — правило `sni_heuristic_falls_back_to_server`: у anytls оно есть на ОБОИХ проектах (как у hysteria2), а общий блок tls#uri несёт только цепочку источников и фолбэк на ПУСТОМ. Имя без точки и двоеточия адресом быть не может, а «🔒» — витринный значок подписки: и то и другое уступает адресу сервера. Вторая половина правила объявляется у схемы, потому что исполняют его НЕ ВСЕ схемы, включившие блок."
-        },
         "security": {
           "source": "query.security",
           "selector": true,
