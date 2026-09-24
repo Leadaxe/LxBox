@@ -12,6 +12,7 @@ import '../models/codec/source_record.dart';
 import '../models/direction.dart';
 import '../models/dns_ref.dart';
 import '../models/source_chain.dart';
+import '../models/source_entry.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
@@ -293,21 +294,45 @@ class SettingsStorage {
   static Future<void> removeVar(String name) => _removeVar(name);
 
   // ---------------------------------------------------------------------------
-  // Источники — записи `sources[]` без цепочек (§439).
+  // §439/§524 — источники: ОДИН упорядоченный список всех родов
+  // (`subscription`/`server`/`folder`/`chain`) записями `sources[]`.
+  // Супертип — `models/source_entry.dart`.
   // ---------------------------------------------------------------------------
+
+  /// §524 — весь список источников в порядке `sources[]`: подписки, серверы,
+  /// папки и цепочки одним рядом. Нечитаемая запись едет [OpaqueEntry]'ем и
+  /// своего места не теряет.
+  static Future<List<SourceEntry>> getSourceEntries() => _getSourceEntries();
+
+  /// §524 — записать список источников ЦЕЛИКОМ, в порядке [entries].
+  /// ЕДИНСТВЕННЫЙ писатель массива: перестановка, удаление и toggle любого
+  /// рода — одна запись на операцию, сопоставлять слоты не нужно.
+  static Future<void> saveSourceEntries(List<SourceEntry> entries,
+          {bool flush = true}) =>
+      _saveSourceEntries(entries, flush: flush);
+
+  /// §524 — источники документа хранения [doc] (снимок [dumpCache], блок
+  /// `storage` бэкапа) тем же чтением, что [getSourceEntries].
+  static List<SourceEntry> sourceEntriesOf(
+    Map<String, dynamic> doc, {
+    void Function(Object error)? onCorrupt,
+  }) =>
+      _sourceEntriesOf(doc, onCorrupt: onCorrupt);
 
   static Future<List<ServerList>> getServerLists() => _getServerLists();
 
-  /// Переписывает источники-контейнеры; слоты цепочек в `sources[]`
-  /// сохраняются (§509).
+  /// Переписывает источники-контейнеры; места цепочек и нечитаемых записей в
+  /// `sources[]` сохраняются (§509/§524).
   static Future<void> saveServerLists(List<ServerList> lists) =>
       _saveServerLists(lists);
 
   /// Ключ записи подписки/сервера/папки в общем порядке `sources[]`.
-  static String sourceKeyForId(String id) => 'id:$id';
+  /// §524 — реализация в `models/source_entry.dart`; здесь делегат, чтобы
+  /// существующие вызовы не менялись.
+  static String sourceKeyForId(String id) => sourceKeyForIdOf(id);
 
   /// Ключ записи цепочки в общем порядке `sources[]`.
-  static String sourceKeyForChain(String tag) => 'chain:$tag';
+  static String sourceKeyForChain(String tag) => sourceKeyForChainOf(tag);
 
   /// Порядок `sources[]`: `id:<uuid>` и `chain:<tag>` в том виде, как
   /// лежит массив.

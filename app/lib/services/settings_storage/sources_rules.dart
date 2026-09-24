@@ -7,39 +7,62 @@ part of '../settings_storage.dart';
 // `_cache`.
 
 // ---------------------------------------------------------------------------
-// §439 — источники: записи `sources[]` контракта 1.0 кодеком
-// `models/codec/source_record.dart`. Цепочки лежат в том же массиве
-// (`chains.dart`); здесь читается и переписывается только часть без них.
-// Слоты цепочек при записи сохраняются (§509).
+// §439/§524 — источники: записи `sources[]` контракта 1.0. ОДИН упорядоченный
+// список всех родов (`subscription`/`server`/`folder`/`chain`) — супертип
+// `models/source_entry.dart`, кодеки `codec/source_record.dart` (контейнеры) и
+// `codec/chain_record.dart` (цепочки).
+//
+// §524 — ЕДИНСТВЕННЫЙ писатель массива: [_writeEntries]. До §524 их было два
+// (часть без цепочек и часть цепочек), и каждый вписывал свой род в чужой
+// контекст, не имея на руках чужих записей; восстановление потерянной
+// информации стоило сопоставления слотов по ключу (`_spliceSourceKind`) и дало
+// подряд два бага — §511 M1 (удаление сдвигало соседей того же рода) и §511 M2
+// (одна нечитаемая запись отвергала любую перестановку). При едином писателе
+// оба невозможны по построению: он получает весь список и пишет его целиком.
+//
+// Формат файла НЕ менялся: тот же ключ, те же записи, тот же порядок.
 // ---------------------------------------------------------------------------
 
-Future<List<ServerList>> _getServerLists() async => _serverListsOf(
-      await _load(),
-      onCorrupt: (e) => AppLog.I.warning('Skipping unreadable source record: $e'),
-      onNote: _logStorageNoteOnce,
-    );
-
-/// Источники документа хранения [doc]: живого файла, его снимка или блока
-/// `storage` бэкапа — одно чтение на все случаи.
+/// §524 — весь список источников в порядке `sources[]`.
 ///
-/// Запись, которую кодек не читает (нет `kind` или `id`, чужой вид), в
-/// список не попадает: причина уходит в [onCorrupt], остальные читаются
-/// (§141 P1.8c). Прочитанное не дословно (тег записи разошёлся с текстом,
-/// отброшенный член папки, ключи, которых модель не держит) — строками в
-/// [onNote].
-List<ServerList> _serverListsOf(
+/// Нечитаемая запись (§141 P1.8c: чужой или будущий `kind`, битый JSON) едет
+/// [OpaqueEntry]'ем — она полноправный элемент списка, а не «то, чего писатель
+/// не трогает». Причина уходит в [onCorrupt], остальные читаются. Прочитанное
+/// не дословно (тег разошёлся с текстом, отброшенный член папки, ключи, которых
+/// модель не держит) — строками в [onNote].
+List<SourceEntry> _sourceEntriesOf(
   Map<String, dynamic> doc, {
   void Function(Object error)? onCorrupt,
   void Function(String note)? onNote,
 }) {
-  final out = <ServerList>[];
-  for (final r in _recordsAt(doc[kSourcesKey])) {
-    if (_isChainRecord(r)) continue;
+  final records = _recordsAt(doc[kSourcesKey]);
+  final out = <SourceEntry>[];
+  for (var i = 0; i < records.length; i++) {
+    final r = records[i];
     final notes = <String>[];
+    if (_isChainRecord(r)) {
+      final read = chainFromRecord(r, notes: notes);
+      final chain = read.value;
+      if (chain == null) {
+        onCorrupt?.call(read.dropped!);
+        out.add(OpaqueEntry(r, i));
+        continue;
+      }
+      if (onNote != null) {
+        notes.forEach(onNote);
+        if (read.unknownKeys.isNotEmpty) {
+          onNote('chain "${chain.tag}": keys not kept by the model: '
+              '${read.unknownKeys.join(', ')}');
+        }
+      }
+      out.add(ChainEntry(chain));
+      continue;
+    }
     final read = sourceFromRecord(r, notes: notes);
     final list = read.value;
     if (list == null) {
       onCorrupt?.call(read.dropped!);
+      out.add(OpaqueEntry(r, i));
       continue;
     }
     if (onNote != null) {
@@ -49,112 +72,112 @@ List<ServerList> _serverListsOf(
             '${read.unknownKeys.join(', ')}');
       }
     }
-    out.add(list);
+    out.add(ContainerEntry(list));
   }
   return out;
 }
 
-/// Переписать записи без цепочек, не трогая слоты цепочек: взаимный порядок
-/// `kind: chain` и их места среди остальных источников сохраняются. Новые
-/// источники, которым не хватило слота, встают в конец массива.
-Future<void> _saveServerLists(List<ServerList> lists, {bool flush = true}) async {
+Future<List<SourceEntry>> _getSourceEntries() async => _sourceEntriesOf(
+      await _load(),
+      onCorrupt: (e) => AppLog.I.warning('Skipping unreadable source record: $e'),
+      onNote: _logStorageNoteOnce,
+    );
+
+/// §524 — записать список источников ЦЕЛИКОМ, в порядке [entries].
+///
+/// Единственный писатель `sources[]`: сопоставлять слоты не нужно, потому что
+/// чужих записей в массиве не остаётся — все они в [entries].
+/// [OpaqueEntry] едет своим сырым объектом, байт в байт.
+Future<void> _writeEntries(List<SourceEntry> entries,
+    {bool flush = true}) async {
   final data = await _load();
-  data[kSourcesKey] = _spliceSourceKind(
-    existing: _recordsAt(data[kSourcesKey]),
-    ours: [for (final l in lists) sourceToRecord(l)],
-    isOurs: (r) => !_isChainRecord(r),
-  );
+  data[kSourcesKey] = [
+    for (final e in entries)
+      switch (e) {
+        ContainerEntry(:final list) => sourceToRecord(list),
+        ChainEntry(:final chain) => chainToRecord(chain),
+        OpaqueEntry(:final record) => record,
+      },
+  ];
   SettingsStorage._cache = data;
   if (flush) await _save();
 }
 
-/// Ключ записи `sources[]` для общего порядка списка: `id:<uuid>` у
-/// подписки/сервера/папки, `chain:<tag>` у цепочки.
-String _sourceRecordKey(Map<String, dynamic> r) => _isChainRecord(r)
-    ? SettingsStorage.sourceKeyForChain('${r['tag'] ?? ''}')
-    : SettingsStorage.sourceKeyForId('${r['id'] ?? ''}');
-
-Future<List<String>> _getSourceKeys() async => [
-      for (final r in _recordsAt((await _load())[kSourcesKey]))
-        _sourceRecordKey(r),
-    ];
-
-/// Перестановка `sources[]`. [keys] — новый порядок записей, которые видит
-/// список (`id:…` / `chain:…`): каждый ключ есть в массиве ровно один раз и
-/// не повторяется в [keys]; иначе no-op — состав списка эта операция не
-/// меняет.
-///
-/// Записи вне [keys] — те, что кодек не читает и экран не показывает
-/// (§141 P1.8c), — остаются в своих слотах; слоты записей из [keys]
-/// заполняются в порядке [keys] (§511 M2). Раньше одна такая запись
-/// отвергала любую перестановку: ключей экрана на один меньше, чем записей.
-///
-/// `false` — перестановка отвергнута, причина уходит в AppLog (§511 m4):
-/// раньше отказ был тихим, и строка на экране просто отпрыгивала назад.
-Future<bool> _reorderSources(List<String> keys) async {
-  final data = await _load();
-  final records = _recordsAt(data[kSourcesKey]);
-  bool reject(String why) {
-    AppLog.I.warning('reorderSources rejected: $why '
-        '(keys=${keys.length}, records=${records.length})');
-    return false;
-  }
-
-  final want = keys.toSet();
-  if (want.length != keys.length) return reject('duplicate key');
-  final byKey = <String, Map<String, dynamic>>{};
-  for (final r in records) {
-    final k = _sourceRecordKey(r);
-    if (!want.contains(k)) continue;
-    if (byKey.containsKey(k)) return reject('ambiguous record $k');
-    byKey[k] = r;
-  }
-  if (byKey.length != keys.length) {
-    return reject(
-        'unknown key ${want.difference(byKey.keys.toSet()).first}');
-  }
-  var next = 0;
-  data[kSourcesKey] = [
-    for (final r in records)
-      want.contains(_sourceRecordKey(r)) ? byKey[keys[next++]]! : r,
-  ];
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty();
-  await _save();
-  return true;
+/// §524 — записать список источников как config-значимую правку (§113).
+/// Отличие от [_writeEntries]: поднимает `configDirty`.
+Future<void> _saveSourceEntries(List<SourceEntry> entries,
+    {bool flush = true}) async {
+  await _writeEntries(entries, flush: flush);
+  SettingsStorage.markConfigDirty(); // §113
 }
 
-/// Заменяет в [existing] записи, для которых [isOurs], элементами [ours];
-/// чужой род остаётся на месте.
+Future<List<ServerList>> _getServerLists() async => _serverListsOf(
+      await _load(),
+      onCorrupt: (e) => AppLog.I.warning('Skipping unreadable source record: $e'),
+      onNote: _logStorageNoteOnce,
+    );
+
+/// Контейнеры документа хранения [doc]: живого файла, его снимка или блока
+/// `storage` бэкапа — срез единого чтения [_sourceEntriesOf].
+List<ServerList> _serverListsOf(
+  Map<String, dynamic> doc, {
+  void Function(Object error)? onCorrupt,
+  void Function(String note)? onNote,
+}) =>
+    [
+      for (final e
+          in _sourceEntriesOf(doc, onCorrupt: onCorrupt, onNote: onNote))
+        if (e is ContainerEntry) e.list,
+    ];
+
+/// §524 — переписать контейнеры, сохранив места и взаимный порядок остальных
+/// родов. Фасад над [_writeEntries]: список читается целиком, контейнеры
+/// заменяются составом [lists] по своим местам, лишние места снимаются, новые
+/// записи встают в конец — сдвига соседей другого рода нет по построению.
+Future<void> _saveServerLists(List<ServerList> lists,
+        {bool flush = true}) async =>
+    _writeEntries(
+      _replaceKind<ContainerEntry>(
+        await _getSourceEntries(),
+        [for (final l in lists) ContainerEntry(l)],
+      ),
+      flush: flush,
+    );
+
+/// §524 — заменить в [all] записи рода [T] составом [ours], не двигая чужие.
 ///
-/// Слоты своего рода сопоставляются по ключу ([_sourceRecordKey]), не по
-/// позиции (§511 M1): слот, чей ключ в [ours] есть, остаётся слотом и
+/// Места рода [T] сопоставляются ПО КЛЮЧУ ([SourceEntry.sourceKey]), не по
+/// позиции (§511 M1): место, чей ключ в [ours] есть, остаётся местом и
 /// получает уцелевшие записи в порядке [ours] (так перестановка своего рода
-/// по-прежнему пишется этой же функцией); слот, чей ключ пропал, снимается
-/// целиком, и соседи того же рода в него не съезжают. Записи [ours] с новыми
-/// ключами — в хвост массива.
-List<Map<String, dynamic>> _spliceSourceKind({
-  required List<Map<String, dynamic>> existing,
-  required List<Map<String, dynamic>> ours,
-  required bool Function(Map<String, dynamic>) isOurs,
-}) {
+/// пишется этой же функцией); место, чей ключ пропал, снимается целиком, и
+/// соседи того же рода в него не съезжают. Записи [ours] с новыми ключами —
+/// в конец списка.
+///
+/// Нужен фасадам `saveServerLists`/`setChains`, которые по историческим
+/// причинам получают половину списка: у них на руках нет ответа, КАКОЕ из мест
+/// своего рода освободилось. Единый писатель [_writeEntries] в этом не
+/// нуждается — ему передают список целиком, и место каждой записи задано её
+/// позицией в нём.
+List<SourceEntry> _replaceKind<T extends SourceEntry>(
+  List<SourceEntry> all,
+  List<SourceEntry> ours,
+) {
   final slotKeys = {
-    for (final r in existing)
-      if (isOurs(r)) _sourceRecordKey(r),
+    for (final e in all)
+      if (e is T) e.sourceKey,
   };
-  final survivors = <Map<String, dynamic>>[];
-  final fresh = <Map<String, dynamic>>[];
-  for (final r in ours) {
-    (slotKeys.contains(_sourceRecordKey(r)) ? survivors : fresh).add(r);
+  final survivors = <SourceEntry>[];
+  final fresh = <SourceEntry>[];
+  for (final e in ours) {
+    (slotKeys.contains(e.sourceKey) ? survivors : fresh).add(e);
   }
-  final survivorKeys = {for (final r in survivors) _sourceRecordKey(r)};
-  final out = <Map<String, dynamic>>[];
+  final survivorKeys = {for (final e in survivors) e.sourceKey};
+  final out = <SourceEntry>[];
   var next = 0;
-  for (final r in existing) {
-    if (!isOurs(r)) {
-      out.add(r);
-    } else if (survivorKeys.contains(_sourceRecordKey(r)) &&
-        next < survivors.length) {
+  for (final e in all) {
+    if (e is! T) {
+      out.add(e);
+    } else if (survivorKeys.contains(e.sourceKey) && next < survivors.length) {
       out.add(survivors[next++]);
     }
   }
@@ -162,6 +185,46 @@ List<Map<String, dynamic>> _spliceSourceKind({
     ..addAll(survivors.skip(next))
     ..addAll(fresh);
   return out;
+}
+
+Future<List<String>> _getSourceKeys() async =>
+    [for (final e in await _getSourceEntries()) e.sourceKey];
+
+/// §524 — перестановка `sources[]`. [keys] — новый порядок записей
+/// ([SourceEntry.sourceKey]): каждый ключ есть в списке ровно один раз и не
+/// повторяется в [keys]; иначе no-op — состав списка эта операция не меняет.
+///
+/// Записи вне [keys] (нечитаемые, §141 P1.8c) остаются в своих слотах; слоты
+/// записей из [keys] заполняются в порядке [keys] (§511 M2).
+///
+/// `false` — перестановка отвергнута, причина уходит в AppLog (§511 m4):
+/// раньше отказ был тихим, и строка на экране просто отпрыгивала назад.
+Future<bool> _reorderSources(List<String> keys) async {
+  final entries = await _getSourceEntries();
+  bool reject(String why) {
+    AppLog.I.warning('reorderSources rejected: $why '
+        '(keys=${keys.length}, records=${entries.length})');
+    return false;
+  }
+
+  final want = keys.toSet();
+  if (want.length != keys.length) return reject('duplicate key');
+  final byKey = <String, SourceEntry>{};
+  for (final e in entries) {
+    final k = e.sourceKey;
+    if (!want.contains(k)) continue;
+    if (byKey.containsKey(k)) return reject('ambiguous record $k');
+    byKey[k] = e;
+  }
+  if (byKey.length != keys.length) {
+    return reject('unknown key ${want.difference(byKey.keys.toSet()).first}');
+  }
+  var next = 0;
+  await _saveSourceEntries([
+    for (final e in entries)
+      want.contains(e.sourceKey) ? byKey[keys[next++]]! : e,
+  ]);
+  return true;
 }
 
 /// Объекты-записи массива [raw]; не объекты пропускаются.
