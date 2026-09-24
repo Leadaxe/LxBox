@@ -32,7 +32,8 @@
           "none": null,
           "": null
         },
-        "normalize": "trim"
+        "normalize": "trim",
+        "_delta_id": "D133-21"
       }
     },
     "uri_with_host": {
@@ -48,7 +49,8 @@
         "impl": "Цепочка sni→peer→host — наше сегодняшнее поведение у http: trojanTLSFromNode(node, \"http\") читает те же три написания (node_parser_http.go:131-138, node_parser_transport.go:1014-1020). Фолбэк на server — тот же Q133-08, что у trojan: корпус uri/http/proxy_https_default_port_443 ждёт server_name из адреса. when по ТЕЛУ: блок tls у http заводит только написание схемы (scheme_sets у proxy-https/proxy+https), и без гейта запись сочиняла бы tls.server_name простому HTTP-прокси, где блока быть не должно.",
         "when": {
           "tls.enabled": true
-        }
+        },
+        "_delta_id": "D133-19"
       }
     },
     "xray": {
@@ -70,7 +72,8 @@
           "": {}
         },
         "impl": "У Xray security=xtls сегодня теряется МОЛЧА (xray_outbound_convert.go:223-225): значение вне набора не даёт tls-блока и не даёт кода. REALITY требует uTLS-блок («uTLS is required by reality client» — fatal при создании outbound), поэтому у этого написания отпечаток материализуется дефолтом ЯДРА; написанное значение перебивает его записью `fp` (priority 20 против 10).",
-        "_why_kept_533": "Синк 1.1.53 — ОСТАЁТСЯ (не снят вместе с прочими записями blocks.xray). REALITY требует uTLS-блок: ядро отвечает fatal «uTLS is required by reality client» при создании outbound, поэтому у написания reality отпечаток материализуется дефолтом ядра (chrome), а написанное значение перебивает его записью fp реестра (priority 20 против 10). У реестра ветка reality ставит только tls.enabled, и без этой записи reality-узел БЕЗ realitySettings.fingerprint уезжает без utls вовсе — реестр сам судит это предупреждением field_requires (tls.reality.enabled requires tls.utls.enabled), то есть признаёт тело неполным. Кейса корпуса на «reality без fingerprint» НЕТ (ревизия зеркала §3 п.15 прямо просит его завести), поэтому снятие здесь опиралось бы не на корпус, а на догадку."
+        "_why_kept_533": "Синк 1.1.53 — ОСТАЁТСЯ (не снят вместе с прочими записями blocks.xray). REALITY требует uTLS-блок: ядро отвечает fatal «uTLS is required by reality client» при создании outbound, поэтому у написания reality отпечаток материализуется дефолтом ядра (chrome), а написанное значение перебивает его записью fp реестра (priority 20 против 10). У реестра ветка reality ставит только tls.enabled, и без этой записи reality-узел БЕЗ realitySettings.fingerprint уезжает без utls вовсе — реестр сам судит это предупреждением field_requires (tls.reality.enabled requires tls.utls.enabled), то есть признаёт тело неполным. Кейса корпуса на «reality без fingerprint» НЕТ (ревизия зеркала §3 п.15 прямо просит его завести), поэтому снятие здесь опиралось бы не на корпус, а на догадку.",
+        "_delta_id": "D533-xray-reality-utls-required"
       }
     }
   }
