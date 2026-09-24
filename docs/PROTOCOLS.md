@@ -43,6 +43,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 5. [Shadowsocks](#4-shadowsocks)
 6. [Hysteria2](#5-hysteria2)
 7. [NaïveProxy](#55-naïveproxy)
+7a. [AnyTLS](#56-anytls)
 8. [SSH](#6-ssh)
 9. [SOCKS](#7-socks)
 10. [HTTP(S) proxy](#75-https-proxy)
@@ -956,6 +957,30 @@ The private key is URL-encoded in the userinfo position. Default port: **51820**
 
 Scheme aliases: `wireguard://`, `wg://`, `awg://` and `amneziawg://` — all four are parsed by the same endpoint logic (§097; `amneziawg://` is the protocol's full name, added by contract 1.1.48 and picked up from the registry rather than from a literal, §512). Panels (rrtrg and neighbours) write the full name, and before 1.1.48 such a link was rejected as an unsupported scheme even though the section could already read every one of its fields. The presence of AWG fields in the query (under any of the schemes) makes the node an AmneziaWG one — see [section 8.5](#85-amneziawg-awg-awg2).
 
+### Second form: a whole `.conf` in base64
+
+Under any of the four schemes the authority may be, instead of `key@host:port`, a base64 blob holding an **entire wg-quick file**:
+
+```
+awg://<base64 of the whole .conf>#label
+amneziawg://<base64 of the whole .conf>#label
+```
+
+AmneziaWG 3.x panels hand out links in this shape (contract 1.1.23, L×Box 2.24.1 §450; `amneziawg://` joined the alias list in 2.25.2 §512). The registry declares it as the form `conf_b64` of the `wireguard` section (`registry/protocols/wireguard.json`), beside the ordinary `url` form.
+
+**What marks the form** (both conditions, judged on the authority):
+
+1. there is **no `@`** — the `key@host` form always has one;
+2. the whole authority is base64 (`^[A-Za-z0-9+/=_-]+$`) — `wireguard://host:port?privatekey=…`, which also has no `@`, carries `:` and `?`, bytes outside that alphabet.
+
+Both must hold: an authority without `@` is legal for a link that keeps the key in the query, so `@` alone does not decide.
+
+**How it is read.** The authority is base64-decoded (std and url-safe, padded and unpadded alike), and the result is parsed as **INI, by the same rules as section 9** — `[Interface]` / `[Peer]`, the same field spellings, the same AWG and AWG 3.x keys, the same MTU clamp. There is one set of value rules for the two inputs, not two. Every parameter of the section names its source per form, so `privatekey`, for one, comes from the userinfo in the `url` form and from `Interface.PrivateKey` in `conf_b64`.
+
+**The fragment is a label and is optional.** With no fragment the name falls back, in order, to the first `=`-less comment under `[Peer]` (where Proton and friends write the server name), then an import hint, then the peer address. The hint link is optional and L×Box passes none, so here the chain ends at the peer address — `awg://<blob>` with no fragment is named after the `Endpoint` host, not the literal `WireGuard`. The node's `rawSource` stays the original `awg://` link, not a `wireguard://` URI synthesised while parsing: the identity hash and the exported source are built from it.
+
+One link is one node. A blob holding several `[Interface]` blocks is not an error and is not split — the first block is taken.
+
 ### Parsed Parameters
 
 | Parameter | Query key | Description |
@@ -1019,6 +1044,8 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 ```
 
 `awg://` and its full-name form `amneziawg://` are scheme aliases for the same endpoint logic as `wireguard://` / `wg://` (section 8). AWG fields are recognised in the query of **any** of the four schemes: with at least one field present the node is AmneziaWG (`WireguardSpec.awg != null`), and with none it is ordinary WG (backward compatible, with unchanged behaviour).
+
+AmneziaWG 3.x panels more often hand out the other form — `awg://<base64 of the whole .conf>#label`, with the AWG 3.x fields written as INI keys rather than query keys. The shape, how the form is told apart and where the label comes from are in [section 8](#8-wireguard) under “Second form”; the field spellings are the same as for a pasted `.conf` (section 9).
 
 ### Fields
 
@@ -1183,6 +1210,8 @@ PersistentKeepalive = 25
 ### Detection
 
 Auto-detected when input contains both `[Interface]` and `[Peer]` sections.
+
+The same text also arrives base64-encoded inside a link — `awg://<base64 of the whole .conf>#label`, see [section 8](#8-wireguard) under “Second form”. Once decoded it is read by the rules of this section, so the two inputs share one set of field spellings and value rules.
 
 ### Conversion
 
