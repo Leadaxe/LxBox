@@ -140,19 +140,29 @@ void main() {
       return (specs.first as VlessSpec).transport;
     }
 
-    test('ed/eh полями объекта', () {
+    // §533 / контракт 1.1.53 (§49 п.5 TASKS_LXBOX) — ПЛОСКИЕ `ed`/`eh` у
+    // `wsSettings` НЕ ЧИТАЮТСЯ. Прежде их читал оверлей
+    // `contract_draft/uri/transports.json` (`blocks.xray.ws`), и ревизия
+    // зеркала назвала это расхождением с корпусом: кейсы
+    // `body/xray/ws_ed_flat_only` и `ws_eh_without_ed` ждут кода
+    // `json_field_unknown`, то есть Xray таких полей у `wsSettings` не
+    // объявляет вовсе — раннее чтение сочиняло early data узлу, у которого
+    // её нет. Конвенцию даёт ТОЛЬКО хвост пути (`path: "/x?ed=N"`, тест
+    // ниже) и query ссылки (группа выше).
+    test('ed/eh полями объекта НЕ читаются (json_field_unknown)', () {
       final m = wsMap(fromXray({
         'path': '/x',
         'ed': 2560,
         'eh': 'Sec-WebSocket-Protocol',
       }));
-      expect(m['max_early_data'], 2560);
-      expect(m['early_data_header_name'], 'Sec-WebSocket-Protocol');
+      expect(m['path'], '/x');
+      expect(m.containsKey('max_early_data'), isFalse);
+      expect(m.containsKey('early_data_header_name'), isFalse);
     });
 
-    test('ed строкой (нестрогие генераторы)', () {
+    test('ed строкой тоже НЕ читается', () {
       final m = wsMap(fromXray({'path': '/x', 'ed': '1500'}));
-      expect(m['max_early_data'], 1500);
+      expect(m.containsKey('max_early_data'), isFalse);
     });
 
     test('eh без ed игнорируется', () {

@@ -129,21 +129,24 @@ void main() {
     expect(s.forms.indexOf(endpoint), lessThan(s.forms.indexOf(outbound)));
   }, skip: skip);
 
-  test('черновые секции порождены механически и не правлены руками', () {
-    final dir = Directory('$_draftRoot/singbox');
-    expect(dir.existsSync(), isTrue);
-    for (final f in dir.listSync().whereType<File>()) {
-      if (!f.path.endsWith('.json')) continue;
-      final j = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
-      expect(j['_generated'], isTrue,
-          reason: '${f.path}: снята пометка «порождено механически». Ручная '
-              'правка такой секции — это диалект, и объявлять его надо '
-              'записями params, а не редактированием генерируемой формы');
-      final sec = ((j['mappers'] as Map)['singbox'] as Map);
-      expect((sec['params'] as Map), isEmpty,
-          reason: '${f.path}: у порождённой секции params обязан быть пуст — '
-              'запись появляется только там, где диалект ЕСТЬ, и тогда файл '
-              'перестаёт быть механическим');
+  // §533 / контракт 1.1.53 (§49 п.9) — ЧЕРНОВИКА `singbox/` БОЛЬШЕ НЕТ:
+  // контракт забрал все 13 секций в реестр (`mappers.singbox` у каждой
+  // схемы), и при исполняемой секции реестра загрузчик берёт реестр.
+  // Прежний тест требовал у каждого файла пометку `_generated` и пустую
+  // `params`; теперь проверяется обратное — что каталог не вернулся. Копия
+  // рядом с исполняемой секцией реестра молча проигрывает ей и протухает
+  // незаметно, то есть ровно та ловушка, из-за которой файлы и сняты.
+  test('черновика singbox/ нет: секции приехали реестром', () {
+    expect(Directory('$_draftRoot/singbox').existsSync(), isFalse,
+        reason: 'каталог $_draftRoot/singbox вернулся. Секции mappers.singbox '
+            'несёт РЕЕСТР (контракт 1.1.53); копия рядом с исполняемой '
+            'секцией реестра загрузчиком игнорируется и становится вторым '
+            'источником правды. Отступление объявляется записями params '
+            'оверлея, а не полной копией секции');
+    for (final type in _elements.values.map((e) => '${e['type']}')) {
+      final resolved = type == 'ss' ? 'shadowsocks' : type;
+      expect(MapperSections.I.has('singbox', resolved), isTrue,
+          reason: 'секция singbox/$resolved обязана приезжать РЕЕСТРОМ');
     }
   }, skip: skip);
 }
