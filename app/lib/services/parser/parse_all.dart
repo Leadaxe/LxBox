@@ -2,6 +2,7 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../contract/parse_warnings.dart';
 import '../contract/registry.dart';
+import '../node_hash.dart';
 import 'body_decoder.dart';
 import 'engine/document.dart';
 import 'ini_parser.dart';
@@ -59,6 +60,7 @@ List<NodeSpec> parseAll(
   List<NodeWarning>? dropped,
 }) {
   final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
+  _dropDuplicates(nodes, dropped);
 
   // §477 — проход по дословной карте выносит и ВЕРДИКТ О ЗАПИСИ, а не только
   // коды полей: `on_invalid: drop_node` значит, что ядро эту запись не примет
@@ -81,6 +83,68 @@ List<NodeSpec> parseAll(
 
   annotateAllWithRegistry(nodes);
   return nodes;
+}
+
+/// §538 — СХЛОПЫВАНИЕ ПОВТОРОВ ВНУТРИ ОДНОГО ТЕЛА.
+///
+/// Живой случай — подписка rrtrg: один и тот же AWG-узел приезжает дважды,
+/// строкой `amneziawg://` (§512) и сжатым контейнером `vpn://` (§450). Формы
+/// разные, узел один, и в списке он стоял дважды.
+///
+/// Ключ — [nodeDedupSignature] (§404 / контракт D-086): отпечаток содержимого
+/// узла (каноническая эмиссия без `tag` и `detour`) плюс подпись пути
+/// дозвона. Второй ключ не заводится намеренно: это ТОТ ЖЕ механизм, которым
+/// §480 сравнивает узлы между обновлениями подписки, и разойдись они —
+/// «схлопнулось при разборе» и «тот же узел, что вчера» стали бы разными
+/// вопросами. Грубый `nodeIdentityKey` (четвёрка подключения) здесь не
+/// годится: он не видит ни транспорта, ни TLS, и один сервер под двумя SNI
+/// схлопнулся бы в один узел — потеря записи, которую провайдер прислал
+/// намеренно.
+///
+/// Первая запись остаётся (порядок разбора = порядок тела: автор ставит
+/// осмысленную форму раньше), каждая следующая с тем же ключом уходит в
+/// `dropped[]` кодом `duplicate`. Имя выжившего узел сохраняет своё; у
+/// дубликата имя отличалось — оно уезжает в `winner` предупреждения, и
+/// пользователь читает «duplicate of <имя>» вместо безымянного «минус узел».
+///
+/// Область — ОДНО ТЕЛО, один импорт: `parseAll` дальше своего входа не видит
+/// по построению. Между подписками и с ручными узлами повторы не схлопываются
+/// — там разные `tag_prefix`/`detour_policy`, и одинаковое содержимое ещё не
+/// значит одну запись (та же граница, что у дедупа Xray-документа §404).
+///
+/// Узлы без подписи (группы §322 — у них нет тела) в дедупе не участвуют:
+/// `emit()` группы описывает состав, а не сервер, и две группы с одинаковым
+/// составом это две разные группы.
+void _dropDuplicates(List<NodeSpec> nodes, List<NodeWarning>? dropped) {
+  if (nodes.length < 2) return;
+  final seen = <String, NodeSpec>{};
+  final dupes = <NodeSpec>[];
+  for (final node in nodes) {
+    if (node.isGroup) continue;
+    final String sig;
+    try {
+      sig = nodeDedupSignature(node);
+    } catch (_) {
+      // Подпись считается эмиссией, а эмиссия узла теоретически может бросить.
+      // Узел без подписи просто не дедупится — потерять его здесь нельзя.
+      continue;
+    }
+    final winner = seen[sig];
+    if (winner == null) {
+      seen[sig] = node;
+      continue;
+    }
+    dupes.add(node);
+    dropped?.add(DuplicateNodeWarning(
+      winner: winner.tag.trim() == node.tag.trim() ? '' : winner.tag.trim(),
+    ));
+  }
+  // Снятие ПО ССЫЛКЕ: `NodeSpec.==` сравнивает `id`+`tag`, а у дубля с
+  // выжившим совпадает ровно это — `removeWhere(dupes.contains)` снёс бы
+  // обоих (тот же довод, по которому `sourceNodeIdentities` держит
+  // `Map.identity`).
+  if (dupes.isEmpty) return;
+  nodes.removeWhere((n) => dupes.any((d) => identical(d, n)));
 }
 
 /// §477 — причина отбраковки узла реестром: код `error`, который проход по

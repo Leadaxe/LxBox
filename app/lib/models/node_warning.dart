@@ -588,6 +588,35 @@ final class SectionsConflictWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.warning;
 }
 
+/// §538 — запись подписки повторяет узел, который в этой же подписке уже
+/// разобран (тот же [nodeDedupSignature]: содержимое узла без `tag`/`detour`
+/// плюс путь дозвона). Живой случай — подписка присылает один AWG-узел дважды,
+/// строкой `amneziawg://` и сжатым `vpn://`: формы разные, узел один.
+///
+/// Первая запись остаётся, каждая следующая уходит в `dropped[]`. [winner] —
+/// имя выжившего; пусто, если имена совпали и называть нечего.
+///
+/// Кода контракта нет — код `duplicate` НАШ, per-app (`kWarningCodes`):
+/// схлопывание записей подписки лаунчер не делает, и запись в
+/// `registry/warnings.json` была бы объявлением чужой нормы.
+final class DuplicateNodeWarning extends NodeWarning {
+  /// Имя выжившего узла; пусто — имена совпали.
+  final String winner;
+
+  const DuplicateNodeWarning({this.winner = ''});
+
+  @override
+  List<Object?> get props => [winner];
+
+  @override
+  String messageWith(GetLocalText t) => winner.isEmpty
+      ? t.s("Duplicate entry: the same node is already in this subscription.")
+      : t.s("Duplicate of %s", winner);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
 // §472 шаг 9 — `TuicCongestionInvalidWarning` снят: `congestion_control` вне
 // {cubic, new_reno, bbr} судит санитайзер по реестру (`tuic.json`, enum +
 // `on_invalid: drop`), код `tuic_congestion_invalid` приходит с путём и
