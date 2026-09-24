@@ -1282,16 +1282,25 @@ class HomeController extends ChangeNotifier
     if (_disposed || !_state.tunnelUp) return; // §219 — ушли за await
     if (list == null) return; // недоступно — прошлую карту не трогаем
     final next = <String, String>{};
+    final idle = <String, int>{};
     for (final o in list) {
-      if (o.endpointState.isNotEmpty) next[o.tag] = o.endpointState;
+      if (o.endpointState.isEmpty) continue;
+      next[o.tag] = o.endpointState;
+      // §540 — простой нужен только спящим (свойства узла: «idle for N s»).
+      if (o.endpointState == CcEndpointState.asleep) {
+        idle[o.tag] = o.idleSinceSeconds;
+      }
     }
-    // Ровно та же карта — не будим UI лишним emit'ом (тик идёт каждые 5 с).
+    // Ровно те же карты — не будим UI лишним emit'ом (тик идёт каждые 5 с).
     final prev = _state.endpointStates;
+    final prevIdle = _state.endpointIdleSince;
     if (next.length == prev.length &&
-        next.entries.every((e) => prev[e.key] == e.value)) {
+        next.entries.every((e) => prev[e.key] == e.value) &&
+        idle.length == prevIdle.length &&
+        idle.entries.every((e) => prevIdle[e.key] == e.value)) {
       return;
     }
-    _emit(_state.copyWith(endpointStates: next));
+    _emit(_state.copyWith(endpointStates: next, endpointIdleSince: idle));
   }
 
   /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.

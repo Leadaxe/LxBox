@@ -70,6 +70,7 @@ class HomeState {
     this.delayByDirection = const <String, Map<String, int>>{},
     this.pingBusy = const <String, String>{},
     this.endpointStates = const <String, String>{},
+    this.endpointIdleSince = const <String, int>{},
     this.sickRoots = const <String, List<DependentRef>>{},
     this.debugEvents = const <DebugEntry>[],
     this.sortMode = NodeSortMode.latencyAsc,
@@ -191,6 +192,11 @@ class HomeState {
   /// Глобально на endpoint, а не per-Направление (в отличие от
   /// [delayByDirection]): одно устройство обслуживает все Направления сразу.
   final Map<String, String> endpointStates;
+
+  /// §540 — сколько секунд endpoint простаивает (`idleSinceSeconds` ядра),
+  /// только для узлов в `asleep`. Тот же pull, что и [endpointStates];
+  /// показывается в свойствах узла («idle for N s»).
+  final Map<String, int> endpointIdleSince;
 
   /// §355 — «корни беды»: мёртвая нода → её транзитивные пострадавшие (DNS и
   /// ноды, зависящие через detour/Направления). Пересчитывается HomeController'ом
@@ -481,6 +487,7 @@ class HomeState {
     Map<String, Map<String, int>>? delayByDirection,
     Map<String, String>? pingBusy,
     Map<String, String>? endpointStates,
+    Map<String, int>? endpointIdleSince,
     Map<String, List<DependentRef>>? sickRoots,
     List<DebugEntry>? debugEvents,
     NodeSortMode? sortMode,
@@ -540,6 +547,7 @@ class HomeState {
       delayByDirection: delayByDirection ?? this.delayByDirection,
       pingBusy: pingBusy ?? this.pingBusy,
       endpointStates: endpointStates ?? this.endpointStates,
+      endpointIdleSince: endpointIdleSince ?? this.endpointIdleSince,
       sickRoots: sickRoots ?? this.sickRoots,
       debugEvents: debugEvents ?? this.debugEvents,
       sortMode: sortMode ?? this.sortMode,

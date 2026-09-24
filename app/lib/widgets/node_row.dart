@@ -72,16 +72,17 @@ class NodeRow extends StatelessWidget {
     return delay < 0 ? '${prefix}ERR' : '$prefix${delay}MS';
   }
 
-  /// §535 (ядро SPEC 097) — подпись состояния WG/AWG-endpoint'а вместо
-  /// молчаливо пустого бейджа. Узел, который ещё не собран или спит, —
-  /// это НЕ таймаут: ядро поднимет его на первом дайле за 0,5–1 с.
-  /// Пусто = узел не endpoint, состояние неизвестно, либо он уже поднят
-  /// (`up`/`building`/`down` подписи не требуют — их видно по обычному бейджу).
+  /// §535/§540 (ядро SPEC 097) — однословная подпись состояния WG/AWG-
+  /// endpoint'а: `up` / `sleep` / `down`. Детали (полное состояние ядра и
+  /// простой) — в свойствах узла. Узел в `down` — это НЕ таймаут: ядро
+  /// поднимет его на первом дайле за 0,5–1 с. Пусто = узел не endpoint,
+  /// состояние неизвестно или идёт сборка (`building`).
   String get _endpointStateLabel {
     final st = item.endpointState;
-    if (st == CcEndpointState.asleep) return getLocalText.s("Node asleep");
-    if (CcEndpointState.isNotBuilt(st)) {
-      return getLocalText.s("Node not built yet");
+    if (st == CcEndpointState.up) return getLocalText.s("up");
+    if (st == CcEndpointState.asleep) return getLocalText.s("sleep");
+    if (CcEndpointState.isNotBuilt(st) || st == CcEndpointState.down) {
+      return getLocalText.s("down");
     }
     return '';
   }
