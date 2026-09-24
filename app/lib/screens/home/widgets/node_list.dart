@@ -47,6 +47,19 @@ bool showAddServerGuide({
 }) =>
     !tunnelUp && (configEmpty || (configNodeCount == 0 && !anyServerNodes));
 
+/// §537 — порог широкого окна для двух колонок списка узлов (issue #134).
+/// 600 dp — граница Material «compact → medium»: телефон в портрете остаётся
+/// в одну колонку, планшет, альбом и split-screen на половину планшета — в две.
+/// Сравнение нестрогое: ровно 600 dp — уже две колонки.
+const double kNodeListTwoColumnsMinWidth = 600;
+
+/// §537 — число колонок списка узлов для ширины [width].
+///
+/// Ручная сортировка всегда в одну колонку: drag-and-drop идёт через
+/// одномерный `ReorderableListView`, в сетке «индекс → позиция» неоднозначен.
+int nodeListColumnCount(double width, {required bool isManual}) =>
+    (!isManual && width >= kNodeListTwoColumnsMinWidth) ? 2 : 1;
+
 /// Node-list секция главного экрана.
 ///
 /// PRESERVED EXACTLY:
@@ -220,12 +233,29 @@ class HomeNodeList extends StatelessWidget {
               // - pinnedCount определяется sequential check'ом первых элементов
               //   displayList — robust против фильтра §048 (если pinned попал
               //   в nonMatching, он не на index 0 → pinnedCount=0, корректно).
-              child: _buildReorderableNodeList(
-                context,
-                displayList: data.displayList,
-                cache: data.cache,
-                matchingSet: data.matchingSet,
-                warningsByTag: data.warningsByTag,
+              // §537 — при ширине ≥ 600 dp и не-ручной сортировке список
+              // рисуется в две колонки (построчно: 1-2 / 3-4 …). Колонки
+              // пересчитываются на лету от ширины секции; скролл переносится.
+              child: _NodeListColumns(
+                isManual: state.sortMode == NodeSortMode.manual,
+                builder: (context, columns, scrollController) => columns > 1
+                    ? _buildNodeGrid(
+                        context,
+                        columns: columns,
+                        scrollController: scrollController,
+                        displayList: data.displayList,
+                        cache: data.cache,
+                        matchingSet: data.matchingSet,
+                        warningsByTag: data.warningsByTag,
+                      )
+                    : _buildReorderableNodeList(
+                        context,
+                        scrollController: scrollController,
+                        displayList: data.displayList,
+                        cache: data.cache,
+                        matchingSet: data.matchingSet,
+                        warningsByTag: data.warningsByTag,
+                      ),
               ),
             ),
           ),
@@ -241,6 +271,7 @@ class HomeNodeList extends StatelessWidget {
   /// сохраняет новый порядок.
   Widget _buildReorderableNodeList(
     BuildContext context, {
+    required ScrollController scrollController,
     required List<String> displayList,
     required ParsedConfig cache,
     required Set<String> matchingSet,
@@ -267,6 +298,7 @@ class HomeNodeList extends StatelessWidget {
     final isManual = state.sortMode == NodeSortMode.manual;
 
     return ReorderableListView.builder(
+      scrollController: scrollController,
       // §134 — bottom-spacer ~в одну строку (высота NodeRow=56): последний
       // узел не липнет к нижнему краю / не уезжает под controls-блок, всегда
       // можно доскроллить с запасом.
@@ -287,113 +319,14 @@ class HomeNodeList extends StatelessWidget {
       },
       itemBuilder: (ctx, i) {
         final tag = displayList[i];
-        final urltestNow = state.urltestNowOf(tag);
-        final group = state.groupOf(tag);
-        final isUrltestGroup =
-            group != null && group.type.toLowerCase().contains('urltest');
-        // §322 — auto-двойник НАПРАВЛЕНИЯ (не узел автовыбора): только ему положены
-        // подмена имени «✨ Auto» и пин в верхнюю секцию.
-        final isDirectionAuto = controller.isDirectionAutoTag(tag);
-        // §102 — протокол и variant (transport/awg) берём с ОДНОГО узла:
-        // сам tag, либо текущий выбор urltest-группы (§048 fallback).
-        final protoSrc = cache.protocolOf(tag) != null
-            ? tag
-            : (urltestNow != null && cache.protocolOf(urltestNow) != null
-                ? urltestNow
-                : null);
-        final protoSrcNode = protoSrc != null ? cache[protoSrc] : null;
-        final protoType = protoSrc != null ? cache.protocolOf(protoSrc) : null;
-        final transport = protoSrcNode?.transportLabel;
-        final security = protoSrcNode?.securityLabel;
-        final outboundType = cache[tag]?.type;
-        final notificationWarnings = _notificationWarningsForRow(
-          outboundType: outboundType,
-          isDirectionAuto: isDirectionAuto,
-          warnings: warningsByTag[tag],
+        final keyedRow = _buildNodeCell(
+          context,
+          tag,
+          cache: cache,
+          matchingSet: matchingSet,
+          warningsByTag: warningsByTag,
+          dividerColor: dividerColor,
         );
-        final row = DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: dividerColor, width: 1),
-            ),
-          ),
-          child: NodeRow(
-            item: NodeViewItem(
-              tag: tag,
-              active: tag == state.activeInGroup,
-              highlighted: tag == state.highlightedNode,
-              delay: state.delayOf(tag),
-              // §325 — замер не этого Направления: рисуем приглушённо со значком.
-              delayIsForeign: state.delayIsForeign(tag),
-              pingBusy: state.pingBusy[tag] == '…',
-              // §535 — состояние WG/AWG-endpoint'а: не собран / спит вместо
-              // пустого бейджа. Тега нет в карте = узел не endpoint.
-              endpointState: state.endpointStates[tag] ?? '',
-              tunnelUp: state.tunnelUp,
-              busy: state.busy,
-              // §322 — у round_robin одного «выбранного» нет: трафик
-              // раскладывается по пулу. Стрелку не рисуем — вместо неё
-              // значки живого пула в метке.
-              urltestNow:
-                  cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
-              hasDetour: cache[tag]?.detour != null,
-              outboundType: outboundType, // §125 — точный тип из конфига
-              notificationWarnings: notificationWarnings,
-              // §322 — двойник Направления vs узел автовыбора: ядру оба `urltest`.
-              isDirectionAuto: isDirectionAuto,
-              // §322 — метка режима узла автовыбора (`🎯 [3]` / `🔀 [15/7]`)
-              // в подзаголовке. Двойник Направления сюда не попадает — у него уже
-              // есть подменённое имя «✨ Auto».
-              autoGroupLabel: isDirectionAuto
-                  ? null
-                  : _autoLabelWithBadges(
-                      controller, subController, cache, tag),
-              protocolLabel: protoType == null
-                  ? null
-                  : [
-                      protoLabel(protoType),
-                      ?transport,
-                      ?security,
-                    ].join('·'),
-              matches: matchingSet.contains(tag),
-              // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
-              // ⚠-метка, тап по ней — sheet со списком пострадавших.
-              isSickRoot: state.sickRoots.containsKey(tag),
-            ),
-            onHighlight: () => controller.setHighlightedNode(tag),
-            onActivate: () => unawaited(controller.switchNode(tag)),
-            onPing: () => unawaited(controller.runNodeUrltest(tag)),
-            // §466 — copyNodeUri стал async (диалог подтверждения у узла с
-            // приватным ключом в ссылке); пункт меню — VoidCallback.
-            onCopyUri: () =>
-                unawaited(copyNodeUri(context, tag, subController)),
-            onViewJson: () => viewOutboundJson(context, tag, state,
-                subController: subController, homeController: controller),
-            onRunUrltest: isUrltestGroup
-                ? () => unawaited(controller.runGroupUrltest(tag))
-                : null,
-            // §203 — для auto/urltest-ноды с текущим выбором: «перейти к
-            // выбранному серверу» (подсветка + scroll). Иначе null → пункт скрыт.
-            onSelectServer:
-                urltestNow != null ? () => onSelectServer(urltestNow) : null,
-            // §208 — «View pool» только для auto-ноды round_robin-Направления
-            // (у least_test пула нет). tag здесь = auto-тег группы.
-            onViewPool: (isUrltestGroup && controller.isRoundRobinAuto(tag))
-                ? () => onViewPool(tag)
-                : null,
-            // §355 — ⚠-тап: View details сразу на вкладке Dependents
-            // («кто сломан этой мёртвой нодой»).
-            onSickTap: state.sickRoots.containsKey(tag)
-                ? () => viewOutboundJson(ctx, tag, state,
-                    subController: subController,
-                    homeController: controller,
-                    openDependents: true)
-                : null,
-          ),
-        );
-        // §203 — GlobalKey на сам row (для Scrollable.ensureVisible); reorder-key
-        // остаётся ValueKey('node-$tag') (его требует ReorderableListView).
-        final keyedRow = KeyedSubtree(key: rowKeyFor(tag), child: row);
         // Pinned ряды — без grab strip.
         if (i < pinnedCount) {
           return KeyedSubtree(key: ValueKey('node-$tag'), child: keyedRow);
@@ -448,6 +381,189 @@ class HomeNodeList extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// §537 — сетка узлов для широкого окна. Строка `ListView` = `columns`
+  /// ячеек равной ширины, порядок построчный, так что визуальный порядок
+  /// совпадает с `displayList`. Пустой хвост последней строки добивается
+  /// пустой ячейкой, чтобы одиночный узел не растягивался на всю ширину.
+  ///
+  /// Заголовков папок/групп в этом списке нет: presenter отдаёт плоский список
+  /// тегов, папки (§234-239) доходят сюда только как чипы фильтра. Тап,
+  /// long-press-меню и подсветка — внутри [NodeRow], как в одной колонке;
+  /// перетаскивания в сетке нет (см. [nodeListColumnCount]).
+  Widget _buildNodeGrid(
+    BuildContext context, {
+    required int columns,
+    required ScrollController scrollController,
+    required List<String> displayList,
+    required ParsedConfig cache,
+    required Set<String> matchingSet,
+    required Map<String, List<NodeWarning>> warningsByTag,
+  }) {
+    final dividerColor =
+        Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
+    final rows = (displayList.length + columns - 1) ~/ columns;
+    return ListView.builder(
+      controller: scrollController,
+      padding: const EdgeInsets.only(bottom: 56).withSafeBottom(context),
+      itemCount: rows,
+      itemBuilder: (ctx, r) {
+        final cells = <Widget>[];
+        for (var c = 0; c < columns; c++) {
+          final i = r * columns + c;
+          final Widget cell = i < displayList.length
+              ? _buildNodeCell(
+                  context,
+                  displayList[i],
+                  cache: cache,
+                  matchingSet: matchingSet,
+                  warningsByTag: warningsByTag,
+                  dividerColor: dividerColor,
+                )
+              : const SizedBox.shrink();
+          cells.add(Expanded(
+            child: c < columns - 1
+                // Вертикальный разделитель между колонками.
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                          right: BorderSide(color: dividerColor, width: 1)),
+                    ),
+                    child: cell,
+                  )
+                : cell,
+          ));
+        }
+        return IntrinsicHeight(
+          key: ValueKey('node-row-${displayList[r * columns]}'),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: cells,
+          ),
+        );
+      },
+    );
+  }
+
+  /// §537 — одна ячейка узла: [NodeRow] с нижним разделителем и §203-GlobalKey.
+  /// Общая для одноколоночного списка и сетки ≥600 dp: тап, long-press-меню и
+  /// подсветка живут внутри [NodeRow], поэтому в обеих раскладках одинаковы.
+  Widget _buildNodeCell(
+    BuildContext context,
+    String tag, {
+    required ParsedConfig cache,
+    required Set<String> matchingSet,
+    required Map<String, List<NodeWarning>> warningsByTag,
+    required Color dividerColor,
+  }) {
+    final urltestNow = state.urltestNowOf(tag);
+    final group = state.groupOf(tag);
+    final isUrltestGroup =
+        group != null && group.type.toLowerCase().contains('urltest');
+    // §322 — auto-двойник НАПРАВЛЕНИЯ (не узел автовыбора): только ему положены
+    // подмена имени «✨ Auto» и пин в верхнюю секцию.
+    final isDirectionAuto = controller.isDirectionAutoTag(tag);
+    // §102 — протокол и variant (transport/awg) берём с ОДНОГО узла:
+    // сам tag, либо текущий выбор urltest-группы (§048 fallback).
+    final protoSrc = cache.protocolOf(tag) != null
+        ? tag
+        : (urltestNow != null && cache.protocolOf(urltestNow) != null
+            ? urltestNow
+            : null);
+    final protoSrcNode = protoSrc != null ? cache[protoSrc] : null;
+    final protoType = protoSrc != null ? cache.protocolOf(protoSrc) : null;
+    final transport = protoSrcNode?.transportLabel;
+    final security = protoSrcNode?.securityLabel;
+    final outboundType = cache[tag]?.type;
+    final notificationWarnings = _notificationWarningsForRow(
+      outboundType: outboundType,
+      isDirectionAuto: isDirectionAuto,
+      warnings: warningsByTag[tag],
+    );
+    final row = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: dividerColor, width: 1),
+        ),
+      ),
+      child: NodeRow(
+        item: NodeViewItem(
+          tag: tag,
+          active: tag == state.activeInGroup,
+          highlighted: tag == state.highlightedNode,
+          delay: state.delayOf(tag),
+          // §325 — замер не этого Направления: рисуем приглушённо со значком.
+          delayIsForeign: state.delayIsForeign(tag),
+          pingBusy: state.pingBusy[tag] == '…',
+          // §535 — состояние WG/AWG-endpoint'а: не собран / спит вместо
+          // пустого бейджа. Тега нет в карте = узел не endpoint.
+          endpointState: state.endpointStates[tag] ?? '',
+          tunnelUp: state.tunnelUp,
+          busy: state.busy,
+          // §322 — у round_robin одного «выбранного» нет: трафик
+          // раскладывается по пулу. Стрелку не рисуем — вместо неё
+          // значки живого пула в метке.
+          urltestNow:
+              cache.rawOf(tag)?['balancer'] != null ? null : urltestNow,
+          hasDetour: cache[tag]?.detour != null,
+          outboundType: outboundType, // §125 — точный тип из конфига
+          notificationWarnings: notificationWarnings,
+          // §322 — двойник Направления vs узел автовыбора: ядру оба `urltest`.
+          isDirectionAuto: isDirectionAuto,
+          // §322 — метка режима узла автовыбора (`🎯 [3]` / `🔀 [15/7]`)
+          // в подзаголовке. Двойник Направления сюда не попадает — у него уже
+          // есть подменённое имя «✨ Auto».
+          autoGroupLabel: isDirectionAuto
+              ? null
+              : _autoLabelWithBadges(
+                  controller, subController, cache, tag),
+          protocolLabel: protoType == null
+              ? null
+              : [
+                  protoLabel(protoType),
+                  ?transport,
+                  ?security,
+                ].join('·'),
+          matches: matchingSet.contains(tag),
+          // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
+          // ⚠-метка, тап по ней — sheet со списком пострадавших.
+          isSickRoot: state.sickRoots.containsKey(tag),
+        ),
+        onHighlight: () => controller.setHighlightedNode(tag),
+        onActivate: () => unawaited(controller.switchNode(tag)),
+        onPing: () => unawaited(controller.runNodeUrltest(tag)),
+        // §466 — copyNodeUri стал async (диалог подтверждения у узла с
+        // приватным ключом в ссылке); пункт меню — VoidCallback.
+        onCopyUri: () =>
+            unawaited(copyNodeUri(context, tag, subController)),
+        onViewJson: () => viewOutboundJson(context, tag, state,
+            subController: subController, homeController: controller),
+        onRunUrltest: isUrltestGroup
+            ? () => unawaited(controller.runGroupUrltest(tag))
+            : null,
+        // §203 — для auto/urltest-ноды с текущим выбором: «перейти к
+        // выбранному серверу» (подсветка + scroll). Иначе null → пункт скрыт.
+        onSelectServer:
+            urltestNow != null ? () => onSelectServer(urltestNow) : null,
+        // §208 — «View pool» только для auto-ноды round_robin-Направления
+        // (у least_test пула нет). tag здесь = auto-тег группы.
+        onViewPool: (isUrltestGroup && controller.isRoundRobinAuto(tag))
+            ? () => onViewPool(tag)
+            : null,
+        // §355 — ⚠-тап: View details сразу на вкладке Dependents
+        // («кто сломан этой мёртвой нодой»).
+        onSickTap: state.sickRoots.containsKey(tag)
+            ? () => viewOutboundJson(context, tag, state,
+                subController: subController,
+                homeController: controller,
+                openDependents: true)
+            : null,
+      ),
+    );
+    // §203 — GlobalKey на сам row (для Scrollable.ensureVisible); reorder-key
+    // остаётся ValueKey('node-$tag') (его требует ReorderableListView).
+    return KeyedSubtree(key: rowKeyFor(tag), child: row);
   }
 
   /// §195 — перенести regex из фильтра на главной в активное Направление. Не пишем
@@ -652,4 +768,59 @@ String poolBadgeOf(SubscriptionController subs, String tag) {
     if (tag.endsWith(specTag)) return badge;
   }
   return kDefaultPoolBadge;
+}
+
+/// §537 — выбирает число колонок по ширине секции и держит общий
+/// [ScrollController] для обеих раскладок. При смене числа колонок
+/// (поворот, split-screen, переход в ручную сортировку) смещение
+/// пересчитывается пропорционально числу строк, чтобы на экране остались
+/// те же узлы. Подсветка и выбор живут в [HomeState] и не теряются.
+class _NodeListColumns extends StatefulWidget {
+  const _NodeListColumns({required this.isManual, required this.builder});
+
+  final bool isManual;
+  final Widget Function(
+    BuildContext context,
+    int columns,
+    ScrollController scrollController,
+  ) builder;
+
+  @override
+  State<_NodeListColumns> createState() => _NodeListColumnsState();
+}
+
+class _NodeListColumnsState extends State<_NodeListColumns> {
+  ScrollController _scroll = ScrollController();
+  int? _columns;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = nodeListColumnCount(
+          constraints.maxWidth,
+          isManual: widget.isManual,
+        );
+        final prev = _columns;
+        if (prev != null && prev != columns) {
+          final old = _scroll;
+          final offset = old.hasClients && old.positions.length == 1
+              ? old.offset * prev / columns
+              : 0.0;
+          _scroll = ScrollController(initialScrollOffset: offset);
+          // Старый контроллер ещё прицеплен к уходящему списку — отпускаем
+          // после кадра, когда тот размонтирован.
+          WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+        }
+        _columns = columns;
+        return widget.builder(context, columns, _scroll);
+      },
+    );
+  }
 }
