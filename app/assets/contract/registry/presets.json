@@ -9,8 +9,8 @@
 
     "private-ips": {"in": "desktop", "label": "Private IPs", "note": "РАЗРЫВ N2: на mobile тот же пресет (ip_is_private → outbound) под id 'private-ip' — id надо выравнивать, до того ссылка непереносима"},
     "private-ip": {"in": "mobile", "label": "Private IPs", "note": "РАЗРЫВ N2: пара к 'private-ips' (desktop)"},
-    "russian": {"in": "desktop", "label": "Russian domains & IPs", "note": "РАЗРЫВ N2: на mobile та же семантика (RU-домены/сервисы/geoip-ru + Yandex DNS) под id 'ru-direct' с меткой «Ru internet segment»; наборы rule_set-тегов совпадают (ru-domains/ru-services/geoip-ru), на mobile добавлен ru-apps (§531)"},
-    "ru-direct": {"in": "mobile", "label": "Ru internet segment", "note": "РАЗРЫВ N2: пара к 'russian' (desktop); дополнительно force_ipv4, набор ru-apps (package_name, §531) и DNS-группа dns_ru (mobile-модель DNS)"},
+    "russian": {"in": "desktop", "label": "Russian domains & IPs", "note": "РАЗРЫВ N2: на mobile та же семантика (RU-домены/сервисы/geoip-ru + Yandex DNS) под id 'ru-direct'; наборы rule_set-тегов совпадают (ru-domains/ru-services/geoip-ru)"},
+    "ru-direct": {"in": "mobile", "label": "Russian domains & IPs", "note": "РАЗРЫВ N2: пара к 'russian' (desktop); дополнительно force_ipv4 и DNS-группа dns_ru (mobile-модель DNS)"},
 
     "local-lan-domains": {"in": "desktop", "label": "Local/LAN domains", "note": ".local/.lan → direct"},
     "ru-blocked": {"in": "desktop", "label": "Russian blocked resources", "note": "geoip-ru-blocked + community → proxy; несёт outbounds add/update (!RU-фильтры)"},
