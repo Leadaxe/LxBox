@@ -25,8 +25,69 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.1-lx.10`** (see `app/android/libbox.version`) — lx.9 plus
-two layers, **SPEC 095** and **SPEC 099**.
+**The current pin: `v1.14.2-lx.1`** (see `app/android/libbox.version`) — lx.10 plus
+the lx.13 layers (**SPEC 097**, **SPEC 098**, **SPEC 101**) and the upstream sync
+to sing-box **1.14.2** (**SPEC 102**).
+
+**SPEC 098** moves every global knob of the fork into a root **`lx`** block,
+grouped by subsystem. The three idle keys keep their SPEC 020 semantics and
+their values; only their place in the config changed:
+
+| Old key | New key |
+|---|---|
+| `route.lx_idle_suspend` | `lx.wg.idle_suspend` |
+| `route.lx_idle_suspend_reachable` | `lx.wg.idle_suspend_reachable` |
+| `route.lx_idle_teardown` | `lx.wg.idle_teardown` |
+
+The old names are accepted for **one release** with a WARN per key
+(`route.lx_idle_suspend is deprecated, use lx.wg.idle_suspend`). The same key in
+both places with the **same** value warns too; with **different** values the core
+does not start (`route.lx_idle_suspend conflicts with lx.wg.idle_suspend`).
+LxBox emits only the new names since §535 — writing both would mean a WARN on
+every start. `GetRunningConfig` (SPEC 037) returns the canonical form, so a
+config that arrived with the old keys shows up as `lx.wg.*`.
+`lx.naive` is reserved for SPEC 096 and is rejected like any unknown key until
+then.
+
+**SPEC 097** adds lazy build and a build budget for WG/AWG endpoints:
+`lx.wg.lazy_build` (bool — endpoints start torn down, the device is built on the
+first dial; requires `idle_suspend`), `lx.wg.build_max` (int, `0` = no cap) and
+`lx.wg.build_overflow` (`wait` \| `build`). **LxBox writes none of the three by
+default** — that is a separate owner decision. The same layer exposes the state
+of each endpoint through `GetOutbounds`: `endpointState`
+(`never_built` / `building` / `up` / `asleep` / `torn_down` / `down`) and
+`idleSinceSeconds`. "Not built" is a state, not an error — §535 shows it as
+*Node not built yet* / *Node asleep* rather than a timeout.
+
+**SPEC 101** stops the AWG log being drowned in
+`failed to send handshake initiation: disabled UDP GSO` (LxBox #95): the message
+belongs to a normal path and no longer reports as an error. Connectivity was
+never affected, only log readability.
+
+**SPEC 102** is the upstream sync to sing-box `v1.14.2`. The part that shows on
+the device: the network state is reset only on a **real** interface change, not
+on every system notification (`route/network.go` rewritten), so a Wi-Fi ↔ mobile
+switch costs the tunnel far less. Also hysteria2 realm and a `resolved` D-Bus
+service.
+
+`lx.masque.idle_timeout` is a new global default for masque outbounds without
+their own `idle_timeout`; a node's own key wins, including an explicit `"0"`.
+MASQUE idle stays **off** by default, and LxBox does not write the global key —
+its WARP MASQUE nodes carry their own `idle_timeout` (5m).
+
+Every `lx.wg` key acts **only** in builds with `with_lx_idle_suspend` (the mobile
+AAR) — see gotcha 1.
+
+The Java surface is **additive**: 253 classes in both versions with identical
+name lists, 3494 → 3498 signature lines, and the whole diff is four accessors on
+`io.nekohasekai.libbox.OutboundGroupItem` (`getEndpointState`/`setEndpointState`,
+`getIdleSinceSeconds`/`setIdleSinceSeconds`). Nothing removed, nothing changed.
+**LxBox depends on this pin for §535**: the config emits `lx.wg.*`, which an
+older core rejects as an unknown key — and an unknown key takes the *whole*
+config down, so rolling the core back below `v1.14.2-lx.1` means reverting the
+emit to `route.lx_idle_*` first.
+
+Below, the layers this pin contains:
 
 **SPEC 095** is an upstream sync: sing-box `v1.14.1` plus 34 commits of `stable`,
 zero drift at the cut. The part that shows on the device is the initial handshake
@@ -814,16 +875,22 @@ omitted too (server-side or outside the client's scope — see the comments in
 
 ### 1. `with_lx_idle_suspend` (rc.19+) — idle-suspend behind a build tag
 
-The idle-suspend tick machinery (`route.lx_idle_suspend`, SPEC 020 / §128) is
-compiled **only** with the `with_lx_idle_suspend` tag. **Without it,
-`route.lx_idle_suspend` in a config KILLS the core's startup**
-(`rebuild with -tags with_lx_idle_suspend (mobile-only feature)`).
+The idle-suspend tick machinery (`lx.wg.idle_suspend`, SPEC 020 / §128; the key
+lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — SPEC 098, §535)
+is compiled **only** with the `with_lx_idle_suspend` tag. **Without it, any
+`lx.wg.*` key in a config KILLS the core's startup**
+(`lx.wg.* is set but this build lacks idle-suspend support; rebuild with -tags
+with_lx_idle_suspend (mobile-only feature)`). That covers every key of the block,
+including an explicit `idle_teardown: "0"`, `lazy_build`, a non-zero `build_max`
+and `build_overflow: "build"`.
 
 - The mobile **AAR** carries the tag (`build_libbox` sharedTags), so the official
   release AAR is fine.
 - The desktop/CLI `sing-box` (for `sing-box check`) does NOT have the tag by
-  default. Validating a config containing `lx_idle_suspend` through the desktop
-  binary will fail without an explicit `-tags with_lx_idle_suspend`.
+  default. Validating a config containing `lx.wg.idle_suspend` through the
+  desktop binary will fail without an explicit `-tags with_lx_idle_suspend`
+  (`sing-box check` validates the keys, but the router does not start, so the
+  desktop binary accepts them at check time).
 
 ### 2. A new transport or route field → “unknown field” kills the WHOLE config
 
@@ -910,7 +977,8 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.1-lx.10** (current pin) | **Upstream sync to v1.14.1 + 34 commits, and Node diagnostics no longer crashes the app on a NaiveProxy node** (§526). Fork SPEC 095 — the initial handshake of a WireGuard/AWG peer given by a domain name completes on the first attempt (before: the attempt was lost, `handshake did not complete after 5 seconds, retrying` in the log, 5.4–5.7 s to switch to such a node); the wireguard-go fork is re-based onto v0.0.7 and the sing-tun fork onto the upstream pin, all fork patches carried over. HTTP/2 error types now go through the upstream `baderror.WrapH2` mapping in the v2ray HTTP and gRPC-lite transports (our wrappers for those two removed, XHTTP keeps its own), plus upstream fixes for DNS timeouts under query deduplication, temporary IPv6 rotation, half-close through connection wrappers, a read-loop spin, a corrupted cache file and the OOM report on clean shutdown; `sing-mux` v0.3.8. Fork SPEC 099 — with the tunnel up, diagnostics on a `naive` node read the remote address of a Cronet connection, which has none, and the nil dereference killed the process; the probe now returns status, body and time as for any other node and leaves `remoteAddr` empty. `option/` untouched, so config schema, wire format and tag sets are unchanged; Go 1.26.8; Java surface gains exactly one additive method, `Libbox.hasTunInbound(String)` (javap over all 253 classes: 3493 → 3494 signature lines, that one line the whole diff), which LxBox does not call. |
+| **v1.14.2-lx.1** (current pin) | **The root `lx` block, lazy WG build, a quieter AWG log and the upstream 1.14.2 sync** (§535). Fork SPEC 098 — every global knob of the fork moves into a root `lx` block: the three SPEC 020 idle keys become `lx.wg.idle_suspend` / `_reachable` / `_teardown`, keeping their semantics; `route.lx_idle_*` is accepted for one release with a WARN per key, and the same key in both places with different values is a start error. `lx.naive` is reserved for SPEC 096. Fork SPEC 097 — `lx.wg.lazy_build`, `lx.wg.build_max` and `lx.wg.build_overflow` (LxBox writes none by default), plus `endpointState` / `idleSinceSeconds` per WG/AWG endpoint in `GetOutbounds`. Fork SPEC 101 — `disabled UDP GSO` is no longer logged as an error on AWG nodes (LxBox #95). Fork SPEC 102 — upstream sing-box `v1.14.2`: the network state is reset only on a real interface change (`route/network.go` rewritten), so a Wi-Fi ↔ mobile switch no longer churns the tunnel; hysteria2 realm; `resolved` D-Bus. New config keys, so the contract moves with the pin; Java surface additive — 253 classes in both, 3494 → 3498 signature lines, the whole diff being four accessors on `OutboundGroupItem` (`EndpointState`, `IdleSinceSeconds`). |
+| **v1.14.1-lx.10** | **Upstream sync to v1.14.1 + 34 commits, and Node diagnostics no longer crashes the app on a NaiveProxy node** (§526). Fork SPEC 095 — the initial handshake of a WireGuard/AWG peer given by a domain name completes on the first attempt (before: the attempt was lost, `handshake did not complete after 5 seconds, retrying` in the log, 5.4–5.7 s to switch to such a node); the wireguard-go fork is re-based onto v0.0.7 and the sing-tun fork onto the upstream pin, all fork patches carried over. HTTP/2 error types now go through the upstream `baderror.WrapH2` mapping in the v2ray HTTP and gRPC-lite transports (our wrappers for those two removed, XHTTP keeps its own), plus upstream fixes for DNS timeouts under query deduplication, temporary IPv6 rotation, half-close through connection wrappers, a read-loop spin, a corrupted cache file and the OOM report on clean shutdown; `sing-mux` v0.3.8. Fork SPEC 099 — with the tunnel up, diagnostics on a `naive` node read the remote address of a Cronet connection, which has none, and the nil dereference killed the process; the probe now returns status, body and time as for any other node and leaves `remoteAddr` empty. `option/` untouched, so config schema, wire format and tag sets are unchanged; Go 1.26.8; Java surface gains exactly one additive method, `Libbox.hasTunInbound(String)` (javap over all 253 classes: 3493 → 3494 signature lines, that one line the whole diff), which LxBox does not call. |
 | **v1.14.1-lx.9** | **The XMUX breaker no longer counts a local cancellation as a failure** (§522). Fork SPEC 094 (LxBox issue #148) — closing the http2/h1 response body ourselves, which is what a node switch or an xhttp session retirement does, reached the read side of the xhttp connection as `context.Canceled` / `net.ErrClosed`. The breaker read that as a broken stream: one `ERROR connection download closed: http2: response body closed` per request plus an XMUX session marked failing and evicted, on a node that was fine. lx.9 recognises the local cancellation at the xhttp-conn boundary and neither logs nor counts it; a genuine remote break is reported as before. `option/` untouched, so config schema, wire format, tag sets and submodules are unchanged; Go 1.26.8; Java surface identical to lx.8 (javap diff over all 253 classes — empty). |
 | **v1.14.1-lx.8** | **gRPC `service_name` as a request path** (§468). Fork SPEC 093 — a `service_name` with a leading `/` is Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the stream name and drops a `|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` the old behaviour stands — one escaped segment plus the core's own `/Tun`. This removes the reason for the §464 normalisation, which only ever fixed the single-segment form and would now strip a `/` the core expects: contract 1.1.3 drops the rule, and the value goes to the core verbatim on every input. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.7 (javap diff over all 253 classes — empty). |
 | **v1.14.1-lx.7** | **Validation and named entries in errors** (§462). Fork SPEC 092 — an initialization error now carries the type and the tag of the entry next to its index: `initialize outbound[0] vless[proxy-de-1]: invalid short_id`; six places (DNS server, endpoint, inbound, service, outbound, certificate provider), errors inside the constructors and the libbox API untouched. Came from a user request of 18.09 — LxBox shows the core's text as is, and a bare index names nothing. Contains lx.6, fork SPEC 091 — `tuic.udp_relay_mode` no longer accepts any string it is given (`unknown udp_relay_mode: X (expected native or quic)`), and the masque `uri` is validated against `standard`. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.5 (javap diff over all 253 classes — empty). |

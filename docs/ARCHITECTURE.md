@@ -2054,7 +2054,7 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **125** | **Configurable directions** (CRUD directions over directions[]; enabled_groups is DEPRECATED) |
 | 126 | First-run wizard |
 | **127** | **XHTTP full URL params** (native XHTTP: mode/x_padding_bytes/no_grpc_header) |
-| **128** | **Idle-suspend** (`route.lx_idle_suspend`, the core's SPEC 020; default `30s`) |
+| **128** | **Idle-suspend** (`lx.wg.idle_suspend`, the core's SPEC 020; default `30s`; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535) |
 | **129** | **File subscriptions** (url=file:<uuid>, an HttpCache snapshot, a transactional source switch) |
 | **130** | **The MASQUE WARP transport** (the flagship of v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP) |
 | **234** | **Server folders** (folders of manual servers: FolderMember plus a per-member toggle and tag_prefix) |

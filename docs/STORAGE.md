@@ -80,7 +80,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       └─ <groupTag>            object          {url?, timeout_ms?}
 │
 ├─ route_final                   string        override sing-box route.final
-├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (route.lx_idle_suspend);
+├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (lx.wg.idle_suspend);
 │                                                a duration ("30s"/"5m"), default "30s" (ENABLED), "" = off; config-significant
 ├─ enabled_groups[]              list          §125 DEPRECATED — read only by the directions[] migration. Safe debris.
 ├─ directions[]                  list          §125 — routing directions (template→storage). See below.
@@ -1651,7 +1651,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | Key | Type | Purpose |
 |---|---|---|
 | `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted direction, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
-| `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the field is not emitted into route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
+| `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`lx.wg.idle_suspend`, kernel SPEC 020; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the `lx` block is not emitted at all). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
@@ -1659,7 +1659,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
-| `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`route.lx_idle_suspend_reachable`). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
+| `route_idle_suspend_reachable` | `String` | §272 — the reachable idle window (`lx.wg.idle_suspend_reachable`, §535). A duration string, default `'5m'`. **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspendReachable` / `saveIdleSuspendReachable`. |
 | `urltest_passive_check` | `bool` | §272 — passive health checking (`urltest.passive_check`): skip probes while live traffic already proves the node is alive. Default `true`. **Config-significant**. CRUD: `getPassiveCheck` / `setPassiveCheck`. |
 
 > The structural keys have their own sections above: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Together with this table that is the exhaustive list of current top-level keys in `lxbox_settings.json`. The registry that must match it is `SettingsStorage.allowedTopLevelKeys` (§159 — the allowlist filter for backup import): **a new key belongs in both**, or it survives an export and is silently dropped on restore.
