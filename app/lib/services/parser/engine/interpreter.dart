@@ -2785,6 +2785,15 @@ final class _Run {
       if (m.containsKey('present')) {
         return (actual != null) == (m['present'] == true);
       }
+      // `absent` — зеркало `present` (эталон `linkmap/exec.go:2159-2161`:
+      // `present != v`). Контракт 1.1.53 объявил им гейт «выключение
+      // keep-alive отрицательным ИНТЕРВАЛОМ считается только тогда, когда
+      // idle не задан вовсе» (`registry/dialer.json`,
+      // `disable_tcp_keep_alive_by_interval`), и без предиката запись не
+      // исполнялась НИ РАЗУ: неизвестный ключ уходил в `return false`.
+      if (m.containsKey('absent')) {
+        return (actual == null) == (m['absent'] == true);
+      }
       // Через общий [_regex]: перевод Go-группы и кэш — условие исполняется
       // на каждом узле, а реестр пишется в Go-написании (ревью после
       // v2.25.1, m2).
