@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../models/codec/chain_record.dart' show kSourceKindChain;
 import '../models/custom_rule.dart';
 import '../models/server_list.dart';
 import '../models/source_chain.dart';
@@ -27,8 +26,8 @@ enum BackupCategory {
 
 /// Top-level storage keys относящиеся к Routing категории.
 ///
-/// §439 — `sources[]` делится по виду записи: цепочки — Routing, прочие
-/// источники — Server lists ([_filterStorage]); `storage_version` пишется при
+/// §524 — `sources[]` СЮДА НЕ ВХОДИТ: весь список (включая цепочки) едет
+/// категорией Server lists ([_filterStorage]). `storage_version` пишется при
 /// любом наборе категорий.
 const _topLevelRoutingKeys = {
   kRulesKey,
@@ -48,12 +47,19 @@ const _topLevelRoutingKeys = {
   kDnsKey,
 };
 
-/// §393 C2 — запись цепочки в `sources[]`. Категория именно Routing, а не
-/// Server lists: цепочка — маршрут, а не набор серверов, её позиции ссылаются
-/// на теги Направлений, и восстановить её без них бессмысленно. Пара
-/// «Направления + цепочки» обязана переезжать одним куском.
-bool _isChainRecord(Object? record) =>
-    record is Map && record['kind'] == kSourceKindChain;
+// §524 — КАТЕГОРИЯ ЭКСПОРТА ЦЕПОЧКИ: Server lists, наравне с одиночными и
+// авто-серверами. Решение владельца 24.09: «в экспорте бэкапа категория
+// Routing для цепочек — ошибка, они идут в серверы». До §524 цепочки ехали в
+// Routing по доводу «цепочка — маршрут, а не набор серверов»; довод снят —
+// цепочка такой же источник, как остальные, и в списке стоит с ними в одном
+// ряду. Поэтому `sources[]` больше не режется по роду при фильтре категорий:
+// весь ключ едет одной галкой, и разделявший его `_isChainRecord` удалён.
+//
+// ЧТЕНИЕ обратно совместимо: старый файл, где цепочки лежали в архиве с
+// галкой Routing, читается по-прежнему — цепочки живут в том же ключе
+// `sources[]`, и восстановление берёт их оттуда независимо от того, какой
+// галкой их когда-то экспортировали. Формат файла не менялся (§524).
+
 
 /// Top-level storage keys относящиеся к App settings (служебные timestamps,
 /// UI-предпочтения, ping options, WARP-аккаунт).
@@ -130,7 +136,7 @@ class BackupContents {
       _readEntities(storage, SettingsStorage.customRulesOf);
 
   /// Цепочки блока [storage] (записи `kind: chain` в `sources[]`) — для
-  /// merge-импорта категории Routing.
+  /// merge-импорта категории Server lists (§524).
   late final _EntitiesRead<SourceChain> _chains =
       _readEntities(storage, SettingsStorage.chainsOf);
 
@@ -138,7 +144,8 @@ class BackupContents {
   Set<BackupCategory> availableCategories() {
     final s = storage;
     return {
-      if (_serverLists.count > 0) BackupCategory.serverLists,
+      // §524 — цепочки в категории Server lists вместе с остальными записями.
+      if (_serverLists.count + _chains.count > 0) BackupCategory.serverLists,
       if (s != null && _hasAnyRouting(s)) BackupCategory.routing,
       if (s != null && _hasAnyApp(s)) BackupCategory.appSettings,
       if (s != null && _hasAnyDebug(s)) BackupCategory.debugConfig,
@@ -151,7 +158,7 @@ class BackupContents {
   int countFor(BackupCategory cat) {
     final s = storage ?? const <String, dynamic>{};
     return switch (cat) {
-      BackupCategory.serverLists => _serverLists.count,
+      BackupCategory.serverLists => _serverLists.count + _chains.count,
       BackupCategory.routing => _rules.count,
       BackupCategory.appSettings => () {
           final vars = s['vars'];
@@ -183,8 +190,7 @@ class BackupContents {
   }
 
   static bool _hasAnyRouting(Map<String, dynamic> s) {
-    final sources = s[kSourcesKey];
-    if (sources is List && sources.any(_isChainRecord)) return true;
+    // §524 — цепочки сюда больше не входят: их категория — Server lists.
     for (final k in _topLevelRoutingKeys) {
       final v = s[k];
       if (v is List && v.isNotEmpty) return true;
@@ -409,7 +415,8 @@ class BackupService {
       // ключ).
       final mergeServerLists =
           merge && include.contains(BackupCategory.serverLists);
-      final mergeChains = merge && include.contains(BackupCategory.routing);
+      // §524 — цепочки идут той же галкой, что остальные записи списка.
+      final mergeChains = mergeServerLists;
       final filtered = _filterStorage(raw, include: include);
       if (merge) filtered.remove(kSourcesKey);
 
@@ -570,12 +577,10 @@ class BackupService {
         // читался бы как форма 2.23.2.
         out[key] = value;
       } else if (key == kSourcesKey) {
-        if (value is List && (wantServers || wantRouting)) {
-          out[key] = [
-            for (final r in value)
-              if (_isChainRecord(r) ? wantRouting : wantServers)
-                deepCloneJson(r),
-          ];
+        // §524 — весь список едет одной категорией: цепочка — такая же
+        // запись серверов, как одиночный и авто-сервер.
+        if (value is List && wantServers) {
+          out[key] = [for (final r in value) deepCloneJson(r)];
         }
       } else if (key == 'vars') {
         if (value is Map) {

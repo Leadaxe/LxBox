@@ -129,10 +129,12 @@ void main() {
       }
 
       expect(contents.availableCategories(), allStorageCategories);
-      expect(contents.countFor(BackupCategory.serverLists), 3,
-          reason: 'цепочки в счёт источников не входят');
+      // §524 — цепочки в счёте Server lists: они такие же записи списка.
+      expect(contents.countFor(BackupCategory.serverLists), 5,
+          reason: '3 контейнера + 2 цепочки');
       expect(contents.splitServerLists(), (subs: 1, custom: 2));
-      expect(contents.countFor(BackupCategory.routing), 1);
+      expect(contents.countFor(BackupCategory.routing), 1,
+          reason: 'Routing — только правила, цепочек там больше нет');
       expect(contents.countFor(BackupCategory.debugConfig), 2);
     });
 
@@ -146,7 +148,9 @@ void main() {
           {'kind': 'preset', 'ref': 'ru-direct', 'enabled': true});
     });
 
-    test('категорийный фильтр делит sources[] по виду записи', () async {
+    // §524 — `sources[]` больше не режется по роду: цепочка едет галкой
+    // Server lists вместе с остальными записями (решение владельца 24.09).
+    test('sources[] едет одной категорией Server lists целиком', () async {
       final storage =
           (await const BackupService().parseImport(envelope(legacyStorage())))
               .storage!;
@@ -157,14 +161,17 @@ void main() {
 
       final servers = BackupService.filterStorageForExport(storage,
           include: {BackupCategory.serverLists});
-      expect(kinds(servers), ['subscription', 'server', 'folder']);
+      expect(kinds(servers),
+          ['subscription', 'server', 'folder', 'chain', 'chain'],
+          reason: 'цепочки в серверах, порядок записей не тронут');
       expect(servers.containsKey('rules'), isFalse);
       expect(servers.containsKey('dns'), isFalse);
       expect(servers['storage_version'], 1);
 
       final routing = BackupService.filterStorageForExport(storage,
           include: {BackupCategory.routing});
-      expect(kinds(routing), ['chain', 'chain']);
+      expect(kinds(routing), isEmpty,
+          reason: 'Routing без sources[] вовсе — правила и DNS');
       expect(routing.containsKey('rules'), isTrue);
       expect(routing.containsKey('dns'), isTrue);
       expect(routing['storage_version'], 1);
@@ -172,8 +179,8 @@ void main() {
   });
 
   group('восстановление архива 2.23.2', () {
-    test('replace только Routing: цепочки по старому order, правила и DNS; '
-        'источников нет', () async {
+    test('replace только Routing: правила и DNS; ни источников, ни цепочек '
+        '(§524)', () async {
       final svc = const BackupService();
       final contents = await svc.parseImport(envelope(legacyStorage()));
       final result = await svc.applyImport(contents,
@@ -183,16 +190,16 @@ void main() {
       expect(result.routingApplied, 1);
 
       expect(await SettingsStorage.getServerLists(), isEmpty);
-      expect((await SettingsStorage.getChains()).map((c) => c.tag),
-          ['first', 'second']);
+      expect(await SettingsStorage.getChains(), isEmpty,
+          reason: '§524 — цепочки едут категорией Server lists');
       expect((await SettingsStorage.getCustomRules()).single.name, 'Ads');
       expect((await SettingsStorage.getDnsServers()).single,
           const DnsServerPreset(
               enabled: true, tag: 'yandex_udp', presetId: 'ru-direct'));
     });
 
-    test('merge Server lists: источники дописываются по id, цепочки хранения '
-        'на месте', () async {
+    test('merge Server lists: источники дописываются по id, цепочки архива '
+        'заменяют цепочки хранения (§524)', () async {
       await SettingsStorage.saveServerLists([
         SubscriptionServers(
           id: 'sub-1',
@@ -217,11 +224,17 @@ void main() {
       expect(lists.map((l) => l.id), ['sub-1', 'srv-1', 'fold-1']);
       expect(lists.first.name, 'Local copy',
           reason: 'id уже есть — запись хранения не заменяется');
-      expect((await SettingsStorage.getChains()).map((c) => c.tag), ['mine']);
+      // §524 — цепочки идут той же галкой: архив с цепочками заменяет их.
+      expect((await SettingsStorage.getChains()).map((c) => c.tag),
+          ['first', 'second']);
     });
 
-    test('merge Routing: цепочки архива заменяют цепочки хранения, источники '
-        'на месте', () async {
+    // §524 — обратная совместимость ЧТЕНИЯ: старый архив экспортировали
+    // галкой Routing, и цепочки в нём лежат в том же ключе `sources[]`.
+    // Восстановление с одной галкой Routing цепочек больше не применяет — их
+    // категория теперь Server lists; сам файл читается по-прежнему.
+    test('merge Routing старого архива цепочек не применяет, источники и '
+        'цепочки хранения на месте (§524)', () async {
       await SettingsStorage.saveServerLists([
         UserServer(
           id: 'keep',
@@ -244,8 +257,23 @@ void main() {
 
       expect((await SettingsStorage.getServerLists()).map((l) => l.id),
           ['keep']);
+      expect((await SettingsStorage.getChains()).map((c) => c.tag), ['mine'],
+          reason: 'цепочки хранения не тронуты — галка не их');
+    });
+
+    // §524 — тот же старый архив, но галкой Server lists: цепочки, которые
+    // когда-то экспортировали как Routing, читаются и применяются.
+    test('старый архив с цепочками читается галкой Server lists (§524)',
+        () async {
+      final svc = const BackupService();
+      final contents = await svc.parseImport(envelope(legacyStorage()));
+      final result = await svc.applyImport(contents,
+          merge: false, include: {BackupCategory.serverLists});
+      expect(result.errors, isEmpty);
       expect((await SettingsStorage.getChains()).map((c) => c.tag),
           ['first', 'second']);
+      expect((await SettingsStorage.getServerLists()).map((l) => l.id),
+          ['sub-1', 'srv-1', 'fold-1']);
     });
   });
 
