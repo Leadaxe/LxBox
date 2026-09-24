@@ -2834,6 +2834,12 @@
   "Node": {
     "value": "节点"
   },
+  "Node asleep": {
+    "value": "节点休眠"
+  },
+  "Node not built yet": {
+    "value": "节点尚未建立"
+  },
   "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
     "value": "节点「%1$s」已丢弃：它的 relay「%2$s」缺失、不可用或成环。直连会绕过 relay。"
   },

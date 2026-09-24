@@ -3036,6 +3036,12 @@
   "Node": {
     "value": "Узел"
   },
+  "Node asleep": {
+    "value": "Узел спит"
+  },
+  "Node not built yet": {
+    "value": "Узел ещё не поднят"
+  },
   "Node \"%1$s\" was dropped: its relay \"%2$s\" is missing, unusable or loops. Connecting directly would have bypassed the relay.": {
     "value": "Узел «%1$s» отброшен: релей «%2$s» отсутствует, непригоден или зациклен. Прямое подключение прошло бы мимо релея."
   },
