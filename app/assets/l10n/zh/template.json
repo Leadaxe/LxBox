@@ -200,6 +200,12 @@
  "GeoIP IP-range fallback": {
   "value": "GeoIP IP 段兜底"
  },
+ "Russian apps by package": {
+  "value": "按包名匹配俄罗斯应用"
+ },
+ "Route Android apps from the legiz-ru list (banks, marketplaces, government services, Yandex/VK and others) by package name, regardless of the domains they use. Auto-downloads ru-app-list.srs (~4 KB) on first use.": {
+  "value": "按包名路由 legiz-ru 列表中的 Android 应用（银行、电商、政务、Yandex/VK 等），与其访问的域名无关。首次启用时自动下载 ru-app-list.srs（约 4 KB）。"
+ },
  "Google 204": {
   "value": "Google 204"
  },
@@ -395,8 +401,8 @@
  "Route BitTorrent traffic. Direct by default, or send it to a separate direction.": {
   "value": "路由 BitTorrent 流量。默认直连，也可送往单独的方向。"
  },
- "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.": {
-  "value": "把俄罗斯顶级域名（.ru/.su/IDN）、各服务 CDN（Yandex/VK/Avito/2GIS/银行等）以及俄罗斯 IP 段直连。"
+ "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc), Russian IP ranges and Russian apps (by package name) directly.": {
+  "value": "把俄罗斯顶级域名（.ru/.su/IDN）、各服务 CDN（Yandex/VK/Avito/2GIS/银行等）、俄罗斯 IP 段以及俄罗斯应用（按包名）直连。"
  },
  "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why.": {
   "value": "让所有 DNS 查询都经隧道的 DNS 引擎。\n⚠️ 警告：关闭后会停用 FakeIP 和所有 DNS 规则——应用将自行直接查询 DNS，完全不受控。除非你非常清楚原因，否则请保持开启。"
@@ -410,8 +416,8 @@
  "Russia-only services": {
   "value": "仅限俄罗斯的服务"
  },
- "Russian domains & IPs": {
-  "value": "俄罗斯域名与 IP"
+ "Ru internet segment": {
+  "value": "俄罗斯互联网板块"
  },
  "SOCKS5 only": {
   "value": "仅 SOCKS5"
