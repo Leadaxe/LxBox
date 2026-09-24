@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | Готово: две мелочи кода, DIAGNOSTICS, `/help`, debug-api-reference, GUARDS, ARCHITECTURE, спеки 472/478/480/493/505/506. Находки по PROTOCOLS и оверлеям `contract_draft/**` переданы в §512 |
+| **Статус** | **Released в v2.25.2** (24.09.2026). Готово: две мелочи кода, DIAGNOSTICS, `/help`, debug-api-reference, GUARDS, ARCHITECTURE, спеки 472/478/480/493/505/506. Находки по PROTOCOLS и оверлеям `contract_draft/**` переданы в §512 |
 | **Дата** | 2026-09-24 |
 | **Источник** | аудит документации и целостности релиза v2.25.0 / v2.25.1 (разделы 1–5, сверка `docs/*.md` с кодом), дерево `c1e669d1`. Перед правкой каждое утверждение перепроверено по `develop` `5150ac74` — после аудита влиты §506, §510, §511 |
 | **Связанные** | §510 (M2: любой Stop гасит прогон страховки, L1: сверка `/help` с роутером), §494 (долги Debug API), §484 (`field_missing`), §485 (снятые классы предупреждений), §481, §501, §502, §505, фичи [472](../features/472%20unified-parse-pipeline/spec.md), [478](../features/478%20core-rejected-node-auto-disable/spec.md), [480](../features/480%20registry-driven-mapper/spec.md) |

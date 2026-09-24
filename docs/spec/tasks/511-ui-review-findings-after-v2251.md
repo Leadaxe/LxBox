@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | Готово: M1, M2, M3, m1, m2, m3, m4, l1 починены; тест 504 восстановлен |
+| **Статус** | **Released в v2.25.2** (24.09.2026). Готово: M1, M2, M3, m1, m2, m3, m4, l1 починены; тест 504 восстановлен |
 | **Дата** | 2026-09-24 |
 | **Источник** | независимое ревью UI-задач 479, 496–505, 509 на `develop` после v2.25.1 |
 | **Связанные** | [504](504-new-entry-highlight.md), [509](509-mixed-source-reorder.md), [500](500-direct-link-reject-reason.md), [502](502-home-node-list-notification-badge.md), [505](505-home-badge-cold-start.md), параллельная [510](510-review-findings-after-v2251.md) |
