@@ -30,6 +30,10 @@ Owner's decision, 2026-09-24.
 - Cap command output (`tail`, `grep`); raw logs do not go into context.
 - Reconnaissance and output grepping go to cheap sub-agents (Sonnet); reasoning
   models are for decisions.
+- Any test run that takes minutes and prints a long log is **always** written as
+  a brief and handed to a Sonnet sub-agent: it runs, summarises (status, failing
+  tests with file:line, first stack trace) and only the summary enters context.
+  Never run such a suite yourself.
 - Repeat runs cover only the one affected file.
 
 ---
