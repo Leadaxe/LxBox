@@ -105,6 +105,43 @@ String? _serviceSchemeCode(String line, String scheme) {
 /// правил в реестр — тоже. Заполняется на схемах конвейера; там, где схема ещё
 /// идёт своим парсером, остаётся пустым, и вызывающий сверяет один `ref`.
 NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
+  final node = _parseUriInner(uri, dropped: dropped);
+  if (node == null) return null;
+  // §514 / контракт 1.1.52 (D133-55) — БАННЕР ПРОВАЙДЕРА, ПРИТВОРИВШИЙСЯ
+  // ССЫЛКОЙ. Проверка идёт ПОСЛЕ разбора, а не по тексту строки: цель надо
+  // прочитать, а до чтения `vless://…@0.0.0.0:1` от годной ссылки ничем не
+  // отличается. Прежде признаком баннера было отсутствие `://`, и обе крупные
+  // панели проходили насквозь, становясь полноценным узлом-пустышкой:
+  // Remnawave при истёкшей подписке отдаёт `vless://…@0.0.0.0:1#⚠ Subscription
+  // expired` с нулевым uuid, 3x-ui — `socks://127.0.0.1:1080#<remark>`, причём
+  // при expired/depleted ЕДИНСТВЕННОЙ записью тела: подписка выглядела рабочей
+  // и одноузловой, и человек видел сервер, которого нет, вместо причины.
+  final banner = _providerBannerWarning(node, uri);
+  if (banner != null) {
+    dropped?.explicit = true;
+    dropped?.reason = banner;
+    return null;
+  }
+  return node;
+}
+
+/// Ремарка после `#` — ТО САМОЕ сообщение, ради которого запись написана
+/// (`message_from: fragment`): выбросить её значило бы отбраковать баннер
+/// вместе с единственным его содержимым. Метка узла к этому моменту уже
+/// раскодирована разбором, поэтому берётся она, а не сырой хвост ссылки.
+RegistryWarning? _providerBannerWarning(NodeSpec node, String uri) {
+  final src = MapperSections.I.documents?.sourceByKind('uri_lines');
+  if (src == null || !src.isBannerTarget(node.server)) return null;
+  final code = src.bannerCode;
+  if (code == null || code.isEmpty) return null;
+  return RegistryWarning(
+    code: code,
+    params: {'message': node.tag},
+    value: node.server,
+  );
+}
+
+NodeSpec? _parseUriInner(String uri, {XrayDropVerdict? dropped}) {
   final t = uri.trim();
   if (t.isEmpty) return null;
   final scheme = t.split('://').first.toLowerCase();

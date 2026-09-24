@@ -1382,12 +1382,32 @@ final class _Run {
     for (final o in section.overlays) {
       if (o.name.isEmpty) continue;
       String? text;
+      // §514 / контракт 1.1.52 (D133-57) — слой приезжает ДВУМЯ формами, и
+      // обе живые. ТЕКСТОМ (`query.extra`) — там его надо декодировать и
+      // разобрать; УЖЕ ОБЪЕКТОМ (`json.extra`) — у схемы-КОНТЕЙНЕРА ссылка сама
+      // есть JSON, и Marzban кладёт `extra` его ВЛОЖЕННЫМ объектом
+      // (`app/subscription/v2ray.py:249`). Прежде объект до слоя не доезжал
+      // вовсе: гейт `v is String` его молча отбрасывал, и `xmux` вместе со
+      // sc*-полями терялся МОЛЧА — притом что ТОТ ЖЕ вход у схемы-соседа
+      // разбирался полностью. Конвейер `decode` к объекту не применяется: он определён на
+      // ТЕКСТЕ, а тут значение уже разобрано JSON'ом.
+      Map<String, dynamic>? direct;
       for (final src in o.source) {
         final v = _readSourceBare(src);
-        if (v is String && v.isNotEmpty) {
-          text = v;
+        if (v is Map) {
+          direct = v.cast<String, dynamic>();
+          _consumeOverlaySource(src);
           break;
         }
+        if (v is String && v.isNotEmpty) {
+          text = v;
+          _consumeOverlaySource(src);
+          break;
+        }
+      }
+      if (direct != null) {
+        _overlays[o.name] = QueryPairs(_overlayPairs(direct, o.flatten));
+        continue;
       }
       if (text == null) continue;
       for (final step in o.decode) {
@@ -1413,24 +1433,50 @@ final class _Run {
         continue;
       }
       if (parsed is! Map) continue;
-
-      final pairs = <(String, String)>[];
-      void put(String k, Object? v) {
-        if (v == null || v is Map || v is List) return;
-        pairs.add((k, '$v'));
-      }
-
-      for (final e in parsed.cast<String, dynamic>().entries) {
-        if (o.flatten.contains(e.key) && e.value is Map) {
-          for (final f in (e.value as Map).cast<String, dynamic>().entries) {
-            put(f.key, f.value);
-          }
-        } else {
-          put(e.key, e.value);
-        }
-      }
-      _overlays[o.name] = QueryPairs(pairs);
+      _overlays[o.name] =
+          QueryPairs(_overlayPairs(parsed.cast<String, dynamic>(), o.flatten));
     }
+  }
+
+  /// Имя, которым слой ОБЪЯВЛЕН, прочитано — значит он не «неизвестный ключ».
+  ///
+  /// Слой читается до общего прохода по записям, и его источник ни одна запись
+  /// своим `source` не называет: без этой отметки ключ-носитель слоя попадал бы
+  /// и в `uri_param_unknown`, и в `unknown_key` — притом что именно из него
+  /// узел и наполнился.
+  void _consumeOverlaySource(String src) {
+    if (src.startsWith('query.')) {
+      _consumeSpelling(src.substring('query.'.length));
+      return;
+    }
+    if (src.startsWith('json.')) {
+      _consumeJson(_resolveBase(src.substring('json.'.length)));
+    }
+  }
+
+  /// Разложить объект слоя в плоские пары. Вынесено из [_buildOverlays], чтобы
+  /// обе формы источника (текст и готовый объект) раскладывались ОДНИМ
+  /// правилом: иначе у формы-объекта `flatten` пришлось бы писать второй раз.
+  List<(String, String)> _overlayPairs(
+    Map<String, dynamic> obj,
+    List<String> flatten,
+  ) {
+    final pairs = <(String, String)>[];
+    void put(String k, Object? v) {
+      if (v == null || v is Map || v is List) return;
+      pairs.add((k, '$v'));
+    }
+
+    for (final e in obj.entries) {
+      if (flatten.contains(e.key) && e.value is Map) {
+        for (final f in (e.value as Map).cast<String, dynamic>().entries) {
+          put(f.key, f.value);
+        }
+      } else {
+        put(e.key, e.value);
+      }
+    }
+    return pairs;
   }
 
   /// `flatten` (FROZEN, P15): поднять члены названных вложенных объектов на
@@ -1554,7 +1600,17 @@ final class _Run {
 
     // `decode` секции — ПОВЕРХ него, и порядок задан ею: у ss percent идёт
     // ДО base64, и выразить это можно только списком.
+    // §514 / контракт 1.1.52 (D133-56) — `decode_requires_separator`: признак
+    // работает В ОБЕ СТОРОНЫ, и обе половины обязательны. Разделитель ВО
+    // ВХОДЕ доказывает открытую форму (двоеточие в алфавит base64 не входит) и
+    // снимает конвейер целиком; его отсутствие В РЕЗУЛЬТАТЕ означает ложное
+    // срабатывание декодера, и результат отвергается. Без второй половины
+    // открытое одиночное имя (версия 4 прокси-схемы: userid без пароля)
+    // проходит RawStdEncoding и уехало бы мусором.
+    final needSep = u.decodeRequiresSeparator;
+    final skipDecode = needSep != null && raw.contains(needSep);
     for (final step in u.decode) {
+      if (skipDecode && step != 'percent') continue;
       switch (step) {
         case 'percent':
           // Userinfo — не query: `+` здесь литерален.
@@ -1563,6 +1619,8 @@ final class _Run {
         case 'base64?':
           final decoded = _tryBase64(raw);
           if (decoded != null) {
+            // Вторая половина признака: разделитель обязан ПОЯВИТЬСЯ.
+            if (needSep != null && !decoded.contains(needSep)) break;
             raw = decoded;
           } else if (step == 'base64') {
             return false;
@@ -1832,6 +1890,11 @@ final class _Run {
           return;
         }
         value = mapped.value;
+      } else if (p.allow.isNotEmpty &&
+          p.allow.any((a) => a.trim().toLowerCase() == value.toString().trim().toLowerCase())) {
+        // `allow` (контракт 1.1.50) — написание, СОВПАДАЮЩЕЕ с каноном ядра:
+        // перевод ему не нужен, и промахом таблицы оно не является. Значение
+        // едет дословно, дальше по конвейеру записи.
       } else if (p.sets.isEmpty && p.onNoMatch.isNotEmpty) {
         // Значение не попало ни в одно написание таблицы. У записи БЕЗ `sets`
         // (там `on_no_match` уже занят, см. ниже) это «мусор»: закрытый набор
@@ -1841,11 +1904,54 @@ final class _Run {
         _applyOnNoMatch(p, value);
         _applyImplies(p);
         return;
+      } else if (p.sets.isEmpty && p.onInvalid['action'] == 'drop') {
+        // §514 / контракт 1.1.50–1.1.52 — ПРОМАХ ЗАКРЫТОЙ ТАБЛИЦЫ ПРИ
+        // `on_invalid: drop`. Прежде промах означал «вези как пришло», и
+        // объявление `{action: drop, code: transport_unsupported}` у
+        // `$selector.network` МОЛЧАЛО: `network: "kcp"` уезжал в
+        // `transport.type` дословно, санитайзер снимал транспорт правилом enum
+        // без кода, и узел выходил РАБОЧИМ plain-TCP — сервер, который ждёт
+        // mKCP, такое соединение не примет, а человек не получал ни кода, ни
+        // причины (Q133-17/M-01, D133-49). У `quic` тот же промах кончался
+        // хуже: тип доезжал до тела и ронял бы ВЕСЬ конфиг на unknown field.
+        //
+        // `drop` у СЕЛЕКТОРА снимает УЗЕЛ целиком, у обычной записи — только
+        // её поле: селектор объявляет транспорт, которого у ядра нет вовсе, и
+        // узел без своего транспорта не «хуже» — он не работает, и оставить
+        // его в списке значило бы предложить человеку заведомо мёртвый сервер.
+        final w = _applyOnInvalid(p, value.toString());
+        if (p.selector) {
+          _dropNode = true;
+          // Отбраковка обязана быть НАЗВАННОЙ: имя кода и его `value` едут в
+          // вердикт, иначе узел исчезает молча — тот же дефект, что правится.
+          if (w is RegistryWarning && _dropped != null) {
+            _dropped.explicit = true;
+            _dropped.reason = w;
+          }
+        }
+        return;
       }
     }
 
     // `sets` по значению — набор присваиваний вместо/вместе с `maps_to`.
     final hadSets = _applyValueSets(p, raw is String ? raw : '$raw');
+
+    // §514 — ВЕТКА, СНИМАЮЩАЯ СВОЙ ЖЕ ПУТЬ, означает ОТСУТСТВИЕ значения.
+    //
+    // `sets: {"-1": {"multiplex": null}}` у записи `multiplex.max_streams`
+    // говорит: это значение не «число вне границ», а «блока нет вовсе». Прежде
+    // ветка стирала блок, а запись тут же писала в него своё число обратно —
+    // блок возвращался, а санитайзер вдобавок ругался `type_invalid` на
+    // отрицательное значение. То есть элемент, ЯВНО отключивший мультиплексор,
+    // получал его включённым и с кодом впридачу.
+    //
+    // Судится ровно перекрытие: ветка сняла путь, В КОТОРЫЙ пишет эта же
+    // запись (его самого или его хозяина-контейнер). Ветка, стирающая ЧУЖОЙ
+    // путь, к записи отношения не имеет и её значение не отменяет.
+    if (hadSets && _setsErasedOwnPath(p, raw is String ? raw : '$raw')) {
+      _applyImplies(p);
+      return;
+    }
 
     // `on_no_match` — значение не попало ни в один ключ `sets`. У селектора
     // рода записи (`version` у форка Xray) это «узла нет»: своего Spec для
@@ -1917,6 +2023,25 @@ final class _Run {
     }
 
     _applyImplies(p);
+  }
+
+  /// Ветка `sets` этого значения СНЯЛА путь, в который пишет сама запись.
+  ///
+  /// Снятым считается и сам `maps_to`, и любой его РОДИТЕЛЬ: `{"multiplex":
+  /// null}` у записи `multiplex.max_streams` убирает контейнер вместе с полем,
+  /// и писать в него после этого значило бы вернуть то, что ветка сняла.
+  bool _setsErasedOwnPath(MapperParam p, String value) {
+    final target = p.mapsTo;
+    if (target == null || p.sets.isEmpty) return false;
+    final set = _lookupFold(p.sets, value);
+    if (set is! Map) return false;
+    final low = target.toLowerCase();
+    for (final e in set.cast<String, dynamic>().entries) {
+      if (e.value != null) continue;
+      final k = e.key.toLowerCase();
+      if (low == k || low.startsWith('$k.')) return true;
+    }
+    return false;
   }
 
   /// `sets` по значению параметра; `true` — набор нашёлся и применён.
@@ -2240,10 +2365,14 @@ final class _Run {
   /// только когда запись его назвала. Молчание — не умолчание движка, а
   /// объявленное решение: эталон второй стороны на части полей молчит, и
   /// поставь движок код сам, узел получил бы его там, где корпус ждёт тишины.
-  void _applyOnInvalid(MapperParam p, String raw) {
+  /// Возвращает поставленное предупреждение — оно нужно вызывающему, когда за
+  /// `on_invalid` следует отбраковка УЗЛА: вердикт обязан нести тот же код.
+  NodeWarning? _applyOnInvalid(MapperParam p, String raw) {
     final code = p.onInvalid['code'] as String?;
-    if (code == null) return;
-    warnings.add(NodeWarning.byCode(code, path: p.name, value: raw.trim()));
+    if (code == null) return null;
+    final w = NodeWarning.byCode(code, path: p.name, value: raw.trim());
+    warnings.add(w);
+    return w;
   }
 
   /// `on_empty` — код за пустое значение записи; узел ОСТАЁТСЯ.
@@ -3207,7 +3336,156 @@ final class _Run {
         body[e.key] = e.value;
       }
     }
+
+    _reportUnknownNested(code, json);
   }
+
+  /// §514 / контракт 1.1.52 (D133-59) — НЕИЗВЕСТНЫЙ КЛЮЧ ВНУТРИ объявленных
+  /// контейнеров.
+  ///
+  /// `json_field_unknown` судил лишь ВЕРХНИЙ уровень, а контейнеры
+  /// (`settings`/`streamSettings`/`mux`/…) стоят в `ignore`, потому что их
+  /// листья читают записи таблицы. Следствие оказалось хуже болезни: всё, что
+  /// лежало внутри контейнера и не названо ни одним `source`, терялось
+  /// АБСОЛЮТНО МОЛЧА — ни кода, ни ноты, ни деградации. Норма: тот же info-код
+  /// с ПОЛНЫМ путём, БЕЗ отбраковки — непрочитанный лист узел не ломает, он
+  /// лишь не доезжает.
+  ///
+  /// Роль контейнеров в `ignore` становится ДВОЙНОЙ: наверху молчат, внутрь
+  /// идёт обход. Молчание ВНУТРИ объявляется путями `source` плюс тремя
+  /// правилами: объявленный путь (включая чтение-без-записи `maps_to: null`),
+  /// путь-РОДИТЕЛЬ (запись, читающая объект целиком, читает и каждый его лист,
+  /// а перечислить листья она не может — их имена принадлежат подписке) и
+  /// `nested_quiet`.
+  ///
+  /// ЛИСТОМ считается скаляр либо ПУСТОЙ объект/массив: путь внутреннего
+  /// объекта — лишь дорога к листьям, и звать неизвестным `streamSettings
+  /// .wsSettings` значило бы ругаться на контейнер, чьи листья секция как раз
+  /// читает. Индекс массива входит в путь ЧИСЛОМ — тем же написанием, каким
+  /// его адресует `source`, иначе объявленность не сверить.
+  void _reportUnknownNested(String code, Map<String, dynamic> json) {
+    if (section.ignoredKeys.isEmpty) return;
+    // Обход идёт ТОЛЬКО внутрь объявленных контейнеров: ключ верхнего уровня
+    // судит ветка выше, и повторять её приговор здесь нельзя.
+    // Найденное собирается и ставится ОТСОРТИРОВАННЫМ по пути. Порядок обхода
+    // объекта — порядок ключей подписки, то есть произвольный: он сделал бы
+    // набор кодов зависящим от того, как панель разложила JSON, и сверку с
+    // эталоном второй стороны — невоспроизводимой. Путь здесь и есть имя
+    // события, по нему и упорядочиваем.
+    final found = <String>[];
+    for (final e in json.entries) {
+      if (!section.ignoredKeys.contains(e.key)) continue;
+      final v = e.value;
+      if (v is! Map && v is! List) continue;
+      _walkNested(code, e.key, v, 1, found);
+    }
+    found.sort();
+    for (final path in found) {
+      warnings.add(_unknownWarning(code, path));
+    }
+  }
+
+  /// Глубина обхода ограничена: путь из данных провайдера не должен уводить
+  /// рекурсию в стек, а 12 сегментов покрывают самую глубокую живую форму с
+  /// запасом.
+  static const int _kNestedUnknownMaxDepth = 12;
+
+  void _walkNested(
+    String code,
+    String path,
+    Object? node,
+    int depth,
+    List<String> found,
+  ) {
+    if (depth >= _kNestedUnknownMaxDepth) return;
+    if (_nestedQuiet(path)) return;
+
+    if (node is Map) {
+      if (node.isEmpty) {
+        // ПУСТОЙ объект — лист: дороги к листьям у него нет, и промолчать о
+        // нём значило бы потерять единственное, что он сообщает.
+        _noteNestedUnknown(path, found);
+        return;
+      }
+      for (final e in node.cast<String, dynamic>().entries) {
+        _walkNested(code, '$path.${e.key}', e.value, depth + 1, found);
+      }
+      return;
+    }
+    if (node is List) {
+      if (node.isEmpty) {
+        _noteNestedUnknown(path, found);
+        return;
+      }
+      for (var i = 0; i < node.length; i++) {
+        _walkNested(code, '$path.$i', node[i], depth + 1, found);
+      }
+      return;
+    }
+    // Скаляр — лист. Судится он и только он.
+    _noteNestedUnknown(path, found);
+  }
+
+  /// Путь лежит внутри поддерева, объявленного `nested_quiet`.
+  bool _nestedQuiet(String path) {
+    final low = path.toLowerCase();
+    for (final q in section.nestedQuiet) {
+      final ql = q.toLowerCase();
+      if (low == ql || low.startsWith('$ql.')) return true;
+    }
+    return false;
+  }
+
+  void _noteNestedUnknown(String path, List<String> found) {
+    final low = path.toLowerCase();
+    // Сам путь объявлен записью — включая чтение-без-записи (`maps_to: null`).
+    if (_declaredJsonPaths.contains(low)) return;
+    // Путь-РОДИТЕЛЬ: запись, читающая объект целиком (`wsSettings.headers` с
+    // `type: object`), читает и каждый его лист; перечислить листья она не
+    // может — их имена принадлежат подписке.
+    for (final d in _declaredJsonPaths) {
+      if (low.startsWith('$d.')) return;
+    }
+    found.add(path);
+  }
+
+  /// ПОЛНЫЕ пути `source`, объявленные секцией, с разрешённым якорем формы.
+  ///
+  /// Объявленность считается НА ИСПОЛНЕНИИ, а не при сборке плана: якорь формы
+  /// (`$base`) известен только здесь — одна и та же запись у формы `vnext` и у
+  /// формы `servers` адресует РАЗНЫЕ пути.
+  late final Set<String> _declaredJsonPaths = () {
+    final out = <String>{};
+    void add(String src) {
+      if (!src.startsWith('json.')) return;
+      out.add(_resolveBase(src.substring('json.'.length)).toLowerCase());
+    }
+
+    for (final p in section.params.values) {
+      for (final src in p.source) {
+        add(src);
+      }
+      for (final l in p.sourceByForm.values) {
+        for (final src in l) {
+          add(src);
+        }
+      }
+    }
+    for (final o in section.overlays) {
+      for (final src in o.source) {
+        add(src);
+      }
+    }
+    for (final src in section.label.source) {
+      add(src);
+    }
+    for (final l in section.label.sourceByForm.values) {
+      for (final src in l) {
+        add(src);
+      }
+    }
+    return out;
+  }();
 
   /// Предупреждение о НЕОБЪЯВЛЕННОМ имени: `uri_param_unknown`,
   /// `json_field_unknown`, `wgconf_param_unknown`.

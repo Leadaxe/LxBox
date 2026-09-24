@@ -97,6 +97,12 @@ Map<String, dynamic> autoGroupMemberToRecord(
           'exclude': membership.exclude,
         },
       if (group.poolBadge != kDefaultPoolBadge) 'pool_badge': group.poolBadge,
+      // §514 / контракт 1.1.50 (D133-53) — `default` СКВОЗНОЙ. Поле рода,
+      // которое мы не исполняем (ручного выбора у нас нет), обязано ДОЖИТЬ в
+      // бэкапе, не интерпретируясь: иначе круг «импорт → бэкап → импорт»
+      // терял выбор пользователя молча. Пишется строкой как пришло — это и
+      // значит «preserve, а не map».
+      if (group.manualDefault.isNotEmpty) 'default': group.manualDefault,
     },
   };
 }
@@ -186,12 +192,16 @@ AutoGroupRead autoGroupMemberFromRecord(
     }
   }
 
+  // §514 / контракт 1.1.50 (D133-53) — `default` СОХРАНЯЕТСЯ сквозным, а не
+  // теряется с нотой. Род группы у нас по-прежнему urltest (ручного выбора
+  // нет), но ПОЛЕ доживает: `preserve_unexecuted` у `genus.round_trip`.
+  // Значение берётся ИМЕНЕМ ЧЛЕНА — та же строка, что писал экспорт; объектная
+  // форма (ссылка S1/S2) сводится к тегу тем же правилом, что и прежде.
   final rawDefault = group['default'];
+  var manualDefault = '';
   if (rawDefault != null) {
     final def = _defaultLink(rawDefault, links, folderId);
-    notes?.add('$where: group.default '
-        '"${def == null ? rawDefault : def.tag}" is not kept, '
-        'the group is urltest');
+    manualDefault = def?.tag ?? (rawDefault is String ? rawDefault : '');
   }
 
   // Поле стороны LxBox — в `group`; уровень узла — dev-форма до 1.0.1.
@@ -229,6 +239,7 @@ AutoGroupRead autoGroupMemberFromRecord(
         membership: membership,
         params: autoSelectParamsFromStrategy(strategy),
         poolBadge: badge is String ? badge : kDefaultPoolBadge,
+        manualDefault: manualDefault,
       ),
       enabled: enabled is bool ? enabled : true,
     ),

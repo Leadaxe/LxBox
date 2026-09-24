@@ -74,17 +74,18 @@
       "identity": "6171a0f7a33ed594a9afd927e8233a596d1f6a1147b4c7fec6d4a0692ea4eb1b"
     },
     "b480:legacy_ipv6_authority": {
-      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXY2IiwiYWRkIjoiWzo6MV0iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJ0bHMiOiIifQ==",
-      "identity": "922e13d113ccbefe354a699d57f7e52f7fe4d89cab603b8f8194a62118393f53",
+      "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXY2IiwiYWRkIjoiWzIwMDE6ZGI4OjoxXSIsInBvcnQiOiI0NDMiLCJpZCI6IjExMTExMTExLTExMTEtMTExMS0xMTExLTExMTExMTExMTExMSIsImFpZCI6IjAiLCJuZXQiOiJ0Y3AiLCJ0eXBlIjoibm9uZSIsInRscyI6IiJ9",
+      "identity": "81c8ca0e6c9ba4c10755b251212e5ce32f6d117b41f0b6912b923de53ad6e116",
       "tag": "legacy-v6",
       "body": {
         "type": "vmess",
         "tag": "legacy-v6",
-        "server": "[::1]",
+        "server": "[2001:db8::1]",
         "server_port": 443,
         "uuid": "11111111-1111-1111-1111-111111111111",
         "security": "auto"
-      }
+      },
+      "_why": "§514 / контракт 1.1.52 (D133-55) — адрес кейса переведён с [::1] на [2001:db8::1]. ПРЕДМЕТ кейса — authority с IPv6 в скобках, а не loopback: loopback попал в него случайно, и с приходом banner_targets такая запись стала (правильно) БАННЕРОМ провайдера, то есть кейс проверял бы отбраковку вместо того, ради чего написан. Документационный префикс 2001:db8::/32 предмет сохраняет полностью. Ровно так же лаунчер перевёл uri/vless/userinfo_raw_space на ws."
     },
     "b480:legacy_tls_1": {
       "uri": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXRsczEiLCJhZGQiOiJleGFtcGxlLTEuY29tIiwicG9ydCI6IjQ0MyIsImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwiYWlkIjoiMCIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwidGxzIjoiMSJ9",

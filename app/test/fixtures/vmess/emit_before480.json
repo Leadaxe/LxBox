@@ -301,16 +301,16 @@
       "body": {
         "type": "vmess",
         "tag": "legacy-v6",
-        "server": "[::1]",
+        "server": "[2001:db8::1]",
         "server_port": 443,
         "uuid": "11111111-1111-1111-1111-111111111111",
         "security": "auto"
       },
-      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXY2IiwiYWRkIjoiWzo6MV0iLCJwb3J0IjoiNDQzIiwiaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJhaWQiOiIwIiwic2N5IjoiYXV0byIsIm5ldCI6InRjcCIsInR5cGUiOiJub25lIiwiaG9zdCI6IiIsInBhdGgiOiIiLCJ0bHMiOiIifQ",
+      "uri_before": "vmess://eyJ2IjoiMiIsInBzIjoibGVnYWN5LXY2IiwiYWRkIjoiWzIwMDE6ZGI4OjoxXSIsInBvcnQiOiI0NDMiLCJpZCI6IjExMTExMTExLTExMTEtMTExMS0xMTExLTExMTExMTExMTExMSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0IjoidGNwIiwidHlwZSI6Im5vbmUiLCJob3N0IjoiIiwicGF0aCI6IiIsInRscyI6IiJ9",
       "body_of_old_uri": {
         "type": "vmess",
         "tag": "legacy-v6",
-        "server": "[::1]",
+        "server": "[2001:db8::1]",
         "server_port": 443,
         "uuid": "11111111-1111-1111-1111-111111111111",
         "security": "auto"

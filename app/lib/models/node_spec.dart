@@ -1181,11 +1181,31 @@ final class AutoSelectSpec extends NodeSpec {
     this.params = const AutoSelectParams(),
     this.tagSynonyms = const {},
     this.poolBadge = kDefaultPoolBadge,
+    this.manualDefault = '',
     super.warnings,
     // §454 — у группы из sing-box-конфига источник — её объект; у групп,
     // собранных приложением (§208, папки), источника нет.
     super.rawSource = '',
   }) : super(server: '', port: 0);
+
+  /// **`default` группы-selector — СКВОЗНОЕ поле** (контракт 1.1.50, D133-53,
+  /// решение владельца 24.09.2026).
+  ///
+  /// Имя члена, выбранного ВРУЧНУЮ. Ручного рода у нас нет: обе формы
+  /// приводятся к `urltest` с кодом `selector_as_auto`, — но приведение РОДА и
+  /// потеря ПОЛЯ разные вещи. Прежде `default` исчезал безвозвратно, и круг
+  /// «импорт → бэкап → импорт» терял выбор пользователя МОЛЧА, без кода и без
+  /// возможности восстановления. Сохранение стоит ничего и возвращает полю
+  /// обратимость.
+  ///
+  /// **В ТЕЛО ЯДРА НЕ ИДЁТ.** Ядро декодирует с `DisallowUnknownFields`, и
+  /// `default`, дописанный к телу с `type: urltest`, роняет ВЕСЬ конфиг —
+  /// значит хранить его можно только ВНЕ тела (модель и бэкап), не подмешивая
+  /// к эмиту. Отсюда и имя нормы: preserve, а не map. Страж — `golden_config`.
+  ///
+  /// Не интерпретируется: значение едет строкой как пришло. Пустая строка —
+  /// «поля не было».
+  final String manualDefault;
 
   @override
   String get protocol => 'urltest';
@@ -1222,7 +1242,8 @@ final class AutoSelectSpec extends NodeSpec {
       label == other.label &&
       membership == other.membership &&
       params == other.params &&
-      poolBadge == other.poolBadge;
+      poolBadge == other.poolBadge &&
+      manualDefault == other.manualDefault;
 
   AutoSelectSpec copyWith({
     String? tag,
@@ -1231,6 +1252,7 @@ final class AutoSelectSpec extends NodeSpec {
     AutoSelectParams? params,
     Map<String, String>? tagSynonyms,
     String? poolBadge,
+    String? manualDefault,
   }) =>
       AutoSelectSpec(
         id: id,
@@ -1240,6 +1262,7 @@ final class AutoSelectSpec extends NodeSpec {
         params: params ?? this.params,
         tagSynonyms: tagSynonyms ?? this.tagSynonyms,
         poolBadge: poolBadge ?? this.poolBadge,
+        manualDefault: manualDefault ?? this.manualDefault,
         warnings: warnings,
         rawSource: rawSource,
       );

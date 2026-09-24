@@ -130,6 +130,7 @@ final class OverlaySpec {
 final class UserinfoSpec {
   const UserinfoSpec({
     this.decode = const [],
+    this.decodeRequiresSeparator,
     this.splitSep,
     this.splitLimit,
     this.into = const [],
@@ -142,6 +143,7 @@ final class UserinfoSpec {
     return UserinfoSpec(
       required: j['required'] as bool? ?? false,
       decode: ((j['decode'] as List?) ?? const []).cast<String>(),
+      decodeRequiresSeparator: j['decode_requires_separator'] as String?,
       splitSep: split?['sep'] as String?,
       // `limit: 2` — резать по ПЕРВОМУ разделителю: иначе пароль с двоеточием
       // теряется (живой дефект у лаунчера).
@@ -152,6 +154,21 @@ final class UserinfoSpec {
   }
 
   final List<String> decode;
+
+  /// `decode_requires_separator` (контракт 1.1.52) — признак, по которому
+  /// судится, НУЖЕН ли конвейер `decode` вообще. Работает В ОБЕ СТОРОНЫ, и обе
+  /// половины обязательны:
+  ///
+  /// - разделитель есть ВО ВХОДЕ → форма открытая, конвейер не применяется;
+  /// - разделителя нет → декодер пробуется, но результат принимается ЛИШЬ
+  ///   когда разделитель в нём ПОЯВИЛСЯ.
+  ///
+  /// Без второй половины try-decode рушит открытое ОДИНОЧНОЕ имя: у версии 4
+  /// прокси-схемы userid законен сам по себе (пароля у неё нет по протоколу),
+  /// но такое имя проходит RawStdEncoding и уехало бы байтами мусора. Ровно
+  /// этим признаком читает и сам v2rayN, который пишет такую ссылку как
+  /// base64(«user:pass») ВСЕГДА.
+  final String? decodeRequiresSeparator;
   final String? splitSep;
   final int? splitLimit;
   final List<String> into;
@@ -387,6 +404,7 @@ final class MapperParam {
     this.priority,
     this.merge,
     this.valueMap = const {},
+    this.allow = const [],
     this.sets = const {},
     this.implies = const {},
     this.when = const {},
@@ -454,6 +472,7 @@ final class MapperParam {
       priority: (j['priority'] as num?)?.toInt(),
       merge: j['merge'] as String?,
       valueMap: ((j['value_map'] as Map?) ?? const {}).cast<String, dynamic>(),
+      allow: ((j['allow'] as List?) ?? const []).cast<String>(),
       sets: ((j['sets'] as Map?) ?? const {}).cast<String, dynamic>(),
       implies: ((j['implies'] as Map?) ?? const {}).cast<String, dynamic>(),
       when: ((j['when'] as Map?) ?? const {}).cast<String, dynamic>(),
@@ -514,6 +533,17 @@ final class MapperParam {
   final int? priority;
   final String? merge;
   final Map<String, dynamic> valueMap;
+
+  /// `allow` — написания, ПРОХОДЯЩИЕ `value_map` как есть (контракт 1.1.50).
+  ///
+  /// Без него «промахом» таблицы оказывается и законное значение, совпадающее
+  /// с каноном ядра, и `on_invalid` снял бы годный узел. Заведён вместе с
+  /// исполнением `on_invalid` у СЕЛЕКТОРА: у `$selector.network` диалекта xray
+  /// таблица называет только ПЕРЕВОДИМЫЕ написания (`h2` → `http`) и те, что
+  /// означают отсутствие транспорта (`tcp`/`raw`/пусто → null), а `ws`, `grpc`,
+  /// `httpupgrade`, `xhttp` едут дословно — им перевод не нужен, но и мусором
+  /// они не являются.
+  final List<String> allow;
   final Map<String, dynamic> sets;
   final Map<String, dynamic> implies;
   final Map<String, dynamic> when;
@@ -634,6 +664,7 @@ final class MapperSection {
     this.unknownKeyAction = 'drop',
     this.unknownKeyCode,
     this.ignoredKeys = const {},
+    this.nestedQuiet = const {},
     this.kindWhen = const {},
     this.iniDialect,
     this.emit,
@@ -692,6 +723,8 @@ final class MapperSection {
         ...((uk?['ignore'] as List?) ?? const []).cast<String>(),
         ...nullParams,
       },
+      nestedQuiet:
+          ((uk?['nested_quiet'] as List?) ?? const []).cast<String>().toSet(),
       kindWhen: ((j['kind_when'] as Map?) ?? const {}).cast<String, dynamic>(),
       iniDialect: j[DraftNames.iniDialect] == null
           ? null
@@ -741,6 +774,16 @@ final class MapperSection {
   /// которое читает сборка документа, а не маппер одного узла).
   final Set<String> ignoredKeys;
 
+  /// `unknown_key.nested_quiet` (контракт 1.1.52) — ПОДДЕРЕВЬЯ, молчащие
+  /// целиком при частичном объявлении.
+  ///
+  /// Роль контейнеров в [ignoredKeys] двойная: НАВЕРХУ они молчат (полем узла
+  /// контейнер не является), а ВНУТРЬ идёт обход — иначе всё, что лежит в
+  /// контейнере и не названо ни одним `source`, теряется АБСОЛЮТНО МОЛЧА.
+  /// `nested_quiet` называет те поддеревья, где обход не нужен: у `sockopt`
+  /// объявлена лишь часть листьев, и код на остальных был бы шумом.
+  final Set<String> nestedQuiet;
+
   /// §0.11 DRAFT — диалект разбора INI; `null` у видов источника, где входом
   /// служит не текст `.conf`.
   final IniDialect? iniDialect;
@@ -765,6 +808,7 @@ final class MapperSection {
         unknownKeyAction: unknownKeyAction,
         unknownKeyCode: unknownKeyCode,
         ignoredKeys: ignoredKeys,
+        nestedQuiet: nestedQuiet,
         kindWhen: kindWhen,
         iniDialect: iniDialect,
         emit: emit,

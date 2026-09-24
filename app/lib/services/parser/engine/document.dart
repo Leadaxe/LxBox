@@ -41,6 +41,7 @@ final class DocumentSource {
     this.elements,
     this.lineCommentPrefixes = const ['#', '//', ';'],
     this.serviceSchemes,
+    this.bannerTargets,
   });
 
   factory DocumentSource.fromJson(Map<String, dynamic> j) => DocumentSource(
@@ -61,6 +62,7 @@ final class DocumentSource {
             ((j['line_comment_prefixes'] as List?) ?? const ['#', '//', ';'])
                 .cast<String>(),
         serviceSchemes: (j['service_schemes'] as Map?)?.cast<String, dynamic>(),
+        bannerTargets: (j['banner_targets'] as Map?)?.cast<String, dynamic>(),
       );
 
   /// Имя вида — строка ДАННЫХ, не перечисление кода.
@@ -123,6 +125,40 @@ final class DocumentSource {
     }
     return cfg['code'] as String?;
   }
+
+  /// Контракт 1.1.52 — ЦЕЛИ, КОТОРЫЕ СЕРВЕРОМ НЕ БЫВАЮТ.
+  ///
+  /// Запись с такой целью есть БАННЕР провайдера, а не узел: панели не отдают
+  /// пустое тело при истёкшей подписке, а пишут синтаксически валидную ссылку
+  /// в никуда и кладут объяснение в ремарку после `#`. Признак объявлен
+  /// ДАННЫМИ, чтобы эвристика не размазывалась по разборщику.
+  ///
+  /// Хранится сырым словарём по той же причине, что [serviceSchemes]:
+  /// нормативны `hosts`, `action`, `code` и `message_from`, а разбирать их в
+  /// поля класса значило бы завести второе определение там, где хватает
+  /// чтения ([isBannerTarget]).
+  final Map<String, dynamic>? bannerTargets;
+
+  /// Адрес из списка «заведомо не сервер».
+  ///
+  /// Судится ТОЛЬКО адрес: баннером бывает ссылка ЛЮБОЙ схемы, а ПОРТ
+  /// признаком не является — у 3x-ui он законный `1080`, и один порт `1`
+  /// баннера не доказывает. Сверка ДОСЛОВНАЯ, после снятия скобок IPv6
+  /// (`[::1]` → `::1`): адрес узла — значение, а не выражение, и сопоставлять
+  /// его образцом значило бы ловить заодно законные адреса вроде `10.0.0.1`.
+  bool isBannerTarget(String host) {
+    final hosts = (bannerTargets?['hosts'] as List?)?.whereType<String>();
+    if (hosts == null || hosts.isEmpty) return false;
+    var h = host.trim();
+    if (h.startsWith('[') && h.endsWith(']')) {
+      h = h.substring(1, h.length - 1);
+    }
+    if (h.isEmpty) return false;
+    return hosts.any((t) => t.toLowerCase() == h.toLowerCase());
+  }
+
+  /// Код отбраковки баннера, либо `null` — признак реестром не объявлен.
+  String? get bannerCode => bannerTargets?['code'] as String?;
 
   bool get isDefault => detect?['default'] == true;
 }

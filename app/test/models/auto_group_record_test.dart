@@ -139,7 +139,12 @@ void main() {
       expect(back.notes.single, contains('group.members[2] is not a link'));
     });
 
-    test('selector с default строкой — urltest, default назван потерей', () {
+    test('selector с default строкой — urltest, default СОХРАНЁН сквозным', () {
+      // §514 / контракт 1.1.50 (D133-53), решение владельца 24.09.2026.
+      // Прежде здесь ожидалась нота «default … is not kept»: поле исчезало, и
+      // круг «импорт → бэкап → импорт» у selector'а терял выбор пользователя
+      // МОЛЧА. Приведение РОДА (selector → urltest) остаётся и по-прежнему
+      // названо нотой; ПОЛЕ теперь доживает, не интерпретируясь.
       final back = _read({
         'kind': 'auto',
         'tag': 'Pick',
@@ -153,11 +158,33 @@ void main() {
         },
       });
       expect(back.fromSelector, isTrue);
-      expect(back.notes, [
-        contains('selector group is read as urltest'),
-        contains('group.default "de-2" is not kept'),
-      ]);
+      expect(back.notes, [contains('selector group is read as urltest')],
+          reason: 'потери больше нет — сообщать о ней нечего');
+      expect(back.group.manualDefault, 'de-2');
       expect((back.group.membership as ExplicitMembers).members, hasLength(2));
+    });
+
+    test('круг бэкапа: `default` уезжает и возвращается тем же именем', () {
+      // Сохранение сквозным стоит ничего и возвращает полю обратимость — это и
+      // есть предмет нормы `genus.round_trip.preserve_unexecuted`.
+      final back = _read({
+        'kind': 'auto',
+        'tag': 'Pick',
+        'group': {
+          'group_type': 'selector',
+          'default': 'de-2',
+          'members': [
+            {'folder_id': 'f1', 'tag': 'de-1'},
+            {'folder_id': 'f1', 'tag': 'de-2'},
+          ],
+        },
+      });
+      final again = _read(autoGroupMemberToRecord(
+        FolderMember.auto(back.group, enabled: true),
+        back.group,
+        'f1',
+      ));
+      expect(again.group.manualDefault, 'de-2');
     });
 
     test('поля стороны LxBox на уровне узла (dev-форма до 1.0.1) читаются '

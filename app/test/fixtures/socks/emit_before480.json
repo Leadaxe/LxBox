@@ -224,17 +224,20 @@
         "server": "example-1.com",
         "server_port": 1080,
         "version": "5",
-        "username": "dXNlcjE6cGFzczEyMw=="
+        "username": "user1",
+        "password": "pass123"
       },
-      "uri_before": "socks5://dXNlcjE6cGFzczEyMw%3D%3D@example-1.com:1080#s5-b64",
+      "uri_before": "socks5://user1:pass123@example-1.com:1080#s5-b64",
       "body_of_old_uri": {
         "type": "socks",
         "tag": "s5-b64",
         "server": "example-1.com",
         "server_port": 1080,
         "version": "5",
-        "username": "dXNlcjE6cGFzczEyMw=="
-      }
+        "username": "user1",
+        "password": "pass123"
+      },
+      "_why": "§514 / контракт 1.1.52 (D133-56) — ПОЧИНКА МОЛЧАЛИВОЙ ПОТЕРИ, а не смена написания. v2rayN пишет socks-ссылку как base64(«user:pass») ВСЕГДА (SocksFmt.ToUri), а реестр резал строку по \":\", которого в ней нет: username становился ВСЕЙ base64-строкой, а пароль pass123 исчезал МОЛЧА — узел с авторизацией уезжал без неё и не соединялся. Снимок «до» заморозил ровно этот дефект. Теперь userinfo декодируется по признаку decode_requires_separator, и тело несёт обе половины. identity меняется ПОТОМУ, что сменилось тело (пароль появился), а не написание ссылки: у сломанного узла она и должна смениться. Соседний кейс socks4_userid (одиночный userid без пароля) остался зелёным — вторая половина признака ровно его и защищает."
     },
     "b480:socks5_no_fragment": {
       "body": {

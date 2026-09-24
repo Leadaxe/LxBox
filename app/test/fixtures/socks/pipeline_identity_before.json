@@ -119,7 +119,7 @@
     },
     "b480:socks5_base64_userinfo": {
       "uri": "socks5://dXNlcjE6cGFzczEyMw==@example-1.com:1080#s5-b64",
-      "identity": "f0f7387c003b2abca4bb4e7ca38bee3988fcf2d2f5dc3b26b6634576dd94e943",
+      "identity": "6b4ba2900d6b7bb5f44e3217c6212ca479bee71a0eb0ccc2b769f53839c7e0bd",
       "tag": "s5-b64",
       "body": {
         "type": "socks",
@@ -127,8 +127,10 @@
         "server": "example-1.com",
         "server_port": 1080,
         "version": "5",
-        "username": "dXNlcjE6cGFzczEyMw=="
-      }
+        "username": "user1",
+        "password": "pass123"
+      },
+      "_why": "§514 / контракт 1.1.52 (D133-56) — ВХОД НЕ ТРОНУТ: socks5://base64(«user:pass»)@… есть живая форма v2rayN, и разбираться она обязана. Сменились ТЕЛО и identity: прежде username несла всю base64-строку, а пароль pass123 терялся МОЛЧА. Смена identity здесь — следствие починки: узел, у которого не было пароля, и узел, у которого он есть, — разные узлы."
     },
     "b480:socks5_no_fragment": {
       "uri": "socks5://user1:pass123@example-1.com:1080",

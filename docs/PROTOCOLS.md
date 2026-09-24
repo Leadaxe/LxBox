@@ -157,7 +157,7 @@ vless://UUID@host:port?query_params#label
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
 | Service name | `serviceName` or `service_name` | gRPC service name, passed to the core **verbatim** (§468, contract 1.1.3, core `v1.14.1-lx.8`+). A leading `/` makes the value a ready-made request path in Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the *stream* name and drops a `\|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` it is a service name — one escaped segment plus the core's own `/Tun` (`a/b` → `/a%2Fb/Tun`). The §464 translation `/<service>/Tun` → `<service>` was removed with the lx.8 pin: it only ever fixed the single-segment form and would now strip a `/` the core expects. Note that the URI parser percent-decodes `serviceName`, so a `%2F` inside a segment becomes a separator after parsing — exactly as in Xray |
-| Header type | `headerType` | When `http` with `type=tcp`/`raw`, creates HTTP transport |
+| Header type | `headerType` | **Drops the node** with `transport_header_unsupported` when it names real obfuscation (§514, contract 1.1.52, D133-58). Until 1.1.52 the value became `transport.type: "http"`, which is a *wrong* mapping, not an approximate one: sing-box `http` is the HTTP/2 transport — a different protocol on the wire — while Xray's camouflage keeps the transport as TCP and only fakes the first packet. A server expecting camouflage received an h2 handshake and closed the connection: the node looked healthy and never worked. `none` and empty mean *no* camouflage and are silent |
 | Packet encoding | `packetEncoding` (case-insensitive) | An allow-list of `xudp` / `packetaddr`. The xray-style `none`, and any garbage, is dropped silently — sing-box `NewOutbound` accepts only those two values, and anything else panics inside libbox. |
 | Encryption | `encryption` | The post-quantum layer (§335, core SPEC 032). Its **shape** is checked against the registry, and a value that fails **drops the node** (§477, contract 1.1.9) — see the note below. |
 | Insecure | `insecure`, `allowInsecure` | Skip certificate verification |
@@ -197,7 +197,7 @@ vless://UUID@host:port?query_params#label
 | Type | Query `type=` | sing-box transport |
 |------|---------------|-------------------|
 | TCP (raw) | `tcp`, `raw`, empty | No transport block |
-| TCP + HTTP headers | `tcp`/`raw` + `headerType=http` | `{"type": "http", "path": ..., "host": [...]}` |
+| TCP + HTTP headers | `tcp`/`raw` + `headerType=http` | **No node** — dropped with `transport_header_unsupported` (§514). The Xray JSON spellings `tcpSettings.header.type` and `rawSettings.header.type` behave identically; before 1.1.52 that form was lost in complete silence and the node was assembled as plain TCP |
 | WebSocket | `ws` | `{"type": "ws", "path": ..., "headers": {"Host": ...}}` — a `?ed=N` in the path becomes `max_early_data` (§303, see the note below) |
 | gRPC | `grpc` | `{"type": "grpc", "service_name": ...}` |
 | HTTP/2 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
