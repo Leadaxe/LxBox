@@ -310,9 +310,11 @@ void main() {
       final bothWg = (both.config['lx'] as Map)['wg'] as Map;
       expect(bothWg['idle_suspend'], '30s');
       expect(bothWg['idle_suspend_reachable'], '30m');
-      // §535 — lazy_build/build_max/build_overflow по умолчанию не пишем.
-      expect(bothWg.containsKey('lazy_build'), false);
-      expect(bothWg.containsKey('build_max'), false);
+      // §536 — lazy_build/build_max пишутся всегда рядом с порогом сна
+      // (ядро: lazy_build требует idle_suspend). build_overflow не пишем —
+      // дефолт ядра `wait`.
+      expect(bothWg['lazy_build'], true);
+      expect(bothWg['build_max'], 5);
       expect(bothWg.containsKey('build_overflow'), false);
       // §535 — глобальный masque.idle_timeout не пишем (у узлов свой).
       expect((both.config['lx'] as Map).containsKey('masque'), false);
@@ -330,6 +332,38 @@ void main() {
       final orphanRoute = orphan.config['route'] as Map;
       expect(orphanRoute.containsKey('lx_idle_suspend'), false);
       expect(orphanRoute.containsKey('lx_idle_suspend_reachable'), false);
+    });
+
+    // §536 — lazy_build/build_max едут вместе с базовым порогом, даже когда
+    // reachable-окно не задано: ядро требует lazy_build при idle_suspend, а
+    // build_max самостоятелен, но держим оба в одном месте.
+    test('§536 lazy_build/build_max пишутся при одном лишь idleSuspend',
+        () async {
+      final wg = parseWireguardUri(
+        'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u8',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        nodes: [wg],
+      );
+      final result = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          idleSuspend: '30s',
+        ),
+      );
+      final wgBlock = (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['idle_suspend'], '30s');
+      expect(wgBlock.containsKey('idle_suspend_reachable'), false);
+      expect(wgBlock['lazy_build'], true);
+      expect(wgBlock['build_max'], 5);
     });
   });
 

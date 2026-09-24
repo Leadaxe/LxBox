@@ -556,7 +556,9 @@
   "lx": {
     "wg": {
       "idle_suspend": "30s",
-      "idle_suspend_reachable": "5m"
+      "idle_suspend_reachable": "5m",
+      "lazy_build": true,
+      "build_max": 5
     }
   }
 }

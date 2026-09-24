@@ -33,6 +33,16 @@ import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'validator.dart';
 
+/// §536 — `lx.wg.lazy_build`: WG/AWG эндпоинт собирается не при старте, а при
+/// первом дайле через него. Константа, а не настройка: ключа storage и
+/// тумблера в UI у неё нет — значение одно для всех сборок.
+const bool kLxWgLazyBuild = true;
+
+/// §536 — `lx.wg.build_max`: сколько WG/AWG эндпоинтов держать собранными
+/// одновременно. Сверх лимита самый давний усыпляется. `build_overflow` не
+/// пишем — дефолт ядра (`wait`) нас устраивает.
+const int kLxWgBuildMax = 5;
+
 /// Результат сборки — готовый JSON + валидация + warnings + generated-vars
 /// которые контроллеру надо записать обратно в storage (Clash API port/secret
 /// — рандомизируются здесь на первом запуске).
@@ -607,9 +617,15 @@ Future<BuildResult> buildConfig({
     if (reachable.isNotEmpty) {
       wg['idle_suspend_reachable'] = reachable;
     }
-    // lazy_build / build_max / build_overflow (ядро SPEC 097) НЕ включаем по
-    // умолчанию — решение владельца отдельно. lx.masque.idle_timeout тоже не
-    // пишем: у WARP MASQUE-узлов свой idle_timeout в самом узле.
+    // §536 — ленивая сборка WG/AWG эндпоинтов (ядро SPEC 097). Решение
+    // владельца 24.09.2026: включаем всегда рядом с порогом сна. Ядро
+    // требует `lazy_build` вместе с `idle_suspend`, поэтому оба ключа живут
+    // в этой же ветке: нет порога сна — нет и блока `lx`.
+    // `build_overflow` НЕ пишем (дефолт ядра `wait` нас устраивает),
+    // `lx.masque.idle_timeout` тоже: у WARP MASQUE-узлов свой idle_timeout
+    // внутри самого узла.
+    wg['lazy_build'] = kLxWgLazyBuild;
+    wg['build_max'] = kLxWgBuildMax;
     config['lx'] = <String, dynamic>{'wg': wg};
   }
 
