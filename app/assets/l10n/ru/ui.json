@@ -4225,6 +4225,9 @@
   "Start the VPN to probe this chain — its hops exist only in the running core.": {
     "value": "Включите VPN, чтобы замерить эту цепочку: её хопы существуют только в работающем ядре."
   },
+  "Start timed out after %1$d s (post-start did not finish, %2$d endpoints)": {
+    "value": "Start timed out after %1$d s (post-start did not finish, %2$d endpoints)"
+  },
   "State": {
     "value": "Состояние"
   },

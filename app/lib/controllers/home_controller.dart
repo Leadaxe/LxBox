@@ -569,15 +569,79 @@ class HomeController extends ChangeNotifier
     _transientTimeoutTimer = null;
   }
 
+  /// §519 — надбавка к порогу `connecting` за КАЖДЫЙ wireguard/AWG-endpoint в
+  /// конфиге. Пост-старт ядра стартует endpoint'ы СТРОГО ПОСЛЕДОВАТЕЛЬНО
+  /// (`adapter/endpoint/manager.go` — цикл `for _, endpoint := range
+  /// m.endpoints` под `m.access`), и стоимость одного на устройстве — 6.8–9.3с
+  /// (замер на эмуляторе, demo 24.09.2026: `post-start endpoint/wireguard[…]
+  /// completed (6.84s)`, суммарно `post-start manager completed (21.48s)`).
+  /// Фиксированный порог 15с поэтому упирался НЕ в зависон, а в арифметику:
+  /// живой старт с двумя endpoint'ами его уже не проходил.
+  ///
+  /// 10с — верхняя граница замера с запасом на телефон под нагрузкой. Порог
+  /// РАСТЁТ линейно с N, потому что линейна и сама работа ядра.
+  static const _connectingTimeoutPerEndpoint = Duration(seconds: 10);
+
+  /// §519 — жёсткий потолок для `connecting`, чтобы конфиг на сотню
+  /// endpoint'ов не превратил safety-timer в «никогда». 4 мин — тот порядок,
+  /// на котором демо поднималось стабильно через Debug-override (240000мс).
+  static const _connectingTimeoutCap = Duration(minutes: 4);
+
+  /// §519 — сколько wireguard/AWG-endpoint'ов ядру придётся поднять на этом
+  /// старте. Считаем по сохранённому конфигу (`kind == 'endpoint'`): это ровно
+  /// та секция, которую перебирает endpoint-manager ядра. Прочие протоколы
+  /// (vless/hysteria2/…) живут в `outbounds` и в пост-старте не блокируют.
+  int get _configEndpointCount =>
+      _state.configModel.nodes.where((n) => n.kind == 'endpoint').length;
+
+  /// §519 — порог для фазы `connecting`: база (защита от «ядро молчит») плюс
+  /// надбавка за каждый endpoint, но не выше потолка. Debug-override
+  /// (`set-transient-timeout`) СОХРАНЯЕТ приоритет и отменяет масштабирование:
+  /// он задаёт точное значение для on-device теста force-stop'а (§140).
+  Duration get _effectiveConnectingTimeout {
+    if (_connectingTimeout != _defaultConnectingTimeout) {
+      return _connectingTimeout; // §140 — debug-override берём дословно
+    }
+    final scaled = _connectingTimeout +
+        _connectingTimeoutPerEndpoint * _configEndpointCount;
+    return scaled > _connectingTimeoutCap ? _connectingTimeoutCap : scaled;
+  }
+
+  /// §519 — visible for testing / Debug API: действующий порог `connecting` в мс
+  /// вместе с числом endpoint'ов, из которого он выведен.
+  ({int connectingMs, int endpoints}) get debugEffectiveConnectingTimeout => (
+        connectingMs: _effectiveConnectingTimeout.inMilliseconds,
+        endpoints: _configEndpointCount,
+      );
+
+  /// §519 — visible for testing: положить `configRaw` в state напрямую, минуя
+  /// `saveParsedConfig` (тот идёт через native `saveConfig` и парс в изоляте —
+  /// в unit-тесте это стенд, а не предмет проверки). Порог `connecting`
+  /// выводится ровно из этого поля, поэтому тесту нужен именно он.
+  @visibleForTesting
+  void debugSetConfigRaw(String raw) =>
+      _emit(_state.copyWith(configRaw: raw));
+
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
   /// connecting подряд) и стартует новый. §140 — порог зависит от фазы:
   /// `connecting` (медленный старт) — длиннее, `stopping` (реальный зависон) — 3с (§287).
+  /// §519 — порог `connecting` ещё и масштабируется числом endpoint'ов.
   void _armTransientTimeout(TunnelStatus expected) {
     _transientTimeoutTimer?.cancel();
     final timeout = expected == TunnelStatus.connecting
-        ? _connectingTimeout
+        ? _effectiveConnectingTimeout
         : _stoppingTimeout;
+    // §519 — снимок числа endpoint'ов на момент постановки: конфиг может быть
+    // перезаписан за время ожидания, а причина должна называть то N, из
+    // которого выведен ИМЕННО этот порог.
+    final endpointsAtArm = _configEndpointCount;
+    if (expected == TunnelStatus.connecting) {
+      _addDebug(
+          DebugSource.app,
+          '[vpn] connecting timeout armed: ${timeout.inMilliseconds}ms '
+          '(endpoints=$endpointsAtArm)');
+    }
     _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
       _addDebug(
@@ -596,9 +660,31 @@ class HomeController extends ChangeNotifier
       // §251 — синтезированный tunnel-down: настоящий Stopped потом проглотит
       // stale-terminal guard, его clearSelected недостижим — чистим здесь.
       SelectorInfo.I.clearSelected();
+      // §519 — таймаут ОБЯЗАН оставить причину. Раньше писался только
+      // `lastError` (UI-строка, живёт до первого `clearError`), а
+      // `lastStartError`/`stopReason` оставались пустыми: снаружи остановка
+      // выглядела «молча не соединяется» при пустых `last_error`/
+      // `last_start_error` и `core_reject: idle`. Для `connecting` причина
+      // типизированная (`StopStartTimeout` — порог и число endpoint'ов в
+      // тексте); для `stopping` оставляем прежний `connectionTimedOut`:
+      // там причина «ядро не отдало Stopped», а не арифметика пост-старта.
+      final timedOutStart = expected == TunnelStatus.connecting;
+      final reason = timedOutStart
+          ? StopStartTimeout(
+              seconds: timeout.inSeconds, endpoints: endpointsAtArm)
+          : null;
+      if (reason != null) {
+        _addDebug(DebugSource.app, reason.renderEn());
+      }
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
-        lastError: const ErrMsg(ErrKey.connectionTimedOut),
+        lastError: reason != null
+            ? StopReasonMsg(reason)
+            : const ErrMsg(ErrKey.connectionTimedOut),
+        stopReason: reason ?? _state.stopReason,
+        // §250 — машинный дубль для Debug API/дампа: всегда English.
+        lastStartError: reason?.renderEn() ?? _state.lastStartError,
+        lastStartErrorAt: reason != null ? DateTime.now() : _state.lastStartErrorAt,
         ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
@@ -607,6 +693,9 @@ class HomeController extends ChangeNotifier
         configChangedNeedRestart: false,
         runningConfigRaw: _invalidateRunningConfig(), // §311 — синтезированный down
       ));
+      // Фича 478 — страховка ждёт вердикта старта; таймаут — тоже вердикт.
+      // Без этого completer висел до своих 45с, а узел не выключался.
+      if (timedOutStart) _settleStartOutcome(reason!.renderEn());
     });
   }
 
