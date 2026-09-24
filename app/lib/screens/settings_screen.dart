@@ -89,8 +89,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   // поведения CommandClient при переключении ноды (selectOutbound +
   // closeConnection). Без Restart-баннера.
   bool _interruptOnSwitch = false;
-  String _idleSuspend = ''; // §215 — route.lx_idle_suspend threshold ("" = off)
-  // §272 — route.lx_idle_suspend_reachable ("" = reachable never suspend)
+  String _idleSuspend = ''; // §215 — lx.wg.idle_suspend threshold ("" = off)
+  // §272 — lx.wg.idle_suspend_reachable ("" = reachable never suspend)
   String _idleSuspendReachable = '';
   bool _passiveCheck = true; // §272 — urltest.passive_check
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
@@ -203,7 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     widget.homeController.markConfigChangedNeedRestart();
   }
 
-  /// §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020).
+  /// §215 — idle-suspend threshold (lx.wg.idle_suspend, kernel SPEC 020).
   /// Выбор списком (RadioGroup) — применяется сразу, config-significant.
   Future<void> _applyIdleSuspend(String value) async {
     if (value == _idleSuspend) return;
@@ -227,7 +227,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool get _idleSuspendReachableEnabled =>
       _vpnLoaded && _idleSuspend.isNotEmpty;
 
-  /// §272 — reachable idle window (route.lx_idle_suspend_reachable).
+  /// §272 — reachable idle window (lx.wg.idle_suspend_reachable).
   /// Config-significant, применяется на следующем подключении.
   Future<void> _applyIdleSuspendReachable(String value) async {
     if (value == _idleSuspendReachable) return;
@@ -371,7 +371,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         const Divider(height: 32),
         // §272 — секция WireGuard connections: оба idle-suspend порога ядра
-        // (lx_idle_suspend / lx_idle_suspend_reachable, SPEC 020).
+        // (lx.wg.idle_suspend / lx.wg.idle_suspend_reachable, SPEC 020).
         const TemplateSectionHeader(
           title: 'WireGuard connections',
           description:
@@ -424,7 +424,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             },
           ),
         ),
-        // §272 — reachable idle window (route.lx_idle_suspend_reachable):
+        // §272 — reachable idle window (lx.wg.idle_suspend_reachable):
         // усыпление ДОСТИЖИМЫХ туннелей (члены пула, выбранный узел) после
         // долгого простоя. Активно только при включённом idle-suspend выше
         // (ядро отвергает reachable без базового порога — генератор и так

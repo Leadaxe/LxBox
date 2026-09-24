@@ -110,13 +110,14 @@ class BuildSettings {
   final VpnModeConfig? vpnMode;
 
   /// §215: порог простоя для idle-suspend недостижимых WG/AWG эндпоинтов
-  /// (ядро SPEC 020, `route.lx_idle_suspend`). Duration-строка (`"5m"`,
-  /// `"30s"`). Пусто = фича выключена (поле не пишется, дефолт ядра =
-  /// idle-тик не запускается).
+  /// (ядро SPEC 020, `lx.wg.idle_suspend` — §535, до пина v1.14.2-lx.1 ключ
+  /// звался `route.lx_idle_suspend`). Duration-строка (`"5m"`, `"30s"`).
+  /// Пусто = фича выключена (поле не пишется, дефолт ядра = idle-тик
+  /// не запускается).
   final String idleSuspend;
 
   /// §272: второе, длинное окно простоя для ДОСТИЖИМЫХ эндпоинтов
-  /// (ядро SPEC 020 rev. 2026-07-15, `route.lx_idle_suspend_reachable`).
+  /// (ядро SPEC 020 rev. 2026-07-15, `lx.wg.idle_suspend_reachable` — §535).
   /// Пусто = достижимые не засыпают. Эмитится ТОЛЬКО при непустом
   /// [idleSuspend] — ядро отвергает reachable без базового порога.
   final String idleSuspendReachable;
@@ -589,17 +590,27 @@ Future<BuildResult> buildConfig({
 
   // §215 — idle-suspend недостижимых WG/AWG эндпоинтов (ядро SPEC 020).
   // Пишем поле только когда порог задан (непустой), чтобы сохранить
-  // omitempty-семантику ядра: отсутствие/пусто = фича выключена (idle-тик
+  // omitempty-семантику ядра: отсутствие/пусто = фича выключена (идл-тик
   // не запускается — безопасный kill-switch).
+  //
+  // §535 — ключи сна переехали из `route` в корневой блок `lx.wg`
+  // (ядро SPEC 098, пин v1.14.2-lx.1). Старые `route.lx_idle_*` ядро ещё
+  // принимает, но пишет WARN на каждый ключ, поэтому эмитим ТОЛЬКО новые
+  // имена: одно место записи, без дублей (значение в обоих местах = WARN,
+  // разное значение = ядро не стартует).
   final idle = settings.idleSuspend.trim();
   if (idle.isNotEmpty) {
-    route['lx_idle_suspend'] = idle;
+    final wg = <String, dynamic>{'idle_suspend': idle};
     // §272 — reachable-окно валидно ТОЛЬКО при включённом базовом пороге
-    // (ядро: "lx_idle_suspend_reachable requires lx_idle_suspend").
+    // (ядро: "lx.wg.idle_suspend_reachable requires lx.wg.idle_suspend").
     final reachable = settings.idleSuspendReachable.trim();
     if (reachable.isNotEmpty) {
-      route['lx_idle_suspend_reachable'] = reachable;
+      wg['idle_suspend_reachable'] = reachable;
     }
+    // lazy_build / build_max / build_overflow (ядро SPEC 097) НЕ включаем по
+    // умолчанию — решение владельца отдельно. lx.masque.idle_timeout тоже не
+    // пишем: у WARP MASQUE-узлов свой idle_timeout в самом узле.
+    config['lx'] = <String, dynamic>{'wg': wg};
   }
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённое Направление

@@ -1016,9 +1016,7 @@
         "format": "binary",
         "path": "<sandbox>/docs/rule_sets/ds_model1.srs"
       }
-    ],
-    "lx_idle_suspend": "1m",
-    "lx_idle_suspend_reachable": "10m"
+    ]
   },
   "experimental": {
     "cache_file": {
@@ -1031,5 +1029,11 @@
     {
       "type": "oom-killer"
     }
-  ]
+  ],
+  "lx": {
+    "wg": {
+      "idle_suspend": "1m",
+      "idle_suspend_reachable": "10m"
+    }
+  }
 }

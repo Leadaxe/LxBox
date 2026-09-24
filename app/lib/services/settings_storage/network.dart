@@ -24,7 +24,7 @@ Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
-// §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020)
+// §215 — idle-suspend threshold (lx.wg.idle_suspend, kernel SPEC 020)
 //
 // Duration-строка ("30s", "5m"). Пусто = feature off (поле не попадёт в
 // route, idle-тик ядра не запустится). Config-significant → markConfigDirty.
@@ -45,7 +45,7 @@ Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
 }
 
 // ---------------------------------------------------------------------------
-// §272 — reachable idle-suspend window (route.lx_idle_suspend_reachable,
+// §272 — reachable idle-suspend window (lx.wg.idle_suspend_reachable,
 // kernel SPEC 020 rev. 2026-07-15)
 //
 // Второе, ДЛИННОЕ окно простоя для ДОСТИЖИМЫХ эндпоинтов (члены пула,
@@ -55,7 +55,7 @@ Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
 // агрессивная экономия; цена — при значении < idle_timeout каналов возможны
 // 1-2 probe-флапа в хвосте засыпания (пробы ещё живы, когда туннель уже спит)
 // — не поломка, см. docs-lx/lx-energy.ru.md §8 ядра.
-// Ядро требует lx_idle_suspend включённым и reachable >= lx_idle_suspend —
+// Ядро требует idle_suspend включённым и reachable >= idle_suspend —
 // генератор эмитит поле только при непустом базовом пороге.
 // ---------------------------------------------------------------------------
 

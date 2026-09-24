@@ -149,8 +149,8 @@ class SettingsStorage {
     kDnsKey,
     'ping_options',
     'route_final',
-    'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
-    'route_idle_suspend_reachable', // §272 — reachable idle window (route.lx_idle_suspend_reachable)
+    'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
+    'route_idle_suspend_reachable', // §272 — reachable idle window (lx.wg.idle_suspend_reachable)
     'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
@@ -538,14 +538,14 @@ class SettingsStorage {
   static Future<void> saveRouteFinal(String outbound, {bool flush = true}) =>
       _saveRouteFinal(outbound, flush: flush);
 
-  // §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020)
+  // §215 — idle-suspend threshold (lx.wg.idle_suspend, kernel SPEC 020)
 
   static Future<String> getIdleSuspend() => _getIdleSuspend();
 
   static Future<void> saveIdleSuspend(String threshold, {bool flush = true}) =>
       _saveIdleSuspend(threshold, flush: flush);
 
-  // §272 — reachable idle window (route.lx_idle_suspend_reachable, SPEC 020)
+  // §272 — reachable idle window (lx.wg.idle_suspend_reachable, SPEC 020)
 
   static Future<String> getIdleSuspendReachable() => _getIdleSuspendReachable();
 

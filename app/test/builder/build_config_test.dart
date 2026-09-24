@@ -223,9 +223,11 @@ void main() {
       expect(result.config, isNot(contains('external_controller')));
     });
 
-    // §215 — idle-suspend (ядро SPEC 020, route.lx_idle_suspend). Порог
-    // прокидывается в route только когда задан; пусто = omitempty (поля нет).
-    test('§215 idleSuspend="30s" → route.lx_idle_suspend', () async {
+    // §215 — idle-suspend (ядро SPEC 020). Порог прокидывается только когда
+    // задан; пусто = omitempty (блока нет).
+    // §535 — ключи переехали из route в корневой блок lx.wg (ядро SPEC 098):
+    // старые имена не пишем, иначе ядро даёт WARN на каждый ключ.
+    test('§535 idleSuspend="30s" → lx.wg.idle_suspend, route чист', () async {
       final wg = parseWireguardUri(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
@@ -246,11 +248,15 @@ void main() {
           idleSuspend: '30s',
         ),
       );
+      final wgBlock =
+          (result.config['lx'] as Map)['wg'] as Map;
+      expect(wgBlock['idle_suspend'], '30s');
+      // Старый ключ не эмитится — иначе WARN «deprecated» на каждом старте.
       final route = result.config['route'] as Map;
-      expect(route['lx_idle_suspend'], '30s');
+      expect(route.containsKey('lx_idle_suspend'), false);
     });
 
-    test('§215 idleSuspend="" (default) → нет route.lx_idle_suspend', () async {
+    test('§535 idleSuspend="" (default) → блока lx нет вовсе', () async {
       final wg = parseWireguardUri(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
@@ -270,13 +276,14 @@ void main() {
           userVars: {'clash_api': '127.0.0.1:9090'},
         ),
       );
+      // Kill-switch: блок не пишется, дефолт ядра (идл-тик не запущен).
+      expect(result.config.containsKey('lx'), false);
       final route = result.config['route'] as Map;
-      // Kill-switch: поле не пишется, дефолт ядра (idle-тик не запущен).
       expect(route.containsKey('lx_idle_suspend'), false);
     });
 
-    // §272 — reachable-окно (route.lx_idle_suspend_reachable) эмитится только
-    // вместе с базовым порогом: ядро отвергает reachable без lx_idle_suspend.
+    // §272 — reachable-окно (lx.wg.idle_suspend_reachable) эмитится только
+    // вместе с базовым порогом: ядро отвергает reachable без idle_suspend.
     test('§272 reachable пишется только при включённом idleSuspend', () async {
       final wg = parseWireguardUri(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
@@ -300,9 +307,15 @@ void main() {
           idleSuspendReachable: '30m',
         ),
       );
-      final bothRoute = both.config['route'] as Map;
-      expect(bothRoute['lx_idle_suspend'], '30s');
-      expect(bothRoute['lx_idle_suspend_reachable'], '30m');
+      final bothWg = (both.config['lx'] as Map)['wg'] as Map;
+      expect(bothWg['idle_suspend'], '30s');
+      expect(bothWg['idle_suspend_reachable'], '30m');
+      // §535 — lazy_build/build_max/build_overflow по умолчанию не пишем.
+      expect(bothWg.containsKey('lazy_build'), false);
+      expect(bothWg.containsKey('build_max'), false);
+      expect(bothWg.containsKey('build_overflow'), false);
+      // §535 — глобальный masque.idle_timeout не пишем (у узлов свой).
+      expect((both.config['lx'] as Map).containsKey('masque'), false);
 
       // Базовый выключен → reachable подавлен (иначе ядро упало бы на старте).
       final orphan = await buildConfig(
@@ -313,6 +326,7 @@ void main() {
           idleSuspendReachable: '30m',
         ),
       );
+      expect(orphan.config.containsKey('lx'), false);
       final orphanRoute = orphan.config['route'] as Map;
       expect(orphanRoute.containsKey('lx_idle_suspend'), false);
       expect(orphanRoute.containsKey('lx_idle_suspend_reachable'), false);

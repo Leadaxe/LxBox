@@ -38,7 +38,7 @@ const _topLevelRoutingKeys = {
   // one-shot миграция не пере-сработала поверх восстановленных Направлений.
   'directions',
   'directions_migrated',
-  'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
+  'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
   'route_idle_suspend_reachable', // §272 — reachable idle window
   'urltest_passive_check', // §272 — passive health check
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
