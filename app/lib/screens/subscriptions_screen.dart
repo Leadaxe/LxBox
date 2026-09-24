@@ -26,6 +26,7 @@ import 'subscriptions_screen/folder_picker.dart';
 import 'subscriptions_screen/paste_dialogs.dart';
 import 'subscriptions_screen/public_test_servers.dart';
 import '../models/source_chain.dart';
+import '../models/source_entry.dart';
 import 'chain_edit/new_chain_dialog.dart';
 import 'chain_edit_screen.dart';
 import 'subscriptions_screen/widgets/add_icon_button.dart';
@@ -67,15 +68,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
   bool _autoUpdateEnabled = true;
 
-  /// §393 D1 / §509 — источники-цепочки. Рисуются СТРОКАМИ ОБЩЕГО СПИСКА
-  /// наравне с подписками. В хранении это записи `kind: chain` в `sources[]`,
-  /// не `SubscriptionController.entries`: цепочка написана пользователем
-  /// руками и обязана пережить и обновление подписки, и её удаление.
-  List<SourceChain> _chains = const [];
+  /// §524 — ОБЩИЙ СПИСОК ИСТОЧНИКОВ в порядке `sources[]`: подписки, серверы,
+  /// папки и цепочки одним рядом. Один список — одна истина о порядке; до §524
+  /// экран сшивал три источника (`entries` контроллера, буфер цепочек,
+  /// `List<String>` ключей) в `_rows()` на каждый кадр.
+  ///
+  /// Наполняется [SubscriptionController.sourceEntries]; пусто до первой
+  /// загрузки — [_rows] тогда рисует записи контроллера в их порядке.
+  List<SourceEntry> _sources = const [];
 
-  /// Порядок `sources[]` (`id:…` / `chain:…`). Пусто до первой загрузки —
-  /// [_rows] тогда рисует записи контроллера, затем цепочки.
-  List<String> _sourceKeys = const [];
+  /// Цепочки общего списка — срез [_sources]. Нужен диалогам (редактор
+  /// цепочки хочет соседей, чтобы показать законные позиции) и гейту тега.
+  List<SourceChain> get _chains =>
+      [for (final e in _sources) if (e is ChainEntry) e.chain];
 
   /// §375 — есть ли камера. null = ещё не ответил канал; до ответа пункт
   /// «Scan QR code» показываем (проверка мгновенная, на телефоне камера есть
@@ -298,14 +303,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   // ── §393 C7/D1 — источники-цепочки ─────────────────────────────────────
 
+  /// §524 — перечитать общий список источников одним чтением.
   Future<void> _loadSourceOrder() async {
-    final keys = await SettingsStorage.getSourceKeys();
-    final chains = await SettingsStorage.getChains();
+    final sources = await widget.subController.sourceEntries();
     if (!mounted) return;
-    setState(() {
-      _sourceKeys = keys;
-      _chains = chains;
-    });
+    setState(() => _sources = sources);
   }
 
   void _onControllerForSourceOrder() {
@@ -1070,51 +1072,42 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  /// §393 D1 / §509 — общий список источников: подписки, серверы, папки и
-  /// цепочки одним рядом, в порядке `sources[]`. Взаимный порядок цепочек
-  /// внутри него держит инвариант «позиция ссылается только на цепочку ВЫШЕ».
+  /// §524 — строки общего списка: ОДИН [_sources], без сшивки трёх источников.
+  /// Взаимный порядок цепочек внутри него держит инвариант «позиция ссылается
+  /// только на цепочку ВЫШЕ».
+  ///
+  /// Фолбэк «[_sources] пусто» — только первый кадр до [_loadSourceOrder]:
+  /// рисуем записи контроллера в их порядке, чтобы список не мигал пустым.
   List<_SourceRow> _rows(SubscriptionController ctrl) {
-    final byEntry = <String, (SubscriptionEntry, int)>{
-      for (var i = 0; i < ctrl.entries.length; i++)
-        SettingsStorage.sourceKeyForId(ctrl.entries[i].id): (
-          ctrl.entries[i],
-          i
-        ),
+    final byId = <String, int>{
+      for (var i = 0; i < ctrl.entries.length; i++) ctrl.entries[i].id: i,
     };
-    final byChain = <String, SourceChain>{
-      for (final c in _chains)
-        SettingsStorage.sourceKeyForChain(c.tag): c,
-    };
-    final seen = <String>{};
+    if (_sources.isEmpty) {
+      return [
+        for (var i = 0; i < ctrl.entries.length; i++)
+          _SourceRow.entry(ctrl.entries[i], i),
+      ];
+    }
     final rows = <_SourceRow>[];
-    for (final k in _sourceKeys) {
-      final e = byEntry[k];
-      if (e != null) {
-        rows.add(_SourceRow.entry(e.$1, e.$2));
-        seen.add(k);
-        continue;
+    for (final e in _sources) {
+      switch (e) {
+        case ChainEntry(:final chain):
+          rows.add(_SourceRow.chain(chain));
+        case ContainerEntry(:final list):
+          // Индекс записи в контроллере — счёт его мутаций, не общего списка.
+          final at = byId[list.id];
+          if (at != null) rows.add(_SourceRow.entry(ctrl.entries[at], at));
+        case OpaqueEntry():
+          // §141 P1.8c — запись, которую кодек не читает: показывать нечего,
+          // и перестановка её не адресует (она остаётся в своём слоте).
+          break;
       }
-      final c = byChain[k];
-      if (c != null) {
-        rows.add(_SourceRow.chain(c));
-        seen.add(k);
-      }
-    }
-    for (var i = 0; i < ctrl.entries.length; i++) {
-      final k = SettingsStorage.sourceKeyForId(ctrl.entries[i].id);
-      if (seen.add(k)) {
-        rows.add(_SourceRow.entry(ctrl.entries[i], i));
-      }
-    }
-    for (final c in _chains) {
-      final k = SettingsStorage.sourceKeyForChain(c.tag);
-      if (seen.add(k)) rows.add(_SourceRow.chain(c));
     }
     return rows;
   }
 
   Widget _buildList(SubscriptionController ctrl) {
-    if (ctrl.entries.isEmpty && _chains.isEmpty) {
+    if (_rows(ctrl).isEmpty) {
       return SubscriptionsEmptyState(
         busy: ctrl.busy,
         onPickPublicTestServer: () => unawaited(_pickPublicTestServer()),
@@ -1234,9 +1227,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  /// §393 D1 / §509 — перестановка в общем списке источников: пишет
-  /// `sources[]` как есть. «Цепочка ссылается только вверх» считается по
-  /// взаимному порядку цепочек; сервер между ними ссылок не ломает.
+  /// §524 — перестановка в общем списке источников: ОДНА запись на жест.
+  ///
+  /// До §524 жест писал дважды — `reorderSources` и `applyEntryOrder`, — и
+  /// каждая падала независимо; порядок контейнеров зеркалится в памяти
+  /// (`applySourceOrder`), а не вторым `_persist`. «Цепочка ссылается только
+  /// вверх» считается по взаимному порядку цепочек; сервер между ними ссылок
+  /// не ломает.
   Future<void> _reorderRows(
       SubscriptionController ctrl, int oldIndex, int newIndex) async {
     if (oldIndex == newIndex) return;
@@ -1255,16 +1252,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         if (r.chain != null) r.chain!.tag,
     ];
 
-    await SettingsStorage.reorderSources([
+    await ctrl.applySourceOrder([
       for (final r in moved)
         if (r.chain != null)
-          SettingsStorage.sourceKeyForChain(r.chain!.tag)
+          sourceKeyForChainOf(r.chain!.tag)
         else
-          SettingsStorage.sourceKeyForId(r.entry!.id),
-    ]);
-    await ctrl.applyEntryOrder([
-      for (final r in moved)
-        if (r.entry != null) r.entry!.id,
+          sourceKeyForIdOf(r.entry!.id),
     ]);
     await _loadSourceOrder();
     if (!mounted) return;
