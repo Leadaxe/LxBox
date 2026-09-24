@@ -587,6 +587,9 @@
   "Quad9 DoH (via VPN, anti-malware)": {
     "value": "Quad9 DoH (через VPN, антивредонос)"
   },
+  "Yandex DoT (direct)": {
+    "value": "Yandex DoT (напрямую)"
+  },
   "Google push (FCM)": {
     "value": "Google-пуши (FCM)"
   },

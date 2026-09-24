@@ -336,6 +336,20 @@
         }
       },
       {
+        "description": "Yandex DoT (direct)",
+        "enabled": true,
+        "server": {
+          "type": "tls",
+          "tag": "yandex_dot",
+          "server_port": 853,
+          "server": "77.88.8.8",
+          "tls": {
+            "enabled": true,
+            "server_name": "common.dot.dns.yandex.net"
+          }
+        }
+      },
+      {
         "description": "Shield DNS (multi-provider group)",
         "enabled": true,
         "server": {
