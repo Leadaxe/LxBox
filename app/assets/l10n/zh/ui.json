@@ -1654,6 +1654,12 @@
   "Drop existing detours — every node connects through this outbound": {
     "value": "清除已有 detour —— 所有节点都经此出站连接"
   },
+  "Duplicate entry: the same node is already in this subscription.": {
+    "value": "重复条目：该节点已在本订阅中。"
+  },
+  "Duplicate of %s": {
+    "value": "与「%s」重复"
+  },
   "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
     "value": "每个来源用自己的密钥签名，所以不同来源的安装包无法互相覆盖安装。切换方法：先备份设置，卸载 L×Box，从新来源安装后再恢复备份。"
   },

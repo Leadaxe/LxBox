@@ -60,7 +60,6 @@ List<NodeSpec> parseAll(
   List<NodeWarning>? dropped,
 }) {
   final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
-  _dropDuplicates(nodes, dropped);
 
   // §477 — проход по дословной карте выносит и ВЕРДИКТ О ЗАПИСИ, а не только
   // коды полей: `on_invalid: drop_node` значит, что ядро эту запись не примет
@@ -80,6 +79,12 @@ List<NodeSpec> parseAll(
     // (corpus/README), а не человеческое имя.
     dropped?.addAll(byRegistry.map(_dropReasonOf));
   }
+
+  // §538 — повторы снимаются ПОСЛЕ вердикта реестра: дословные карты двух
+  // форм одного узла разные (`amneziawg://` и `vpn://`), и отбраковка могла
+  // задеть только одну. Дедуп раньше неё оставил бы первую форму и потерял
+  // годную вторую.
+  _dropDuplicates(nodes, dropped);
 
   annotateAllWithRegistry(nodes);
   return nodes;

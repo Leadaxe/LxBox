@@ -1853,6 +1853,12 @@
   "Drop existing detours — every node connects through this outbound": {
     "value": "Сбросить существующие detour — каждый узел подключается через этот исходящий канал"
   },
+  "Duplicate entry: the same node is already in this subscription.": {
+    "value": "Повтор: этот узел в подписке уже есть."
+  },
+  "Duplicate of %s": {
+    "value": "Повтор узла «%s»"
+  },
   "Each source signs the app with its own key, so builds from different sources do not install over each other. To switch: back up your settings, uninstall L×Box, install it from the new source and restore the backup.": {
     "value": "Каждый источник подписывает приложение своим ключом, поэтому сборки из разных источников не ставятся друг поверх друга. Чтобы перейти: сделайте резервную копию настроек, удалите L×Box, установите из нового источника и восстановите копию."
   },
