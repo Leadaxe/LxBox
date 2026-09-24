@@ -151,24 +151,16 @@ void main() {
       // запрещённых значило бы запретить сам примитив переопределения,
       // которым блок и задуман пользоваться.
       //
-      // Копией запись считается, только если схема ПОДКЛЮЧАЕТ блок-владелец.
-      // hysteria2 не подключает `tls#uri_security` (его ветка `none` сняла
-      // бы обязательный TLS) и объявляет свою запись `security` — маркер
-      // 3x-ui без записи в тело (контракт 1.1.54). Это не копия блока.
-      const owners = {
-        'security': 'tls#uri_security',
-        'alpn': 'tls#uri',
-        'pbk': 'tls#uri_reality',
-        'sid': 'tls#uri_reality',
-      };
+      // Единственное исключение — `security` у hysteria2: схема не подключает
+      // `tls#uri_security` (его ветка `none` сняла бы обязательный TLS) и
+      // объявляет свою запись — маркер 3x-ui без записи в тело (контракт
+      // 1.1.54). Это не копия блока.
+      const allowed = {'hysteria2.security'};
       for (final e in uriSections.entries) {
-        final s = section(e.value, 'uri');
-        final params = (s['params'] as Map).cast<String, dynamic>();
-        final includes = (s['include'] as List? ?? const []).cast<String>();
-        for (final o in owners.entries) {
-          if (!includes.contains(o.value)) continue;
-          expect(params.containsKey(o.key), isFalse,
-              reason: '${e.key}.${o.key}');
+        final params = (section(e.value, 'uri')['params'] as Map).cast<String, dynamic>();
+        for (final dup in const ['security', 'alpn', 'pbk', 'sid']) {
+          if (allowed.contains('${e.key}.$dup')) continue;
+          expect(params.containsKey(dup), isFalse, reason: '${e.key}.$dup');
         }
       }
     });
