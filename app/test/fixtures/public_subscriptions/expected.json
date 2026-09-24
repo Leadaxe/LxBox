@@ -1,14 +1,13 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.52",
+  "contract_version": "1.1.53",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 97,
       "dropped": {},
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "02-github-vless-lite": {
@@ -18,8 +17,7 @@
       },
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "03-github-vless": {
@@ -67,7 +65,7 @@
       "dropped": {},
       "warnings": {
         "tls_insecure": 1,
-        "uri_param_unknown": 5
+        "uri_param_unknown": 1
       }
     },
     "09-github-26": {
@@ -85,7 +83,7 @@
         "ss_method_legacy": 4,
         "tls_alpn_item_invalid": 14,
         "unknown_key": 5,
-        "uri_param_unknown": 489,
+        "uri_param_unknown": 427,
         "ws_early_data_converted": 5
       }
     },
@@ -118,7 +116,7 @@
         "reality_fp_not_chrome": 8,
         "tls_insecure": 6,
         "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 6,
+        "uri_param_unknown": 3,
         "utls_fp_unknown": 1
       }
     },
@@ -145,8 +143,7 @@
       "dropped": {},
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 7,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 7
       }
     },
     "16-github-aetrisvpn": {
@@ -158,7 +155,7 @@
         "ss_method_legacy": 3,
         "tls_insecure": 2,
         "unknown_key": 28,
-        "uri_param_unknown": 35
+        "uri_param_unknown": 32
       }
     },
     "17-github-configs": {
@@ -168,7 +165,7 @@
         "reality_fp_not_chrome": 6,
         "tls_insecure": 3,
         "unknown_key": 8,
-        "uri_param_unknown": 11,
+        "uri_param_unknown": 9,
         "ws_early_data_converted": 1
       }
     },
@@ -180,7 +177,7 @@
       "warnings": {
         "reality_fp_not_chrome": 26,
         "tls_alpn_item_invalid": 20,
-        "uri_param_unknown": 9
+        "uri_param_unknown": 5
       }
     },
     "19-github-bypass-all": {
@@ -190,7 +187,7 @@
         "reality_fp_not_chrome": 50,
         "tls_insecure": 1,
         "unknown_key": 75,
-        "uri_param_unknown": 145,
+        "uri_param_unknown": 135,
         "utls_fp_unknown": 72,
         "ws_early_data_converted": 37
       }
@@ -201,7 +198,7 @@
       "warnings": {
         "reality_fp_not_chrome": 11,
         "unknown_key": 5,
-        "uri_param_unknown": 20,
+        "uri_param_unknown": 15,
         "utls_fp_unknown": 29,
         "ws_early_data_converted": 20
       }
@@ -213,7 +210,7 @@
         "reality_fp_not_chrome": 34,
         "tls_insecure": 1,
         "unknown_key": 70,
-        "uri_param_unknown": 92,
+        "uri_param_unknown": 88,
         "utls_fp_unknown": 2,
         "ws_early_data_converted": 10
       }
@@ -248,7 +245,7 @@
       "dropped": {},
       "warnings": {
         "reality_fp_not_chrome": 21,
-        "uri_param_unknown": 1166
+        "uri_param_unknown": 534
       }
     },
     "25-github-bypass-6": {
@@ -258,7 +255,7 @@
         "reality_fp_not_chrome": 32,
         "tls_insecure": 4,
         "unknown_key": 45,
-        "uri_param_unknown": 89,
+        "uri_param_unknown": 69,
         "utls_fp_unknown": 1
       }
     },
@@ -274,7 +271,7 @@
         "reality_fp_not_chrome": 86,
         "tls_alpn_item_invalid": 1,
         "tls_insecure": 40,
-        "uri_param_unknown": 327,
+        "uri_param_unknown": 314,
         "utls_fp_unknown": 2,
         "ws_early_data_converted": 50
       }
@@ -293,7 +290,7 @@
         "ss_method_legacy": 16,
         "tls_alpn_item_invalid": 9,
         "tls_insecure": 129,
-        "uri_param_unknown": 386,
+        "uri_param_unknown": 310,
         "utls_fp_unknown": 1,
         "vision_with_transport": 11,
         "ws_early_data_converted": 13,
@@ -306,7 +303,7 @@
       "warnings": {
         "reality_fp_not_chrome": 22,
         "unknown_key": 7,
-        "uri_param_unknown": 17
+        "uri_param_unknown": 12
       }
     },
     "29-github-blacklist": {
@@ -368,7 +365,7 @@
         "ss_method_legacy": 3,
         "tls_alpn_item_invalid": 7,
         "tls_insecure": 6,
-        "uri_param_unknown": 3
+        "uri_param_unknown": 2
       }
     },
     "36-github-alive-full": {
@@ -382,7 +379,7 @@
         "reality_short_id_invalid": 2,
         "tls_insecure": 4,
         "unknown_key": 89,
-        "uri_param_unknown": 121
+        "uri_param_unknown": 119
       }
     },
     "37-github-sub": {
@@ -402,7 +399,7 @@
         "tls_alpn_item_invalid": 1,
         "tls_insecure": 70,
         "unknown_key": 419,
-        "uri_param_unknown": 3270,
+        "uri_param_unknown": 3220,
         "utls_fp_unknown": 48,
         "vision_with_transport": 1,
         "ws_early_data_converted": 72
@@ -413,8 +410,7 @@
       "dropped": {},
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "39-moshub-list-universal": {
@@ -422,8 +418,7 @@
       "dropped": {},
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "40-gitverse-list-universal": {
@@ -431,8 +426,7 @@
       "dropped": {},
       "warnings": {
         "field_conflict": 1,
-        "reality_fp_not_chrome": 5,
-        "uri_param_unknown": 3
+        "reality_fp_not_chrome": 5
       }
     },
     "41-gitlab-vless-reality-white-lists-rus-mobile": {
@@ -461,8 +455,7 @@
       "warnings": {
         "reality_fp_not_chrome": 5,
         "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "48-domain-1": {
@@ -480,7 +473,7 @@
         "tls_insecure": 115,
         "tls_not_applicable_quic": 11,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -499,7 +492,7 @@
         "tls_insecure": 115,
         "tls_not_applicable_quic": 11,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -511,8 +504,7 @@
       "warnings": {
         "reality_fp_not_chrome": 5,
         "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "51-domain-other": {
@@ -530,7 +522,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 10,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 90,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -549,7 +541,7 @@
         "tls_insecure": 115,
         "tls_not_applicable_quic": 11,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -568,7 +560,7 @@
         "tls_insecure": 115,
         "tls_not_applicable_quic": 11,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -580,7 +572,7 @@
       },
       "warnings": {
         "reality_fp_not_chrome": 16,
-        "uri_param_unknown": 4
+        "uri_param_unknown": 2
       }
     },
     "55-gitverse-other": {
@@ -594,7 +586,7 @@
         "reality_fp_not_chrome": 23,
         "ss_method_legacy": 1,
         "tls_insecure": 17,
-        "uri_param_unknown": 86
+        "uri_param_unknown": 61
       }
     },
     "56-gitverse-1": {
@@ -608,7 +600,7 @@
         "reality_fp_not_chrome": 39,
         "ss_method_legacy": 1,
         "tls_insecure": 17,
-        "uri_param_unknown": 90
+        "uri_param_unknown": 63
       }
     },
     "57-gitverse-2": {
@@ -622,7 +614,7 @@
         "reality_fp_not_chrome": 39,
         "ss_method_legacy": 1,
         "tls_insecure": 17,
-        "uri_param_unknown": 90
+        "uri_param_unknown": 63
       }
     },
     "58-domain-whitelist": {
@@ -633,8 +625,7 @@
       "warnings": {
         "reality_fp_not_chrome": 5,
         "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "59-domain-other": {
@@ -652,7 +643,7 @@
         "tls_insecure": 112,
         "tls_not_applicable_quic": 10,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 90,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -671,7 +662,7 @@
         "tls_insecure": 115,
         "tls_not_applicable_quic": 11,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -690,7 +681,7 @@
         "tls_insecure": 115,
         "tls_not_applicable_quic": 11,
         "tuic_udp_relay_mode_invalid": 2,
-        "uri_param_unknown": 91,
+        "uri_param_unknown": 42,
         "utls_fp_unknown": 13
       }
     },
@@ -702,8 +693,7 @@
       "warnings": {
         "reality_fp_not_chrome": 5,
         "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "63-domain-whitelist": {
@@ -714,8 +704,7 @@
       "warnings": {
         "reality_fp_not_chrome": 5,
         "tls_insecure": 3,
-        "tls_not_applicable_quic": 1,
-        "uri_param_unknown": 1
+        "tls_not_applicable_quic": 1
       }
     },
     "64-domain-gen": {
@@ -726,16 +715,14 @@
       "warnings": {
         "reality_fp_not_chrome": 18,
         "tls_insecure": 1,
-        "tls_not_applicable_quic": 4,
-        "uri_param_unknown": 5
+        "tls_not_applicable_quic": 4
       }
     },
     "65-codeberg-sub": {
       "nodes_total": 50,
       "dropped": {},
       "warnings": {
-        "reality_fp_not_chrome": 16,
-        "uri_param_unknown": 2
+        "reality_fp_not_chrome": 16
       }
     },
     "66-gitverse-wl": {
@@ -750,7 +737,7 @@
         "ss_method_legacy": 4,
         "tls_insecure": 7,
         "unknown_key": 5,
-        "uri_param_unknown": 52,
+        "uri_param_unknown": 16,
         "ws_early_data_converted": 2
       }
     },
@@ -764,7 +751,7 @@
         "reality_fp_not_chrome": 7,
         "tls_insecure": 2,
         "unknown_key": 7,
-        "uri_param_unknown": 19
+        "uri_param_unknown": 18
       }
     },
     "68-gitverse-outlinevpn-outlinevpn": {
@@ -795,7 +782,7 @@
         "field_missing": 59,
         "reality_fp_not_chrome": 72,
         "type_invalid": 2,
-        "uri_param_unknown": 749
+        "uri_param_unknown": 746
       }
     },
     "71-domain-bypass-all": {
@@ -809,7 +796,7 @@
         "field_missing": 59,
         "reality_fp_not_chrome": 72,
         "type_invalid": 2,
-        "uri_param_unknown": 749
+        "uri_param_unknown": 746
       }
     },
     "72-gitverse-alive-full": {
@@ -823,7 +810,7 @@
         "reality_short_id_invalid": 2,
         "tls_insecure": 4,
         "unknown_key": 89,
-        "uri_param_unknown": 121
+        "uri_param_unknown": 119
       }
     }
   }

@@ -74,8 +74,6 @@ flutter:
     # `conf/` больше нет: секция `.conf` приехала реестром целиком (диалект
     # ini — контракт 1.1.30, код незнакомого ключа — 1.1.32), и последнее
     # отличие (дефолтный порт пира) сняла ветка `endpoint.on_no_match`.
-    - assets/contract_draft/xray/
-    - assets/contract_draft/singbox/
     # §480 W6 — реестр ВИДОВ ИСТОЧНИКА приехал нормой (контракт 1.1.41,
     # `assets/contract/registry/source_kinds.json`), черновик снят.
     - assets/icons/app_icon.png

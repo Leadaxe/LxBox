@@ -399,8 +399,8 @@ carried its own value rules. It is the one input whose source dialect is an
 **object**, not text: the mapper takes a `Map`, so it has its own pair of types
 and its own entry point (`parseXrayViaPipeline`) while the pipeline body stays
 shared. After §480 the per-scheme table is the registry section for the `xray`
-source kind (`registry/protocols/<scheme>.json` → `mappers.xray`, our
-divergences in the overlays `contract_draft/xray/<scheme>.json`), executed
+source kind (`registry/protocols/<scheme>.json` → `mappers.xray`; the xray
+overlays were removed in §533, so the registry is the only source), executed
 through the bridge `engine/engine_mapper.dart` → `mapJsonViaEngine`; the
 section's own `detect` picks the record, so there is no dispatcher by protocol
 name left in the code. Three things differ, all of them from the shape of the
