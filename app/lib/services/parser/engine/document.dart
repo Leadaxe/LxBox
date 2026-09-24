@@ -40,6 +40,8 @@ final class DocumentSource {
     this.mapper,
     this.elements,
     this.lineCommentPrefixes = const ['#', '//', ';'],
+    this.serviceSchemes,
+    this.bannerTargets,
   });
 
   factory DocumentSource.fromJson(Map<String, dynamic> j) => DocumentSource(
@@ -59,6 +61,8 @@ final class DocumentSource {
         lineCommentPrefixes:
             ((j['line_comment_prefixes'] as List?) ?? const ['#', '//', ';'])
                 .cast<String>(),
+        serviceSchemes: (j['service_schemes'] as Map?)?.cast<String, dynamic>(),
+        bannerTargets: (j['banner_targets'] as Map?)?.cast<String, dynamic>(),
       );
 
   /// Имя вида — строка ДАННЫХ, не перечисление кода.
@@ -87,6 +91,74 @@ final class DocumentSource {
   final String? elements;
 
   final List<String> lineCommentPrefixes;
+
+  /// Контракт 1.1.48 — СЛУЖЕБНЫЕ схемы строки состава: записи, которые узлами
+  /// не являются вовсе (команды роутинга соседнему клиенту:
+  /// `incy://routing/…`, `happ://routing/…`).
+  ///
+  /// Хранится сырым словарём: нормативны `schemes`, `path_prefix_fold`,
+  /// `action` и `code`, и разбирать их в поля класса значило бы завести второе
+  /// определение там, где хватает чтения ([serviceSchemeCode]).
+  final Map<String, dynamic>? serviceSchemes;
+
+  /// Код info-отбраковки для СЛУЖЕБНОЙ строки состава, либо `null` — строка
+  /// служебной не является.
+  ///
+  /// §512 — хвост обязателен (`path_prefix_fold`, по норме `routing/`): схема,
+  /// объявившая что-то другое, тихого игнора не заслуживает, потому что про
+  /// неё не известно ничего. Проверка регистронезависимая, как у остальных
+  /// схемных предикатов реестра.
+  String? serviceSchemeCode(String line) {
+    final cfg = serviceSchemes;
+    if (cfg == null) return null;
+    final schemes = (cfg['schemes'] as List?)?.whereType<String>();
+    if (schemes == null || schemes.isEmpty) return null;
+    final t = line.trim();
+    final sep = t.indexOf('://');
+    if (sep <= 0) return null;
+    final scheme = t.substring(0, sep).toLowerCase();
+    if (!schemes.any((s) => s.toLowerCase() == scheme)) return null;
+    final prefix = cfg['path_prefix_fold'] as String?;
+    if (prefix != null && prefix.isNotEmpty) {
+      final rest = t.substring(sep + 3).toLowerCase();
+      if (!rest.startsWith(prefix.toLowerCase())) return null;
+    }
+    return cfg['code'] as String?;
+  }
+
+  /// Контракт 1.1.52 — ЦЕЛИ, КОТОРЫЕ СЕРВЕРОМ НЕ БЫВАЮТ.
+  ///
+  /// Запись с такой целью есть БАННЕР провайдера, а не узел: панели не отдают
+  /// пустое тело при истёкшей подписке, а пишут синтаксически валидную ссылку
+  /// в никуда и кладут объяснение в ремарку после `#`. Признак объявлен
+  /// ДАННЫМИ, чтобы эвристика не размазывалась по разборщику.
+  ///
+  /// Хранится сырым словарём по той же причине, что [serviceSchemes]:
+  /// нормативны `hosts`, `action`, `code` и `message_from`, а разбирать их в
+  /// поля класса значило бы завести второе определение там, где хватает
+  /// чтения ([isBannerTarget]).
+  final Map<String, dynamic>? bannerTargets;
+
+  /// Адрес из списка «заведомо не сервер».
+  ///
+  /// Судится ТОЛЬКО адрес: баннером бывает ссылка ЛЮБОЙ схемы, а ПОРТ
+  /// признаком не является — у 3x-ui он законный `1080`, и один порт `1`
+  /// баннера не доказывает. Сверка ДОСЛОВНАЯ, после снятия скобок IPv6
+  /// (`[::1]` → `::1`): адрес узла — значение, а не выражение, и сопоставлять
+  /// его образцом значило бы ловить заодно законные адреса вроде `10.0.0.1`.
+  bool isBannerTarget(String host) {
+    final hosts = (bannerTargets?['hosts'] as List?)?.whereType<String>();
+    if (hosts == null || hosts.isEmpty) return false;
+    var h = host.trim();
+    if (h.startsWith('[') && h.endsWith(']')) {
+      h = h.substring(1, h.length - 1);
+    }
+    if (h.isEmpty) return false;
+    return hosts.any((t) => t.toLowerCase() == h.toLowerCase());
+  }
+
+  /// Код отбраковки баннера, либо `null` — признак реестром не объявлен.
+  String? get bannerCode => bannerTargets?['code'] as String?;
 
   bool get isDefault => detect?['default'] == true;
 }
@@ -148,6 +220,15 @@ final class DocumentRegistry {
 
   final List<DocumentSource> sources;
   final int maxUnwrapDepth;
+
+  /// §512 — ветка по ИМЕНИ вида: нужна там, где правило принадлежит именно
+  /// ей и опознание документа уже состоялось (служебные схемы у `uri_lines`).
+  DocumentSource? sourceByKind(String kind) {
+    for (final s in sources) {
+      if (s.kind == kind) return s;
+    }
+    return null;
+  }
 
   /// Ветка `default` — ровно одна; её отсутствие значит «не опознали».
   DocumentSource? get defaultSource {

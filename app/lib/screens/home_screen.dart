@@ -420,7 +420,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// §417 — перед загрузкой workspace: пробы держат `cache.db` (§286),
   /// туннель — тем более. Возвращает «был ли туннель поднят» — новый
   /// `HomeScreen` поднимет его после пересборки.
+  ///
+  /// §515 — плюс апдейтер подписок. `dispose()` (в `dispose` экрана, то есть
+  /// ПОСЛЕ загрузки слота) снимал только таймеры, а идущий проход продолжался:
+  /// между подписками у него 10 с ± 2 с, и подписки прежнего слота уезжали в
+  /// сцену нового. `halt()` прерывает проход на ближайшей проверке. Ответ уже
+  /// летящего HTTP ловит барьер поколения в
+  /// `SubscriptionController._persist` (§515) — здесь закрыт штатный путь.
   Future<bool> _stopForWorkspaceSwitch() async {
+    _autoUpdater.halt();
     ProbeLifecycle.I.haltAll();
     final wasUp = _controller.state.tunnelUp;
     if (_controller.state.tunnel != TunnelStatus.disconnected) {

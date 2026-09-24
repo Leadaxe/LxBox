@@ -259,13 +259,31 @@ void main() {
       );
     });
 
-    test('headerType=http поверх tcp → транспорт http', () {
+    test('headerType=http поверх tcp → УЗЕЛ ОТБРАКОВАН', () {
+      // §514 / контракт 1.1.52 (D133-58), решение владельца 24.09.2026.
+      // Прежде здесь ожидался `transport.type: "http"`, и это был НЕВЕРНЫЙ
+      // маппинг, а не приблизительный: у ядра `http` есть транспорт HTTP/2, на
+      // проводе другой протокол, а камуфляж Xray оставляет транспорт TCP и лишь
+      // подделывает первый пакет. Сервер, ждущий камуфляж, получал
+      // h2-рукопожатие и обрывал соединение — узел выглядел рабочим и НЕ
+      // РАБОТАЛ. Отбраковка, а не нота: собрать узел без обфускации можно, но
+      // он заведомо мёртв, и предлагать его человеку значит прятать отказ.
+      final dropped = XrayDropVerdict();
+      final spec = parseUri(
+        'trojan://p@h.example:443?security=tls&type=tcp'
+        '&headerType=http&path=%2Fc&host=cdn.example#n',
+        dropped: dropped,
+      );
+      expect(spec, isNull);
+      expect(dropped.reason?.code, 'transport_header_unsupported');
+    });
+
+    test('headerType=none поверх tcp — камуфляжа нет, узел цел', () {
+      // Граница нормы: `none` и пусто означают ОТСУТСТВИЕ камуфляжа и кода не
+      // дают — это не обфускация, а её отсутствие.
       final spec = parseUri('trojan://p@h.example:443?security=tls&type=tcp'
-          '&headerType=http&path=%2Fc&host=cdn.example#n')!;
-      final tr = spec.emit(TemplateVars.empty).map['transport'] as Map;
-      expect(tr['type'], 'http');
-      expect(tr['path'], '/c');
-      expect(tr['host'], ['cdn.example']);
+          '&headerType=none#n')!;
+      expect(spec.emit(TemplateVars.empty).map['transport'], isNull);
     });
   });
 

@@ -712,6 +712,11 @@ AutoSelectSpec? _groupToSpec(
     // — они ограничивают пул правила (§321 P6).
     membership: const ExplicitMembers([]),
     params: params,
+    // §514 / контракт 1.1.50 (D133-53) — `default` СОХРАНЯЕТСЯ сквозным, не
+    // интерпретируясь. Прежде круг «импорт → бэкап → импорт» у selector'а
+    // терял выбор пользователя молча. В тело ядра поле не идёт (эмит urltest
+    // его не пишет — ядро декодирует с DisallowUnknownFields).
+    manualDefault: group['default']?.toString() ?? '',
     warnings: warnings,
     rawSource: _prettyJson(group), // §454 — источник группы = её объект
   );

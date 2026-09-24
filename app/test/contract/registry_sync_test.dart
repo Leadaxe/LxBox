@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/parser/hysteria2_obfs.dart';
+import 'package:lxbox/services/parser/uri_utils.dart'
+    show kMaxDetourDepth, maxAmneziaLinkLength, maxURILength;
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
 
 // Sync-тесты реестра контракта (SPEC 103, фаза 2), сторона LxBox.
@@ -156,6 +158,35 @@ void main() {
     test('значения вне словаря отвергаются', () {
       expect(kHysteria2ObfsTypes.contains('nonsense'), isFalse);
       expect(normalizeUtlsFingerprintValue('garbage').junk, isTrue);
+    });
+
+    // §514 / контракт 1.1.50 (D133-52) — ЛИМИТЫ. Расхождение сторон по пределу
+    // длины ссылки закрыто волной 1.1.50 (у лаунчера стояло 8192, канон —
+    // 65536), и с этого номера у обеих сторон значение одно. Константа
+    // остаётся константой намеренно: предел работает НА ВХОДЕ конвейера, до
+    // того как реестр вообще загружен (`parseUri` зовётся и из тестов без
+    // ассетов), — но она обязана СОВПАДАТЬ с реестром, иначе расхождение
+    // вернётся молча, как уже было.
+    test('лимиты реестра совпадают с константами кода', () {
+      final file = File('$kRegistryRoot/registry/limits.json');
+      final limits = ((jsonDecode(file.readAsStringSync())
+              as Map<String, dynamic>)['limits'] as Map)
+          .cast<String, dynamic>();
+      int value(String name) {
+        final e = limits[name];
+        expect(e, isNotNull, reason: 'в реестре нет лимита "$name"');
+        return ((e as Map)['value'] as num).toInt();
+      }
+
+      expect(maxURILength, value('max_uri_length'),
+          reason: 'предел длины ссылки разошёлся с реестром: у сторон он '
+              'общий с контракта 1.1.50, и расхождение означает, что длинная '
+              'валидная ссылка принимается одним приложением и отбивается '
+              'другим');
+      expect(maxAmneziaLinkLength, value('amnezia_link_max_bytes'),
+          reason: 'потолок сырой vpn://-ссылки разошёлся с реестром');
+      expect(kMaxDetourDepth, value('max_detour_chain'),
+          reason: 'предел длины цепочки релеев разошёлся с реестром');
     });
   });
 }

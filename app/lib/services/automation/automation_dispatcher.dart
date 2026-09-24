@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../vpn/box_vpn_client.dart';
 import '../app_log.dart';
+import '../core_reject/core_reject_state.dart';
 import '../debug/context.dart';
 import '../debug/contract/errors.dart';
 import '../debug/debug_registry.dart';
@@ -20,6 +21,10 @@ import 'handlers.dart' as handlers;
 /// события (`ACTIVE_NODE_CHANGED` и т.п.), которые эмитятся из контроллеров.
 ///
 /// Init: [registerAutomationBridge] в `main()` после bootstrap'а.
+/// Имя события «нативный Stop» (`BoxVpnService.stop` → `VpnPlugin.
+/// notifyStopRequested`). Не команда: остановку native уже выполнил сам.
+const kVpnStopRequestedAction = 'vpn-stop-requested';
+
 void registerAutomationBridge() {
   BoxVpnClient.I.registerAutomationActionHandler(_dispatch);
 }
@@ -37,6 +42,13 @@ void _dispatch(String name, Map<String, dynamic> args) {
   // пробрасываем (native onReceive синхронный, ответа не ждёт).
   Future<void> run() async {
     switch (name) {
+      // Фича 478, ревью после v2.25.1 (M2): нативный Stop (плитка QS, Intent
+      // API §047, Locale-плагин, ярлык) идёт в `BoxVpnService.stop` мимо Dart и
+      // сообщает о себе этим событием. Идущий прогон страховки гасится так
+      // же, как Stop из приложения, — иначе финальный старт поднял бы туннель
+      // вопреки только что высказанному намерению. Без прогона — no-op.
+      case kVpnStopRequestedAction:
+        CoreRejectState.I.cancelRun();
       case 'switch-node':
         await handlers.actionSwitchNode(_str(args, 'tag'), ctx);
       case 'set-group':

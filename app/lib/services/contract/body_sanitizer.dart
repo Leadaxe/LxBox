@@ -848,7 +848,15 @@ final class _Ctx {
           final kept = <dynamic>[];
           for (var i = 0; i < v.length; i++) {
             final e = v[i];
-            if (e is String && !re.hasMatch(e)) {
+            // Нестроковый элемент судится тоже (ревью после v2.25.1, M1).
+            // `item_pattern` стоит только у полей, которые ядро читает как
+            // `Listable[string]`, и число в элементе для него — ошибка
+            // unmarshal на разборе, то есть отказ ВСЕГО конфига, а не узла.
+            // Форма `listable_string` пропускает `String|num` (так пишут
+            // источники), поэтому элемент-число сюда доезжает. Строкой ядро
+            // его не прочтёт — элемент снимается тем же кодом, что и
+            // негодная строка; в код уезжает как написан.
+            if (e is! String || !re.hasMatch(e)) {
               warn(itemCode,
                   path: '$path[$i]', value: e, secret: f.secret);
               continue;

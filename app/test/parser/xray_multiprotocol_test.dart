@@ -219,8 +219,14 @@ void main() {
           {'remarks': 'X', 'outbounds': obs}
         ])));
 
+    // §514 / контракт 1.1.50 — `wireguard` БОЛЬШЕ НЕ «неподдержанный»: волна
+    // привезла `mappers.xray` этой схемы, и элемент `protocol: "wireguard"`
+    // собирается в узел. Держать его в кейсе про неизвестный протокол значило
+    // бы проверять ОБРАТНОЕ заявленному, поэтому здесь, как и у лаунчера
+    // (фикстуры `unsupported_protocol` корпуса и Go-теста), он заменён на
+    // `trojan-go` — имя, которого не ведёт ни одна секция реестра.
     test('warning висит на соседе по элементу', () {
-      final r = parse([ob('vless', 'v'), ob('wireguard', 'w')]);
+      final r = parse([ob('vless', 'v'), ob('trojan-go', 'w')]);
       expect(r, hasLength(1));
       expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
           hasLength(1));
@@ -229,17 +235,48 @@ void main() {
     test('один warning на протокол, не на каждый outbound', () {
       final r = parse([
         ob('vless', 'v'),
-        ob('wireguard', 'w1'),
-        ob('wireguard', 'w2'),
+        ob('trojan-go', 'w1'),
+        ob('trojan-go', 'w2'),
       ]);
       expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
           hasLength(1));
     });
 
     test('разные протоколы → разные warnings', () {
-      final r = parse([ob('vless', 'v'), ob('wireguard', 'w'), ob('ssh', 's')]);
+      final r = parse([ob('vless', 'v'), ob('trojan-go', 'w'), ob('ssh', 's')]);
       expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
           hasLength(2));
+    });
+
+    test('`protocol: wireguard` СОБИРАЕТСЯ в узел, а не в warning', () {
+      // Пара к замене выше: прежде элемент не опознавался НИ ОДНОЙ секцией и
+      // узел пропадал целиком — притом что все целевые поля у ядра есть.
+      final r = parseAll(decode(jsonEncode([
+        {
+          'remarks': 'wg',
+          'outbounds': [
+            {
+              'tag': 'proxy',
+              'protocol': 'wireguard',
+              'settings': {
+                'secretKey': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+                'address': ['10.0.0.2/32'],
+                'peers': [
+                  {
+                    'endpoint': 'wg.example:51820',
+                    'publicKey':
+                        'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=',
+                    'allowedIPs': ['0.0.0.0/0'],
+                  },
+                ],
+              },
+            },
+          ],
+        }
+      ])));
+      expect(r, hasLength(1));
+      expect(r.single.warnings.whereType<UnsupportedProtocolWarning>(),
+          isEmpty);
     });
 
     test('поддержанные протоколы warnings не порождают', () {

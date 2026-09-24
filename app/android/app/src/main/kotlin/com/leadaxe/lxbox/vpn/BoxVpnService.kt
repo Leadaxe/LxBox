@@ -212,6 +212,12 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
 
         fun stop(context: Context) {
             Log.d(TAG, "[vpn] companion.stop() → sendBroadcast(ACTION_STOP), current status=${currentStatus.name}")
+            // Фича 478, ревью после v2.25.1 (M2): это воронка нативных Stop
+            // (плитка QS, ярлык, Intent API §047, Locale-плагин) — мимо Dart.
+            // Идущий прогон страховки о них иначе не узнаёт и финальным
+            // стартом поднимает туннель обратно; особенно в фазе тихого
+            // цикла, где сервиса нет и ACTION_STOP принять некому.
+            VpnPlugin.notifyStopRequested()
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )

@@ -171,7 +171,14 @@ class _NotificationTile extends StatelessWidget {
     // Подстановки несёт только RegistryWarning: у рукописного класса свои
     // поля, и текст он собрал сам. Тексты реестра для его кода при этом
     // остаются осмысленными — они про код, а не про конкретное значение.
-    final w = warning;
+    //
+    // §511 l1 — значение секретного поля (атрибут `secret` реестра) маскируется
+    // здесь, в общем компоненте: карточку открывают список подписки, Servers,
+    // Diagnostics и главный экран, а не только лист отказа ввода.
+    final w = switch (warning) {
+      final RegistryWarning r => r.withSecretValueMasked(),
+      final other => other,
+    };
     final subst = w is RegistryWarning ? w : null;
     final path = subst?.path;
     final detail = known
@@ -195,7 +202,7 @@ class _NotificationTile extends StatelessWidget {
       childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       expandedCrossAxisAlignment: CrossAxisAlignment.start,
       title: Text(
-        warning.message(),
+        w.message(),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodyMedium?.copyWith(color: color),

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
 import '../app_log.dart';
@@ -80,8 +81,18 @@ class ParseResult {
   final String rawBody;
   final Map<String, String> headers;
 
+  /// §506 — ПРИЧИНЫ отбраковки записей тела (`parseAll(dropped:)`). Раньше
+  /// `parseFromSource` звал `parseAll` без этого аргумента, и на прод-пути
+  /// подписки причины не собирались вовсе: их видел только конформанс-раннер
+  /// корпуса. Из-за этого «0 серверов» приходило к пользователю без слова о
+  /// том, почему, — даже когда причина у разбора была.
+  final List<NodeWarning> dropped;
+
   const ParseResult(this.nodes, this.decoded,
-      [this.meta, this.rawBody = '', this.headers = const {}]);
+      [this.meta,
+      this.rawBody = '',
+      this.headers = const {},
+      this.dropped = const []]);
 }
 
 /// Fetch + decode + parse — верхнеуровневый pipeline одного источника (§3.1).
@@ -106,7 +117,9 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
     // JSON узла (`NodeSpec.emit`), а не над текстом тела, и применяются в
     // контроллере уже после парсинга. Так одно правило работает для всех
     // форматов подписки (URI-строки / Xray-JSON / INI).
-    final nodes = parseAll(decoded);
+    // §506 — причины собираются и на прод-пути: см. [ParseResult.dropped].
+    final dropped = <NodeWarning>[];
+    final nodes = parseAll(decoded, dropped: dropped);
     // §435 / контракт ## 13 (норма E1, 14.09.2026) — секции у узлов подписки
     // не сохраняются: поле есть только у свободных узлов. Сторона сообщает
     // уровнем info без кода контракта: связка, извлечённая парсером из тела
@@ -125,7 +138,8 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
             'ignored, sections apply to free nodes only');
       }
     }
-    return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
+    return ParseResult(
+        nodes, decoded, meta, fetch.body, fetch.headers, dropped);
   } finally {
     if (owned) c.close();
   }

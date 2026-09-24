@@ -224,21 +224,6 @@ String newUuidV4() {
       '${h(10)}${h(11)}${h(12)}${h(13)}${h(14)}${h(15)}';
 }
 
-/// Нормализация insecure-флага: `insecure`, `allowInsecure`, `allowinsecure`,
-/// `skip-cert-verify` → bool. Значения `1`, `true`, `yes`.
-bool isTlsInsecure(Map<String, String> q) {
-  for (final key in [
-    'insecure',
-    'allowInsecure',
-    'allowinsecure',
-    'allow_insecure',
-    'skip-cert-verify',
-  ]) {
-    final v = (q[key] ?? '').toLowerCase().trim();
-    if (v == '1' || v == 'true' || v == 'yes') return true;
-  }
-  return false;
-}
 
 /// Allow-list нормализации VLESS/VMess `packetEncoding` к sing-box словарю.
 ///
@@ -454,16 +439,6 @@ String normalizeRealityShortId(String s) {
   return (out.length > 16 || out.length.isOdd) ? '' : out;
 }
 
-/// SPEC 103 `reality_short_id_invalid` — сырое значение `sid` будет
-/// деградировано (не-hex вычищен / всё значение снято). Зеркало Go
-/// `realityShortIDWouldDegrade` (parse_warnings.go:72): непустое сырое
-/// значение, чья нормализация не совпала с `lower(trim(raw))`. Отдельный
-/// предикат, а не флаг из [normalizeRealityShortId], потому что код обязан
-/// встать ДО нормализации — после неё исходного значения уже нет.
-bool realityShortIdWouldDegrade(String raw) {
-  if (raw.isEmpty) return false;
-  return normalizeRealityShortId(raw) != raw.trim().toLowerCase();
-}
 
 /// SPEC 103 D-024 — bare integer (трактуется как секунды) → sing-box
 /// duration string (`"30"` → `"30s"`); значение, уже несущее суффикс единицы

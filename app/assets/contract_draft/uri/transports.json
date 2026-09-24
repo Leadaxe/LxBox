@@ -73,36 +73,6 @@
           },
           "emit_as": "raw",
           "_why_emit_as": "§480 W8 / синк 1.1.37 — `emit_as: raw`: булев уезжает в ссылку СЛОВОМ `true`, а не `1`. Так писал рукописный эмит, так пишет Xray, и так его читают чужие клиенты. Реестр это объявление СНЯЛ (контракт 1.1.36): у лаунчера словом пишется ЛЮБОЙ необъявленный булев, цифру даёт только явный `emit_as: bool01`, — то есть ему объявлять нечего. У нас умолчание ОБРАТНОЕ (цифра), и без этого ключа записи уехали бы `noGRPCHeader=1`. По типу (`bool_spelled`) это решать нельзя: у лаунчера `bool` и `bool_spelled` на выходе неразличимы, а привязка к типу сменила бы вид ссылок tuic (`reduce_rtt=1` → `=true`). Запись скопирована из реестра ЦЕЛИКОМ: оверлей замещает запись, а не сливает её поля, и оставь мы один `emit_as`, запись потеряла бы source и умерла."
-        },
-        "sessionPlacement": {
-          "source": [
-            "extra.sessionPlacement",
-            "extra.session_placement",
-            "extra.sessionIDPlacement",
-            "query.sessionPlacement",
-            "query.session_placement",
-            "query.sessionIDPlacement"
-          ],
-          "maps_to": "transport.session_placement",
-          "when": {
-            "transport.type": "xhttp"
-          },
-          "_why": "§508 / лаунчер #131. Xray proto `sessionIDPlacement`; реестр знает только `sessionPlacement`. Канон extra по-прежнему первый. Снять, когда алиас приедет в реестр."
-        },
-        "sessionKey": {
-          "source": [
-            "extra.sessionKey",
-            "extra.session_key",
-            "extra.sessionIDKey",
-            "query.sessionKey",
-            "query.session_key",
-            "query.sessionIDKey"
-          ],
-          "maps_to": "transport.session_key",
-          "when": {
-            "transport.type": "xhttp"
-          },
-          "_why": "§508 / лаунчер #131. Пара к `sessionIDPlacement`: proto `sessionIDKey` → `session_key`. `sessionIDLength`/`sessionIDTable` не маппить."
         }
       }
     },
@@ -197,7 +167,7 @@
           "when": {
             "transport.type": "xhttp"
           },
-          "_why": "§508 / лаунчер #131. Тот же алиас proto-имени, что у URI extra."
+          "_why": "§508 / лаунчер #131. Тот же алиас proto-имени, что у URI extra. §512: ПАРА uri СНЯТА — контракт 1.1.47 привёз алиас дословно тем же набором source. Здесь запись ОСТАЁТСЯ: у неё на два источника больше — ПЛОСКАЯ форма (`xhttpSettings.sessionIDPlacement`/`sessionIDKey` без `extra`), которую реестр объявил только под `extra`."
         },
         "sessionKey": {
           "source": [
@@ -218,7 +188,7 @@
           "when": {
             "transport.type": "xhttp"
           },
-          "_why": "§508 / лаунчер #131. Пара к `sessionIDPlacement`."
+          "_why": "§508 / лаунчер #131. Пара к `sessionIDPlacement`. §512: ПАРА uri СНЯТА — контракт 1.1.47 привёз алиас дословно тем же набором source. Здесь запись ОСТАЁТСЯ: у неё на два источника больше — ПЛОСКАЯ форма (`xhttpSettings.sessionIDPlacement`/`sessionIDKey` без `extra`), которую реестр объявил только под `extra`."
         }
       }
     }

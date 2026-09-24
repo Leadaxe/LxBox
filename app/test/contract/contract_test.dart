@@ -290,9 +290,14 @@ void main() {
 
         if (spec == null) {
           // CANON §4: битая/нераспознанная нода → dropped, подписка живёт.
+          // §512 (контракт 1.1.49 §45.4) — `index` обязателен у КАЖДОЙ
+          // отбраковки: это позиция отвергнутого ЭЛЕМЕНТА в нарезке
+          // `elements` вида источника. У одиночной ссылки элемент один, и
+          // индекс всегда `0` — не «неизвестно», а именно нулевой.
           envelope = _buildEnvelope(dropped: [
             {
               'ref': uri,
+              'index': 0,
               'reason': 'parse_error',
               if (verdict.reason != null) 'code': verdict.reason!.code,
             },

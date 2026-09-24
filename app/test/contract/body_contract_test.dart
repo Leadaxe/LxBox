@@ -52,10 +52,28 @@ String _readCorpusBody(File file) {
 /// Dart зовёт протокол по типу sing-box ("shadowsocks"), канон корпуса — по
 /// имени схемы URI ("ss"). Расхождение историческое и на поведение не влияет,
 /// но подписи узлов без приведения не сходятся.
-String _canonScheme(String protocol) => switch (protocol) {
-      'shadowsocks' => 'ss',
-      _ => protocol,
-    };
+/// §512 (контракт 1.1.49 §45.2) — РОД ГРУППЫ приводится к схеме по
+/// `genus.values` реестра, а не литералом: `singbox_type` группы записан
+/// через черту (`selector|urltest`), и обратного хода «тип → схема» такая
+/// строка не даёт — поэтому `urltest` оставался `urltest`, где контракт ждёт
+/// `group`. Список родов живёт в данных, и новый род приедет реестром.
+String _canonScheme(String protocol) {
+  if (_genusValues().contains(protocol)) return 'group';
+  return switch (protocol) {
+    'shadowsocks' => 'ss',
+    _ => protocol,
+  };
+}
+
+Set<String> _genusValues() {
+  for (final name in ContractRegistry.I.protocolNames) {
+    final proto = ContractRegistry.I.rawProtocol(name);
+    final genus = (proto?['genus'] as Map?)?.cast<String, dynamic>();
+    final values = (genus?['values'] as List?)?.whereType<String>();
+    if (values != null && values.isNotEmpty) return values.toSet();
+  }
+  return const <String>{};
+}
 
 /// Короткая подпись узла для сравнения состава.
 String _nodeSignature(NodeSpec spec) {

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
 import '../app_log.dart';
@@ -64,6 +66,17 @@ class AutoUpdater {
   Timer? _postVpnTimer;
   bool _running = false;
 
+  /// §515 — «идущий проход обязан прекратиться». Ставит [halt], проход
+  /// проверяет между подписками и перед каждой записью. `dispose()` снимал
+  /// только таймеры: уже запущенный `maybeUpdateAll` продолжал идти, а между
+  /// подписками у него [perSubscriptionDelay] (10 с ± 2 с) — окно в десятки
+  /// секунд, в котором подписки ПРЕЖНЕГО слота уезжали в сцену нового.
+  bool _halted = false;
+
+  /// §515 — идёт ли проход. Для тестов и диагностики.
+  @visibleForTesting
+  bool get runningForTesting => _running;
+
   /// Счётчики фейлов только в памяти; сбрасываются при перезапуске app.
   final Map<String, int> _failCounts = {};
 
@@ -95,10 +108,31 @@ class AutoUpdater {
   }
 
   void dispose() {
+    _halted = true;
     _periodicTimer?.cancel();
     _postVpnTimer?.cancel();
     _periodicTimer = null;
     _postVpnTimer = null;
+  }
+
+  /// §515 — прервать апдейтер перед переключением пространства Workspaces.
+  /// Снимает таймеры (как [dispose]) и выставляет флаг отмены: идущий проход
+  /// выходит на ближайшей проверке — между подписками (вместо 10-секундной
+  /// паузы) и перед реакцией на обновление.
+  ///
+  /// Не дожидается `_running == false`: летящий HTTP может висеть до таймаута,
+  /// а переключение слота ждать его не должно. Сам факт «ответ пришёл в чужой
+  /// слот» закрыт барьером поколения в `SubscriptionController._persist`
+  /// (§515) — `halt` лишь сводит штатное окно к нулю.
+  void halt() {
+    _halted = true;
+    _periodicTimer?.cancel();
+    _postVpnTimer?.cancel();
+    _periodicTimer = null;
+    _postVpnTimer = null;
+    if (_running) {
+      AppLog.I.info('AutoUpdater: halt requested — run will stop');
+    }
   }
 
   /// Manual force refresh одной подписки — сбрасывает `failCount`,
@@ -114,6 +148,13 @@ class AutoUpdater {
       {bool force = false}) async {
     if (_running) {
       AppLog.I.debug('AutoUpdater: skip ${trigger.name} — already running');
+      return;
+    }
+    // §515 — после `halt`/`dispose` новых проходов не начинаем: экран уже
+    // отдаёт сцену другому слоту, а `unawaited(maybeUpdateAll(...))` летит из
+    // `resumed`/`vpnStopped` и легко попадает в это окно.
+    if (_halted) {
+      AppLog.I.debug('AutoUpdater: skip ${trigger.name} — halted');
       return;
     }
     // Global toggle: `auto_update_subs` в App Settings → Subscriptions.
@@ -158,6 +199,14 @@ class AutoUpdater {
       var needReload = false;
 
       for (var i = 0; i < candidates.length; i++) {
+        // §515 — проверка ПЕРЕД подпиской: `halt` мог прийти во время фетча
+        // предыдущей или во время паузы между ними. Реакцию (пересборку) при
+        // отмене тоже не применяем — конфиг собирал бы уже чужой экран.
+        if (_halted) {
+          AppLog.I.info('AutoUpdater: run halted after $i of '
+              '${candidates.length} subscriptions');
+          return;
+        }
         final entry = candidates[i];
         final url = (entry.list as SubscriptionServers).url;
         if (_inFlight.contains(url)) continue;
@@ -200,7 +249,7 @@ class AutoUpdater {
         if (i < candidates.length - 1) {
           // 10с ± джиттер ±2с — чтобы два app'а не стучали в одну миллисекунду.
           final jitter = Random().nextInt(4000) - 2000;
-          await Future<void>.delayed(
+          await _sleepInterruptibly(
               perSubscriptionDelay + Duration(milliseconds: jitter));
         }
       }
@@ -212,6 +261,21 @@ class AutoUpdater {
       if (needRebuild) await applyReaction(reload: needReload);
     } finally {
       _running = false;
+    }
+  }
+
+  /// §515 — пауза между подписками, прерываемая [halt]. Один `Future.delayed`
+  /// на 10 с держал окно, в котором переключение пространства уже случилось, а
+  /// проход ещё шёл; нарезка по 250 мс сводит реакцию на отмену к четверти
+  /// секунды, не меняя суммарной задержки для провайдера.
+  static const Duration _sleepSlice = Duration(milliseconds: 250);
+
+  Future<void> _sleepInterruptibly(Duration total) async {
+    var left = total;
+    while (left > Duration.zero && !_halted) {
+      final slice = left < _sleepSlice ? left : _sleepSlice;
+      await Future<void>.delayed(slice);
+      left -= slice;
     }
   }
 

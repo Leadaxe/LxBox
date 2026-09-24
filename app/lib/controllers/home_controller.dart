@@ -805,6 +805,14 @@ class HomeController extends ChangeNotifier
   }
 
   Future<void> stop() async {
+    // Фича 478, ревью после v2.25.1 (M2): любой Stop — жест «туннель не
+    // нужен», и идущий прогон страховки он гасит так же, как кнопка Start в
+    // фазе тихого цикла. Иначе автомат доводил цикл до чистого `check` и
+    // ФИНАЛЬНЫМ стартом поднимал туннель через секунды после Stop. Сюда
+    // сходятся кнопка Stop, `POST /action/stop-vpn` и прочие Dart-пути;
+    // нативные (плитка, Intent API, Locale) приходят событием
+    // `vpn-stop-requested` (`automation_dispatcher.dart`). Без прогона — no-op.
+    CoreRejectState.I.cancelRun();
     _emit(_state.copyWith(busy: true, lastError: null));
     try {
       final ok = await _stopInternal();

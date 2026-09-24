@@ -41,4 +41,5 @@
 - [x] `mapper_sections_*_test.dart` зелёные.
 - [x] `flutter analyze` без новых issues; identity/emit/golden зелёные без
   переписывания фикстур. `test/contract/` + `test/parser/`: ровно шесть
-  заявленных красных корпуса (`naive/empty_host_rejected` и пять `xray/*`).
+  заявленных красных корпуса (`naive/empty_host_rejected` и пять `xray/*`;
+  поимённо и со сверкой 24.09.2026 — фича 480, §12 «Осталось красным»).

@@ -1,9 +1,11 @@
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import 'amnezia_link.dart';
 import 'mappers/uri_pipeline.dart';
 export 'drop_verdict.dart' show XrayDropVerdict;
 
 import 'drop_verdict.dart';
+import 'engine/section_loader.dart' show MapperSections;
 import 'uri_utils.dart';
 import 'uri_parsers/anytls_parser.dart';
 import 'uri_parsers/http_parser.dart';
@@ -38,7 +40,60 @@ export 'uri_parsers/wireguard_parser.dart';
 /// §472 шаг 7 — схемы, у которых конвейер вызывает НЕ `parseUri`, а сам
 /// парсер схемы: у wireguard две формы записи, и вторая
 /// (`awg://<base64 .conf>`, §450) не URI.
-const _kWireguardSchemes = <String>{'wireguard', 'wg', 'awg'};
+///
+/// §512 — ЗАПАСНОЙ набор: основной даёт реестр ([_wireguardSchemes]), потому
+/// что написания перечисляет `detect.scheme_in` секции, а не этот код.
+const _kWireguardSchemesFallback = <String>{'wireguard', 'wg', 'awg'};
+
+/// §512 — написания той же секции wireguard по РЕЕСТРУ: всё, что реестр
+/// переводит в тип тела `wireguard`.
+///
+/// Контракт 1.1.48 добавил третье написание (`amneziawg`), и оно обязано
+/// попасть сюда без правки литерала: у схемы вторая форма
+/// (`<base64 .conf>`), и без этого набора ссылка ушла бы в конвейер, где
+/// payload не URI, вместо `parseWireguardUri`.
+/// Литералы остаются в объединении: `wg://` реестр в `scheme_in` не объявляет
+/// намеренно (разрыв с Go, см. [pipelineSchemes]), а вторая форма у него та же.
+Set<String> _wireguardSchemes() {
+  final out = <String>{..._kWireguardSchemesFallback};
+  for (final s in pipelineSchemes()) {
+    if (registrySchemeType(s) == 'wireguard') out.add(s);
+  }
+  return out;
+}
+
+/// §506 — СЛУЖЕБНЫЕ схемы панелей провайдера: строки тела подписки, которые
+/// узлами не являются вовсе (правила роутинга Happ/Incy: `incy://routing/…`,
+/// `happ://routing/onadd/…`). Их игнор ТИХИЙ — в отличие от незнакомой схемы
+/// узла, о которой пользователю говорят кодом `protocol_unsupported`.
+///
+/// Разделение нужно именно здесь: без него список причин у обычной подписки
+/// Happ заполнялся бы строками, о которых пользователю решать нечего, и
+/// настоящая потеря узла терялась бы среди них.
+///
+/// §512 — ЗАПАСНОЙ набор: основной объявляет реестр (контракт 1.1.48,
+/// `source_kinds.json` → `uri_lines.service_schemes`), см.
+/// [_serviceSchemeCode].
+const _kProviderServiceSchemesFallback = <String>{'incy', 'happ'};
+
+/// §512 — код служебной строки по РЕЕСТРУ, либо `null` — строка служебной не
+/// является.
+///
+/// Реестр 1.1.48 требует хвост `routing/` и даёт info-код
+/// `service_record_ignored`: выпадение перестаёт быть МОЛЧАЛИВЫМ (иначе оно
+/// неотличимо от потерянного узла), но и ошибкой не становится — шторка §500
+/// показывает причины только когда узлов не нашлось ни одного, а у живой
+/// подписки Happ они есть.
+///
+/// Без реестра — прежний тихий игнор по литералам, без кода: `''` означает
+/// «служебная, кода нет».
+String? _serviceSchemeCode(String line, String scheme) {
+  final src = MapperSections.I.documents?.sourceByKind('uri_lines');
+  final code = src?.serviceSchemeCode(line);
+  if (code != null) return code;
+  if (src?.serviceSchemes != null) return null;
+  return _kProviderServiceSchemesFallback.contains(scheme) ? '' : null;
+}
 
 /// Диспетчер по схеме URI. Возвращает NodeSpec или null (skip).
 /// Ошибки структуры (отсутствие host, uuid) — null, не throw.
@@ -50,13 +105,58 @@ const _kWireguardSchemes = <String>{'wireguard', 'wg', 'awg'};
 /// правил в реестр — тоже. Заполняется на схемах конвейера; там, где схема ещё
 /// идёт своим парсером, остаётся пустым, и вызывающий сверяет один `ref`.
 NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
+  final node = _parseUriInner(uri, dropped: dropped);
+  if (node == null) return null;
+  // §514 / контракт 1.1.52 (D133-55) — БАННЕР ПРОВАЙДЕРА, ПРИТВОРИВШИЙСЯ
+  // ССЫЛКОЙ. Проверка идёт ПОСЛЕ разбора, а не по тексту строки: цель надо
+  // прочитать, а до чтения `vless://…@0.0.0.0:1` от годной ссылки ничем не
+  // отличается. Прежде признаком баннера было отсутствие `://`, и обе крупные
+  // панели проходили насквозь, становясь полноценным узлом-пустышкой:
+  // Remnawave при истёкшей подписке отдаёт `vless://…@0.0.0.0:1#⚠ Subscription
+  // expired` с нулевым uuid, 3x-ui — `socks://127.0.0.1:1080#<remark>`, причём
+  // при expired/depleted ЕДИНСТВЕННОЙ записью тела: подписка выглядела рабочей
+  // и одноузловой, и человек видел сервер, которого нет, вместо причины.
+  final banner = _providerBannerWarning(node, uri);
+  if (banner != null) {
+    dropped?.explicit = true;
+    dropped?.reason = banner;
+    return null;
+  }
+  return node;
+}
+
+/// Ремарка после `#` — ТО САМОЕ сообщение, ради которого запись написана
+/// (`message_from: fragment`): выбросить её значило бы отбраковать баннер
+/// вместе с единственным его содержимым. Метка узла к этому моменту уже
+/// раскодирована разбором, поэтому берётся она, а не сырой хвост ссылки.
+RegistryWarning? _providerBannerWarning(NodeSpec node, String uri) {
+  final src = MapperSections.I.documents?.sourceByKind('uri_lines');
+  if (src == null || !src.isBannerTarget(node.server)) return null;
+  final code = src.bannerCode;
+  if (code == null || code.isEmpty) return null;
+  return RegistryWarning(
+    code: code,
+    params: {'message': node.tag},
+    value: node.server,
+  );
+}
+
+NodeSpec? _parseUriInner(String uri, {XrayDropVerdict? dropped}) {
   final t = uri.trim();
   if (t.isEmpty) return null;
   final scheme = t.split('://').first.toLowerCase();
   // vpn:// проверяется своим потолком (maxAmneziaLinkLength): профиль везёт
   // целый конфиг и штатно перерастает общий лимит — под ним ссылка молча
   // терялась, хотя десктоп её принимал (§103 §9.B12).
-  if (scheme != 'vpn' && uri.length > maxURILength) return null;
+  if (scheme != 'vpn' && uri.length > maxURILength) {
+    // §506 — раньше молча: длинная строка исчезала, и «0 узлов» ничем не
+    // отличалось от пустого тела. Код реестра для этого уже есть.
+    dropped?.reason = RegistryWarning(
+      code: 'uri_too_long',
+      params: {'length': '${uri.length}', 'limit': '$maxURILength'},
+    );
+    return null;
+  }
   try {
     // §472 шаг 2 — схемы, переехавшие на конвейер «маппер → санитайзер по
     // реестру → модель», идут им; остальные пока своим парсером. Список
@@ -66,8 +166,19 @@ NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
     // mapper-правил читает его), но маршрутизируются они по-прежнему через
     // `parseWireguardUri`: у схемы есть ВТОРАЯ ФОРМА `awg://<base64 .conf>`
     // (§450), и распознать её надо ДО конвейера — её payload не URI вовсе.
-    if (kPipelineSchemes.contains(scheme) && !_kWireguardSchemes.contains(scheme)) {
+    //
+    // §512 — набор схем даёт РЕЕСТР (`detect.scheme_in` секций `mappers.uri`),
+    // и написание, приехавшее контрактом, работает без правки кода. Ветка
+    // wireguard ниже — по такому же набору, а не по литералам.
+    final wireguardSchemes = _wireguardSchemes();
+    if (pipelineSchemes().contains(scheme) &&
+        !wireguardSchemes.contains(scheme)) {
       return parseUriViaPipeline(t, scheme, dropped: dropped);
+    }
+    // §097 §450 §512 — wireguard/AWG/AmneziaWG: та же endpoint-логика у всех
+    // написаний секции, включая приехавшие реестром.
+    if (wireguardSchemes.contains(scheme)) {
+      return parseWireguardUri(t, dropped: dropped);
     }
     switch (scheme) {
       case 'vless':
@@ -102,15 +213,70 @@ NodeSpec? parseUri(String uri, {XrayDropVerdict? dropped}) {
       case 'proxy+http': // §268 — плюс-алиасы (единообразие с naive+https)
       case 'proxy+https':
         return parseHttpProxy(t);
-      case 'wg':
-      case 'wireguard':
-      case 'awg': // §097 — AmneziaWG2 алиас (та же endpoint-логика, что WG)
-        return parseWireguardUri(t, dropped: dropped);
+      // §512 — ветка wireguard снята: её написания перечисляет реестр, и
+      // маршрут стоит ВЫШЕ switch'а (`_wireguardSchemes`). Литералы `wg`/
+      // `wireguard`/`awg` здесь были четвёртой копией того же списка.
       case 'masque': // §130 — MASQUE-WARP (CONNECT-IP)
         return parseMasqueUri(t);
       case 'vpn': // §103 §9.B12 — Amnezia vpn:// строкой внутри URI-списка
-        return parseAmneziaVpnUri(t);
+        final n = parseAmneziaVpnUri(t, dropped: dropped);
+        // §506 — профиль не разобран: ни контейнера с WG/AWG, ни голого
+        // `.conf`. Причину назвать нечем, кроме рода тела, — но молчать
+        // нельзя: строка была узнана как ссылка на профиль.
+        //
+        // §512 (контракт 1.1.49, CANON §4.1) — код `form_unrecognized`, а НЕ
+        // `protocol_unsupported`: схему `vpn` секция ведёт, и протокол тут при
+        // чём не был — не раскрылась ОБОЛОЧКА (битый base64, обрезанный или
+        // раздутый payload), то есть ни одна форма секции текст не прочитала.
+        if (n == null && dropped != null && dropped.reason == null) {
+          dropped.reason = const RegistryWarning(
+            code: 'form_unrecognized',
+            params: {'scheme': 'vpn'},
+          );
+        }
+        return n;
       default:
+        // §506 — СЛУЖЕБНЫЕ строки провайдера: не узлы по смыслу, и код
+        // «схема не поддержана» на них был бы ложной тревогой. Панели Happ /
+        // Incy кладут их в тело подписки рядом с узлами (правила роутинга,
+        // баннеры), поэтому игнор тихий и намеренный.
+        //
+        // §512 — набор и код объявляет РЕЕСТР (1.1.48). Код info, а не
+        // молчание: выпадение обязано быть названным, иначе оно неотличимо от
+        // потерянного узла. Шума в UI это не даёт — шторка §500 показывает
+        // причины только когда не нашлось НИ ОДНОГО узла.
+        final serviceCode = _serviceSchemeCode(t, scheme);
+        if (serviceCode != null) {
+          if (serviceCode.isNotEmpty) {
+            dropped?.reason = RegistryWarning(
+              code: serviceCode,
+              params: {'scheme': scheme},
+              value: scheme,
+            );
+          }
+          return null;
+        }
+        // §506 — строка БЕЗ схемы вовсе (`split('://')` отдал её целиком):
+        // это не «протокол не поддержан», а «ввод не распознан», и код о
+        // протоколе назвал бы мусор именем протокола. Молчим, как и §500:
+        // причины нет, потому что узла тут никто и не обещал.
+        if (!t.contains('://')) return null;
+        // §506 — незнакомая схема: раньше `return null` молча, и строка
+        // исчезала без следа (4 строки `amneziawg://` из подписки — вход D
+        // диагностики). Схему называем в `value`: пользователю нужно знать
+        // ИМЕННО её, чтобы спросить провайдера.
+        //
+        // §512 (контракт 1.1.49, CANON §4.1) — граница двух кодов
+        // непрочитанного: `scheme_unsupported` СТРОКЕ формы `xxx://`, схему
+        // которой не ведёт ни одна секция реестра (это ровно наш случай), а
+        // `protocol_unsupported` — записи, чей ТИП неизвестен внутри
+        // опознанного тела (Xray/sing-box). До 1.1.49 второй код стоял и
+        // здесь, то есть о схеме сообщалось словом «протокол».
+        dropped?.reason = RegistryWarning(
+          code: 'scheme_unsupported',
+          params: {'scheme': scheme},
+          value: scheme,
+        );
         return null;
     }
   } catch (_) {

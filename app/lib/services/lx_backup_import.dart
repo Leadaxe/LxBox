@@ -96,6 +96,7 @@ class LxImportPlan {
     required this.appliedChains,
     required this.rules,
     this.dns,
+    this.sourceOrder = const [],
   });
 
   /// Текст файла: запись пересчитывает план по свежему приёмнику.
@@ -140,6 +141,12 @@ class LxImportPlan {
 
   /// §393 B9 + §441 — DNS после слияния; `null` — секции DNS в файле нет.
   final DnsBackupApply? dns;
+
+  /// §511 m2 — заведённые импортом источники и цепочки в порядке `sources[]`
+  /// файла (`id:…` / `chain:…`). Подписки со списками и цепочки пишутся
+  /// разными сейверами, и без этой перестановки смешанный порядок файла
+  /// схлопывался в «цепочки, потом источники».
+  final List<String> sourceOrder;
 }
 
 /// Итог записи плана: для строки результата на экране.
@@ -339,7 +346,31 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
         .length,
     rules: rules,
     dns: dns,
+    sourceOrder: _importedSourceOrder(
+      srvMerge.added,
+      decoded.chainPositions,
+      acceptedChainTags,
+    ),
   );
+}
+
+/// §511 m2 — ключи заведённых импортом записей по месту в файле.
+List<String> _importedSourceOrder(
+  Map<String, int> addedLists,
+  Map<String, int> chainPositions,
+  Set<String> acceptedChains,
+) {
+  final placed = <(int, String)>[
+    for (final e in addedLists.entries)
+      (e.value, SettingsStorage.sourceKeyForId(e.key)),
+    for (final e in chainPositions.entries)
+      if (acceptedChains.contains(e.key))
+        (e.value, SettingsStorage.sourceKeyForChain(e.key)),
+  ]..sort((a, b) {
+      final byPos = a.$1.compareTo(b.$1);
+      return byPos != 0 ? byPos : a.$2.compareTo(b.$2);
+    });
+  return [for (final (_, key) in placed) key];
 }
 
 /// Импорт LX Backup в хранение: снимок приёмника, план, запись.
@@ -398,12 +429,28 @@ class LxBackupImportService {
     await SettingsStorage.saveCustomRules(plan.rules);
 
     final settings = await _applySections(plan);
+    await _placeImportedSources(plan.sourceOrder);
     return (
       file: file,
       appliedDirections: plan.appliedDirections,
       appliedChains: plan.appliedChains,
       appliedSettings: settings,
     );
+  }
+
+  /// §511 m2 — заведённые импортом записи встают в `sources[]` в порядке
+  /// файла: цепочки пишет `setChains`, источники — `saveServerLists`, и без
+  /// перестановки новые цепочки оказывались перед новыми источниками.
+  /// Прочие записи приёмника остаются в своих слотах.
+  Future<void> _placeImportedSources(List<String> order) async {
+    if (order.length < 2) return;
+    final present = (await SettingsStorage.getSourceKeys()).toSet();
+    final keys = [
+      for (final k in order)
+        if (present.contains(k)) k,
+    ];
+    if (keys.length < 2) return;
+    await SettingsStorage.reorderSources(keys);
   }
 
   /// §393 B6-B9 — остальные секции. Возвращает число применённых сущностей.

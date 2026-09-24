@@ -194,7 +194,7 @@ sing-box-схемой значило бы выдать `unknown_key` на каж
 
 | Файл | Что держит |
 |---|---|
-| `uri_mapper.dart` | Интерфейс: `UriMapping {body, label, warnings, wsEarlyDataHeaderImplicit}` и `typedef UriMapper = UriMapping? Function(Uri)`. Граница записана здесь же: маппер не заводит предупреждений О ЗНАЧЕНИИ, только о переводе, который что-то потерял или переложил |
+| `uri_mapper.dart` | Интерфейс: `UriMapping {body, label, warnings, wsEarlyDataHeaderImplicit}` и `typedef UriMapper = UriMapping? Function(Uri)` (так на шагах 2–3; с шага 4 — `Function(String uri)`, исходный текст ссылки, см. §10.1). Граница записана здесь же: маппер не заводит предупреждений О ЗНАЧЕНИИ, только о переводе, который что-то потерял или переложил |
 | `common_parts.dart` | Общие части В ФОРМЕ КАРТЫ: `tlsMapFromQuery`, `transportMapFromQuery`, `insecureFromQuery`, `tcpKeepAliveMapFromQuery`, `utlsSpellingToFamily`. Различия схем — аргументы (`plaintextPorts`, `fpAliases`, `defaultFingerprint`, `reality`), а не ветки по схеме внутри: шаг 3 берёт их для vless как есть |
 | `trojan_mapper.dart` | Словарь именно trojan: пароль из userinfo, порт 443, отсутствие REALITY, `fp` без алиаса `fingerprint`, TLS включён по умолчанию |
 | `uri_pipeline.dart` | Конвейер: маппер → санитайзер → `parseSingboxEntry`; список переехавших схем; отметка «разобран конвейером» |

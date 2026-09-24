@@ -27,6 +27,10 @@ class Router {
     _routes.add(_Route(prefix, handler));
   }
 
+  /// Смонтированные префиксы в порядке `mount` — для сверки `/help` с
+  /// роутером (обе формы `/help` обязаны описывать один роутер).
+  List<String> get prefixes => [for (final r in _routes) r.prefix];
+
   /// Найти handler для path'а или null если не замаунчен.
   Handler? resolve(String path) {
     _Route? best;

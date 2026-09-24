@@ -3,12 +3,12 @@
 L×Box parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
 
 **Source code (Parser v2, spec 026):**
-- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — the URI formats of all 12 protocols (vless, vmess, trojan, shadowsocks, hysteria2, naive, tuic, ssh, socks, http, wireguard/awg, masque)
+- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — the scheme dispatcher. The **set of schemes comes from the registry**, not from literals in the code (§512): it is the union of `detect.scheme_in` over every `mappers.uri` section in [`app/contract/registry/protocols/*.json`](../app/contract/registry/protocols), so a spelling that arrives with a contract works without a code change — `amneziawg://` (contract 1.1.48) was the first such case. Covered today: vless, vmess, trojan, shadowsocks, hysteria2, naive, tuic, ssh, socks, http, anytls, wireguard/awg/amneziawg, masque
 - [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — parsing `TransportSpec`, native XHTTP (§097, the full parameter set in §127)
 - [`app/lib/services/parser/json_parsers.dart`](../app/lib/services/parser/json_parsers.dart) — `parseSingboxEntry`, `parseXrayOutbound`
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
-- [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`
+- [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`. `toUri()` is **not** implemented per variant: every variant delegates to `uriViaEngineRequired`, which writes the link through the section engine (the emit rules live in the registry). Tailscale is the one exception — `toUriTailscale`, because the node has no link form of its own
 
 **Sanitisers and guards.** Every place where a value is dropped, normalised,
 defaulted or degraded so the core does not fail — the full registry with
@@ -157,7 +157,7 @@ vless://UUID@host:port?query_params#label
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
 | Host | `host` | WebSocket Host header / HTTP host |
 | Service name | `serviceName` or `service_name` | gRPC service name, passed to the core **verbatim** (§468, contract 1.1.3, core `v1.14.1-lx.8`+). A leading `/` makes the value a ready-made request path in Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the *stream* name and drops a `\|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` it is a service name — one escaped segment plus the core's own `/Tun` (`a/b` → `/a%2Fb/Tun`). The §464 translation `/<service>/Tun` → `<service>` was removed with the lx.8 pin: it only ever fixed the single-segment form and would now strip a `/` the core expects. Note that the URI parser percent-decodes `serviceName`, so a `%2F` inside a segment becomes a separator after parsing — exactly as in Xray |
-| Header type | `headerType` | When `http` with `type=tcp`/`raw`, creates HTTP transport |
+| Header type | `headerType` | **Drops the node** with `transport_header_unsupported` when it names real obfuscation (§514, contract 1.1.52, D133-58). Until 1.1.52 the value became `transport.type: "http"`, which is a *wrong* mapping, not an approximate one: sing-box `http` is the HTTP/2 transport — a different protocol on the wire — while Xray's camouflage keeps the transport as TCP and only fakes the first packet. A server expecting camouflage received an h2 handshake and closed the connection: the node looked healthy and never worked. `none` and empty mean *no* camouflage and are silent |
 | Packet encoding | `packetEncoding` (case-insensitive) | An allow-list of `xudp` / `packetaddr`. The xray-style `none`, and any garbage, is dropped silently — sing-box `NewOutbound` accepts only those two values, and anything else panics inside libbox. |
 | Encryption | `encryption` | The post-quantum layer (§335, core SPEC 032). Its **shape** is checked against the registry, and a value that fails **drops the node** (§477, contract 1.1.9) — see the note below. |
 | Insecure | `insecure`, `allowInsecure` | Skip certificate verification |
@@ -197,7 +197,7 @@ vless://UUID@host:port?query_params#label
 | Type | Query `type=` | sing-box transport |
 |------|---------------|-------------------|
 | TCP (raw) | `tcp`, `raw`, empty | No transport block |
-| TCP + HTTP headers | `tcp`/`raw` + `headerType=http` | `{"type": "http", "path": ..., "host": [...]}` |
+| TCP + HTTP headers | `tcp`/`raw` + `headerType=http` | **No node** — dropped with `transport_header_unsupported` (§514). The Xray JSON spellings `tcpSettings.header.type` and `rawSettings.header.type` behave identically; before 1.1.52 that form was lost in complete silence and the node was assembled as plain TCP |
 | WebSocket | `ws` | `{"type": "ws", "path": ..., "headers": {"Host": ...}}` — a `?ed=N` in the path becomes `max_early_data` (§303, see the note below) |
 | gRPC | `grpc` | `{"type": "grpc", "service_name": ...}` |
 | HTTP/2 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
@@ -676,7 +676,7 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 - An **empty host rejects the node** (§463, contract §24.6). Up to that point `naive+https://` stayed a live node with `server: ""`, on the premise that the Go side only validates a non-empty hostname for vless/trojan/ssh/tuic/anytls. The premise was wrong: the core answers an empty server address with a fatal for the *whole* config (`invalid server address`), so a single such node in a subscription left the user with no VPN at all.
 - The naive outbound in sing-box rejects `alpn`, `insecure`, `disable_sni`, `utls`, `reality`, `min/max_version`, `cipher_suites`, `curve_preferences`, `client_*`, `fragment`, `kernel_*`. The parser deliberately leaves them unset. What naive **does** accept on top of `enabled`/`server_name` is `certificate` (PEM, string or array — its own trusted root, fed to cronet) and `certificate_path`; both survive the JSON round-trip since §454 (issue #140). The pin `certificate_public_key_sha256` is silently ignored by naive and therefore dropped.
 - `network`/`udp_over_tcp`/`quic` fields are **not** emitted in v1 — the URI standard does not carry them and naive QUIC mode is deferred (see spec 037 §10).
-- **A single userinfo without a colon is the password**, not the username (§465, contract §24.2 item 7.3). Until then the rule was the opposite (SPEC 103 item 6, mirroring Go's `url.User.Username()`), and it contradicted every emitter in sight: NekoBox, NaiveGUI and the Go share-URI writer all put the password in that slot, as does `toUriNaive` here — so a link the app handed out came back with the password read as a login, and the node authenticated with none. The colon is what tells the two apart: `pass@host` is password-only, `user:@host` is username-only, `user:pass@host` is both. The emitter keeps that colon for the username-only form, so `parseUri(spec.toUri())` returns the same credentials for all three.
+- **A single userinfo without a colon is the password**, not the username (§465, contract §24.2 item 7.3). Until then the rule was the opposite (SPEC 103 item 6, mirroring Go's `url.User.Username()`), and it contradicted every emitter in sight: NekoBox, NaiveGUI and the Go share-URI writer all put the password in that slot, as does this app's own link writer (the naive `emit` rules of the registry section; a separate `toUriNaive` no longer exists) — so a link the app handed out came back with the password read as a login, and the node authenticated with none. The colon is what tells the two apart: `pass@host` is password-only, `user:@host` is username-only, `user:pass@host` is both. The emitter keeps that colon for the username-only form, so `parseUri(spec.toUri())` returns the same credentials for all three.
 - `extra_headers` keys are sorted lexicographically when emitted to JSON or back to URI form, for deterministic round-trip.
 - `padding` is silently dropped because sing-box has no corresponding option.
 
@@ -911,7 +911,7 @@ and **443** respectively.
 | SNI | `sni` / `peer` / `host` | `proxy-https://` only; the default is the host (the trojan convention, `registry/tls.json` → `blocks.uri_with_host.sni`, included by `registry/protocols/http.json` → `mappers.uri`) |
 | Fingerprint | `fp` | The uTLS fingerprint (`proxy-https://` only) |
 | ALPN | `alpn` | Comma-separated (`proxy-https://` only) |
-| Insecure | `allowInsecure` and its aliases | `tls.insecure` → `InsecureTlsWarning` |
+| Insecure | `allowInsecure` and its aliases | `tls.insecure` → warning code `tls_insecure` |
 
 ### sing-box Outbound Mapping
 
@@ -954,7 +954,7 @@ wireguard://PRIVATE_KEY@host:port?publickey=...&address=...&...#label
 
 The private key is URL-encoded in the userinfo position. Default port: **51820**.
 
-Scheme aliases: `wireguard://`, `wg://` and `awg://` — all three are parsed by the same endpoint logic (§097). The presence of AWG fields in the query (under any of the schemes) makes the node an AmneziaWG one — see [section 8.5](#85-amneziawg-awg-awg2).
+Scheme aliases: `wireguard://`, `wg://`, `awg://` and `amneziawg://` — all four are parsed by the same endpoint logic (§097; `amneziawg://` is the protocol's full name, added by contract 1.1.48 and picked up from the registry rather than from a literal, §512). Panels (rrtrg and neighbours) write the full name, and before 1.1.48 such a link was rejected as an unsupported scheme even though the section could already read every one of its fields. The presence of AWG fields in the query (under any of the schemes) makes the node an AmneziaWG one — see [section 8.5](#85-amneziawg-awg-awg2).
 
 ### Parsed Parameters
 
@@ -1018,7 +1018,7 @@ Every field is **config-only** — nothing is negotiated over the wire, and the 
 awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&s2=0&h1=...&i1=...#label
 ```
 
-`awg://` is a scheme alias for the same endpoint logic as `wireguard://` / `wg://` (section 8). AWG fields are recognised in the query of **any** of the three schemes: with at least one field present the node is AmneziaWG (`WireguardSpec.awg != null`), and with none it is ordinary WG (backward compatible, with unchanged behaviour).
+`awg://` and its full-name form `amneziawg://` are scheme aliases for the same endpoint logic as `wireguard://` / `wg://` (section 8). AWG fields are recognised in the query of **any** of the four schemes: with at least one field present the node is AmneziaWG (`WireguardSpec.awg != null`), and with none it is ordinary WG (backward compatible, with unchanged behaviour).
 
 ### Fields
 
@@ -1218,11 +1218,13 @@ Added in §110 (the task spec [`110`](./spec/tasks/110-amnezia-vpn-link-import.m
 ### Format
 
 ```
-vpn://<base64url( qCompress(JSON, 8) )>
+vpn://<base64url( qCompress(JSON, 8) )>   # a profile bundle
+vpn://<base64url( bare wg-quick / AWG .conf )>   # a bare .conf (contract 1.1.48)
 ```
 
 - base64url **without padding** (the `-_` alphabet, `Base64UrlEncoding | OmitTrailingEquals`); the padded and standard variants are accepted too (`decodeBase64Safe`).
 - `qCompress` is 4 big-endian bytes (the uncompressed length) followed by a standard zlib stream. An uncompressed payload (bare base64 JSON) is the fallback, matching Amnezia's `importController`.
+- **A bare `.conf` under `vpn://`** (the `bare_conf` payload form, contract 1.1.48 / §506): panels put the config itself under the wrapper, with no profile bundle around it. The form is judged by the same predicate as a `.conf` file — the first non-comment section is `[Interface]` — and the body then travels the ordinary wg-quick/AWG path, so the node is identical to the one the same `.conf` produces when pasted directly. Previously such a payload went to the qCompress branch, where the first four bytes of the INI were read as a declared length, and the user got zero nodes with a diagnosis about zlib that pointed at the wrong thing.
 - Inside the JSON: `containers[]` → the `awg` / `wireguard` sub-objects → `last_config` (a JSON string; we defensively accept an object too) → `config`, a ready-made WG/AWG INI (section 9). The `$PRIMARY_DNS` / `$SECONDARY_DNS` placeholders are filled in from the root-level `dns1` / `dns2`.
 - AWG 3.x exports (§421: the `amnezia-awg2` container with `protocol_version: "3.1"`) keep the MTU **outside** the INI — in `last_config.mtu` (the string `"1376"`) next to `config`. When `[Interface]` has no `MTU`, an `MTU = N` line is appended to the INI before the INI → URI conversion (one conversion point; an explicit `MTU` in `[Interface]` wins). The AWG 3.x keys themselves travel inside the INI (section 9).
 

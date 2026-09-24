@@ -1,3 +1,4 @@
+import '../../services/l10n/locale_controller.dart';
 import '../../services/parser/body_decoder.dart';
 import '../../services/parser/parse_all.dart';
 import '../../services/subscription/input_helpers.dart';
@@ -29,7 +30,7 @@ ClipboardAnalysis analyzeClipboard(String text) {
     final uri = Uri.tryParse(text);
     return ClipboardAnalysis(
       type: 'subscription',
-      title: 'Subscription URL',
+      title: getLocalText.s("Subscription URL"),
       subtitle: uri?.host ?? text,
     );
   }
@@ -41,7 +42,7 @@ ClipboardAnalysis analyzeClipboard(String text) {
         .firstOrNull ?? '';
     return ClipboardAnalysis(
       type: 'wireguard_config',
-      title: 'WireGuard config',
+      title: getLocalText.s("WireGuard config"),
       subtitle: endpoint.isNotEmpty ? endpoint : '[Interface] + [Peer]',
     );
   }
@@ -58,12 +59,12 @@ ClipboardAnalysis analyzeClipboard(String text) {
       final n = decoded.iniTexts.length;
       return ClipboardAnalysis(
         type: 'amnezia_vpn',
-        title: 'Amnezia VPN config',
+        title: getLocalText.s("Amnezia VPN config"),
         subtitle: '${endpoint.isNotEmpty ? endpoint : "WG/AWG"}'
             '${n > 1 ? " × $n" : ""}',
       );
     }
-    return ClipboardAnalysis(type: 'unknown', title: 'Unknown', subtitle: '');
+    return ClipboardAnalysis(type: 'unknown', title: getLocalText.s("Unknown"), subtitle: '');
   }
   if (isDirectLink(text)) {
     final uri = Uri.tryParse(text);
@@ -72,7 +73,7 @@ ClipboardAnalysis analyzeClipboard(String text) {
     final server = uri != null ? '${uri.host}:${uri.port}' : '';
     return ClipboardAnalysis(
       type: 'direct',
-      title: '$scheme link',
+      title: getLocalText.s("%s link", scheme),
       subtitle: '${label.isNotEmpty ? "$label\n" : ""}$server',
     );
   }
@@ -87,7 +88,7 @@ ClipboardAnalysis analyzeClipboard(String text) {
     if (analysis != null) return analysis;
   }
 
-  return ClipboardAnalysis(type: 'unknown', title: 'Unknown', subtitle: '');
+  return ClipboardAnalysis(type: 'unknown', title: getLocalText.s("Unknown"), subtitle: '');
 }
 
 /// §368 §7.2 — превью JSON-формы. Счётчики берём сухим прогоном парсера, а не
@@ -104,7 +105,7 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
       final tag = map['tag']?.toString() ?? '';
       return ClipboardAnalysis(
         type: 'json_outbound',
-        title: 'Outbound JSON',
+        title: getLocalText.s("Outbound JSON"),
         subtitle: '$type${tag.isNotEmpty ? " — $tag" : ""}',
       );
 
@@ -116,8 +117,9 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
           .toList();
       return ClipboardAnalysis(
         type: 'json_outbound',
-        title: 'Outbound JSON',
-        subtitle: '${list.length} outbounds (${types.join(" + ")})',
+        title: getLocalText.s("Outbound JSON"),
+        subtitle: getLocalText.plural(
+            "%1\$d outbounds (%2\$s)", list.length, types.join(" + ")),
       );
 
     case SourceKind.singboxConfig:
@@ -141,11 +143,11 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
 
       return ClipboardAnalysis(
         type: 'singbox_config',
-        title: 'sing-box config',
+        title: getLocalText.s("sing-box config"),
         subtitle: [
-          '${nodes.length - groups} nodes',
-          if (groups > 0) '$groups groups',
-          if (chained > 0) '$chained chained',
+          getLocalText.plural("%d nodes", nodes.length - groups),
+          if (groups > 0) getLocalText.plural("%d groups", groups),
+          if (chained > 0) getLocalText.plural("%d chained", chained),
         ].join(' · '),
         notImported: ignored,
       );
@@ -162,8 +164,8 @@ ClipboardAnalysis? _analyzeJson(JsonConfig j) {
       final count = list.isNotEmpty ? list.length : parseAll(j).length;
       return ClipboardAnalysis(
         type: 'json_outbound',
-        title: 'Xray config',
-        subtitle: '$count elements',
+        title: getLocalText.s("Xray config"),
+        subtitle: getLocalText.plural("%d elements", count),
       );
 
     // Clash, нераспознанный JSON и вид, о котором код не знает: превью не

@@ -89,6 +89,8 @@ auth), а не факт, что за границей всё открыто.
 - [Settings writes — `/settings/*`](#settings-writes--settings)
 - [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
+- [Backup — `/backup/*`](#backup--backup)
+- [Diagnostics — `/diag/*` (§038)](#diagnostics--diag-038)
 - [Support feed — `/support/*`](#support-feed--support)
 - [Profiler — `/profiler/*`](#profiler--profiler)
 - [Common errors](#common-errors)
@@ -229,7 +231,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/start-vpn` | — | `runCoreRejectGuard(guard=false)` → прежний `home.start()` через Activity (может показать consent-диалог), **без** цикла страховки. Публичный Intent API (§047) этот путь не зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую |
 | `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start, но реальные старты — headless (`startVpnHeadless`, не Activity) → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
 | `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig`: с телом запроса проверяет **этот** JSON; без тела — **текущий собранный** конфиг на диске (не пересобранный на лету). Та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает CANON §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
-| `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра) |
+| `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра). Идущий прогон страховки (фича 478) гасится, как `POST /core_reject/cancel`: исход `stopped_by_user`, финального старта нет. Так же действуют кнопка Stop, плитка QS, Intent API и Locale |
 | `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
 | `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
 | `POST /action/clear-error` | — | сброс `lastError`-баннера программно (после того как automation обработала/спровоцировала ошибку). → `{"ok":true,"action":"clear-error"}` |
@@ -1376,7 +1378,7 @@ Read-only file access.
 | `GET /files/crash/list` | §316 — архив краш-репортов ядра: `[{name, size, mtime}]`, новые первыми; `[]` если крашей не было |
 | `GET /files/crash` | §316 — `name=<file>` → тело архивного репорта |
 | `GET /files/oom/list` | OOM-снапшоты ядра: `[{name, size, mtime, memory_usage, ...}]`, новые первыми |
-| `GET /files/oom` | `name=<snapshot>` → файл снапшота; по умолчанию `metadata.json`, иначе `&file=heap.pb\|allocs.pb\|goroutine.pb\|go.log\|configuration.json` |
+| `GET /files/oom` | `name=<snapshot>` → файл снапшота; по умолчанию `metadata.json`, иначе `&file=heap.pb\|allocs.pb\|goroutine.pb\|go.log\|configuration.json\|connections.json` (клиент передаёт только basename) |
 
 ```bash
 curl -s -H "$HDR" "$BASE/files/srs/list" | jq
@@ -1613,6 +1615,11 @@ Shape ошибки:
 ```json
 {"error": {"code": "bad_request", "message": "missing query param: tag"}}
 ```
+
+Поля `details` в конверте нет. Единственное дополнение — необязательный
+верхнеуровневый массив `dropped` рядом с `error` у отказа `POST /subs` (400,
+§500): причины отбраковки `{code, path, value, title_en}`, см.
+[Subscriptions CRUD](#subscriptions-crud--subs).
 
 ### Structured tunnel alerts — `state.last_error`
 

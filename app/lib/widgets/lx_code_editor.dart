@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
 
@@ -45,7 +46,7 @@ class LxCodeEditor extends StatelessWidget {
         textColor: cs.onSurface,
         hintTextColor: cs.onSurfaceVariant,
       ),
-      toolbarController: const _LxSelectionToolbarController(),
+      toolbarController: LxSelectionToolbarController(),
       indicatorBuilder: showLineNumbers
           ? (context, editingController, chunkController, notifier) =>
               DefaultCodeLineNumber(
@@ -57,14 +58,40 @@ class LxCodeEditor extends StatelessWidget {
   }
 }
 
-/// Long-press контекстное меню. У re_editor дефолтного нет
-/// (`toolbarController` nullable и без него меню просто не появляется),
-/// поэтому минимальный свой — по образцу example пакета.
-class _LxSelectionToolbarController implements SelectionToolbarController {
-  const _LxSelectionToolbarController();
+/// §517 — контекстное меню выделения через `OverlayEntry`, а не `showMenu`.
+///
+/// Было: `showMenu` = `Navigator.push` модального `PopupRoute`. Маршрут
+/// забирает фокус у редактора и ставит поверх барьер; re_editor снимает
+/// выделение на любом тапе вне текста (`_code_selection.dart:172-176,188-192`
+/// — `_selectPosition` + `hideHandle` + `hideToolbar`), поэтому выделение
+/// схлопывалось в каретку ещё до того, как сработает `onTap` элемента меню
+/// (у `PopupMenuItem` он вызывается ПОСЛЕ закрытия маршрута) — `copy`
+/// копировал не то, что человек выделил.
+///
+/// Стало: оверлей, как и задумано контрактом пакета (`show` получает
+/// `layerLink` и `visibility` именно под `CompositedTransformFollower`).
+/// Оверлей фокус не забирает, `CodeEditorTapRegion` помечает меню «своим»
+/// для редактора — тап по кнопке не считается тапом вне текста, выделение
+/// живо, действия работают с настоящим диапазоном.
+///
+/// Свой класс, а не штатный `MobileSelectionToolbarController`: тот делает
+/// `offset: -renderRect!.topLeft` (`_code_selection.dart:1134`), а
+/// `renderRect` не-null только на мобильной ветке — на desktop/в тестах
+/// `_DesktopSelectionOverlayController.showToolbar` (`:454-461`) передаёт
+/// `null` и штатный контроллер падает.
+class LxSelectionToolbarController implements SelectionToolbarController {
+  LxSelectionToolbarController();
+
+  OverlayEntry? _entry;
+
+  /// Видно ли меню сейчас — для тестов и для идемпотентного `hide`.
+  bool get isShown => _entry != null;
 
   @override
-  void hide(BuildContext context) {}
+  void hide(BuildContext context) {
+    _entry?.remove();
+    _entry = null;
+  }
 
   @override
   void show({
@@ -75,26 +102,99 @@ class _LxSelectionToolbarController implements SelectionToolbarController {
     required LayerLink layerLink,
     required ValueNotifier<bool> visibility,
   }) {
-    const itemSize = Size(180, 40);
-    showMenu<void>(
-      context: context,
-      position: RelativeRect.fromSize(
-        anchors.primaryAnchor & itemSize,
-        MediaQuery.of(context).size,
+    hide(context);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+    // `anchors` — в глобальных координатах, а follower смещается от левого
+    // верхнего угла редактора: вычитаем его. На desktop `renderRect == null`
+    // — тогда смещения нет, follower уже стоит на редакторе.
+    final origin = renderRect?.topLeft ?? Offset.zero;
+    final entry = OverlayEntry(
+      builder: (_) => _LxToolbarOverlay(
+        visibility: visibility,
+        layerLink: layerLink,
+        offset: anchors.primaryAnchor - origin,
+        items: [
+          _LxToolbarItem(getLocalText.s("Cut"), controller.cut),
+          _LxToolbarItem(getLocalText.s("Copy"), controller.copy),
+          _LxToolbarItem(getLocalText.s("Paste"), controller.paste),
+          _LxToolbarItem(getLocalText.s("Select all"), controller.selectAll),
+        ],
+        onDismiss: () => hide(context),
       ),
-      items: [
-        _item(getLocalText.s("Cut"), controller.cut),
-        _item(getLocalText.s("Copy"), controller.copy),
-        _item(getLocalText.s("Paste"), controller.paste),
-        _item(getLocalText.s("Select all"), controller.selectAll),
-      ],
+    );
+    overlay.insert(entry);
+    _entry = entry;
+  }
+}
+
+/// Пункт меню: подпись + действие над живым выделением.
+class _LxToolbarItem {
+  const _LxToolbarItem(this.label, this.onTap);
+  final String label;
+  final VoidCallback onTap;
+}
+
+/// Сам оверлей. `CodeEditorTapRegion` (`groupId: CodeEditor`) — ключевая
+/// деталь: без неё тап по кнопке считается тапом вне редактора и снимает
+/// выделение ровно так же, как раньше это делал барьер модального меню.
+class _LxToolbarOverlay extends StatelessWidget {
+  const _LxToolbarOverlay({
+    required this.visibility,
+    required this.layerLink,
+    required this.offset,
+    required this.items,
+    required this.onDismiss,
+  });
+
+  final ValueListenable<bool> visibility;
+  final LayerLink layerLink;
+  final Offset offset;
+  final List<_LxToolbarItem> items;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return CodeEditorTapRegion(
+      child: ValueListenableBuilder<bool>(
+        valueListenable: visibility,
+        builder: (context, visible, child) =>
+            visible ? child! : const SizedBox.shrink(),
+        child: CompositedTransformFollower(
+          link: layerLink,
+          showWhenUnlinked: false,
+          offset: offset,
+          child: _menu(context),
+        ),
+      ),
     );
   }
 
-  PopupMenuItem<void> _item(String text, VoidCallback onTap) =>
-      PopupMenuItem<void>(
-        onTap: onTap,
-        height: 40,
-        child: Text(text, style: const TextStyle(fontSize: 13)),
-      );
+  Widget _menu(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        elevation: 4,
+        color: cs.surfaceContainerHighest,
+        borderRadius: const BorderRadius.all(Radius.circular(4)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final item in items)
+              TextButton(
+                onPressed: () {
+                  // Порядок важен: действие — над ещё живым выделением,
+                  // и только потом снимаем меню.
+                  item.onTap();
+                  onDismiss();
+                },
+                child: Text(item.label,
+                    style: TextStyle(fontSize: 13, color: cs.onSurface)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -78,16 +78,38 @@ void main() {
     test('обычный WireGuard (не WARP) остаётся 🏠', () {
       expect(defaultEmojiFor(wg()), '🏠'); // тег wg-node, не WARP
     });
+    // §514 / контракт 1.1.52 — цель `127.0.0.1` / `localhost` / `::1` больше
+    // НЕ ПРИЕЗЖАЕТ ссылкой: `parseUri` судит её баннером провайдера и даёт
+    // null (кейс ниже это закрепляет). Поэтому приоритет «локальное > протокол»
+    // проверяется на спеке, собранной напрямую, а не через разбор URI: ветка
+    // 🔁 в defaultEmojiFor жива и нужна — узел с таким адресом попадает в
+    // состав не из подписки, а руками (SOCKS-форма, свой конфиг).
     test('local 127.0.0.1 → 🔁 (приоритет над протоколом)', () {
-      expect(
-          defaultEmojiFor(parse('vless://11111111-1111-1111-1111-111111111111@127.0.0.1:443?security=none#X')),
-          '🔁');
       expect(defaultEmojiFor(wg(server: '127.0.0.1')), '🔁'); // local > WG
     });
     test('localhost → 🔁', () {
-      expect(
-          defaultEmojiFor(parse('vless://11111111-1111-1111-1111-111111111111@localhost:443?security=none#X')),
-          '🔁');
+      expect(defaultEmojiFor(wg(server: 'localhost')), '🔁');
+    });
+    test('::1 → 🔁', () {
+      expect(defaultEmojiFor(wg(server: '::1')), '🔁');
+    });
+    // Сторож нормы, а не эмодзи: кейс выше раньше кормил 🔁 ссылкой на
+    // `127.0.0.1`, и «починка» упавшего теста возвратом такой ссылки тихо
+    // отменила бы отбраковку баннеров (§514). Если ссылка снова начнёт давать
+    // узел — падает здесь, с названной причиной.
+    test('§514 — ссылка на loopback есть баннер провайдера, а не узел', () {
+      final dropped = XrayDropVerdict();
+      final node = parseUri(
+          'vless://11111111-1111-1111-1111-111111111111@127.0.0.1:443'
+          '?security=none#Subscription expired',
+          dropped: dropped);
+      expect(node, isNull);
+      expect(dropped.explicit, isTrue);
+      expect(dropped.reason?.code, 'provider_banner_link');
+      // message_from: fragment — ремарка после `#` есть то самое сообщение,
+      // ради которого запись существует.
+      expect(dropped.reason?.params['message'], 'Subscription expired');
+      expect(dropped.reason?.value, '127.0.0.1');
     });
   });
 

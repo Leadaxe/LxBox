@@ -82,11 +82,10 @@
         "type": "group",
         "tag": "dns_shield",
         "servers": [
-          "google_udp",
-          "opendns_udp",
           "google_doh",
           "google_dot",
           "cloudflare_dot",
+          "opendns_doh",
           "quad9_doh"
         ],
         "mode": "fastest",
@@ -131,6 +130,17 @@
         "tls": {
           "enabled": true,
           "server_name": "safe.dot.dns.yandex.net"
+        }
+      },
+      {
+        "type": "https",
+        "tag": "opendns_doh",
+        "server_port": 443,
+        "server": "208.67.222.222",
+        "path": "/dns-query",
+        "tls": {
+          "enabled": true,
+          "server_name": "dns.opendns.com"
         }
       },
       {

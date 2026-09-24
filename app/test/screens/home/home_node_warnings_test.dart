@@ -83,14 +83,17 @@ void main() {
     });
   });
 
-  group('nodeSpecForConfigTag', () {
+  // §513 — отдельный `nodeSpecForConfigTag` снят: в lib/ его никто не звал,
+  // главный экран ищет узел через `storedNodeOfEmittedTag` (§505). Кейс
+  // «префикс записи → bare-тег» проверяется на реальном пути.
+  group('storedNodeOfEmittedTag', () {
     test('одиночный сервер с префиксом — bare-тег', () {
       final node = awgHomeNode();
       final entries = [userServerEntry(node)];
-      expect(
-        identical(nodeSpecForConfigTag('🏠 awg2-home', entries), node),
-        isTrue,
-      );
+      final found = storedNodeOfEmittedTag('🏠 awg2-home', entries);
+      expect(found, isNotNull);
+      expect(identical(found!.node, node), isTrue);
+      expect(found.stored, isEmpty);
     });
   });
 
@@ -293,6 +296,46 @@ void main() {
         presenter.computeListData(state).topWarningSeverityOf('🏠 awg2-home'),
         WarningSeverity.warning,
       );
+
+      filter.dispose();
+    });
+
+    // §511 M3 — тик статистики даёт новый HomeState с теми же узлами: уровни
+    // не пересчитываются; смена записей или карты сборки — пересчёт.
+    test('уведомления кэшируются по входам, тик статистики их не считает',
+        () {
+      final node = awgHomeNode();
+      final subController = SubscriptionController();
+      subController.debugSetLastEmittedTagMap(const {});
+      subController.debugSetEntries([userServerEntry(node)]);
+
+      final filter = NodeFilterViewModel();
+      final presenter = NodeListPresenter(
+        controller: HomeController(),
+        subController: subController,
+        filter: filter,
+      );
+      final state = HomeState(
+        configRaw: '{}',
+        nodes: const ['🏠 awg2-home'],
+      );
+
+      presenter.computeListData(state);
+      final tick = presenter.computeListData(state.copyWith());
+      expect(presenter.debugWarningsPasses, 1);
+      expect(tick.topWarningSeverityOf('🏠 awg2-home'), WarningSeverity.warning);
+
+      subController.debugSetEntries([userServerEntry(node)]);
+      presenter.computeListData(state.copyWith());
+      expect(presenter.debugWarningsPasses, 2, reason: 'сменились записи');
+
+      subController.debugSetLastEmittedTagMap(const <String, NodeSpec>{});
+      presenter.computeListData(state.copyWith());
+      expect(presenter.debugWarningsPasses, 2,
+          reason: 'та же константная карта — тот же объект');
+      subController.debugSetLastEmittedTagMap({'x': ssNode()});
+      presenter.computeListData(state.copyWith());
+      expect(presenter.debugWarningsPasses, 3, reason: 'новая карта сборки');
 
       filter.dispose();
     });

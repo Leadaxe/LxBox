@@ -1,821 +1,822 @@
 {
- "balancer_group": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"bal\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}], \"routing\": {\"balancers\": [{\"tag\": \"bal\", \"selector\": [\"proxy\"], \"strategy\": {\"type\": \"leastPing\"}}]}, \"burstObservatory\": {\"pingConfig\": {\"destination\": \"http://example.com\", \"interval\": \"30s\"}}}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"bal proxy\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
-    "label": "bal proxy",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "bal proxy"
-   },
-   {
-    "body_json": "{\"tag\":\"bal\",\"type\":\"urltest\",\"outbounds\":[],\"url\":\"http://example.com\",\"interval\":\"30s\",\"tolerance\":50,\"idle_timeout\":\"30m\",\"interrupt_exist_connections\":false}",
-    "chained": null,
-    "identity": "6bcad9425337c77942cdf303122c51655eafcae1c9065e166a703ddb34de9517",
-    "label": "bal",
-    "rawSource": "",
-    "tag": "bal"
-   }
-  ]
- },
- "dialer_chain": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"chain\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\", \"sockopt\": {\"dialerProxy\": \"relay\"}}}, {\"tag\": \"relay\", \"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"r.example\", \"port\": 1080, \"users\": [{\"user\": \"u\", \"pass\": \"p\"}]}]}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"chain\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"detour\":\"relay\"}",
-    "chained": {
-     "identity": "5cc2b374b86dcfe6b62766bc488f237532e75f3ec77b67b94ce52a5e0e056f4e",
-     "tag": "relay"
-    },
-    "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
-    "label": "chain",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"dialerProxy\": \"relay\"\n    }\n  }\n}",
-    "tag": "chain"
-   }
-  ]
- },
- "dialer_chain_vless_relay": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"chain vless\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"a.example\", \"port\": 443, \"password\": \"pw\"}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"sockopt\": {\"dialerProxy\": \"relay\"}}}, {\"tag\": \"relay\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"r.example\", \"port\": 443, \"users\": [{\"id\": \"33333333-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"trojan\",\"tag\":\"chain vless\",\"server\":\"a.example\",\"server_port\":443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"},\"detour\":\"relay\"}",
-    "chained": {
-     "identity": "4039900da6eda77bf8768aa9828f8d40e2faa412b2edbe9917ed40ceaf31d75f",
-     "tag": "relay"
-    },
-    "identity": "57c2029351f68561aeaeadfd9e90b83a8e46d1c7e925e643d9f2bd774dad1791",
-    "label": "chain vless",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"sockopt\": {\n      \"dialerProxy\": \"relay\"\n    }\n  }\n}",
-    "tag": "chain vless"
-   }
-  ]
- },
- "dialer_missing": {
-  "dropped": 1,
-  "input_json": "[{\"remarks\": \"chain ghost\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\", \"sockopt\": {\"dialerProxy\": \"ghost\"}}}]}]",
-  "nodes": []
- },
- "hysteria2": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"hy2\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"hysteria\", \"settings\": {\"address\": \"hy.example\", \"port\": 443, \"version\": 2}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"hy.example\"}, \"hysteriaSettings\": {\"version\": 2, \"auth\": \"pw\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"hysteria2\",\"tag\":\"hy2\",\"server\":\"hy.example\",\"server_port\":443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"hy.example\"}}",
-    "chained": null,
-    "identity": "8734152575dcadf1d35b6c8f8fb6443a31bda3f69d6f11de5cc713804ae8f3fa",
-    "label": "hy2",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"hysteria\",\n  \"settings\": {\n    \"address\": \"hy.example\",\n    \"port\": 443,\n    \"version\": 2\n  },\n  \"streamSettings\": {\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"hy.example\"\n    },\n    \"hysteriaSettings\": {\n      \"version\": 2,\n      \"auth\": \"pw\"\n    }\n  }\n}",
-    "tag": "hy2"
-   }
-  ]
- },
- "hysteria2_fp_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"hy2 fp\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"hysteria\", \"settings\": {\"address\": \"hy.example\", \"port\": 8443}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"hy.example\", \"fingerprint\": \"bogus\"}, \"hysteriaSettings\": {\"version\": 2, \"auth\": \"pw\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"hysteria2\",\"tag\":\"hy2 fp\",\"server\":\"hy.example\",\"server_port\":8443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"hy.example\"}}",
-    "chained": null,
-    "identity": "48695ea02270db1f83e849b569886344d3f97592cac18b2493e7c046af035c30",
-    "label": "hy2 fp",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"hysteria\",\n  \"settings\": {\n    \"address\": \"hy.example\",\n    \"port\": 8443\n  },\n  \"streamSettings\": {\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"hy.example\",\n      \"fingerprint\": \"bogus\"\n    },\n    \"hysteriaSettings\": {\n      \"version\": 2,\n      \"auth\": \"pw\"\n    }\n  }\n}",
-    "tag": "hy2 fp"
-   }
-  ]
- },
- "hysteria_v1_skipped": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"hy1\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"hysteria\", \"settings\": {\"address\": \"hy.example\", \"port\": 443, \"version\": 1}, \"streamSettings\": {\"hysteriaSettings\": {\"version\": 1, \"auth\": \"pw\"}}}]}]",
-  "nodes": []
- },
- "malformed_stream": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"malformed\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": \"none\"}, {\"tag\": \"ok\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"b.example\", \"port\": 443, \"users\": [{\"id\": \"22222222-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"malformed ok\",\"server\":\"b.example\",\"server_port\":443,\"uuid\":\"22222222-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "ccfadff4b2e1bcf53c7d2099fbb980b53bd65bb56b2b718db2d400873013a40e",
-    "label": "malformed ok",
-    "rawSource": "{\n  \"tag\": \"ok\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"b.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"22222222-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "malformed ok"
-   }
-  ]
- },
- "multinode_310": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"multi\", \"outbounds\": [{\"tag\": \"a\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"b\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"b.example\", \"port\": 443, \"users\": [{\"id\": \"22222222-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"c\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"c.example\", \"port\": 443, \"password\": \"pw\"}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"multi a\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
-    "label": "multi a",
-    "rawSource": "{\n  \"tag\": \"a\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "multi a"
-   },
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"multi b\",\"server\":\"b.example\",\"server_port\":443,\"uuid\":\"22222222-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "ccfadff4b2e1bcf53c7d2099fbb980b53bd65bb56b2b718db2d400873013a40e",
-    "label": "multi b",
-    "rawSource": "{\n  \"tag\": \"b\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"b.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"22222222-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "multi b"
-   },
-   {
-    "body_json": "{\"type\":\"trojan\",\"tag\":\"multi c\",\"server\":\"c.example\",\"server_port\":443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"c.example\"}}",
-    "chained": null,
-    "identity": "d1e651adab466d506e11539046600fc8041789c4ade12d1e0c4710c8d09b5dea",
-    "label": "multi c",
-    "rawSource": "{\n  \"tag\": \"c\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"c.example\",\n        \"port\": 443,\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\"\n  }\n}",
-    "tag": "multi c"
-   }
-  ]
- },
- "multinode_same_tag": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"same tag\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"b.example\", \"port\": 443, \"users\": [{\"id\": \"22222222-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"same tag 1\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
-    "label": "same tag 1",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "same tag 1"
-   },
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"same tag 2\",\"server\":\"b.example\",\"server_port\":443,\"uuid\":\"22222222-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "ccfadff4b2e1bcf53c7d2099fbb980b53bd65bb56b2b718db2d400873013a40e",
-    "label": "same tag 2",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"b.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"22222222-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "same tag 2"
-   }
-  ]
- },
- "no_tag_solo": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"\", \"outbounds\": [{\"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 8443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"vless-a.example-8443\",\"server\":\"a.example\",\"server_port\":8443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "11ad42b7a4053918b0fb8e9bfec9766543b5ee62a4ee8e8d7f6917102c6109c7",
-    "label": "",
-    "rawSource": "{\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 8443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "vless-a.example-8443"
-   }
-  ]
- },
- "ss_basic": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"ss\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"shadowsocks\", \"settings\": {\"servers\": [{\"address\": \"s.example\", \"port\": 8388, \"method\": \"aes-256-gcm\", \"password\": \"pw\"}]}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"shadowsocks\",\"tag\":\"ss\",\"server\":\"s.example\",\"server_port\":8388,\"method\":\"aes-256-gcm\",\"password\":\"pw\"}",
-    "chained": null,
-    "identity": "a6e9eb881beb3c7999558bcf115036b0eaa1cab22417a4a0178f7520711b99f4",
-    "label": "ss",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"shadowsocks\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"s.example\",\n        \"port\": 8388,\n        \"method\": \"aes-256-gcm\",\n        \"password\": \"pw\"\n      }\n    ]\n  }\n}",
-    "tag": "ss"
-   }
-  ]
- },
- "ss_method_legacy": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"ss legacy\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"shadowsocks\", \"settings\": {\"servers\": [{\"address\": \"s.example\", \"port\": 8388, \"method\": \"aes-256-cfb\", \"password\": \"pw\"}]}, \"streamSettings\": {\"sockopt\": {\"tcpKeepAliveIdle\": 20}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"shadowsocks\",\"tag\":\"ss legacy\",\"server\":\"s.example\",\"server_port\":8388,\"method\":\"aes-256-cfb\",\"password\":\"pw\",\"tcp_keep_alive\":\"20s\"}",
-    "chained": null,
-    "identity": "2139cf983f711640522b24c92c882f332c7223fd01b6cff07f60edad36f41a38",
-    "label": "ss legacy",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"shadowsocks\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"s.example\",\n        \"port\": 8388,\n        \"method\": \"aes-256-cfb\",\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 20\n    }\n  }\n}",
-    "tag": "ss legacy"
-   }
-  ]
- },
- "trojan_tls": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"trojan\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"t.example\", \"port\": 443, \"password\": \"secret\"}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"t.example\", \"fingerprint\": \"firefox\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"trojan\",\"tag\":\"trojan\",\"server\":\"t.example\",\"server_port\":443,\"password\":\"secret\",\"tls\":{\"enabled\":true,\"server_name\":\"t.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"firefox\"}}}",
-    "chained": null,
-    "identity": "cb86339bcffd53a28c8691acd7566d560d2a8c81ed30697e74caaacc74e6dd09",
-    "label": "trojan",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"t.example\",\n        \"port\": 443,\n        \"password\": \"secret\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"t.example\",\n      \"fingerprint\": \"firefox\"\n    }\n  }\n}",
-    "tag": "trojan"
-   }
-  ]
- },
- "trojan_ws_fp_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"trojan ws\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"t.example\", \"port\": 8443, \"password\": \"pw\"}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"t.example\", \"fingerprint\": \"bogus\"}, \"wsSettings\": {\"path\": \"/tr\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"trojan\",\"tag\":\"trojan ws\",\"server\":\"t.example\",\"server_port\":8443,\"password\":\"pw\",\"transport\":{\"type\":\"ws\",\"path\":\"/tr\"},\"tls\":{\"enabled\":true,\"server_name\":\"t.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
-    "chained": null,
-    "identity": "9511ddef8c3a7aac7eeb2e287f377f53e6ff613c9e987f3da49e861ab7429dea",
-    "label": "trojan ws",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"t.example\",\n        \"port\": 8443,\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"t.example\",\n      \"fingerprint\": \"bogus\"\n    },\n    \"wsSettings\": {\n      \"path\": \"/tr\"\n    }\n  }\n}",
-    "tag": "trojan ws"
-   }
-  ]
- },
- "unsupported_protocol": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"unsup\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"x\", \"protocol\": \"wireguard\", \"settings\": {}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"unsup proxy\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
-    "label": "unsup proxy",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "unsup proxy"
-   }
-  ]
- },
- "vless_alpn_tls": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"alpn\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"alpn\": [\"h2\", \"http/1.1\"]}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"alpn\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "213e856baaed0274764e9cb558115566f09cf6784a5f08b434f0af04ced25758",
-    "label": "alpn",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"alpn\": [\n        \"h2\",\n        \"http/1.1\"\n      ]\n    }\n  }\n}",
-    "tag": "alpn"
-   }
-  ]
- },
- "vless_default_port": {
-  "_delta480": "delta480: дефолт порта 443 на Xray-входе СНЯТ по арбитру — исходникам XTLS/Xray-core (решение владельца 19.09.2026). Дефолта порта у Xray нет ни у одного outbound-протокола: trojan и shadowsocks отбраковывают элемент явно (infra/conf/trojan.go:67-69 «Invalid Trojan port.», infra/conf/shadowsocks.go:223-224,247-248), а vless/vmess/socks/http порт не проверяют вовсе (infra/conf/vless.go:274-283) и собирают узел с нулём, который падает при первом дозвоне. Рабочего узла из элемента без порта Xray не делает НИ В ОДНОЙ ветке. БЫЛО (значения ниже, сняты старым кодом): один узел, server_port 443, identity bef94847…, нуль отбраковок. СТАЛО: ноль узлов и одна отбраковка с причиной `server port is missing or out of range` — той же записью `port` реестра и тем же текстом, что у лаунчера. Значения ниже НЕ переписаны намеренно: файл — снимок «до переезда», а дельта объявлена парно в _expectedChanges теста engine_xray_pilot_test.",
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"defport\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"defport\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "bef94847403c9e714784921126240d4e49f317adfeadf35dec32dc9e53363cfc",
-    "label": "defport",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "defport"
-   }
-  ]
- },
- "vless_encryption_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"enc junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"encryption\": \"totally-bogus\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"enc junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"totally-bogus\"}",
-    "chained": null,
-    "identity": "91f9724e3b651d3edb9bb0003f9980790c459c9387f55c7ee559f476329da81e",
-    "label": "enc junk",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"totally-bogus\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "enc junk"
-   }
-  ]
- },
- "vless_encryption_mlkem": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"enc\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"encryption\": \"mlkem768x25519plus.native.0rtt.AAAABBBBCCCCDDDD\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"enc\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"mlkem768x25519plus.native.0rtt.AAAABBBBCCCCDDDD\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "1a61dd90ec2e341413dfed80d54717df38067b122f929eeeefd53024f56d9ddd",
-    "label": "enc",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"mlkem768x25519plus.native.0rtt.AAAABBBBCCCCDDDD\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    }\n  }\n}",
-    "tag": "enc"
-   }
-  ]
- },
- "vless_encryption_none": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"enc none\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"enc none\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "bef94847403c9e714784921126240d4e49f317adfeadf35dec32dc9e53363cfc",
-    "label": "enc none",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "enc none"
-   }
-  ]
- },
- "vless_flow_deprecated": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"flow old\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-direct\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"flow old\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "213e856baaed0274764e9cb558115566f09cf6784a5f08b434f0af04ced25758",
-    "label": "flow old",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-direct\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    }\n  }\n}",
-    "tag": "flow old"
-   }
-  ]
- },
- "vless_flow_udp443": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"udp443\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 8443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-vision-udp443\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"udp443\",\"server\":\"h.example\",\"server_port\":8443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"flow\":\"xtls-rprx-vision\",\"packet_encoding\":\"xudp\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "c65490016e2b5597c83a2cba2002818d5e41b57d045dcb167a8c2f555d41819d",
-    "label": "udp443",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 8443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-vision-udp443\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    }\n  }\n}",
-    "tag": "udp443"
-   }
-  ]
- },
- "vless_fp_alias": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"fp alias\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"hellochrome_120\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"fp alias\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
-    "chained": null,
-    "identity": "7486318b352af7ae31f84be84d81ef8f62683d2bafc762a45a3545798c97da1f",
-    "label": "fp alias",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"hellochrome_120\"\n    }\n  }\n}",
-    "tag": "fp alias"
-   }
-  ]
- },
- "vless_fp_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"fp junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"bogus-fp\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"fp junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
-    "chained": null,
-    "identity": "7486318b352af7ae31f84be84d81ef8f62683d2bafc762a45a3545798c97da1f",
-    "label": "fp junk",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"bogus-fp\"\n    }\n  }\n}",
-    "tag": "fp junk"
-   }
-  ]
- },
- "vless_grpc": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"grpc\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"grpc\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"grpcSettings\": {\"serviceName\": \"/pkg/Tun\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"grpc\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"grpc\",\"service_name\":\"/pkg/Tun\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "3afedad73b9800e760cecf528e4adc55128e647139ba6880ec099f93df45cbfb",
-    "label": "grpc",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"grpc\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"grpcSettings\": {\n      \"serviceName\": \"/pkg/Tun\"\n    }\n  }\n}",
-    "tag": "grpc"
-   }
-  ]
- },
- "vless_h2": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"h2\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"h2\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"httpSettings\": {\"path\": \"/h2\", \"host\": [\"a.example\", \"b.example\"]}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"h2\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"http\",\"path\":\"/h2\",\"host\":[\"a.example\",\"b.example\"]},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "3d6eb8889d5a2bc46b7d7ceb263e198bc5001c697003e0130cbec2f9a5ae7101",
-    "label": "h2",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"h2\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"httpSettings\": {\n      \"path\": \"/h2\",\n      \"host\": [\n        \"a.example\",\n        \"b.example\"\n      ]\n    }\n  }\n}",
-    "tag": "h2"
-   }
-  ]
- },
- "vless_insecure": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"insecure\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"allowInsecure\": true}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"insecure\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"insecure\":true}}",
-    "chained": null,
-    "identity": "90ae7c7b040340bf9899378d073a410d170f56b42fc8768e0db87f363a4aabfc",
-    "label": "insecure",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"allowInsecure\": true\n    }\n  }\n}",
-    "tag": "insecure"
-   }
-  ]
- },
- "vless_packet_encoding": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"pe\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"pe\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null,
-    "identity": "bef94847403c9e714784921126240d4e49f317adfeadf35dec32dc9e53363cfc",
-    "label": "pe",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "pe"
-   }
-  ]
- },
- "vless_reality_fp_qq": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"reality qq\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"qq\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abcd\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"reality qq\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"qq\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"short_id\":\"abcd\"}}}",
-    "chained": null,
-    "identity": "632a07a821256dceb79deae0f11602e3b18ed8ead2564a17fae5069a5a871f73",
-    "label": "reality qq",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"qq\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abcd\"\n    }\n  }\n}",
-    "tag": "reality qq"
-   }
-  ]
- },
- "vless_reality_key_share": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"ks\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"chrome\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abcd\", \"keyShare\": \"hybrid\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"ks\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"short_id\":\"abcd\"}}}",
-    "chained": null,
-    "identity": "ce255e8fe62a78a2bd548f2a61a992f5b37c5d67efe040baa252e05dfdbdbbb4",
-    "label": "ks",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abcd\",\n      \"keyShare\": \"hybrid\"\n    }\n  }\n}",
-    "tag": "ks"
-   }
-  ]
- },
- "vless_reality_pbk_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"pbk junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"www.example.com\", \"fingerprint\": \"chrome\", \"publicKey\": \"!!!not-base64!!!\", \"shortId\": \"abcd\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"pbk junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"www.example.com\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
-    "chained": null,
-    "identity": "bb929d7f45f234ad550414d1ae8f9451e157dc75723572b658ed7ab97a3ef235",
-    "label": "pbk junk",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"www.example.com\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"!!!not-base64!!!\",\n      \"shortId\": \"abcd\"\n    }\n  }\n}",
-    "tag": "pbk junk"
-   }
-  ]
- },
- "vless_reality_sid_odd": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"sid odd\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"chrome\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abc\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"sid odd\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}}",
-    "chained": null,
-    "identity": "27d4a5cf9ccc00ed8552531be365a3225d053764413f28f8fdb8aeddc2c765aa",
-    "label": "sid odd",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abc\"\n    }\n  }\n}",
-    "tag": "sid odd"
-   }
-  ]
- },
- "vless_reality_vision": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"Xray VLESS Reality\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"example-1.com\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-vision\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"www.example.com\", \"fingerprint\": \"chrome\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abcd1234\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"Xray VLESS Reality\",\"server\":\"example-1.com\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"flow\":\"xtls-rprx-vision\",\"tls\":{\"enabled\":true,\"server_name\":\"www.example.com\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"short_id\":\"abcd1234\"}}}",
-    "chained": null,
-    "identity": "e245cbba950e3d80edb99c05165aa4db9bb4adf356d7fb94e8ff842fa8745ba1",
-    "label": "Xray VLESS Reality",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"example-1.com\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-vision\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"www.example.com\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abcd1234\"\n    }\n  }\n}",
-    "tag": "Xray VLESS Reality"
-   }
-  ]
- },
- "vless_sockopt_keepalive": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"ka\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\", \"sockopt\": {\"tcpKeepAliveIdle\": 30, \"tcpKeepAliveInterval\": 15}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"ka\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tcp_keep_alive\":\"30s\",\"tcp_keep_alive_interval\":\"15s\"}",
-    "chained": null,
-    "identity": "64fc3305c7b67c056c268334bccd261281bec7affb826fadd06c6a31e1f94e0f",
-    "label": "ka",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 30,\n      \"tcpKeepAliveInterval\": 15\n    }\n  }\n}",
-    "tag": "ka"
-   }
-  ]
- },
- "vless_splithttp": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"splithttp\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"splithttp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"splithttpSettings\": {\"path\": \"/sp\", \"mode\": \"stream-one\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"splithttp\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/sp\",\"mode\":\"stream-one\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "ec29054cd69754c02a38545efb1711d2fdb780eef27f6be3c15e08091e6ab88c",
-    "label": "splithttp",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"splithttp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"splithttpSettings\": {\n      \"path\": \"/sp\",\n      \"mode\": \"stream-one\"\n    }\n  }\n}",
-    "tag": "splithttp"
-   }
-  ]
- },
- "vless_vision_with_transport": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"vision+ws\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-vision\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"wsSettings\": {\"path\": \"/ws\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"vision+ws\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/ws\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "83d8a350890cabe29d167063a83c909af180cf398501abff04d2b186150e45d6",
-    "label": "vision+ws",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-vision\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"wsSettings\": {\n      \"path\": \"/ws\"\n    }\n  }\n}",
-    "tag": "vision+ws"
-   }
-  ]
- },
- "vless_ws_ed_fields": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"ws ed fields\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"none\", \"wsSettings\": {\"path\": \"/y\", \"ed\": 1024, \"eh\": \"X-Custom\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"ws ed fields\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/y\",\"max_early_data\":1024,\"early_data_header_name\":\"X-Custom\"}}",
-    "chained": null,
-    "identity": "ebe905f3947083122b2a35240d2bffcf019a57b0c594be59015291242881792d",
-    "label": "ws ed fields",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"none\",\n    \"wsSettings\": {\n      \"path\": \"/y\",\n      \"ed\": 1024,\n      \"eh\": \"X-Custom\"\n    }\n  }\n}",
-    "tag": "ws ed fields"
-   }
-  ]
- },
- "vless_ws_ed_path": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"ws ed\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"wsSettings\": {\"path\": \"/x?ed=2560\", \"headers\": {\"Host\": \"cdn.example\"}}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"ws ed\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\",\"headers\":{\"Host\":\"cdn.example\"},\"max_early_data\":2560,\"early_data_header_name\":\"Sec-WebSocket-Protocol\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "36df484ffad9b78044cb9ee712408d92ec45d8b1e0e7bee662725244ac2e26ce",
-    "label": "ws ed",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"wsSettings\": {\n      \"path\": \"/x?ed=2560\",\n      \"headers\": {\n        \"Host\": \"cdn.example\"\n      }\n    }\n  }\n}",
-    "tag": "ws ed"
-   }
-  ]
- },
- "vless_ws_path_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"pathjunk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"none\", \"wsSettings\": {\"path\": \"/bad%zz\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"pathjunk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/bad%zz\"}}",
-    "chained": null,
-    "identity": "250f2dc7ff6b837dcaef3f5c561103d2a48806a98a64fbf34e4fe1fb6cf65ee8",
-    "label": "pathjunk",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"none\",\n    \"wsSettings\": {\n      \"path\": \"/bad%zz\"\n    }\n  }\n}",
-    "tag": "pathjunk"
-   }
-  ]
- },
- "vless_xhttp": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"xhttp\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"xhttpSettings\": {\"path\": \"/xh\", \"host\": \"x.example\", \"mode\": \"packet-up\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/xh\",\"host\":\"x.example\",\"mode\":\"packet-up\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
-    "chained": null,
-    "identity": "0385901d345d2fc63c91986fcdffda877dff4b04a34d0a78aa4f2d2572db6af9",
-    "label": "xhttp",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"xhttpSettings\": {\n      \"path\": \"/xh\",\n      \"host\": \"x.example\",\n      \"mode\": \"packet-up\"\n    }\n  }\n}",
-    "tag": "xhttp"
-   }
-  ]
- },
- "vless_xhttp_mode_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"xhttp junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"none\", \"xhttpSettings\": {\"path\": \"/xh\", \"mode\": \"bogus-mode\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/xh\"}}",
-    "chained": null,
-    "identity": "c62a02789f26f037906058e554b9771e966e2ad402084bd9e350a6e3f73f7d23",
-    "label": "xhttp junk",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"path\": \"/xh\",\n      \"mode\": \"bogus-mode\"\n    }\n  }\n}",
-    "tag": "xhttp junk"
-   }
-  ]
- },
- "vmess_security_empty": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"vmess sec empty\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vmess\", \"settings\": {\"vnext\": [{\"address\": \"v.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"alterId\": 1}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vmess\",\"tag\":\"vmess sec empty\",\"server\":\"v.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"security\":\"auto\",\"alter_id\":1}",
-    "chained": null,
-    "identity": "b3363e46d8f2b86599484ac08e2ff4314bc302d0264412e3bf2c33e5275e65a7",
-    "label": "vmess sec empty",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vmess\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"v.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"alterId\": 1\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
-    "tag": "vmess sec empty"
-   }
-  ]
- },
- "vmess_security_junk": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"vmess sec junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vmess\", \"settings\": {\"vnext\": [{\"address\": \"v.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"alterId\": 0, \"security\": \"rubbish\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"none\", \"wsSettings\": {\"path\": \"/vm\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vmess\",\"tag\":\"vmess sec junk\",\"server\":\"v.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"security\":\"auto\",\"transport\":{\"type\":\"ws\",\"path\":\"/vm\"}}",
-    "chained": null,
-    "identity": "befd41b77fd3ad3f69129fe5a6a7f4c82738ac2fbd7e66b8bbb601b4a4c0d53b",
-    "label": "vmess sec junk",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vmess\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"v.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"alterId\": 0,\n            \"security\": \"rubbish\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"none\",\n    \"wsSettings\": {\n      \"path\": \"/vm\"\n    }\n  }\n}",
-    "tag": "vmess sec junk"
-   }
-  ]
- },
- "vmess_tls": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\": \"vmess\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vmess\", \"settings\": {\"vnext\": [{\"address\": \"v.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"alterId\": 0, \"security\": \"auto\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"v.example\"}}}]}]",
-  "nodes": [
-   {
-    "body_json": "{\"type\":\"vmess\",\"tag\":\"vmess\",\"server\":\"v.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"security\":\"auto\",\"tls\":{\"enabled\":true,\"server_name\":\"v.example\"}}",
-    "chained": null,
-    "identity": "e9584cf4d2634955039074540ab21e3fa660154012971326db9d5e00993435d2",
-    "label": "vmess",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vmess\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"v.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"alterId\": 0,\n            \"security\": \"auto\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"v.example\"\n    }\n  }\n}",
-    "tag": "vmess"
-   }
-  ]
- },
- "b480_xhttp_full_field_set": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"xhttp full\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"host\":\"h.example\",\"path\":\"/p\",\"mode\":\"packet-up\",\"extra\":{\"xPaddingBytes\":\"100-1000\",\"noGRPCHeader\":true,\"noSSEHeader\":true,\"sessionPlacement\":\"header\",\"sessionKey\":\"X-Session\",\"seqPlacement\":\"query\",\"seqKey\":\"x_seq\",\"uplinkDataPlacement\":\"header\",\"uplinkDataKey\":\"X-Data\",\"uplinkChunkSize\":\"3000-4000\",\"uplinkHTTPMethod\":\"GET\",\"xPaddingObfsMode\":true,\"xPaddingKey\":\"x_padding\",\"xPaddingHeader\":\"X-Padding\",\"xPaddingPlacement\":\"header\",\"xPaddingMethod\":\"tokenish\",\"scMaxEachPostBytes\":\"1000000\",\"scMinPostsIntervalMs\":\"30\",\"scStreamUpServerSecs\":\"20-80\",\"scMaxBufferedPosts\":30,\"xmux\":{\"maxConnections\":\"1\",\"cMaxReuseTimes\":\"5\",\"hMaxRequestTimes\":\"600\",\"hMaxReusableSecs\":\"1800\",\"hKeepAlivePeriod\":30}}}}}]}]",
-  "nodes": [
-   {
-    "identity": "af011fd695a36f9e23fa88813744b68133b3955f18d8b5fb458d3b88a45b9e1a",
-    "tag": "xhttp full",
-    "label": "xhttp full",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"host\": \"h.example\",\n      \"path\": \"/p\",\n      \"mode\": \"packet-up\",\n      \"extra\": {\n        \"xPaddingBytes\": \"100-1000\",\n        \"noGRPCHeader\": true,\n        \"noSSEHeader\": true,\n        \"sessionPlacement\": \"header\",\n        \"sessionKey\": \"X-Session\",\n        \"seqPlacement\": \"query\",\n        \"seqKey\": \"x_seq\",\n        \"uplinkDataPlacement\": \"header\",\n        \"uplinkDataKey\": \"X-Data\",\n        \"uplinkChunkSize\": \"3000-4000\",\n        \"uplinkHTTPMethod\": \"GET\",\n        \"xPaddingObfsMode\": true,\n        \"xPaddingKey\": \"x_padding\",\n        \"xPaddingHeader\": \"X-Padding\",\n        \"xPaddingPlacement\": \"header\",\n        \"xPaddingMethod\": \"tokenish\",\n        \"scMaxEachPostBytes\": \"1000000\",\n        \"scMinPostsIntervalMs\": \"30\",\n        \"scStreamUpServerSecs\": \"20-80\",\n        \"scMaxBufferedPosts\": 30,\n        \"xmux\": {\n          \"maxConnections\": \"1\",\n          \"cMaxReuseTimes\": \"5\",\n          \"hMaxRequestTimes\": \"600\",\n          \"hMaxReusableSecs\": \"1800\",\n          \"hKeepAlivePeriod\": 30\n        }\n      }\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp full\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/p\",\"host\":\"h.example\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"100-1000\",\"no_grpc_header\":true,\"no_sse_header\":true,\"session_placement\":\"header\",\"session_key\":\"X-Session\",\"seq_placement\":\"query\",\"seq_key\":\"x_seq\",\"uplink_data_placement\":\"header\",\"uplink_data_key\":\"X-Data\",\"uplink_chunk_size\":\"3000-4000\",\"uplink_http_method\":\"GET\",\"x_padding_obfs_mode\":true,\"x_padding_key\":\"x_padding\",\"x_padding_header\":\"X-Padding\",\"x_padding_placement\":\"header\",\"x_padding_method\":\"tokenish\",\"sc_max_each_post_bytes\":\"1000000\",\"sc_min_posts_interval_ms\":\"30\",\"sc_stream_up_server_secs\":\"20-80\",\"sc_max_buffered_posts\":30,\"xmux\":{\"max_connections\":\"1\",\"c_max_reuse_times\":\"5\",\"h_max_request_times\":\"600\",\"h_max_reusable_secs\":\"1800\",\"h_keep_alive_period\":30}}}",
-    "chained": null
-   }
-  ]
- },
- "b480_xhttp_snake_case_extra": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"xhttp snake\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"path\":\"/p\",\"mode\":\"packet-up\",\"extra\":{\"x_padding_bytes\":\"50-200\",\"uplink_http_method\":\"GET\",\"sc_max_each_post_bytes\":\"1000000\",\"no_grpc_header\":true,\"xmux\":{\"max_concurrency\":\"16-32\",\"h_keep_alive_period\":30}}}}}]}]",
-  "nodes": [
-   {
-    "identity": "6c54d28351a8095cb7830695636b72075d4182525b0670018945e92e1b4d283c",
-    "tag": "xhttp snake",
-    "label": "xhttp snake",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"path\": \"/p\",\n      \"mode\": \"packet-up\",\n      \"extra\": {\n        \"x_padding_bytes\": \"50-200\",\n        \"uplink_http_method\": \"GET\",\n        \"sc_max_each_post_bytes\": \"1000000\",\n        \"no_grpc_header\": true,\n        \"xmux\": {\n          \"max_concurrency\": \"16-32\",\n          \"h_keep_alive_period\": 30\n        }\n      }\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp snake\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/p\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"50-200\",\"no_grpc_header\":true,\"uplink_http_method\":\"GET\",\"sc_max_each_post_bytes\":\"1000000\",\"xmux\":{\"max_concurrency\":\"16-32\",\"h_keep_alive_period\":30}}}",
-    "chained": null
-   }
-  ]
- },
- "b480_xhttp_splithttp_alias_full": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"splithttp alias\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"splithttp\",\"security\":\"none\",\"splithttpSettings\":{\"host\":\"h.example\",\"path\":\"/p\",\"mode\":\"stream-one\",\"extra\":{\"xPaddingBytes\":\"100-1000\",\"scMaxBufferedPosts\":12,\"xmux\":{\"maxConcurrency\":\"4-8\"}}}}}]}]",
-  "nodes": [
-   {
-    "identity": "fce948adf5104f22eb55374d740bb213348fbf2f83211e87d452b25a67b4a6ee",
-    "tag": "splithttp alias",
-    "label": "splithttp alias",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"splithttp\",\n    \"security\": \"none\",\n    \"splithttpSettings\": {\n      \"host\": \"h.example\",\n      \"path\": \"/p\",\n      \"mode\": \"stream-one\",\n      \"extra\": {\n        \"xPaddingBytes\": \"100-1000\",\n        \"scMaxBufferedPosts\": 12,\n        \"xmux\": {\n          \"maxConcurrency\": \"4-8\"\n        }\n      }\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"splithttp alias\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/p\",\"host\":\"h.example\",\"mode\":\"stream-one\",\"x_padding_bytes\":\"100-1000\",\"sc_max_buffered_posts\":12,\"xmux\":{\"max_concurrency\":\"4-8\"}}}",
-    "chained": null
-   }
-  ]
- },
- "b480_xhttp_extra_beats_flat_field": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"extra wins\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"mode\":\"packet-up\",\"path\":\"/real\",\"host\":\"real.example\",\"xPaddingBytes\":\"10-20\",\"extra\":{\"mode\":\"stream-up\",\"path\":\"/fake\",\"host\":\"fake.example\",\"xPaddingBytes\":\"500-600\"}}}}]}]",
-  "nodes": [
-   {
-    "identity": "ef430c842207e179dfb7fc33cf75f055e694e0a0953221c841563d64e6e92b68",
-    "tag": "extra wins",
-    "label": "extra wins",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"mode\": \"packet-up\",\n      \"path\": \"/real\",\n      \"host\": \"real.example\",\n      \"xPaddingBytes\": \"10-20\",\n      \"extra\": {\n        \"mode\": \"stream-up\",\n        \"path\": \"/fake\",\n        \"host\": \"fake.example\",\n        \"xPaddingBytes\": \"500-600\"\n      }\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"extra wins\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/real\",\"host\":\"real.example\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"500-600\"}}",
-    "chained": null
-   }
-  ]
- },
- "b480_xhttp_empty_extra_member_keeps_flat": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"empty extra\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"mode\":\"packet-up\",\"xPaddingBytes\":\"10-20\",\"xmux\":{\"maxConcurrency\":\"16\"},\"extra\":{\"mode\":\"\",\"xPaddingBytes\":\"\",\"xmux\":{\"maxConcurrency\":\"\"}}}}}]}]",
-  "nodes": [
-   {
-    "identity": "817da44c85873513b4c504ab7e9c6bd3f126f333af781d955b663ea68c127421",
-    "tag": "empty extra",
-    "label": "empty extra",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"mode\": \"packet-up\",\n      \"xPaddingBytes\": \"10-20\",\n      \"xmux\": {\n        \"maxConcurrency\": \"16\"\n      },\n      \"extra\": {\n        \"mode\": \"\",\n        \"xPaddingBytes\": \"\",\n        \"xmux\": {\n          \"maxConcurrency\": \"\"\n        }\n      }\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"empty extra\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"10-20\",\"xmux\":{\"max_concurrency\":\"16\"}}}",
-    "chained": null
-   }
-  ]
- },
- "b480_sockopt_keepalive_positive": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"sockopt positive\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":30,\"tcpKeepAliveInterval\":15}}}]}]",
-  "nodes": [
-   {
-    "identity": "bf9d4fcd029f77e74353a3d638126f91623caeb1f6bb1e8d7eed98d7afb6fe28",
-    "tag": "sockopt positive",
-    "label": "sockopt positive",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 30,\n      \"tcpKeepAliveInterval\": 15\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt positive\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tcp_keep_alive\":\"30s\",\"tcp_keep_alive_interval\":\"15s\"}",
-    "chained": null
-   }
-  ]
- },
- "b480_sockopt_keepalive_zero": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"sockopt zero\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":0,\"tcpKeepAliveInterval\":0}}}]}]",
-  "nodes": [
-   {
-    "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
-    "tag": "sockopt zero",
-    "label": "sockopt zero",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 0,\n      \"tcpKeepAliveInterval\": 0\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt zero\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
-    "chained": null
-   }
-  ]
- },
- "b480_sockopt_keepalive_negative": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"sockopt negative\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":-1}}}]}]",
-  "nodes": [
-   {
-    "identity": "9b0095e14cbe8b83878f738cceb3612af3af8a668bc20f4e95c5eee3b43f67af",
-    "tag": "sockopt negative",
-    "label": "sockopt negative",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": -1\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt negative\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"disable_tcp_keep_alive\":true}",
-    "chained": null
-   }
-  ]
- },
- "b480_sockopt_keepalive_negative_interval": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"sockopt negative interval\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":30,\"tcpKeepAliveInterval\":-5}}}]}]",
-  "nodes": [
-   {
-    "identity": "28f81787345c1fb8d3bf3b1bb0623ad031f8f48aa9f9608ebc999638e30aa6d1",
-    "tag": "sockopt negative interval",
-    "label": "sockopt negative interval",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 30,\n      \"tcpKeepAliveInterval\": -5\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt negative interval\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"disable_tcp_keep_alive\":true,\"tcp_keep_alive\":\"30s\"}",
-    "chained": null
-   }
-  ]
- },
- "b480_ws_ed_path_tail_beats_flat": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"ed both places\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"tls\",\"wsSettings\":{\"path\":\"/x?ed=700\",\"ed\":2560,\"eh\":\"X-Flat\"}}}]}]",
-  "nodes": [
-   {
-    "identity": "2ab42b1d9cae72cd7026e248fb63e4053f6fcbee08dda742644bf21e30048f6f",
-    "tag": "ed both places",
-    "label": "ed both places",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"wsSettings\": {\n      \"path\": \"/x?ed=700\",\n      \"ed\": 2560,\n      \"eh\": \"X-Flat\"\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"ed both places\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\",\"max_early_data\":700,\"early_data_header_name\":\"X-Flat\"},\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"}}",
-    "chained": null
-   }
-  ]
- },
- "b480_ws_eh_without_ed": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"eh alone\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"tls\",\"wsSettings\":{\"path\":\"/x\",\"eh\":\"X-Early\"}}}]}]",
-  "nodes": [
-   {
-    "identity": "b302c2a7c5d01ec3dbdd3c75532a2c7aab423998e7baf87a9793f9fcb8b02e40",
-    "tag": "eh alone",
-    "label": "eh alone",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"wsSettings\": {\n      \"path\": \"/x\",\n      \"eh\": \"X-Early\"\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"eh alone\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\"},\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"}}",
-    "chained": null
-   }
-  ]
- },
- "b480_ws_ed_flat_only": {
-  "dropped": 0,
-  "input_json": "[{\"remarks\":\"ed flat only\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"tls\",\"wsSettings\":{\"path\":\"/x\",\"ed\":1500,\"eh\":\"Sec-WebSocket-Protocol\"}}}]}]",
-  "nodes": [
-   {
-    "identity": "b3c26b72f0617e030e16d68bd24e8544671b5b96e15d6d325344fe2bcd54b01c",
-    "tag": "ed flat only",
-    "label": "ed flat only",
-    "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"wsSettings\": {\n      \"path\": \"/x\",\n      \"ed\": 1500,\n      \"eh\": \"Sec-WebSocket-Protocol\"\n    }\n  }\n}",
-    "body_json": "{\"type\":\"vless\",\"tag\":\"ed flat only\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\",\"max_early_data\":1500,\"early_data_header_name\":\"Sec-WebSocket-Protocol\"},\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"}}",
-    "chained": null
-   }
-  ]
- }
+  "balancer_group": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"bal\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}], \"routing\": {\"balancers\": [{\"tag\": \"bal\", \"selector\": [\"proxy\"], \"strategy\": {\"type\": \"leastPing\"}}]}, \"burstObservatory\": {\"pingConfig\": {\"destination\": \"http://example.com\", \"interval\": \"30s\"}}}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"bal proxy\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
+        "label": "bal proxy",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "bal proxy"
+      },
+      {
+        "body_json": "{\"tag\":\"bal\",\"type\":\"urltest\",\"outbounds\":[],\"url\":\"http://example.com\",\"interval\":\"30s\",\"tolerance\":50,\"idle_timeout\":\"30m\",\"interrupt_exist_connections\":false}",
+        "chained": null,
+        "identity": "6bcad9425337c77942cdf303122c51655eafcae1c9065e166a703ddb34de9517",
+        "label": "bal",
+        "rawSource": "",
+        "tag": "bal"
+      }
+    ]
+  },
+  "dialer_chain": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"chain\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\", \"sockopt\": {\"dialerProxy\": \"relay\"}}}, {\"tag\": \"relay\", \"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"r.example\", \"port\": 1080, \"users\": [{\"user\": \"u\", \"pass\": \"p\"}]}]}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"chain\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"detour\":\"relay\"}",
+        "chained": {
+          "identity": "5cc2b374b86dcfe6b62766bc488f237532e75f3ec77b67b94ce52a5e0e056f4e",
+          "tag": "relay"
+        },
+        "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
+        "label": "chain",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"dialerProxy\": \"relay\"\n    }\n  }\n}",
+        "tag": "chain"
+      }
+    ]
+  },
+  "dialer_chain_vless_relay": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"chain vless\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"a.example\", \"port\": 443, \"password\": \"pw\"}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"sockopt\": {\"dialerProxy\": \"relay\"}}}, {\"tag\": \"relay\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"r.example\", \"port\": 443, \"users\": [{\"id\": \"33333333-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"trojan\",\"tag\":\"chain vless\",\"server\":\"a.example\",\"server_port\":443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"},\"detour\":\"relay\"}",
+        "chained": {
+          "identity": "4039900da6eda77bf8768aa9828f8d40e2faa412b2edbe9917ed40ceaf31d75f",
+          "tag": "relay"
+        },
+        "identity": "57c2029351f68561aeaeadfd9e90b83a8e46d1c7e925e643d9f2bd774dad1791",
+        "label": "chain vless",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"sockopt\": {\n      \"dialerProxy\": \"relay\"\n    }\n  }\n}",
+        "tag": "chain vless"
+      }
+    ]
+  },
+  "dialer_missing": {
+    "dropped": 1,
+    "input_json": "[{\"remarks\": \"chain ghost\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\", \"sockopt\": {\"dialerProxy\": \"ghost\"}}}]}]",
+    "nodes": []
+  },
+  "hysteria2": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"hy2\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"hysteria\", \"settings\": {\"address\": \"hy.example\", \"port\": 443, \"version\": 2}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"hy.example\"}, \"hysteriaSettings\": {\"version\": 2, \"auth\": \"pw\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"hysteria2\",\"tag\":\"hy2\",\"server\":\"hy.example\",\"server_port\":443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"hy.example\"}}",
+        "chained": null,
+        "identity": "8734152575dcadf1d35b6c8f8fb6443a31bda3f69d6f11de5cc713804ae8f3fa",
+        "label": "hy2",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"hysteria\",\n  \"settings\": {\n    \"address\": \"hy.example\",\n    \"port\": 443,\n    \"version\": 2\n  },\n  \"streamSettings\": {\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"hy.example\"\n    },\n    \"hysteriaSettings\": {\n      \"version\": 2,\n      \"auth\": \"pw\"\n    }\n  }\n}",
+        "tag": "hy2"
+      }
+    ]
+  },
+  "hysteria2_fp_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"hy2 fp\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"hysteria\", \"settings\": {\"address\": \"hy.example\", \"port\": 8443}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"hy.example\", \"fingerprint\": \"bogus\"}, \"hysteriaSettings\": {\"version\": 2, \"auth\": \"pw\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"hysteria2\",\"tag\":\"hy2 fp\",\"server\":\"hy.example\",\"server_port\":8443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"hy.example\"}}",
+        "chained": null,
+        "identity": "48695ea02270db1f83e849b569886344d3f97592cac18b2493e7c046af035c30",
+        "label": "hy2 fp",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"hysteria\",\n  \"settings\": {\n    \"address\": \"hy.example\",\n    \"port\": 8443\n  },\n  \"streamSettings\": {\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"hy.example\",\n      \"fingerprint\": \"bogus\"\n    },\n    \"hysteriaSettings\": {\n      \"version\": 2,\n      \"auth\": \"pw\"\n    }\n  }\n}",
+        "tag": "hy2 fp"
+      }
+    ]
+  },
+  "hysteria_v1_skipped": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"hy1\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"hysteria\", \"settings\": {\"address\": \"hy.example\", \"port\": 443, \"version\": 1}, \"streamSettings\": {\"hysteriaSettings\": {\"version\": 1, \"auth\": \"pw\"}}}]}]",
+    "nodes": []
+  },
+  "malformed_stream": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"malformed\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": \"none\"}, {\"tag\": \"ok\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"b.example\", \"port\": 443, \"users\": [{\"id\": \"22222222-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"malformed ok\",\"server\":\"b.example\",\"server_port\":443,\"uuid\":\"22222222-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "ccfadff4b2e1bcf53c7d2099fbb980b53bd65bb56b2b718db2d400873013a40e",
+        "label": "malformed ok",
+        "rawSource": "{\n  \"tag\": \"ok\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"b.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"22222222-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "malformed ok"
+      }
+    ]
+  },
+  "multinode_310": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"multi\", \"outbounds\": [{\"tag\": \"a\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"b\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"b.example\", \"port\": 443, \"users\": [{\"id\": \"22222222-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"c\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"c.example\", \"port\": 443, \"password\": \"pw\"}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"multi a\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
+        "label": "multi a",
+        "rawSource": "{\n  \"tag\": \"a\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "multi a"
+      },
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"multi b\",\"server\":\"b.example\",\"server_port\":443,\"uuid\":\"22222222-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "ccfadff4b2e1bcf53c7d2099fbb980b53bd65bb56b2b718db2d400873013a40e",
+        "label": "multi b",
+        "rawSource": "{\n  \"tag\": \"b\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"b.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"22222222-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "multi b"
+      },
+      {
+        "body_json": "{\"type\":\"trojan\",\"tag\":\"multi c\",\"server\":\"c.example\",\"server_port\":443,\"password\":\"pw\",\"tls\":{\"enabled\":true,\"server_name\":\"c.example\"}}",
+        "chained": null,
+        "identity": "d1e651adab466d506e11539046600fc8041789c4ade12d1e0c4710c8d09b5dea",
+        "label": "multi c",
+        "rawSource": "{\n  \"tag\": \"c\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"c.example\",\n        \"port\": 443,\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\"\n  }\n}",
+        "tag": "multi c"
+      }
+    ]
+  },
+  "multinode_same_tag": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"same tag\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"b.example\", \"port\": 443, \"users\": [{\"id\": \"22222222-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"same tag 1\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
+        "label": "same tag 1",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "same tag 1"
+      },
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"same tag 2\",\"server\":\"b.example\",\"server_port\":443,\"uuid\":\"22222222-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "ccfadff4b2e1bcf53c7d2099fbb980b53bd65bb56b2b718db2d400873013a40e",
+        "label": "same tag 2",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"b.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"22222222-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "same tag 2"
+      }
+    ]
+  },
+  "no_tag_solo": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"\", \"outbounds\": [{\"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 8443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"vless-a.example-8443\",\"server\":\"a.example\",\"server_port\":8443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "11ad42b7a4053918b0fb8e9bfec9766543b5ee62a4ee8e8d7f6917102c6109c7",
+        "label": "",
+        "rawSource": "{\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 8443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "vless-a.example-8443"
+      }
+    ]
+  },
+  "ss_basic": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"ss\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"shadowsocks\", \"settings\": {\"servers\": [{\"address\": \"s.example\", \"port\": 8388, \"method\": \"aes-256-gcm\", \"password\": \"pw\"}]}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"shadowsocks\",\"tag\":\"ss\",\"server\":\"s.example\",\"server_port\":8388,\"method\":\"aes-256-gcm\",\"password\":\"pw\"}",
+        "chained": null,
+        "identity": "a6e9eb881beb3c7999558bcf115036b0eaa1cab22417a4a0178f7520711b99f4",
+        "label": "ss",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"shadowsocks\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"s.example\",\n        \"port\": 8388,\n        \"method\": \"aes-256-gcm\",\n        \"password\": \"pw\"\n      }\n    ]\n  }\n}",
+        "tag": "ss"
+      }
+    ]
+  },
+  "ss_method_legacy": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"ss legacy\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"shadowsocks\", \"settings\": {\"servers\": [{\"address\": \"s.example\", \"port\": 8388, \"method\": \"aes-256-cfb\", \"password\": \"pw\"}]}, \"streamSettings\": {\"sockopt\": {\"tcpKeepAliveIdle\": 20}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"shadowsocks\",\"tag\":\"ss legacy\",\"server\":\"s.example\",\"server_port\":8388,\"method\":\"aes-256-cfb\",\"password\":\"pw\",\"tcp_keep_alive\":\"20s\"}",
+        "chained": null,
+        "identity": "2139cf983f711640522b24c92c882f332c7223fd01b6cff07f60edad36f41a38",
+        "label": "ss legacy",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"shadowsocks\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"s.example\",\n        \"port\": 8388,\n        \"method\": \"aes-256-cfb\",\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 20\n    }\n  }\n}",
+        "tag": "ss legacy"
+      }
+    ]
+  },
+  "trojan_tls": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"trojan\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"t.example\", \"port\": 443, \"password\": \"secret\"}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"t.example\", \"fingerprint\": \"firefox\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"trojan\",\"tag\":\"trojan\",\"server\":\"t.example\",\"server_port\":443,\"password\":\"secret\",\"tls\":{\"enabled\":true,\"server_name\":\"t.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"firefox\"}}}",
+        "chained": null,
+        "identity": "cb86339bcffd53a28c8691acd7566d560d2a8c81ed30697e74caaacc74e6dd09",
+        "label": "trojan",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"t.example\",\n        \"port\": 443,\n        \"password\": \"secret\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"t.example\",\n      \"fingerprint\": \"firefox\"\n    }\n  }\n}",
+        "tag": "trojan"
+      }
+    ]
+  },
+  "trojan_ws_fp_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"trojan ws\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"trojan\", \"settings\": {\"servers\": [{\"address\": \"t.example\", \"port\": 8443, \"password\": \"pw\"}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"t.example\", \"fingerprint\": \"bogus\"}, \"wsSettings\": {\"path\": \"/tr\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"trojan\",\"tag\":\"trojan ws\",\"server\":\"t.example\",\"server_port\":8443,\"password\":\"pw\",\"transport\":{\"type\":\"ws\",\"path\":\"/tr\"},\"tls\":{\"enabled\":true,\"server_name\":\"t.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
+        "chained": null,
+        "identity": "9511ddef8c3a7aac7eeb2e287f377f53e6ff613c9e987f3da49e861ab7429dea",
+        "label": "trojan ws",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"trojan\",\n  \"settings\": {\n    \"servers\": [\n      {\n        \"address\": \"t.example\",\n        \"port\": 8443,\n        \"password\": \"pw\"\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"t.example\",\n      \"fingerprint\": \"bogus\"\n    },\n    \"wsSettings\": {\n      \"path\": \"/tr\"\n    }\n  }\n}",
+        "tag": "trojan ws"
+      }
+    ]
+  },
+  "unsupported_protocol": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"unsup\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"a.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}, {\"tag\": \"x\", \"protocol\": \"wireguard\", \"settings\": {}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"unsup proxy\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
+        "label": "unsup proxy",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "unsup proxy"
+      }
+    ]
+  },
+  "vless_alpn_tls": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"alpn\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"alpn\": [\"h2\", \"http/1.1\"]}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"alpn\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"alpn\":[\"h2\",\"http/1.1\"]}}",
+        "chained": null,
+        "identity": "6b30710c023674dfa0507f42c1bd27ef3de2de13c098628bd13869517b06e852",
+        "label": "alpn",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"alpn\": [\n        \"h2\",\n        \"http/1.1\"\n      ]\n    }\n  }\n}",
+        "tag": "alpn"
+      }
+    ],
+    "_why": "§514 / решение владельца 24.09.2026 — D133-C9 ОТМЕНЕНА: `tlsSettings.alpn` переносится в `tls.alpn` с ОБЩЕГО блока `tls#xray`, то есть и у vless/vmess/trojan из Xray-конфига. Довод владельца: ALPN есть часть РУКОПОЖАТИЯ, а не украшение — сервер, которому нечего выбрать из предложенного, соединение обрывает, значит узел с h2-only сервером просто НЕ РАБОТАЛ. Смена тела здесь И ЕСТЬ ПОЧИНКА: прежний `maps_to: null` объявлял потерю, не делая её меньше. Вместе с этим снят наш оверлей `assets/contract_draft/uri/tls.json` → `blocks.xray.alpn`, который держал `maps_to: null` «до решения владельца» — решение пришло."
+  },
+  "vless_default_port": {
+    "_delta480": "delta480: дефолт порта 443 на Xray-входе СНЯТ по арбитру — исходникам XTLS/Xray-core (решение владельца 19.09.2026). Дефолта порта у Xray нет ни у одного outbound-протокола: trojan и shadowsocks отбраковывают элемент явно (infra/conf/trojan.go:67-69 «Invalid Trojan port.», infra/conf/shadowsocks.go:223-224,247-248), а vless/vmess/socks/http порт не проверяют вовсе (infra/conf/vless.go:274-283) и собирают узел с нулём, который падает при первом дозвоне. Рабочего узла из элемента без порта Xray не делает НИ В ОДНОЙ ветке. БЫЛО (значения ниже, сняты старым кодом): один узел, server_port 443, identity bef94847…, нуль отбраковок. СТАЛО: ноль узлов и одна отбраковка с причиной `server port is missing or out of range` — той же записью `port` реестра и тем же текстом, что у лаунчера. Значения ниже НЕ переписаны намеренно: файл — снимок «до переезда», а дельта объявлена парно в _expectedChanges теста engine_xray_pilot_test.",
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"defport\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"defport\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "bef94847403c9e714784921126240d4e49f317adfeadf35dec32dc9e53363cfc",
+        "label": "defport",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "defport"
+      }
+    ]
+  },
+  "vless_encryption_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"enc junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"encryption\": \"totally-bogus\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"enc junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"totally-bogus\"}",
+        "chained": null,
+        "identity": "91f9724e3b651d3edb9bb0003f9980790c459c9387f55c7ee559f476329da81e",
+        "label": "enc junk",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"totally-bogus\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "enc junk"
+      }
+    ]
+  },
+  "vless_encryption_mlkem": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"enc\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"encryption\": \"mlkem768x25519plus.native.0rtt.AAAABBBBCCCCDDDD\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"enc\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"mlkem768x25519plus.native.0rtt.AAAABBBBCCCCDDDD\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "1a61dd90ec2e341413dfed80d54717df38067b122f929eeeefd53024f56d9ddd",
+        "label": "enc",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"mlkem768x25519plus.native.0rtt.AAAABBBBCCCCDDDD\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    }\n  }\n}",
+        "tag": "enc"
+      }
+    ]
+  },
+  "vless_encryption_none": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"enc none\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"encryption\": \"none\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"enc none\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "bef94847403c9e714784921126240d4e49f317adfeadf35dec32dc9e53363cfc",
+        "label": "enc none",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "enc none"
+      }
+    ]
+  },
+  "vless_flow_deprecated": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"flow old\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-direct\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"flow old\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "213e856baaed0274764e9cb558115566f09cf6784a5f08b434f0af04ced25758",
+        "label": "flow old",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-direct\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    }\n  }\n}",
+        "tag": "flow old"
+      }
+    ]
+  },
+  "vless_flow_udp443": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"udp443\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 8443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-vision-udp443\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"udp443\",\"server\":\"h.example\",\"server_port\":8443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"flow\":\"xtls-rprx-vision\",\"packet_encoding\":\"xudp\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "c65490016e2b5597c83a2cba2002818d5e41b57d045dcb167a8c2f555d41819d",
+        "label": "udp443",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 8443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-vision-udp443\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    }\n  }\n}",
+        "tag": "udp443"
+      }
+    ]
+  },
+  "vless_fp_alias": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"fp alias\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"hellochrome_120\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"fp alias\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
+        "chained": null,
+        "identity": "7486318b352af7ae31f84be84d81ef8f62683d2bafc762a45a3545798c97da1f",
+        "label": "fp alias",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"hellochrome_120\"\n    }\n  }\n}",
+        "tag": "fp alias"
+      }
+    ]
+  },
+  "vless_fp_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"fp junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"bogus-fp\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"fp junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
+        "chained": null,
+        "identity": "7486318b352af7ae31f84be84d81ef8f62683d2bafc762a45a3545798c97da1f",
+        "label": "fp junk",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"bogus-fp\"\n    }\n  }\n}",
+        "tag": "fp junk"
+      }
+    ]
+  },
+  "vless_grpc": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"grpc\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"grpc\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"grpcSettings\": {\"serviceName\": \"/pkg/Tun\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"grpc\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"grpc\",\"service_name\":\"/pkg/Tun\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "3afedad73b9800e760cecf528e4adc55128e647139ba6880ec099f93df45cbfb",
+        "label": "grpc",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"grpc\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"grpcSettings\": {\n      \"serviceName\": \"/pkg/Tun\"\n    }\n  }\n}",
+        "tag": "grpc"
+      }
+    ]
+  },
+  "vless_h2": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"h2\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"h2\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"httpSettings\": {\"path\": \"/h2\", \"host\": [\"a.example\", \"b.example\"]}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"h2\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"http\",\"path\":\"/h2\",\"host\":[\"a.example\",\"b.example\"]},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "3d6eb8889d5a2bc46b7d7ceb263e198bc5001c697003e0130cbec2f9a5ae7101",
+        "label": "h2",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"h2\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"httpSettings\": {\n      \"path\": \"/h2\",\n      \"host\": [\n        \"a.example\",\n        \"b.example\"\n      ]\n    }\n  }\n}",
+        "tag": "h2"
+      }
+    ]
+  },
+  "vless_insecure": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"insecure\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\", \"allowInsecure\": true}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"insecure\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"insecure\":true}}",
+        "chained": null,
+        "identity": "90ae7c7b040340bf9899378d073a410d170f56b42fc8768e0db87f363a4aabfc",
+        "label": "insecure",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\",\n      \"allowInsecure\": true\n    }\n  }\n}",
+        "tag": "insecure"
+      }
+    ]
+  },
+  "vless_packet_encoding": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"pe\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"pe\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null,
+        "identity": "bef94847403c9e714784921126240d4e49f317adfeadf35dec32dc9e53363cfc",
+        "label": "pe",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "pe"
+      }
+    ]
+  },
+  "vless_reality_fp_qq": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"reality qq\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"qq\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abcd\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"reality qq\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"qq\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"short_id\":\"abcd\"}}}",
+        "chained": null,
+        "identity": "632a07a821256dceb79deae0f11602e3b18ed8ead2564a17fae5069a5a871f73",
+        "label": "reality qq",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"qq\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abcd\"\n    }\n  }\n}",
+        "tag": "reality qq"
+      }
+    ]
+  },
+  "vless_reality_key_share": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"ks\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"chrome\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abcd\", \"keyShare\": \"hybrid\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"ks\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"short_id\":\"abcd\"}}}",
+        "chained": null,
+        "identity": "ce255e8fe62a78a2bd548f2a61a992f5b37c5d67efe040baa252e05dfdbdbbb4",
+        "label": "ks",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abcd\",\n      \"keyShare\": \"hybrid\"\n    }\n  }\n}",
+        "tag": "ks"
+      }
+    ]
+  },
+  "vless_reality_pbk_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"pbk junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"www.example.com\", \"fingerprint\": \"chrome\", \"publicKey\": \"!!!not-base64!!!\", \"shortId\": \"abcd\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"pbk junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"www.example.com\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"}}}",
+        "chained": null,
+        "identity": "bb929d7f45f234ad550414d1ae8f9451e157dc75723572b658ed7ab97a3ef235",
+        "label": "pbk junk",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"www.example.com\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"!!!not-base64!!!\",\n      \"shortId\": \"abcd\"\n    }\n  }\n}",
+        "tag": "pbk junk"
+      }
+    ]
+  },
+  "vless_reality_sid_odd": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"sid odd\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"s.example\", \"fingerprint\": \"chrome\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abc\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"sid odd\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tls\":{\"enabled\":true,\"server_name\":\"s.example\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}}",
+        "chained": null,
+        "identity": "27d4a5cf9ccc00ed8552531be365a3225d053764413f28f8fdb8aeddc2c765aa",
+        "label": "sid odd",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"s.example\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abc\"\n    }\n  }\n}",
+        "tag": "sid odd"
+      }
+    ]
+  },
+  "vless_reality_vision": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"Xray VLESS Reality\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"example-1.com\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-vision\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"reality\", \"realitySettings\": {\"serverName\": \"www.example.com\", \"fingerprint\": \"chrome\", \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"shortId\": \"abcd1234\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"Xray VLESS Reality\",\"server\":\"example-1.com\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"flow\":\"xtls-rprx-vision\",\"tls\":{\"enabled\":true,\"server_name\":\"www.example.com\",\"utls\":{\"enabled\":true,\"fingerprint\":\"chrome\"},\"reality\":{\"enabled\":true,\"public_key\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"short_id\":\"abcd1234\"}}}",
+        "chained": null,
+        "identity": "e245cbba950e3d80edb99c05165aa4db9bb4adf356d7fb94e8ff842fa8745ba1",
+        "label": "Xray VLESS Reality",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"example-1.com\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-vision\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"reality\",\n    \"realitySettings\": {\n      \"serverName\": \"www.example.com\",\n      \"fingerprint\": \"chrome\",\n      \"publicKey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n      \"shortId\": \"abcd1234\"\n    }\n  }\n}",
+        "tag": "Xray VLESS Reality"
+      }
+    ]
+  },
+  "vless_sockopt_keepalive": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"ka\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\", \"sockopt\": {\"tcpKeepAliveIdle\": 30, \"tcpKeepAliveInterval\": 15}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"ka\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tcp_keep_alive\":\"30s\",\"tcp_keep_alive_interval\":\"15s\"}",
+        "chained": null,
+        "identity": "64fc3305c7b67c056c268334bccd261281bec7affb826fadd06c6a31e1f94e0f",
+        "label": "ka",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 30,\n      \"tcpKeepAliveInterval\": 15\n    }\n  }\n}",
+        "tag": "ka"
+      }
+    ]
+  },
+  "vless_splithttp": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"splithttp\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"splithttp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"splithttpSettings\": {\"path\": \"/sp\", \"mode\": \"stream-one\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"splithttp\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/sp\",\"mode\":\"stream-one\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "ec29054cd69754c02a38545efb1711d2fdb780eef27f6be3c15e08091e6ab88c",
+        "label": "splithttp",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"splithttp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"splithttpSettings\": {\n      \"path\": \"/sp\",\n      \"mode\": \"stream-one\"\n    }\n  }\n}",
+        "tag": "splithttp"
+      }
+    ]
+  },
+  "vless_vision_with_transport": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"vision+ws\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"flow\": \"xtls-rprx-vision\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"wsSettings\": {\"path\": \"/ws\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"vision+ws\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/ws\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "83d8a350890cabe29d167063a83c909af180cf398501abff04d2b186150e45d6",
+        "label": "vision+ws",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"flow\": \"xtls-rprx-vision\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"wsSettings\": {\n      \"path\": \"/ws\"\n    }\n  }\n}",
+        "tag": "vision+ws"
+      }
+    ]
+  },
+  "vless_ws_ed_fields": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"ws ed fields\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"none\", \"wsSettings\": {\"path\": \"/y\", \"ed\": 1024, \"eh\": \"X-Custom\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"ws ed fields\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/y\",\"max_early_data\":1024,\"early_data_header_name\":\"X-Custom\"}}",
+        "chained": null,
+        "identity": "ebe905f3947083122b2a35240d2bffcf019a57b0c594be59015291242881792d",
+        "label": "ws ed fields",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"none\",\n    \"wsSettings\": {\n      \"path\": \"/y\",\n      \"ed\": 1024,\n      \"eh\": \"X-Custom\"\n    }\n  }\n}",
+        "tag": "ws ed fields"
+      }
+    ]
+  },
+  "vless_ws_ed_path": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"ws ed\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"wsSettings\": {\"path\": \"/x?ed=2560\", \"headers\": {\"Host\": \"cdn.example\"}}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"ws ed\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\",\"headers\":{\"Host\":\"cdn.example\"},\"max_early_data\":2560,\"early_data_header_name\":\"Sec-WebSocket-Protocol\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "36df484ffad9b78044cb9ee712408d92ec45d8b1e0e7bee662725244ac2e26ce",
+        "label": "ws ed",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"wsSettings\": {\n      \"path\": \"/x?ed=2560\",\n      \"headers\": {\n        \"Host\": \"cdn.example\"\n      }\n    }\n  }\n}",
+        "tag": "ws ed"
+      }
+    ]
+  },
+  "vless_ws_path_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"pathjunk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"none\", \"wsSettings\": {\"path\": \"/bad%zz\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"pathjunk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/bad%zz\"}}",
+        "chained": null,
+        "identity": "250f2dc7ff6b837dcaef3f5c561103d2a48806a98a64fbf34e4fe1fb6cf65ee8",
+        "label": "pathjunk",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"none\",\n    \"wsSettings\": {\n      \"path\": \"/bad%zz\"\n    }\n  }\n}",
+        "tag": "pathjunk"
+      }
+    ]
+  },
+  "vless_xhttp": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"xhttp\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"s.example\"}, \"xhttpSettings\": {\"path\": \"/xh\", \"host\": \"x.example\", \"mode\": \"packet-up\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/xh\",\"host\":\"x.example\",\"mode\":\"packet-up\"},\"tls\":{\"enabled\":true,\"server_name\":\"s.example\"}}",
+        "chained": null,
+        "identity": "0385901d345d2fc63c91986fcdffda877dff4b04a34d0a78aa4f2d2572db6af9",
+        "label": "xhttp",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"s.example\"\n    },\n    \"xhttpSettings\": {\n      \"path\": \"/xh\",\n      \"host\": \"x.example\",\n      \"mode\": \"packet-up\"\n    }\n  }\n}",
+        "tag": "xhttp"
+      }
+    ]
+  },
+  "vless_xhttp_mode_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"xhttp junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vless\", \"settings\": {\"vnext\": [{\"address\": \"h.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\"}]}]}, \"streamSettings\": {\"network\": \"xhttp\", \"security\": \"none\", \"xhttpSettings\": {\"path\": \"/xh\", \"mode\": \"bogus-mode\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp junk\",\"server\":\"h.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/xh\"}}",
+        "chained": null,
+        "identity": "c62a02789f26f037906058e554b9771e966e2ad402084bd9e350a6e3f73f7d23",
+        "label": "xhttp junk",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"h.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"path\": \"/xh\",\n      \"mode\": \"bogus-mode\"\n    }\n  }\n}",
+        "tag": "xhttp junk"
+      }
+    ]
+  },
+  "vmess_security_empty": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"vmess sec empty\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vmess\", \"settings\": {\"vnext\": [{\"address\": \"v.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"alterId\": 1}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"none\"}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vmess\",\"tag\":\"vmess sec empty\",\"server\":\"v.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"security\":\"auto\",\"alter_id\":1}",
+        "chained": null,
+        "identity": "b3363e46d8f2b86599484ac08e2ff4314bc302d0264412e3bf2c33e5275e65a7",
+        "label": "vmess sec empty",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vmess\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"v.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"alterId\": 1\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\"\n  }\n}",
+        "tag": "vmess sec empty"
+      }
+    ]
+  },
+  "vmess_security_junk": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"vmess sec junk\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vmess\", \"settings\": {\"vnext\": [{\"address\": \"v.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"alterId\": 0, \"security\": \"rubbish\"}]}]}, \"streamSettings\": {\"network\": \"ws\", \"security\": \"none\", \"wsSettings\": {\"path\": \"/vm\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vmess\",\"tag\":\"vmess sec junk\",\"server\":\"v.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"security\":\"auto\",\"transport\":{\"type\":\"ws\",\"path\":\"/vm\"}}",
+        "chained": null,
+        "identity": "befd41b77fd3ad3f69129fe5a6a7f4c82738ac2fbd7e66b8bbb601b4a4c0d53b",
+        "label": "vmess sec junk",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vmess\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"v.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"alterId\": 0,\n            \"security\": \"rubbish\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"none\",\n    \"wsSettings\": {\n      \"path\": \"/vm\"\n    }\n  }\n}",
+        "tag": "vmess sec junk"
+      }
+    ]
+  },
+  "vmess_tls": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\": \"vmess\", \"outbounds\": [{\"tag\": \"proxy\", \"protocol\": \"vmess\", \"settings\": {\"vnext\": [{\"address\": \"v.example\", \"port\": 443, \"users\": [{\"id\": \"11111111-2222-3333-4444-555555555555\", \"alterId\": 0, \"security\": \"auto\"}]}]}, \"streamSettings\": {\"network\": \"tcp\", \"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"v.example\"}}}]}]",
+    "nodes": [
+      {
+        "body_json": "{\"type\":\"vmess\",\"tag\":\"vmess\",\"server\":\"v.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"security\":\"auto\",\"tls\":{\"enabled\":true,\"server_name\":\"v.example\"}}",
+        "chained": null,
+        "identity": "e9584cf4d2634955039074540ab21e3fa660154012971326db9d5e00993435d2",
+        "label": "vmess",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vmess\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"v.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"alterId\": 0,\n            \"security\": \"auto\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"tls\",\n    \"tlsSettings\": {\n      \"serverName\": \"v.example\"\n    }\n  }\n}",
+        "tag": "vmess"
+      }
+    ]
+  },
+  "b480_xhttp_full_field_set": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"xhttp full\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"host\":\"h.example\",\"path\":\"/p\",\"mode\":\"packet-up\",\"extra\":{\"xPaddingBytes\":\"100-1000\",\"noGRPCHeader\":true,\"noSSEHeader\":true,\"sessionPlacement\":\"header\",\"sessionKey\":\"X-Session\",\"seqPlacement\":\"query\",\"seqKey\":\"x_seq\",\"uplinkDataPlacement\":\"header\",\"uplinkDataKey\":\"X-Data\",\"uplinkChunkSize\":\"3000-4000\",\"uplinkHTTPMethod\":\"GET\",\"xPaddingObfsMode\":true,\"xPaddingKey\":\"x_padding\",\"xPaddingHeader\":\"X-Padding\",\"xPaddingPlacement\":\"header\",\"xPaddingMethod\":\"tokenish\",\"scMaxEachPostBytes\":\"1000000\",\"scMinPostsIntervalMs\":\"30\",\"scStreamUpServerSecs\":\"20-80\",\"scMaxBufferedPosts\":30,\"xmux\":{\"maxConnections\":\"1\",\"cMaxReuseTimes\":\"5\",\"hMaxRequestTimes\":\"600\",\"hMaxReusableSecs\":\"1800\",\"hKeepAlivePeriod\":30}}}}}]}]",
+    "nodes": [
+      {
+        "identity": "af011fd695a36f9e23fa88813744b68133b3955f18d8b5fb458d3b88a45b9e1a",
+        "tag": "xhttp full",
+        "label": "xhttp full",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"host\": \"h.example\",\n      \"path\": \"/p\",\n      \"mode\": \"packet-up\",\n      \"extra\": {\n        \"xPaddingBytes\": \"100-1000\",\n        \"noGRPCHeader\": true,\n        \"noSSEHeader\": true,\n        \"sessionPlacement\": \"header\",\n        \"sessionKey\": \"X-Session\",\n        \"seqPlacement\": \"query\",\n        \"seqKey\": \"x_seq\",\n        \"uplinkDataPlacement\": \"header\",\n        \"uplinkDataKey\": \"X-Data\",\n        \"uplinkChunkSize\": \"3000-4000\",\n        \"uplinkHTTPMethod\": \"GET\",\n        \"xPaddingObfsMode\": true,\n        \"xPaddingKey\": \"x_padding\",\n        \"xPaddingHeader\": \"X-Padding\",\n        \"xPaddingPlacement\": \"header\",\n        \"xPaddingMethod\": \"tokenish\",\n        \"scMaxEachPostBytes\": \"1000000\",\n        \"scMinPostsIntervalMs\": \"30\",\n        \"scStreamUpServerSecs\": \"20-80\",\n        \"scMaxBufferedPosts\": 30,\n        \"xmux\": {\n          \"maxConnections\": \"1\",\n          \"cMaxReuseTimes\": \"5\",\n          \"hMaxRequestTimes\": \"600\",\n          \"hMaxReusableSecs\": \"1800\",\n          \"hKeepAlivePeriod\": 30\n        }\n      }\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp full\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/p\",\"host\":\"h.example\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"100-1000\",\"no_grpc_header\":true,\"no_sse_header\":true,\"session_placement\":\"header\",\"session_key\":\"X-Session\",\"seq_placement\":\"query\",\"seq_key\":\"x_seq\",\"uplink_data_placement\":\"header\",\"uplink_data_key\":\"X-Data\",\"uplink_chunk_size\":\"3000-4000\",\"uplink_http_method\":\"GET\",\"x_padding_obfs_mode\":true,\"x_padding_key\":\"x_padding\",\"x_padding_header\":\"X-Padding\",\"x_padding_placement\":\"header\",\"x_padding_method\":\"tokenish\",\"sc_max_each_post_bytes\":\"1000000\",\"sc_min_posts_interval_ms\":\"30\",\"sc_stream_up_server_secs\":\"20-80\",\"sc_max_buffered_posts\":30,\"xmux\":{\"max_connections\":\"1\",\"c_max_reuse_times\":\"5\",\"h_max_request_times\":\"600\",\"h_max_reusable_secs\":\"1800\",\"h_keep_alive_period\":30}}}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_xhttp_snake_case_extra": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"xhttp snake\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"path\":\"/p\",\"mode\":\"packet-up\",\"extra\":{\"x_padding_bytes\":\"50-200\",\"uplink_http_method\":\"GET\",\"sc_max_each_post_bytes\":\"1000000\",\"no_grpc_header\":true,\"xmux\":{\"max_concurrency\":\"16-32\",\"h_keep_alive_period\":30}}}}}]}]",
+    "nodes": [
+      {
+        "identity": "6c54d28351a8095cb7830695636b72075d4182525b0670018945e92e1b4d283c",
+        "tag": "xhttp snake",
+        "label": "xhttp snake",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"path\": \"/p\",\n      \"mode\": \"packet-up\",\n      \"extra\": {\n        \"x_padding_bytes\": \"50-200\",\n        \"uplink_http_method\": \"GET\",\n        \"sc_max_each_post_bytes\": \"1000000\",\n        \"no_grpc_header\": true,\n        \"xmux\": {\n          \"max_concurrency\": \"16-32\",\n          \"h_keep_alive_period\": 30\n        }\n      }\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"xhttp snake\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/p\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"50-200\",\"no_grpc_header\":true,\"uplink_http_method\":\"GET\",\"sc_max_each_post_bytes\":\"1000000\",\"xmux\":{\"max_concurrency\":\"16-32\",\"h_keep_alive_period\":30}}}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_xhttp_splithttp_alias_full": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"splithttp alias\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"splithttp\",\"security\":\"none\",\"splithttpSettings\":{\"host\":\"h.example\",\"path\":\"/p\",\"mode\":\"stream-one\",\"extra\":{\"xPaddingBytes\":\"100-1000\",\"scMaxBufferedPosts\":12,\"xmux\":{\"maxConcurrency\":\"4-8\"}}}}}]}]",
+    "nodes": [
+      {
+        "identity": "fce948adf5104f22eb55374d740bb213348fbf2f83211e87d452b25a67b4a6ee",
+        "tag": "splithttp alias",
+        "label": "splithttp alias",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"splithttp\",\n    \"security\": \"none\",\n    \"splithttpSettings\": {\n      \"host\": \"h.example\",\n      \"path\": \"/p\",\n      \"mode\": \"stream-one\",\n      \"extra\": {\n        \"xPaddingBytes\": \"100-1000\",\n        \"scMaxBufferedPosts\": 12,\n        \"xmux\": {\n          \"maxConcurrency\": \"4-8\"\n        }\n      }\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"splithttp alias\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/p\",\"host\":\"h.example\",\"mode\":\"stream-one\",\"x_padding_bytes\":\"100-1000\",\"sc_max_buffered_posts\":12,\"xmux\":{\"max_concurrency\":\"4-8\"}}}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_xhttp_extra_beats_flat_field": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"extra wins\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"mode\":\"packet-up\",\"path\":\"/real\",\"host\":\"real.example\",\"xPaddingBytes\":\"10-20\",\"extra\":{\"mode\":\"stream-up\",\"path\":\"/fake\",\"host\":\"fake.example\",\"xPaddingBytes\":\"500-600\"}}}}]}]",
+    "nodes": [
+      {
+        "identity": "ef430c842207e179dfb7fc33cf75f055e694e0a0953221c841563d64e6e92b68",
+        "tag": "extra wins",
+        "label": "extra wins",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"mode\": \"packet-up\",\n      \"path\": \"/real\",\n      \"host\": \"real.example\",\n      \"xPaddingBytes\": \"10-20\",\n      \"extra\": {\n        \"mode\": \"stream-up\",\n        \"path\": \"/fake\",\n        \"host\": \"fake.example\",\n        \"xPaddingBytes\": \"500-600\"\n      }\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"extra wins\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"path\":\"/real\",\"host\":\"real.example\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"500-600\"}}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_xhttp_empty_extra_member_keeps_flat": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"empty extra\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"xhttp\",\"security\":\"none\",\"xhttpSettings\":{\"mode\":\"packet-up\",\"xPaddingBytes\":\"10-20\",\"xmux\":{\"maxConcurrency\":\"16\"},\"extra\":{\"mode\":\"\",\"xPaddingBytes\":\"\",\"xmux\":{\"maxConcurrency\":\"\"}}}}}]}]",
+    "nodes": [
+      {
+        "identity": "817da44c85873513b4c504ab7e9c6bd3f126f333af781d955b663ea68c127421",
+        "tag": "empty extra",
+        "label": "empty extra",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"xhttp\",\n    \"security\": \"none\",\n    \"xhttpSettings\": {\n      \"mode\": \"packet-up\",\n      \"xPaddingBytes\": \"10-20\",\n      \"xmux\": {\n        \"maxConcurrency\": \"16\"\n      },\n      \"extra\": {\n        \"mode\": \"\",\n        \"xPaddingBytes\": \"\",\n        \"xmux\": {\n          \"maxConcurrency\": \"\"\n        }\n      }\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"empty extra\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"xhttp\",\"mode\":\"packet-up\",\"x_padding_bytes\":\"10-20\",\"xmux\":{\"max_concurrency\":\"16\"}}}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_sockopt_keepalive_positive": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"sockopt positive\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":30,\"tcpKeepAliveInterval\":15}}}]}]",
+    "nodes": [
+      {
+        "identity": "bf9d4fcd029f77e74353a3d638126f91623caeb1f6bb1e8d7eed98d7afb6fe28",
+        "tag": "sockopt positive",
+        "label": "sockopt positive",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 30,\n      \"tcpKeepAliveInterval\": 15\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt positive\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"tcp_keep_alive\":\"30s\",\"tcp_keep_alive_interval\":\"15s\"}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_sockopt_keepalive_zero": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"sockopt zero\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":0,\"tcpKeepAliveInterval\":0}}}]}]",
+    "nodes": [
+      {
+        "identity": "eee301d9e983f81c998474714da7a638c60aade6f8a2326b7fddc9dc9f7c48b1",
+        "tag": "sockopt zero",
+        "label": "sockopt zero",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 0,\n      \"tcpKeepAliveInterval\": 0\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt zero\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\"}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_sockopt_keepalive_negative": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"sockopt negative\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":-1}}}]}]",
+    "nodes": [
+      {
+        "identity": "9b0095e14cbe8b83878f738cceb3612af3af8a668bc20f4e95c5eee3b43f67af",
+        "tag": "sockopt negative",
+        "label": "sockopt negative",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": -1\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt negative\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"disable_tcp_keep_alive\":true}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_sockopt_keepalive_negative_interval": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"sockopt negative interval\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"tcp\",\"security\":\"none\",\"sockopt\":{\"tcpKeepAliveIdle\":30,\"tcpKeepAliveInterval\":-5}}}]}]",
+    "nodes": [
+      {
+        "identity": "28f81787345c1fb8d3bf3b1bb0623ad031f8f48aa9f9608ebc999638e30aa6d1",
+        "tag": "sockopt negative interval",
+        "label": "sockopt negative interval",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"tcp\",\n    \"security\": \"none\",\n    \"sockopt\": {\n      \"tcpKeepAliveIdle\": 30,\n      \"tcpKeepAliveInterval\": -5\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"sockopt negative interval\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"disable_tcp_keep_alive\":true,\"tcp_keep_alive\":\"30s\"}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_ws_ed_path_tail_beats_flat": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"ed both places\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"tls\",\"wsSettings\":{\"path\":\"/x?ed=700\",\"ed\":2560,\"eh\":\"X-Flat\"}}}]}]",
+    "nodes": [
+      {
+        "identity": "2ab42b1d9cae72cd7026e248fb63e4053f6fcbee08dda742644bf21e30048f6f",
+        "tag": "ed both places",
+        "label": "ed both places",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"wsSettings\": {\n      \"path\": \"/x?ed=700\",\n      \"ed\": 2560,\n      \"eh\": \"X-Flat\"\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"ed both places\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\",\"max_early_data\":700,\"early_data_header_name\":\"X-Flat\"},\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"}}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_ws_eh_without_ed": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"eh alone\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"tls\",\"wsSettings\":{\"path\":\"/x\",\"eh\":\"X-Early\"}}}]}]",
+    "nodes": [
+      {
+        "identity": "b302c2a7c5d01ec3dbdd3c75532a2c7aab423998e7baf87a9793f9fcb8b02e40",
+        "tag": "eh alone",
+        "label": "eh alone",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"wsSettings\": {\n      \"path\": \"/x\",\n      \"eh\": \"X-Early\"\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"eh alone\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\"},\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"}}",
+        "chained": null
+      }
+    ]
+  },
+  "b480_ws_ed_flat_only": {
+    "dropped": 0,
+    "input_json": "[{\"remarks\":\"ed flat only\",\"outbounds\":[{\"tag\":\"proxy\",\"protocol\":\"vless\",\"settings\":{\"vnext\":[{\"address\":\"a.example\",\"port\":443,\"users\":[{\"id\":\"11111111-2222-3333-4444-555555555555\",\"encryption\":\"none\"}]}]},\"streamSettings\":{\"network\":\"ws\",\"security\":\"tls\",\"wsSettings\":{\"path\":\"/x\",\"ed\":1500,\"eh\":\"Sec-WebSocket-Protocol\"}}}]}]",
+    "nodes": [
+      {
+        "identity": "b3c26b72f0617e030e16d68bd24e8544671b5b96e15d6d325344fe2bcd54b01c",
+        "tag": "ed flat only",
+        "label": "ed flat only",
+        "rawSource": "{\n  \"tag\": \"proxy\",\n  \"protocol\": \"vless\",\n  \"settings\": {\n    \"vnext\": [\n      {\n        \"address\": \"a.example\",\n        \"port\": 443,\n        \"users\": [\n          {\n            \"id\": \"11111111-2222-3333-4444-555555555555\",\n            \"encryption\": \"none\"\n          }\n        ]\n      }\n    ]\n  },\n  \"streamSettings\": {\n    \"network\": \"ws\",\n    \"security\": \"tls\",\n    \"wsSettings\": {\n      \"path\": \"/x\",\n      \"ed\": 1500,\n      \"eh\": \"Sec-WebSocket-Protocol\"\n    }\n  }\n}",
+        "body_json": "{\"type\":\"vless\",\"tag\":\"ed flat only\",\"server\":\"a.example\",\"server_port\":443,\"uuid\":\"11111111-2222-3333-4444-555555555555\",\"transport\":{\"type\":\"ws\",\"path\":\"/x\",\"max_early_data\":1500,\"early_data_header_name\":\"Sec-WebSocket-Protocol\"},\"tls\":{\"enabled\":true,\"server_name\":\"a.example\"}}",
+        "chained": null
+      }
+    ]
+  }
 }

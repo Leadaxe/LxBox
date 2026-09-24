@@ -918,6 +918,43 @@ void main() {
       expect(syn, nodeIdentityKeyRaw(hy));
     });
 
+    // §513 — ветка hysteria зеркалит ту же дельту: секция требует порт,
+    // узла без порта нет, значит и ключ identity с придуманным 443 не
+    // строится. Раньше здесь стоял `?? 443`.
+    test('hysteria без порта: узла нет, синонима у тега нет', () {
+      final nodes = parseXrayElement({
+        'remarks': 'HY',
+        'outbounds': [
+          {
+            'tag': 'hy-no-port',
+            'protocol': 'hysteria',
+            'settings': {'address': 'hy.example', 'version': 2},
+            'streamSettings': {
+              'network': 'hysteria',
+              'hysteriaSettings': {'auth': 'secret', 'version': 2},
+            },
+          },
+          {
+            'tag': 'hy-ok',
+            'protocol': 'hysteria',
+            'settings': {'address': 'hy2.example', 'port': 8443, 'version': 2},
+            'streamSettings': {
+              'network': 'hysteria',
+              'hysteriaSettings': {'auth': 'secret', 'version': 2},
+            },
+          },
+        ],
+        'routing': balancer(['hy-no-port', 'hy-ok']),
+      });
+      final hy = nodes.whereType<Hysteria2Spec>().single;
+      final auto = nodes.whereType<AutoSelectSpec>().single;
+      expect(hy.server, 'hy2.example');
+      expect(auto.tagSynonyms['hy-no-port'], isNull,
+          reason: 'узла без порта нет — ключ hysteria2|hy.example|443|… '
+              'указывал бы в пустоту или на чужой узел с настоящим 443');
+      expect(auto.tagSynonyms['hy-ok'], nodeIdentityKeyRaw(hy));
+    });
+
     // §480, дельта `vless_default_port` (19.09.2026): элемент БЕЗ порта
     // больше не даёт узла. Дефолта порта нет и у самого Xray — `trojan` и
     // `shadowsocks` отбраковывают такой элемент явно (infra/conf/trojan.go:

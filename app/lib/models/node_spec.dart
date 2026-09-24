@@ -870,14 +870,6 @@ class Awg {
     return null;
   }
 
-  /// Явные CPS-теги i1–i5 (без masquerade-сахара). Эталон Go
-  /// `awgStringFields` — ядро отвергает id/ip/ib одновременно с явным i1
-  /// (D-023/masquerade_suppressed_by_i1: явный i1 подавляет промоушен).
-  static const _iTagKeys = <String>{'i1', 'i2', 'i3', 'i4', 'i5'};
-
-  /// id/ip/ib — masquerade sugar, ядро само разворачивает их в i1.
-  static const _masqueradeKeys = <String>{'id', 'ip', 'ib'};
-
   /// §112 — magic headers: с AWG 2.0 значение бывает диапазоном `N-M`
   /// (ranged headers). Подмножество [numKeys] — consumers, проверяющие
   /// наличие ключа (ini_parser, securityLabel), не меняются.
@@ -905,91 +897,6 @@ class Awg {
 
   bool get isEmpty => fields.isEmpty;
 
-  /// Из URI query (строки). Числа → `int.tryParse` (битое → пропуск поля, не
-  /// валим парс — forward-compat, как mtu/keepalive). h1–h4 дополнительно
-  /// принимают диапазон `N-M` (§112). `i*` пустые пропускаем.
-  /// §481 (контракт 1.1.11) — параметра `badHeaders` больше нет: годность
-  /// `h1`–`h4` (как и `jc`/`jmin`/`jmax`/`s1`–`s4`) судит РЕЕСТР, и сырое
-  /// значение уезжает в тело как есть.
-  ///
-  /// §421 — [badAwg3]: пары (параметр, сырое значение) для AWG3-таймингов и
-  /// булевых с мусором/перевёрнутым диапазоном — поле снято, узел живёт
-  /// (`awg3_field_invalid`). Ключ защиты заголовка кладётся как есть — его
-  /// валидирует `awg3NodeError` (на узел, не на поле). Вызывающий обязан
-  /// подать `headerprotectionkey` с сохранённым `+` (queryParamPreservePlus):
-  /// `Uri.queryParameters` превращает `+` base64 в пробел.
-  ///
-  /// §463 — [droppedRequires]: пути полей, снятых правилом `requires` реестра
-  /// ([applyJunkSizeRequires]); вызывающий ставит на них код с путём.
-  static Awg? fromQuery(
-    Map<String, String> q, {
-    List<(String, String)>? badAwg3,
-    List<String>? droppedRequires,
-  }) {
-    final f = <String, Object>{};
-    final hk = (q[awg3Param(headerKey)] ?? '').trim();
-    if (hk.isNotEmpty) f[headerKey] = hk;
-    // §481 (контракт 1.1.11) — тайминги судит РЕЕСТР (`type: awg_range`,
-    // `on_invalid: awg3_field_invalid`), и негодное значение уезжает ему как
-    // есть. Прежде его снимал этот разбор, а код ставил маппер — с ИМЕНЕМ
-    // ПАРАМЕТРА ССЫЛКИ в пути (`rekeyaftertime`), тогда как контракт
-    // адресует поле ТЕЛА (`rekey_after_time`).
-    //
-    // Перевёрнутая пара («180-150») здесь НЕ свопается и не должна: у этих
-    // полей реестр `normalize: range_order` не объявляет — опечатку человек
-    // обязан увидеть (SPEC 123 §2), в отличие от `h1`–`h4`.
-    for (final k in awg3RangeKeys) {
-      final raw = (q[awg3Param(k)] ?? '').trim();
-      if (raw.isEmpty) continue;
-      f[k] = parseAwg3Range(raw) ?? raw;
-    }
-    for (final k in awg3BoolKeys) {
-      final raw = (q[awg3Param(k)] ?? '').trim();
-      if (raw.isEmpty) continue;
-      final v = parseAwg3Bool(raw);
-      if (v == null) {
-        badAwg3?.add((awg3Param(k), raw));
-        continue;
-      }
-      if (v) f[k] = true;
-    }
-    // §481 (контракт 1.1.11) — СУДИТ РЕЕСТР, а не этот разбор.
-    //
-    // Было: битые `jc`/`jmin`/`jmax`/`s1`–`s4` снимались МОЛЧА, а соседи по
-    // тому же циклу `h1`–`h4` код получали. Асимметрия жила внутри одной
-    // функции и расходилась с буквой реестра; выравнивание пошло в сторону
-    // реестра — поле снимается С КОДОМ (`awg_header_invalid`), одинаково у
-    // всех семи.
-    //
-    // Поэтому мусор уезжает в тело КАК ЕСТЬ (строкой), и его судит санитайзер:
-    // `type: int` / `type: awg_range` не сойдутся, сработает `on_invalid`.
-    // Своп перевёрнутой пары у `h1`–`h4` тоже снят отсюда — это
-    // `normalize: range_order` реестра, тихий, как `trim`.
-    for (final k in numKeys) {
-      final v = q[k]?.trim();
-      if (v == null || v.isEmpty) continue;
-      // Числом кладётся только то, что ЧИСЛОМ и написано в смысле ядра
-      // (`strconv.ParseUint`): `-5` для него не число, а мусор, и подсунуть
-      // санитайзеру `int -5` значило бы выдать мусор за годную форму. Это
-      // граница ТИПА, не суждение о годности: и то и другое доезжает до
-      // реестра, просто в той форме, в какой написано.
-      f[k] = _parseUint32(v) ?? v;
-    }
-    for (final k in _iTagKeys) {
-      final v = q[k];
-      if (v != null && v.isNotEmpty) f[k] = v; // регистр НЕ трогаем
-    }
-    // §143/D-023 — masquerade sugar id/ip/ib подавляется явным i1 (ядро
-    // отвергает оба сразу); эталон Go applyAWGFields.
-    if (!f.containsKey('i1')) {
-      for (final k in _masqueradeKeys) {
-        final v = q[k];
-        if (v != null && v.isNotEmpty) f[k] = v;
-      }
-    }
-    applyJunkSizeRequires(f, dropped: droppedRequires);
-    return f.isEmpty ? null : Awg(f);
-  }
 
   /// §463 / контракт §24.6 — `jmin` без `jmax` снимается
   /// (`requires: [{path: jmax, code: awg_header_invalid}]` в
@@ -1016,7 +923,7 @@ class Awg {
   /// `"N"`/`"N-M"` (§112, контракт ядра lx.6); `i*`: непустые `String`.
   static Awg? fromJson(Map<String, dynamic> m) {
     final f = <String, Object>{};
-    // §472 шаг 7 — ПОРЯДОК ТОТ ЖЕ, ЧТО У [fromQuery]: сначала AWG 3.x, потом
+    // §472 шаг 7 — ПОРЯДОК: сначала AWG 3.x, потом
     // числовые AWG2 и строковые `i*`. Порядок вставки в `fields` становится
     // порядком ключей в теле узла (`writeInto` — это `addAll`), а тело
     // сравнивается БАЙТ В БАЙТ golden-эталонами (`avd_v0.config.json`).
@@ -1066,12 +973,6 @@ class Awg {
   /// `bool` → `true` (§421; `false` в полях не бывает).
   void writeInto(Map<String, dynamic> m) => m.addAll(fields);
 
-  /// В URI query (числа → строка, `i*` как есть; encode делает `buildQuery`).
-  /// §421 — AWG3-ключи под URI-именами (без `_`), булевы → `on`.
-  void writeQuery(Map<String, String> q) => fields.forEach((k, v) {
-        final key = awg3JsonKeys.contains(k) ? awg3Param(k) : k;
-        q[key] = v is bool ? 'on' : v.toString();
-      });
 }
 
 class WireguardPeer {
@@ -1280,11 +1181,31 @@ final class AutoSelectSpec extends NodeSpec {
     this.params = const AutoSelectParams(),
     this.tagSynonyms = const {},
     this.poolBadge = kDefaultPoolBadge,
+    this.manualDefault = '',
     super.warnings,
     // §454 — у группы из sing-box-конфига источник — её объект; у групп,
     // собранных приложением (§208, папки), источника нет.
     super.rawSource = '',
   }) : super(server: '', port: 0);
+
+  /// **`default` группы-selector — СКВОЗНОЕ поле** (контракт 1.1.50, D133-53,
+  /// решение владельца 24.09.2026).
+  ///
+  /// Имя члена, выбранного ВРУЧНУЮ. Ручного рода у нас нет: обе формы
+  /// приводятся к `urltest` с кодом `selector_as_auto`, — но приведение РОДА и
+  /// потеря ПОЛЯ разные вещи. Прежде `default` исчезал безвозвратно, и круг
+  /// «импорт → бэкап → импорт» терял выбор пользователя МОЛЧА, без кода и без
+  /// возможности восстановления. Сохранение стоит ничего и возвращает полю
+  /// обратимость.
+  ///
+  /// **В ТЕЛО ЯДРА НЕ ИДЁТ.** Ядро декодирует с `DisallowUnknownFields`, и
+  /// `default`, дописанный к телу с `type: urltest`, роняет ВЕСЬ конфиг —
+  /// значит хранить его можно только ВНЕ тела (модель и бэкап), не подмешивая
+  /// к эмиту. Отсюда и имя нормы: preserve, а не map. Страж — `golden_config`.
+  ///
+  /// Не интерпретируется: значение едет строкой как пришло. Пустая строка —
+  /// «поля не было».
+  final String manualDefault;
 
   @override
   String get protocol => 'urltest';
@@ -1321,7 +1242,8 @@ final class AutoSelectSpec extends NodeSpec {
       label == other.label &&
       membership == other.membership &&
       params == other.params &&
-      poolBadge == other.poolBadge;
+      poolBadge == other.poolBadge &&
+      manualDefault == other.manualDefault;
 
   AutoSelectSpec copyWith({
     String? tag,
@@ -1330,6 +1252,7 @@ final class AutoSelectSpec extends NodeSpec {
     AutoSelectParams? params,
     Map<String, String>? tagSynonyms,
     String? poolBadge,
+    String? manualDefault,
   }) =>
       AutoSelectSpec(
         id: id,
@@ -1339,6 +1262,7 @@ final class AutoSelectSpec extends NodeSpec {
         params: params ?? this.params,
         tagSynonyms: tagSynonyms ?? this.tagSynonyms,
         poolBadge: poolBadge ?? this.poolBadge,
+        manualDefault: manualDefault ?? this.manualDefault,
         warnings: warnings,
         rawSource: rawSource,
       );

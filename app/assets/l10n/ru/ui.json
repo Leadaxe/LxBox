@@ -16,6 +16,14 @@
   "%1$d of %2$d nodes match": {
     "value": "Совпадений: %1$d из %2$d узлов"
   },
+  "%1$d outbounds (%2$s)": {
+    "value": {
+      "one": "%1$d исходящий канал (%2$s)",
+      "few": "%1$d исходящих канала (%2$s)",
+      "many": "%1$d исходящих каналов (%2$s)",
+      "other": "%1$d исходящего канала (%2$s)"
+    }
+  },
   "%1$d selected · %2$d shown": {
     "value": "%1$d выбрано · %2$d показано"
   },
@@ -62,6 +70,14 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
+  "%d chained": {
+    "value": {
+      "one": "%d в цепочке",
+      "few": "%d в цепочке",
+      "many": "%d в цепочке",
+      "other": "%d в цепочке"
+    }
+  },
   "%d DNS rules": {
     "value": {
       "one": "%d DNS-правило",
@@ -76,6 +92,22 @@
       "few": "%d DNS-сервера",
       "many": "%d DNS-серверов",
       "other": "%d DNS-серверов"
+    }
+  },
+  "%d elements": {
+    "value": {
+      "one": "%d элемент",
+      "few": "%d элемента",
+      "many": "%d элементов",
+      "other": "%d элемента"
+    }
+  },
+  "%d groups": {
+    "value": {
+      "one": "%d группа",
+      "few": "%d группы",
+      "many": "%d групп",
+      "other": "%d группы"
     }
   },
   "%d MB": {
@@ -373,6 +405,9 @@
       "other": "Удалено %d сервера"
     }
   },
+  "%s link": {
+    "value": "Ссылка %s"
+  },
   "1 server disabled": {
     "value": "Отключено серверов: 1"
   },
@@ -636,6 +671,9 @@
   },
   "ACTIVE": {
     "value": "АКТИВЕН"
+  },
+  "Amnezia VPN config": {
+    "value": "Конфиг Amnezia VPN"
   },
   "AND": {
     "value": "И"
@@ -1557,8 +1595,8 @@
   "Default Domain Resolver": {
     "value": "Резолвер доменов по умолчанию"
   },
-  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
-    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом выше. Сюда попадает каждый запрос приложений, не направленный правилом.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 9 провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh — шифрованный (DoH)\n  • cloudflare_dot / google_dot — шифрованные (DoT)\n  • cloudflare_udp / google_udp — быстрый обычный UDP\n\nlocal_dns_resolver работает, но раскрывает запросы вашему провайдеру. Шифрованные варианты сохраняют их приватность."
+  "Default fallback DNS server. Used when an app makes a DNS query and no DNS rule above matches it. Every app DNS query that isn't routed by a rule ends up here.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh — encrypted (DoH)\n  • cloudflare_dot / google_dot — encrypted (DoT)\n  • cloudflare_udp / google_udp — fast plain UDP\n\nlocal_dns_resolver works but reveals queries to your ISP. Encrypted options keep them private.": {
+    "value": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом выше. Сюда попадает каждый запрос приложений, не направленный правилом.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • google_doh — шифрованный (DoH)\n  • cloudflare_dot / google_dot — шифрованные (DoT)\n  • cloudflare_udp / google_udp — быстрый обычный UDP\n\nlocal_dns_resolver работает, но раскрывает запросы вашему провайдеру. Шифрованные варианты сохраняют их приватность."
   },
   "Default traffic": {
     "value": "Трафик по умолчанию"
@@ -3862,6 +3900,9 @@
   "Runtime HTTP server for adb-forwarded debugging.": {
     "value": "HTTP-сервер для отладки через adb forward."
   },
+  "sing-box config": {
+    "value": "Конфиг sing-box"
+  },
   "SOCKS5": {
     "value": "SOCKS5"
   },
@@ -4728,8 +4769,8 @@
   "Use this node": {
     "value": "Использовать этот узел"
   },
-  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 9 providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
-    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса исходящих серверов, правила маршрутизации). Это не резолвер приложений.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 9 провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • cloudflare_udp — UDP к 1.1.1.1 (быстро)\n  • google_udp — UDP к 8.8.8.8 (быстро)\n  • google_doh — шифрованный\n\n⚠ local_dns_resolver здесь сливает запросы провайдеру — системный DNS идёт мимо VPN."
+  "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use.\n\nRecommended:\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n  • google_udp — UDP to 8.8.8.8 (fast)\n  • google_doh — encrypted\n\n⚠ local_dns_resolver here leaks lookups to your ISP — system DNS bypasses the VPN.": {
+    "value": "Используется движком маршрутизации для внутреннего резолва имён (адреса исходящих серверов, правила маршрутизации). Это не резолвер приложений.\n\nРекомендуется:\n  • dns_shield — по умолчанию; опрашивает 6 шифрованных провайдеров наперегонки, отвечает тот, кто первым откликнулся\n  • cloudflare_udp — UDP к 1.1.1.1 (быстро)\n  • google_udp — UDP к 8.8.8.8 (быстро)\n  • google_doh — шифрованный\n\n⚠ local_dns_resolver здесь сливает запросы провайдеру — системный DNS идёт мимо VPN."
   },
   "User": {
     "value": "Свой"
@@ -4869,6 +4910,9 @@
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
   },
+  "WireGuard config": {
+    "value": "Конфиг WireGuard"
+  },
   "WireGuard config: saved as is. The tag is stored separately.": {
     "value": "Конфиг WireGuard: сохраняется как есть. Тег хранится отдельно."
   },
@@ -4898,6 +4942,9 @@
   },
   "XHTTP padding": {
     "value": "набивка XHTTP"
+  },
+  "Xray config": {
+    "value": "Конфиг Xray"
   },
   "Yellow up to, ms": {
     "value": "Жёлтый до, мс"

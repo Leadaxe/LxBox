@@ -25,6 +25,10 @@ docs/spec/tasks/NNN-short-kebab-title.md
 | 143 | [`143-interrupt-connections-on-node-switch.md`](143-interrupt-connections-on-node-switch.md) | §143-interrupt | обрыв соединений при смене ноды |
 | 143 | [`143-warp-masquerade-id-ip-ib.md`](143-warp-masquerade-id-ip-ib.md) | §143-warp | WARP core-masquerade `id/ip/ib` |
 
+> §505 — коллизия **снята слиянием**: `505-home-badge-cold-start.md` и
+> `505-home-node-badge-user-server.md` описывали один дефект; задачей §513
+> первая слита во вторую ([`505-home-node-badge-user-server.md`](505-home-node-badge-user-server.md)) и удалена.
+>
 > §146 — **не** коллизия: `146-warp-quic-initial-fragmented-i1.md` + `146-test-vectors/`
 > относятся к одной таске (директория — hex-векторы к ней).
 >

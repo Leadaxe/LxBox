@@ -171,7 +171,8 @@
     },
     "raw_headertype_http": {
       "uri": "vless://22222222-2222-2222-2222-222222222222@192.0.2.14:58387?encryption=none&type=raw&headerType=http&host=cdn.example-7.com&path=%2F&security=none#t",
-      "identity": "1e7987d50d914e68632a58140030fa5d8191e421934e0987bf5b75ccb7fb2389"
+      "identity": null,
+      "_why": "§514 / контракт 1.1.52 (D133-58), решение владельца 24.09.2026 — УЗЕЛ ОТБРАКОВЫВАЕТСЯ. `identity: null` здесь значит «ссылка не разбирается вовсе», и это ЗАЯВЛЕННОЕ свойство кейса, а не потеря: прежний хеш описывал узел с `transport.type: \"http\"`, то есть с НЕВЕРНЫМ маппингом — у ядра это транспорт HTTP/2, на проводе другой протокол, а камуфляж Xray оставляет транспорт TCP и лишь подделывает первый пакет. Такой узел выглядел рабочим и НЕ РАБОТАЛ: сервер, ждущий камуфляж, получал h2-рукопожатие и обрывал соединение. Слетит identity только у узлов, которые и так не соединялись."
     },
     "reality_fp_firefox_kept": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?security=reality&type=tcp&fp=firefox&sni=www.example-3.com&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sid=ab#reality-fp-firefox",
@@ -242,8 +243,9 @@
       "identity": "96b12023f7bdadbc4bfb6bcf158fb7849ce7b75a8ead8d324c423c45f8c98982"
     },
     "userinfo_raw_space": {
-      "uri": "vless://Promo:Configs @192.0.2.16:80?encryption=none&type=raw&headerType=http&host=play.example-11.com&path=%2F&security=none#node",
-      "identity": "f2985eeb8f15c2f85b943bea1066df6784dfbf6f616037c023db781b87f623e2"
+      "uri": "vless://Promo:Configs @192.0.2.16:80?encryption=none&type=ws&host=play.example-11.com&path=%2F&security=none#node",
+      "identity": "5a612fc6411d68dfa79b00d3db15e1a8355ec05c7b45f7f5b04d97fb1c75fe25",
+      "_why": "§514 / контракт 1.1.52 — ссылка кейса переведена с `type=raw&headerType=http` на `type=ws`, ТОЧНО КАК У ЛАУНЧЕРА (corpus/uri/vless/userinfo_raw_space.uri). ПРЕДМЕТ кейса ДРУГОЙ — пробел в userinfo, — и с приходом отбраковки обфускации заголовком (D133-58) кейс проверял бы отбраковку вместо того, ради чего написан. Транспорт здесь лишь обстановка, и ws её сохраняет полностью."
     },
     "utls_junk_fp_fallback": {
       "uri": "vless://11111111-1111-1111-1111-111111111111@example-1.com:443?encryption=none&security=tls&sni=example-1.com&fp=enabled#t",

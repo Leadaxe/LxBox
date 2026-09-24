@@ -613,6 +613,7 @@ class LxBackupFile {
     this.servers = const [],
     this.folders = const [],
     this.chainHops = const {},
+    this.chainPositions = const {},
     this.dns,
     this.warp = const [],
   });
@@ -674,6 +675,11 @@ class LxBackupFile {
   /// пусто: там позиции уже строки.
   final Map<String, List<NodeLink>> chainHops;
 
+  /// §511 m2 — место цепочки в `sources[]` файла 1.0 (тег → индекс записи),
+  /// та же шкала, что [LxSubscription.position]: импорт по ней ставит
+  /// цепочки между источниками, как в файле. У 0.x пусто.
+  final Map<String, int> chainPositions;
+
   /// §393 B9 — секция DNS; `null` = в файле её не было.
   final LxDns? dns;
 
@@ -706,6 +712,7 @@ class LxBackupFile {
         rules: rules ?? this.rules,
         chains: chains,
         chainHops: chainHops,
+        chainPositions: chainPositions,
         subscriptions: subscriptions,
         servers: servers,
         folders: folders,
@@ -2556,6 +2563,7 @@ LxBackupFile gateLxBackupTargets(LxBackupFile file, Set<String>? known) {
     rules: rules,
     chains: file.chains,
     chainHops: file.chainHops,
+    chainPositions: file.chainPositions,
     subscriptions: file.subscriptions,
     servers: file.servers,
     folders: file.folders,
@@ -2798,6 +2806,7 @@ LxBackupFile _parse10(
   final folders = <LxFolder>[];
   final chains = <SourceChain>[];
   final chainHops = <String, List<NodeLink>>{};
+  final chainPositions = <String, int>{};
   final takenChainTags = <String>{
     for (final t in knownChains) t.trim(),
   };
@@ -2837,6 +2846,7 @@ LxBackupFile _parse10(
         if (chain == null) continue;
         chains.add(chain.chain);
         chainHops[tag] = chain.hops;
+        chainPositions[tag] = i;
       default:
         // Корневые `auto`/`unsupported` union не выражает, незнакомый вид —
         // чужая сторона, ушедшая вперёд по схеме. Молча не теряется (П6).
@@ -2876,6 +2886,7 @@ LxBackupFile _parse10(
     rules: sortRulesByAxis(rules),
     chains: chains,
     chainHops: chainHops,
+    chainPositions: chainPositions,
     subscriptions: subscriptions,
     servers: servers,
     folders: folders,
@@ -3755,6 +3766,10 @@ typedef BackupServerMerge = ({
   /// хвосте, в порядке файла).
   List<ServerList> lists,
 
+  /// §511 m2 — заведённые импортом источники (подписки, серверы, папки):
+  /// `id` здесь → место записи в `sources[]` файла.
+  Map<String, int> added,
+
   /// Сколько записей файла реально применилось.
   int applied,
 
@@ -4148,6 +4163,7 @@ BackupServerMerge mergeBackupServers(
 
   return (
     lists: merged,
+    added: added,
     applied: applied,
     folderIds: linkIds,
     touched: touched,

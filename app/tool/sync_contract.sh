@@ -48,6 +48,15 @@ MODE="restore"
 BUMP_SHA=""
 LX_CONTRACT_SRC_EXPLICIT=0
 
+# §512 — временный каталог держится в переменной УРОВНЯ СКРИПТА, а `trap` стоит
+# один и здесь же. Прежде `trap 'rm -rf "$tmp"' EXIT` ставился внутри функции
+# поверх её `local tmp`: к моменту выхода локальная переменная уже не
+# существует, и под `set -u` ловушка печатала `tmp: unbound variable`, а
+# каталог не удалялся вовсе.
+SYNC_TMP=""
+_sync_cleanup() { [[ -n "$SYNC_TMP" ]] && rm -rf "$SYNC_TMP"; }
+trap _sync_cleanup EXIT
+
 if [[ -n "${LX_CONTRACT_SRC:-}" ]]; then
   MODE="bump"
   LX_CONTRACT_SRC_EXPLICIT=1
@@ -140,7 +149,7 @@ _restore_contract() {
 
   local tmp
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  SYNC_TMP="$tmp"
 
   echo "sync_contract: восстановление $launcher_repo@$source_sha -> $DEST_DIR"
   git -C "$launcher_repo" archive "$source_sha" contract | tar -x -C "$tmp"
@@ -178,7 +187,7 @@ _bump_contract() {
     fi
     local tmp
     tmp="$(mktemp -d)"
-    trap 'rm -rf "$tmp"' EXIT
+    SYNC_TMP="$tmp"
     git -C "$launcher_repo" archive "$BUMP_SHA" contract | tar -x -C "$tmp"
     contract_src="$tmp/contract"
     source_sha="$BUMP_SHA"

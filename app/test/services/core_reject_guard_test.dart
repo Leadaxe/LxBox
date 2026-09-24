@@ -167,14 +167,17 @@ void main() {
       expect(scripted.checks, 0);
     });
 
-    test('тот же тег назван повторно → цикл прерван (CANON §9.5)', () async {
-      // Ядро упрямо называет A, а выключение его не убирает.
+    test('тот же узел назван повторно → цикл прерван (CANON §9.5)', () async {
+      // Ядро упрямо называет A, а выключение его не убирает. Повтор судится
+      // по ref узла (H1): хост зовётся второй раз, отдаёт тот же ref — и цикл
+      // обрывается, не начиная третьего круга.
       final core = _StubbornCore();
       final run = await CoreRejectGuard(core).run();
 
       expect(run.outcome, CoreRejectOutcome.failed);
-      expect(core.disabledTags, ['A'],
-          reason: 'выключен ровно один раз, второго круга по нему нет');
+      expect(run.disabled.map((d) => d.tag), ['A'],
+          reason: 'в итоге прогона узел один, второго выключения нет');
+      expect(core.disabledTags.toSet(), {'A'});
       expect(run.rounds, 1);
     });
   });

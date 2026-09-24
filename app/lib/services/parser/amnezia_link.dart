@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../../models/node_spec.dart';
 import 'body_decoder.dart';
+import 'drop_verdict.dart';
 import 'ini_parser.dart';
 import 'uri_utils.dart';
 
@@ -24,6 +25,13 @@ DecodedBody decodeAmneziaLink(String link) {
   if (t.length > maxAmneziaLinkLength) {
     return const DecodeFailure('vpn://: link too long');
   }
+
+  // §506 — payload бывает ГОЛЫМ `.conf`: экспорт wg-quick/AWG, завёрнутый в
+  // `vpn://` без JSON-обёртки профиля. Тело поддержано полностью (те же
+  // AWG3-поля), недостижимо было только через обёртку — проверяем ДО
+  // JSON-ветки, потому что признак взаимоисключающий (`[` против `{`).
+  final bareIni = _decodeBareIni(t);
+  if (bareIni != null) return AmneziaConfig([bareIni]);
 
   final root = _decodeAmneziaRoot(t);
   if (root == null) {
@@ -61,11 +69,16 @@ DecodedBody decodeAmneziaLink(String link) {
 /// импортируется первый найденный контейнер). Label: `description` →
 /// `hostName` → имя контейнера (Go-порядок; отличается от body-пути, где
 /// Dart берёт nameHint файла — здесь такого контекста нет).
-WireguardSpec? parseAmneziaVpnUri(String link) {
+WireguardSpec? parseAmneziaVpnUri(String link, {XrayDropVerdict? dropped}) {
   final t = link.trim();
   if (!t.startsWith('vpn://')) return null;
   // §110 — cap 512 KiB общий с Go (maxAmneziaLinkLength): профиль с
   // сертификатами штатно больше maxURILength, и общий лимит его терял.
+
+  // §506 — голый `.conf` под обёрткой `vpn://` (см. [decodeAmneziaLink]).
+  // Имени у такой ссылки нет: тег даст сам INI (комментарий под `[Peer]`).
+  final bareIni = _decodeBareIni(t);
+  if (bareIni != null) return parseWireguardIni(bareIni, dropped: dropped);
 
   final root = _decodeAmneziaRoot(t);
   if (root == null) return null;
@@ -117,7 +130,34 @@ WireguardSpec? parseAmneziaVpnUri(String link) {
               ? containerName
               : null;
 
-  return parseWireguardIni(ini, nameHint: label);
+  return parseWireguardIni(ini, nameHint: label, dropped: dropped);
+}
+
+/// §506 — payload `vpn://` как ГОЛЫЙ wg-quick/AWG `.conf` (без JSON-обёртки
+/// профиля Amnezia). Возвращает текст INI или `null`, если payload не INI.
+///
+/// Признак — первая НЕ-комментарная и непустая строка начинается с `[`:
+/// у профиля Amnezia payload это JSON (`{`), у `.conf` — секция ini
+/// (`[Interface]`). Комментарии пропускаем, потому что экспортёры ставят
+/// шапку (`# awg-entry-…`) перед первой секцией.
+///
+/// Форму секций дальше судит [parseWireguardIni] — здесь только распознание
+/// РОДА тела, как и у JSON-ветки (`_decodeAmneziaRoot`).
+String? _decodeBareIni(String linkTrimmed) {
+  final bytes = decodeBase64Safe(linkTrimmed.substring('vpn://'.length));
+  if (bytes == null) return null;
+  String text;
+  try {
+    text = utf8.decode(bytes);
+  } catch (_) {
+    return null;
+  }
+  for (final raw in text.split(RegExp(r'\r?\n'))) {
+    final l = raw.trim();
+    if (l.isEmpty || l.startsWith('#') || l.startsWith(';')) continue;
+    return l.startsWith('[') ? text : null;
+  }
+  return null;
 }
 
 /// base64 (любой из 4 вариантов) → qCompress-инфлейт/несжатый JSON → decode

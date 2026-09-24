@@ -90,6 +90,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   _HighlightMode _highlightMode = _HighlightMode.none;
   double _highlightOpacity = 0;
   double? _highlightScrollBaseline;
+
+  /// §504 — запас под SnackBar в конце списка. Новая запись встаёт в хвост,
+  /// а хвост длинного списка прокручивается только до нижнего padding:
+  /// без запаса последняя строка оставалась под SnackBar «Config
+  /// regenerated». Появляется с первой подсветкой и живёт до ухода с экрана —
+  /// иначе список дёрнулся бы вниз при снятии подсветки.
+  double _snackBarClearance = 0;
   Timer? _highlightTimer;
   Timer? _highlightFadeTimer;
 
@@ -230,6 +237,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       _highlightedEntryId = id;
       _highlightMode = _HighlightMode.newEntry;
       _highlightOpacity = 1;
+      _snackBarClearance = 80;
     });
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
@@ -301,8 +309,25 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   void _onControllerForSourceOrder() {
+    _forgetGoneEntries();
     unawaited(_loadSourceOrder());
   }
+
+  /// §511 m1 — запись ушла (удалена из меню, пропала при обновлении
+  /// подписки): подсветка с её id снимается, а не живёт до таймера, и
+  /// `GlobalKey` строки не копится в [_tileKeys] до закрытия экрана.
+  void _forgetGoneEntries() {
+    final ids = _entryIds(widget.subController);
+    _tileKeys.removeWhere((id, _) => !ids.contains(id));
+    final hl = _highlightedEntryId;
+    if (hl != null && !ids.contains(hl)) _dismissHighlight(animated: false);
+  }
+
+  @visibleForTesting
+  String? get debugHighlightedEntryId => _highlightedEntryId;
+
+  @visibleForTesting
+  Iterable<String> get debugTileKeyIds => _tileKeys.keys;
 
   /// Создание цепочки: тег спрашиваем ДО создания (после он immutable — на
   /// него ссылаются фильтры Направлений, `route_final` и позиции ДРУГИХ
@@ -465,7 +490,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   @override
   void deactivate() {
-    _dismissHighlight(animated: false);
+    // Уход с экрана снимает подсветку (§504). setState здесь нельзя: дерево
+    // в фазе сборки, debug ловит assert. Поля — напрямую; при activate()
+    // элемент перестроится сам.
+    _highlightTimer?.cancel();
+    _highlightFadeTimer?.cancel();
+    _highlightedEntryId = null;
+    _highlightMode = _HighlightMode.none;
+    _highlightOpacity = 0;
+    _highlightScrollBaseline = null;
     super.deactivate();
   }
 
@@ -1097,7 +1130,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       // Bottom safe-area: последняя подписка не должна прятаться за системной
       // навигацией Android (жесты/кнопки). Паттерн проекта — padding.bottom + 24.
       padding: EdgeInsets.fromLTRB(
-          12, 0, 12, MediaQuery.of(context).padding.bottom + 24),
+          12, 0, 12,
+          MediaQuery.of(context).padding.bottom + 24 + _snackBarClearance),
       buildDefaultDragHandles: false,
       itemCount: rows.length,
       onReorderItem: (oldIndex, newIndex) {
@@ -1143,50 +1177,56 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                         : null,
                   )
                 : null,
-            child: SubscriptionEntryTile(
-              dragIndex: i,
-              entry: entry,
-              subController: widget.subController,
-              showNewBadge: showNewBadge,
-              onToggle: () {
-                _onUserInteractionDismissHighlight();
-                unawaited(widget.subController.toggleAt(at));
-              },
-              onLaunchUrl: _launchUrl,
-              onLongPress: (context) => _showContextMenu(context, at, entry),
-              onTap: (context) {
-                _onUserInteractionDismissHighlight();
-                // §234 — папка открывает свой экран (члены + settings).
-                if (entry.list is FolderServers) {
+            // Фон подсветки — DecoratedBox над ближайшим Material: без своего
+            // прозрачного Material ink строки рисовался бы под ним (невидим),
+            // а debug-сборка ловила assert ListTile.
+            child: Material(
+              type: MaterialType.transparency,
+              child: SubscriptionEntryTile(
+                dragIndex: i,
+                entry: entry,
+                subController: widget.subController,
+                showNewBadge: showNewBadge,
+                onToggle: () {
+                  _onUserInteractionDismissHighlight();
+                  unawaited(widget.subController.toggleAt(at));
+                },
+                onLaunchUrl: _launchUrl,
+                onLongPress: (context) => _showContextMenu(context, at, entry),
+                onTap: (context) {
+                  _onUserInteractionDismissHighlight();
+                  // §234 — папка открывает свой экран (члены + settings).
+                  if (entry.list is FolderServers) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FolderDetailScreen(
+                          entry: entry,
+                          controller: widget.subController,
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  final isDirectServer =
+                      entry.url.isEmpty && entry.connections.isNotEmpty;
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => FolderDetailScreen(
-                        entry: entry,
-                        controller: widget.subController,
-                      ),
+                      builder: (_) => isDirectServer
+                          ? NodeSettingsScreen(
+                              entry: entry,
+                              index: at,
+                              subController: widget.subController,
+                            )
+                          : SubscriptionDetailScreen(
+                              entry: entry,
+                              controller: widget.subController,
+                            ),
                     ),
                   );
-                  return;
-                }
-                final isDirectServer =
-                    entry.url.isEmpty && entry.connections.isNotEmpty;
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => isDirectServer
-                        ? NodeSettingsScreen(
-                            entry: entry,
-                            index: at,
-                            subController: widget.subController,
-                          )
-                        : SubscriptionDetailScreen(
-                            entry: entry,
-                            controller: widget.subController,
-                          ),
-                  ),
-                );
-              },
+                },
+              ),
             ),
           ),
         );

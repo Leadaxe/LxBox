@@ -1,5 +1,5 @@
-source=/tmp/x_1146/contract
+source=/var/folders/nk/7972z82j36bb6cr5_x88wgk00000gn/T/tmp.k0Z6a9Phtd/contract
 launcher_repo=/Users/macbook/projects/singbox-launcher
-source_sha=7e2945bff0b6fcd0475a1e37808d3a08407dbb44
-synced_at=2026-09-19T11:26:14Z
-sha256=53c9a958ac471751fde4b381422b4e2ee044fd6471766417460595c99199736b
+source_sha=8a915861
+synced_at=2026-09-23T23:11:52Z
+sha256=f38e8ef8b8525caa52b2b1d42349133516afce0977983f9757bec12206fa4511

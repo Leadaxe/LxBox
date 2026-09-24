@@ -33,6 +33,7 @@ import '../drop_verdict.dart';
 import '../../contract/body_sanitizer.dart';
 import '../../contract/registry.dart';
 import '../../../services/parser/engine/engine_mapper.dart';
+import '../engine/section_loader.dart' show MapperSections;
 import '../json_parsers.dart';
 import '../uri_utils.dart';
 import 'uri_mapper.dart';
@@ -42,9 +43,56 @@ import 'uri_mapper.dart';
 /// `parse_warnings.dart`.
 const _kParseTimeCore = '0.0.0';
 
-/// Схемы, переехавшие на конвейер. Растёт по шагу за протокол; список
-/// нормативен для стража покрытия mapper-правил
-/// (`test/parser/mapper_rules_coverage_test.dart`).
+/// §512 — НАБОР СХЕМ ИЗ РЕЕСТРА: объединение `detect.scheme_in` всех секций
+/// `mappers.uri`, которые загружены (реестр + черновик-оверлеи).
+///
+/// Источник истины у написания схемы один — секция протокола, и до §512
+/// диспетчер дублировал его литералами: контракт 1.1.48 добавил `amneziawg` в
+/// `scheme_in` секции wireguard, а ссылка всё равно падала в `default`, потому
+/// что литерального списка это не касалось. Ровно тем же дефектом раньше были
+/// `naive+quic`, `socks4` и `masque` — каждый чинился правкой копии, то есть по
+/// одной схеме за находку (история в [isDirectLink]).
+///
+/// Возвращается `null`, когда ни одной секции `uri` нет (реестр не загружен):
+/// тогда вызывающий берёт [kPipelineSchemes]. Пустой набор и «реестра нет» —
+/// разные вещи, и молчаливый пустой набор выключил бы разбор ссылок целиком.
+Set<String>? registryUriSchemes() {
+  final types = MapperSections.I.typesFor('uri');
+  if (types.isEmpty) return null;
+  final out = <String>{};
+  for (final type in types) {
+    final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
+    if (si is! List) continue;
+    for (final s in si) {
+      if (s is String && s.isNotEmpty) out.add(s.toLowerCase());
+    }
+  }
+  return out.isEmpty ? null : out;
+}
+
+/// Схемы конвейера: набор реестра ОБЪЕДИНЁННЫЙ с литеральным
+/// [kPipelineSchemes].
+///
+/// §512 — объединение, а не замена: `wg://` реестр в `scheme_in` НЕ объявляет
+/// намеренно (`wireguard.json` → note: «алиас wg:// знает только Dart, Go
+/// IsDirectLink его не принимает — разрыв»), а написание живое и снимать его
+/// эта задача не уполномочена. Реестр здесь ДОБАВЛЯЕТ написания, и новое имя
+/// работает без правки кода; убрать написание он сегодня не может — это
+/// решение владельца, а не следствие синка.
+Set<String> pipelineSchemes() {
+  final fromRegistry = registryUriSchemes();
+  if (fromRegistry == null) return kPipelineSchemes;
+  return {...kPipelineSchemes, ...fromRegistry};
+}
+
+/// Схемы, переехавшие на конвейер — ЗАПАСНОЙ набор на случай, когда реестр не
+/// загружен (см. [registryUriSchemes]); он же нормативен для стража покрытия
+/// mapper-правил (`test/parser/mapper_rules_coverage_test.dart`).
+///
+/// §512 — литералы больше НЕ решают, какую ссылку примет диспетчер: их
+/// перекрывает набор реестра. Список остаётся полным, чтобы запасной путь не
+/// оказался уже основного, а страж `registry_uri_schemes_test.dart` стережёт,
+/// что реестр покрывает каждое написание из него.
 ///
 /// §472 шаг 5 — `hy2` стоит в списке отдельной записью: это АЛИАС СХЕМЫ
 /// (`hysteria2.json` → `aliases`), и `parseUri` маршрутизирует по тексту
@@ -145,6 +193,26 @@ const Map<String, String> _kSchemeToType = <String, String>{
   'vmess': 'vmess',
 };
 
+/// §512 — написание схемы → ТИП ТЕЛА по РЕЕСТРУ: секция, чей
+/// `detect.scheme_in` несёт это написание. `null` — ни одна секция его не
+/// объявляет.
+///
+/// Спрашивается раньше литеральной [_kSchemeToType]: новое написание в
+/// `scheme_in` (контракт 1.1.48 — `amneziawg`) обязано работать без правки
+/// кода, иначе реестр не источник истины, а копия. Литералы остаются
+/// запасным путём, когда реестра нет.
+String? registrySchemeType(String scheme) {
+  final s = scheme.toLowerCase();
+  for (final type in MapperSections.I.typesFor('uri')) {
+    final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
+    if (si is! List) continue;
+    for (final v in si) {
+      if (v is String && v.toLowerCase() == s) return type;
+    }
+  }
+  return null;
+}
+
 /// Мапперы схем, ещё НЕ переехавших на движок, по схеме ссылки.
 ///
 /// §480 — таблица ПУСТА: ссылочных схем, разбираемых рукописным маппером, не
@@ -165,8 +233,12 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme,
   // схемы не остаётся (критерий 7 спеки — движок без реестра не работает
   // вовсе, и молчаливый откат на рукописный разбор скрыл бы отсутствие
   // секции).
-  final singboxType = _kSchemeToType[scheme];
+  // §512 — реестр спрашивается ПЕРВЫМ; литеральная таблица остаётся запасным
+  // путём для случая «реестра нет вовсе».
+  final singboxType = registrySchemeType(scheme) ?? _kSchemeToType[scheme];
   if (singboxType != null) {
+    // §512 — код непрочитанного ставит ДВИЖОК (`runSection`): только он знает,
+    // что именно не сошлось — форма или обязательное значение (CANON §4.1).
     final mapping = mapViaEngine(uri, singboxType, dropped: dropped);
     if (mapping == null) return null;
     return _runPipeline(uri, null, mapping: mapping, dropped: dropped);

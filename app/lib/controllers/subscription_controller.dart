@@ -62,6 +62,7 @@ import '../services/warp/scan/candidate_generator.dart';
 import '../services/warp/scan/scan_models.dart';
 import '../services/warp/scan/scan_node_builder.dart';
 import '../services/warp/scan/scan_pool.dart';
+import '../services/workspaces/workspace_controller.dart';
 import '../services/workspaces/workspace_store.dart';
 
 // Та же библиотека (`part`), поэтому library-private доступ
@@ -76,6 +77,54 @@ enum _JsonAdd { added, empty, notJson }
 /// Основной контроллер подписок. Владеет `List<ServerList>`, делает
 /// fetch/parse через `parseFromSource`, собирает конфиг через `buildConfig`.
 class SubscriptionController extends ChangeNotifier {
+  /// §515 — поколение Workspaces, в котором контроллер родился. Сцена на диске
+  /// принадлежит ровно одному слоту, а `_persist()` переписывает весь набор
+  /// не-цепочек целиком (`sources_rules.dart` → `_spliceSourceKind`) — без
+  /// привязки к слоту. Пересоздание экрана (`main.dart`, ключ по
+  /// `WorkspaceController.generation`) даёт новый контроллер, но асинхронные
+  /// хвосты старого (летящий HTTP подписки, 10-секундная пауза апдейтера между
+  /// подписками, `toggleAt` из ещё живого обработчика) продолжают жить и
+  /// пишут состав ПРЕЖНЕГО слота в файл, который к тому моменту принадлежит
+  /// НОВОМУ. Ближайший `load`/`saveAs` копирует испорченную сцену в папку
+  /// слота — подмена закрепляется на диске.
+  ///
+  /// Барьер стоит на уровне контроллера, а не в `saveServerLists`: там под
+  /// него попали бы легитимные писатели, не принадлежащие `HomeScreen`
+  /// (импорт бэкапа, Debug API, шаги `_reloadStateFromDisk`), и их записи
+  /// молча терялись бы.
+  final int _bornGeneration = WorkspaceController.I.generation;
+
+  /// §515 — контроллер прошёл `dispose()`. Проверяется в `_persist()` и после
+  /// каждого `await` в долгих асинхронных проходах.
+  bool _disposed = false;
+
+  /// §515 — «этот контроллер больше не владеет сценой»: либо его уже
+  /// disposed'нули, либо Workspaces успел сменить слот. Публичный, чтобы
+  /// асинхронные проходы (fetch, регидрация) могли выйти рано, не дожидаясь
+  /// собственного `_persist`.
+  bool get stale =>
+      _disposed || WorkspaceController.I.generation != _bornGeneration;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  /// §515 — disposed-контроллер молчит вместо `assert`-падения. У контроллера
+  /// 58 точек `_persist` + `notifyListeners`, и любой асинхронный хвост
+  /// (летящий фетч, ещё не отработавший обработчик кнопки) доходит до notify
+  /// уже после `HomeScreen.dispose()`. Барьер в `_persist` запись отменяет, но
+  /// `ChangeNotifier.notifyListeners` на этом же пути роняет debug-сборку
+  /// assert'ом «used after being disposed» — на проде это был бы тихий no-op,
+  /// а в тестах и профиле падение на месте, не имеющем отношения к дефекту.
+  /// Слушателей после `dispose()` нет по построению, уведомлять некого.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
   List<SubscriptionEntry> _entries = [];
   List<SubscriptionEntry> get entries => _entries;
 
@@ -242,6 +291,9 @@ class SubscriptionController extends ChangeNotifier {
         if (list is! SubscriptionServers) continue;
         if (list.nodes.isNotEmpty) continue;
         final body = await HttpCache.loadBody(list.url);
+        // §515 — регидрация стартует `unawaited` из `_initBody`: контроллер
+        // прежнего слота может дожить до неё уже после переключения.
+        if (stale) return;
         if (body == null || body.isEmpty) continue;
         try {
           final decoded = decode(body);
@@ -1675,14 +1727,26 @@ class SubscriptionController extends ChangeNotifier {
     if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
 
     List<NodeSpec> nodes;
+    // §506 — причины отбраковки записей: без них «серверов не найдено» не
+    // отличалось от пустого ввода.
+    final dropped = <NodeWarning>[];
     try {
       // §243 — INI-ноды получают имя файла прямо во фрагмент синтетического
       // URI (rawSource) — фолбэк-цикл ниже до них не дойдёт (_rawHasOwnName).
-      nodes = parseAll(decode(input.trim()), nameHint: nameFallback);
+      nodes = parseAll(decode(input.trim()),
+          nameHint: nameFallback, dropped: dropped);
     } catch (e) {
       return humanizeError(e);
     }
-    if (nodes.isEmpty) return const ErrMsg(ErrKey.noServersFoundInInput);
+    if (nodes.isEmpty) {
+      final sorted = maskSecretDropWarnings(sortedDropWarnings(dropped));
+      if (sorted.isEmpty) return const ErrMsg(ErrKey.noServersFoundInInput);
+      return ParseInputRejectedMsg(
+        ErrKey.noServersFoundInInput,
+        dropped: sorted,
+        sourceLabel: inputSourceLabel(input),
+      );
+    }
 
     final usedNames = <String>{};
     final added = <FolderMember>[];
@@ -1734,7 +1798,14 @@ class SubscriptionController extends ChangeNotifier {
       final result = await parseFromSource(UrlSource(url.trim()),
           client: httpClientForTesting);
       if (result.nodes.isEmpty) {
-        return const ErrMsg(ErrKey.noServersFoundAtUrl);
+        // §506 — причины из `dropped[]` разбора доезжают и сюда.
+        final sorted = maskSecretDropWarnings(sortedDropWarnings(result.dropped));
+        if (sorted.isEmpty) return const ErrMsg(ErrKey.noServersFoundAtUrl);
+        return ParseInputRejectedMsg(
+          ErrKey.noServersFoundAtUrl,
+          dropped: sorted,
+          sourceLabel: inputSourceLabel(url),
+        );
       }
       // Guard после await: entry могли удалить/подменить.
       final cur = entry.list;
@@ -2321,16 +2392,22 @@ class SubscriptionController extends ChangeNotifier {
   /// §509 — взаимный порядок контейнеров после drag в общем `sources[]`.
   /// Состав [ids] обязан совпасть с текущими записями; слоты цепочек
   /// [SettingsStorage.saveServerLists] не двигает.
-  Future<void> applyEntryOrder(List<String> ids) async {
+  ///
+  /// `false` — состав не совпал, порядок не тронут; причина в AppLog
+  /// (§511 m4: раньше отказ был тихим).
+  Future<bool> applyEntryOrder(List<String> ids) async {
     final byId = {for (final e in _entries) e.id: e};
     if (ids.length != _entries.length || ids.toSet() != byId.keys.toSet()) {
-      return;
+      AppLog.I.warning('applyEntryOrder rejected: '
+          'ids=${ids.length}, entries=${_entries.length}');
+      return false;
     }
     _entries
       ..clear()
       ..addAll([for (final id in ids) byId[id]!]);
     await _persist();
     notifyListeners();
+    return true;
   }
 
   /// Замена `entry.list` на новый ServerList (для экранов, меняющих политику
@@ -2803,6 +2880,15 @@ class SubscriptionController extends ChangeNotifier {
       final result = await parseFromSource(
           UrlSource(list.url, identity: list.identity),
           client: httpClientForTesting);
+      // §515 — сетевые секунды это окно, в котором пользователь успевает
+      // переключить пространство. Выходим до разбора результата: писать в
+      // чужую сцену нечего (барьер в `_persist` поймал бы и так, но тогда
+      // entry и статусы старого контроллера уехали бы в лог как «обновлено»).
+      if (stale) {
+        AppLog.I.warning(
+            'workspaces: fetch result dropped — workspace switched: $shortUrl');
+        return false;
+      }
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'
           '${result.meta?.profileTitle == null ? "" : " (title: ${result.meta!.profileTitle})"}');
@@ -3193,7 +3279,22 @@ class SubscriptionController extends ChangeNotifier {
   /// следующей случайной мутации. Самозагрязнение самой пересборки закрыто
   /// явным `keepDirtyFlag: true` на её внутренних вызовах, отдельный гейт для
   /// этого не нужен.
+  ///
+  /// §515 — первая строка: барьер поколения. Контроллер, переживший
+  /// переключение пространства (или уже disposed'нутый), НЕ пишет: сцена на
+  /// диске принадлежит другому слоту, а запись здесь заменяет весь набор
+  /// не-цепочек составом ЭТОГО контроллера. Один барьер в одной точке
+  /// закрывает и летящий фетч, и `toggleAt`, и регидрацию кэша, и любую
+  /// будущую мутацию. `configDirty` тоже не поднимаем — флаг глобальный, он
+  /// заставил бы новый слот пересобирать конфиг из-за чужого хвоста.
   Future<void> _persist({bool keepDirtyFlag = false}) async {
+    if (stale) {
+      AppLog.I.warning('workspaces: persist skipped — controller from '
+          'generation $_bornGeneration, current '
+          '${WorkspaceController.I.generation}'
+          '${_disposed ? ' (disposed)' : ''}');
+      return;
+    }
     if (!_generating && !keepDirtyFlag) configDirty = true;
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
