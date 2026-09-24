@@ -1,0 +1,1180 @@
+{
+  "schema": 1,
+  "note": "см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
+  "subscriptions": [
+    {
+      "id": "01-github-vless-universal",
+      "url": "https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:00.809605Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "e345a1d5038f132bae3e880ac3b4dddd96a90704301f2c27e31d1cccefa245d5",
+      "body_file": "bodies/01-github-vless-universal.txt.gz",
+      "body_bytes": 57803,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "02-github-vless-lite",
+      "url": "https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:00.983634Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "6766bc93841682d3e1ea9eeebc65b688cc446e2c120b8027ec9ad12fc09098a3",
+      "body_file": "bodies/02-github-vless-lite.txt.gz",
+      "body_bytes": 59069,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "03-github-vless",
+      "url": "https://raw.githubusercontent.com/zieng2/wl/main/vless.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:01.278480Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "07f4725181a97a17aa1173dc12d37d414020d7228fc2fdc8bdf25a05603289fc",
+      "body_file": "bodies/03-github-vless.txt.gz",
+      "body_bytes": 802,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "04-github-vless-reality-white-lists-rus-mobile",
+      "url": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:01.311880Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "225c1ab8df5eedd62ed6d5efcff074e61a88c6206bec92c67899817e0bf92e8e",
+      "body_file": "bodies/04-github-vless-reality-white-lists-rus-mobile.txt.gz",
+      "body_bytes": 8708,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "05-github-white-cidr-ru-checked",
+      "url": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:01.345115Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "ff9b3f8991564d50eedfb3dda0020bcd815deffadde318dbdf6e41acd2c51fa9",
+      "body_file": "bodies/05-github-white-cidr-ru-checked.txt.gz",
+      "body_bytes": 1467,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "06-github-black-vless-rus-mobile",
+      "url": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:01.377713Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "76abc26bc4cb561707a9fd9627815c5aacd075aeb651ad6f6378ab4c411eac9a",
+      "body_file": "bodies/06-github-black-vless-rus-mobile.txt.gz",
+      "body_bytes": 35986,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "07-github-byewhitelists2",
+      "url": "https://raw.githubusercontent.com/ByeWhiteLists/ByeWhiteLists2/refs/heads/main/ByeWhiteLists2.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:01.426798Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "9e6288d876514c0780e7af9097ebe7114acd991d7597e846168eceda846ef5c3",
+      "body_file": "bodies/07-github-byewhitelists2.txt.gz",
+      "body_bytes": 314143,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "08-github-whitelist",
+      "url": "https://raw.githubusercontent.com/hussaroff/lte-universal-checked/refs/heads/main/whitelist.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:01.691641Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "f41e9645716455223b28e6c1f1bb9942189b5e12e9d9b12f789155fd1aef6829",
+      "body_file": "bodies/08-github-whitelist.txt.gz",
+      "body_bytes": 11169,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "09-github-26",
+      "url": "https://raw.githubusercontent.com/AvenCores/goida-vpn-configs/refs/heads/main/githubmirror/26.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:01.898587Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "568f82c7113619958872fa4dd971f03f8e440e9ec51457a05db266d976ccad26",
+      "body_file": "bodies/09-github-26.txt.gz",
+      "body_bytes": 1323405,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "10-github-whitelist",
+      "url": "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/refs/heads/main/whitelist.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:02.042748Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "475004056e894f28561dcf919fc4499d6a3d4ab7d86403f96da1e00d984f8312",
+      "body_file": "bodies/10-github-whitelist.txt.gz",
+      "body_bytes": 19682,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "11-github-blacklist",
+      "url": "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/refs/heads/main/blacklist.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:02.158249Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "d5784af006e8571d68b829ddd5fc0e5d714cb27d19dbffe50577879eb9521d4f",
+      "body_file": "bodies/11-github-blacklist.txt.gz",
+      "body_bytes": 936783,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "12-github-kizyakbeta7",
+      "url": "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta7.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:02.359283Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "7885c7197862d9e18ffefeaf51e3bc0ab2a0ff7e5852a37e54bd37ec26b980d6",
+      "body_file": "bodies/12-github-kizyakbeta7.txt.gz",
+      "body_bytes": 33197,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "13-github-kizyakbeta6",
+      "url": "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:02.397086Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "be42b2426692f08509c0091ff9fbda4dd8980d08fa56b47e23689fa9f27c6ffd",
+      "body_file": "bodies/13-github-kizyakbeta6.txt.gz",
+      "body_bytes": 11321,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "14-github-kizyakbeta6bl",
+      "url": "https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6BL.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:02.443966Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "56916a7397f55cfff2d3c8e35c0399f4acafa0d7c3572b7a36104cf2dd2d3acd",
+      "body_file": "bodies/14-github-kizyakbeta6bl.txt.gz",
+      "body_bytes": 9104,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "15-github-rkn-white-list",
+      "url": "https://raw.githubusercontent.com/AirLinkVPN1/AirLinkVPN/refs/heads/main/rkn_white_list",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:02.494149Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "fb6b396cb56284029dcf14eb87bb1750bf5f8e22823f34cb28b56b458c34b154",
+      "body_file": "bodies/15-github-rkn-white-list.txt.gz",
+      "body_bytes": 59780,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "16-github-aetrisvpn",
+      "url": "https://raw.githubusercontent.com/flaafix/AetrisVPN-white-list-lite/refs/heads/main/AetrisVPN.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:02.712468Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "7f2bc9a0701edf70ced3b8551e4a479724439377d28c6d09aa654d9a21d81623",
+      "body_file": "bodies/16-github-aetrisvpn.txt.gz",
+      "body_bytes": 41880,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "17-github-configs",
+      "url": "https://raw.githubusercontent.com/flaafix/AetrisVPN-black-list/refs/heads/main/configs.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:03.072043Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "1beac1550a96bf10ffd15b9ed0c8672987f491115df1d0b4782c51bd7a28f076",
+      "body_file": "bodies/17-github-configs.txt.gz",
+      "body_bytes": 58294,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "18-github-whitelist-all",
+      "url": "https://raw.githubusercontent.com/ksenkovsolo/HardVPN-bypass-WhiteLists-/refs/heads/main/vpn-lte/WHITELIST-ALL.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:03.161670Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "046d2b04e64ef89e6f82e3eaa65f4b5df5ce3347c22745ce6b92df38d387c967",
+      "body_file": "bodies/18-github-whitelist-all.txt.gz",
+      "body_bytes": 97953,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "19-github-bypass-all",
+      "url": "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-all.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:03.242686Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "b9545fa46e772e29221ef9aeca36ca508283a73a31481a952f0d24062be73c1a",
+      "body_file": "bodies/19-github-bypass-all.txt.gz",
+      "body_bytes": 237215,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "20-github-bypass-1",
+      "url": "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-1.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:03.449455Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "8050240ac51f9ef4a26fa75cc5fb742e42fa13100ae175c3a7399153d1144274",
+      "body_file": "bodies/20-github-bypass-1.txt.gz",
+      "body_bytes": 94447,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "21-github-bypass-2",
+      "url": "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-2.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:03.654089Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "77f539ffbcd1f430efa22a6d34d5fa6b4776c3e870b86d38c1d9de36c695a777",
+      "body_file": "bodies/21-github-bypass-2.txt.gz",
+      "body_bytes": 101176,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "22-github-bypass-3",
+      "url": "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-3.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:03.962102Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "b8abb9d2258fb9320e353a3d338a985f98cf7e1b4818c5c438ac8366e1fab099",
+      "body_file": "bodies/22-github-bypass-3.txt.gz",
+      "body_bytes": 111391,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "23-github-bypass-4",
+      "url": "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-4.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:04.299301Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "7051c2655c0b19edffa505291bc7f02420190a1156028720162ed6fd49b9c297",
+      "body_file": "bodies/23-github-bypass-4.txt.gz",
+      "body_bytes": 107664,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "24-github-bypass-5",
+      "url": "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-5.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:04.485993Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "458fe9dad69aa76be252dbb11241c4fe551db1ad2f9b67816b3612f7113695c8",
+      "body_file": "bodies/24-github-bypass-5.txt.gz",
+      "body_bytes": 114091,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "25-github-bypass-6",
+      "url": "https://raw.githubusercontent.com/whoahaow/rjsxrd/refs/heads/main/githubmirror/bypass/bypass-6.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:04.756269Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "452610b34fcd047da3f54bd600d4192197529c57b38a65094e03122306be441a",
+      "body_file": "bodies/25-github-bypass-6.txt.gz",
+      "body_bytes": 79087,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "26-github-russia-whitelist",
+      "url": "https://raw.githubusercontent.com/FLEXIY0/matryoshka-vpn/main/configs/russia_whitelist.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:04.865142Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "805ce807c49e66918c045a0a5947970b9ba0e29c86129abc0f973c3d25893d06",
+      "body_file": "bodies/26-github-russia-whitelist.txt.gz",
+      "body_bytes": 649713,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "27-github-ru-white-all-white",
+      "url": "https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_WHITE.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:05.048114Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "c0b595fd15201a4bdf6264f3cd05b275524699889f5e0d02f00c69a4c5dde423",
+      "body_file": "bodies/27-github-ru-white-all-white.txt.gz",
+      "body_bytes": 1642551,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "28-github-whitelist",
+      "url": "https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/whitelist.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:05.337541Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "fd54bcc14e04aaf9fd588a3535f04028226ad03f6b9354f5675166102b42ef68",
+      "body_file": "bodies/28-github-whitelist.txt.gz",
+      "body_bytes": 110395,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "29-github-blacklist",
+      "url": "https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/blacklist.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:05.564352Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "98577ba18f8dd26055910a44f2e34e86c1ac1bc3d3a719ceba04d25eff4dbd9d",
+      "body_file": "bodies/29-github-blacklist.txt.gz",
+      "body_bytes": 34638,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "30-github-non-ru",
+      "url": "https://raw.githubusercontent.com/luxxuria/harvester/refs/heads/main/non_ru.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:05.598540Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "a3a9f3916be20fb543107fee6a9d4a8599671015d97e46e6cd738145e47817f9",
+      "body_file": "bodies/30-github-non-ru.txt.gz",
+      "body_bytes": 11137,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "31-github-ping-tested",
+      "url": "https://raw.githubusercontent.com/luxxuria/harvester/refs/heads/main/ping_tested.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:05.814809Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "8085c14e52d28b8fe641a3b935e7b9555e3d88e15d6d80368a6750607abc4de1",
+      "body_file": "bodies/31-github-ping-tested.txt.gz",
+      "body_bytes": 35351,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "32-github-top-600",
+      "url": "https://raw.githubusercontent.com/luxxuria/harvester/refs/heads/main/top_600.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:06.040715Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "49acb7ce06963fa2ce3ee0b2e87717d28251cbbf8388f5fbe73b2c0d04eece6d",
+      "body_file": "bodies/32-github-top-600.txt.gz",
+      "body_bytes": 12090,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "33-github-229",
+      "url": "https://raw.githubusercontent.com/ANT1VEN0M/PODVAL-KOTA-VPN-/refs/heads/main/%D0%91%D0%B5%D0%BB%D1%8B%D0%B5_%D1%81%D0%BF%D0%B8%D1%81%D0%BA%D0%B8229.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:06.280134Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "31bd3161db7b0e8ff1749561f50ed40f09c8f61e8c6731e1995b9befc2127418",
+      "body_file": "bodies/33-github-229.txt.gz",
+      "body_bytes": 171905,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "34-github-antinet",
+      "url": "https://raw.githubusercontent.com/ANT1VEN0M/PODVAL-KOTA-VPN-/refs/heads/main/antinet_%D0%A7%D0%B5%D1%80%D0%BD%D1%8B%D0%B5_%D1%81%D0%BF%D0%B8%D1%81%D0%BA%D0%B8.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:06.852752Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "9a5a001aba4674a6723d9212d3dd3d63a7b8506224dd2f18e8b546a811d55978",
+      "body_file": "bodies/34-github-antinet.txt.gz",
+      "body_bytes": 473813,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "35-github-premium",
+      "url": "https://raw.githubusercontent.com/btsk161/Freeinternet_byMygalaru.github.io/refs/heads/main/premium.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:06.985803Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "99382315313cc6fb14532b823f7f542873f16721076ab9c6df774199cdf2d816",
+      "body_file": "bodies/35-github-premium.txt.gz",
+      "body_bytes": 51345,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "36-github-alive-full",
+      "url": "https://raw.githubusercontent.com/Diversan313/apex-parser/main/subs/main/alive_full.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:07.360832Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "4772e9d0f82d19d1367b2388111b1d272edbbc3370c763831658c454765d2664",
+      "body_file": "bodies/36-github-alive-full.txt.gz",
+      "body_bytes": 292892,
+      "body_kind_hint": "base64"
+    },
+    {
+      "id": "37-github-sub",
+      "url": "https://raw.githubusercontent.com/histeenn/VLESS-PO-GRIBI/main/deploy/sub.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:07.978640Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "b0d600bf89c3855b2dedb4fc2b99f28cf8443e61f04bead4bd0d938d8933bac0",
+      "body_file": "bodies/37-github-sub.txt.gz",
+      "body_bytes": 1096750,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "38-codeberg-vless-universal",
+      "url": "https://codeberg.org/zieng2/wl/raw/branch/main/vless_universal.txt",
+      "source": "codeberg",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:08.393428Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=\"vless_universal.txt\"; filename*=UTF-8''vless_universal.txt"
+      },
+      "body_sha256": "e345a1d5038f132bae3e880ac3b4dddd96a90704301f2c27e31d1cccefa245d5",
+      "body_file": "bodies/38-codeberg-vless-universal.txt.gz",
+      "body_bytes": 57803,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "39-moshub-list-universal",
+      "url": "https://hub.mos.ru/zieng2/wl/raw/main/list_universal.txt",
+      "source": "moshub",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:08.675469Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline"
+      },
+      "body_sha256": "e345a1d5038f132bae3e880ac3b4dddd96a90704301f2c27e31d1cccefa245d5",
+      "body_file": "bodies/39-moshub-list-universal.txt.gz",
+      "body_bytes": 57803,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "40-gitverse-list-universal",
+      "url": "https://gitverse.ru/api/repos/zieng2/wl/raw/branch/master/list_universal.txt",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:09.077972Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=list_universal.txt"
+      },
+      "body_sha256": "e345a1d5038f132bae3e880ac3b4dddd96a90704301f2c27e31d1cccefa245d5",
+      "body_file": "bodies/40-gitverse-list-universal.txt.gz",
+      "body_bytes": 57803,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "41-gitlab-vless-reality-white-lists-rus-mobile",
+      "url": "https://gitlab.com/igareck/vpn-configs-for-russia/-/raw/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+      "source": "gitlab",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:10.584373Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-disposition": "inline",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "225c1ab8df5eedd62ed6d5efcff074e61a88c6206bec92c67899817e0bf92e8e",
+      "body_file": "bodies/41-gitlab-vless-reality-white-lists-rus-mobile.txt.gz",
+      "body_bytes": 8708,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "42-bitbucket-vless-reality-white-lists-rus-mobile",
+      "url": "https://bitbucket.org/igareck/vpn-configs-for-russia/raw/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+      "source": "bitbucket",
+      "title": "",
+      "fetched_at": "2026-09-24T07:30:12.583315Z",
+      "http_status": 200,
+      "content_type": "text/plain",
+      "headers": {
+        "content-type": "text/plain"
+      },
+      "body_sha256": "225c1ab8df5eedd62ed6d5efcff074e61a88c6206bec92c67899817e0bf92e8e",
+      "body_file": "bodies/42-bitbucket-vless-reality-white-lists-rus-mobile.txt.gz",
+      "body_bytes": 8708,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "43-domain-whitelist",
+      "url": "https://etoneya.su/whitelist",
+      "source": "domain",
+      "dead_since": "2026-09-24"
+    },
+    {
+      "id": "44-domain-other",
+      "url": "https://etoneya.su/other",
+      "source": "domain",
+      "dead_since": "2026-09-24"
+    },
+    {
+      "id": "45-domain-1",
+      "url": "https://etoneya.su/1",
+      "source": "domain",
+      "dead_since": "2026-09-24"
+    },
+    {
+      "id": "46-domain-2",
+      "url": "https://etoneya.su/2",
+      "source": "domain",
+      "dead_since": "2026-09-24"
+    },
+    {
+      "id": "47-domain-whitelist",
+      "url": "https://etoneya.best/whitelist",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:38.412790Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "d814b953ec50bae49ab98d568437bbcb8378b867b3ed0662a5ff078068f5fc96",
+      "body_file": "bodies/47-domain-whitelist.txt.gz",
+      "body_bytes": 35585,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "48-domain-1",
+      "url": "https://etoneya.best/1",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:38.732176Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "ddd43866401cc822c3b56eca90285087e8940c5a51cb8c9d29019ef1b3552e63",
+      "body_file": "bodies/48-domain-1.txt.gz",
+      "body_bytes": 1052452,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "49-domain-2",
+      "url": "https://etoneya.best/2",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:39.077379Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "ddd43866401cc822c3b56eca90285087e8940c5a51cb8c9d29019ef1b3552e63",
+      "body_file": "bodies/49-domain-2.txt.gz",
+      "body_bytes": 1052452,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "50-domain-whitelist",
+      "url": "https://alley.serv00.net/whitelist",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:39.619086Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "d814b953ec50bae49ab98d568437bbcb8378b867b3ed0662a5ff078068f5fc96",
+      "body_file": "bodies/50-domain-whitelist.txt.gz",
+      "body_bytes": 35585,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "51-domain-other",
+      "url": "https://alley.serv00.net/other",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:40.646775Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "2212349dcbc323e1cc36892b47ce893cbad924ea24ced96d872c6bd7f0cf0dc7",
+      "body_file": "bodies/51-domain-other.txt.gz",
+      "body_bytes": 1017068,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "52-domain-1",
+      "url": "https://alley.serv00.net/1",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:41.703167Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "ddd43866401cc822c3b56eca90285087e8940c5a51cb8c9d29019ef1b3552e63",
+      "body_file": "bodies/52-domain-1.txt.gz",
+      "body_bytes": 1052452,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "53-domain-2",
+      "url": "https://alley.serv00.net/2",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:42.724111Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "ddd43866401cc822c3b56eca90285087e8940c5a51cb8c9d29019ef1b3552e63",
+      "body_file": "bodies/53-domain-2.txt.gz",
+      "body_bytes": 1052452,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "54-gitverse-whitelist",
+      "url": "https://gitverse.ru/api/repos/nloverx/EtoNeYa_Subs/raw/branch/master/whitelist",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:43.244021Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=whitelist"
+      },
+      "body_sha256": "7c1be47ce654cfe5665843bbb3b30165368b3792c501e581ddc0572740791a6b",
+      "body_file": "bodies/54-gitverse-whitelist.txt.gz",
+      "body_bytes": 54026,
+      "body_kind_hint": "base64"
+    },
+    {
+      "id": "55-gitverse-other",
+      "url": "https://gitverse.ru/api/repos/nloverx/EtoNeYa_Subs/raw/branch/master/other",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:44.570742Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=other"
+      },
+      "body_sha256": "6601cf2dd18a15fc390d9d78b13a97a7609f487e083784f9437054d890efe9a0",
+      "body_file": "bodies/55-gitverse-other.txt.gz",
+      "body_bytes": 406394,
+      "body_kind_hint": "base64"
+    },
+    {
+      "id": "56-gitverse-1",
+      "url": "https://gitverse.ru/api/repos/nloverx/EtoNeYa_Subs/raw/branch/master/1",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:45.457974Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=1"
+      },
+      "body_sha256": "3e71e13d03ea656c7d0fa5344b815bc49f2c37bbf960433c6599c60f7d4e8a84",
+      "body_file": "bodies/56-gitverse-1.txt.gz",
+      "body_bytes": 460148,
+      "body_kind_hint": "base64"
+    },
+    {
+      "id": "57-gitverse-2",
+      "url": "https://gitverse.ru/api/repos/nloverx/EtoNeYa_Subs/raw/branch/master/2",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:46.367381Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=2"
+      },
+      "body_sha256": "3e71e13d03ea656c7d0fa5344b815bc49f2c37bbf960433c6599c60f7d4e8a84",
+      "body_file": "bodies/57-gitverse-2.txt.gz",
+      "body_bytes": 460148,
+      "body_kind_hint": "base64"
+    },
+    {
+      "id": "58-domain-whitelist",
+      "url": "https://internet-tenshi.kangel.tech/whitelist",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:46.583597Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "d814b953ec50bae49ab98d568437bbcb8378b867b3ed0662a5ff078068f5fc96",
+      "body_file": "bodies/58-domain-whitelist.txt.gz",
+      "body_bytes": 35585,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "59-domain-other",
+      "url": "https://internet-tenshi.kangel.tech/other",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:46.886444Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "2212349dcbc323e1cc36892b47ce893cbad924ea24ced96d872c6bd7f0cf0dc7",
+      "body_file": "bodies/59-domain-other.txt.gz",
+      "body_bytes": 1017068,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "60-domain-1",
+      "url": "https://internet-tenshi.kangel.tech/1",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:47.232146Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "ddd43866401cc822c3b56eca90285087e8940c5a51cb8c9d29019ef1b3552e63",
+      "body_file": "bodies/60-domain-1.txt.gz",
+      "body_bytes": 1052452,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "61-domain-2",
+      "url": "https://internet-tenshi.kangel.tech/2",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:47.518565Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "ddd43866401cc822c3b56eca90285087e8940c5a51cb8c9d29019ef1b3552e63",
+      "body_file": "bodies/61-domain-2.txt.gz",
+      "body_bytes": 1052452,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "62-domain-whitelist-etoneya-baby",
+      "url": "https://whitelist.etoneya.baby",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:47.663210Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "d814b953ec50bae49ab98d568437bbcb8378b867b3ed0662a5ff078068f5fc96",
+      "body_file": "bodies/62-domain-whitelist-etoneya-baby.txt.gz",
+      "body_bytes": 35585,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "63-domain-whitelist",
+      "url": "https://xn--e1apcp8cq.xn--p1ai/whitelist",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:47.750520Z",
+      "http_status": 200,
+      "content_type": "application/octet-stream",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "application/octet-stream"
+      },
+      "body_sha256": "d814b953ec50bae49ab98d568437bbcb8378b867b3ed0662a5ff078068f5fc96",
+      "body_file": "bodies/63-domain-whitelist.txt.gz",
+      "body_bytes": 35585,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "64-domain-gen",
+      "url": "https://subrostunnel.vercel.app/gen.txt",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:47.978588Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "7a27678087594d3f3535528eb20953f144bb09f0aeec57f53a1e759c715bd34d",
+      "body_file": "bodies/64-domain-gen.txt.gz",
+      "body_bytes": 107108,
+      "body_kind_hint": "base64"
+    },
+    {
+      "id": "65-codeberg-sub",
+      "url": "https://codeberg.org/kfwl/sub/raw/branch/main/sub.txt",
+      "source": "codeberg",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:48.297013Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=\"sub.txt\"; filename*=UTF-8''sub.txt"
+      },
+      "body_sha256": "b6e456ecaa582b9b218f50e448d1010594e73a21753c57bf83ada9dc2ad84ce0",
+      "body_file": "bodies/65-codeberg-sub.txt.gz",
+      "body_bytes": 21649,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "66-gitverse-wl",
+      "url": "https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/wl.txt",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:48.688800Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=wl.txt"
+      },
+      "body_sha256": "50bb021392a8be0347957e9dbc1444ecf3a2fe1e3707c7a7707687ada7b22056",
+      "body_file": "bodies/66-gitverse-wl.txt.gz",
+      "body_bytes": 586581,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "67-domain-working-configs",
+      "url": "https://sub.vlessfo.ru/vlessforu/working_configs.txt",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:48.862763Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "1c44517b36da42f8794251d53d6efb7fbaccaf75a17fffa80aa746e91afaca71",
+      "body_file": "bodies/67-domain-working-configs.txt.gz",
+      "body_bytes": 62290,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "68-gitverse-outlinevpn-outlinevpn",
+      "url": "https://gitverse.ru/api/repos/ru-wbl/wl/raw/branch/master/OutlineVPN%2FOutlineVPN.txt",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:50.383109Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=OutlineVPN.txt"
+      },
+      "body_sha256": "b9baad7a70d0121eb4a75c5b9888fbc9c1a6a73748e91450dac5723f8ec89d0b",
+      "body_file": "bodies/68-gitverse-outlinevpn-outlinevpn.txt.gz",
+      "body_bytes": 69139,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "69-domain-api-php",
+      "url": "http://stabratni4.temp.swtest.ru/api.php?type=normal",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:50.433004Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "b29d4bc32d840617cc8167c04a79433fd6da49c3c8e3d0608931459eca1d771d",
+      "body_file": "bodies/69-domain-api-php.txt.gz",
+      "body_bytes": 215,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "70-gitverse-flux-bypass-all-782661",
+      "url": "https://gitverse.ru/api/repos/RUVIPIEN/russian-white-bolt_fix/raw/branch/master/VPNMIRRORS/nekobox/Flux_bypass_all_782661.txt",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:51.300057Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=Flux_bypass_all_782661.txt"
+      },
+      "body_sha256": "f3f5baf0329289a44b50d3e552b5ba2577939cb1c799af29af99e1c143b4a81b",
+      "body_file": "bodies/70-gitverse-flux-bypass-all-782661.txt.gz",
+      "body_bytes": 399530,
+      "body_kind_hint": "unknown"
+    },
+    {
+      "id": "71-domain-bypass-all",
+      "url": "http://fsub.flux.2bd.net/githubmirror/bypass/bypass-all.txt",
+      "source": "domain",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:51.666504Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "7a56e04d70717abcd47f85c361d61e8fff3eba9a6822164d091809c1d913d9ed",
+      "body_file": "bodies/71-domain-bypass-all.txt.gz",
+      "body_bytes": 399227,
+      "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "72-gitverse-alive-full",
+      "url": "https://gitverse.ru/api/repos/bikinitw22/apelsintel/raw/branch/main/alive_full.txt",
+      "source": "gitverse",
+      "title": "",
+      "fetched_at": "2026-09-24T07:36:52.245715Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-disposition": "inline; filename=alive_full.txt"
+      },
+      "body_sha256": "4772e9d0f82d19d1367b2388111b1d272edbbc3370c763831658c454765d2664",
+      "body_file": "bodies/72-gitverse-alive-full.txt.gz",
+      "body_bytes": 292892,
+      "body_kind_hint": "base64"
+    }
+  ]
+}
