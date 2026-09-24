@@ -62,25 +62,30 @@ class RoutingHelpers {
   /// Список remote `rule_set` пресета (type=remote + url). Пустой если
   /// пресет только inline или без rule_set'ов.
   ///
-  /// `rule` опционален — если передан, фильтруются rule_set'ы выключенные
-  /// через `enabled: "@var"` гейтинг (§045). Без `rule` — все remote
-  /// rule_set'ы (для cleanup-операций когда хотим тронуть все cached files).
+  /// `rule` опционален — если передан, выключенные гейтом наборы
+  /// отфильтрованы (`#enable` §107 и легаси `enabled` §045, та же семантика,
+  /// что у билдера — §534). Без `rule` — все remote rule_set'ы (для
+  /// cleanup-операций когда хотим тронуть все cached files). `globalVars` —
+  /// userVars для гейта на ref-переменной (§265).
   /// §366 — реализация переехала в `models/preset_rule_set.dart` (нужна
   /// headless-сервису авто-обновления). Здесь — делегат, чтобы не менять
   /// вызовы на экранах.
   static List<PresetRemoteRuleSet> remoteRuleSetsOf(
     SelectableRule preset, [
     CustomRulePreset? rule,
+    Map<String, String> globalVars = const {},
   ]) =>
-      remoteRuleSetsOfPreset(preset, rule);
+      remoteRuleSetsOfPreset(preset, rule, globalVars);
 
-  /// Резолв `rule_set.enabled` (§045). См. `models/preset_rule_set.dart`.
+  /// Гейт `rule_set` пресета (`#enable` §107 + легаси `enabled` §045).
+  /// См. `isRuleSetEnabledFor` в `models/preset_rule_set.dart`.
   static bool isRuleSetEnabled(
     Map<String, dynamic> rs,
     SelectableRule preset,
-    CustomRulePreset rule,
-  ) =>
-      isRuleSetEnabledFor(rs, preset, rule);
+    CustomRulePreset rule, {
+    Map<String, String> globalVars = const {},
+  }) =>
+      isRuleSetEnabledFor(rs, preset, rule, globalVars: globalVars);
 
   /// Composite ключ для `_srsCached` / `_srsDownloading` у preset-rule_set'ов.
   /// У `CustomRuleSrs` там просто `rule.id`; у preset'ов — `<id>|<tag>`,
@@ -91,12 +96,16 @@ class RoutingHelpers {
   /// `true` если у preset-правила есть remote rule_set'ы и хотя бы один из
   /// них НЕ закэширован. Используется для disabled-switch (switch auto-
   /// download'ит при toggle-on) и для выбора иконки ☁/✅.
+  /// Выключенные гейтом наборы не учитываются (§534): иконки ☁ ради набора,
+  /// который в конфиг не попадёт, нет.
   static bool presetNeedsDownload(
     CustomRulePreset rule,
     SelectableRule preset,
-    Set<String> srsCached,
-  ) {
-    final remotes = remoteRuleSetsOf(preset, rule); // §045: enabled-gating
+    Set<String> srsCached, {
+    Map<String, String> globalVars = const {},
+  }) {
+    // §045/§107/§534: гейт наборов — одна семантика с билдером.
+    final remotes = remoteRuleSetsOf(preset, rule, globalVars);
     if (remotes.isEmpty) return false;
     for (final rs in remotes) {
       if (!srsCached.contains(presetSrsKey(rule, rs.tag))) return true;
