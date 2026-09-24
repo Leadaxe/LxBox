@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
@@ -222,6 +222,7 @@ class SettingsStorage {
     'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
     'notif_perm_prompted_v1', // §128 — promt уведомлений показан
     'allow_rotation', // §220 — снятие портретной фиксации
+    'node_list_two_columns', // §541 — две колонки списка узлов на широком окне
     'app_language', // §279 — язык приложения (system|en|ru); НЕ config-var
     'region', // §425 — регион использования (auto|none|<cc>); НЕ config-var
   };
@@ -763,6 +764,23 @@ class SettingsStorage {
 
   static Future<void> setAllowRotation(bool enabled) =>
       setVar('allow_rotation', enabled ? 'true' : 'false');
+
+  /// §541 — две колонки списка узлов при ширине ≥ 600 dp (§537). Default
+  /// true. Toggle в App Settings → Appearance → Node list. [nodeListTwoColumns]
+  /// — живое значение для списка на главном экране: смена применяется без
+  /// перезапуска; геттер синхронизирует его с хранилищем (старт, restore).
+  static final ValueNotifier<bool> nodeListTwoColumns = ValueNotifier<bool>(true);
+
+  static Future<bool> getNodeListTwoColumns() async {
+    final v = (await getVar('node_list_two_columns', 'true')) != 'false';
+    nodeListTwoColumns.value = v;
+    return v;
+  }
+
+  static Future<void> setNodeListTwoColumns(bool enabled) {
+    nodeListTwoColumns.value = enabled;
+    return setVar('node_list_two_columns', enabled ? 'true' : 'false');
+  }
 
   /// §279 — допустимые значения `app_language`. Неизвестное (hand-edited
   /// бэкап, будущие языки) → 'system'.

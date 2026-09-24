@@ -3045,8 +3045,17 @@
   "down": {
     "value": "down"
   },
+  "Node list": {
+    "value": "Список узлов"
+  },
+  "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
+    "value": "Показывать список узлов в две колонки, когда ширина окна не меньше 600 dp (планшеты, альбомная ориентация, разделённый экран)."
+  },
   "sleep": {
     "value": "sleep"
+  },
+  "Two columns on wide screens": {
+    "value": "Две колонки на широком экране"
   },
   "up": {
     "value": "up"

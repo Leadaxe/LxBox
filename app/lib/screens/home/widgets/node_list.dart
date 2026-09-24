@@ -57,8 +57,17 @@ const double kNodeListTwoColumnsMinWidth = 600;
 ///
 /// Ручная сортировка всегда в одну колонку: drag-and-drop идёт через
 /// одномерный `ReorderableListView`, в сетке «индекс → позиция» неоднозначен.
-int nodeListColumnCount(double width, {required bool isManual}) =>
-    (!isManual && width >= kNodeListTwoColumnsMinWidth) ? 2 : 1;
+///
+/// §541 — [twoColumnsEnabled] = тумблер App Settings → Appearance → «Two
+/// columns on wide screens»; при false всегда одна колонка.
+int nodeListColumnCount(
+  double width, {
+  required bool isManual,
+  bool twoColumnsEnabled = true,
+}) =>
+    (twoColumnsEnabled && !isManual && width >= kNodeListTwoColumnsMinWidth)
+        ? 2
+        : 1;
 
 /// Node-list секция главного экрана.
 ///
@@ -801,26 +810,32 @@ class _NodeListColumnsState extends State<_NodeListColumns> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = nodeListColumnCount(
-          constraints.maxWidth,
-          isManual: widget.isManual,
-        );
-        final prev = _columns;
-        if (prev != null && prev != columns) {
-          final old = _scroll;
-          final offset = old.hasClients && old.positions.length == 1
-              ? old.offset * prev / columns
-              : 0.0;
-          _scroll = ScrollController(initialScrollOffset: offset);
-          // Старый контроллер ещё прицеплен к уходящему списку — отпускаем
-          // после кадра, когда тот размонтирован.
-          WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
-        }
-        _columns = columns;
-        return widget.builder(context, columns, _scroll);
-      },
+    // §541 — тумблер двух колонок слушается напрямую: переключение в
+    // настройках перестраивает список без перезапуска.
+    return ValueListenableBuilder<bool>(
+      valueListenable: SettingsStorage.nodeListTwoColumns,
+      builder: (context, twoColumnsEnabled, _) => LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = nodeListColumnCount(
+            constraints.maxWidth,
+            isManual: widget.isManual,
+            twoColumnsEnabled: twoColumnsEnabled,
+          );
+          final prev = _columns;
+          if (prev != null && prev != columns) {
+            final old = _scroll;
+            final offset = old.hasClients && old.positions.length == 1
+                ? old.offset * prev / columns
+                : 0.0;
+            _scroll = ScrollController(initialScrollOffset: offset);
+            // Старый контроллер ещё прицеплен к уходящему списку — отпускаем
+            // после кадра, когда тот размонтирован.
+            WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+          }
+          _columns = columns;
+          return widget.builder(context, columns, _scroll);
+        },
+      ),
     );
   }
 }

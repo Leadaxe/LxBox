@@ -20,6 +20,8 @@
 
 ## Решение
 
+- Гейт по тумблеру — §541: App Settings → Appearance → «Two columns on wide
+  screens» (по умолчанию включён); выключен — всегда одна колонка.
 - Порог `kNodeListTwoColumnsMinWidth = 600` dp (граница Material «compact →
   medium»), нестрогий: 600.0 — уже две колонки. Число колонок —
   `nodeListColumnCount(width, isManual:)` в

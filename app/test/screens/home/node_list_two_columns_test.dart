@@ -6,6 +6,7 @@ import 'package:lxbox/models/home_state.dart';
 import 'package:lxbox/screens/home/node_filter_view_model.dart';
 import 'package:lxbox/screens/home/node_list_presenter.dart';
 import 'package:lxbox/screens/home/widgets/node_list.dart';
+import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/subscription/auto_updater.dart';
 import 'package:lxbox/widgets/node_row.dart';
 
@@ -22,6 +23,15 @@ void main() {
 
     test('1280 dp — две колонки', () {
       expect(nodeListColumnCount(1280, isManual: false), 2);
+    });
+
+    test('§541 тумблер выключен — одна колонка на любой ширине', () {
+      expect(
+        nodeListColumnCount(1280, isManual: false, twoColumnsEnabled: false),
+        1,
+      );
+      expect(nodeListColumnCount(1280, isManual: false), 2,
+          reason: 'дефолт тумблера — включён');
     });
 
     test('ручная сортировка остаётся одноколоночной на любой ширине', () {
@@ -139,6 +149,35 @@ void main() {
 
       // Порядок построчный: визуальный порядок == порядок displayList.
       expect(visualOrder(tester), tags);
+    });
+
+    List<double> columnXs(WidgetTester tester) => tester
+        .widgetList<NodeRow>(find.byType(NodeRow))
+        .map((r) => tester.getTopLeft(find.byWidget(r)).dx)
+        .toSet()
+        .toList();
+
+    testWidgets('§541 1280 dp, тумблер по умолчанию — две колонки',
+        (tester) async {
+      expect(SettingsStorage.nodeListTwoColumns.value, isTrue);
+      await tester.pumpWidget(host(width: 1280));
+      await tester.pump();
+      expect(columnXs(tester).length, 2);
+    });
+
+    testWidgets('§541 1280 dp, тумблер выключен — одна колонка, включение на лету',
+        (tester) async {
+      addTearDown(() => SettingsStorage.nodeListTwoColumns.value = true);
+      SettingsStorage.nodeListTwoColumns.value = false;
+      await tester.pumpWidget(host(width: 1280));
+      await tester.pump();
+      expect(columnXs(tester).length, 1,
+          reason: 'тумблер выключен — одна колонка');
+
+      SettingsStorage.nodeListTwoColumns.value = true;
+      await tester.pump();
+      expect(columnXs(tester).length, 2,
+          reason: 'смена тумблера применяется без перезапуска');
     });
 
     testWidgets('1280 dp + ручная сортировка — одна колонка', (tester) async {

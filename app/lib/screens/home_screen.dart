@@ -697,9 +697,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       case 'app-settings':
         return AppSettingsScreen(
           initialTab: switch (tab) {
-            'subscriptions' => 1,
-            'diagnostics' => 2,
-            'automation' => 3,
+            'appearance' => 1,
+            'subscriptions' => 2,
+            'diagnostics' => 3,
+            'automation' => 4,
             _ => 0,
           },
         );

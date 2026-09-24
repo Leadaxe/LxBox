@@ -1744,7 +1744,7 @@ Two patterns: a **contextual banner** (a state-dependent hint) and an **overflow
 
 - **Statistics → Live and Per-app → the contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart))
 - **Routing → Tunnel apps → ⋮ → “VPN settings (Core)”** → `SettingsScreen(initialTab: 1)`. State-independent. |
-- **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 1)` — a fast path. |
+- **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 3)` — a fast path (tabs: 0 General, 1 Appearance, 2 Subscriptions, 3 Diagnostics, 4 Automation; §541). |
 
 ---
 
