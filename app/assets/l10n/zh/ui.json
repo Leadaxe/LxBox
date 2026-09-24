@@ -4158,6 +4158,12 @@
   "Suspend idle tunnels": {
     "value": "挂起空闲隧道"
   },
+  "Lazy tunnel build": {
+    "value": "延迟构建隧道"
+  },
+  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
+    "value": "仅在首次使用时构建 WireGuard 隧道，而不是在启动时构建。节点较多时可节省内存；首次连接某个节点会稍慢一些。"
+  },
   "Built tunnels limit": {
     "value": "已构建隧道上限"
   },

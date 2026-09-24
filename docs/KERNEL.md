@@ -53,11 +53,13 @@ then.
 `lx.wg.lazy_build` (bool — endpoints start torn down, the device is built on the
 first dial; requires `idle_suspend`), `lx.wg.build_max` (int, `0` = no cap) and
 `lx.wg.build_overflow` (`wait` \| `build`). **LxBox writes `lazy_build: true`
-and `build_max` whenever it writes `idle_suspend`** (§536 — `lazy_build` is the
-constant `kLxWgLazyBuild` in `build_config.dart`; §542 — `build_max` comes from
-the `wg_build_max` setting, VPN Settings → System → WireGuard connections,
-default `5`; `0` is written as `0`, which the core reads as no cap); an empty
-idle threshold means no `lx` block at all, so none of them are written either. `build_overflow` stays unwritten — the core default `wait`
+and `build_max` together with `idle_suspend`** (§536, settings since §542:
+`wg_lazy_build`, default `true`, and `wg_build_max`, default `5`, VPN Settings →
+System → WireGuard connections; `0` is written as `0`, which the core reads as
+no cap). With lazy build switched off neither key is written: the core would
+accept `build_max` alone, but the UI greys the limit out with the toggle, so a
+greyed-out value must not act. An empty idle threshold means no `lx` block at
+all, so none of them are written either. `build_overflow` stays unwritten — the core default `wait`
 is what we want. The same layer exposes the state
 of each endpoint through `GetOutbounds`: `endpointState`
 (`never_built` / `building` / `up` / `asleep` / `torn_down` / `down`) and

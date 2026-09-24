@@ -10,11 +10,13 @@
 
 ### Added
 
-- **Лимит собранных туннелей WireGuard в настройках ([§542](docs/spec/tasks/542-build-max-setting.md)).**
-  VPN Settings → System → WireGuard connections → «Built tunnels limit»:
-  сколько туннелей WireGuard/AmneziaWG держать собранными одновременно
-  (0 — без ограничения, 3, 5, 8, 12; по умолчанию 5, как раньше). Пункт
-  недоступен, пока выключено «Suspend idle tunnels». Применяется при следующем
+- **Ленивая сборка и лимит туннелей WireGuard в настройках ([§542](docs/spec/tasks/542-build-max-setting.md)).**
+  VPN Settings → System → WireGuard connections: тумблер «Lazy tunnel build»
+  (туннель собирается при первом использовании, по умолчанию включён) и
+  «Built tunnels limit» — сколько туннелей WireGuard/AmneziaWG держать
+  собранными одновременно (0 — без ограничения, 3, 5, 8, 12; по умолчанию 5,
+  как раньше). Оба пункта недоступны, пока выключено «Suspend idle tunnels»,
+  лимит — ещё и при выключенной ленивой сборке. Применяется при следующем
   подключении.
 
 - **Сводка per-app в логе в режиме отладки ([§539](docs/spec/tasks/539-perapp-debug-log.md)).**

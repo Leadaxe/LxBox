@@ -93,6 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   // §272 — lx.wg.idle_suspend_reachable ("" = reachable never suspend)
   String _idleSuspendReachable = '';
   int _wgBuildMax = 5; // §542 — lx.wg.build_max (0 = no cap)
+  bool _wgLazyBuild = true; // §542 — lx.wg.lazy_build
   bool _passiveCheck = true; // §272 — urltest.passive_check
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
   String _memoryLimit = MemoryLimitSetting.auto;
@@ -173,6 +174,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final idleSuspendReachable =
         await SettingsStorage.getIdleSuspendReachable(); // §272
     final wgBuildMax = await SettingsStorage.getWgBuildMax(); // §542
+    final wgLazyBuild = await SettingsStorage.getWgLazyBuild(); // §542
     final passiveCheck = await SettingsStorage.getPassiveCheck(); // §272
     final memoryLimit = await SettingsStorage.getNativeMemoryLimit(); // §271
     setState(() {
@@ -182,6 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _idleSuspend = idleSuspend;
       _idleSuspendReachable = idleSuspendReachable;
       _wgBuildMax = wgBuildMax;
+      _wgLazyBuild = wgLazyBuild;
       _passiveCheck = passiveCheck;
       _memoryLimit = memoryLimit;
       _vpnLoaded = true;
@@ -230,10 +233,28 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool get _idleSuspendReachableEnabled =>
       _vpnLoaded && _idleSuspend.isNotEmpty;
 
-  /// §542 — lx.wg.build_max. Ядро принимает lazy_build/build_max только
-  /// вместе с idle_suspend, поэтому пункт гаснет, пока сон выключен (как
+  /// §542 — lx.wg.lazy_build. Ядро принимает lazy_build только вместе с
+  /// idle_suspend, поэтому тумблер гаснет, пока сон выключен (как
   /// reachable-окно, §277).
-  bool get _wgBuildMaxEnabled => _vpnLoaded && _idleSuspend.isNotEmpty;
+  bool get _wgLazyBuildEnabled => _vpnLoaded && _idleSuspend.isNotEmpty;
+
+  /// §542 — lx.wg.build_max: бюджет — часть ленивой сборки, гаснет и без
+  /// сна, и при выключенном «Lazy tunnel build» (тогда ключ не пишется).
+  bool get _wgBuildMaxEnabled => _wgLazyBuildEnabled && _wgLazyBuild;
+
+  Future<void> _applyWgLazyBuild(bool value) async {
+    if (value == _wgLazyBuild) return;
+    setState(() => _wgLazyBuild = value);
+    await SettingsStorage.saveWgLazyBuild(value);
+    widget.subController.configDirty = true;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(getLocalText.s("Applies on next connect.")),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   Future<void> _applyWgBuildMax(int value) async {
     if (value == _wgBuildMax) return;
@@ -517,9 +538,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                   },
           ),
         ),
+        // §542 — ленивая сборка WG/AWG (lx.wg.lazy_build, SPEC 097). Было
+        // константой true (§536). onChanged: null → честный disabled без сна.
+        SwitchListTile(
+          value: _wgLazyBuild,
+          onChanged: !_wgLazyBuildEnabled
+              ? null
+              : (bool v) => unawaited(_applyWgLazyBuild(v)),
+          title: Text(getLocalText.s("Lazy tunnel build")),
+          subtitle: Text(getLocalText.s("Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.")),
+        ),
         // §542 — бюджет собранных WG/AWG туннелей (lx.wg.build_max, SPEC 097).
-        // Было константой 5 (§536); 0 = без потолка. Гаснет вместе с
-        // reachable-окном: без idle_suspend ядро ключ не примет.
+        // Было константой 5 (§536); 0 = без потолка. Гаснет без сна и при
+        // выключенной ленивой сборке (тогда ключ не пишется).
         dimmedWhenDisabled(
           enabled: _wgBuildMaxEnabled,
           child: Padding(

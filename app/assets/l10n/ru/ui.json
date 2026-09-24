@@ -4365,6 +4365,12 @@
   "Suspend idle tunnels": {
     "value": "Усыплять неактивные туннели"
   },
+  "Lazy tunnel build": {
+    "value": "Ленивая сборка туннелей"
+  },
+  "Build a WireGuard tunnel only on first use instead of at start. Saves memory with many nodes; the first connection to a node takes a moment longer.": {
+    "value": "Собирать туннель WireGuard при первом использовании, а не при запуске. Экономит память, когда узлов много; первое подключение к узлу чуть дольше."
+  },
   "Built tunnels limit": {
     "value": "Лимит собранных туннелей"
   },

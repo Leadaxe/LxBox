@@ -33,11 +33,6 @@ import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'validator.dart';
 
-/// §536 — `lx.wg.lazy_build`: WG/AWG эндпоинт собирается не при старте, а при
-/// первом дайле через него. Константа, а не настройка: ключа storage и
-/// тумблера в UI у неё нет — значение одно для всех сборок.
-const bool kLxWgLazyBuild = true;
-
 /// Результат сборки — готовый JSON + валидация + warnings + generated-vars
 /// которые контроллеру надо записать обратно в storage (Clash API port/secret
 /// — рандомизируются здесь на первом запуске).
@@ -134,6 +129,13 @@ class BuildSettings {
   /// [idleSuspend]. `build_overflow` не пишем — дефолт ядра `wait`.
   final int wgBuildMax;
 
+  /// §542 — `lx.wg.lazy_build` (ядро SPEC 097): WG/AWG эндпоинт собирается
+  /// при первом дайле, а не на старте. Было константой §536 (`true`), теперь
+  /// настройка `wg_lazy_build`. `false` → не пишем ни `lazy_build`, ни
+  /// `build_max` (бюджет в UI гаснет вместе с тумблером; ядро `build_max`
+  /// без `lazy_build` принимает, но выключенный пункт не должен действовать).
+  final bool wgLazyBuild;
+
   /// §272: passive health check (ядро SPEC 019, `urltest.passive_check`) —
   /// пишется в urltest-двойники Направлений. Пока свежий успешный TCP-дайл
   /// подтверждает узел, периодические пробы группы пропускаются.
@@ -165,6 +167,7 @@ class BuildSettings {
     this.idleSuspend = '',
     this.idleSuspendReachable = '',
     this.wgBuildMax = 5,
+    this.wgLazyBuild = true,
     this.passiveCheck = false,
     this.tailscaleStateRoot = '',
     this.tailscaleStateDirs,
@@ -627,9 +630,13 @@ Future<BuildResult> buildConfig({
     // `build_overflow` НЕ пишем (дефолт ядра `wait` нас устраивает),
     // `lx.masque.idle_timeout` тоже: у WARP MASQUE-узлов свой idle_timeout
     // внутри самого узла.
-    wg['lazy_build'] = kLxWgLazyBuild;
-    // §542 — число из настройки, `0` пишется как есть (ядро: без потолка).
-    wg['build_max'] = settings.wgBuildMax < 0 ? 0 : settings.wgBuildMax;
+    // §542 — оба значения из настроек. Тумблер lazy выключен → ни
+    // `lazy_build`, ни `build_max`; `0` в build_max пишется как есть (ядро:
+    // без потолка).
+    if (settings.wgLazyBuild) {
+      wg['lazy_build'] = true;
+      wg['build_max'] = settings.wgBuildMax < 0 ? 0 : settings.wgBuildMax;
+    }
     config['lx'] = <String, dynamic>{'wg': wg};
   }
 

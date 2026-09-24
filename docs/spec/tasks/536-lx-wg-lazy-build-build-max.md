@@ -46,9 +46,10 @@
 (`app/lib/services/builder/build_config.dart`). **Ни ключа storage, ни тумблера
 в UI** у них нет: это не настройка, а выбранное поведение сборки.
 
-> **§542:** `build_max` — константа → настройка (`wg_build_max`, VPN Settings →
-> System → WireGuard connections, дефолт 5, `0` = без потолка). `lazy_build`
-> остался константой `kLxWgLazyBuild`.
+> **§542:** константы → настройки: `lazy_build` → `wg_lazy_build` (тумблер
+> «Lazy tunnel build», дефолт true), `build_max` → `wg_build_max` («Built
+> tunnels limit», дефолт 5, `0` = без потолка); VPN Settings → System →
+> WireGuard connections.
 
 **Почему в той же ветке, что и `idle_suspend`.** Ядро требует
 `lx.wg.lazy_build requires lx.wg.idle_suspend` (`option/lx.go`) — `lazy_build`

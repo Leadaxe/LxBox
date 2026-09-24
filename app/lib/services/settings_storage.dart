@@ -152,6 +152,7 @@ class SettingsStorage {
     'route_idle_suspend', // §215 — idle-suspend threshold (lx.wg.idle_suspend)
     'route_idle_suspend_reachable', // §272 — reachable idle window (lx.wg.idle_suspend_reachable)
     'wg_build_max', // §542 — WG/AWG build budget (lx.wg.build_max)
+    'wg_lazy_build', // §542 — WG/AWG lazy build (lx.wg.lazy_build)
     'urltest_passive_check', // §272 — passive health check (urltest.passive_check)
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'directions', // §125/§393 — Направления роутинга (template→storage)
@@ -561,6 +562,13 @@ class SettingsStorage {
 
   static Future<void> saveWgBuildMax(int value, {bool flush = true}) =>
       _saveWgBuildMax(value, flush: flush);
+
+  // §542 — WG/AWG lazy build (lx.wg.lazy_build, SPEC 097); default true
+
+  static Future<bool> getWgLazyBuild() => _getWgLazyBuild();
+
+  static Future<void> saveWgLazyBuild(bool enabled, {bool flush = true}) =>
+      _saveWgLazyBuild(enabled, flush: flush);
 
   // §272 — passive health check (urltest.passive_check, SPEC 019)
 

@@ -74,7 +74,11 @@ Future<void> _saveIdleSuspendReachable(String threshold,
 }
 
 // ---------------------------------------------------------------------------
-// §542 — WG/AWG build budget (lx.wg.build_max, kernel SPEC 097)
+// §542 — WG/AWG lazy build + build budget (lx.wg.lazy_build / build_max,
+// kernel SPEC 097)
+//
+// `wg_lazy_build` (bool, дефолт true): эндпоинт собирается при первом дайле.
+// false → в конфиг не пишутся ни lazy_build, ни build_max.
 //
 // Сколько WG/AWG эндпоинтов ядро держит собранными одновременно; сверх лимита
 // самый давний разбирается и пересобирается по требованию. `0` = без потолка.
@@ -94,6 +98,19 @@ Future<int> _getWgBuildMax() async {
 Future<void> _saveWgBuildMax(int value, {bool flush = true}) async {
   final data = await _load();
   data['wg_build_max'] = value;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
+Future<bool> _getWgLazyBuild() async {
+  final data = await _load();
+  return (data['wg_lazy_build'] as bool?) ?? true;
+}
+
+Future<void> _saveWgLazyBuild(bool enabled, {bool flush = true}) async {
+  final data = await _load();
+  data['wg_lazy_build'] = enabled;
   SettingsStorage._cache = data;
   SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
