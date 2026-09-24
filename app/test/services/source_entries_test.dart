@@ -10,6 +10,8 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/source_entry.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
+import '../contract_paths.dart';
+
 // §524 — ЕДИНЫЙ СПИСОК ЗАПИСЕЙ `sources[]`: один упорядоченный род сущности
 // (`SourceEntry`) над подписками, серверами, папками и цепочками.
 //
@@ -142,7 +144,7 @@ void main() {
       expect(back.last.sourceKey, 'chain:jp-via-eu');
       expect((back.last as ChainEntry).chain.hops.length, 3,
           reason: 'позиции цепочки (в том числе ссылки в папки) на месте');
-    });
+    }, skip: corpusTestSkip('test/services/source_entries_test.dart'));
   });
 
   group('операции над списком', () {
