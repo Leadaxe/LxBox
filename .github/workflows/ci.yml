@@ -266,6 +266,59 @@ jobs:
             flutter test
           fi
 
+  # §525 — корпус публичных подписок: прогон конвейера разбора по 68 снимкам
+  # реальных списков. ОТДЕЛЬНЫМ job'ом и НЕ блокирующий: красный корпус значит
+  # «числа разошлись с эталоном», то есть регрессия ИЛИ прогресс реестра, и
+  # разбираться с этим обязан человек. Ронять на нём сборку нельзя — контракт
+  # приезжает из чужого репозитория, и его правка красила бы здесь каждый
+  # соседний PR.
+  #
+  # В общий `flutter test` сьют не попадает: гейт — LX_CORPUS_PUBLIC (тегами
+  # не вышло, `flutter test` не пробрасывает ни --exclude-tags, ни -P).
+  public-subs:
+    name: PublicSubsCorpus
+    if: ${{ github.event.inputs.test_path == '' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Flutter version pin
+        id: flutter_pin
+        run: echo "version=$(tr -d '[:space:]' < android/flutter.version)" >> "$GITHUB_OUTPUT"
+
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ steps.flutter_pin.outputs.version }}
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      # Отчёты пишутся, чтобы их можно было забрать артефактом и посмотреть,
+      # ЧТО именно разошлось; эталон не обновляется — это работа человека.
+      - name: Corpus run (parse only, no core, no network)
+        env:
+          LX_CORPUS_PUBLIC: "1"
+          LX_CORPUS_REPORT: "1"
+        run: flutter test test/public_subscriptions
+
+      - name: Upload corpus reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-subs-corpus-report
+          path: |
+            app/test/fixtures/public_subscriptions/report.json
+            app/test/fixtures/public_subscriptions/report.md
+          retention-days: 14
+
   android:
     if: startsWith(github.ref, 'refs/tags/v') ||
         (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'checks')

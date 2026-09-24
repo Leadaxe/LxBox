@@ -496,7 +496,9 @@ void main() {
   });
 
   group('внутренний backup/restore', () {
-    test('цепочки переживают export→restore в категории routing', () async {
+    // §524 — категория цепочки в экспорте: серверы, не Routing (решение
+    // владельца 24.09).
+    test('цепочки переживают export→restore в категории серверов', () async {
       await SettingsStorage.setChains(const [
         SourceChain(tag: 'via-de', label: 'DE', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de')]),
       ]);
@@ -504,7 +506,7 @@ void main() {
 
       final exported = BackupService.filterStorageForExport(
         raw,
-        include: {BackupCategory.routing},
+        include: {BackupCategory.serverLists},
       );
       expect(
           (exported['sources'] as List).map((r) => (r as Map)['kind']),
@@ -523,7 +525,7 @@ void main() {
       expect(back.single.hops, const [NodeLink(tag: 'home'), NodeLink(tag: 'de')]);
     });
 
-    test('без галки routing цепочки в архив не идут', () async {
+    test('без галки серверов цепочки в архив не идут (§524)', () async {
       await SettingsStorage.setChains(
           const [SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])]);
       final exported = BackupService.filterStorageForExport(

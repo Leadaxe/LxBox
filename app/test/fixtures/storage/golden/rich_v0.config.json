@@ -86,7 +86,8 @@
           "google_dot",
           "cloudflare_dot",
           "opendns_doh",
-          "quad9_doh"
+          "quad9_doh",
+          "yandex_dot"
         ],
         "mode": "fastest",
         "error_ttl": "5m",
@@ -141,6 +142,16 @@
         "tls": {
           "enabled": true,
           "server_name": "dns.opendns.com"
+        }
+      },
+      {
+        "type": "tls",
+        "tag": "yandex_dot",
+        "server_port": 853,
+        "server": "77.88.8.8",
+        "tls": {
+          "enabled": true,
+          "server_name": "common.dot.dns.yandex.net"
         }
       },
       {

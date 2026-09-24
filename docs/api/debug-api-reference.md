@@ -104,7 +104,7 @@ auth), а не факт, что за границей всё открыто.
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
 | `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
-| `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
+| `GET /state/subs` | массив подписок (без цепочек — §524, весь список у `GET /subs`), `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` в форме хранения 1.0 (§439: `storage_version`, `sources[]`, `rules[]`, `dns{}`) со scrubber'ом: `vars.debug_token` → `***`, `url` подписки — маской, `origin.raw` сервера → `origin.raw_bytes`, `nodes[]` папки → `nodes_count`. Ключей `server_lists` / `custom_rules` / `dns_options` / `chains` больше нет — [STORAGE.md](../STORAGE.md#storage-form-and-migration-439) |
 | `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,current_session_allow_bypass,background_mode,is_ignoring_battery_optimizations}`. **§069** — `current_session_allow_bypass` это **runtime applied** значение (snapshot из последнего `VpnService.Builder.allowBypass()` в `establish()`); может отличаться от persisted `allow_bypass` если юзер поменял toggle без VPN reload. `false` пока VPN never started или после `stop`. |
@@ -353,9 +353,30 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 
 ## Subscriptions CRUD — `/subs/*`
 
-Подписки + inline user-servers. Shape в GET — как `/state/subs`. §435 — у
-записи `kind: UserServer` есть `sections` (секции узла как хранятся, с
-плейсхолдерами `@self`; `null` — нет); read-only, PATCH его не принимает.
+Подписки + inline user-servers. §435 — у записи `kind: UserServer` есть
+`sections` (секции узла как хранятся, с плейсхолдерами `@self`; `null` — нет);
+read-only, PATCH его не принимает.
+
+**§524 — `GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
+же, что видит пользователь на экране Servers: подписки, серверы, папки **и
+цепочки** одним массивом. До §524 ответ нёс только контейнеры, а цепочки жили в
+отдельном `/chains` — смешанный порядок диска этим API нельзя было ни прочитать,
+ни выразить.
+
+Каждая запись несёт `source_key` — ключ её места в списке: `id:<uuid>` у
+контейнера, `chain:<tag>` у цепочки. Его принимает `POST /subs/reorder`.
+
+| `kind` | Что это | Поля |
+|---|---|---|
+| `SubscriptionServers` / `UserServer` / `FolderServers` | контейнер узлов | полный shape записи (как `/state/subs`) |
+| `SourceChain` | цепочка (§524 — такая же запись списка) | `id` = тег, `title`, `enabled`, `nodes_count` = `hops_count` = число позиций |
+| `Unreadable` | запись, которую кодек не читает (§141 P1.8c) | `record_kind` — её `kind` с диска, `enabled: false` |
+
+Маршрут цепочки (позиции, `strip`, `rewrite`) здесь НЕ разворачивается: его
+читает и правит `/chains/{tag}` — `/subs` отвечает за состав и порядок списка.
+
+`GET /state/subs` цепочек НЕ включает: это снимок состояния контроллера
+подписок (fetch-состояние, счётчики узлов), а не список источников.
 
 | Endpoint | Метод | Body |
 |---|---|---|
@@ -365,7 +386,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 | `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity. **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
-| `/subs/reorder` | POST | `{"order":[id1,...]}` |
+| `/subs/reorder` | POST | **§524** `{"order":[source_key,...]}` — ключи ЛЮБОГО рода (`id:<uuid>` / `chain:<tag>`), состав обязан совпасть с текущим списком. Голый uuid тоже принимается (форма до §524). Одна запись на диск |
 
 ### Фича 478 — `reveal` и `warnings` у одной записи
 
@@ -392,10 +413,30 @@ credentials, поэтому симметрично папке: только по
         "title_en": "…", "text_en": "…"
       }
     ],
-    "Tokyo": []
+    "Tokyo": [],
+    "Tokyo-2": []
   }
 }
 ```
+
+**Ключ — сырой тег узла в контейнере** (`containerRawTags`, NODE_LINK §2.2) — тот же
+адрес, по которому узел виден в `nodes[]`, `GET /nodes/link?tag=` и
+`POST /action/switch-node?tag=`. У тёзок провайдера (§310 — все узлы зовутся
+`proxy`; дубль `vpn://`↔`amneziawg://` под одним именем) ключи различаются
+так же, как в списке узлов: `X`, `X-2`, `X-3`.
+
+§520 — раньше карта ключевалась СЫРЫМ `NodeSpec.tag` и у тёзок теряла
+записи last-write-wins: у 12 узлов ответ отдавал 8 ключей, а `nodes_count`
+оставался верен — счётчик расходился со списком. Форма ответа не менялась
+(тот же объект «тег → список»), и у записи без тёзок ключи дословно те же,
+что и до §520. Инвариант: **`warnings.length == nodes_count`**.
+
+У члена папки адрес — тег как есть (NODE_LINK §2.2, у ссылки побеждает
+первый), поэтому тёзки-члены получают суффикс с **индексом узла** (`X#3`), а
+безымянный узел — ключ `#<индекс>`. Индекс тот же, которым член папки
+адресуется в `/folders/*` (поле `index`), так что узел в ответе не только
+присутствует, но и находится; ключ при этом не притворяется тегом, по
+которому его можно позвать в `switch-node`.
 
 Все узлы присутствуют; у узла без предупреждений — пустой список. Тексты — **пиненный
 английский**: ответ не должен зависеть от локали устройства, а проверять надо

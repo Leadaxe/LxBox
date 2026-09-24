@@ -25,7 +25,63 @@ was removed).
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.1-lx.8`** (see `app/android/libbox.version`) — lx.7 plus
+**The current pin: `v1.14.1-lx.10`** (see `app/android/libbox.version`) — lx.9 plus
+two layers, **SPEC 095** and **SPEC 099**.
+
+**SPEC 095** is an upstream sync: sing-box `v1.14.1` plus 34 commits of `stable`,
+zero drift at the cut. The part that shows on the device is the initial handshake
+of a WireGuard/AWG peer given by a domain name — it now completes on the first
+attempt. Before, the first attempt was lost, the core logged `handshake did not
+complete after 5 seconds, retrying`, and switching to such a node cost 5.4–5.7 s.
+The fix needs the wireguard-go fork re-based onto v0.0.7, and the sing-tun fork
+moves to the upstream pin with it; all fork patches (AWG, batch paths, the
+`acceptLoop` self-heal) are carried over. Also in this layer: HTTP/2 error types
+from `sing` now go through the upstream `baderror.WrapH2` mapping in the v2ray
+HTTP and gRPC-lite transports, so our own wrappers for those two are gone (XHTTP
+keeps its own handling), plus upstream fixes for DNS timeouts under query
+deduplication, temporary IPv6 address rotation, half-close through connection
+wrappers, a read-loop spin on persistent errors, a crash on a corrupted cache
+file and the OOM report on clean shutdown; `sing-mux` goes to v0.3.8.
+
+**SPEC 099** stops Node diagnostics from killing the app on a `naive` node. With
+the tunnel up, the diagnostics probe read the remote address of the connection
+inside the tunnel; a Cronet connection has no address, so dereferencing that nil
+took the whole core down — the process died at once, regardless of the memory
+limit. Traffic through the node and `urltest` were never affected. Now the probe
+returns status, body and elapsed time as for any other node, and `remoteAddr`
+stays empty for `naive` — that is the expected value, not an error.
+
+`option/` is untouched in both layers (`git diff v1.14.1-lx.9 v1.14.1-lx.10 --
+option/` is empty), so the config schema, the wire formats, Clash API, gRPC/lxd
+and the AAR tag sets are unchanged; Go 1.26.8. The Java surface gains exactly one
+additive method from upstream — `Libbox.hasTunInbound(String)` (javap over all
+253 classes of `classes.jar`: same class list, 3493 → 3494 signature lines, that
+one line the whole diff). Nothing is removed or changed, so no app-side change is
+needed to consume this core, and LxBox does not call the new method.
+**LxBox depends on this pin for §526**: Diagnostics on a `naive` node is safe to
+run. Rolling the core back below lx.10 brings back the crash and the lost five
+seconds on domain-addressed WG/AWG peers.
+
+**`v1.14.1-lx.9`** — lx.8 plus
+one layer. **SPEC 094** (lx.9) stops the XMUX breaker from counting our own
+teardown as a server failure. When LxBox switches a node, or the core retires an
+xhttp session, it closes the http2/h1 response body itself; the read side of the
+xhttp connection then surfaces that as `context.Canceled` or `net.ErrClosed`.
+Until lx.9 the breaker treated those two as evidence the server had broken the
+stream: it logged `ERROR connection download closed: http2: response body closed`
+once per request and marked the XMUX session failing, so a perfectly healthy
+node was evicted and rebuilt. lx.9 recognises a local cancellation at the
+xhttp-conn boundary and neither logs nor counts it; a real remote break is still
+reported exactly as before. Wire format, config schema, AAR tag sets and
+submodules unchanged, Go 1.26.8, and the Java surface is identical to lx.8
+(javap over all 253 classes of `classes.jar`, 3493 signature lines — diff empty).
+**LxBox depends on this pin for §522**: the log of a working xhttp/REALITY node is
+clean, and switching servers no longer costs an XMUX rebuild. Rolling the core
+back below lx.9 brings the false `response body closed` errors back — they are
+cosmetic plus one wasted session teardown, not a loss of connectivity. Upstream
+issue: LxBox #148.
+
+**`v1.14.1-lx.8`** — lx.7 plus
 one layer. **SPEC 093** (lx.8) teaches the gRPC transport the Xray notation where
 `service_name` starts with a `/` and is therefore a ready-made request path, not a
 name: the core escapes such a value segment by segment, treats the last segment as
@@ -854,7 +910,9 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.1-lx.8** (current pin) | **gRPC `service_name` as a request path** (§468). Fork SPEC 093 — a `service_name` with a leading `/` is Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the stream name and drops a `|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` the old behaviour stands — one escaped segment plus the core's own `/Tun`. This removes the reason for the §464 normalisation, which only ever fixed the single-segment form and would now strip a `/` the core expects: contract 1.1.3 drops the rule, and the value goes to the core verbatim on every input. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.7 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.10** (current pin) | **Upstream sync to v1.14.1 + 34 commits, and Node diagnostics no longer crashes the app on a NaiveProxy node** (§526). Fork SPEC 095 — the initial handshake of a WireGuard/AWG peer given by a domain name completes on the first attempt (before: the attempt was lost, `handshake did not complete after 5 seconds, retrying` in the log, 5.4–5.7 s to switch to such a node); the wireguard-go fork is re-based onto v0.0.7 and the sing-tun fork onto the upstream pin, all fork patches carried over. HTTP/2 error types now go through the upstream `baderror.WrapH2` mapping in the v2ray HTTP and gRPC-lite transports (our wrappers for those two removed, XHTTP keeps its own), plus upstream fixes for DNS timeouts under query deduplication, temporary IPv6 rotation, half-close through connection wrappers, a read-loop spin, a corrupted cache file and the OOM report on clean shutdown; `sing-mux` v0.3.8. Fork SPEC 099 — with the tunnel up, diagnostics on a `naive` node read the remote address of a Cronet connection, which has none, and the nil dereference killed the process; the probe now returns status, body and time as for any other node and leaves `remoteAddr` empty. `option/` untouched, so config schema, wire format and tag sets are unchanged; Go 1.26.8; Java surface gains exactly one additive method, `Libbox.hasTunInbound(String)` (javap over all 253 classes: 3493 → 3494 signature lines, that one line the whole diff), which LxBox does not call. |
+| **v1.14.1-lx.9** | **The XMUX breaker no longer counts a local cancellation as a failure** (§522). Fork SPEC 094 (LxBox issue #148) — closing the http2/h1 response body ourselves, which is what a node switch or an xhttp session retirement does, reached the read side of the xhttp connection as `context.Canceled` / `net.ErrClosed`. The breaker read that as a broken stream: one `ERROR connection download closed: http2: response body closed` per request plus an XMUX session marked failing and evicted, on a node that was fine. lx.9 recognises the local cancellation at the xhttp-conn boundary and neither logs nor counts it; a genuine remote break is reported as before. `option/` untouched, so config schema, wire format, tag sets and submodules are unchanged; Go 1.26.8; Java surface identical to lx.8 (javap diff over all 253 classes — empty). |
+| **v1.14.1-lx.8** | **gRPC `service_name` as a request path** (§468). Fork SPEC 093 — a `service_name` with a leading `/` is Xray's absolute-path notation: the core escapes it segment by segment, reads the last segment as the stream name and drops a `|…` tail, so `/a/b/Tun` reaches the wire as `/a/b/Tun` and `/a/Stream` as `/a/Stream`. Without a leading `/` the old behaviour stands — one escaped segment plus the core's own `/Tun`. This removes the reason for the §464 normalisation, which only ever fixed the single-segment form and would now strip a `/` the core expects: contract 1.1.3 drops the rule, and the value goes to the core verbatim on every input. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.7 (javap diff over all 253 classes — empty). |
 | **v1.14.1-lx.7** | **Validation and named entries in errors** (§462). Fork SPEC 092 — an initialization error now carries the type and the tag of the entry next to its index: `initialize outbound[0] vless[proxy-de-1]: invalid short_id`; six places (DNS server, endpoint, inbound, service, outbound, certificate provider), errors inside the constructors and the libbox API untouched. Came from a user request of 18.09 — LxBox shows the core's text as is, and a bare index names nothing. Contains lx.6, fork SPEC 091 — `tuic.udp_relay_mode` no longer accepts any string it is given (`unknown udp_relay_mode: X (expected native or quic)`), and the masque `uri` is validated against `standard`. Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.5 (javap diff over all 253 classes — empty). |
 | **v1.14.1-lx.5** | **REALITY `short_id` hotfix** (fork SPEC 090): a `short_id` longer than 16 hex characters is rejected with `invalid short_id` before decoding, on the client and on the server; until lx.5 it panicked with `index out of range` inside `hex.Decode` writing into an `[8]byte`. Found by the contract's DRIFT inventory (§461). Wire format, config schema, tag sets, toolchain and submodules unchanged; Java surface identical to lx.4 (javap diff over all 253 classes — empty). |
 | **v1.14.1-lx.4** | **REALITY: fragmentation and `key_share`.** Fork SPEC 088 — `tls.fragment` / `tls.record_fragment` now apply to REALITY as well: until lx.4 the REALITY client built its handshake on the bare socket and skipped them silently, including the automatic `record_fragment` under a `detour`. Fork SPEC 089 — a per-node `tls.reality.key_share` (`hybrid` \| `classical`), an unknown value rejects the whole config; LxBox emits it from §457. Wire format, tag sets and toolchain unchanged; Java surface identical to lx.3 (javap diff over all 253 classes — empty). |

@@ -52,4 +52,36 @@ void main() {
       );
     });
   });
+
+  group('StopStartTimeout (§519)', () {
+    test('НЕ разбирается из native-события — причина синтезируется нами', () {
+      // Ядро/native при таймауте фазы `connecting` молчат: `errorReason`
+      // пустой. Поэтому `fromEvent` эту причину не производит и не должен —
+      // её ставит `HomeController._armTransientTimeout`.
+      expect(StopReason.fromEvent(revoked: false, errorReason: null), isNull);
+    });
+
+    test('renderEn несёт порог и число endpoint\'ов', () {
+      const r = StopStartTimeout(seconds: 95, endpoints: 8);
+      final en = r.renderEn();
+      expect(en, contains('95'));
+      expect(en, contains('8'));
+      expect(en, contains('Start timed out'));
+    });
+
+    test('равенство по обоим полям', () {
+      expect(const StopStartTimeout(seconds: 95, endpoints: 8),
+          const StopStartTimeout(seconds: 95, endpoints: 8));
+      expect(
+        const StopStartTimeout(seconds: 95, endpoints: 8) ==
+            const StopStartTimeout(seconds: 95, endpoints: 4),
+        isFalse,
+      );
+      expect(
+        const StopStartTimeout(seconds: 95, endpoints: 8) ==
+            const StopError('x'),
+        isFalse,
+      );
+    });
+  });
 }

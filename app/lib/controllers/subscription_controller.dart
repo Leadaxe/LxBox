@@ -14,6 +14,7 @@ import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
+import '../models/source_entry.dart';
 import '../models/tailscale_bundle.dart';
 import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
@@ -79,8 +80,8 @@ enum _JsonAdd { added, empty, notJson }
 class SubscriptionController extends ChangeNotifier {
   /// §515 — поколение Workspaces, в котором контроллер родился. Сцена на диске
   /// принадлежит ровно одному слоту, а `_persist()` переписывает весь набор
-  /// не-цепочек целиком (`sources_rules.dart` → `_spliceSourceKind`) — без
-  /// привязки к слоту. Пересоздание экрана (`main.dart`, ключ по
+  /// контейнеров целиком (§524 — `sources_rules.dart` → `_writeEntries` через
+  /// фасад `saveServerLists`) — без привязки к слоту. Пересоздание экрана (`main.dart`, ключ по
   /// `WorkspaceController.generation`) даёт новый контроллер, но асинхронные
   /// хвосты старого (летящий HTTP подписки, 10-секундная пауза апдейтера между
   /// подписками, `toggleAt` из ещё живого обработчика) продолжают жить и
@@ -88,7 +89,7 @@ class SubscriptionController extends ChangeNotifier {
   /// НОВОМУ. Ближайший `load`/`saveAs` копирует испорченную сцену в папку
   /// слота — подмена закрепляется на диске.
   ///
-  /// Барьер стоит на уровне контроллера, а не в `saveServerLists`: там под
+  /// Барьер стоит на уровне контроллера, а не в писателе хранения: там под
   /// него попали бы легитимные писатели, не принадлежащие `HomeScreen`
   /// (импорт бэкапа, Debug API, шаги `_reloadStateFromDisk`), и их записи
   /// молча терялись бы.
@@ -2389,9 +2390,73 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// §509 — взаимный порядок контейнеров после drag в общем `sources[]`.
-  /// Состав [ids] обязан совпасть с текущими записями; слоты цепочек
-  /// [SettingsStorage.saveServerLists] не двигает.
+  /// §524 — ВЕСЬ список источников в порядке `sources[]`: подписки, серверы,
+  /// папки и цепочки одним рядом. Один упорядоченный список — единственный
+  /// источник истины о порядке; до §524 порядок жил `List<String>` в state
+  /// одного экрана, а контроллер держал только половину записей.
+  ///
+  /// Контейнеры берутся из [entries] (живой состав с fetch-состоянием),
+  /// цепочки и нечитаемые записи — с диска: цепочка написана пользователем
+  /// руками и переживает и обновление подписки, и её удаление.
+  Future<List<SourceEntry>> sourceEntries() async {
+    final disk = await SettingsStorage.getSourceEntries();
+    final live = {for (final e in _entries) sourceKeyForIdOf(e.id): e.list};
+    final seen = <String>{};
+    final out = <SourceEntry>[];
+    for (final e in disk) {
+      final k = e.sourceKey;
+      if (e is ContainerEntry) {
+        final l = live[k];
+        // Запись, которой в контроллере уже нет (удалена, но диск ещё не
+        // перечитан), в список не попадает: состав задаёт контроллер.
+        if (l == null) continue;
+        out.add(ContainerEntry(l));
+      } else {
+        out.add(e);
+      }
+      seen.add(k);
+    }
+    // Записи контроллера, которых на диске ещё нет (только что добавленные и
+    // не долетевший `_persist`) — в конец, как встают новые записи.
+    for (final e in _entries) {
+      if (seen.add(sourceKeyForIdOf(e.id))) out.add(ContainerEntry(e.list));
+    }
+    return out;
+  }
+
+  /// §524 — применить порядок общего списка ОДНОЙ записью на диск.
+  ///
+  /// [keys] — новый порядок ключей любого рода ([SourceEntry.sourceKey]):
+  /// `id:<uuid>` у контейнера, `chain:<tag>` у цепочки. До §524 экран делал
+  /// на один drag ДВЕ независимо падающие записи (`reorderSources` +
+  /// `applyEntryOrder`); здесь запись одна, и `_entries` синхронизируется с
+  /// ней в памяти, без второго `_persist`.
+  ///
+  /// `false` — перестановка отвергнута (состав не совпал), порядок не тронут;
+  /// причина в AppLog (§511 m4: раньше отказ был тихим).
+  Future<bool> applySourceOrder(List<String> keys) async {
+    if (stale) return false; // §515 — чужая сцена, писать нечего
+    final ok = await SettingsStorage.reorderSources(keys);
+    if (!ok) return false;
+    final rank = <String, int>{
+      for (var i = 0; i < keys.length; i++) keys[i]: i,
+    };
+    // Взаимный порядок контейнеров зеркалим в `_entries`: без этого
+    // следующий `_persist()` (toggle, rename, авто-refresh) вернул бы на диск
+    // прежний порядок контейнеров.
+    _entries.sort((a, b) =>
+        (rank[sourceKeyForIdOf(a.id)] ?? rank.length)
+            .compareTo(rank[sourceKeyForIdOf(b.id)] ?? rank.length));
+    configDirty = true;
+    notifyListeners();
+    return true;
+  }
+
+  /// §509/§524 — взаимный порядок контейнеров. Состав [ids] обязан совпасть с
+  /// текущими записями; места цепочек и нечитаемых записей не двигаются.
+  ///
+  /// Перестановка ОБЩЕГО списка (drag на Servers) идёт через
+  /// [applySourceOrder]: одна запись на жест вместо двух.
   ///
   /// `false` — состав не совпал, порядок не тронут; причина в AppLog
   /// (§511 m4: раньше отказ был тихим).
@@ -3283,7 +3348,7 @@ class SubscriptionController extends ChangeNotifier {
   /// §515 — первая строка: барьер поколения. Контроллер, переживший
   /// переключение пространства (или уже disposed'нутый), НЕ пишет: сцена на
   /// диске принадлежит другому слоту, а запись здесь заменяет весь набор
-  /// не-цепочек составом ЭТОГО контроллера. Один барьер в одной точке
+  /// контейнеров составом ЭТОГО контроллера. Один барьер в одной точке
   /// закрывает и летящий фетч, и `toggleAt`, и регидрацию кэша, и любую
   /// будущую мутацию. `configDirty` тоже не поднимаем — флаг глобальный, он
   /// заставил бы новый слот пересобирать конфиг из-за чужого хвоста.

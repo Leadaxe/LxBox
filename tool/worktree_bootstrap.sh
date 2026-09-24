@@ -310,4 +310,9 @@ if [ "$MODE" = "bootstrap" ] && [ "$contract_ok" -eq 0 ]; then
   exit 1
 fi
 
+# Автор коммитов в worktree — noreply-адрес GitHub: коммит с личным e-mail
+# отклоняется push'ем (GH007 «would publish a private email»), см. 24.09.2026.
+git config user.email "247031499+Leadaxe@users.noreply.github.com"
+git config user.name "Leadaxe"
+
 echo "worktree_bootstrap: готово"

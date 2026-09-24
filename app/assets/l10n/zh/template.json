@@ -587,6 +587,9 @@
  "Quad9 DoH (via VPN, anti-malware)": {
   "value": "Quad9 DoH（经 VPN，防恶意软件）"
  },
+ "Yandex DoT (direct)": {
+  "value": "Yandex DoT（直连）"
+ },
  "Google push (FCM)": {
   "value": "Google 推送（FCM）"
  },
