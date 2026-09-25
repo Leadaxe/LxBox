@@ -86,41 +86,38 @@ void main() {
 
     // (c) по типам ссылки; `LX_PERF_QUICK=1` — пропустить (A/B гипотез
     // сверяли по (a)/(b), (c) идёт ещё ~2 минуты).
-    if (quick) {
-      // ignore: avoid_print
-      print(out);
-      return;
-    }
-    out.writeln('\n(c) по типам ссылки');
-    out.writeln(
-      _row([
-        'тип',
-        'parseUri',
-        'маршрут',
-        'маппер',
-        'санитайзер',
-        'модель',
-        'остаток',
-        'JSON',
-      ]),
-    );
-    for (final s in _shapes.entries) {
-      final links = _links([s.value]);
-      final st = _stages(links);
-      final cfg = _singboxConfig(links);
-      final json = _best(() => parseSingboxConfigs([cfg]));
+    if (!quick) {
+      out.writeln('\n(c) по типам ссылки');
       out.writeln(
         _row([
-          s.key,
-          _us(st['parseUri']!),
-          _us(st['маршрут']!),
-          _us(st['маппер']!),
-          _us(st['санитайзер']!),
-          _us(st['модель']!),
-          _us(st['остаток']!),
-          _us(json),
+          'тип',
+          'parseUri',
+          'маршрут',
+          'маппер',
+          'санитайзер',
+          'модель',
+          'остаток',
+          'JSON',
         ]),
       );
+      for (final s in _shapes.entries) {
+        final links = _links([s.value]);
+        final st = _stages(links);
+        final cfg = _singboxConfig(links);
+        final json = _best(() => parseSingboxConfigs([cfg]));
+        out.writeln(
+          _row([
+            s.key,
+            _us(st['parseUri']!),
+            _us(st['маршрут']!),
+            _us(st['маппер']!),
+            _us(st['санитайзер']!),
+            _us(st['модель']!),
+            _us(st['остаток']!),
+            _us(json),
+          ]),
+        );
+      }
     }
 
     // ignore: avoid_print
