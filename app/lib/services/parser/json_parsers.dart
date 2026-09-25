@@ -1437,7 +1437,10 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
         _ => const [],
       },
       insecure: raw['insecure'] == true,
-      fingerprint: utls?['fingerprint']?.toString(),
+      // Контракт 1.1.61 — включённый uTLS без отпечатка (его дописывает
+      // `requires[].set` у REALITY) держится в модели пустой строкой.
+      fingerprint: utls?['fingerprint']?.toString() ??
+          (utls?['enabled'] == true ? '' : null),
       // §454 — пин (D-078) из JSON раньше не читался вовсе: только из
       // `pinSHA256=` hysteria2-URI. Listable ядра: строка или массив.
       certificatePublicKeySha256: switch (raw['certificate_public_key_sha256']) {

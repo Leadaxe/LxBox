@@ -201,6 +201,10 @@ final class RegistrySanitizer {
     // бы узел кодом `awg_headers_overlap` вместо честного `awg_header_invalid`
     // на самом поле — вина уезжала бы не на того.
     if (!ctx.dropNode) ctx.applyBodyRelations(out, schema.relations);
+    // Контракт 1.1.61 — правила-починки (`requires[].set`, `coerce_when`)
+    // судятся по ГОТОВОМУ телу, после всех снятий; у отбракованного узла не
+    // исполняются.
+    if (!ctx.dropNode) ctx.applyRepairs(out);
     if (ctx.dropNode) {
       return SanitizeResult(null, ctx.warnings,
           explicitDropNode: ctx.explicitDropNode);
@@ -352,6 +356,11 @@ final class _Ctx {
   /// судятся посреди него. Карта живёт ровно на время обхода объекта. Эталон
   /// — `building` в `nodeflow/sanitize.go`.
   final _building = <String, Map<String, Object?>>{};
+
+  /// Контракт 1.1.61 — отложенные правила-починки: записываются по ходу
+  /// обхода (там, где встал бы их код), исполняются [applyRepairs] по
+  /// готовому телу.
+  final _repairs = <_Repair>[];
 
   void warn(
     String code, {
@@ -542,7 +551,10 @@ final class _Ctx {
         }
         return out;
       }
-      if (res.keep) kept[key] = res.value;
+      if (res.keep) {
+        kept[key] = res.value;
+        _recordCoerceWhen(f, path, res.value);
+      }
     }
 
     // Состояние ПОСЛЕ проверки значений: связи обязаны видеть его, а не
@@ -1548,6 +1560,23 @@ final class _Ctx {
             : _present(need, kept, prefix);
         if (ok) continue;
         if (_unlessHolds(rel, kept, prefix)) continue;
+        // Контракт 1.1.61 — `requires[].set`: недостающий путь не снимает
+        // поле, а материализуется значением `set` по готовому телу. Путь,
+        // который схема не допускает, — обычное снятие ниже.
+        if (rel.containsKey('set')) {
+          final target = need.contains('.') ? need : _join(prefix, need);
+          if (_pathAllowed(target)) {
+            _repairs.add(_Repair.set(
+              index: warnings.length,
+              path: _join(prefix, key),
+              target: target,
+              need: need,
+              value: rel['set'],
+              code: rel['code'] as String? ?? 'field_requires',
+            ));
+            continue;
+          }
+        }
         kept.remove(key);
         // §472 шаг 3 — требуемое поле снял этот же прогон и уже объяснил
         // почему: молча уходим следом. См. [explainedDrops].
@@ -1558,6 +1587,114 @@ final class _Ctx {
         break;
       }
     }
+  }
+
+  /// Контракт 1.1.61 — `coerce_when`: годное значение из `values` поля
+  /// запоминается; замена — по готовому телу в [applyRepairs].
+  void _recordCoerceWhen(FieldSchema f, String path, Object? v) {
+    final rule = f.raw['coerce_when'];
+    if (rule is! Map) return;
+    final values = rule['values'];
+    if (values is! List || !values.any((e) => '$e' == '$v')) return;
+    _repairs.add(_Repair.coerce(
+      index: warnings.length,
+      path: path,
+      original: v,
+      value: rule['value'],
+      when: rule['when'],
+      code: rule['code'] as String?,
+    ));
+  }
+
+  /// Допускает ли схема путь [path] (каждый сегмент объявлен и не запрещён
+  /// схеме записи) — только тогда `requires[].set` вправе его завести.
+  bool _pathAllowed(String path) {
+    Map<String, FieldSchema>? fields =
+        ContractRegistry.I.schemaFor(scheme)?.fields;
+    for (final seg in path.split('.')) {
+      final f = fields?[seg];
+      if (f == null) return false;
+      if (f.forbiddenFor?.contains(scheme) ?? false) return false;
+      final allowed = f.allowedFor;
+      if (allowed != null && !allowed.contains(scheme)) return false;
+      fields = f.fields;
+    }
+    return true;
+  }
+
+  /// Исполнить отложенные починки по готовому телу [out]. Код встаёт в
+  /// `warnings` туда, где встал бы при обходе.
+  void applyRepairs(Map<String, dynamic> out) {
+    if (_repairs.isEmpty) return;
+    final inserts = <(int, RegistryWarning)>[];
+    for (final r in _repairs) {
+      final w = r.apply(out, this);
+      if (w != null) inserts.add((r.index, w));
+    }
+    for (var i = inserts.length - 1; i >= 0; i--) {
+      warnings.insert(inserts[i].$1, inserts[i].$2);
+    }
+  }
+
+  /// Условие правила по ГОТОВОМУ телу (грамматика `condition`).
+  bool finalConditionHolds(Object? when, Map<String, dynamic> body) {
+    if (when is! Map) return true;
+    var branches = false;
+    for (final e in when.entries) {
+      final key = '${e.key}';
+      if (key == 'any_set' || key == 'source_kind') {
+        branches = true;
+        continue;
+      }
+      final got = finalAt(body, key);
+      final present = got != null && !(got is String && got.isEmpty);
+      final want = e.value;
+      if (want is Map) {
+        final inList = want['in'];
+        final notIn = want['not_in'];
+        if (inList is List) {
+          if (!(present && inList.any((x) => '$x' == '$got'))) return false;
+        } else if (notIn is List) {
+          if (present && notIn.any((x) => '$x' == '$got')) return false;
+        } else if (want.containsKey('type_of')) {
+          if (!_typeOf(got, '${want['type_of']}')) return false;
+        } else {
+          return false;
+        }
+      } else if (!(present && '$want' == '$got')) {
+        return false;
+      }
+    }
+    if (!branches) return true;
+    final sourceKind = (when['source_kind'] as List?)?.map((e) => '$e');
+    if (sourceKind != null && sourceKind.any(kinds.contains)) return true;
+    final anySet = (when['any_set'] as List?)?.map((e) => '$e');
+    if (anySet != null) {
+      for (final k in anySet) {
+        final v = finalAt(body, k);
+        if (v != null && !(v is String && v.isEmpty)) return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _typeOf(Object? v, String t) => switch (t) {
+        'object' => v is Map,
+        'array' => v is List,
+        'string' => v is String,
+        'number' => v is num,
+        'bool' => v is bool,
+        _ => false,
+      };
+
+  /// Значение по абсолютному пути готового тела; `null` — пути нет.
+  static Object? finalAt(Map<String, dynamic> body, String path) {
+    Object? cur = body;
+    for (final seg in path.split('.')) {
+      if (cur is! Map || !cur.containsKey(seg)) return null;
+      cur = cur[seg];
+    }
+    return cur;
   }
 
   /// Значение по пути связи — для `requires` с `equals`.
@@ -2200,4 +2337,78 @@ final class _Value {
 
   final bool keep;
   final Object? value;
+}
+
+/// Контракт 1.1.61 — отложенное правило-починка (`requires[].set` либо
+/// `coerce_when`), исполняемое по готовому телу.
+final class _Repair {
+  _Repair.set({
+    required this.index,
+    required this.path,
+    required String this.target,
+    required String this.need,
+    required this.value,
+    required this.code,
+  })  : original = null,
+        when = null;
+
+  _Repair.coerce({
+    required this.index,
+    required this.path,
+    required this.original,
+    required this.value,
+    required this.when,
+    required this.code,
+  })  : target = null,
+        need = null;
+
+  final int index;
+  final String path;
+  final String? target;
+  final String? need;
+  final Object? original;
+  final Object? value;
+  final Object? when;
+  final String? code;
+
+  RegistryWarning? apply(Map<String, dynamic> out, _Ctx ctx) {
+    final t = target;
+    if (t != null) {
+      // Декларант не пережил своих правил — дописывать нечего.
+      if (!_Ctx._meaningful(_Ctx.finalAt(out, path))) return null;
+      if (_Ctx._meaningful(_Ctx.finalAt(out, t))) return null;
+      final segs = t.split('.');
+      Map<String, dynamic> cur = out;
+      for (final seg in segs.sublist(0, segs.length - 1)) {
+        final next = cur[seg];
+        if (next is Map<String, dynamic>) {
+          cur = next;
+        } else if (next == null) {
+          final m = <String, dynamic>{};
+          cur[seg] = m;
+          cur = m;
+        } else {
+          return null;
+        }
+      }
+      cur[segs.last] = value;
+      return RegistryWarning(
+          code: code ?? 'field_requires', path: path, params: {'requires': need!});
+    }
+    final got = _Ctx.finalAt(out, path);
+    if (got == null || '$got' != '$original') return null;
+    if (!ctx.finalConditionHolds(when, out)) return null;
+    final segs = path.split('.');
+    final parent = segs.length == 1
+        ? out
+        : _Ctx.finalAt(out, segs.sublist(0, segs.length - 1).join('.'));
+    if (parent is! Map) return null;
+    parent[segs.last] = value;
+    final c = code;
+    if (c == null) return null;
+    return RegistryWarning(
+        code: c,
+        path: path,
+        value: RegistrySanitizer.renderWarningValue(original as Object));
+  }
 }

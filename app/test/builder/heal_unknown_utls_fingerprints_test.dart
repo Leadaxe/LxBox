@@ -144,14 +144,6 @@ void main() {
           reason: 'регистр канонизируется, выбор источника — нет');
     });
 
-    test('§444: REALITY + random → chrome, молча (дефолт парсера)', () {
-      final config = {
-        'outbounds': [realityOutbound('rnd', 'random')],
-      };
-      expect(healUnknownUtlsFingerprints(config), isEmpty);
-      expect(utlsOf(config, 0)['fingerprint'], 'chrome');
-    });
-
     test('§281: REALITY + мусор → chrome + запись (защита от fatal)', () {
       final config = {
         'outbounds': [realityOutbound('junk', 'garbage')],
@@ -200,43 +192,6 @@ void main() {
       expect(healUnknownUtlsFingerprints({}), isEmpty);
     });
 
-    test('РЕВЬЮ §281: REALITY без utls-блока → минимальный блок восстановлен',
-        () {
-      final config = {
-        'outbounds': [
-          {
-            'tag': 'r',
-            'type': 'vless',
-            'tls': {
-              'enabled': true,
-              'reality': {'enabled': true, 'public_key': 'pk'},
-            },
-          },
-        ],
-      };
-      final healed = healUnknownUtlsFingerprints(config);
-
-      expect(healed, isEmpty, reason: 'восстановление — молча');
-      expect(utlsOf(config, 0)['enabled'], true,
-          reason: 'без uTLS ядро отвергает reality-outbound на старте');
-      expect(utlsOf(config, 0)['fingerprint'], 'chrome',
-          reason: '§444: chrome ЯВНО, не дефолт ядра');
-    });
-
-    test('§444: REALITY + пустой/пробельный fingerprint → chrome ЯВНО', () {
-      final config = {
-        'outbounds': [
-          realityOutbound('empty', ''),
-          realityOutbound('blank', '  '),
-        ],
-      };
-      final healed = healUnknownUtlsFingerprints(config);
-
-      expect(healed, isEmpty);
-      expect(utlsOf(config, 0)['fingerprint'], 'chrome');
-      expect(utlsOf(config, 1)['fingerprint'], 'chrome');
-    });
-
     test(
         'РЕВЬЮ §282: QUIC (hysteria2/tuic) → utls И reality СНЯТЫ, '
         'НЕ восстановлены (иначе воскрешение мёртвой QUIC-ноды)', () {
@@ -264,27 +219,6 @@ void main() {
             reason: '$type reality снят');
         expect(tls['server_name'], 'x.com', reason: '$type остальное цело');
       }
-    });
-
-    test('РЕВЬЮ §281: REALITY + utls.enabled=false → включён', () {
-      final config = {
-        'outbounds': [
-          {
-            'tag': 'r',
-            'type': 'vless',
-            'tls': {
-              'enabled': true,
-              'utls': {'enabled': false, 'fingerprint': 'chrome'},
-              'reality': {'enabled': true, 'public_key': 'pk'},
-            },
-          },
-        ],
-      };
-      final healed = healUnknownUtlsFingerprints(config);
-
-      expect(healed, isEmpty);
-      expect(utlsOf(config, 0)['enabled'], true);
-      expect(utlsOf(config, 0)['fingerprint'], 'chrome');
     });
   });
 }

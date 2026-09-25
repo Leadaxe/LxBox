@@ -188,6 +188,9 @@ class TlsSpec {
     }
     if (fingerprint != null && fingerprint!.isNotEmpty) {
       typed['utls'] = {'enabled': true, 'fingerprint': fingerprint};
+    } else if (fingerprint == '') {
+      // Контракт 1.1.61 — uTLS включён без отпечатка (ядро = chrome).
+      typed['utls'] = {'enabled': true};
     }
     if (reality != null) {
       typed['reality'] = reality!.toSingbox();
