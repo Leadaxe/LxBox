@@ -39,6 +39,11 @@ Checklist for a manual edit:
    `gh api repos/Leadaxe/sing-box-lx/contents/go.mod?ref=<core tag> --jq .content | base64 -d | grep 'cronet-go v'`.
    Reachability check: `git ls-remote https://github.com/SagerNet/cronet-go | grep <sha>`.
 4. `CurrentVersion` / `CurrentVersionCode`.
+   Core submodules: `git submodule update --init submodules` (the directory
+   pathspec), never a list by name. A list silently misses a new submodule and
+   the Go build fails at `reading submodules/<name>/go.mod` (2.24.2, !49202,
+   `submodules/utls`). Blocks before 2.25.5 keep the old list: their core has
+   no `utls`, so the pathspec form would not change anything for them.
 5. Toolchain versions are read from the sources (`android/flutter.version`,
    the core's `go.version`, `android/libbox.version`). No version literals in
    the recipe.
