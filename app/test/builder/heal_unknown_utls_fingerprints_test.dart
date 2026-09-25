@@ -27,7 +27,7 @@ void main() {
             {
               'tag': 'q',
               'type': type,
-              'tls': TlsSpec.disabled.toSingboxForQuic(),
+              'tls': TlsSpec.disabled.toSingbox(),
             },
           ],
         };

@@ -82,6 +82,7 @@
 | 435 | [`435 node-sections-tailscale/`](435%20node-sections-tailscale/) | Секции узла (контракт ## 13, форма ONE_NAMESPACE §2) + узел Tailscale: инъекция при сборке, гейт ядра, мастер, Routing/DNS/редактор узла | Released v2.23.2 (ядро lx.38) |
 | 439 | [`439 storage-contract-1-0/`](439%20storage-contract-1-0/) | Хранение `lxbox_settings.json` в форме записей контракта 1.0 (`sources[]`, `rules[]`, `dns{}`), миграция при загрузке с копией `.v0.bak`, ссылки на узлы `{folder_id, tag}` (NodeLink), экспорт LX Backup — срез хранения | Реализовано, DEVICE-PENDING (2.23.3) |
 | 417 | [`417 workspaces/`](417%20workspaces/) | Workspaces: именованные копии состояния (настройки + кэш подписок + .srs); Load = автосохранение текущего → копия → перечитать без рестарта → пересборка → VPN; Save as; без переезда файлов | DEVICE-PENDING |
+| 554 | [`554 schema-driven-node-editor/`](554%20schema-driven-node-editor/) | Редактор узла по схеме реестра: форма строится из схемы, проверка — санитайзер | Сырая идея, на доработку |
 
 ## Демотированные / superseded (теперь в `../tasks/`)
 

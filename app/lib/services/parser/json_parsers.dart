@@ -9,13 +9,11 @@ import '../../models/transport_spec.dart';
 import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
 import 'engine/engine_mapper.dart' show mapJsonViaEngine;
-import 'hysteria2_obfs.dart';
 import 'mappers/uri_pipeline.dart'
     show parseXrayViaPipeline;
 import 'drop_verdict.dart';
 import 'tcp_keep_alive.dart';
 import 'transport.dart';
-import '../app_log.dart';
 import 'uri_utils.dart';
 import 'utls_fingerprint.dart';
 
@@ -219,8 +217,14 @@ List<NodeSpec> parseXrayElement(
       // негодная форма `vless.encryption` значит, что ядро не примет конфиг и
       // не стартует НА ВСЁМ наборе (случай #147). Такой узел обязан исчезнуть
       // при разборе, а не дожить до гарда сборки, стоя в списке рабочим.
+      // §302/§454 — исходник узла: compact = сам outbound (он же `rawSource`
+      // узла), extended = весь элемент как пришёл от провайдера (dns/inbounds/
+      // routing соседи) — хранится только когда отличается. Текст считается
+      // здесь один раз и уходит в `_xrayToSpec` как готовый `rawSource`
+      // (§551 follow-up: раньше тот же outbound сериализовался дважды).
+      final compact = _prettyJson(ob);
       final verdict = XrayDropVerdict();
-      var spec = _xrayToSpec(ob, label, dropped: verdict);
+      var spec = _xrayToSpec(ob, label, dropped: verdict, rawSource: compact);
       if (spec == null && verdict.explicit) {
         // Причина — код реестра с тегом записи: `dropped[].ref` контракта
         // называет именно тег outbound'а (D-088), как и у прочих отбраковок.
@@ -245,11 +249,6 @@ List<NodeSpec> parseXrayElement(
         if (proto.isNotEmpty) unsupported.add(proto);
         continue;
       }
-
-      // §302/§454 — исходник узла: compact = сам outbound (он же `rawSource`
-      // узла), extended = весь элемент как пришёл от провайдера (dns/inbounds/
-      // routing соседи) — хранится только когда отличается.
-      final compact = _prettyJson(ob);
 
       // §321/§368/§404 — цепочка релеев. `dialerProxy` в Xray живёт в
       // `streamSettings.sockopt`, то есть технически возможен у любого
@@ -638,6 +637,7 @@ NodeSpec? _xrayToSpec(
   String remarks, {
   XrayDropVerdict? dropped,
   bool allowSocks = false,
+  String? rawSource,
 }) {
   // §321 — SOCKS самостоятельным узлом подписки не становится: он бывает
   // только звеном цепочки `dialerProxy`, и зовут его оттуда явным флагом.
@@ -653,7 +653,7 @@ NodeSpec? _xrayToSpec(
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
   return parseXrayViaPipeline(
     mapping.body,
-    rawSource: _prettyJson(o),
+    rawSource: rawSource ?? _prettyJson(o),
     label: label,
     warnings: mapping.warnings,
     wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
@@ -982,34 +982,29 @@ NodeSpec? parseSingboxEntry(
       if (server.isEmpty || port == 0) return null;
       // §219 — кастуем entry['obfs'] один раз (было дважды).
       final obfs = entry['obfs'] as Map?;
-      // §469 п. 6 (зеркало находки лаунчера в `371448da`) — коды обфускации
-      // ДОХОДЯТ ДО УЗЛА и на JSON-входе тоже.
-      //
-      // Раньше сюда передавался `null` («у parseSingboxEntry нет
-      // warnings-аккумулятора»), и `obfs_unknown`/`obfs_password_missing`
-      // пропадали: один и тот же узел, пришедший ссылкой и телом, нёс разные
-      // наборы кодов, хотя тело у него выходило одинаковым. Аккумулятор
-      // есть — это `NodeSpec.warnings`, куда их кладёт сам spec.
-      final hy2Warnings = <NodeWarning>[];
-      final obfsNorm = normalizeHysteria2Obfs(
-        obfs?['type']?.toString() ?? '',
-        obfs?['password']?.toString() ?? '',
-        hy2Warnings,
-      );
+      // §547 A2 — обфускацию судит реестр (`hysteria2.json` →
+      // `body.fields.obfs`: `type` — enum `salamander/gecko`, `trim_lower`,
+      // `on_invalid: drop` с кодом `obfs_unknown`; `password` — `required` с
+      // кодом `obfs_password_missing`, без него снимается весь блок). Модель
+      // строится по карте санитайзера (ссылка — §472, JSON — §545), коды
+      // ставит он же: у ссылки — конвейер, у JSON — проход по дословной карте
+      // (`annotateFromRawBody`). Рукописная копия (`normalizeHysteria2Obfs`,
+      // §358/§469) снята: второй производитель тех же кодов и второй enum.
+      final obfsType = obfs?['type']?.toString() ?? '';
       // §472 шаг 5 — рукописного производителя `tls_not_applicable_quic`
       // здесь БОЛЬШЕ НЕТ.
       //
       // §469 ставил его отсюда потому, что санитайзер разбора смотрел на
-      // `emit()`, где `toSingboxForQuic` блоки уже срезал. С шага 1 у
+      // `emit()`, где эмиттер блоки уже срезал. С шага 1 у
       // JSON-узла есть проход по ДОСЛОВНОЙ карте (`annotateFromRawBody`), и
       // правило реестра `forbidden_for` на `tls.utls`/`tls.reality` он
       // исполняет сам — по тому же телу, которое читала эта ветка, и с тем же
       // `value`. Дедуп по `(code, path)` дубль снимал, так что видно ничего не
       // было; лишним производитель от этого быть не перестал.
       //
-      // Тело узла не меняется: блоки по-прежнему срезает эмиттер.
+      // Блоков нет и в теле: модель строится по карте санитайзера (§545),
+      // эмиттер QUIC-срезов не делает (§546).
       return Hysteria2Spec(
-        warnings: hy2Warnings,
         id: newUuidV4(),
         tag: tag.isEmpty ? 'hy2-$server-$port' : tag,
         label: label0,
@@ -1017,8 +1012,9 @@ NodeSpec? parseSingboxEntry(
         port: port,
         rawSource: src,
         password: entry['password']?.toString() ?? '',
-        obfs: obfsNorm.type,
-        obfsPassword: obfsNorm.password,
+        obfs: obfsType,
+        obfsPassword:
+            obfsType.isEmpty ? '' : obfs?['password']?.toString() ?? '',
         obfsMinPacketSize: (obfs?['min_packet_size'] as num?)?.toInt(),
         obfsMaxPacketSize: (obfs?['max_packet_size'] as num?)?.toInt(),
         // §404 п.5 — bandwidth-подсказки и port hopping доезжали только из
@@ -1484,23 +1480,18 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
   );
 }
 
-/// §457 — `tls.reality.key_share`: только значение из [kRealityKeyShares].
-/// Иное (`"x"`, число, пусто) — поле отброшено, узел жив: ядро на неизвестном
-/// значении отвергает outbound, а с ним и весь конфиг («деградируй поле, не
-/// конфиг»).
+/// §457 — `tls.reality.key_share` в модель: пустое не пишем.
 ///
-/// §459 (контракт §24.2 п. 7.12) — реестр `tls.json` →
-/// `body.fields.reality.fields.key_share`, `normalize: trim_lower`: ядро
-/// case-sensitive, но `"Hybrid"` из чужого JSON — это явное намерение, а не
-/// мусор; раньше оно терялось молча.
-String? _realityKeyShare(dynamic raw) {
-  if (raw is! String) return null;
-  final v = raw.trim().toLowerCase();
-  if (v.isEmpty) return null;
-  if (kRealityKeyShares.contains(v)) return v;
-  AppLog.I.debug("reality: key_share '$raw' is not a known value, dropping");
-  return null;
-}
+/// §547 A1 — значение судит реестр (`tls.json` →
+/// `body.fields.reality.fields.key_share`: enum `""/hybrid/classical`,
+/// `normalize: trim_lower`, `on_invalid: drop` с кодом
+/// `reality_key_share_invalid`). Модель строится по карте санитайзера на всех
+/// входах (ссылка — конвейер §472, sing-box JSON — §545), а гард сборки
+/// (`applyRegistryGate`) судит тело ещё раз перед ядром. Рукописная копия
+/// enum (`kRealityKeyShares`) и её фильтр сняты: правка реестра до них не
+/// доходила.
+String? _realityKeyShare(dynamic raw) =>
+    raw is String && raw.isNotEmpty ? raw : null;
 
 TransportSpec? _transportFromSingbox(dynamic raw) {
   if (raw is! Map) return null;

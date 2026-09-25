@@ -716,6 +716,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               controller: _jsonCtrl,
               fontSize: 13,
               hint: '{"type": "vless", "tag": "…", …}',
+              language: LxCodeLanguage.json,
             ),
           ),
           const SizedBox(height: 8),

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
 import 'package:lxbox/services/lx_backup.dart';
-import 'package:lxbox/services/parser/hysteria2_obfs.dart';
 import 'package:lxbox/services/parser/uri_utils.dart'
     show kMaxDetourDepth, maxAmneziaLinkLength, maxURILength;
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
@@ -107,9 +106,8 @@ void main() {
       _checkAllowlist('utls_fingerprints', kUtlsFingerprints, allowlists);
     });
 
-    test('hysteria2_obfs', () {
-      _checkAllowlist('hysteria2_obfs', kHysteria2ObfsTypes, allowlists);
-    });
+    // §547 A2 — allowlist `hysteria2_obfs` в коде больше не зеркалится:
+    // `kHysteria2ObfsTypes` снят, obfs судит enum реестра.
 
     // §401 — словарь кодов LX Backup. Сверка ДВУСТОРОННЯЯ: односторонняя
     // ловила бы только «код есть в коде, но нет в реестре» и молчала бы о
@@ -156,7 +154,6 @@ void main() {
 
     // Значение вне словаря обязано отвергаться — иначе allowlist декоративен.
     test('значения вне словаря отвергаются', () {
-      expect(kHysteria2ObfsTypes.contains('nonsense'), isFalse);
       expect(normalizeUtlsFingerprintValue('garbage').junk, isTrue);
     });
 

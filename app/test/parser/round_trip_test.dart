@@ -134,6 +134,29 @@ void main() {
       expect(b.obfsMaxPacketSize, 1200);
     });
 
+    // §543 — ссылка 3x-ui (genHysteriaLink): security=tls в каждой ссылке,
+    // gecko-размеры парой minPacketSize/maxPacketSize (написание v2rayN).
+    // Контракт 1.1.54: алиасы читаются, security=tls молчит.
+    test('§543 — Hysteria2 gecko из 3x-ui: camelCase-размеры и security=tls',
+        () {
+      final a = parseHysteria2(
+        'hysteria2://secret@example.com:443?security=tls&alpn=h3'
+        '&sni=example.com&obfs=gecko&obfs-password=op'
+        '&minPacketSize=512&maxPacketSize=1200#3x-ui',
+      )!;
+      expect(a.obfs, 'gecko');
+      expect(a.obfsMinPacketSize, 512);
+      expect(a.obfsMaxPacketSize, 1200);
+      expect(a.warnings, isEmpty);
+
+      final obfs =
+          a.emitRaw(const TemplateVars()).map['obfs'] as Map<String, dynamic>;
+      expect(obfs['type'], 'gecko');
+      expect(obfs['password'], 'op');
+      expect(obfs['min_packet_size'], 512);
+      expect(obfs['max_packet_size'], 1200);
+    });
+
     test('§358 — salamander: gecko-размеры в JSON не попадают', () {
       final a = parseHysteria2(
         'hysteria2://secret@h:443?obfs=salamander&obfs-password=op'

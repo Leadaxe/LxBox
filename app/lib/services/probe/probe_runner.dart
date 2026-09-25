@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../../models/node_spec.dart';
+import '../../vpn/box_vpn_client.dart';
 import '../../vpn/cc_channel.dart';
 import '../app_log.dart';
+import '../builder/core_chain_capability.dart';
 import 'probe_config.dart';
 import 'probe_lifecycle.dart';
 
@@ -91,12 +93,16 @@ class ProbeRunner {
       // зовётся после каждого батча, так что движки/пулы предыдущего батча
       // освобождаются до старта следующего. Без naive и WG батч один, и прогон
       // дословно как до §518.
-      final batches = buildProbeBatches(nodes);
+      // §546 — гард реестра в probe судит `min_core` по той же версии ядра,
+      // что и боевая сборка (`CoreVersionCache`, кэш на сессию).
+      final coreVersion = await CoreVersionCache.ensure(
+          () => BoxVpnClient().getCoreVersion());
+      final batches = buildProbeBatches(nodes, coreVersion: coreVersion);
 
       // Битые/несобираемые/группы — вердикт сразу, без ядра. Вердикты лежат
       // в первом батче (§518 `_assemble`), покрывают весь список целиком.
       final broken = batches.isEmpty
-          ? buildProbeConfig(nodes).brokenByIndex
+          ? buildProbeConfig(nodes, coreVersion: coreVersion).brokenByIndex
           : batches.first.brokenByIndex;
       broken.forEach((i, why) {
         onResult(

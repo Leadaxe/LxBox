@@ -167,17 +167,11 @@ class TlsSpec {
 
   static const disabled = TlsSpec(enabled: false);
 
-  Map<String, dynamic> toSingbox() => _toSingbox(quic: false);
-
-  /// §282 — uTLS И REALITY поверх QUIC (hysteria2/tuic) в ядре не работают
-  /// вообще: их `STDConfig()` возвращает ошибку («unsupported usage for
-  /// uTLS»/«…for reality»), а QUIC-путь фолбэчит именно на `STDConfig()`
-  /// (аудит ядра SPECS/027-UTLS_OVER_QUIC). Оба блока на QUIC = мёртвая
-  /// нода, и `fp`/reality на hy2/tuic — мусор xray-подписок. Для QUIC-эмита
-  /// срезаем `utls` и `reality`; server_name/alpn/insecure цел.
-  Map<String, dynamic> toSingboxForQuic() => _toSingbox(quic: true);
-
-  Map<String, dynamic> _toSingbox({required bool quic}) {
+  /// §282 — uTLS и REALITY поверх QUIC (hysteria2/tuic) ядро не поднимает, но
+  /// блоки снимает реестр (`tls.json` → `forbidden_for`,
+  /// `tls_not_applicable_quic`) на разборе и гард сборки, а не этот метод:
+  /// он один на все протоколы и пишет то, что есть в модели.
+  Map<String, dynamic> toSingbox() {
     // Карта уходит в тело outbound, а телом после эмита владеет сборщик:
     // post-steps правят его на месте. `const {}` ронял сборку ВСЕГО конфига
     // на QUIC-узле с выключенным TLS («Cannot modify unmodifiable map»).
@@ -192,15 +186,14 @@ class TlsSpec {
       typed['certificate_public_key_sha256'] =
           List<String>.from(certificatePublicKeySha256);
     }
-    if (!quic && fingerprint != null && fingerprint!.isNotEmpty) {
+    if (fingerprint != null && fingerprint!.isNotEmpty) {
       typed['utls'] = {'enabled': true, 'fingerprint': fingerprint};
     }
-    if (!quic && reality != null) {
+    if (reality != null) {
       typed['reality'] = reality!.toSingbox();
     }
-    // §454 — сквозные ключи на QUIC валидны (сертификаты, версии) — в
-    // отличие от utls/reality не срезаются. Форма прибытия сохраняется:
-    // человек, набравший certificate строкой, увидит после Save строку.
+    // §454 — сквозные ключи в форме прибытия: человек, набравший certificate
+    // строкой, увидит после Save строку.
     final m = <String, dynamic>{};
     for (final k in _kTlsEmitOrder) {
       final v = typed[k] ?? passthrough[k];
@@ -260,21 +253,12 @@ class TlsSpec {
       _deepEq.hash(passthrough));
 }
 
-/// §457 — допустимые значения `tls.reality.key_share` ядра (`option/tls.go`,
-/// `common/tls/reality_client.go`). `hybrid` — требовать `X25519MLKEM768`
-/// (ClientHello ~1,5–1,9 КБ, два TCP-сегмента), `classical` — вырезать гибрид
-/// из `key_share`/`supported_groups` (~0,5 КБ, один сегмент). Любое другое
-/// значение ядро не понимает и отвергает outbound целиком = отказ всего
-/// конфига, поэтому парсеры отбрасывают поле молча, а не подгоняют.
-/// Нормативно для пина ядра lx.4+.
-const kRealityKeyShares = <String>{'hybrid', 'classical'};
-
 class RealitySpec {
   final String publicKey;
   final String shortId;
 
   /// §457 — `null` = не задано: ключ не эмитится, ядро берёт как несёт
-  /// отпечаток. Значение — только из [kRealityKeyShares].
+  /// отпечаток. Значение судит реестр (`tls.reality.key_share`, §547).
   final String? keyShare;
 
   const RealitySpec({

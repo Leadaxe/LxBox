@@ -705,6 +705,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`masque`](protocols/masque.md)
   - [`private_key`](protocols/masque.md#body-private-key) — set without `public_key` → removed
   - [`public_key`](protocols/masque.md#body-public-key) — set without `private_key` → removed
+- [`shadowsocks`](protocols/shadowsocks.md)
+  - [`plugin_opts`](protocols/shadowsocks.md#body-plugin-opts) — set without `plugin` → removed
 - [`tls`](protocols/_tls.md)
   - [`client_certificate`](protocols/_tls.md#body-client-certificate) — set without `tls.client_key` → removed
   - [`client_key`](protocols/_tls.md#body-client-key) — set without `tls.client_certificate` → removed
@@ -1700,15 +1702,15 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **flow removed: incompatible with transport**
 
-- **What happened:** xtls-rprx-vision works only over bare TLS, but the node has {with} set. The flow field at {path} was removed, because the value has no effect here; the node keeps working.
-- **Why it happens:** The panel put flow=xtls-rprx-vision into every link it generates, without looking at whether the node uses a transport. Vision only exists over bare TLS, so on a WebSocket, gRPC or HTTP node it is simply left over.
+- **What happened:** Without a VLESS Encryption layer, xtls-rprx-vision works only over bare TLS, but the node has {with} set and no encryption. The flow field at {path} was removed, because the value has no effect here; the node keeps working.
+- **Why it happens:** The panel put flow=xtls-rprx-vision into every link it generates, without looking at whether the node uses a transport. Without an encryption layer Vision only exists over bare TLS, so on a WebSocket, gRPC or HTTP node it is simply left over.
 - **What you can do:**
   - Nothing to do: the node works, and the removed value had no effect on this transport.
 
 **Where it comes from:**
 
 - [`vless`](protocols/vless.md)
-  - [`flow`](protocols/vless.md#body-flow) — conflicts with `transport` → removed
+  - [`flow`](protocols/vless.md#body-flow) — conflicts with `transport` (unless `encryption` is set) → removed
 
 <a id="vless_encryption_invalid"></a>
 ### vless_encryption_invalid
@@ -1850,7 +1852,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **Where it comes from:**
 
-- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+- [`transports`](protocols/_transports.md)
+  - [`xhttp.mode`](protocols/_transports.md#body-xhttp-mode) — the field is absent → filled in with `packet-up`
 
 <a id="xhttp_param_reset"></a>
 ### xhttp_param_reset
@@ -1871,6 +1874,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
   - [`xhttp.mode`](protocols/_transports.md#body-xhttp-mode) — the value does not fit the field → removed
   - [`xhttp.seq_placement`](protocols/_transports.md#body-xhttp-seq-placement) — the value does not fit the field → removed
   - [`xhttp.session_placement`](protocols/_transports.md#body-xhttp-session-placement) — the value does not fit the field → removed
+  - [`xhttp.uplink_data_placement`](protocols/_transports.md#body-xhttp-uplink-data-placement) — set without `transport.mode` → removed
   - [`xhttp.uplink_data_placement`](protocols/_transports.md#body-xhttp-uplink-data-placement) — the value does not fit the field → removed
   - [`xhttp.x_padding_method`](protocols/_transports.md#body-xhttp-x-padding-method) — the value does not fit the field → removed
   - [`xhttp.x_padding_placement`](protocols/_transports.md#body-xhttp-x-padding-placement) — the value does not fit the field → removed

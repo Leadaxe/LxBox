@@ -54,13 +54,25 @@ const _kWireguardSchemesFallback = <String>{'wireguard', 'wg', 'awg'};
 /// payload не URI, вместо `parseWireguardUri`.
 /// Литералы остаются в объединении: `wg://` реестр в `scheme_in` не объявляет
 /// намеренно (разрыв с Go, см. [pipelineSchemes]), а вторая форма у него та же.
+///
+/// §551 — считается один раз на маршрут схем ([schemeRouteToken]), а не на
+/// каждой ссылке.
 Set<String> _wireguardSchemes() {
+  final token = schemeRouteToken();
+  final cached = _wireguardSchemesCache;
+  if (cached != null && identical(token, _wireguardSchemesToken)) {
+    return cached;
+  }
   final out = <String>{..._kWireguardSchemesFallback};
   for (final s in pipelineSchemes()) {
     if (registrySchemeType(s) == 'wireguard') out.add(s);
   }
-  return out;
+  _wireguardSchemesToken = token;
+  return _wireguardSchemesCache = Set.unmodifiable(out);
 }
+
+Object? _wireguardSchemesToken;
+Set<String>? _wireguardSchemesCache;
 
 /// §506 — СЛУЖЕБНЫЕ схемы панелей провайдера: строки тела подписки, которые
 /// узлами не являются вовсе (правила роутинга Happ/Incy: `incy://routing/…`,

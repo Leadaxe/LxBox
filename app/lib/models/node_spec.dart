@@ -409,10 +409,10 @@ final class ShadowsocksSpec extends NodeSpec {
 final class Hysteria2Spec extends NodeSpec {
   final String password;
 
-  /// §358 — `'' | 'salamander' | 'gecko'` ([kHysteria2ObfsTypes]). Значение
-  /// нормализуют парсеры: тип вне словаря ядра или без пароля роняет ВЕСЬ
-  /// конфиг (`Hysteria2Obfs.MarshalJSON` → «unknown obfs type», outbound.go
-  /// → «missing obfs password»), поэтому в спеку он не попадает.
+  /// §358 — `'' | 'salamander' | 'gecko'`. Значение судит реестр
+  /// (`hysteria2.obfs`, §547): тип вне словаря ядра или без пароля роняет
+  /// ВЕСЬ конфиг (`Hysteria2Obfs.MarshalJSON` → «unknown obfs type»,
+  /// outbound.go → «missing obfs password»), поэтому в спеку он не попадает.
   final String obfs;
   final String obfsPassword;
 

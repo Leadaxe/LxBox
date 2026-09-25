@@ -114,24 +114,22 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
     }
   }
 
-  // §115 — ядро принимает РОВНО два flow: "" и "xtls-rprx-vision". vision
-  // валиден ТОЛЬКО на голом TLS (с любым транспортом ws/grpc/http/httpupgrade/
-  // xhttp ядро отвергает конфиг на load). Универсальный net на все пути
-  // (URI/Xray/raw sing-box JSON/manual): пишем flow только если он РОВНО
-  // vision И транспорта нет. Всё прочее (`none`, deprecated
-  // xtls-rprx-direct/origin/splice, мусор) → поле не пишется = plain VLESS.
-  if (s.flow == 'xtls-rprx-vision' && s.transport == null) {
-    out['flow'] = s.flow;
-  }
+  // Ни допустимое значение flow (`vless.flow.values`, `flow_deprecated`), ни
+  // связь flow ↔ transport (`vless.flow.conflicts`, `unless_set:
+  // [encryption]`) здесь не судятся: это правила реестра. Модель к эмиссии
+  // построена по очищенной карте — у ссылки (`mappers/uri_pipeline.dart`) и у
+  // sing-box JSON (§545, `singbox_config.dart`), — а тело перед ядром ещё раз
+  // проходит гард сборки (`applyRegistryGate`).
+  if (s.flow.isNotEmpty) out['flow'] = s.flow;
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;
 
   // §335 — постквантовый слой VLESS. Плоское поле верхнего уровня (в Xray-JSON
-  // оно вложено в users[0], у ядра — рядом с uuid). Пишем только непустое и не
-  // "none": обычные узлы не должны измениться ни на байт. Значение как есть —
-  // битую строку отвергнет ядро на check с указанием сегмента.
-  if (s.encryption.isNotEmpty && s.encryption != 'none') {
-    out['encryption'] = s.encryption;
-  }
+  // оно вложено в users[0], у ядра — рядом с uuid). Пустое не пишем.
+  //
+  // §547 A3 — `none` отсекает реестр (`vless.encryption.absent_values:
+  // [none]`) на разборе, а гард сборки — ещё раз перед ядром; рукописное
+  // сравнение с `none` снято. Форму значения судит `pattern` реестра.
+  if (s.encryption.isNotEmpty) out['encryption'] = s.encryption;
 
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
@@ -217,10 +215,11 @@ Outbound emitShadowsocks(ShadowsocksSpec s, TemplateVars vars) {
   final out = _baseOutbound('shadowsocks', s)
     ..['method'] = s.method
     ..['password'] = s.password;
-  if (s.plugin.isNotEmpty) {
-    out['plugin'] = s.plugin;
-    if (s.pluginOpts.isNotEmpty) out['plugin_opts'] = s.pluginOpts;
-  }
+  if (s.plugin.isNotEmpty) out['plugin'] = s.plugin;
+  // `plugin_opts` без `plugin` снимает реестр (`plugin_opts.requires: plugin`,
+  // контракт 1.1.56, код `field_requires`) — на разборе и гардом сборки
+  // (§547 фаза B). Эмиттер пишет непустое как есть.
+  if (s.pluginOpts.isNotEmpty) out['plugin_opts'] = s.pluginOpts;
   _addDialFields(out, s);
   return Outbound(out);
 }
@@ -238,24 +237,24 @@ Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
   if (s.serverPorts != null && s.serverPorts!.isNotEmpty) {
     out['server_ports'] = List<String>.from(s.serverPorts!);
   }
-  // §358 — оба типа из enum ядра. Тип и наличие пароля уже отвалидированы
-  // парсером (normalizeHysteria2Obfs): сюда доезжает только то, что ядро
-  // примет, иначе obfs отсутствует. Плоские min/max внутри `obfs` — так их
-  // кладёт badjson.MarshallObjects(_Hysteria2Obfs, Hysteria2ObfsGecko).
-  if (s.obfs == 'salamander' || s.obfs == 'gecko') {
+  // §358 — тип obfs (enum `hysteria2.obfs.type`, `obfs_unknown`), пароль
+  // (`obfs_password_missing`) и размеры пакета только у gecko (`requires`
+  // type=gecko) судит реестр на разборе и гард сборки; эмиттер пишет, что
+  // задано. Плоские min/max внутри `obfs` — так их кладёт
+  // badjson.MarshallObjects(_Hysteria2Obfs, Hysteria2ObfsGecko).
+  if (s.obfs.isNotEmpty) {
     out['obfs'] = {
       'type': s.obfs,
       if (s.obfsPassword.isNotEmpty) 'password': s.obfsPassword,
-      if (s.obfs == 'gecko') ...{
-        if (s.obfsMinPacketSize != null) 'min_packet_size': s.obfsMinPacketSize,
-        if (s.obfsMaxPacketSize != null) 'max_packet_size': s.obfsMaxPacketSize,
-      },
+      'min_packet_size': ?s.obfsMinPacketSize,
+      'max_packet_size': ?s.obfsMaxPacketSize,
     };
   }
   if (s.upMbps != null) out['up_mbps'] = s.upMbps;
   if (s.downMbps != null) out['down_mbps'] = s.downMbps;
-  // §282 — QUIC не поддерживает uTLS; fp на hysteria2 = мусор подписок.
-  out['tls'] = s.tls.toSingboxForQuic();
+  // §282 — блоки utls/reality на QUIC снимает реестр (`tls.json`,
+  // `forbidden_for` → `tls_not_applicable_quic`), не эмиттер.
+  out['tls'] = s.tls.toSingbox();
   _addDialFields(out, s);
   return Outbound(out);
 }
@@ -314,8 +313,9 @@ Outbound emitTuic(TuicSpec s, TemplateVars vars) {
   if (s.udpRelayMode != null) out['udp_relay_mode'] = s.udpRelayMode;
   if (s.zeroRtt) out['zero_rtt_handshake'] = true;
   if (s.heartbeat != null) out['heartbeat'] = s.heartbeat;
-  // §282 — QUIC не поддерживает uTLS; fp на tuic = мусор подписок.
-  out['tls'] = s.tls.toSingboxForQuic();
+  // §282 — блоки utls/reality на QUIC снимает реестр (`tls.json`,
+  // `forbidden_for` → `tls_not_applicable_quic`), не эмиттер.
+  out['tls'] = s.tls.toSingbox();
   _addDialFields(out, s);
   return Outbound(out);
 }

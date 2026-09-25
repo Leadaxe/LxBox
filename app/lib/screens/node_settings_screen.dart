@@ -18,6 +18,7 @@ import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
+import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
@@ -717,18 +718,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Stack(
             children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(12, 12, 40, 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: theme.dividerColor),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: SelectableText(
-                  _jsonCtrl.text,
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                ),
-              ),
+              LxJsonView(text: _jsonCtrl.text, height: 420),
               Positioned(
                 top: 4,
                 right: 4,

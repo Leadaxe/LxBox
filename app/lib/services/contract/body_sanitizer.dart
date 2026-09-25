@@ -332,6 +332,27 @@ final class _Ctx {
   /// `hysteria2/salamander_ignores_gecko_sizes`).
   final explainedDrops = <String>{};
 
+  /// §544 (контракт 1.1.55) — пути, снятые как ВЫКЛЮЧАТЕЛЬ: литерал
+  /// `absent_values` (`encryption: none`) или объект по `absent_when`
+  /// (`tls: {enabled: false}`).
+  ///
+  /// Для связей такое поле НЕ ЗАДАНО, хотя в исходном теле оно написано:
+  /// связи читают исходное тело ([_presentInSource]), и без этой пометки
+  /// `encryption: none` отменял бы `unless_set` конфликта `flow ↔ transport`,
+  /// хотя слоя шифрования нет. У лаунчера то же делает предварительный проход
+  /// (`markAbsentObjects`); здесь хватает записи в момент снятия — связи
+  /// объекта судятся после разбора всех его полей.
+  final switchedOff = <String>{};
+
+  /// Контракт 1.1.56 (норма 1) — чистые карты объектов, обход которых ЕЩЁ
+  /// ИДЁТ, по префиксу пути (`transport`; корень — `''`).
+  ///
+  /// В снимок [sanitized] поля объекта попадают только по завершении его
+  /// обхода, а условия соседей (`default_when.when` с предикатом по значению)
+  /// судятся посреди него. Карта живёт ровно на время обхода объекта. Эталон
+  /// — `building` в `nodeflow/sanitize.go`.
+  final _building = <String, Map<String, Object?>>{};
+
   void warn(
     String code, {
     String? path,
@@ -392,10 +413,49 @@ final class _Ctx {
     // 2. Значения — по одному, в порядке схемы: и результат, и список
     // warnings становятся детерминированными.
     final kept = <String, Object?>{};
+    _building[prefix] = kept;
+    try {
+      return _sanitizeObjectBody(src, order, fields, prefix, kept, out);
+    } finally {
+      _building.remove(prefix);
+    }
+  }
+
+  Map<String, dynamic> _sanitizeObjectBody(
+    Map<String, dynamic> src,
+    List<String> order,
+    Map<String, FieldSchema> fields,
+    String prefix,
+    Map<String, Object?> kept,
+    Map<String, dynamic> out,
+  ) {
     for (final key in order) {
       final f = fields[key];
       if (f == null) continue;
-      if (!src.containsKey(key)) {
+      final unset = !src.containsKey(key) || _unsetForDefault(src[key], f);
+      if (unset && src.containsKey(key)) {
+        // Контракт 1.1.56 (норма 2) — пустая строка у обычного поля и
+        // литерал-выключатель (`absent_values`) равны отсутствию ключа:
+        // `default_when` срабатывает так же, как на пропущенный ключ
+        // (`mode: ""` + header → packet-up). Не сработал — прежний путь:
+        // выключатель снимается [_sanitizeScalar] (с пометкой
+        // [switchedOff]), пустая строка — молча, как у лаунчера
+        // (`omitAsUnset`).
+        final dw = f.defaultWhen;
+        final fires = dw != null &&
+            dw['absent'] == true &&
+            _conditionHolds(dw['when'], src);
+        if (!fires) {
+          final v = src[key];
+          if (v is String && v.isEmpty) continue;
+          final path = _join(prefix, key);
+          final res = _sanitizeValue(v, f, path);
+          if (dropNode) return out;
+          if (res.keep) kept[key] = res.value;
+          continue;
+        }
+      }
+      if (unset) {
         // §464 (W2d) — `default_when`: дефолт, без которого ядро не поднимает
         // outbound вовсе (полоса hysteria v1 — «missing upload speed» фаталом
         // на ВЕСЬ конфиг). В отличие от `default` (CANON §2.4 — не пишется),
@@ -411,7 +471,11 @@ final class _Ctx {
         // и на ОТСУТСТВУЮЩЕЕ поле. Стоит ДО `default_when`: у `s1`–`s4`
         // дефолта нет вовсе, а появись он — материализованный дефолт судил бы
         // сам себя.
-        _minWhenOnAbsent(f, _join(prefix, key));
+        //
+        // §549 R2 — путь строится внутри, только когда правило есть: у
+        // большинства полей схемы его нет, а отсутствующих полей у узла — все,
+        // кроме нескольких.
+        _minWhenOnAbsent(f, prefix, key);
         if (dropNode) return out;
         final dw = f.defaultWhen;
         if (dw != null &&
@@ -484,8 +548,15 @@ final class _Ctx {
     // Состояние ПОСЛЕ проверки значений: связи обязаны видеть его, а не
     // исходное тело. Поле, снятое как невалидное, для зависимых от него —
     // отсутствует (reality.short_id без валидного public_key).
+    //
+    // §549 R2 — пути записанных ключей запоминаются: синхронизации после
+    // связей нужны только они (ключа вне `kept` в снимке нет — других
+    // писателей у `sanitized` нет, а пути у объектов разные).
+    final written = <String, String>{};
     for (final e in kept.entries) {
-      sanitized[_join(prefix, e.key)] = e.value;
+      final path = _join(prefix, e.key);
+      written[e.key] = path;
+      sanitized[path] = e.value;
     }
 
     // 3. Связи между полями — когда состав уже известен: `requires` смотрит
@@ -493,8 +564,8 @@ final class _Ctx {
     _applyRelations(kept, order, fields, prefix);
 
     // Связи могли что-то снять — синхронизируем снимок.
-    for (final key in order) {
-      if (!kept.containsKey(key)) sanitized.remove(_join(prefix, key));
+    for (final e in written.entries) {
+      if (!kept.containsKey(e.key)) sanitized.remove(e.value);
     }
 
     // Порядок ключей результата — ВХОДЯЩИЙ, а не `order` схемы.
@@ -521,6 +592,19 @@ final class _Ctx {
       if (!out.containsKey(e.key)) out[e.key] = e.value;
     }
     return out;
+  }
+
+  /// Контракт 1.1.56 (норма 2) — значение, равное отсутствию ключа: пустая
+  /// строка у обычного поля (не `required`, не `tristate` — у них пустое
+  /// значимо) и скаляр-литерал `absent_values` (после `normalize`).
+  static bool _unsetForDefault(Object? v, FieldSchema f) {
+    if (v is! String) return false;
+    if (v.isEmpty) return !f.required && f.raw['tristate'] != true;
+    final absent = f.absentValues;
+    if (absent == null) return false;
+    final norm = f.normalize;
+    final n = norm == null ? v : _normalizeString(v, norm);
+    return absent.contains(n);
   }
 
   /// Гейты уровня поля: годность значения они не проверяют, но само значение
@@ -566,9 +650,6 @@ final class _Ctx {
   _Value _sanitizeValue(Object? value, FieldSchema f, String path) {
     if (_gated(f, path, value)) return const _Value.drop();
 
-    // `ref` — спуск в общую суб-схему (tls / multiplex / transports).
-    final ref = f.ref;
-
     // §481 (контракт 1.1.12, CANON §6.1) — `absent_when`: ВЫКЛЮЧАТЕЛЬ ВНУТРИ
     // САМОГО ОБЪЕКТА. Совпали все перечисленные ключи — объект снимается
     // ЦЕЛИКОМ и ТИХО: это запись «настройки нет», а не деградация, и сообщать
@@ -582,80 +663,60 @@ final class _Ctx {
     // которого в теле не будет, а сосед потерял бы своё значение из-за
     // конфликта с несуществующим блоком.
     //
-    // Объявлен атрибут у поля-объекта ЛИБО у секции суб-схемы: у `tls` он
-    // стоит ОДИН раз, на секции, и при разрешении `ref` переезжает в каждый
-    // протокол — отдельной копии на схему не заводится.
-    final absentWhen = f.absentWhen ??
-        (f.type == 'ref' && ref != null
-            ? ContractRegistry.I.sharedSchema(ref)?.absentWhen
-            : null);
+    // У `tls` атрибут стоит ОДИН раз, на секции суб-схемы, и реестр при
+    // развороте ссылки переносит его в поле каждого протокола (§553) —
+    // отдельной копии на схему не заводится.
+    final absentWhen = f.absentWhen;
     if (absentWhen != null &&
         value is Map &&
         _absentWhenHolds(absentWhen, value)) {
+      switchedOff.add(path);
       return const _Value.drop();
-    }
-
-    if (f.type == 'ref' && ref != null) {
-      return _sanitizeRef(value, f, ref, path);
     }
 
     switch (f.type) {
       case 'object':
+        if (f.variants != null) return _sanitizeVariantObject(value, f, path);
         return _sanitizeObjectField(value, f, path);
       case 'array':
         return _sanitizeArray(value, f, path);
+      case 'ref':
+        // §553 — ссылку, которую реестр не смог разрешить при загрузке,
+        // судить нечем: значение остаётся как есть (так было и до
+        // разворота). В бандле таких нет — это ловит registry_load_test.
+        return _Value.keep(value);
       default:
         return _sanitizeScalar(value, f, path);
     }
   }
 
-  _Value _sanitizeRef(Object? value, FieldSchema f, String ref, String path) {
-    // `transports` — вариант по дискриминатору `transport.type`.
-    if (ref == 'transports') {
-      if (value is! Map) return _invalid(f, path, value);
-      final map = value.cast<String, dynamic>();
-      final type = map['type'];
-      if (type is! String) {
-        // Транспорт без `type` ядро не разберёт вовсе — тот же тип-фатал.
-        return _invalid(f, path, value);
-      }
-      final variant = ContractRegistry.I.transportVariant(type);
-      if (variant == null) return _invalid(f, path, type);
-      // `type` — сам дискриминатор: в `order` варианта его нет, но снимать
-      // его нельзя, иначе транспорт перестанет быть транспортом.
-      final inner = Map<String, dynamic>.from(map)..remove('type');
-      final cleaned =
-          sanitizeObject(inner, variant.order, variant.fields, path);
-      return _Value.keep(<String, dynamic>{'type': type, ...cleaned});
-    }
-
-    final shared = ContractRegistry.I.sharedSchema(ref);
-    if (shared == null) return _Value.keep(value);
-    // `dialer.common` — правило значения одного скаляра (server/server_port/
-    // network), а не объект: поле описано ссылкой, но лежит плоско.
-    if (ref == 'dialer.common') {
-      final key = path.split('.').last;
-      final sub = shared.fields[key];
-      if (sub == null) return _Value.keep(value);
-      return _sanitizeValue(value, sub, path);
-    }
+  /// §553 — объект с вариантами по дискриминатору (`transport` по `type`):
+  /// реестр развернул ссылку `transports` при загрузке, вариант берётся из
+  /// самого поля ([FieldSchema.variants]).
+  _Value _sanitizeVariantObject(Object? value, FieldSchema f, String path) {
     if (value is! Map) return _invalid(f, path, value);
-    // §472 шаг 5 — та же граница, что у объекта: не хватило `required` внутри
-    // общей суб-схемы — снимается она, а не узел. Сегодня таких полей в
-    // `tls`/`multiplex`/`dialer` нет ни одного на верхнем уровне (все четыре
-    // лежат глубже, во вложенных объектах), но правило должно быть одно на
-    // оба спуска — иначе оно зависело бы от того, описано поле ссылкой или
-    // объектом.
-    dropObject = false;
-    final cleaned = sanitizeObject(
-        value.cast<String, dynamic>(), shared.order, shared.fields, path);
-    if (dropObject) {
-      dropObject = false;
-      return const _Value.drop();
+    final disc = f.discriminator ?? 'type';
+    final map = value.cast<String, dynamic>();
+    final type = map[disc];
+    if (type is! String) {
+      // Транспорт без `type` ядро не разберёт вовсе — тот же тип-фатал.
+      return _invalid(f, path, value);
     }
-    return _Value.keep(cleaned);
+    final variant = f.variants![type];
+    if (variant == null) return _invalid(f, path, type);
+    // `type` — сам дискриминатор: в `order` варианта его нет, но снимать
+    // его нельзя, иначе транспорт перестанет быть транспортом.
+    final inner = Map<String, dynamic>.from(map)..remove(disc);
+    final cleaned = sanitizeObject(
+        inner, variant.order ?? const [], variant.fields ?? const {}, path);
+    return _Value.keep(<String, dynamic>{disc: type, ...cleaned});
   }
 
+  /// Поле-объект: собственный объект схемы (`tls.reality`, `hysteria2.obfs`)
+  /// и развёрнутая ссылка на общую суб-схему (`tls`, `multiplex`, §553 —
+  /// у такого поля [FieldSchema.originRef]). Граница §472 шаг 5 у них одна:
+  /// не хватило `required` внутри объекта — снимается он, а не узел, и не
+  /// важно, описан объект ссылкой или на месте.
   _Value _sanitizeObjectField(Object? value, FieldSchema f, String path) {
     if (value is! Map) return _invalid(f, path, value);
     final map = value.cast<String, dynamic>();
@@ -752,6 +813,7 @@ final class _Ctx {
     // выключенную настройку.
     final absent = f.absentValues;
     if (absent != null && v is String && absent.contains(v)) {
+      switchedOff.add(path);
       return const _Value.drop();
     }
 
@@ -1167,13 +1229,13 @@ final class _Ctx {
   /// паддинга нет» так же фатально, как «ключ + паддинг 5». Без этой ветки
   /// правило молчало бы ровно на том случае, который в живых подписках
   /// встречается чаще битого значения (кейс `awg3_padding_absent_with_header_key`).
-  void _minWhenOnAbsent(FieldSchema f, String path) {
+  void _minWhenOnAbsent(FieldSchema f, String prefix, String key) {
     final rule = f.minWhen;
     if (rule == null || rule['absent_is_zero'] != true) return;
     final floor = rule['min'];
     if (floor is! num || floor <= 0) return;
     if (!_conditionHolds(rule['when'], root)) return;
-    _minWhenViolated(rule, f, path, 0);
+    _minWhenViolated(rule, f, _join(prefix, key), 0);
   }
 
   /// Общий исход обеих веток `min_when`: код и, при `drop_node`, отбраковка.
@@ -1211,10 +1273,26 @@ final class _Ctx {
   /// (негодные значения снял судья поля). `any_set` судит тело и остаётся
   /// навсегда: у входа в собственной форме ядра рода от входа нет вовсе.
   /// Потребуй оба — правило перестало бы срабатывать в обоих случаях сразу.
+  ///
+  /// Контракт 1.1.56 — прочие ключи условия суть ПУТИ тела с предикатом по
+  /// ЗНАЧЕНИЮ (грамматика `when` маппера: скаляр — равенство по печатной
+  /// форме, `{in: […]}` / `{not_in: […]}`). Предикаты — И между собой и И с
+  /// ветками `any_set`/`source_kind`; см. [_valuePredicateHolds].
   bool _conditionHolds(Object? when, Map<String, dynamic> body) {
     if (when == null) return true;
     if (when is! Map) return true;
     var known = false;
+    var branches = false;
+
+    for (final e in when.entries) {
+      final key = '${e.key}';
+      if (key == 'any_set' || key == 'source_kind') {
+        branches = true;
+        continue;
+      }
+      if (!_valuePredicateHolds(key, e.value)) return false;
+    }
+    if (!branches) return true;
 
     final sourceKind = (when['source_kind'] as List?)?.map((e) => '$e');
     if (sourceKind != null) {
@@ -1247,11 +1325,78 @@ final class _Ctx {
   /// Пути условия — ключи корня тела (реестр называет их так же, как
   /// `conflicts`/`requires`): вложенных условий у `any_set` сегодня нет, и
   /// выдумывать их разбор здесь нечего — сегмент с точкой просто не найдётся.
+  ///
+  /// Контракт 1.1.56 — пустая СТРОКА условия не выполняет: для ядра это
+  /// отсутствие ключа (`uplink_data_placement: ""` не будит `default_when` у
+  /// mode). Число 0 остаётся значением.
   static bool _anySetInBody(Iterable<String> keys, Map<String, dynamic> body) {
     for (final key in keys) {
-      if (body.containsKey(key)) return true;
+      if (!body.containsKey(key)) continue;
+      final v = body[key];
+      if (v is String && v.isEmpty) continue;
+      return true;
     }
     return false;
+  }
+
+  /// Контракт 1.1.56 — предикат по ЗНАЧЕНИЮ пути тела (ключ `condition`,
+  /// не `any_set`/`source_kind`; тот же у `relation.when`).
+  ///
+  /// Значение берётся из чистого состояния, включая объект, обход которого
+  /// ещё идёт ([_cleanAt]: материализованный `default_when` у
+  /// `transport.mode` виден соседу), иначе из исходного тела. Снятое поле
+  /// (выключатель, снятое с объяснением) и пустая строка — «не задано»: `in`
+  /// ложен, `not_in` истинен, равенство ложно. Незнакомый оператор — ложь
+  /// (реестр вправе уехать вперёд кода; эталон — `valuePredicateHolds` в
+  /// `nodeflow/sanitize.go`).
+  bool _valuePredicateHolds(String path, Object? want) {
+    Object? got;
+    var present = false;
+    if (!_switchedOff(path) && !explainedDrops.contains(path)) {
+      final clean = _cleanAt(path);
+      if (clean.$1) {
+        got = clean.$2;
+        present = true;
+      } else {
+        got = _rawAt(path);
+        present = got != null;
+      }
+      if (got is String && got.isEmpty) present = false;
+    }
+    if (want is Map) {
+      final inList = want['in'];
+      if (inList is List) {
+        return present && inList.any((e) => '$e' == '$got');
+      }
+      final notIn = want['not_in'];
+      if (notIn is List) {
+        return !present || !notIn.any((e) => '$e' == '$got');
+      }
+      _logUnknownExpression('when', want.keys.join(','));
+      return false;
+    }
+    return present && '$want' == '$got';
+  }
+
+  /// Значение по абсолютному пути в ЧИСТОМ состоянии: в снимке [sanitized]
+  /// либо в объекте, обход которого ещё идёт ([_building]). Второе нужно
+  /// связям и условиям между соседями одного вложенного объекта: сосед,
+  /// материализованный по ходу обхода (`default_when`), в снимок попадает
+  /// только вместе со всем объектом (контракт 1.1.56, норма 1).
+  (bool, Object?) _cleanAt(String path) {
+    if (sanitized.containsKey(path)) return (true, sanitized[path]);
+    final parts = path.split('.');
+    for (var i = parts.length - 1; i >= 0; i--) {
+      final m = _building[parts.sublist(0, i).join('.')];
+      if (m == null) continue;
+      Object? cur = m;
+      for (final seg in parts.sublist(i)) {
+        if (cur is! Map || !cur.containsKey(seg)) return (false, null);
+        cur = cur[seg];
+      }
+      return (true, cur);
+    }
+    return (false, null);
   }
 
   /// Нарушенное ограничение — возвращает значение для текста кода, `null`
@@ -1369,7 +1514,9 @@ final class _Ctx {
       for (final rel in f.conflicts) {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
+        if (!_conditionHolds(rel['when'], kept)) continue;
         if (!_presentInSource(with0, kept, prefix)) continue;
+        if (_unlessHolds(rel, kept, prefix)) continue;
         kept.remove(key);
         warn(rel['code'] as String? ?? 'field_conflict',
             path: myPath, params: {'with': with0});
@@ -1393,10 +1540,14 @@ final class _Ctx {
       for (final rel in f.requires) {
         final need = rel['path'] as String?;
         if (need == null) continue;
+        // Контракт 1.1.56 — `relation.when`: ложно — связь не судится вовсе
+        // (у `uplink_data_placement` mode=packet-up нужен лишь header/cookie).
+        if (!_conditionHolds(rel['when'], kept)) continue;
         final ok = rel.containsKey('equals')
             ? _valueAt(need, kept, prefix) == rel['equals']
             : _present(need, kept, prefix);
         if (ok) continue;
+        if (_unlessHolds(rel, kept, prefix)) continue;
         kept.remove(key);
         // §472 шаг 3 — требуемое поле снял этот же прогон и уже объяснил
         // почему: молча уходим следом. См. [explainedDrops].
@@ -1464,6 +1615,34 @@ final class _Ctx {
     return _meaningful(cur);
   }
 
+  /// §544 (контракт 1.1.55) — `relation.unless_set`: связь НЕ действует, если
+  /// задан ЛЮБОЙ из путей. «Задан» — тот же предикат, что у соседа связи
+  /// ([_presentInSource]): непустое значение по исходному телу, не снятое
+  /// схемой и не выключатель ([switchedOff]). Пример реестра —
+  /// `vless.flow ↔ transport`: с VLESS Encryption Vision идёт поверх слоя
+  /// шифрования, и транспорт ему не помеха.
+  bool _unlessHolds(
+      Map<String, dynamic> rel, Map<String, Object?> siblings, String prefix) {
+    final unless = rel['unless_set'];
+    if (unless is! List) return false;
+    for (final p in unless) {
+      if (p is String && _presentInSource(p, siblings, prefix)) return true;
+    }
+    return false;
+  }
+
+  /// Снят ли [path] (или объект над ним) как выключатель — см. [switchedOff].
+  bool _switchedOff(String path) {
+    if (switchedOff.isEmpty) return false;
+    var p = path;
+    while (true) {
+      if (switchedOff.contains(p)) return true;
+      final i = p.lastIndexOf('.');
+      if (i < 0) return false;
+      p = p.substring(0, i);
+    }
+  }
+
   /// §474 — сосед для `conflicts`: виден и в ИСХОДНОМ теле.
   ///
   /// Отличие от [_present] ровно одно и оно намеренное. `requires` судит
@@ -1485,10 +1664,12 @@ final class _Ctx {
       if (siblings.containsKey(path)) return _meaningful(siblings[path]);
       final abs = _join(prefix, path);
       if (explainedDrops.contains(abs)) return false;
+      if (_switchedOff(abs)) return false;
       if (sanitized.containsKey(abs)) return _meaningful(sanitized[abs]);
       return _meaningful(_rawAt(abs));
     }
     if (explainedDrops.contains(path)) return false;
+    if (_switchedOff(path)) return false;
     if (sanitized.containsKey(path)) return _meaningful(sanitized[path]);
     final parent = path.substring(0, path.lastIndexOf('.'));
     // Ветку уже разобрали, а ключа в снимке нет — поле снято проверкой
@@ -1614,8 +1795,14 @@ String _normalizeString(String v, String norm) {
       // Декодер ЛЕНИВЫЙ — тот же, которым судит годность `base64_32`: канон
       // и суд обязаны читать значение одинаково, иначе ключ, признанный
       // годным, нормализация оставила бы неканоническим (или наоборот).
-      final decoded = decodeBase64Lenient(v.trim());
-      return decoded == null ? v : base64.encode(decoded);
+      final decoded = _decodeB64(v.trim());
+      if (decoded == null) return v;
+      final canon = base64.encode(decoded);
+      // §549 R4 — канон декодируется в те же байты: следом его судит
+      // `format: base64_32`, и второй декод того же ключа не нужен.
+      _b64Key = canon;
+      _b64Bytes = decoded;
+      return canon;
     // D133-30 (контракт 1.1.40) — `base64_rawurl`: симметрия к `base64_std`,
     // заведена по нашему же запросу 19.09.2026. Отличие только в ЦЕЛЕВОМ
     // алфавите: std с паддингом против url-safe без него. Какой нужен полю,
@@ -1638,9 +1825,12 @@ String _normalizeString(String v, String norm) {
     // работа `format base64_32` с его `on_invalid`, и в код обязано уехать
     // СЫРОЕ написание (та же причина, что у `pattern` и `normalize_code`).
     case 'base64_rawurl':
-      final raw = decodeBase64Lenient(v.trim());
+      final raw = _decodeB64(v.trim());
       if (raw == null || raw.length != 32) return v;
-      return base64Url.encode(raw).replaceAll('=', '');
+      final canon = base64Url.encode(raw).replaceAll('=', '');
+      _b64Key = canon;
+      _b64Bytes = raw;
+      return canon;
     // `cidr_prefix`: голый адрес получает префикс — `/32` у v4, `/128` у v6.
     // Применяется поэлементно: поле-список нормализуется вызывающим по
     // элементам, и скаляр с той же записью ведёт себя так же.
@@ -1906,7 +2096,22 @@ bool _formatOk(Object? v, String format) {
 /// ней `FormatException`. Строгим декодером длина такого ключа выходила
 /// `null`, и `format: base64_32` ронял ЗАКОННЫЙ узел кодом `wg_key_invalid`
 /// (корпус `uri_psk_keepalive`, где ключи лежат в query).
-int? _base64Bytes(String v) => decodeBase64Lenient(v.trim())?.length;
+int? _base64Bytes(String v) => _decodeB64(v.trim())?.length;
+
+/// §549 R4 — последний декод base64 (одна запись). Ключ WireGuard судят
+/// подряд `normalize: base64_std` и `format: base64_32`, и без памяти один
+/// ключ декодировался дважды (§548: ~40 % санитайзера WG-узла). Декод —
+/// чистая функция строки, поэтому запись верна всегда; байты только читают.
+String? _b64Key;
+List<int>? _b64Bytes;
+
+List<int>? _decodeB64(String s) {
+  if (s == _b64Key) return _b64Bytes;
+  final bytes = decodeBase64Lenient(s);
+  _b64Key = s;
+  _b64Bytes = bytes;
+  return bytes;
+}
 
 bool _ipv4Ok(String v) {
   final parts = v.split('.');

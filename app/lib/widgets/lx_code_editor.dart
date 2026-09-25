@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
+import 'package:re_highlight/languages/json.dart';
+import 'package:re_highlight/styles/atom-one-dark.dart';
+import 'package:re_highlight/styles/atom-one-light.dart';
 
 import '../services/l10n/locale_controller.dart';
 
@@ -24,6 +27,8 @@ class LxCodeEditor extends StatefulWidget {
     this.readOnly = false,
     this.showLineNumbers = false,
     this.wordWrap = true,
+    this.language,
+    this.autofocus,
   });
 
   final CodeLineEditingController controller;
@@ -33,8 +38,34 @@ class LxCodeEditor extends StatefulWidget {
   final bool showLineNumbers;
   final bool wordWrap;
 
+  /// §554 — язык подсветки синтаксиса. `null` — без подсветки (поле ссылки
+  /// в мастере). Подсветка живёт в `re_highlight`, тема — по яркости темы
+  /// приложения; ключ `root` темы вырезан, чтобы фон редактора остался
+  /// фоном экрана.
+  final LxCodeLanguage? language;
+
+  /// `null` — умолчание пакета (`CodeEditor` берёт фокус при появлении).
+  /// Просмотрщик ([LxJsonView]) передаёт `false`: без этого вкладка JSON
+  /// забирает фокус и запускает мигание курсора в тексте только для чтения.
+  final bool? autofocus;
+
   @override
   State<LxCodeEditor> createState() => _LxCodeEditorState();
+}
+
+/// §554 — языки, которые умеет подсвечивать [LxCodeEditor].
+enum LxCodeLanguage { json }
+
+CodeHighlightTheme _highlightTheme(LxCodeLanguage language, Brightness b) {
+  final base = b == Brightness.dark ? atomOneDarkTheme : atomOneLightTheme;
+  final theme = Map<String, TextStyle>.of(base)..remove('root');
+  final mode = switch (language) {
+    LxCodeLanguage.json => CodeHighlightThemeMode(mode: langJson),
+  };
+  return CodeHighlightTheme(
+    languages: {language.name: mode},
+    theme: theme,
+  );
 }
 
 class _LxCodeEditorState extends State<LxCodeEditor> {
@@ -115,6 +146,7 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
       child: CodeEditor(
         controller: widget.controller,
         focusNode: _focusNode,
+        autofocus: widget.autofocus,
         readOnly: widget.readOnly,
         wordWrap: widget.wordWrap,
         hint: widget.hint,
@@ -126,6 +158,9 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
           fontFamily: 'monospace',
           textColor: cs.onSurface,
           hintTextColor: cs.onSurfaceVariant,
+          codeTheme: widget.language == null
+              ? null
+              : _highlightTheme(widget.language!, Theme.of(context).brightness),
         ),
         toolbarController: _toolbar,
         indicatorBuilder: widget.showLineNumbers
@@ -313,5 +348,64 @@ class _LxToolbarOverlay extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// §554 — просмотр JSON с подсветкой синтаксиса, только чтение.
+///
+/// Обёртка над [LxCodeEditor] для экранов, где текст показывался
+/// `SelectableText`/`TextField(readOnly)` без подсветки (вкладка JSON узла,
+/// инспектор узла подписки). Контроллер живёт здесь и пересобирается при
+/// смене [text]. `CodeEditor` не умеет сжиматься по содержимому, поэтому в
+/// прокручиваемом родителе нужна [height]; в ограниченном — не нужна.
+class LxJsonView extends StatefulWidget {
+  const LxJsonView({
+    super.key,
+    required this.text,
+    this.height,
+    this.fontSize = 12,
+    this.showLineNumbers = false,
+  });
+
+  final String text;
+  final double? height;
+  final double fontSize;
+  final bool showLineNumbers;
+
+  @override
+  State<LxJsonView> createState() => _LxJsonViewState();
+}
+
+class _LxJsonViewState extends State<LxJsonView> {
+  late CodeLineEditingController _ctrl =
+      CodeLineEditingController.fromText(widget.text);
+
+  @override
+  void didUpdateWidget(covariant LxJsonView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _ctrl.dispose();
+      _ctrl = CodeLineEditingController.fromText(widget.text);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final editor = LxCodeEditor(
+      controller: _ctrl,
+      readOnly: true,
+      autofocus: false,
+      fontSize: widget.fontSize,
+      showLineNumbers: widget.showLineNumbers,
+      language: LxCodeLanguage.json,
+    );
+    final h = widget.height;
+    return h == null ? editor : SizedBox(height: h, child: editor);
   }
 }

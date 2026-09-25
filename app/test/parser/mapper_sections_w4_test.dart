@@ -150,9 +150,16 @@ void main() {
       // собственной записью, перекрывающей блочную: перечислять `fp` среди
       // запрещённых значило бы запретить сам примитив переопределения,
       // которым блок и задуман пользоваться.
+      //
+      // Единственное исключение — `security` у hysteria2: схема не подключает
+      // `tls#uri_security` (его ветка `none` сняла бы обязательный TLS) и
+      // объявляет свою запись — маркер 3x-ui без записи в тело (контракт
+      // 1.1.54). Это не копия блока.
+      const allowed = {'hysteria2.security'};
       for (final e in uriSections.entries) {
         final params = (section(e.value, 'uri')['params'] as Map).cast<String, dynamic>();
         for (final dup in const ['security', 'alpn', 'pbk', 'sid']) {
+          if (allowed.contains('${e.key}.$dup')) continue;
           expect(params.containsKey(dup), isFalse, reason: '${e.key}.$dup');
         }
       }

@@ -1,0 +1,16 @@
+# Dependabot: только алерты по уязвимостям и обновления actions.
+# Версионные PR для pub отключены (open-pull-requests-limit: 0): бампы
+# зависимостей приложения идут по регламенту, а не автоматом.
+version: 2
+updates:
+  - package-ecosystem: pub
+    directory: /app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3

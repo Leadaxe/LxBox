@@ -5,7 +5,11 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart';
+import 'package:lxbox/services/contract/parse_warnings.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 import 'package:lxbox/services/parser/transport.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -43,6 +47,63 @@ TransportSpec? _viaUri(TransportSpec t) {
 /// сохранить.
 Map<String, dynamic> _bodyViaUri(TransportSpec t) =>
     _viaUri(t)!.toSingbox(TemplateVars.empty).$1;
+
+/// Тело транспорта узла, пришедшего sing-box JSON: `parseSingboxConfigs`
+/// строит модель по карте санитайзера реестра (§545), так что правила
+/// `transports.json` срабатывают здесь, а не в эмиттере (§546).
+Map<String, dynamic> _viaSingbox(Map<String, dynamic> transport) {
+  final node = parseSingboxConfigs([
+    {
+      'outbounds': [
+        {
+          'type': 'vless',
+          'tag': 'n',
+          'server': '1.2.3.4',
+          'server_port': 443,
+          'uuid': '11111111-2222-3333-4444-555555555555',
+          'transport': transport,
+        },
+      ],
+    },
+  ]).single;
+  return node.emit(TemplateVars.empty).map['transport'] as Map<String, dynamic>;
+}
+
+/// Тело транспорта и коды узла из sing-box JSON (путь §545 через санитайзер).
+(Map<String, dynamic>, List<String?>) _viaSingboxCodes(
+    Map<String, dynamic> transport) {
+  final node = parseSingboxConfigs([
+    {
+      'outbounds': [
+        {
+          'type': 'vless',
+          'tag': 'n',
+          'server': '1.2.3.4',
+          'server_port': 443,
+          'uuid': '11111111-2222-3333-4444-555555555555',
+          'transport': transport,
+        },
+      ],
+    },
+  ]).single;
+  // Коды JSON-входа ставит проход по дословной карте (как в `parseAll`).
+  annotateFromRawBody(node);
+  return (
+    node.emit(TemplateVars.empty).map['transport'] as Map<String, dynamic>,
+    node.warnings.map(warningCodeOf).toList(),
+  );
+}
+
+/// Тело транспорта и коды узла, пришедшего ссылкой с xhttp и параметрами
+/// [query] (имена параметров — snake_case, как читает секция `uri`).
+(Map<String, dynamic>, List<String?>) _viaUriQuery(String query) {
+  final node = parseUri('vless://11111111-2222-3333-4444-555555555555'
+      '@1.2.3.4:443?security=tls&type=xhttp&$query#n')!;
+  return (
+    node.emit(TemplateVars.empty).map['transport'] as Map<String, dynamic>,
+    node.warnings.map(warningCodeOf).toList(),
+  );
+}
 
 void main() {
   // §480 — разбор ссылки и Xray-элемента идёт ДВИЖКОМ по секциям реестра;
@@ -198,7 +259,7 @@ void main() {
     });
 
     test('snake_case формы расширенных полей тоже читаются', () {
-      // Парсинг дословный — поле читается как есть; нормализация в toSingbox.
+      // parseTransport читает поле как есть; значения судит реестр на разборе.
       final t = parseTransport({
         'type': 'xhttp',
         'session_placement': 'cookie',
@@ -233,9 +294,8 @@ void main() {
       expect(m2['uplink_http_method'], 'GET');
       expect(w2, isEmpty);
 
-      // §416 отменил passthrough ИМЕННО для header-placement: ядро на нём
-      // роняет весь конфиг, а не одну ноду. Не-header placement'ы (body,
-      // cookie, auto) остаются pass-through, как канон Go и требует.
+      // Эмиттер пишет placement как есть при любом mode: связь с mode
+      // (header/cookie только в packet-up) судит реестр, см. группу §416.
       final t3 = parseTransport({
         'type': 'xhttp',
         'uplink_data_placement': 'cookie',
@@ -245,38 +305,40 @@ void main() {
       expect(m3['uplink_data_placement'], 'cookie');
       expect(w3.whereType<XhttpParamResetWarning>(), isEmpty);
 
-      // §460 — session_placement вне enum реестра снимается (xhttp_param_reset),
-      // как seq_placement; см. тест ниже.
-      final t4 = parseTransport({'type': 'xhttp', 'session_placement': 'bogus'})!;
-      final (m4, w4) = t4.toSingbox(TemplateVars.empty);
-      expect(m4.containsKey('session_placement'), isFalse);
-      expect(w4.whereType<XhttpParamResetWarning>(), isNotEmpty);
+      // §460 — session_placement вне enum реестра снимается (xhttp_param_reset)
+      // на разборе, как seq_placement; см. группу ниже.
+      expect(
+          _viaSingbox({'type': 'xhttp', 'session_placement': 'bogus'})
+              .containsKey('session_placement'),
+          isFalse);
     });
 
     // §459 (контракт §24.2 п. 7.14) — mode/x_padding_placement/
-    // x_padding_method гейтятся enum'ом ядра в эмите: мусор там даёт fatal на
-    // ВЕСЬ конфиг (transport/v2rayxhttp/client.go:47-51, meta.go:151-160).
-    // Регистр НЕ нормализуем — ядро case-sensitive, `queryInHeader` только
-    // camelCase.
+    // x_padding_method: мусор даёт fatal на ВЕСЬ конфиг
+    // (transport/v2rayxhttp/client.go:47-51, meta.go:151-160). Регистр НЕ
+    // нормализуем — ядро case-sensitive, `queryInHeader` только camelCase.
+    //
+    // §546 — enum судит реестр (`transports.json` → xhttp, `on_invalid` →
+    // `xhttp_param_reset`) на разборе, эмиттер пишет как есть. Поэтому
+    // проверка идёт обоими входами: sing-box JSON (тело) и ссылкой (тело и
+    // код).
     group('§459 enum-гейт трёх полей', () {
-      (Map<String, dynamic>, List<NodeWarning>) emit(
-              String key, String value) =>
-          parseTransport({'type': 'xhttp', key: value})!
-              .toSingbox(TemplateVars.empty);
-
       void expectKept(String key, String value) {
-        final (m, w) = emit(key, value);
-        expect(m[key], value, reason: '$key=$value');
-        expect(w.whereType<XhttpParamResetWarning>(), isEmpty,
-            reason: '$key=$value');
+        expect(_viaSingbox({'type': 'xhttp', key: value})[key], value,
+            reason: 'json $key=$value');
+        final (m, codes) = _viaUriQuery('$key=${Uri.encodeQueryComponent(value)}');
+        expect(m[key], value, reason: 'uri $key=$value');
+        expect(codes, isNot(contains('xhttp_param_reset')),
+            reason: 'uri $key=$value');
       }
 
       void expectDropped(String key, String value) {
-        final (m, w) = emit(key, value);
-        expect(m.containsKey(key), isFalse, reason: '$key=$value');
-        final reset = w.whereType<XhttpParamResetWarning>().single;
-        expect(reset, XhttpParamResetWarning(
-            key, XhttpResetReason.invalidEnumValue, value: value));
+        expect(
+            _viaSingbox({'type': 'xhttp', key: value}).containsKey(key), isFalse,
+            reason: 'json $key=$value');
+        final (m, codes) = _viaUriQuery('$key=${Uri.encodeQueryComponent(value)}');
+        expect(m.containsKey(key), isFalse, reason: 'uri $key=$value');
+        expect(codes, contains('xhttp_param_reset'), reason: 'uri $key=$value');
       }
 
       test('mode: валидные значения ядра проходят', () {
@@ -310,23 +372,46 @@ void main() {
         }
       });
 
+      test('session_placement/seq_placement: мусор снят', () {
+        for (final key in ['session_placement', 'seq_placement']) {
+          expectKept(key, 'cookie');
+          expectDropped(key, 'bogus');
+        }
+      });
+
       test('пустое значение — ключа нет и предупреждения нет', () {
         for (final key in ['mode', 'x_padding_placement', 'x_padding_method']) {
-          final (m, w) = emit(key, '');
+          final (m, w) = parseTransport({'type': 'xhttp', key: ''})!
+              .toSingbox(TemplateVars.empty);
           expect(m.containsKey(key), isFalse, reason: key);
           expect(w, isEmpty, reason: key);
         }
       });
 
+      test('эмиттер значение не судит: модель как есть → тело как есть', () {
+        final (m, w) = const XhttpTransport(
+          mode: 'bogus',
+          sessionPlacement: 'bogus',
+          seqPlacement: 'bogus',
+          xPaddingPlacement: 'queryinheader',
+          xPaddingMethod: 'fixed',
+        ).toSingbox(TemplateVars.empty);
+        expect(m['mode'], 'bogus');
+        expect(m['session_placement'], 'bogus');
+        expect(m['seq_placement'], 'bogus');
+        expect(m['x_padding_placement'], 'queryinheader');
+        expect(m['x_padding_method'], 'fixed');
+        expect(w, isEmpty);
+      });
+
       test('mode-гейт не ломает §416 (header-placement без mode)', () {
-        final (m, w) = parseTransport({
+        final (m, codes) = _viaSingboxCodes({
           'type': 'xhttp',
           'uplink_data_placement': 'header',
-        })!
-            .toSingbox(TemplateVars.empty);
+        });
         expect(m['mode'], 'packet-up');
         expect(m['uplink_data_placement'], 'header');
-        expect(w.whereType<XhttpModeForcedPacketUpWarning>(), hasLength(1));
+        expect(codes, ['xhttp_mode_forced_packet_up']);
       });
     });
 
@@ -912,91 +997,180 @@ void main() {
   // §416 — форумная жалоба 03.09: узел подписки несёт
   // uplink_data_placement=header БЕЗ mode, ядро отвергает ВЕСЬ конфиг
   // («uplink_data_placement can be header only in packet-up mode»), VPN не
-  // поднимается. Guard стоит на эмиссии XhttpTransport — единственной точке,
-  // общей для всех веток источника.
-  group('§416 XHTTP: header-placement требует packet-up', () {
-    test('placement=header без mode → дописан mode: packet-up + warning', () {
-      final (m, w) = const XhttpTransport(
-        path: '/hls/v2/track/8e31c750/',
-        host: 'media.morphei.cc',
-        uplinkDataPlacement: 'header',
-      ).toSingbox(TemplateVars.empty);
-      expect(m['mode'], 'packet-up');
-      expect(m['uplink_data_placement'], 'header');
-      expect(w, const [XhttpModeForcedPacketUpWarning()]);
-    });
-
-    test('регистр и пробелы нормализуются при сверке, значение — как есть',
-        () {
-      final (m, w) = const XhttpTransport(
-        uplinkDataPlacement: ' Header ',
-      ).toSingbox(TemplateVars.empty);
-      expect(m['mode'], 'packet-up');
-      expect(m['uplink_data_placement'], ' Header ',
-          reason: 'placement уходит в ядро дословно, нормализация — только '
-              'для сверки');
-      expect(w, const [XhttpModeForcedPacketUpWarning()]);
-    });
-
-    test('placement=header + mode=packet-up → ничего не меняется, тихо', () {
-      final (m, w) = const XhttpTransport(
-        mode: 'packet-up',
-        uplinkDataPlacement: 'header',
-      ).toSingbox(TemplateVars.empty);
-      expect(m['mode'], 'packet-up');
-      expect(m['uplink_data_placement'], 'header');
-      expect(w, isEmpty);
-    });
-
-    // §169 — отбрасывать, а не подгонять молча: явный чужой mode не
-    // переписываем (это сменило бы wire-протокол узла), снимаем placement.
-    test('placement=header + mode=stream-one → placement снят, mode цел', () {
+  // поднимается. §547 фаза B (контракт 1.1.56): правило живёт в реестре —
+  // тело xhttp (`mode.default_when`, `uplink_data_placement.requires` с
+  // `when`) и записи маппера uri/xray; эмиттер копии не держит.
+  group('§416 XHTTP: header/cookie-placement требует packet-up (реестр)', () {
+    test('эмиттер пишет пару как есть — правило не его', () {
       final (m, w) = const XhttpTransport(
         mode: 'stream-one',
         uplinkDataPlacement: 'header',
       ).toSingbox(TemplateVars.empty);
       expect(m['mode'], 'stream-one');
-      expect(m.containsKey('uplink_data_placement'), isFalse);
-      expect(w, const [
-        XhttpParamResetWarning(
-            'uplink_data_placement', XhttpResetReason.placementRequiresPacketUp)
-      ]);
+      expect(m['uplink_data_placement'], 'header');
+      expect(w, isEmpty);
+      final (m2, _) = const XhttpTransport(uplinkDataPlacement: 'header')
+          .toSingbox(TemplateVars.empty);
+      expect(m2.containsKey('mode'), isFalse);
     });
 
-    test('placement не header (body/cookie/auto) — узел не трогаем', () {
-      for (final p in ['body', 'auto', 'cookie']) {
-        final (m, w) = XhttpTransport(
-          mode: 'stream-one',
-          uplinkDataPlacement: p,
-        ).toSingbox(TemplateVars.empty);
-        expect(m['mode'], 'stream-one', reason: p);
+    test('JSON: header/cookie без mode → mode: packet-up + код', () {
+      for (final p in ['header', 'cookie']) {
+        final (m, codes) =
+            _viaSingboxCodes({'type': 'xhttp', 'uplink_data_placement': p});
+        expect(m['mode'], 'packet-up', reason: p);
         expect(m['uplink_data_placement'], p, reason: p);
-        expect(w, isEmpty, reason: p);
+        expect(codes, ['xhttp_mode_forced_packet_up'], reason: p);
       }
     });
 
-    test('узла без placement guard не касается', () {
-      final (m, w) = const XhttpTransport(path: '/x')
-          .toSingbox(TemplateVars.empty);
+    test('JSON: mode "" + header — как без mode', () {
+      final (m, codes) = _viaSingboxCodes(
+          {'type': 'xhttp', 'mode': '', 'uplink_data_placement': 'header'});
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(codes, ['xhttp_mode_forced_packet_up']);
+    });
+
+    test('JSON: header + mode=packet-up → ничего не меняется, тихо', () {
+      final (m, codes) = _viaSingboxCodes({
+        'type': 'xhttp',
+        'mode': 'packet-up',
+        'uplink_data_placement': 'header',
+      });
+      expect(m['mode'], 'packet-up');
+      expect(m['uplink_data_placement'], 'header');
+      expect(codes, isEmpty);
+    });
+
+    // §169 — отбрасывать, а не подгонять молча: явный чужой mode не
+    // переписываем (это сменило бы wire-протокол узла), снимаем placement.
+    test('JSON: header/cookie + mode=stream-one → placement снят, mode цел',
+        () {
+      for (final p in ['header', 'cookie']) {
+        final (m, codes) = _viaSingboxCodes({
+          'type': 'xhttp',
+          'mode': 'stream-one',
+          'uplink_data_placement': p,
+        });
+        expect(m['mode'], 'stream-one', reason: p);
+        expect(m.containsKey('uplink_data_placement'), isFalse, reason: p);
+        expect(codes, ['xhttp_param_reset'], reason: p);
+      }
+    });
+
+    // §547 п. 4 — body/auto ядро принимает в любом режиме: ни mode не
+    // дописывается, ни placement не снимается, на всех трёх входах.
+    test('body/auto при любом mode — узел не трогаем (JSON, ссылка, Xray)',
+        () {
+      for (final p in ['body', 'auto']) {
+        for (final mode in [
+          '',
+          'auto',
+          'packet-up',
+          'stream-up',
+          'stream-one',
+        ]) {
+          final why = '$p/$mode';
+          final (m, codes) = _viaSingboxCodes({
+            'type': 'xhttp',
+            if (mode.isNotEmpty) 'mode': mode,
+            'uplink_data_placement': p,
+          });
+          expect(m['uplink_data_placement'], p, reason: 'json $why');
+          expect(m['mode'], mode.isEmpty ? isNull : mode, reason: 'json $why');
+          expect(codes, isEmpty, reason: 'json $why');
+
+          final (u, uCodes) = _viaUriQuery('uplinkDataPlacement=$p'
+              '${mode.isEmpty ? '' : '&mode=$mode'}');
+          expect(u['uplink_data_placement'], p, reason: 'uri $why');
+          expect(u['mode'], mode.isEmpty ? isNull : mode, reason: 'uri $why');
+          expect(uCodes, isNot(contains('xhttp_param_reset')),
+              reason: 'uri $why');
+          expect(uCodes, isNot(contains('xhttp_mode_forced_packet_up')),
+              reason: 'uri $why');
+
+          final x = parseXrayOutbound({
+            'remarks': 'x',
+            'outbounds': [
+              {
+                'tag': 'proxy',
+                'protocol': 'vless',
+                'settings': {
+                  'vnext': [
+                    {
+                      'address': '1.2.3.4',
+                      'port': 443,
+                      'users': [
+                        {
+                          'id': '11111111-2222-3333-4444-555555555555',
+                          'encryption': 'none',
+                        }
+                      ],
+                    }
+                  ],
+                },
+                'streamSettings': {
+                  'network': 'xhttp',
+                  'security': 'tls',
+                  'tlsSettings': {'serverName': 'example.com'},
+                  'xhttpSettings': {
+                    'path': '/x',
+                    if (mode.isNotEmpty) 'mode': mode,
+                    'extra': {'uplinkDataPlacement': p},
+                  },
+                },
+              }
+            ],
+          });
+          expect(x, isNotNull, reason: 'xray $why');
+          final xm = x!.emit(TemplateVars.empty).map['transport'] as Map;
+          expect(xm['uplink_data_placement'], p, reason: 'xray $why');
+          expect(xm['mode'], mode.isEmpty ? isNull : mode,
+              reason: 'xray $why');
+          final xCodes = x.warnings.map(warningCodeOf).toList();
+          expect(xCodes, isNot(contains('xhttp_param_reset')),
+              reason: 'xray $why');
+          expect(xCodes, isNot(contains('xhttp_mode_forced_packet_up')),
+              reason: 'xray $why');
+        }
+      }
+    });
+
+    test('узла без placement правило не касается', () {
+      final (m, codes) = _viaSingboxCodes({'type': 'xhttp', 'path': '/x'});
       expect(m.containsKey('mode'), isFalse);
       expect(m.containsKey('uplink_data_placement'), isFalse);
-      expect(w, isEmpty);
+      expect(codes, isEmpty);
     });
 
     test('ссылка из жалобы: header без mode через URI-ветку', () {
-      final t = parseTransport({
-        'type': 'xhttp',
-        'host': 'media.morphei.cc',
-        'path': '/hls/v2/track/8e31c750/',
-        'uplinkDataPlacement': 'header',
-        'uplinkHTTPMethod': 'GET',
-      })! as XhttpTransport;
-      expect(t.mode, '', reason: 'парсер mode не выдумывает');
-      final (m, w) = t.toSingbox(TemplateVars.empty);
+      final (m, codes) = _viaUriQuery(
+          'host=media.morphei.cc&path=%2Fhls%2Fv2%2Ftrack%2F8e31c750%2F'
+          '&uplinkDataPlacement=header&uplinkHTTPMethod=GET');
       expect(m['mode'], 'packet-up');
       expect(m['uplink_data_placement'], 'header');
       expect(m['uplink_http_method'], 'GET');
-      expect(w, const [XhttpModeForcedPacketUpWarning()]);
+      expect(codes, contains('xhttp_mode_forced_packet_up'));
+    });
+
+    test('гард сборки: модель редактора с header без mode', () {
+      final body = <String, dynamic>{
+        'type': 'vless',
+        'tag': 'n',
+        'server': '1.2.3.4',
+        'server_port': 443,
+        'uuid': '11111111-2222-3333-4444-555555555555',
+        'transport': const XhttpTransport(uplinkDataPlacement: 'header')
+            .toSingbox(TemplateVars.empty)
+            .$1,
+      };
+      final res = RegistrySanitizer.sanitize(body,
+          scheme: 'vless', coreVersion: '1.14.2');
+      final t = res.body!['transport'] as Map;
+      expect(t['mode'], 'packet-up');
+      expect(t['uplink_data_placement'], 'header');
+      expect(res.warnings.map((w) => w.code), ['xhttp_mode_forced_packet_up']);
     });
 
     test('эмиссия детерминирована: два прогона байт в байт', () {

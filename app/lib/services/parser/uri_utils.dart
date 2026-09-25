@@ -85,8 +85,11 @@ final Map<int, int> _b64CharValue = {
 /// (корпус `uri_psk_keepalive`). Двум гардам одного ключа расходиться нельзя.
 List<int>? decodeBase64Lenient(String s) => _decodeBase64Lenient(s);
 
+/// Хвостовой паддинг base64 (§549 R4 — одна регулярка на модуль, не на вызов).
+final RegExp _reB64Padding = RegExp(r'=+$');
+
 List<int>? _decodeBase64Lenient(String s) {
-  final trimmed = s.replaceAll(RegExp(r'=+$'), '');
+  final trimmed = s.replaceAll(_reB64Padding, '');
   if (trimmed.isEmpty) return null;
   final values = <int>[];
   for (final unit in trimmed.codeUnits) {
@@ -211,7 +214,15 @@ String decodeFragment(String fragment) {
 /// Генерация UUID v4 (для `NodeSpec.id`). Используется при парсинге — id не
 /// приходит из URI, а присваивается в момент создания spec'а. Round-trip
 /// тесты сравнивают без `id`.
-final _rng = Random.secure();
+///
+/// §551 — генератор обычный [Random], не `Random.secure()`: по решению
+/// владельца 25.09.2026 стойкость id не требуется. Все вызовы — локальные
+/// идентификаторы (узел, подписка, правило, автогруппа, ключ кеша
+/// `file:<uuid>`); ни токеном, ни ключом, ни учётными данными id не служит,
+/// а нужна ему только уникальность. `Random()` без зерна сеется из энтропии
+/// ОС, 122 случайных бита на id. Криптостойкое — там, где оно нужно
+/// (`subscription_identity.dart`, `masque_keys.dart`), своими генераторами.
+final _rng = Random();
 String newUuidV4() {
   final b = List<int>.generate(16, (_) => _rng.nextInt(256));
   b[6] = (b[6] & 0x0f) | 0x40;

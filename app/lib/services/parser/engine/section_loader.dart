@@ -47,6 +47,16 @@ final class MapperSections {
   /// `<kind>/<singbox_type>` → секция; отсутствие секции тоже кэшируется.
   final Map<String, MapperSection?> _cache = {};
 
+  /// §551 — [typesFor] по виду источника: список пересобирался и сортировался
+  /// на каждом вызове, а маршрут ссылки зовёт его на каждой строке подписки.
+  /// Сбрасывается там же, где [_cache] (загрузка и сброс черновиков), и при
+  /// смене поколения реестра ([_typesRegistryGen]): состав берётся из обоих.
+  final Map<String, List<String>> _typesCache = {};
+
+  /// Поколение реестра ([ContractRegistry.generation]), от которого посчитан
+  /// [_typesCache].
+  int _typesRegistryGen = -1;
+
   /// Черновые файлы, уже прочитанные с диска/из ассетов. Ключ —
   /// `<каталог>/<имя>`: у одного протокола черновиков столько же, сколько
   /// видов источника, и класть их в одно пространство имён нельзя.
@@ -73,6 +83,7 @@ final class MapperSections {
     _draftDir = dir;
     _draft.clear();
     _cache.clear();
+    _typesCache.clear();
     _documents = null;
     for (final name in files) {
       final rel = name.contains('/') ? name : 'uri/$name';
@@ -86,6 +97,9 @@ final class MapperSections {
       }
       if (text == null) continue;
       _draft[key] = jsonDecode(text) as Map<String, dynamic>;
+      // Загрузка асинхронная: разбор между двумя файлами обязан видеть
+      // черновик таким, какой он есть сейчас, а не список до загрузки.
+      _typesCache.clear();
     }
     _draftLoaded = true;
   }
@@ -95,6 +109,7 @@ final class MapperSections {
   @visibleForTesting
   void resetForTesting() {
     _cache.clear();
+    _typesCache.clear();
     _draft.clear();
     _documents = null;
     _draftLoaded = false;
@@ -130,6 +145,7 @@ final class MapperSections {
         }
       }
     }
+    _typesCache.clear();
   }
 
   Future<String?> _readDraft(String rel) async {
@@ -187,8 +203,21 @@ final class MapperSections {
   /// Состав берётся из ЧЕРНОВИКА и РЕЕСТРА вместе, без списка в коде: имена
   /// протоколов в пакете движка не живут (греп-страж), и «знать, какие
   /// секции бывают» значило бы завести их здесь.
+  ///
+  /// §551 — результат кешируется ([_typesCache]) и отдаётся НЕИЗМЕНЯЕМЫМ:
+  /// один и тот же экземпляр до следующего сброса, по нему маршрут схем
+  /// ссылки узнаёт, что пересчитываться не нужно.
   List<String> typesFor(String kind) {
     if (!_draftLoaded) _loadDraftsFromDiskSync();
+    final regGen = ContractRegistry.I.generation;
+    if (regGen != _typesRegistryGen) {
+      _typesCache.clear();
+      _typesRegistryGen = regGen;
+    }
+    return _typesCache[kind] ??= List.unmodifiable(_typesForUncached(kind));
+  }
+
+  List<String> _typesForUncached(String kind) {
     final out = <String>{};
     final prefix = '$kind/';
     for (final key in _draft.keys) {

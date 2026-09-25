@@ -22,6 +22,8 @@ import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/record_codec.dart';
 import '../node_hash.dart';
+import '../contract/body_sanitizer.dart';
+import '../contract/registry.dart';
 import '../node_identity.dart';
 import 'json_parsers.dart';
 import 'uri_utils.dart';
@@ -263,7 +265,9 @@ List<NodeSpec> _parseOne(
       // §454 — источник узла = оригинальный outbound (до подмены тега лейблом).
       final compact = _prettyJson(ob);
       final spec = parseSingboxEntry(
-        _withLabel(ob, _entryLabel(tag: rawTag, index: i, tagUses: tagUses)),
+        _sanitizedEntry(
+          _withLabel(ob, _entryLabel(tag: rawTag, index: i, tagUses: tagUses)),
+        ),
         rawSource: compact,
       );
       if (spec == null) {
@@ -618,7 +622,10 @@ NodeSpec? _buildChain(
     visited.add(raw);
     final NodeSpec? spec;
     try {
-      spec = parseSingboxEntry(target);
+      spec = parseSingboxEntry(
+        _sanitizedEntry(target),
+        rawSource: _prettyJson(target),
+      );
     } catch (_) {
       // Битое звено: узел-владелец важнее цепочки.
       warnings.add(DetourTargetMissingWarning(raw));
@@ -730,6 +737,41 @@ int? _asInt(Object? v) => switch (v) {
       final String s => int.tryParse(s.trim()),
       _ => null,
     };
+
+/// §545 — карта, по которой строится модель JSON-узла: entry, очищенный
+/// санитайзером реестра. Связи полей (`conflicts`, `requires`,
+/// `forbidden_for`) судит реестр, как у ссылки (`mappers/uri_pipeline.dart`),
+/// и рукописных копий правил в эмиттере не нужно.
+///
+/// Вход `singbox`: тело в форме ядра написал автор, и `max_when` с
+/// `except_sources` написанное им не подменяет (§473) — ровно как у прохода
+/// по дословной карте (`annotateFromRawBody`) и гарда сборки. Коды здесь не
+/// собираются: их ставит тот проход, по той же карте и с тем же входом.
+///
+/// Санитайзер переписывает и вложенные карты, поэтому ему идёт глубокая
+/// копия: исходный entry нужен дальше (`rawSource` по §454, резолв detour).
+/// Тела нет (`drop_node`, снято обязательное поле) — модель строится по
+/// сырой карте, как до §545: снимать такой узел при разборе решает §477, а не
+/// этот шаг.
+Map<String, dynamic> _sanitizedEntry(Map<String, dynamic> entry) {
+  if (!ContractRegistry.I.isLoaded) return entry;
+  final type = entry['type'];
+  if (type is! String || type.isEmpty) return entry;
+  final Map<String, dynamic> copy;
+  try {
+    copy = (jsonDecode(jsonEncode(entry)) as Map).cast<String, dynamic>();
+  } catch (_) {
+    return entry;
+  }
+  final res = RegistrySanitizer.sanitize(
+    copy,
+    scheme: type,
+    coreVersion: '0.0.0',
+    applyCoreGates: false,
+    source: BodySource.singbox,
+  );
+  return res.body ?? entry;
+}
 
 /// §302 — стабильный отступ для показа фрагмента конфига пользователю.
 String _prettyJson(Object? value) {
