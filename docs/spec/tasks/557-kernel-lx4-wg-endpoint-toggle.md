@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **ТЗ**, решения владельца приняты 26.09.2026: А1, Б — выключать можно любой узел |
+| Статус | **Реализовано** (бамп, биндинг, UI, переприменение). Решения владельца: А1, **Б1** (заменило Б2 26.09.2026). Проверено: javap-дельта, `flutter analyze`, затронутые тесты. **Не снято:** эмулятор, CI — см. «Итог» |
 | Дата | 2026-09-26 |
 | Ядро | `v1.14.2-lx.4` — fork **SPEC 106** (`SPECS/TASKS/106-WG_ENDPOINT_TOGGLE/` в `../sing-box-lx`): `CommandClient.SetEndpointEnabled(tag, enabled)` → `*EndpointToggleResult{State string}`; новое `endpointState = "disabled"` в `GetOutbounds`. Плюс OpenWrt-инсталлятор (LxBox не касается) |
 | Связанные | §535 (lx.1: `endpointState`/`idleSinceSeconds`, `CcEndpointState`), §540 (idle-время в UI), §544 (lx.3, текущий пин), §122 (CommandClient), §283 (отключение узла в подписке — **другая** механика, через сборку конфига), `docs/KERNEL.md` («Gotchas when bumping the version») |
@@ -119,3 +119,59 @@
 - `libbox.version` не коммитить до проверки, что релиз `v1.14.2-lx.4` есть на
   GitHub с AAR (иначе CI `fetch-libbox` падает). Релиз есть на 26.09.2026.
 - Контракт, реестр, §283-механику не трогать.
+
+## Итог (26.09.2026)
+
+**Решение Б изменено владельцем на Б1:** выключать можно любой WG/AWG-узел,
+в том числе выбранный сейчас в selector; блокировок, подсказки
+«Selected in <group>» и предупреждений нет — выключенный выбранный узел
+ведёт себя как мёртвый. Пункт «Б2» выше устарел.
+
+**Вид выключенного узла в списке (уточнение владельца):** в сабтайтле
+последней слева `● off` — точка ~6 px и курсивный `off` оранжевым
+(`Colors.orange`, как пинг 200–500 мс); при нехватке ширины обрезается
+только текст, точка остаётся. Справа вместо пинга — прочерк `—` цветом
+`onSurfaceVariant`, без красного таймаута и без `PING…`. На экране узла
+строка «Endpoint state» показывает `off`, время простоя для него не выводится.
+
+**Ядро.** `libbox.version` → `v1.14.2-lx.4`. javap по `classes.jar` из
+релизных AAR (один вызов списком): 253 → 254 класса, 3498 → 3512 строк;
+дифф ровно `EndpointToggleResult` (`getState`/`setState` + служебное
+gomobile) и `CommandClient.setEndpointEnabled(String, boolean)`. sha256 AAR
+совпали с `SHA256SUMS` релизов: lx.4
+`ddd266242ed236f028faa17942937475221931dda50a06fce031c6136e67fb10`, lx.3
+`42474da0956c429b020e12d439b4ae60670b59a6e21d474a87afe633d7ac979c`. Норм
+контракта, привязанных к `1.14.2-lx.3`, нет (grep по `docs/contract`;
+`1.14.1-lx.3` в `warnings.md` — другая версия). Константа пина в
+`test/perf/registry_guard_perf_test.dart` сдвинута на lx.4.
+
+**Биндинг.** `BoxCommandClient.setEndpointEnabled` — no-throw, код отказа из
+gRPC-статуса в тексте ошибки gomobile (`code = NotFound` → `not_found` и
+т. д., прочее → `error`); `VpnPlugin` `ccSetEndpointEnabled` отдаёт строку
+состояния или `PlatformException` с кодом; `CcChannel.setEndpointEnabled`,
+`CcEndpointState.disabled` (`isNotBuilt` не тронут).
+
+**Сохранение (А1).** `HomeController._disabledEndpoints`: пополняется при
+успешном выключении, переприменяется после захвата снапшота новой сессии
+ядра (§311: старт и `reloadVpn`, куда сходятся apply, автообновление
+подписки и Debug API), плюс страховка на тике heartbeat'а — узел из
+множества, который ядро видит включённым, гасится снова. `not_found` /
+`invalid_argument` при переприменении выкидывают тег молча. На спуске
+туннеля множество и карты `endpointStates`/`endpointIdleSince` очищаются.
+Ответ выключателя сразу пишется в `endpointStates[tag]`.
+
+**UI.** Пункт «Turn off» / «Turn on» в меню узла (только при живом туннеле и
+непустом `endpointState`), переключатель «Node enabled» на вкладке Overview
+экрана узла (слушает контроллер). Отказ ядра — snackbar с текстом по коду.
+Новые l10n-ключи (ru/zh): `off`, `Turn on`, `Turn off`, `Node enabled`,
+подпись переключателя и пять текстов ошибок.
+
+**Проверки.** `flutter analyze` — чисто. Тесты: новые
+`test/vpn/cc_endpoint_toggle_test.dart` (5) и
+`test/widgets/node_row_endpoint_off_test.dart` (5), плюс
+`test/widgets/node_row_sick_test.dart` — зелёные.
+
+**Не снято:** эмулятор (сценарий в «Проверке»), сборка Kotlin и полный
+прогон — CI; `ui_check`/`hardcoded_check` локально не гонялись. Юнит-теста
+на переприменение в `HomeController` нет — контроллер в тестах не
+поднимается без native-обвязки; проверка — на эмуляторе.

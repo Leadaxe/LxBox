@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Turn a WireGuard/AmneziaWG node off without restarting the tunnel ([§557](docs/spec/tasks/557-kernel-lx4-wg-endpoint-toggle.md)).**
+  Core `v1.14.2-lx.4`. A node's menu has Turn off / Turn on, and the node screen has
+  a Node enabled switch. A node that is off drops its connections and refuses new
+  ones; the rest of the tunnel keeps running. It stays off through config reloads
+  and subscription updates until you turn it on or stop the VPN. In the list it
+  shows an orange `● off` and a dash instead of a ping.
+
 ### Changed
 
 - **Node sanitizer catches up with contract 1.1.57–1.1.67 ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
