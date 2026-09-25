@@ -343,3 +343,61 @@ class _LxToolbarOverlay extends StatelessWidget {
     );
   }
 }
+
+/// §554 — просмотр JSON с подсветкой синтаксиса, только чтение.
+///
+/// Обёртка над [LxCodeEditor] для экранов, где текст показывался
+/// `SelectableText`/`TextField(readOnly)` без подсветки (вкладка JSON узла,
+/// инспектор узла подписки). Контроллер живёт здесь и пересобирается при
+/// смене [text]. `CodeEditor` не умеет сжиматься по содержимому, поэтому в
+/// прокручиваемом родителе нужна [height]; в ограниченном — не нужна.
+class LxJsonView extends StatefulWidget {
+  const LxJsonView({
+    super.key,
+    required this.text,
+    this.height,
+    this.fontSize = 12,
+    this.showLineNumbers = false,
+  });
+
+  final String text;
+  final double? height;
+  final double fontSize;
+  final bool showLineNumbers;
+
+  @override
+  State<LxJsonView> createState() => _LxJsonViewState();
+}
+
+class _LxJsonViewState extends State<LxJsonView> {
+  late CodeLineEditingController _ctrl =
+      CodeLineEditingController.fromText(widget.text);
+
+  @override
+  void didUpdateWidget(covariant LxJsonView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _ctrl.dispose();
+      _ctrl = CodeLineEditingController.fromText(widget.text);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final editor = LxCodeEditor(
+      controller: _ctrl,
+      readOnly: true,
+      fontSize: widget.fontSize,
+      showLineNumbers: widget.showLineNumbers,
+      language: LxCodeLanguage.json,
+    );
+    final h = widget.height;
+    return h == null ? editor : SizedBox(height: h, child: editor);
+  }
+}

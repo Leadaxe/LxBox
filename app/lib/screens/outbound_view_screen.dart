@@ -12,6 +12,7 @@ import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
 import '../vpn/cc_channel.dart';
 import '../widgets/chain_positions_block.dart';
+import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
 import 'owner_navigation.dart';
@@ -686,27 +687,10 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   // ─── JSON ───────────────────────────────────────────────────────────────
 
   Widget _buildJsonTab(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: TextField(
-        controller: _jsonCtrl,
-        readOnly: true,
-        maxLines: null,
-        expands: true,
-        textAlignVertical: TextAlignVertical.top,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 12,
-          color: theme.colorScheme.onSurface,
-        ),
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.all(10),
-          filled: true,
-          fillColor: theme.colorScheme.surfaceContainerLow,
-        ),
-      ),
+      child: LxJsonView(text: _jsonCtrl.text),
     );
   }
+
 }

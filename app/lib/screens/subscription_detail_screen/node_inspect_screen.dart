@@ -7,6 +7,7 @@ import '../../models/node_spec.dart';
 import '../../models/template_vars.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/tag_resolver.dart';
+import '../../widgets/lx_code_editor.dart';
 import '../../widgets/node_diagnostics_tab.dart';
 
 /// §302 — экран разбора одной ноды подписки: две вкладки.
@@ -217,12 +218,7 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          child: SingleChildScrollView(
-            child: SelectableText(
-              text,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-            ),
-          ),
+          child: LxJsonView(text: text),
         ),
         Positioned(
           top: 4,
