@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import '../../models/parser_config.dart';
@@ -16,7 +17,8 @@ import '../../models/parser_config.dart';
 ///      и array-element (условный элемент массива) + expression language.
 ///
 /// Дизайн заимствован у singbox-launcher SPEC 067 (десктоп), адаптирован под
-/// Dart. НЕ берём: `params[]`-механику, `@runtime.*` globals (одна платформа).
+/// Dart. НЕ берём: `params[]`-механику. `@runtime.*` на телефоне значения не
+/// имеет (одна платформа): резервированный неймспейс, см. [isRuntimeRef].
 
 /// Sentinel: элемент/ключ должен быть удалён (optional-var → null, либо
 /// array-element `#if` без else на false-ветке). Публичный — общий для движков.
@@ -36,7 +38,14 @@ const int _intMax = 65535;
 /// Остальные (`text`/`secret`/`enum`/`outbound`/`dns_servers`) — дословная
 /// строка: даже если значение выглядит как `123`/`true`, оно остаётся строкой
 /// (пароль `1234` не должен стать int — §120 корень).
-dynamic coerceVarValue(String raw, String type) {
+///
+/// `options`/`options_open` на приведение не влияют (TEMPLATE_LANG §2.1): своё
+/// значение вне списка проходит ровно ту же ветку по `type`.
+///
+/// [name] — имя переменной для предупреждений `template_int_clamped` /
+/// `template_int_invalid` (§2.2); без имени приведение молчит (вызовы вне
+/// шаблона: превью, on_change-резолв без накопителя).
+dynamic coerceVarValue(String raw, String type, {String? name}) {
   switch (type) {
     case 'bool':
       // SPEC 103 (разрыв N12): сравнение с trim и без учёта регистра — канон
@@ -50,7 +59,17 @@ dynamic coerceVarValue(String raw, String type) {
       // (ручной ввод, импорт бэкапа, legacy) — конфиг никогда не получит int,
       // который ядро отвергнет как `uint16`. Не-число → строка (advisory).
       final n = int.tryParse(raw.trim());
-      if (n == null) return raw;
+      if (n == null) {
+        if (name != null) {
+          reportTemplateWarning(
+              templateWarnIntInvalid, {'name': name, 'value': raw});
+        }
+        return raw;
+      }
+      if (name != null && (n < 0 || n > _intMax)) {
+        reportTemplateWarning(
+            templateWarnIntClamped, {'name': name, 'value': raw});
+      }
       return n.clamp(0, _intMax);
     case 'text_list':
       // SPEC 103 (разрыв C6): тип ядра языка — построчный список
@@ -71,16 +90,115 @@ List<String> splitTextList(String raw) => [
     ];
 
 /// Коды warning'ов движка шаблонов (contract/registry/warnings.json).
-/// Отдаются через [onTemplateWarning] — коды, а не отрендеренный текст
-/// (CANON §6), чтобы сравнение с корпусом было языконезависимым.
+/// Отдаются в [TemplateWarnings] — код и параметры, а не отрендеренный текст
+/// (CANON §6): сравнение с корпусом языконезависимо, текст берётся из реестра
+/// в момент показа.
 const String templateWarnUnknownDirective = 'template_unknown_directive';
 const String templateWarnVarUndeclared = 'template_var_undeclared';
+const String templateWarnIntClamped = 'template_int_clamped';
+const String templateWarnIntInvalid = 'template_int_invalid';
+const String templateWarnFragmentDropped = 'template_fragment_dropped';
 
-/// Приёмник warning'ов движка. Глобальный хук, а не параметр каждой функции:
-/// walk рекурсивен и вызывается из двух движков (build_config, preset_expand),
-/// протаскивание накопителя через все уровни исказило бы их сигнатуры ради
-/// диагностики. null (по умолчанию) — warning'и не собираются.
-void Function(String code)? onTemplateWarning;
+/// Одно предупреждение движка шаблонов: код реестра и его параметры.
+class TemplateWarning {
+  const TemplateWarning(this.code, [this.params = const {}]);
+
+  final String code;
+  final Map<String, String> params;
+
+  /// Ключ дедупа — пара (код, параметры); порядок параметров не важен.
+  String get dedupKey {
+    final keys = params.keys.toList()..sort();
+    return jsonEncode([code, for (final k in keys) [k, params[k]]]);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is TemplateWarning && other.dedupKey == dedupKey;
+
+  @override
+  int get hashCode => dedupKey.hashCode;
+
+  @override
+  String toString() => params.isEmpty ? code : '$code $params';
+}
+
+/// Накопитель предупреждений одной сборки: порядок первого появления, дедуп
+/// по (код, параметры). Два разных необъявленных имени — две записи; одно
+/// имя в десяти местах — одна.
+class TemplateWarnings {
+  final List<TemplateWarning> _items = [];
+  final Set<String> _seen = {};
+
+  void add(String code, [Map<String, String> params = const {}]) {
+    final w = TemplateWarning(code, Map.unmodifiable(params));
+    if (_seen.add(w.dedupKey)) _items.add(w);
+  }
+
+  List<TemplateWarning> get items => List.unmodifiable(_items);
+
+  bool get isEmpty => _items.isEmpty;
+
+  /// Коды без параметров, без дублей, по алфавиту — форма корпуса шаблонов.
+  List<String> get codes => (_items.map((w) => w.code).toSet().toList())..sort();
+}
+
+/// Ключ зоны, в которой живёт накопитель. Зона, а не глобальная переменная:
+/// сборка асинхронна, и между её await'ами UI вычисляет свои условия тем же
+/// движком — их предупреждения не должны попасть в отчёт сборки.
+final Object _warningsZoneKey = Object();
+
+/// Выполняет [body], собирая предупреждения движка в [sink]. Вложенный вызов
+/// перекрывает внешний на время своего тела.
+R collectTemplateWarnings<R>(TemplateWarnings sink, R Function() body) =>
+    runZoned(body, zoneValues: {_warningsZoneKey: sink});
+
+/// Ставит предупреждение в накопитель текущей зоны. Вне
+/// [collectTemplateWarnings] — ничего не делает.
+void reportTemplateWarning(String code,
+    [Map<String, String> params = const {}]) {
+  final sink = Zone.current[_warningsZoneKey];
+  if (sink is TemplateWarnings) sink.add(code, params);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// @runtime.* — резервированный неймспейс (TEMPLATE_LANG §7.2, N15)
+// ─────────────────────────────────────────────────────────────────────────
+
+const String _runtimePrefix = 'runtime.';
+
+/// Поля окружения сборки, которые язык знает. Это грамматика неймспейса, а не
+/// имена переменных шаблона: на desktop они несут платформу/архитектуру/
+/// таргет, на телефоне значения нет.
+const Set<String> _runtimeFields = {'platform', 'arch', 'target'};
+
+/// Имя из неймспейса `runtime.` (с любым полем).
+bool isRuntimeRef(String name) => name.startsWith(_runtimePrefix);
+
+/// Известное поле `runtime.*`: на телефоне — объявлено со значением null.
+bool isKnownRuntimeGlobal(String name) =>
+    isRuntimeRef(name) &&
+    _runtimeFields.contains(name.substring(_runtimePrefix.length));
+
+/// Единая точка разрешения ссылки `@name` для обхода и предикатов.
+///
+/// - известное `runtime.*` → [Dropped] (объявлено, значения нет), без
+///   предупреждения: ключ или элемент выпадает, в JSON ничего не уходит;
+/// - неизвестное `runtime.*` и любое имя, которое резолвер не знает, → null
+///   (плейсхолдер остаётся) + `template_var_undeclared {name}`;
+/// - иначе — значение резолвера (в т.ч. [Dropped] у объявленной без значения).
+dynamic _resolveRef(String name, VarResolver resolve) {
+  if (isRuntimeRef(name)) {
+    if (isKnownRuntimeGlobal(name)) return Dropped.instance;
+    reportTemplateWarning(templateWarnVarUndeclared, {'name': name});
+    return null;
+  }
+  final v = resolve(name);
+  if (v == null) {
+    reportTemplateWarning(templateWarnVarUndeclared, {'name': name});
+  }
+  return v;
+}
 
 /// Кэш скомпилированных `#matches`-регэкспов по паттерну. RegExp immutable —
 /// шарить безопасно даже при deepCopy шаблона. Никаких `RegExp(...)` per-node
@@ -105,7 +223,7 @@ VarResolver makeResolver(
     final raw = vars[name];
     if (raw == null) return null;
     final node = nodes[name];
-    return coerceVarValue(raw, node?.type ?? 'text');
+    return coerceVarValue(raw, node?.type ?? 'text', name: name);
   };
 }
 
@@ -141,7 +259,9 @@ dynamic walk(dynamic node, VarResolver resolve) {
   if (node is String) {
     if (!node.startsWith('@')) return node;
     final name = node.substring(1);
-    final v = resolve(name);
+    // `@runtime.platform` и соседи на телефоне — Dropped (§7.2); необъявленное
+    // имя — плейсхолдер + template_var_undeclared (§5.2).
+    final v = _resolveRef(name, resolve);
     if (v == null) {
       // Имя не объявлено → оставить плейсхолдер как есть (build_config-контракт).
       return node;
@@ -212,7 +332,7 @@ dynamic _walkMap(Map<String, dynamic> obj, VarResolver resolve) {
     // Невалидная грамматика условия — warning: узел молча исчезает из
     // конфига, и без сигнала причину не найти (паритет с Go).
     if (!condFormValid(gate)) {
-      onTemplateWarning?.call(templateWarnUnknownDirective);
+      reportTemplateWarning(templateWarnUnknownDirective, {'key': enableKey});
     }
     if (!evalCond(gate, resolve)) return Dropped.instance;
   }
@@ -232,7 +352,7 @@ dynamic _walkMap(Map<String, dynamic> obj, VarResolver resolve) {
     // SPEC 103 (разрыв N10): факт выброса обязан быть виден, а не только
     // молча применён — иначе шаблон новой версии тихо теряет директиву на
     // старом движке, и понять это по конфигу невозможно.
-    onTemplateWarning?.call(templateWarnUnknownDirective);
+    reportTemplateWarning(templateWarnUnknownDirective, {'key': k});
   }
 
   // 2) Резолвить обычные ключи (рекурсивно). #if…-ключи снимаем отдельно ниже.
@@ -256,8 +376,12 @@ dynamic _walkMap(Map<String, dynamic> obj, VarResolver resolve) {
   for (final key in ifKeys) {
     final raw = obj[key];
     obj.remove(key);
-    if (raw is! Map<String, dynamic>) continue;
-    final branch = _selectBranch(raw, resolve); // Map | null (drop, no else)
+    if (raw is! Map<String, dynamic>) {
+      // Тело #if не объект — конструкция не распознана (§4.1), не молча.
+      reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
+      continue;
+    }
+    final branch = _selectBranch(raw, resolve, key); // Map | null (drop, no else)
     if (branch != null) {
       // branch уже прошёл walk внутри _selectBranch; мерджим поля в родителя.
       branch.forEach((k, v) {
@@ -279,8 +403,19 @@ dynamic _walkList(List<dynamic> list, VarResolver resolve) {
       if (isIfKey(key)) {
         final body = elem[key];
         if (body is Map<String, dynamic>) {
-          final taken = _selectArrayBranch(body, resolve);
-          if (!identical(taken, Dropped.instance)) out.add(taken);
+          final taken = _selectArrayBranch(body, resolve, key);
+          if (identical(taken, Dropped.instance)) continue;
+          // Сплайс на один уровень (TEMPLATE_LANG §4.4, SPEC 143 D-123, N13):
+          // ветка-массив вливается в родителя, не-массив встаёт элементом.
+          // Литерал и ссылка на text_list не различаются — решает только
+          // форма результата, типы переменных здесь не смотрятся. Вложенный
+          // массив автор пишет двойными скобками: `[[…]]` после сплайса
+          // одного уровня даёт один элемент-массив. Паритет с Go.
+          if (taken is List) {
+            out.addAll(taken);
+          } else {
+            out.add(taken);
+          }
           continue;
         }
       }
@@ -291,11 +426,14 @@ dynamic _walkList(List<dynamic> list, VarResolver resolve) {
     // CIDR. Без этого получается [["10.0.0.1/30"]] — ядро отвергает конфиг
     // («cannot unmarshal array into netip.Prefix»). Паритет с Go.
     if (elem is String && elem.startsWith('@')) {
-      final value = resolve(elem.substring(1));
+      final value = walk(elem, resolve);
+      if (identical(value, Dropped.instance)) continue;
       if (value is List) {
         out.addAll(value);
-        continue;
+      } else {
+        out.add(value);
       }
+      continue;
     }
     final replaced = walk(elem, resolve);
     if (identical(replaced, Dropped.instance)) continue;
@@ -312,14 +450,15 @@ dynamic _walkList(List<dynamic> list, VarResolver resolve) {
 Map<String, dynamic>? _selectBranch(
   Map<String, dynamic> body,
   VarResolver resolve,
+  String key,
 ) {
-  final ok = _evalCondition(body, resolve);
+  final ok = _evalCondition(body, resolve, key: key);
   final picked = ok ? condKey(body, 'value') : condKey(body, 'else');
   if (picked == null) {
     // Условие истинно, но обязательной ветки value нет (§4.1) — конструкция
     // пропускается + warning. Отсутствие else на false-ветке — штатный случай
     // «не мерджить», он молчит.
-    if (ok) onTemplateWarning?.call(templateWarnUnknownDirective);
+    if (ok) reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
     return null;
   }
   // Резолвим ТОЛЬКО выбранную ветку (lazy). value — объект (валидатор проверил).
@@ -329,8 +468,12 @@ Map<String, dynamic>? _selectBranch(
 
 /// Array-element branch: возвращает резолвленный `value`/`else` (любой тип),
 /// либо [Dropped.instance] (false без else → элемент выпадает).
-dynamic _selectArrayBranch(Map<String, dynamic> body, VarResolver resolve) {
-  final ok = _evalCondition(body, resolve);
+dynamic _selectArrayBranch(
+  Map<String, dynamic> body,
+  VarResolver resolve, [
+  String key = '#if',
+]) {
+  final ok = _evalCondition(body, resolve, key: key);
   if (ok) {
     return walk(_clone(condKey(body, 'value')), resolve);
   }
@@ -354,7 +497,7 @@ String? evalIfScalar(Map<String, dynamic> node, VarResolver resolve) {
   if (!isIfKey(key)) return null;
   final body = node[key];
   if (body is! Map<String, dynamic>) return null;
-  final picked = _selectArrayBranch(body, resolve);
+  final picked = _selectArrayBranch(body, resolve, key);
   return picked is String ? picked : null;
 }
 
@@ -363,14 +506,18 @@ String? evalIfScalar(Map<String, dynamic> node, VarResolver resolve) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /// Вычисляет условие `#if`-тела: ровно один из `and`/`or`. Short-circuit.
-bool _evalCondition(Map<String, dynamic> body, VarResolver resolve) {
+bool _evalCondition(
+  Map<String, dynamic> body,
+  VarResolver resolve, {
+  String key = '#if',
+}) {
   final and = condKey(body, 'and');
   final or = condKey(body, 'or');
   // Грамматика §4.1: ровно один из and/or. Оба или ни одного — невалидная
   // форма: условие ложно (ветка не включается) + warning, чтобы ошибка была
   // видна, а не только применена (SPEC 103, разрыв C3 — паритет с лаунчером).
   if ((and is List) == (or is List)) {
-    onTemplateWarning?.call(templateWarnUnknownDirective);
+    reportTemplateWarning(templateWarnUnknownDirective, {'key': key});
     return false;
   }
   if (and is List) {
@@ -428,8 +575,10 @@ bool _evalPredicate(dynamic pred, VarResolver resolve) {
     if (parsed != null) return evalCond(parsed, resolve);
     final name = _varName(pred);
     if (name == null) return false;
+    // `@runtime.*` на телефоне — false явно (§7.2), не общим путём.
+    if (isKnownRuntimeGlobal(name)) return false;
     // SPEC 103 (разрыв C1): trim + case-insensitive, как в лаунчере.
-    return _scalar(resolve(name)).trim().toLowerCase() == 'true';
+    return _scalar(_resolveRef(name, resolve)).trim().toLowerCase() == 'true';
   }
 
   if (pred is Map<String, dynamic>) {
@@ -445,8 +594,11 @@ bool _evalPredicate(dynamic pred, VarResolver resolve) {
       final key = pred.keys.first;
       final name = _varName(key);
       if (name == null) return false;
+      // `@runtime.*` на телефоне значения не имеет: любой предикат по нему —
+      // false явно (§7.2, §4.2), а не случайным сравнением с плейсхолдером.
+      if (isKnownRuntimeGlobal(name)) return false;
       final arg = pred[key];
-      final resolvedValue = resolve(name);
+      final resolvedValue = _resolveRef(name, resolve);
       final scalar = _scalar(resolvedValue);
 
       if (arg is String) {
@@ -502,7 +654,7 @@ String? _varName(String ref) =>
 String _substRhs(String rhs, VarResolver resolve) {
   final name = _varName(rhs);
   if (name == null) return rhs;
-  final v = resolve(name);
+  final v = _resolveRef(name, resolve);
   if (v == null || identical(v, Dropped.instance)) return rhs;
   return _scalar(v).trim();
 }
@@ -532,7 +684,7 @@ bool _inList(String needle, dynamic arg, VarResolver resolve) {
     // Строковая форма: ссылка на text_list-переменную.
     final name = _varName(arg);
     if (name == null) return arg.trim() == needle;
-    final v = resolve(name);
+    final v = _resolveRef(name, resolve);
     if (v is List) return v.map((e) => _scalar(e).trim()).contains(needle);
     if (v == null || identical(v, Dropped.instance)) return false;
     return _scalar(v).trim() == needle;
@@ -543,7 +695,7 @@ bool _inList(String needle, dynamic arg, VarResolver resolve) {
 /// Скалярное строковое представление резолвленного значения для сравнений.
 /// bool true/false → "true"/"false"; int → строка; String → как есть.
 String _scalar(dynamic v) {
-  if (v == null) return '';
+  if (v == null || identical(v, Dropped.instance)) return '';
   if (v is bool) return v ? 'true' : 'false';
   return v.toString();
 }
@@ -835,6 +987,12 @@ WizardVar _requireVar(
   String path,
 ) {
   final node = byName[name];
+  if (node == null && isKnownRuntimeGlobal(name)) {
+    // §7.2: известное поле `runtime.*` в предикате допустимо — на телефоне
+    // оно вычисляется в false. Тип `text`: bare-форма по нему запрещена так же,
+    // как по любой не-bool переменной.
+    return WizardVar(name: name, type: 'text', defaultValue: '');
+  }
   if (node == null) {
     throw TemplateIfError(
         '$path: предикат ссылается на необъявленную var `@$name` (нужна WizardVar-нода)');

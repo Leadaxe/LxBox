@@ -48,6 +48,46 @@ const _kIntermediateActions = {'resolve', 'sniff', 'route-options'};
 /// action = decode error; опечатка в шаблоне не должна доезжать до ядра.
 const _kServerlessDnsActions = {'predefined', 'reject', 'route-options'};
 
+/// §555 (контракт 1.1.70): типы DNS-серверов sing-box, у которых адрес
+/// (`server`) обязателен. Это схема ядра, а не имена переменных шаблона.
+const _kAddressDnsServerTypes = {'udp', 'tcp', 'tls', 'https', 'quic', 'h3'};
+
+/// §555 — DNS-сервер адресного типа без `server` после подстановки (пустая
+/// переменная дала Dropped ключа). Ядро такой сервер не примет. Легаси-форма
+/// без `type` сюда не попадает.
+bool dnsServerMissingAddress(Map<String, dynamic> server) {
+  final type = server['type'];
+  if (type is! String || !_kAddressDnsServerTypes.contains(type)) return false;
+  final address = server['server'];
+  return address is! String || address.trim().isEmpty;
+}
+
+/// §555 — источник набора правил по его `type` (remote — `url`, local —
+/// `path`, inline — `rules`). Возвращает недостающее поле или null, если
+/// источник на месте. Тип не распознан — `url/path`.
+String? ruleSetMissingSource(Map<String, dynamic> rs) {
+  bool has(String k) {
+    final v = rs[k];
+    if (v is String) return v.trim().isNotEmpty;
+    if (v is List) return v.isNotEmpty;
+    return v != null;
+  }
+
+  return switch (rs['type']) {
+    'remote' => has('url') ? null : 'url',
+    'local' => has('path') ? null : 'path',
+    'inline' => has('rules') ? null : 'rules',
+    _ => 'url/path',
+  };
+}
+
+/// §555 — фрагмент выпал гейтом валидности после Dropped-каскада: код
+/// `template_fragment_dropped {owner, kind, reason}` в накопитель сборки.
+/// Фрагмент, целиком снятый `#if`/`#enable` автора, сюда не приходит.
+void reportFragmentDropped(String owner, String kind, String reason) =>
+    reportTemplateWarning(templateWarnFragmentDropped,
+        {'owner': owner, 'kind': kind, 'reason': reason});
+
 /// Результат merge всех preset-фрагментов от разных CustomRule'ов.
 class BundleMerge {
   final List<Map<String, dynamic>> dnsServers;
@@ -123,7 +163,12 @@ PresetFragments expandPreset(
     final result = substituteVars(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
-    if (result['type'] is! String) continue;
+    // §555 — набор без источника по `type` не выпадает молча.
+    final missingSource = ruleSetMissingSource(result);
+    if (missingSource != null) {
+      reportFragmentDropped(preset.presetId, 'route.rule_set', missingSource);
+      continue;
+    }
     // Служебные ключи гейта — прочь из результата. ВАЖНО: `enabled` снимается
     // ТОЛЬКО в строковой форме "@var" (наша мета-конвенция). Булев `enabled`
     // — настоящее поле sing-box (`tls.enabled`, `cache_file.enabled`), его
@@ -179,7 +224,10 @@ PresetFragments expandPreset(
       final action = result['action'];
       final serverless =
           action is String && _kServerlessDnsActions.contains(action);
-      if (result['server'] is! String && !serverless) continue;
+      if (result['server'] is! String && !serverless) {
+        reportFragmentDropped(preset.presetId, 'dns.rules', 'server/action');
+        continue;
+      }
 
       // Dangling-rule_set guard — паритет с route-правилами (§011/§045):
       // DNS-правило со ссылкой на незарегистрированный tag уронило бы ядро
@@ -188,6 +236,7 @@ PresetFragments expandPreset(
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
           warnings.add(
             'preset "${preset.presetId}": DNS rule skipped — references '
             'missing rule_set "$refTag" (download SRS first)',
@@ -200,6 +249,7 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
           warnings.add(
             'preset "${preset.presetId}": DNS rule skipped — none of '
             '[${refTag.join(", ")}] available in expanded rule_sets',
@@ -238,7 +288,8 @@ PresetFragments expandPreset(
       final result = item;
       if (result['outbound'] is! String && result['action'] is! String) {
         // После substitute нет ни outbound, ни action (optional-var
-        // выпал / кривой шаблон) → элемент дропается silently (§033).
+        // выпал / кривой шаблон) → элемент выпадает с кодом (§033, §555).
+        reportFragmentDropped(preset.presetId, 'route.rules', 'outbound/action');
         continue;
       }
 
@@ -313,6 +364,7 @@ PresetFragments expandPreset(
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
           warnings.add(
             'preset "${preset.presetId}": routing rule skipped — references '
             'missing rule_set "$refTag" (download SRS first)',
@@ -326,6 +378,7 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
           warnings.add(
             'preset "${preset.presetId}": routing rule skipped — none of '
             '[${refTag.join(", ")}] available in expanded rule_sets',
@@ -392,6 +445,12 @@ PresetFragments expandPreset(
     final result = substituteVars(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
+    // §555 — адресный сервер без адреса ядро не примет: выпадает с кодом,
+    // правила на него отсеет фильтр эмитированных тегов (dns_rules).
+    if (dnsServerMissingAddress(result)) {
+      reportFragmentDropped(preset.presetId, 'dns.servers', 'server');
+      continue;
+    }
     normalizeDnsDetour(result);
     dnsServers.add(result);
   }

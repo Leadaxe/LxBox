@@ -63,6 +63,12 @@ class BuildResult {
   /// §505 — предупреждения сборки (гард реестра) по финальному config-тегу.
   final Map<String, List<NodeWarning>> nodeBuildWarningsByEmittedTag;
 
+  /// §555 — предупреждения движка шаблона за эту сборку (вид
+  /// `template_degraded` контракта 1.1.69/1.1.70): код реестра с параметрами,
+  /// без дублей по (код, параметры), в порядке первого появления. Их
+  /// EN-строки стоят ПЕРВЫМИ в [emitWarnings]; сохранение они не блокируют.
+  final List<TemplateWarning> templateWarnings;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -72,6 +78,7 @@ class BuildResult {
     this.directionsWithoutNodes = const [],
     this.nodeByEmittedTag = const {},
     this.nodeBuildWarningsByEmittedTag = const {},
+    this.templateWarnings = const [],
   });
 }
 
@@ -190,10 +197,37 @@ class BuildSettings {
 /// 6. Applied selectable rules, app rules, route final.
 /// 7. Post-steps: tls_fragment, custom DNS.
 /// 8. Validate → вернуть BuildResult с готовым `configJson`.
+///
+/// §555 — вся сборка идёт в зоне накопителя [TemplateWarnings]: коды движка
+/// шаблона (главный конфиг, тела пресетов, шаблонные DNS-серверы) собираются
+/// с параметрами и дедупом и уходят в [BuildResult.templateWarnings].
 Future<BuildResult> buildConfig({
   required List<ServerList> lists,
   BuildSettings settings = const BuildSettings(),
   WizardTemplate? template,
+}) {
+  final templateWarnings = TemplateWarnings();
+  return collectTemplateWarnings(
+    templateWarnings,
+    () => _buildConfig(
+      lists: lists,
+      settings: settings,
+      template: template,
+      templateWarnings: templateWarnings,
+    ),
+  );
+}
+
+/// EN-строка предупреждения шаблона для [BuildResult.emitWarnings]: заголовок
+/// кода из реестра с подстановкой параметров.
+String _renderTemplateWarning(TemplateWarning w) =>
+    'Template: ${RegistryWarning(code: w.code, params: w.params).renderEn()}';
+
+Future<BuildResult> _buildConfig({
+  required List<ServerList> lists,
+  required BuildSettings settings,
+  required WizardTemplate? template,
+  required TemplateWarnings templateWarnings,
 }) async {
   template ??= await TemplateLoader.load();
 
@@ -794,11 +828,17 @@ Future<BuildResult> buildConfig({
   ));
 
   final validation = validateConfig(config);
+  // §555 — записи template_degraded идут первыми (паритет с «Итогом» desktop).
+  final templateItems = templateWarnings.items;
   return BuildResult(
     configJson: jsonEncode(config),
     config: config,
     validation: validation,
-    emitWarnings: emitWarnings,
+    emitWarnings: [
+      for (final w in templateItems) _renderTemplateWarning(w),
+      ...emitWarnings,
+    ],
+    templateWarnings: templateItems,
     generatedVars: generatedVars,
     directionsWithoutNodes: directionsWithoutNodes,
     nodeByEmittedTag: {

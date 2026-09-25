@@ -247,6 +247,14 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       ..remove('_origin')
       ..remove('_overrides');
     body['tag'] = tag; // ensure tag set (даже если body lost его при edit'е)
+    // §555 (контракт 1.1.70) — шаблонный сервер адресного типа, у которого
+    // пустая переменная сняла `server`: ядро его не примет, выпадает с кодом
+    // (owner — тег сервера). Правила на него отсеет фильтр эмитированных
+    // тегов (dns_rules). Пресетные серверы гейтит expandPreset.
+    if (entry is DnsServerTemplate && dnsServerMissingAddress(body)) {
+      reportFragmentDropped(tag, 'dns.servers', 'server');
+      continue;
+    }
     seen.add(tag);
     if (dropForDetour(body, tag)) continue;
     out.add(body);

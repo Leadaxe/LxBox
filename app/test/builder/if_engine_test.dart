@@ -16,6 +16,8 @@ VarResolver _resolver(Map<String, String> vars, Map<String, String> types) {
   return makeResolver(vars, nodes);
 }
 
+dynamic _json(Object v) => jsonDecode(jsonEncode(v));
+
 void main() {
   group('Часть 1 — coerceVarValue', () {
     test('bool: true/false строго', () {
@@ -721,6 +723,71 @@ void main() {
       final resolved = coerceVarValue(tol.defaultValue, tol.type);
       expect(resolved, isA<int>());
       expect(resolved, 30);
+    });
+  });
+
+  group('§555 — @runtime.* и накопитель предупреждений', () {
+    test('@runtime.platform в значении даёт Dropped и не попадает в JSON; '
+        'необъявленное имя — одна запись с параметром на два вхождения', () {
+      final resolve = _resolver({'port': '8080'}, {'port': 'int'});
+      // Через JSON — форма, в которой шаблон приходит в движок.
+      final template = _json({
+        'platform': '@runtime.platform',
+        'list': ['a', '@runtime.arch', 'b'],
+        'port': '@port',
+        'x': '@runtime.nope',
+        'y': {'z': '@runtime.nope'},
+        '#if': {
+          'and': ['@runtime.target'],
+          'value': {'gated': true},
+        },
+      });
+      final sink = TemplateWarnings();
+      final out = collectTemplateWarnings(
+          sink, () => walk(template, resolve)) as Map<String, dynamic>;
+
+      expect(out.containsKey('platform'), isFalse);
+      expect(out['list'], ['a', 'b']);
+      expect(out['port'], 8080);
+      expect(out.containsKey('gated'), isFalse);
+      // Неизвестное поле неймспейса — плейсхолдер как есть (§7.2).
+      expect(out['x'], '@runtime.nope');
+      final json = jsonEncode(out);
+      expect(json.contains('runtime.platform'), isFalse);
+      expect(json.contains('runtime.arch'), isFalse);
+      expect(json.contains('runtime.target'), isFalse);
+
+      expect(sink.items, [
+        const TemplateWarning(
+            templateWarnVarUndeclared, {'name': 'runtime.nope'}),
+      ]);
+    });
+
+    test('ветка-массив элемента массива вливается на один уровень', () {
+      final resolve = _resolver({'on': 'true'}, {'on': 'bool'});
+      final out = walk(_json([
+        'a',
+        {
+          '#if': {
+            'and': ['@on'],
+            'value': ['b', 'c'],
+          },
+        },
+        {
+          '#if': {
+            'and': ['@on'],
+            'value': [
+              ['d', 'e'],
+            ],
+          },
+        },
+      ]), resolve);
+      expect(out, [
+        'a',
+        'b',
+        'c',
+        ['d', 'e'],
+      ]);
     });
   });
 }

@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Template language parity with contract 1.1.68–1.1.70 ([§555](docs/spec/tasks/555-template-lang-spec143-parity.md)).**
+  A list-valued `#if` branch inside an array now splices one level into the parent,
+  `@runtime.platform/arch/target` drop their key instead of leaking into the config,
+  variables accept `options_open`, and template warnings (undeclared variable, unknown
+  directive, clamped or invalid number, dropped preset fragment) carry their parameters,
+  are deduplicated and come first in the build report without blocking save. A preset
+  or template DNS server of an address type left without `server` is now dropped with
+  a warning.
+
 ## [2.25.5] — 2026-09-25
 
 Патч поверх [v2.25.4](docs/releases/v2.25.4.md): ядро `v1.14.2-lx.3` (VLESS
