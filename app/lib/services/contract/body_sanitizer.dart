@@ -344,6 +344,15 @@ final class _Ctx {
   /// объекта судятся после разбора всех его полей.
   final switchedOff = <String>{};
 
+  /// Контракт 1.1.56 (норма 1) — чистые карты объектов, обход которых ЕЩЁ
+  /// ИДЁТ, по префиксу пути (`transport`; корень — `''`).
+  ///
+  /// В снимок [sanitized] поля объекта попадают только по завершении его
+  /// обхода, а условия соседей (`default_when.when` с предикатом по значению)
+  /// судятся посреди него. Карта живёт ровно на время обхода объекта. Эталон
+  /// — `building` в `nodeflow/sanitize.go`.
+  final _building = <String, Map<String, Object?>>{};
+
   void warn(
     String code, {
     String? path,
@@ -404,10 +413,49 @@ final class _Ctx {
     // 2. Значения — по одному, в порядке схемы: и результат, и список
     // warnings становятся детерминированными.
     final kept = <String, Object?>{};
+    _building[prefix] = kept;
+    try {
+      return _sanitizeObjectBody(src, order, fields, prefix, kept, out);
+    } finally {
+      _building.remove(prefix);
+    }
+  }
+
+  Map<String, dynamic> _sanitizeObjectBody(
+    Map<String, dynamic> src,
+    List<String> order,
+    Map<String, FieldSchema> fields,
+    String prefix,
+    Map<String, Object?> kept,
+    Map<String, dynamic> out,
+  ) {
     for (final key in order) {
       final f = fields[key];
       if (f == null) continue;
-      if (!src.containsKey(key)) {
+      final unset = !src.containsKey(key) || _unsetForDefault(src[key], f);
+      if (unset && src.containsKey(key)) {
+        // Контракт 1.1.56 (норма 2) — пустая строка у обычного поля и
+        // литерал-выключатель (`absent_values`) равны отсутствию ключа:
+        // `default_when` срабатывает так же, как на пропущенный ключ
+        // (`mode: ""` + header → packet-up). Не сработал — прежний путь:
+        // выключатель снимается [_sanitizeScalar] (с пометкой
+        // [switchedOff]), пустая строка — молча, как у лаунчера
+        // (`omitAsUnset`).
+        final dw = f.defaultWhen;
+        final fires = dw != null &&
+            dw['absent'] == true &&
+            _conditionHolds(dw['when'], src);
+        if (!fires) {
+          final v = src[key];
+          if (v is String && v.isEmpty) continue;
+          final path = _join(prefix, key);
+          final res = _sanitizeValue(v, f, path);
+          if (dropNode) return out;
+          if (res.keep) kept[key] = res.value;
+          continue;
+        }
+      }
+      if (unset) {
         // §464 (W2d) — `default_when`: дефолт, без которого ядро не поднимает
         // outbound вовсе (полоса hysteria v1 — «missing upload speed» фаталом
         // на ВЕСЬ конфиг). В отличие от `default` (CANON §2.4 — не пишется),
@@ -533,6 +581,19 @@ final class _Ctx {
       if (!out.containsKey(e.key)) out[e.key] = e.value;
     }
     return out;
+  }
+
+  /// Контракт 1.1.56 (норма 2) — значение, равное отсутствию ключа: пустая
+  /// строка у обычного поля (не `required`, не `tristate` — у них пустое
+  /// значимо) и скаляр-литерал `absent_values` (после `normalize`).
+  static bool _unsetForDefault(Object? v, FieldSchema f) {
+    if (v is! String) return false;
+    if (v.isEmpty) return !f.required && f.raw['tristate'] != true;
+    final absent = f.absentValues;
+    if (absent == null) return false;
+    final norm = f.normalize;
+    final n = norm == null ? v : _normalizeString(v, norm);
+    return absent.contains(n);
   }
 
   /// Гейты уровня поля: годность значения они не проверяют, но само значение
@@ -1225,10 +1286,26 @@ final class _Ctx {
   /// (негодные значения снял судья поля). `any_set` судит тело и остаётся
   /// навсегда: у входа в собственной форме ядра рода от входа нет вовсе.
   /// Потребуй оба — правило перестало бы срабатывать в обоих случаях сразу.
+  ///
+  /// Контракт 1.1.56 — прочие ключи условия суть ПУТИ тела с предикатом по
+  /// ЗНАЧЕНИЮ (грамматика `when` маппера: скаляр — равенство по печатной
+  /// форме, `{in: […]}` / `{not_in: […]}`). Предикаты — И между собой и И с
+  /// ветками `any_set`/`source_kind`; см. [_valuePredicateHolds].
   bool _conditionHolds(Object? when, Map<String, dynamic> body) {
     if (when == null) return true;
     if (when is! Map) return true;
     var known = false;
+    var branches = false;
+
+    for (final e in when.entries) {
+      final key = '${e.key}';
+      if (key == 'any_set' || key == 'source_kind') {
+        branches = true;
+        continue;
+      }
+      if (!_valuePredicateHolds(key, e.value)) return false;
+    }
+    if (!branches) return true;
 
     final sourceKind = (when['source_kind'] as List?)?.map((e) => '$e');
     if (sourceKind != null) {
@@ -1261,11 +1338,78 @@ final class _Ctx {
   /// Пути условия — ключи корня тела (реестр называет их так же, как
   /// `conflicts`/`requires`): вложенных условий у `any_set` сегодня нет, и
   /// выдумывать их разбор здесь нечего — сегмент с точкой просто не найдётся.
+  ///
+  /// Контракт 1.1.56 — пустая СТРОКА условия не выполняет: для ядра это
+  /// отсутствие ключа (`uplink_data_placement: ""` не будит `default_when` у
+  /// mode). Число 0 остаётся значением.
   static bool _anySetInBody(Iterable<String> keys, Map<String, dynamic> body) {
     for (final key in keys) {
-      if (body.containsKey(key)) return true;
+      if (!body.containsKey(key)) continue;
+      final v = body[key];
+      if (v is String && v.isEmpty) continue;
+      return true;
     }
     return false;
+  }
+
+  /// Контракт 1.1.56 — предикат по ЗНАЧЕНИЮ пути тела (ключ `condition`,
+  /// не `any_set`/`source_kind`; тот же у `relation.when`).
+  ///
+  /// Значение берётся из чистого состояния, включая объект, обход которого
+  /// ещё идёт ([_cleanAt]: материализованный `default_when` у
+  /// `transport.mode` виден соседу), иначе из исходного тела. Снятое поле
+  /// (выключатель, снятое с объяснением) и пустая строка — «не задано»: `in`
+  /// ложен, `not_in` истинен, равенство ложно. Незнакомый оператор — ложь
+  /// (реестр вправе уехать вперёд кода; эталон — `valuePredicateHolds` в
+  /// `nodeflow/sanitize.go`).
+  bool _valuePredicateHolds(String path, Object? want) {
+    Object? got;
+    var present = false;
+    if (!_switchedOff(path) && !explainedDrops.contains(path)) {
+      final clean = _cleanAt(path);
+      if (clean.$1) {
+        got = clean.$2;
+        present = true;
+      } else {
+        got = _rawAt(path);
+        present = got != null;
+      }
+      if (got is String && got.isEmpty) present = false;
+    }
+    if (want is Map) {
+      final inList = want['in'];
+      if (inList is List) {
+        return present && inList.any((e) => '$e' == '$got');
+      }
+      final notIn = want['not_in'];
+      if (notIn is List) {
+        return !present || !notIn.any((e) => '$e' == '$got');
+      }
+      _logUnknownExpression('when', want.keys.join(','));
+      return false;
+    }
+    return present && '$want' == '$got';
+  }
+
+  /// Значение по абсолютному пути в ЧИСТОМ состоянии: в снимке [sanitized]
+  /// либо в объекте, обход которого ещё идёт ([_building]). Второе нужно
+  /// связям и условиям между соседями одного вложенного объекта: сосед,
+  /// материализованный по ходу обхода (`default_when`), в снимок попадает
+  /// только вместе со всем объектом (контракт 1.1.56, норма 1).
+  (bool, Object?) _cleanAt(String path) {
+    if (sanitized.containsKey(path)) return (true, sanitized[path]);
+    final parts = path.split('.');
+    for (var i = parts.length - 1; i >= 0; i--) {
+      final m = _building[parts.sublist(0, i).join('.')];
+      if (m == null) continue;
+      Object? cur = m;
+      for (final seg in parts.sublist(i)) {
+        if (cur is! Map || !cur.containsKey(seg)) return (false, null);
+        cur = cur[seg];
+      }
+      return (true, cur);
+    }
+    return (false, null);
   }
 
   /// Нарушенное ограничение — возвращает значение для текста кода, `null`
@@ -1383,6 +1527,7 @@ final class _Ctx {
       for (final rel in f.conflicts) {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
+        if (!_conditionHolds(rel['when'], kept)) continue;
         if (!_presentInSource(with0, kept, prefix)) continue;
         if (_unlessHolds(rel, kept, prefix)) continue;
         kept.remove(key);
@@ -1408,6 +1553,9 @@ final class _Ctx {
       for (final rel in f.requires) {
         final need = rel['path'] as String?;
         if (need == null) continue;
+        // Контракт 1.1.56 — `relation.when`: ложно — связь не судится вовсе
+        // (у `uplink_data_placement` mode=packet-up нужен лишь header/cookie).
+        if (!_conditionHolds(rel['when'], kept)) continue;
         final ok = rel.containsKey('equals')
             ? _valueAt(need, kept, prefix) == rel['equals']
             : _present(need, kept, prefix);

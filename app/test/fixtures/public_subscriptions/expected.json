@@ -1,6 +1,6 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.55",
+  "contract_version": "1.1.56",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 96,
@@ -323,7 +323,7 @@
         "uri_param_unknown": 248,
         "utls_fp_unknown": 1,
         "ws_early_data_converted": 13,
-        "xhttp_param_reset": 12
+        "xhttp_param_reset": 1
       }
     },
     "28-github-whitelist": {
@@ -389,8 +389,7 @@
         "unknown_key": 78,
         "uri_param_unknown": 126,
         "wgconf_dns_ignored": 1,
-        "ws_early_data_converted": 46,
-        "xhttp_param_reset": 3
+        "ws_early_data_converted": 46
       }
     },
     "35-github-premium": {

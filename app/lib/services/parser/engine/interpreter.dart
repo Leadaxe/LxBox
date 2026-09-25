@@ -1754,6 +1754,30 @@ final class _Run {
     // конфига; поле пишет только сборка/эмит (dialer.detour).
     if (p.roundTripOnly == 'emit') return;
 
+    // Контракт 1.1.56 (MAPPER_ENGINE §10.4) — `$value` в `when`: СЕЛЕКТОР
+    // записи, а не условие. Делит одно значение источника между записями с
+    // одним `maps_to` (`uplinkDataPlacement` берёт header/cookie,
+    // `uplinkDataPlacementOther` — остальное). Промах — молчаливый пропуск
+    // БЕЗ `on_when_false`: значение не подавлено, его пишет другая запись.
+    // Судится до остальных ключей `when`; источник прочитанным не отмечается
+    // (§10.2). Пустое значение = отсутствует.
+    if (p.when.containsKey(r'$value')) {
+      var own = _valueOfBare(p);
+      if (own is String && own.isEmpty) own = null;
+      if (!_matches(own, p.when[r'$value'])) {
+        _trace?.add(
+          stage: TraceStage.field,
+          mapper: _mapperId,
+          entry: p.name,
+          src: '-',
+          path: p.mapsTo,
+          act: TraceAct.skip,
+          why: TraceWhy.whenFalse,
+        );
+        return;
+      }
+    }
+
     if (!_whenHolds(p.when)) {
       _trace?.add(
         stage: TraceStage.field,
