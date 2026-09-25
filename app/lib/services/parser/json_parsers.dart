@@ -217,8 +217,14 @@ List<NodeSpec> parseXrayElement(
       // негодная форма `vless.encryption` значит, что ядро не примет конфиг и
       // не стартует НА ВСЁМ наборе (случай #147). Такой узел обязан исчезнуть
       // при разборе, а не дожить до гарда сборки, стоя в списке рабочим.
+      // §302/§454 — исходник узла: compact = сам outbound (он же `rawSource`
+      // узла), extended = весь элемент как пришёл от провайдера (dns/inbounds/
+      // routing соседи) — хранится только когда отличается. Текст считается
+      // здесь один раз и уходит в `_xrayToSpec` как готовый `rawSource`
+      // (§551 follow-up: раньше тот же outbound сериализовался дважды).
+      final compact = _prettyJson(ob);
       final verdict = XrayDropVerdict();
-      var spec = _xrayToSpec(ob, label, dropped: verdict);
+      var spec = _xrayToSpec(ob, label, dropped: verdict, rawSource: compact);
       if (spec == null && verdict.explicit) {
         // Причина — код реестра с тегом записи: `dropped[].ref` контракта
         // называет именно тег outbound'а (D-088), как и у прочих отбраковок.
@@ -243,11 +249,6 @@ List<NodeSpec> parseXrayElement(
         if (proto.isNotEmpty) unsupported.add(proto);
         continue;
       }
-
-      // §302/§454 — исходник узла: compact = сам outbound (он же `rawSource`
-      // узла), extended = весь элемент как пришёл от провайдера (dns/inbounds/
-      // routing соседи) — хранится только когда отличается.
-      final compact = _prettyJson(ob);
 
       // §321/§368/§404 — цепочка релеев. `dialerProxy` в Xray живёт в
       // `streamSettings.sockopt`, то есть технически возможен у любого
@@ -636,6 +637,7 @@ NodeSpec? _xrayToSpec(
   String remarks, {
   XrayDropVerdict? dropped,
   bool allowSocks = false,
+  String? rawSource,
 }) {
   // §321 — SOCKS самостоятельным узлом подписки не становится: он бывает
   // только звеном цепочки `dialerProxy`, и зовут его оттуда явным флагом.
@@ -651,7 +653,7 @@ NodeSpec? _xrayToSpec(
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
   return parseXrayViaPipeline(
     mapping.body,
-    rawSource: _prettyJson(o),
+    rawSource: rawSource ?? _prettyJson(o),
     label: label,
     warnings: mapping.warnings,
     wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
