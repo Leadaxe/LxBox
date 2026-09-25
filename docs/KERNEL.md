@@ -876,6 +876,13 @@ ts_omit_synology, ts_omit_bird
 mobile set). Before lx.38 the AAR was built without it on purpose (APK size);
 LxBox's build gate keeps a Tailscale node out of the config on such a core.
 
+libbox does not export its build tags (`Libbox.version()` is the version
+string only), so LxBox mirrors this list in `kCoreBuildTags`
+(`app/lib/services/builder/core_chain_capability.dart`) for the registry's node
+gate (`build_tag` + `on_core_unsupported`, contract 1.1.60). A core bump must
+re-check the list and move `kCoreBuildTagsPin`; `node_core_gate_test` fails
+until the pin matches `app/android/libbox.version`.
+
 `with_clash_api` is deliberately absent (§122 — CommandClient instead of Clash
 HTTP); `with_usbip` and `with_openvpn` / `with_openconnect` are deliberately
 omitted too (server-side or outside the client's scope — see the comments in

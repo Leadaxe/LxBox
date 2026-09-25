@@ -4,6 +4,7 @@ import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/tailscale_bundle.dart';
@@ -346,32 +347,43 @@ void main() {
       expect(endpoints(r2).single['state_directory'], '/own');
     });
 
-    test('гейт ядра: lx.36 → узел снят с warning, секции не инжектятся; lx.38 → эмиссия', () async {
+    test('гейт ядра по тегу сборки (§56): без with_tailscale узел снят с кодом, '
+        'секции не инжектятся; с тегом — эмиссия', () async {
+      final noTs = kCoreBuildTags.difference({'with_tailscale'});
       final old = await buildConfig(
         lists: [user(ts(), sections: canonical())],
         template: template,
-        settings: const BuildSettings(enabledGroups: {'vpn-1'}, coreVersion: '1.14.0-lx.36'),
+        settings: BuildSettings(enabledGroups: const {'vpn-1'}, coreBuildTags: noTs),
       );
       expect(endpoints(old), isEmpty);
       expect(rules(old).where((x) => x['outbound'] == 'home-ts'), isEmpty);
       expect(dnsServers(old), isEmpty);
-      expect(old.emitWarnings.single, contains('Tailscale node "home-ts" was skipped'));
-      expect(old.emitWarnings.single, contains('1.14.0-lx.36'));
+      expect(old.emitWarnings.single, startsWith('home-ts: '));
+      expect(old.emitWarnings.single, contains('Tailscale'));
+      final codes = [
+        for (final w in old.nodeBuildWarningsByEmittedTag['home-ts'] ?? const [])
+          (w as RegistryWarning).code,
+      ];
+      expect(codes, ['tailscale_core_unsupported']);
       expect(old.validation.isOk, isTrue, reason: old.validation.issues.join('\n'));
 
+      // Встроенное ядро (дефолт BuildSettings) несёт тег — узел на месте.
+      expect(kCoreBuildTags, contains('with_tailscale'));
       final fresh = await buildConfig(
         lists: [user(ts(), sections: canonical())],
         template: template,
-        settings: const BuildSettings(enabledGroups: {'vpn-1'}, coreVersion: '1.14.0-lx.38'),
+        settings: const BuildSettings(enabledGroups: {'vpn-1'}),
       );
       expect(endpoints(fresh).single['tag'], 'home-ts');
       expect(fresh.emitWarnings, isEmpty);
-      // Неизвестная версия — поддержка есть (fail-open, как у chain).
-      expect(coreVersionSupportsTailscale(''), isTrue);
-      expect(coreVersionSupportsTailscale('garbage'), isTrue);
-      expect(coreVersionSupportsTailscale('1.14.0-lx.37'), isFalse);
-      expect(coreVersionSupportsTailscale('1.14.0-lx.38-rc.1'), isFalse);
-      expect(coreVersionSupportsTailscale('1.14.0-lx.40'), isTrue);
+
+      // Теги неизвестны — гейт по тегу не применяется.
+      final unknown = await buildConfig(
+        lists: [user(ts(), sections: canonical())],
+        template: template,
+        settings: const BuildSettings(enabledGroups: {'vpn-1'}, coreBuildTags: null),
+      );
+      expect(endpoints(unknown).single['tag'], 'home-ts');
     });
 
     test('без exit_node — не в пуле Направлений; с exit_node — кандидат', () async {

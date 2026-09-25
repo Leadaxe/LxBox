@@ -69,10 +69,6 @@ abstract class EmitContext {
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.
   void warn(String line) {}
 
-  /// §435 — умеет ли установленное ядро endpoint `tailscale`
-  /// (`coreSupportsTailscale`). Дефолт fail-open — как у гейта `chain`.
-  bool get coreSupportsTailscale => true;
-
   /// §435 — строка версии ядра для текста предупреждения гейта.
   String get coreVersion => '';
 
