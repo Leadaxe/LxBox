@@ -7,7 +7,7 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`BUILD.md`](BUILD.md).
 | Recipe | `metadata/com.leadaxe.lxbox.yml` in `fdroid/fdroiddata` (merged 2026-09-06) |
 | Fork for CI runs | `gitlab.com/leadaxe/fdroiddata`, branch `com.leadaxe.lxbox` |
 | MR | [fdroiddata!44731](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44731) |
-| Open MR | [fdroiddata!48904](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/48904) (2026-09-14): 2.23.2 with the cronet-go fix, x86_64 back, rc tags skipped. Replaces the failed bot MR !48873, answers [#132](https://github.com/Leadaxe/LxBox/issues/132) |
+| Open MR | [fdroiddata!50151](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/50151) (2026-09-26): 2.25.5, submodules by directory pathspec, cronet-go ref derived from the core's `go.mod`. Replaces the failed bot MR !49202 (2.24.2, missing `submodules/utls`) |
 | RFP | [rfp#4218](https://gitlab.com/fdroid/rfp/-/work_items/4218) |
 
 F-Droid builds from source at `commit:`, including `libbox.aar` from
@@ -29,15 +29,13 @@ Checklist for a manual edit:
 1. `commit:` — the full commit hash of the tag, not the tag name.
    `git rev-parse v2.X.Y^{commit}`.
 2. `versionCode` per block: `scripts/version-code.sh 2.X.Y arm64-v8a`.
-3. `srclibs`: the core's ref does not matter, `prebuild:` checks out the tag
-   from `app/android/libbox.version`. `cronet-go@<sha>` must be the commit the
-   core's `go.mod` requires; if it is not, the Chromium `cmp` step fails.
-   Take the version of the root module `github.com/sagernet/cronet-go`, not of
-   `cronet-go/lib/android_*`: the root one is the “Generate all package” commit
-   on top of the lib blobs (lx.38 → `0d28acc4`, lx.34 → `45832ab0`), and it is
-   the head of the `go` branch when fresh.
-   `gh api repos/Leadaxe/sing-box-lx/contents/go.mod?ref=<core tag> --jq .content | base64 -d | grep 'cronet-go v'`.
-   Reachability check: `git ls-remote https://github.com/SagerNet/cronet-go | grep <sha>`.
+3. `srclibs`: the pins only seed the clones. `prebuild:` checks out the
+   core tag from `app/android/libbox.version`; since the 2.25.5 blocks the
+   build also checks out `cronet-go` at the commit from the pseudo-version in
+   the core's `go.mod` (`CRONET_REF`, last 12 hex chars) and inits its
+   `naiveproxy` submodule. If that ever fails, the Chromium `cmp` step is the
+   symptom: the root module `github.com/sagernet/cronet-go` in `go.mod` must
+   point at a commit that exists on the `go` branch.
 4. `CurrentVersion` / `CurrentVersionCode`.
    Core submodules: `git submodule update --init submodules` (the directory
    pathspec), never a list by name. A list silently misses a new submodule and
