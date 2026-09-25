@@ -403,6 +403,18 @@ class CcChannel {
       }) ??
       false;
 
+  /// §557 (ядро SPEC 106) — вкл/выкл WG/AWG-endpoint'а на лету. Возвращает
+  /// состояние узла после вызова (строки [CcEndpointState]). Отказ ядра —
+  /// [PlatformException] с кодом `not_found` / `invalid_argument` /
+  /// `failed_precondition` / `unavailable` / `error`. Ядро выключатель не
+  /// сохраняет: reload стартует все узлы включёнными.
+  Future<String> setEndpointEnabled(String tag, bool enabled) async =>
+      await _methods.invokeMethod<String>('ccSetEndpointEnabled', {
+        'tag': tag,
+        'enabled': enabled,
+      }) ??
+      '';
+
   Future<bool> closeConnection(String id) async =>
       await _methods.invokeMethod<bool>('ccCloseConnection', {'id': id}) ??
       false;
@@ -533,6 +545,10 @@ abstract final class CcEndpointState {
 
   /// Ещё не стартовал или закрыт.
   static const down = 'down';
+
+  /// §557 (SPEC 106) — выключен вручную: дайлы отвергаются, ничто его не
+  /// будит до включения. Не «соберётся при дайле», поэтому не [isNotBuilt].
+  static const disabled = 'disabled';
 
   /// Узел не поднят: ядро соберёт его при первом дайле (0,5–1 с).
   /// Это состояние, а не сбой, — UI не показывает тут таймаут.

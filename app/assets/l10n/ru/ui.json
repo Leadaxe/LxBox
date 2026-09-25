@@ -5317,5 +5317,38 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "off": {
+    "value": "off"
+  },
+  "Turn on": {
+    "value": "Включить"
+  },
+  "Turn off": {
+    "value": "Выключить"
+  },
+  "Node enabled": {
+    "value": "Узел включён"
+  },
+  "Stays off until you turn it on or stop the VPN.": {
+    "value": "Остаётся выключенным, пока вы не включите его или не остановите VPN."
+  },
+  "The running config has no node %s.": {
+    "value": "В работающем конфиге нет узла %s."
+  },
+  "Only WireGuard and AmneziaWG nodes can be turned off.": {
+    "value": "Выключить можно только узлы WireGuard и AmneziaWG."
+  },
+  "VPN is not running or is restarting. Try again.": {
+    "value": "VPN не запущен или перезапускается. Повторите попытку."
+  },
+  "The node did not wake up. The next connection through it will retry.": {
+    "value": "Узел не проснулся. Следующее соединение через него попробует снова."
+  },
+  "Could not turn the node on.": {
+    "value": "Не удалось включить узел."
+  },
+  "Could not turn the node off.": {
+    "value": "Не удалось выключить узел."
   }
 }

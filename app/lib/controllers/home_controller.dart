@@ -501,6 +501,8 @@ class HomeController extends ChangeNotifier
       // этого поля: разбор грамматику §9 находит в нём по вхождению, а не с
       // начала строки.
       _settleStartOutcome(event.coreError ?? event.errorReason ?? '');
+      // §557 — VPN опущен: выключатели узлов живут только в сеансе (А1).
+      _disabledEndpoints.clear();
       _emit(
         _state.copyWith(
           tunnel: tunnel,
@@ -525,6 +527,9 @@ class HomeController extends ChangeNotifier
           connectedSince: null,
           configChangedNeedRestart: false,
           runningConfigRaw: _invalidateRunningConfig(), // §311 — running перестал существовать
+          // §557 — без ядра состояний узлов нет; «off» не должен пережить сеанс.
+          endpointStates: const <String, String>{},
+          endpointIdleSince: const <String, int>{},
         ),
       );
       // Haptic — на революд/краш тяжёлый, на user-инициированный stop лёгкий.
@@ -676,6 +681,7 @@ class HomeController extends ChangeNotifier
       if (reason != null) {
         _addDebug(DebugSource.app, reason.renderEn());
       }
+      _disabledEndpoints.clear(); // §557 — сеанс VPN кончился (А1)
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
         lastError: reason != null
@@ -692,6 +698,9 @@ class HomeController extends ChangeNotifier
         connectedSince: null,
         configChangedNeedRestart: false,
         runningConfigRaw: _invalidateRunningConfig(), // §311 — синтезированный down
+        // §557 — без ядра состояний узлов нет; «off» не должен пережить сеанс.
+        endpointStates: const <String, String>{},
+        endpointIdleSince: const <String, int>{},
       ));
       // Фича 478 — страховка ждёт вердикта старта; таймаут — тоже вердикт.
       // Без этого completer висел до своих 45с, а узел не выключался.
@@ -1204,6 +1213,7 @@ class HomeController extends ChangeNotifier
           _emit(_state.copyWith(runningConfigRaw: raw));
           _addDebug(DebugSource.app,
               '[cc] running config captured (${raw.length} bytes)');
+          _reapplyDisabledEndpoints(); // §557 — новый box стартовал
           return;
         }
         // null = ядро ещё не STARTED; == staleRaw = box ещё не подменён.
@@ -1220,6 +1230,7 @@ class HomeController extends ChangeNotifier
         _emit(_state.copyWith(runningConfigRaw: echoedRaw));
         _addDebug(DebugSource.app,
             '[cc] running config unchanged after reload (${echoedRaw.length} bytes)');
+        _reapplyDisabledEndpoints(); // §557 — новый box стартовал
       } else if (!_disposed) {
         _addDebug(DebugSource.app,
             '[cc] running config unavailable after $_groupsPullMaxAttempts attempts');
@@ -1291,6 +1302,14 @@ class HomeController extends ChangeNotifier
         idle[o.tag] = o.idleSinceSeconds;
       }
     }
+    // §557 — страховка решения А1: ядро не хранит выключатель, и узел из
+    // множества, который ядро видит включённым, значит, что старт/reload
+    // прошёл мимо переприменения. Гасим его снова с этого же тика.
+    final drifted = [
+      for (final t in _disabledEndpoints)
+        if (next[t] != null && next[t] != CcEndpointState.disabled) t,
+    ];
+    if (drifted.isNotEmpty) unawaited(_disableEndpoints(drifted));
     // Ровно те же карты — не будим UI лишним emit'ом (тик идёт каждые 5 с).
     final prev = _state.endpointStates;
     final prevIdle = _state.endpointIdleSince;
@@ -1301,6 +1320,80 @@ class HomeController extends ChangeNotifier
       return;
     }
     _emit(_state.copyWith(endpointStates: next, endpointIdleSince: idle));
+  }
+
+  /// §557 (ядро SPEC 106) — теги WG/AWG-узлов, выключенных пользователем в
+  /// этом сеансе VPN. Ядро выключатель не хранит (reload/apply стартует все
+  /// узлы включёнными), поэтому множество переприменяется после каждого
+  /// старта ядра в сеансе и сбрасывается, когда туннель опускается (решение А1).
+  final Set<String> _disabledEndpoints = <String>{};
+
+  /// §557 — выключить/включить WG/AWG-узел на лету. `null` — успех, иначе
+  /// код отказа (`not_found` / `invalid_argument` / `failed_precondition` /
+  /// `unavailable` / `error`); текст для юзера строит UI. Узел, выбранный
+  /// сейчас в selector, выключать можно: трафик через него просто встанет,
+  /// как у мёртвого узла (решение Б1).
+  Future<String?> setEndpointEnabled(String tag, bool enabled) async {
+    if (!_state.tunnelUp) return 'failed_precondition';
+    // Включение убирает тег из множества ДО вызова: тик heartbeat'а между
+    // вызовом и ответом не должен погасить узел обратно.
+    if (enabled) _disabledEndpoints.remove(tag);
+    final String st;
+    try {
+      st = await _cc.setEndpointEnabled(tag, enabled);
+    } on PlatformException catch (e) {
+      if (enabled && e.code != 'not_found') _disabledEndpoints.add(tag);
+      _addDebug(DebugSource.app,
+          '[cc] setEndpointEnabled($tag, $enabled) → ${e.code}: ${e.message}');
+      return e.code;
+    } on MissingPluginException {
+      if (enabled) _disabledEndpoints.add(tag);
+      return 'error';
+    }
+    if (_disposed) return null;
+    if (!enabled) _disabledEndpoints.add(tag);
+    _addDebug(DebugSource.app, '[cc] setEndpointEnabled($tag, $enabled) → $st');
+    _patchEndpointState(tag, st);
+    return null;
+  }
+
+  /// §557 — состояние из ответа выключателя сразу в карту, не дожидаясь тика.
+  void _patchEndpointState(String tag, String st) {
+    if (st.isEmpty || !_state.tunnelUp) return;
+    final next = Map<String, String>.of(_state.endpointStates)..[tag] = st;
+    final idle = Map<String, int>.of(_state.endpointIdleSince);
+    if (st != CcEndpointState.asleep) idle.remove(tag);
+    _emit(_state.copyWith(endpointStates: next, endpointIdleSince: idle));
+  }
+
+  /// §557 — переприменить множество выключенных после старта/reload'а ядра.
+  /// Зовётся по факту захвата снапшота новой сессии (§311), то есть когда
+  /// новый box уже STARTED. Тег, которого в конфиге больше нет (или он
+  /// перестал быть WG/AWG), выкидывается молча.
+  void _reapplyDisabledEndpoints() {
+    if (_disabledEndpoints.isEmpty) return;
+    unawaited(_disableEndpoints(_disabledEndpoints.toList()));
+  }
+
+  Future<void> _disableEndpoints(List<String> tags) async {
+    final epoch = _runningConfigEpoch;
+    for (final tag in tags) {
+      if (_disposed || !_state.tunnelUp || epoch != _runningConfigEpoch) return;
+      if (!_disabledEndpoints.contains(tag)) continue; // успели включить
+      try {
+        final st = await _cc.setEndpointEnabled(tag, false);
+        if (_disposed || !_disabledEndpoints.contains(tag)) continue;
+        _patchEndpointState(tag, st);
+      } on PlatformException catch (e) {
+        if (e.code == 'not_found' || e.code == 'invalid_argument') {
+          _disabledEndpoints.remove(tag);
+        }
+        _addDebug(DebugSource.app,
+            '[cc] re-disable $tag → ${e.code}: ${e.message}');
+      } on MissingPluginException {
+        return;
+      }
+    }
   }
 
   /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.

@@ -15,6 +15,7 @@ import '../widgets/chain_positions_block.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
+import 'home/node_actions.dart' show toggleEndpoint;
 import 'owner_navigation.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 import '../services/l10n/locale_controller.dart';
@@ -417,9 +418,49 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       if (_isBalancer && poolTolerance is int && poolTolerance > 0)
         _kvRow(context, 'Pool tolerance', '$poolTolerance ms'),
       if (members is List) _membersTile(context, members),
-      if (_endpointStateValue(node) case final v?)
-        _kvRow(context, 'Endpoint state', v),
+      // §557 — состояние и выключатель слушают контроллер: heartbeat и
+      // ответ выключателя обновляют их без перехода на экран заново.
+      if (node.type == 'wireguard' || node.type == 'awg')
+        ListenableBuilder(
+          listenable: widget.homeController,
+          builder: (context, _) => _endpointBlock(context, node),
+        ),
     ];
+  }
+
+  bool _endpointToggleBusy = false;
+
+  /// §557 (ядро SPEC 106) — строка состояния endpoint'а (§540) и выключатель
+  /// узла. Выключатель есть, только пока туннель поднят и ядро отдало
+  /// состояние узла. Выбранный в selector узел выключать можно (решение Б1).
+  Widget _endpointBlock(BuildContext context, ConfigNode node) {
+    final hs = widget.homeController.state;
+    final st = hs.endpointStates[widget.tag] ?? '';
+    final value = _endpointStateValue(node);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (value != null) _kvRow(context, 'Endpoint state', value),
+        if (hs.tunnelUp && st.isNotEmpty)
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText.s("Node enabled")),
+            subtitle: Text(getLocalText
+                .s("Stays off until you turn it on or stop the VPN.")),
+            value: st != CcEndpointState.disabled,
+            onChanged: _endpointToggleBusy
+                ? null
+                : (_) => unawaited(_toggleEndpoint()),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _toggleEndpoint() async {
+    setState(() => _endpointToggleBusy = true);
+    await toggleEndpoint(context, widget.homeController, widget.tag);
+    if (mounted) setState(() => _endpointToggleBusy = false);
   }
 
   /// §540 — полное состояние WG/AWG-endpoint'а (строка ядра, не переводится)
@@ -431,6 +472,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final hs = widget.homeController.state;
     final st = hs.endpointStates[widget.tag];
     if (st == null || st.isEmpty) return null;
+    // §557 — выключен вручную: своя подпись, простой не показываем.
+    if (st == CcEndpointState.disabled) return getLocalText.s("off");
     final idle = hs.endpointIdleSince[widget.tag];
     if (st == CcEndpointState.asleep && idle != null && idle > 0) {
       return '$st · idle for $idle s';

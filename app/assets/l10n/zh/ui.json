@@ -5108,5 +5108,38 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ 仅解析%s"
+  },
+  "off": {
+    "value": "off"
+  },
+  "Turn on": {
+    "value": "开启"
+  },
+  "Turn off": {
+    "value": "关闭"
+  },
+  "Node enabled": {
+    "value": "节点已启用"
+  },
+  "Stays off until you turn it on or stop the VPN.": {
+    "value": "在您重新开启或停止 VPN 之前保持关闭。"
+  },
+  "The running config has no node %s.": {
+    "value": "运行中的配置里没有节点 %s。"
+  },
+  "Only WireGuard and AmneziaWG nodes can be turned off.": {
+    "value": "只有 WireGuard 和 AmneziaWG 节点可以关闭。"
+  },
+  "VPN is not running or is restarting. Try again.": {
+    "value": "VPN 未运行或正在重启，请重试。"
+  },
+  "The node did not wake up. The next connection through it will retry.": {
+    "value": "节点未能唤醒，下一次经由它的连接会重试。"
+  },
+  "Could not turn the node on.": {
+    "value": "无法开启节点。"
+  },
+  "Could not turn the node off.": {
+    "value": "无法关闭节点。"
   }
 }

@@ -10,6 +10,7 @@ import '../../models/node_spec.dart';
 import '../../services/tag_resolver.dart';
 import '../outbound_view_screen.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../vpn/cc_channel.dart' show CcEndpointState;
 
 /// Node long-press action helpers.
 /// Все принимают `context` явно (раньше использовали `mounted`/`context`
@@ -212,4 +213,28 @@ Future<void> copyNodeUri(BuildContext context, String tag,
       SnackBar(content: Text(getLocalText.s("URI copied"))),
     );
   }
+}
+
+/// §557 (ядро SPEC 106) — «Turn off» / «Turn on» WG/AWG-узла на лету: вызов
+/// контроллера и snackbar при отказе ядра. Направление — по текущему
+/// состоянию узла: выключенный включаем, остальные выключаем.
+Future<void> toggleEndpoint(
+    BuildContext context, HomeController controller, String tag) async {
+  final enable =
+      controller.state.endpointStates[tag] == CcEndpointState.disabled;
+  final code = await controller.setEndpointEnabled(tag, enable);
+  if (code == null || !context.mounted) return;
+  final text = switch (code) {
+    'not_found' => getLocalText.s("The running config has no node %s.", tag),
+    'invalid_argument' =>
+      getLocalText.s("Only WireGuard and AmneziaWG nodes can be turned off."),
+    'failed_precondition' =>
+      getLocalText.s("VPN is not running or is restarting. Try again."),
+    'unavailable' => getLocalText.s(
+        "The node did not wake up. The next connection through it will retry."),
+    _ => enable
+        ? getLocalText.s("Could not turn the node on.")
+        : getLocalText.s("Could not turn the node off."),
+  };
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 }

@@ -713,6 +713,36 @@ class BoxCommandClient {
             .getOrElse { Log.w(TAG, "selectOutbound failed: ${it.message}"); false }
     }
 
+    /// §557 (ядро SPEC 106) — вкл/выкл WG/AWG-endpoint'а на лету. No-throw:
+    /// успех → `{"state": <endpointState после вызова>}`, отказ →
+    /// `{"error": <код>, "message": <текст ядра>}`. Код берётся из gRPC-статуса
+    /// в тексте ошибки gomobile (`… rpc error: code = NotFound desc = …`):
+    /// `not_found` / `invalid_argument` / `failed_precondition` / `unavailable`,
+    /// всё прочее (нет клиента, транспорт, старое ядро) — `error`.
+    fun setEndpointEnabled(tag: String, enabled: Boolean): Map<String, String> {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "setEndpointEnabled: no command client (paused/down)")
+            return mapOf("error" to "error", "message" to "no command client")
+        }
+        return runCatching {
+            val r = client.setEndpointEnabled(tag, enabled)
+            mapOf("state" to (r?.state ?: ""))
+        }.getOrElse {
+            val msg = it.message ?: it.toString()
+            Log.w(TAG, "setEndpointEnabled($tag, $enabled) failed: $msg")
+            mapOf("error" to endpointToggleErrorCode(msg), "message" to msg)
+        }
+    }
+
+    private fun endpointToggleErrorCode(message: String): String =
+        when (Regex("""code = (\w+)""").find(message)?.groupValues?.get(1)) {
+            "NotFound" -> "not_found"
+            "InvalidArgument" -> "invalid_argument"
+            "FailedPrecondition" -> "failed_precondition"
+            "Unavailable" -> "unavailable"
+            else -> "error"
+        }
+
     fun closeConnection(id: String): Boolean {
         val client = ensurePingClient() ?: run {
             Log.w(TAG, "closeConnection: no command client (paused/down)")

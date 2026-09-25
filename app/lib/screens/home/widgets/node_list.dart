@@ -562,6 +562,12 @@ class HomeNodeList extends StatelessWidget {
             : null,
         // §355 — ⚠-тап: View details сразу на вкладке Dependents
         // («кто сломан этой мёртвой нодой»).
+        // §557 — выключатель WG/AWG-узла: только когда ядро отдало его
+        // состояние (значит, узел — endpoint) и туннель поднят.
+        onToggleEndpoint:
+            state.tunnelUp && (state.endpointStates[tag] ?? '').isNotEmpty
+                ? () => unawaited(toggleEndpoint(context, controller, tag))
+                : null,
         onSickTap: state.sickRoots.containsKey(tag)
             ? () => viewOutboundJson(context, tag, state,
                 subController: subController,
