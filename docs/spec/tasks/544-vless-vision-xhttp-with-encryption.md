@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-25 |
 | Дата завершения | — |
 | Коммиты | — |
-| Связанные spec'ы | контракт `registry/protocols/vless.json` (`flow.conflicts`), `schema/registry_body.schema.json` (`relation`); §335 (encryption), ядро SPEC 032 (VLESS encryption); ядро — задача «Vision поверх VLESS encryption» (сессия ядра, 25.09.2026) |
+| Связанные spec'ы | контракт `registry/protocols/vless.json` (`flow.conflicts`), `schema/registry_body.schema.json` (`relation`); §335 (encryption), ядро SPEC 032 (VLESS encryption); ядро — [Leadaxe/sing-box-lx#29](https://github.com/Leadaxe/sing-box-lx/issues/29) (Vision поверх VLESS encryption) |
 
 ## Проблема
 
@@ -48,8 +48,8 @@ xhttp в том числе. Панель выдаёт такую комбина�
 Выводы:
 
 1. Корень в ядре: Vision не умеет работать поверх `encryption.CommonConn`
-   (`sing-vmess v0.2.8` `vless/vision.go`, `tlsRegistry`). Это чинит сессия
-   ядра по тикету в `config.d/`.
+   (`sing-vmess v0.2.8` `vless/vision.go`, `tlsRegistry`). Это чинит ядро:
+   [Leadaxe/sing-box-lx#29](https://github.com/Leadaxe/sing-box-lx/issues/29).
 2. Даже после фикса ядра «Швеция (Прямая)» не заработает, пока LxBox
    снимает `flow`. Эта задача про это.
 3. Ложный след: версия «потерялся flow» объясняет только xhttp-узел.
