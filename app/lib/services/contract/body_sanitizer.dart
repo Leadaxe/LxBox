@@ -430,7 +430,7 @@ final class _Ctx {
     Map<String, dynamic> out,
   ) {
     for (final key in order) {
-      final f = fields[key];
+      final f = _flatDialerField(fields[key], key);
       if (f == null) continue;
       final unset = !src.containsKey(key) || _unsetForDefault(src[key], f);
       if (unset && src.containsKey(key)) {
@@ -592,6 +592,21 @@ final class _Ctx {
       if (!out.containsKey(e.key)) out[e.key] = e.value;
     }
     return out;
+  }
+
+  /// §552 — плоский `ref: dialer.common` (`server`, `server_port`) судится
+  /// правилом поля суб-схемы, а не пустой обёрткой ссылки. `required`,
+  /// `default_when` и `min_when` объявлены только там: у обёртки их нет, и
+  /// обязательный `server` выглядел необязательным. Пока отсутствие ключа и
+  /// пустое значение шли в [_sanitizeValue] (он разворачивает ссылку сам),
+  /// это не было видно на пустой строке; норма 2 контракта 1.1.56 судит
+  /// пустую строку ДО спуска — и `server: ""` стал уходить молча, а узел без
+  /// адреса проходил гард в ядро. Лаунчер разворачивает такие ссылки при
+  /// загрузке схемы (`resolveNamedRef`, `registry.go`); здесь — на входе в
+  /// цикл полей, по той же развилке, что в [_sanitizeRef].
+  static FieldSchema? _flatDialerField(FieldSchema? f, String key) {
+    if (f == null || f.type != 'ref' || f.ref != 'dialer.common') return f;
+    return ContractRegistry.I.sharedSchema('dialer.common')?.fields[key] ?? f;
   }
 
   /// Контракт 1.1.56 (норма 2) — значение, равное отсутствию ключа: пустая
