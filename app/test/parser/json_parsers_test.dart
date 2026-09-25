@@ -8,6 +8,7 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 
 import 'engine_test_setup.dart';
 
@@ -18,24 +19,80 @@ void main() {
   setUpAll(loadEngineSections);
 
   group('parseSingboxEntry', () {
-    test('§115: raw sing-box JSON flow=vision + transport → emit гасит flow',
-        () {
-      // parseSingboxEntry читает flow напрямую (spec.flow=vision), но
-      // универсальный net на эмиссии (§115) убирает flow при транспорте —
-      // покрывает путь, который парсерные guard'ы URI/Xray не трогают.
-      final spec = parseSingboxEntry({
-        'type': 'vless',
-        'tag': 't',
-        'server': 'h.example',
-        'server_port': 443,
-        'uuid': '11111111-2222-3333-4444-555555555555',
-        'flow': 'xtls-rprx-vision',
-        'tls': {'enabled': true, 'server_name': 'w.example'},
-        'transport': {'type': 'ws', 'path': '/x'},
-      }) as VlessSpec;
-      final emitted = spec.emit(TemplateVars.empty).map;
-      expect(emitted['flow'], isNull, reason: 'flow+transport невалидно');
-      expect(emitted['transport'], isNotNull);
+    // §545 — связь flow ↔ transport судит только реестр
+    // (`vless.flow.conflicts`, `unless_set: [encryption]`). Узел sing-box JSON
+    // строится по карте санитайзера (`singbox_config.dart`), эмиттер своей
+    // копии правила не держит. Проверка идёт полным путём JSON-входа —
+    // `parseSingboxConfigs`, куда приходят и подписка, и редактор JSON, и
+    // Smart-Paste одиночного entry.
+    group('§545 flow ↔ transport на JSON-входе судит реестр', () {
+      const uuid = '11111111-2222-3333-4444-555555555555';
+      const enc = 'mlkem768x25519plus.native.0rtt.AbCd-EfGh_IjKl0123456789';
+      Map<String, dynamic> vless(
+        String tag, {
+        required Map<String, dynamic> transport,
+        String? encryption,
+        String? detour,
+      }) =>
+          {
+            'type': 'vless',
+            'tag': tag,
+            'server': '$tag.example',
+            'server_port': 443,
+            'uuid': uuid,
+            'flow': 'xtls-rprx-vision',
+            if (encryption != null) 'encryption': encryption,
+            'tls': {'enabled': true, 'server_name': 'w.example'},
+            'transport': transport,
+            if (detour != null) 'detour': detour,
+          };
+      Map<String, dynamic> emitted(NodeSpec n) =>
+          n.emit(TemplateVars.empty).map;
+
+      test('vision + ws без encryption → flow снят, rawSource дословный', () {
+        final entry = vless('t', transport: {'type': 'ws', 'path': '/x'});
+        final nodes = parseSingboxConfigs([
+          {
+            'outbounds': [entry]
+          }
+        ]);
+        final v = nodes.single as VlessSpec;
+        expect(v.flow, '', reason: 'модель по очищенной карте');
+        expect(emitted(v)['flow'], isNull);
+        expect(emitted(v)['transport'], isNotNull);
+        expect(jsonDecode(v.rawSource)['flow'], 'xtls-rprx-vision',
+            reason: '§454 — источник узла не меняется');
+      });
+
+      test('vision + xhttp + encryption → flow остаётся (§544)', () {
+        final nodes = parseSingboxConfigs([
+          {
+            'outbounds': [
+              vless('t',
+                  transport: {'type': 'xhttp', 'host': 'cdn.example'},
+                  encryption: enc),
+            ]
+          }
+        ]);
+        final out = emitted(nodes.single);
+        expect(out['flow'], 'xtls-rprx-vision');
+        expect(out['encryption'], enc);
+      });
+
+      test('звено detour: vision + ws → flow снят', () {
+        final nodes = parseSingboxConfigs([
+          {
+            'outbounds': [
+              vless('main', transport: {'type': 'ws'}, detour: 'hop'),
+              vless('hop', transport: {'type': 'ws', 'path': '/h'}),
+            ]
+          }
+        ]);
+        final hop = nodes.single.chained! as VlessSpec;
+        expect(hop.flow, '');
+        expect(emitted(hop)['flow'], isNull);
+        expect(jsonDecode(hop.rawSource)['flow'], 'xtls-rprx-vision');
+      });
     });
 
     test('vless outbound fixture', () {

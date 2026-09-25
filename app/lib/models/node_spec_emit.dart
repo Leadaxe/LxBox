@@ -118,18 +118,11 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
   // (`none`, deprecated xtls-rprx-direct/origin/splice, мусор) → поле не
   // пишется = plain VLESS.
   //
-  // Связь flow ↔ transport — правило реестра (`vless.flow.conflicts`,
-  // `unless_set: [encryption]`), и на путях через санитайзер она уже решена.
-  // Здесь — страховочная сетка для путей, которые строят узел из sing-box JSON
-  // МИМО санитайзера (`parseSingboxEntry`: редактор JSON, Smart-Paste,
-  // звенья detour в `singbox_config.dart`): Vision при транспорте без
-  // шифрования бессмыслен. §544 — с VLESS Encryption Vision идёт поверх слоя
-  // шифрования, и flow остаётся (сервер с Vision без него рвёт соединение).
-  // Сетка повторяет реестр и уйдёт, когда эти пути пойдут через санитайзер.
-  final hasEncryption = s.encryption.isNotEmpty && s.encryption != 'none';
-  if (s.flow == 'xtls-rprx-vision' && (s.transport == null || hasEncryption)) {
-    out['flow'] = s.flow;
-  }
+  // Связь flow ↔ transport здесь не судится: это правило реестра
+  // (`vless.flow.conflicts`, `unless_set: [encryption]`), и модель к эмиссии
+  // уже построена по очищенной карте — у ссылки (`mappers/uri_pipeline.dart`)
+  // и у sing-box JSON (§545, `singbox_config.dart`).
+  if (s.flow == 'xtls-rprx-vision') out['flow'] = s.flow;
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;
 
   // §335 — постквантовый слой VLESS. Плоское поле верхнего уровня (в Xray-JSON
