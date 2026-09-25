@@ -306,7 +306,8 @@ final class FieldSchema {
 
   /// Вложенный объект: порядок + поля. Объект без `fields` (например
   /// `transport.headers`) — свободная карта, внутрь санитайзер не смотрит.
-  List<String>? get order => (raw['order'] as List?)?.cast<String>();
+  late final List<String>? order =
+      (raw['order'] as List?)?.cast<String>().toList(growable: false);
 
   /// Разбирается один раз: реестр иммутабелен после загрузки, а санитайзер
   /// спускается во вложенные объекты (`tls`, `tls.reality`) на каждом узле.
