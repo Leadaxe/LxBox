@@ -19,6 +19,7 @@ library;
 
 import 'dart:convert' show base64, base64Url;
 import 'dart:io' show InternetAddress, InternetAddressType;
+import 'dart:typed_data' show Uint8List;
 
 import '../../models/node_warning.dart';
 import '../app_log.dart';
@@ -834,6 +835,25 @@ final class _Ctx {
           if (e is String) _normalizeString(e, norm) else e,
       ];
     }
+    // Контракт 1.1.63 — `item_forbidden`: запрещённый элемент (после
+    // normalize) снимается элементом со своим кодом, годные остаются.
+    final itemForbidden = f.raw['item_forbidden'];
+    if (itemForbidden is Map && v is List) {
+      final banned =
+          ((itemForbidden['values'] as List?) ?? const []).map((e) => '$e');
+      final kept0 = [];
+      for (var i = 0; i < v.length; i++) {
+        final e = v[i];
+        if (banned.contains('$e')) {
+          warn(itemForbidden['code'] as String? ?? _kDefaultInvalidCode,
+              path: '$path[$i]', value: e);
+        } else {
+          kept0.add(e);
+        }
+      }
+      if (kept0.isEmpty) return const _Value.drop();
+      v = kept0;
+    }
 
     // §477 (контракт 1.1.9) — `absent_values`: значения-ВЫКЛЮЧАТЕЛИ.
     //
@@ -1135,6 +1155,10 @@ final class _Ctx {
         _applyCooccurrence(clean, rel);
         continue;
       }
+      if (kind == 'ordered') {
+        _applyOrdered(clean, rel);
+        continue;
+      }
       if (kind != 'ranges_disjoint') {
         _logUnknownExpression('relation', '$kind');
         continue;
@@ -1191,6 +1215,39 @@ final class _Ctx {
   /// человек начнёт разбираться. Повтор одного кода по одному пути снимается —
   /// связей с общим кодом в реестре бывает несколько, а сообщение об одной и
   /// той же цене человеку нужно один раз.
+  /// Контракт 1.1.63 — `ordered`: значения `paths` по неубыванию (у
+  /// диапазона `N-M` верхняя граница левого не выше нижней правого).
+  /// Участник без значения пары не образует. `drop` снимает все участвующие
+  /// поля, узел живёт; код — на первом пути.
+  void _applyOrdered(Map<String, dynamic> clean, Map<String, dynamic> rel) {
+    final paths = [
+      for (final p in (rel['paths'] as List?) ?? const [])
+        if (clean.containsKey('$p') && _rangeSpan(clean['$p']) != null) '$p',
+    ];
+    for (var i = 0; i + 1 < paths.length; i++) {
+      final a = paths[i], b = paths[i + 1];
+      if (_rangeSpan(clean[a])!.$2 <= _rangeSpan(clean[b])!.$1) continue;
+      final code = rel['code'] as String?;
+      if (code != null) {
+        warn(code, path: a, params: {
+          'a': a,
+          'b': b,
+          'value': '${clean[a]}',
+          'with': '${clean[b]}',
+        });
+      }
+      if (rel['action'] == 'drop_node') {
+        dropNode = true;
+        explicitDropNode = true;
+      } else if (rel['action'] == 'drop') {
+        for (final p in (rel['paths'] as List?) ?? const []) {
+          clean.remove('$p');
+        }
+      }
+      return;
+    }
+  }
+
   void _applyCooccurrence(Map<String, dynamic> clean, Map<String, dynamic> rel) {
     final when = rel['when'];
     if (when is! Map) return;
@@ -1951,6 +2008,11 @@ String _normalizeString(String v, String norm) {
     //
     // Голое число («5») свопать нечего — возвращается как есть; мусор тоже
     // проходит насквозь, его судит `type`/`on_invalid` следом.
+    // Контракт 1.1.63 — `cidr_masked`: голый адрес получает префикс хоста,
+    // биты за длиной префикса обнуляются; мусор уезжает как есть (его судит
+    // `format: cidr`).
+    case 'cidr_masked':
+      return _cidrMasked(v);
     case 'range_order':
       final s = v.trim();
       final dash = s.indexOf('-');
@@ -2207,6 +2269,27 @@ bool _uint32Ok(int n) => n >= 0 && n <= 0xFFFFFFFF;
 /// §481 — отрезок значения `awg_range` для `ranges_disjoint`: голое число `N`
 /// — отрезок `[N, N]`, диапазон `"N-M"` — `[N, M]`. `null` — значение не в
 /// форме диапазона (его уже осудил `on_invalid`, второй раз не судим).
+String _cidrMasked(String v) {
+  final s = v.trim();
+  final slash = s.indexOf('/');
+  final addrText = slash < 0 ? s : s.substring(0, slash);
+  final addr = InternetAddress.tryParse(addrText);
+  if (addr == null) return v;
+  final bits = addr.rawAddress.length * 8;
+  final len = slash < 0 ? bits : int.tryParse(s.substring(slash + 1));
+  if (len == null || len < 0 || len > bits) return v;
+  final raw = List<int>.of(addr.rawAddress);
+  for (var i = 0; i < raw.length; i++) {
+    final keep = len - i * 8;
+    if (keep >= 8) continue;
+    raw[i] = keep <= 0 ? 0 : raw[i] & (0xff << (8 - keep)) & 0xff;
+  }
+  final masked = InternetAddress.fromRawAddress(
+      Uint8List.fromList(raw),
+      type: addr.type);
+  return '${masked.address}/$len';
+}
+
 (int, int)? _rangeSpan(Object? raw) {
   if (raw is int) return (raw, raw);
   if (raw is! String) return null;
