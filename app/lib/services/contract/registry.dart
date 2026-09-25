@@ -381,6 +381,17 @@ final class ContractRegistry {
   final Map<String, _SchemaSlot> _schemaCache = {};
   bool _loaded = false;
 
+  /// §551 — ПОКОЛЕНИЕ набора протоколов: растёт на каждом изменении
+  /// [_protocols] (сброс, запись протокола при загрузке, конец загрузки).
+  ///
+  /// Нужно кешам ВНЕ реестра, которые считаются от его протоколов
+  /// (`MapperSections.typesFor`, маршрут схем ссылки): сравнить число дешевле,
+  /// чем пересобирать набор на каждой ссылке, а ручной сброс из реестра в
+  /// чужой кеш завязал бы слой контракта на движок разбора.
+  int _generation = 0;
+
+  int get generation => _generation;
+
   bool get isLoaded => _loaded;
 
   /// §500 — сброс синглтона после теста, чтобы загруженный реестр не
@@ -395,6 +406,7 @@ final class ContractRegistry {
     _schemaCache.clear();
     _transportCache.clear();
     _sharedCache.clear();
+    _generation++;
   }
 
   /// Версия контракта из `contract/VERSION` (например `1.1.0`).
@@ -449,6 +461,7 @@ final class ContractRegistry {
       // сошлось бы не всегда.
       final singboxType = data['singbox_type'] as String? ?? scheme;
       _protocols[singboxType] = data;
+      _generation++;
     }
 
     final warnings = jsonDecode(await read('registry/warnings.json'))
@@ -486,6 +499,7 @@ final class ContractRegistry {
     _schemaCache.clear();
     _transportCache.clear();
     _sharedCache.clear();
+    _generation++;
 
     _loaded = true;
   }

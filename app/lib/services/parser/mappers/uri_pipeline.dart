@@ -56,19 +56,79 @@ const _kParseTimeCore = '0.0.0';
 /// Возвращается `null`, когда ни одной секции `uri` нет (реестр не загружен):
 /// тогда вызывающий берёт [kPipelineSchemes]. Пустой набор и «реестра нет» —
 /// разные вещи, и молчаливый пустой набор выключил бы разбор ссылок целиком.
-Set<String>? registryUriSchemes() {
-  final types = MapperSections.I.typesFor('uri');
-  if (types.isEmpty) return null;
-  final out = <String>{};
-  for (final type in types) {
-    final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
-    if (si is! List) continue;
-    for (final s in si) {
-      if (s is String && s.isNotEmpty) out.add(s.toLowerCase());
+///
+/// §551 — набор считается один раз на состав секций ([_SchemeRoute]) и
+/// отдаётся неизменяемым.
+Set<String>? registryUriSchemes() => _schemeRoute().uriSchemes;
+
+/// §551 — МАРШРУТ СХЕМ, посчитанный один раз на состав секций `uri`.
+///
+/// Профиль §550: набор схем реестра, рабочий набор и перевод «схема → тип»
+/// собирались заново на КАЖДОЙ ссылке обходом всех секций — 43 % цены
+/// `parseUri`. Состав от ссылки не зависит, только от загруженных секций.
+///
+/// Ключ — ЭКЗЕМПЛЯР списка [MapperSections.typesFor]: загрузчик отдаёт один
+/// и тот же список, пока черновики и реестр не перезагрузили, а перезагрузка
+/// даёт новый — и маршрут пересчитывается без ручной инвалидации (тот же
+/// приём, что план интерпретатора по экземпляру секции).
+final class _SchemeRoute {
+  _SchemeRoute(this.types)
+      : uriSchemes = _uriSchemesOf(types),
+        typeByScheme = _typeBySchemeOf(types);
+
+  final List<String> types;
+
+  /// Набор реестра; `null` — секций `uri` нет или ни одна не объявила схему.
+  final Set<String>? uriSchemes;
+
+  /// Рабочий набор: реестр ОБЪЕДИНЁННЫЙ с [kPipelineSchemes].
+  late final Set<String> pipeline = uriSchemes == null
+      ? kPipelineSchemes
+      : Set.unmodifiable({...kPipelineSchemes, ...uriSchemes!});
+
+  /// Написание в нижнем регистре → тип ПЕРВОЙ (в порядке [types]) секции,
+  /// чей `scheme_in` его несёт: ровно порядок прежнего перебора.
+  final Map<String, String> typeByScheme;
+
+  static Set<String>? _uriSchemesOf(List<String> types) {
+    if (types.isEmpty) return null;
+    final out = <String>{};
+    for (final type in types) {
+      final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
+      if (si is! List) continue;
+      for (final s in si) {
+        if (s is String && s.isNotEmpty) out.add(s.toLowerCase());
+      }
     }
+    return out.isEmpty ? null : Set.unmodifiable(out);
   }
-  return out.isEmpty ? null : out;
+
+  static Map<String, String> _typeBySchemeOf(List<String> types) {
+    final out = <String, String>{};
+    for (final type in types) {
+      final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
+      if (si is! List) continue;
+      for (final v in si) {
+        if (v is String) out.putIfAbsent(v.toLowerCase(), () => type);
+      }
+    }
+    return out;
+  }
 }
+
+_SchemeRoute? _route;
+
+_SchemeRoute _schemeRoute() {
+  final types = MapperSections.I.typesFor('uri');
+  final r = _route;
+  if (r != null && identical(r.types, types)) return r;
+  return _route = _SchemeRoute(types);
+}
+
+/// §551 — метка текущего маршрута схем: один и тот же объект, пока состав
+/// секций не менялся. Для кешей, производных от [pipelineSchemes] и
+/// [registrySchemeType] (набор написаний wireguard у `parseUri`).
+Object schemeRouteToken() => _schemeRoute();
 
 /// Схемы конвейера: набор реестра ОБЪЕДИНЁННЫЙ с литеральным
 /// [kPipelineSchemes].
@@ -79,11 +139,10 @@ Set<String>? registryUriSchemes() {
 /// эта задача не уполномочена. Реестр здесь ДОБАВЛЯЕТ написания, и новое имя
 /// работает без правки кода; убрать написание он сегодня не может — это
 /// решение владельца, а не следствие синка.
-Set<String> pipelineSchemes() {
-  final fromRegistry = registryUriSchemes();
-  if (fromRegistry == null) return kPipelineSchemes;
-  return {...kPipelineSchemes, ...fromRegistry};
-}
+///
+/// §551 — набор считается один раз на состав секций ([_SchemeRoute]) и
+/// отдаётся неизменяемым.
+Set<String> pipelineSchemes() => _schemeRoute().pipeline;
 
 /// Схемы, переехавшие на конвейер — ЗАПАСНОЙ набор на случай, когда реестр не
 /// загружен (см. [registryUriSchemes]); он же нормативен для стража покрытия
@@ -201,17 +260,11 @@ const Map<String, String> _kSchemeToType = <String, String>{
 /// `scheme_in` (контракт 1.1.48 — `amneziawg`) обязано работать без правки
 /// кода, иначе реестр не источник истины, а копия. Литералы остаются
 /// запасным путём, когда реестра нет.
-String? registrySchemeType(String scheme) {
-  final s = scheme.toLowerCase();
-  for (final type in MapperSections.I.typesFor('uri')) {
-    final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
-    if (si is! List) continue;
-    for (final v in si) {
-      if (v is String && v.toLowerCase() == s) return type;
-    }
-  }
-  return null;
-}
+///
+/// §551 — перевод берётся из карты маршрута ([_SchemeRoute.typeByScheme]),
+/// а не перебором секций на каждой ссылке.
+String? registrySchemeType(String scheme) =>
+    _schemeRoute().typeByScheme[scheme.toLowerCase()];
 
 /// Мапперы схем, ещё НЕ переехавших на движок, по схеме ссылки.
 ///

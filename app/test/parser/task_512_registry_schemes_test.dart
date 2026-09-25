@@ -1,13 +1,18 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/uri_pipeline.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/subscription/input_helpers.dart';
 
+import '../contract_paths.dart';
 import 'engine_test_setup.dart';
 
 /// §512 — СПИСОК СХЕМ ИЗ РЕЕСТРА и исполнение контракта 1.1.49.
@@ -249,6 +254,44 @@ void main() {
         ['service_record_ignored'],
         reason: 'ни одной МОЛЧАЛИВОЙ потери и ни одной ложной ошибки',
       );
+    });
+  });
+
+  // §551 — маршрут схем кешируется на состав секций: сброс обязан случаться
+  // при перезагрузке черновиков и реестра, иначе схема, приехавшая
+  // контрактом, не видна до перезапуска приложения.
+  group('§551 — кеш маршрута схем сбрасывается при перезагрузке', () {
+    tearDown(loadEngineSections);
+
+    test('новая схема черновика видна после loadDrafts', () async {
+      expect(pipelineSchemes(), isNot(contains('zz551')));
+      expect(registrySchemeType('zz551'), isNull);
+      final dir = Directory.systemTemp.createTempSync('lx551');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      Directory('${dir.path}/uri').createSync();
+      File('${dir.path}/uri/zz551proto.json').writeAsStringSync(jsonEncode({
+        'mappers': {
+          'uri': {
+            'detect': {
+              'scheme_in': ['zz551'],
+            },
+            'params': <String, dynamic>{},
+          },
+        },
+      }));
+      await MapperSections.I
+          .loadDrafts(dir: dir.path, files: const ['uri/zz551proto']);
+      expect(pipelineSchemes(), contains('zz551'));
+      expect(registryUriSchemes(), contains('zz551'));
+      expect(registrySchemeType('ZZ551'), 'zz551proto');
+    });
+
+    test('перезагрузка реестра даёт новый состав секций', () async {
+      final before = MapperSections.I.typesFor('uri');
+      expect(identical(MapperSections.I.typesFor('uri'), before), isTrue);
+      await ContractRegistry.I.loadFromDirectory(kRegistryRoot);
+      expect(identical(MapperSections.I.typesFor('uri'), before), isFalse);
+      expect(MapperSections.I.typesFor('uri'), before);
     });
   });
 }
