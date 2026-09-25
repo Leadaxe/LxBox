@@ -968,13 +968,7 @@ void main() {
       expect(low.warnings, isEmpty);
     });
 
-    test('§473 any_set судит НАЛИЧИЕ ключа, а не заданность значения', () {
-      // Пара к §467: `conflicts`/`requires` судят значение, и `jc: 0` для них
-      // «не задано». Здесь ровно наоборот — `jc: 0` значит «мусорные пакеты
-      // выключены» у настоящего AmneziaWG, и потолок обязан остаться.
-      // Смешай предикаты — туннель молча перестал бы нести данные.
-      for (final marker in const [0, false, '', <String>[]]) {
-        final r = RegistrySanitizer.sanitize({
+    Map<String, dynamic> awgBody(Object marker) => {
           'type': 'wireguard',
           'tag': 'wg',
           'mtu': 1420,
@@ -989,11 +983,35 @@ void main() {
               'allowed_ips': ['0.0.0.0/0'],
             },
           ],
-        }, scheme: 'wireguard', coreVersion: _core);
+        };
+
+    test('§473 any_set судит НАЛИЧИЕ ключа, а не заданность значения', () {
+      // Пара к §467: `conflicts`/`requires` судят значение, и `jc: 0` для них
+      // «не задано». Здесь ровно наоборот — `jc: 0` значит «мусорные пакеты
+      // выключены» у настоящего AmneziaWG, и потолок обязан остаться.
+      // Смешай предикаты — туннель молча перестал бы нести данные.
+      //
+      // §552 — пустая строка из списка ушла: с контракта 1.1.56 она не
+      // выполняет `any_set` (норма 3 §547), см. тест ниже.
+      for (final marker in const [0, false, <String>[]]) {
+        final r = RegistrySanitizer.sanitize(awgBody(marker),
+            scheme: 'wireguard', coreVersion: _core);
         expect(r.body!['mtu'], 1280, reason: 'jc=$marker — ключ есть');
         expect(r.warnings.map((w) => w.code), contains('awg_mtu_clamped'),
             reason: 'jc=$marker');
       }
+    });
+
+    test('§552 any_set: пустая строка — не наличие ключа (контракт 1.1.56)',
+        () {
+      // Норма 3 §547: пустая строка не выполняет `any_set`, для ядра это
+      // отсутствие ключа; число 0 — значение (тест выше). `jc: ""` снимается
+      // молча, узел остаётся обычным WireGuard, потолка AWG нет.
+      final r = RegistrySanitizer.sanitize(awgBody(''),
+          scheme: 'wireguard', coreVersion: _core);
+      expect(r.body!['mtu'], 1420);
+      expect(r.body!.containsKey('jc'), isFalse);
+      expect(r.warnings.map((w) => w.code), isNot(contains('awg_mtu_clamped')));
     });
 
     test('grpc service_name: нормализации нет — значение как есть', () {
