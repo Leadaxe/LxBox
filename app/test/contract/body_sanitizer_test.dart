@@ -1332,4 +1332,40 @@ void main() {
       expect(coreAtLeast('', '1.14.1-lx.4'), isTrue);
     });
   });
+
+  // §556 (контракт 1.1.57) — `on_invalid: unwrap`, общий обход атрибута.
+  group('on_invalid unwrap', () {
+    Map<String, dynamic> hy(Object obfs) => {
+          'type': 'hysteria',
+          'tag': 'h',
+          'server': 'example.com',
+          'server_port': 443,
+          'up_mbps': 10,
+          'down_mbps': 50,
+          'tls': {'enabled': true, 'server_name': 'example.com'},
+          'obfs': obfs,
+        };
+
+    test('объект с годным членом → член и код', () {
+      final r = RegistrySanitizer.sanitize(hy({'type': 'salamander', 'password': 'pw'}),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!['obfs'], 'pw');
+      expect(r.warnings.map((w) => w.code), contains('obfs_object_flattened'));
+    });
+
+    test('объект без члена → поле снято, else_code с параметром type', () {
+      final r = RegistrySanitizer.sanitize(hy({'type': 'salamander'}),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!.containsKey('obfs'), isFalse);
+      final w = r.warnings.singleWhere((w) => w.code == 'obfs_password_missing');
+      expect(w.params['type'], 'salamander');
+    });
+
+    test('не объект и не строка → type_invalid', () {
+      final r = RegistrySanitizer.sanitize(hy([1, 2]),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!.containsKey('obfs'), isFalse);
+      expect(r.warnings.map((w) => w.code), contains('type_invalid'));
+    });
+  });
 }

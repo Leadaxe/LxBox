@@ -1563,6 +1563,48 @@ final class _Ctx {
       case 'coerce':
         warn(code, path: path, value: value, secret: secret || f.secret);
         return _Value.keep(rule?['value']);
+      // Контракт 1.1.57 — `unwrap`: значение приехало обёрткой соседнего
+      // диалекта (объект вместо скаляра). Годный член `key` становится
+      // значением поля с кодом `code`; объект без годного члена — поле
+      // снято с `else_code` (параметры — скалярные члены объекта, кроме
+      // `key`); не объект — `type_invalid`.
+      case 'unwrap':
+        if (value is! Map) {
+          warn(_kDefaultInvalidCode,
+              path: path, value: value, secret: secret || f.secret);
+          explainedDrops.add(path);
+          return const _Value.drop();
+        }
+        final key = rule?['key'] as String?;
+        final member = key == null ? null : value[key];
+        if (member != null) {
+          final probe = _Ctx(
+            scheme: scheme,
+            coreVersion: coreVersion,
+            platform: platform,
+            applyCoreGates: applyCoreGates,
+            source: source,
+            kinds: kinds,
+            root: root,
+          );
+          final plain = FieldSchema({...f.raw}..remove('on_invalid'));
+          final res = probe._sanitizeScalar(member, plain, path);
+          final blank = res.value is String && (res.value as String).trim().isEmpty;
+          if (res.keep && probe.warnings.isEmpty && !blank) {
+            warn(code, path: path, value: member, secret: secret || f.secret);
+            return _Value.keep(res.value);
+          }
+        }
+        final params = <String, String>{
+          for (final e in value.entries)
+            if (e.key != key &&
+                (e.value is String || e.value is num || e.value is bool))
+              '${e.key}': '${e.value}',
+        };
+        warn(rule?['else_code'] as String? ?? _kDefaultInvalidCode,
+            path: path, params: params);
+        explainedDrops.add(path);
+        return const _Value.drop();
       case 'drop_node':
         dropNode = true;
         explicitDropNode = true;
