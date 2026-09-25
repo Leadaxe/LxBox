@@ -391,6 +391,7 @@ final class ContractRegistry {
     _warnings.clear();
     _schemaCache.clear();
     _transportCache.clear();
+    _sharedCache.clear();
   }
 
   /// Версия контракта из `contract/VERSION` (например `1.1.0`).
@@ -481,6 +482,7 @@ final class ContractRegistry {
     // раскрытых схем: иначе второй `load()` отдавал бы схемы первого.
     _schemaCache.clear();
     _transportCache.clear();
+    _sharedCache.clear();
 
     _loaded = true;
   }
@@ -534,7 +536,22 @@ final class ContractRegistry {
 
   /// Схема общей суб-схемы по имени `ref` (`tls`, `multiplex`, `dialer`,
   /// `dialer.common`). Транспорты сюда не ходят — у них дискриминатор.
+  ///
+  /// §549 R1 — результат кэшируется по имени `ref`, как [schemaFor] и
+  /// [transportVariant]: санитайзер спрашивает `tls`/`dialer.common` на каждое
+  /// поле-ссылку каждого узла (§548: без кэша это ~40 % гарда), а реестр
+  /// иммутабелен после `load()`. Сброс — вместе с остальными кэшами.
   BodySchema? sharedSchema(String ref) {
+    final cached = _sharedCache[ref];
+    if (cached != null) return cached.schema;
+    final schema = _sharedSchema(ref);
+    _sharedCache[ref] = _SchemaSlot(schema);
+    return schema;
+  }
+
+  final Map<String, _SchemaSlot> _sharedCache = {};
+
+  BodySchema? _sharedSchema(String ref) {
     final file = _kSharedRefs[ref];
     if (file == null) return null;
     final data = _shared[file];
