@@ -73,7 +73,7 @@ class NodeRow extends StatelessWidget {
   String get _delayLabel {
     // §557 — выключенный узел (SPEC 106) отвергает дайлы: провал замера тут
     // не сбой узла. Вместо пинга, таймаута и PING… — нейтральный прочерк,
-    // слева подпись «● off».
+    // слева подпись «off».
     if (_isDisabled) return '—'; // l10n-exempt: dash placeholder, not text
     if (item.pingBusy) return 'PING…';
     final delay = item.delay;
@@ -198,32 +198,15 @@ class NodeRow extends StatelessWidget {
           )
         : null;
 
-    // §557 — выключенный узел: «● off» оранжевым (тот же оранжевый, что у
-    // пинга 200–500 мс). При нехватке ширины обрезается только текст, точка
-    // фиксированного размера остаётся.
+    // §557 — выключенный узел: «off» оранжевым (тот же оранжевый, что у
+    // пинга 200–500 мс), курсивом, как соседние up/sleep/down.
     final Widget? endpointStateText = stateLabel.isEmpty
         ? null
         : Flexible(
-            child: _isDisabled
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Colors.orange,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 3),
-                      Flexible(
-                          child: _endpointStateLabelText(
-                              stateLabel, Colors.orange)),
-                    ],
-                  )
-                : _endpointStateLabelText(stateLabel, cs.onSurfaceVariant),
+            child: _endpointStateLabelText(
+                stateLabel, _isDisabled ? Colors.orange : cs.onSurfaceVariant),
           );
+
     final Widget? proto = (hasProto || hasNotificationBadge)
         ? Row(
             mainAxisSize: MainAxisSize.min,

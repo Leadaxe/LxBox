@@ -15,7 +15,7 @@
   a Node enabled switch. A node that is off drops its connections and refuses new
   ones; the rest of the tunnel keeps running. It stays off through config reloads
   and subscription updates until you turn it on or stop the VPN. In the list it
-  shows an orange `● off` and a dash instead of a ping.
+  shows an orange `off` and a dash instead of a ping.
 
 ### Changed
 
