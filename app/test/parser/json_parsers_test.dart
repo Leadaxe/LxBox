@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/services/parser/uri_utils.dart';
 import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/singbox_config.dart';
@@ -41,10 +40,10 @@ void main() {
             'server_port': 443,
             'uuid': uuid,
             'flow': 'xtls-rprx-vision',
-            if (encryption != null) 'encryption': encryption,
+            'encryption': ?encryption,
             'tls': {'enabled': true, 'server_name': 'w.example'},
             'transport': transport,
-            if (detour != null) 'detour': detour,
+            'detour': ?detour,
           };
       Map<String, dynamic> emitted(NodeSpec n) =>
           n.emit(TemplateVars.empty).map;
