@@ -10,6 +10,14 @@
 
 ### Changed
 
+- **Node sanitizer catches up with contract 1.1.57–1.1.67 ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
+  REALITY without uTLS now gets uTLS switched on instead of losing REALITY, and a
+  `random` fingerprint under REALITY becomes `chrome`, both with a code on the node;
+  the build no longer patches this silently. MASQUE keeps `tls.fragment` and
+  `tls.record_fragment` on `h2`/`auto` and drops them on `h3`; a body without `vhttp`
+  stays without it. AmneziaWG `jmin > jmax` drops both bounds with a code, Tailscale
+  `advertise_routes` masks host bits and drops default routes with a code, and an
+  object sent where a string is expected (hysteria v1 `obfs`) is unwrapped by rule.
 - **Template language parity with contract 1.1.68–1.1.70 ([§555](docs/spec/tasks/555-template-lang-spec143-parity.md)).**
   A list-valued `#if` branch inside an array now splices one level into the parent,
   `@runtime.platform/arch/target` drop their key instead of leaking into the config,
