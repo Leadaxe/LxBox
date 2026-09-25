@@ -143,6 +143,24 @@ Set<String> _mapperOnlyPathsFor(String scheme) =>
           }
         }
       }
+      // §556 (контракт 1.1.6x) — записи общих блоков (`tls.json`
+      // `blocks.uri.ech`), которые секция схемы включает: потеря на разборе
+      // та же, где бы запись ни жила.
+      for (final shared in const ['tls', 'transports', 'dialer', 'multiplex']) {
+        final sf = File('$kContractRoot/registry/$shared.json');
+        if (!sf.existsSync()) continue;
+        final blocks = (json.decode(sf.readAsStringSync()) as Map)['blocks'];
+        if (blocks is! Map) continue;
+        for (final block in blocks.values) {
+          if (block is! Map) continue;
+          for (final e in block.entries) {
+            final p = e.value;
+            if (p is Map && p.containsKey('maps_to') && p['maps_to'] == null) {
+              out.add('${e.key}');
+            }
+          }
+        }
+      }
       return out;
     });
 
