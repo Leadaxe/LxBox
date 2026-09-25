@@ -18,6 +18,12 @@
   stays without it. AmneziaWG `jmin > jmax` drops both bounds with a code, Tailscale
   `advertise_routes` masks host bits and drops default routes with a code, and an
   object sent where a string is expected (hysteria v1 `obfs`) is unwrapped by rule.
+  In an Xray chain, TLS fragmentation from a `freedom` dialer goes to the hop that
+  actually dials out, and such a chain is no longer dropped. The global TLS fragment
+  toggle asks the registry per node, so MASQUE without `vhttp` gets it too. A
+  WireGuard `listen_port` yields to a detour added by the build, with a code in the
+  build report. Backups carry an Auto group's warnings as they are; a node disabled
+  after a core rejection stays disabled on import, without the verdict.
 - **Template language parity with contract 1.1.68–1.1.70 ([§555](docs/spec/tasks/555-template-lang-spec143-parity.md)).**
   A list-valued `#if` branch inside an array now splices one level into the parent,
   `@runtime.platform/arch/target` drop their key instead of leaking into the config,
