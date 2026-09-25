@@ -28,6 +28,7 @@ class LxCodeEditor extends StatefulWidget {
     this.showLineNumbers = false,
     this.wordWrap = true,
     this.language,
+    this.autofocus,
   });
 
   final CodeLineEditingController controller;
@@ -42,6 +43,11 @@ class LxCodeEditor extends StatefulWidget {
   /// приложения; ключ `root` темы вырезан, чтобы фон редактора остался
   /// фоном экрана.
   final LxCodeLanguage? language;
+
+  /// `null` — умолчание пакета (`CodeEditor` берёт фокус при появлении).
+  /// Просмотрщик ([LxJsonView]) передаёт `false`: без этого вкладка JSON
+  /// забирает фокус и запускает мигание курсора в тексте только для чтения.
+  final bool? autofocus;
 
   @override
   State<LxCodeEditor> createState() => _LxCodeEditorState();
@@ -140,6 +146,7 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
       child: CodeEditor(
         controller: widget.controller,
         focusNode: _focusNode,
+        autofocus: widget.autofocus,
         readOnly: widget.readOnly,
         wordWrap: widget.wordWrap,
         hint: widget.hint,
@@ -393,6 +400,7 @@ class _LxJsonViewState extends State<LxJsonView> {
     final editor = LxCodeEditor(
       controller: _ctrl,
       readOnly: true,
+      autofocus: false,
       fontSize: widget.fontSize,
       showLineNumbers: widget.showLineNumbers,
       language: LxCodeLanguage.json,
