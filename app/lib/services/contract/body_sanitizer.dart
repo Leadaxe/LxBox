@@ -471,7 +471,11 @@ final class _Ctx {
         // и на ОТСУТСТВУЮЩЕЕ поле. Стоит ДО `default_when`: у `s1`–`s4`
         // дефолта нет вовсе, а появись он — материализованный дефолт судил бы
         // сам себя.
-        _minWhenOnAbsent(f, _join(prefix, key));
+        //
+        // §549 R2 — путь строится внутри, только когда правило есть: у
+        // большинства полей схемы его нет, а отсутствующих полей у узла — все,
+        // кроме нескольких.
+        _minWhenOnAbsent(f, prefix, key);
         if (dropNode) return out;
         final dw = f.defaultWhen;
         if (dw != null &&
@@ -544,8 +548,15 @@ final class _Ctx {
     // Состояние ПОСЛЕ проверки значений: связи обязаны видеть его, а не
     // исходное тело. Поле, снятое как невалидное, для зависимых от него —
     // отсутствует (reality.short_id без валидного public_key).
+    //
+    // §549 R2 — пути записанных ключей запоминаются: синхронизации после
+    // связей нужны только они (ключа вне `kept` в снимке нет — других
+    // писателей у `sanitized` нет, а пути у объектов разные).
+    final written = <String, String>{};
     for (final e in kept.entries) {
-      sanitized[_join(prefix, e.key)] = e.value;
+      final path = _join(prefix, e.key);
+      written[e.key] = path;
+      sanitized[path] = e.value;
     }
 
     // 3. Связи между полями — когда состав уже известен: `requires` смотрит
@@ -553,8 +564,8 @@ final class _Ctx {
     _applyRelations(kept, order, fields, prefix);
 
     // Связи могли что-то снять — синхронизируем снимок.
-    for (final key in order) {
-      if (!kept.containsKey(key)) sanitized.remove(_join(prefix, key));
+    for (final e in written.entries) {
+      if (!kept.containsKey(e.key)) sanitized.remove(e.value);
     }
 
     // Порядок ключей результата — ВХОДЯЩИЙ, а не `order` схемы.
@@ -1242,13 +1253,13 @@ final class _Ctx {
   /// паддинга нет» так же фатально, как «ключ + паддинг 5». Без этой ветки
   /// правило молчало бы ровно на том случае, который в живых подписках
   /// встречается чаще битого значения (кейс `awg3_padding_absent_with_header_key`).
-  void _minWhenOnAbsent(FieldSchema f, String path) {
+  void _minWhenOnAbsent(FieldSchema f, String prefix, String key) {
     final rule = f.minWhen;
     if (rule == null || rule['absent_is_zero'] != true) return;
     final floor = rule['min'];
     if (floor is! num || floor <= 0) return;
     if (!_conditionHolds(rule['when'], root)) return;
-    _minWhenViolated(rule, f, path, 0);
+    _minWhenViolated(rule, f, _join(prefix, key), 0);
   }
 
   /// Общий исход обеих веток `min_when`: код и, при `drop_node`, отбраковка.
