@@ -131,22 +131,6 @@ void _collectPaths(
     if (f.raw['skip'] != null) continue;
     final path = prefix.isEmpty ? key : '$prefix.$key';
     out.add(path);
-    final ref = f.ref;
-    if (f.type == 'ref' && ref != null) {
-      if (ref == 'transports') {
-        for (final t in _kTransportTypes) {
-          final v = ContractRegistry.I.transportVariant(t);
-          if (v == null) continue;
-          _collectPaths(v.order, v.fields, '$path.$t', out);
-        }
-        continue;
-      }
-      if (ref == 'dialer.common' || ref.startsWith('dialer.common.')) continue;
-      final shared = ContractRegistry.I.sharedSchema(ref);
-      if (shared == null) continue;
-      _collectPaths(shared.order, shared.fields, path, out);
-      continue;
-    }
     // Объект с вариантами (`transport`): поля варианта лежат под его именем.
     final variants = f.variants;
     if (variants != null) {
@@ -570,34 +554,6 @@ final class _Generator {
   }
 
   Object? _value(FieldSchema f, String path, _BuildCtx ctx) {
-    final ref = f.ref;
-    if (f.type == 'ref' && ref != null) {
-      if (ref == 'transports') {
-        final t = ctx.transport;
-        if (t == null) return _kOmit;
-        final variant = ContractRegistry.I.transportVariant(t);
-        if (variant == null) return _kOmit;
-        final inner = _object(variant.order, variant.fields, '$path.$t', ctx);
-        return <String, dynamic>{'type': t, ...inner};
-      }
-      // `dialer.common` — правило значения ОДНОГО скаляра, лежащего плоско.
-      // Имя поля берётся из самого `ref`, когда он его называет
-      // (`dialer.common.network` у masque: поле зовётся `network_list`, а
-      // правило у него сетевое), иначе — по последнему сегменту пути.
-      if (ref == 'dialer.common' || ref.startsWith('dialer.common.')) {
-        final shared = ContractRegistry.I.sharedSchema('dialer.common');
-        final named = ref.startsWith('dialer.common.')
-            ? ref.substring('dialer.common.'.length)
-            : path.split('.').last;
-        final sub = shared?.fields[named];
-        if (sub == null) return _kOmit;
-        return _value(sub, path, ctx);
-      }
-      final shared = ContractRegistry.I.sharedSchema(ref);
-      if (shared == null) return _kOmit;
-      return _object(shared.order, shared.fields, path, ctx);
-    }
-
     switch (f.type) {
       case 'object':
         // Объект с вариантами (`transport`): вариант — по оси тела.

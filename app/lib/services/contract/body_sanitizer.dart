@@ -430,7 +430,7 @@ final class _Ctx {
     Map<String, dynamic> out,
   ) {
     for (final key in order) {
-      final f = _flatDialerField(fields[key], key);
+      final f = fields[key];
       if (f == null) continue;
       final unset = !src.containsKey(key) || _unsetForDefault(src[key], f);
       if (unset && src.containsKey(key)) {
@@ -594,21 +594,6 @@ final class _Ctx {
     return out;
   }
 
-  /// §552 — плоский `ref: dialer.common` (`server`, `server_port`) судится
-  /// правилом поля суб-схемы, а не пустой обёрткой ссылки. `required`,
-  /// `default_when` и `min_when` объявлены только там: у обёртки их нет, и
-  /// обязательный `server` выглядел необязательным. Пока отсутствие ключа и
-  /// пустое значение шли в [_sanitizeValue] (он разворачивает ссылку сам),
-  /// это не было видно на пустой строке; норма 2 контракта 1.1.56 судит
-  /// пустую строку ДО спуска — и `server: ""` стал уходить молча, а узел без
-  /// адреса проходил гард в ядро. Лаунчер разворачивает такие ссылки при
-  /// загрузке схемы (`resolveNamedRef`, `registry.go`); здесь — на входе в
-  /// цикл полей, по той же развилке, что в [_sanitizeRef].
-  static FieldSchema? _flatDialerField(FieldSchema? f, String key) {
-    if (f == null || f.type != 'ref' || f.ref != 'dialer.common') return f;
-    return ContractRegistry.I.sharedSchema('dialer.common')?.fields[key] ?? f;
-  }
-
   /// Контракт 1.1.56 (норма 2) — значение, равное отсутствию ключа: пустая
   /// строка у обычного поля (не `required`, не `tristate` — у них пустое
   /// значимо) и скаляр-литерал `absent_values` (после `normalize`).
@@ -665,9 +650,6 @@ final class _Ctx {
   _Value _sanitizeValue(Object? value, FieldSchema f, String path) {
     if (_gated(f, path, value)) return const _Value.drop();
 
-    // `ref` — спуск в общую суб-схему (tls / multiplex / transports).
-    final ref = f.ref;
-
     // §481 (контракт 1.1.12, CANON §6.1) — `absent_when`: ВЫКЛЮЧАТЕЛЬ ВНУТРИ
     // САМОГО ОБЪЕКТА. Совпали все перечисленные ключи — объект снимается
     // ЦЕЛИКОМ и ТИХО: это запись «настройки нет», а не деградация, и сообщать
@@ -681,22 +663,15 @@ final class _Ctx {
     // которого в теле не будет, а сосед потерял бы своё значение из-за
     // конфликта с несуществующим блоком.
     //
-    // Объявлен атрибут у поля-объекта ЛИБО у секции суб-схемы: у `tls` он
-    // стоит ОДИН раз, на секции, и при разрешении `ref` переезжает в каждый
-    // протокол — отдельной копии на схему не заводится.
-    final absentWhen = f.absentWhen ??
-        (f.type == 'ref' && ref != null
-            ? ContractRegistry.I.sharedSchema(ref)?.absentWhen
-            : null);
+    // У `tls` атрибут стоит ОДИН раз, на секции суб-схемы, и реестр при
+    // развороте ссылки переносит его в поле каждого протокола (§553) —
+    // отдельной копии на схему не заводится.
+    final absentWhen = f.absentWhen;
     if (absentWhen != null &&
         value is Map &&
         _absentWhenHolds(absentWhen, value)) {
       switchedOff.add(path);
       return const _Value.drop();
-    }
-
-    if (f.type == 'ref' && ref != null) {
-      return _sanitizeRef(value, f, ref, path);
     }
 
     switch (f.type) {
@@ -705,56 +680,14 @@ final class _Ctx {
         return _sanitizeObjectField(value, f, path);
       case 'array':
         return _sanitizeArray(value, f, path);
+      case 'ref':
+        // §553 — ссылку, которую реестр не смог разрешить при загрузке,
+        // судить нечем: значение остаётся как есть (так было и до
+        // разворота). В бандле таких нет — это ловит registry_load_test.
+        return _Value.keep(value);
       default:
         return _sanitizeScalar(value, f, path);
     }
-  }
-
-  _Value _sanitizeRef(Object? value, FieldSchema f, String ref, String path) {
-    // `transports` — вариант по дискриминатору `transport.type`.
-    if (ref == 'transports') {
-      if (value is! Map) return _invalid(f, path, value);
-      final map = value.cast<String, dynamic>();
-      final type = map['type'];
-      if (type is! String) {
-        // Транспорт без `type` ядро не разберёт вовсе — тот же тип-фатал.
-        return _invalid(f, path, value);
-      }
-      final variant = ContractRegistry.I.transportVariant(type);
-      if (variant == null) return _invalid(f, path, type);
-      // `type` — сам дискриминатор: в `order` варианта его нет, но снимать
-      // его нельзя, иначе транспорт перестанет быть транспортом.
-      final inner = Map<String, dynamic>.from(map)..remove('type');
-      final cleaned =
-          sanitizeObject(inner, variant.order, variant.fields, path);
-      return _Value.keep(<String, dynamic>{'type': type, ...cleaned});
-    }
-
-    final shared = ContractRegistry.I.sharedSchema(ref);
-    if (shared == null) return _Value.keep(value);
-    // `dialer.common` — правило значения одного скаляра (server/server_port/
-    // network), а не объект: поле описано ссылкой, но лежит плоско.
-    if (ref == 'dialer.common') {
-      final key = path.split('.').last;
-      final sub = shared.fields[key];
-      if (sub == null) return _Value.keep(value);
-      return _sanitizeValue(value, sub, path);
-    }
-    if (value is! Map) return _invalid(f, path, value);
-    // §472 шаг 5 — та же граница, что у объекта: не хватило `required` внутри
-    // общей суб-схемы — снимается она, а не узел. Сегодня таких полей в
-    // `tls`/`multiplex`/`dialer` нет ни одного на верхнем уровне (все четыре
-    // лежат глубже, во вложенных объектах), но правило должно быть одно на
-    // оба спуска — иначе оно зависело бы от того, описано поле ссылкой или
-    // объектом.
-    dropObject = false;
-    final cleaned = sanitizeObject(
-        value.cast<String, dynamic>(), shared.order, shared.fields, path);
-    if (dropObject) {
-      dropObject = false;
-      return const _Value.drop();
-    }
-    return _Value.keep(cleaned);
   }
 
   /// §553 — объект с вариантами по дискриминатору (`transport` по `type`):
