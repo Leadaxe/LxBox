@@ -215,10 +215,11 @@ Outbound emitShadowsocks(ShadowsocksSpec s, TemplateVars vars) {
   final out = _baseOutbound('shadowsocks', s)
     ..['method'] = s.method
     ..['password'] = s.password;
-  if (s.plugin.isNotEmpty) {
-    out['plugin'] = s.plugin;
-    if (s.pluginOpts.isNotEmpty) out['plugin_opts'] = s.pluginOpts;
-  }
+  if (s.plugin.isNotEmpty) out['plugin'] = s.plugin;
+  // `plugin_opts` без `plugin` снимает реестр (`plugin_opts.requires: plugin`,
+  // контракт 1.1.56, код `field_requires`) — на разборе и гардом сборки
+  // (§547 фаза B). Эмиттер пишет непустое как есть.
+  if (s.pluginOpts.isNotEmpty) out['plugin_opts'] = s.pluginOpts;
   _addDialFields(out, s);
   return Outbound(out);
 }

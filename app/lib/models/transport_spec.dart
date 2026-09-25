@@ -259,44 +259,17 @@ final class XhttpTransport extends TransportSpec {
     if (seqPlacement.isNotEmpty) m['seq_placement'] = seqPlacement;
     if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
 
-    // §416 — связь uplink_data_placement ↔ mode. §546: это копия правила
-    // реестра, но снять её пока нельзя. У ссылки и Xray-объекта правило есть
-    // в данных (`transports.json`, блоки `uri`/`xray` → `uplinkDataPlacement`:
-    // `when` по mode, `implies` packet-up), а у тела sing-box JSON его нет:
-    // схема `body.variants.xhttp.uplink_data_placement` знает только enum.
-    // Узел из JSON-подписки или редактора без этой проверки доехал бы до
-    // ядра с header вне packet-up. Снимается, когда связь появится в схеме
-    // тела (запрос лаунчеру, спека 546 → «Нерешённое»).
-    //
-    // Ядро (transport/v2rayxhttp/meta.go normalizeMeta) отвергает
-    // `header`-placement вне packet-up с fatal на ВЕСЬ конфиг:
-    //   create client transport: xhttp: v2ray-xhttp:
-    //   uplink_data_placement can be header only in packet-up mode
-    // Один узел подписки в такой форме не даёт подняться VPN вовсе.
-    //
-    // Две разные ситуации, две разные реакции:
-    //  * mode не задан — намерения пользователя нет, `header` сам по себе
-    //    его и выражает (осмысленен только в packet-up). Дописываем
-    //    mode: packet-up — узел собирается ровно так, как ждёт сервер.
-    //  * mode задан и это не packet-up — конфликт явный, оба значения
-    //    осмысленны и противоречат друг другу. По §169 «отбрасывать, а не
-    //    подгонять молча»: чужой явный mode не переписываем (это сменило бы
-    //    wire-протокол узла), снимаем placement — ядро возьмёт свой дефолт.
-    // Обе ветки — с предупреждением: поведение изменено, пользователь видит.
+    // §416 — связь uplink_data_placement ↔ mode судит реестр (§547 фаза B,
+    // контракт 1.1.56), не эмиттер. Тело xhttp: `mode.default_when`
+    // (header/cookie без mode → packet-up, `xhttp_mode_forced_packet_up`) и
+    // `uplink_data_placement.requires` (header/cookie при явном другом mode →
+    // placement снят, `xhttp_param_reset`); ссылка и Xray — записи маппера
+    // `uplinkDataPlacement`/`uplinkDataPlacementOther`. Исполняет санитайзер
+    // на каждом входе разбора и гард сборки перед ядром, поэтому ядро
+    // (meta.go: «header only in packet-up mode» — фатал на весь конфиг) такой
+    // пары не увидит. Эмиттер пишет непустое как есть.
     if (uplinkDataPlacement.isNotEmpty) {
-      final placement = uplinkDataPlacement.trim().toLowerCase();
-      final effectiveMode = mode.trim().toLowerCase();
-      final needsPacketUp = placement == 'header';
-      if (needsPacketUp && effectiveMode.isEmpty) {
-        m['mode'] = 'packet-up';
-        m['uplink_data_placement'] = uplinkDataPlacement;
-        warnings.add(const XhttpModeForcedPacketUpWarning());
-      } else if (needsPacketUp && effectiveMode != 'packet-up') {
-        warnings.add(XhttpParamResetWarning('uplink_data_placement',
-            XhttpResetReason.placementRequiresPacketUp));
-      } else {
-        m['uplink_data_placement'] = uplinkDataPlacement;
-      }
+      m['uplink_data_placement'] = uplinkDataPlacement;
     }
     if (uplinkDataKey.isNotEmpty) m['uplink_data_key'] = uplinkDataKey;
     if (uplinkChunkSize.isNotEmpty) m['uplink_chunk_size'] = uplinkChunkSize;
