@@ -45,7 +45,7 @@ const _kStandaloneShared = <String>['source_kinds.json'];
 /// точечно, и лишний слой конвертации разошёлся бы со схемой на первом же
 /// новом атрибуте. Геттеры — только для тех, что нужны санитайзеру.
 final class FieldSchema {
-  const FieldSchema(this.raw);
+  FieldSchema(this.raw);
 
   final Map<String, dynamic> raw;
 
@@ -226,12 +226,15 @@ final class FieldSchema {
   String? forbiddenCodeFor(String scheme) =>
       forbiddenCodes?[scheme] ?? code;
 
-  List<Map<String, dynamic>> get conflicts => _relations('conflicts');
+  // §549 R3 — связи разбираются один раз на экземпляр, а не на каждый вызов
+  // геттера: санитайзер спрашивает их у каждого поля каждого узла, а схема
+  // (и `raw` под ней) после `load()` не меняется.
+  late final List<Map<String, dynamic>> conflicts = _relations('conflicts');
 
-  List<Map<String, dynamic>> get requires => _relations('requires');
+  late final List<Map<String, dynamic>> requires = _relations('requires');
 
   /// Значения, которые ядро принимает, но узел получает info-код.
-  List<Map<String, dynamic>> get advisory => _relations('advisory');
+  late final List<Map<String, dynamic>> advisory = _relations('advisory');
 
   /// §474 (контракт 1.1.6) — элемент связи читается в ДВУХ формах: объект
   /// `{with, code}` и голая строка.
