@@ -118,12 +118,16 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
   // (`none`, deprecated xtls-rprx-direct/origin/splice, мусор) → поле не
   // пишется = plain VLESS.
   //
-  // §544 — связь flow ↔ transport здесь НЕ судится: её решает реестр
-  // (`vless.flow.conflicts`, `unless_set: [encryption]`) в санитайзере тела.
-  // Прежнее рукописное «vision только без транспорта» молча снимало flow у
-  // xhttp-узла с VLESS Encryption, где Vision работает поверх слоя шифрования
-  // и сервер без flow рвёт соединение.
-  if (s.flow == 'xtls-rprx-vision') {
+  // Связь flow ↔ transport — правило реестра (`vless.flow.conflicts`,
+  // `unless_set: [encryption]`), и на путях через санитайзер она уже решена.
+  // Здесь — страховочная сетка для путей, которые строят узел из sing-box JSON
+  // МИМО санитайзера (`parseSingboxEntry`: редактор JSON, Smart-Paste,
+  // звенья detour в `singbox_config.dart`): Vision при транспорте без
+  // шифрования бессмыслен. §544 — с VLESS Encryption Vision идёт поверх слоя
+  // шифрования, и flow остаётся (сервер с Vision без него рвёт соединение).
+  // Сетка повторяет реестр и уйдёт, когда эти пути пойдут через санитайзер.
+  final hasEncryption = s.encryption.isNotEmpty && s.encryption != 'none';
+  if (s.flow == 'xtls-rprx-vision' && (s.transport == null || hasEncryption)) {
     out['flow'] = s.flow;
   }
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;
