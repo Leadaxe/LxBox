@@ -86,6 +86,7 @@ class PresetParamsTab extends StatelessWidget {
           defaultValue: g.defaultValue,
           wizardUI: g.wizardUI,
           options: g.options,
+          optionsOpen: g.optionsOpen,
           title: g.title,
           tooltip: g.tooltip,
           required: g.required,
