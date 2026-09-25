@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Open — ТЗ, ждёт контракт и ядро |
+| Статус | Done |
 | Дата старта | 2026-09-25 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-09-25 |
+| Коммиты | лаунчер `1cdb3279` (контракт 1.1.55, `TASKS_LXBOX.md` §51); ядро `1934b2214` (sing-box-lx#29, SPEC 105); LxBox — этот коммит |
 | Связанные spec'ы | контракт `registry/protocols/vless.json` (`flow.conflicts`), `schema/registry_body.schema.json` (`relation`); §335 (encryption), ядро SPEC 032 (VLESS encryption); ядро — [Leadaxe/sing-box-lx#29](https://github.com/Leadaxe/sing-box-lx/issues/29) (Vision поверх VLESS encryption) |
 
 ## Проблема
@@ -99,8 +99,11 @@ xhttp в том числе. Панель выдаёт такую комбина�
      `encryption`, тот же;
    - регрессия: `encryption=none` (точное) + xhttp + flow → `flow` снят,
      `vision_with_transport` (как в `flow_vision_xhttp_suppressed`);
-   - регрессия: `encryption=None` (другой регистр) + xhttp + flow → это
-     настоящее значение (§335), `flow` сохраняется;
+   - ~~регрессия `encryption=None` → `flow` сохраняется~~ — неверно в
+     исходном ТЗ: `None` не проходит `pattern` и снимает весь узел
+     (`vless_encryption_invalid`, уже покрыто
+     `body/singbox/vless_encryption_none_wrong_case_rejected`); отдельного
+     кейса нет (решение лаунчера);
    - существующие `flow_vision_xhttp_suppressed`,
      `flow_vision_ws_suppressed`, `body/xray/vless_vision_with_transport`
      не меняются.
@@ -135,6 +138,24 @@ xhttp в том числе. Панель выдаёт такую комбина�
   После неё tcp-узлы вида MOBILE_GAMES заработают без правок в LxBox.
 - UDP через Vision: поведение не меняется.
 
+## Как сделано
+
+- Контракт 1.1.55 (лаунчер `1cdb3279`): в схеме связи появилось общее слово
+  `relation.unless_set` (действует в `conflicts` и `requires`), у
+  `vless.flow` — `conflicts: [{with: transport, code: vision_with_transport,
+  unless_set: [encryption]}]`. Литерал-выключатель (`absent_values`,
+  `encryption: none`) для связей не считается заданным.
+- LxBox, `lib/services/contract/body_sanitizer.dart`: `_unlessHolds` —
+  одна проверка перед снятием поля в `conflicts` и `requires`, предикат тот
+  же, что у соседа (`_presentInSource`); `switchedOff` — пути, снятые как
+  выключатель (`absent_values` и `absent_when`), для связей незаданы. У
+  лаунчера то же делает предварительный проход; здесь хватает записи в
+  момент снятия — связи объекта судятся после разбора всех его полей.
+- Найден и снят остаток рукописного правила:
+  `lib/models/node_spec_emit.dart` писал `flow` «только без транспорта» уже
+  после санитайзера и молча гасил то, что реестр оставил. Теперь эмиттер
+  проверяет лишь значение (`xtls-rprx-vision`), связь судит только реестр.
+
 ## Риски и edge cases
 
 - **Порядок выката.** Пока ядро не умеет Vision+encryption, узел с
@@ -154,6 +175,25 @@ xhttp в том числе. Панель выдаёт такую комбина�
   `TASKS_LXBOX.md` / на стороне лаунчера.
 
 ## Верификация
+
+Сделано 25.09.2026 (локально, с `app/contract` 1.1.55):
+
+- `test/contract/contract_test.dart`: все четыре vless-кейса `flow_vision_*`
+  зелёные (`…_encryption_kept`, `…_encryption_none_suppressed`,
+  `…_xhttp_suppressed`, `…_ws_suppressed`).
+- `test/contract/body_contract_test.dart`: `xray/vless_vision_xhttp_encryption`,
+  `singbox/vless_vision_transport_encryption_kept`,
+  `xray/vless_vision_with_transport` зелёные. Сравнение с базой без правки:
+  новых падений нет, починено два кейса.
+- `registry_invariant_test.dart`, `parser/vless_test.dart`,
+  `parser/round_trip_test.dart` — зелёные.
+- Посторонние падения корпуса (6 в `contract_test`, 27 в
+  `body_contract_test`: anytls, naive, socks, vmess, wireguard, ws_ed, xhttp,
+  `hysteria2_bandwidth_suffix_finalmask_obfs` — расходится поле `value` у
+  `tls_not_applicable_quic`) были и до правки; на CI корпус пропускается
+  (нет `app/contract`), поэтому CI их не видит.
+
+План проверки на устройстве:
 
 - Корпус из п. 1.6 зелёный в Go-раннере лаунчера и в
   `test/contract/contract_test.dart`.

@@ -114,13 +114,16 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
     }
   }
 
-  // §115 — ядро принимает РОВНО два flow: "" и "xtls-rprx-vision". vision
-  // валиден ТОЛЬКО на голом TLS (с любым транспортом ws/grpc/http/httpupgrade/
-  // xhttp ядро отвергает конфиг на load). Универсальный net на все пути
-  // (URI/Xray/raw sing-box JSON/manual): пишем flow только если он РОВНО
-  // vision И транспорта нет. Всё прочее (`none`, deprecated
-  // xtls-rprx-direct/origin/splice, мусор) → поле не пишется = plain VLESS.
-  if (s.flow == 'xtls-rprx-vision' && s.transport == null) {
+  // §115 — ядро принимает РОВНО два flow: "" и "xtls-rprx-vision"; всё прочее
+  // (`none`, deprecated xtls-rprx-direct/origin/splice, мусор) → поле не
+  // пишется = plain VLESS.
+  //
+  // §544 — связь flow ↔ transport здесь НЕ судится: её решает реестр
+  // (`vless.flow.conflicts`, `unless_set: [encryption]`) в санитайзере тела.
+  // Прежнее рукописное «vision только без транспорта» молча снимало flow у
+  // xhttp-узла с VLESS Encryption, где Vision работает поверх слоя шифрования
+  // и сервер без flow рвёт соединение.
+  if (s.flow == 'xtls-rprx-vision') {
     out['flow'] = s.flow;
   }
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;

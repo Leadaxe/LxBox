@@ -332,6 +332,18 @@ final class _Ctx {
   /// `hysteria2/salamander_ignores_gecko_sizes`).
   final explainedDrops = <String>{};
 
+  /// §544 (контракт 1.1.55) — пути, снятые как ВЫКЛЮЧАТЕЛЬ: литерал
+  /// `absent_values` (`encryption: none`) или объект по `absent_when`
+  /// (`tls: {enabled: false}`).
+  ///
+  /// Для связей такое поле НЕ ЗАДАНО, хотя в исходном теле оно написано:
+  /// связи читают исходное тело ([_presentInSource]), и без этой пометки
+  /// `encryption: none` отменял бы `unless_set` конфликта `flow ↔ transport`,
+  /// хотя слоя шифрования нет. У лаунчера то же делает предварительный проход
+  /// (`markAbsentObjects`); здесь хватает записи в момент снятия — связи
+  /// объекта судятся после разбора всех его полей.
+  final switchedOff = <String>{};
+
   void warn(
     String code, {
     String? path,
@@ -592,6 +604,7 @@ final class _Ctx {
     if (absentWhen != null &&
         value is Map &&
         _absentWhenHolds(absentWhen, value)) {
+      switchedOff.add(path);
       return const _Value.drop();
     }
 
@@ -752,6 +765,7 @@ final class _Ctx {
     // выключенную настройку.
     final absent = f.absentValues;
     if (absent != null && v is String && absent.contains(v)) {
+      switchedOff.add(path);
       return const _Value.drop();
     }
 
@@ -1370,6 +1384,7 @@ final class _Ctx {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
         if (!_presentInSource(with0, kept, prefix)) continue;
+        if (_unlessHolds(rel, kept, prefix)) continue;
         kept.remove(key);
         warn(rel['code'] as String? ?? 'field_conflict',
             path: myPath, params: {'with': with0});
@@ -1397,6 +1412,7 @@ final class _Ctx {
             ? _valueAt(need, kept, prefix) == rel['equals']
             : _present(need, kept, prefix);
         if (ok) continue;
+        if (_unlessHolds(rel, kept, prefix)) continue;
         kept.remove(key);
         // §472 шаг 3 — требуемое поле снял этот же прогон и уже объяснил
         // почему: молча уходим следом. См. [explainedDrops].
@@ -1464,6 +1480,34 @@ final class _Ctx {
     return _meaningful(cur);
   }
 
+  /// §544 (контракт 1.1.55) — `relation.unless_set`: связь НЕ действует, если
+  /// задан ЛЮБОЙ из путей. «Задан» — тот же предикат, что у соседа связи
+  /// ([_presentInSource]): непустое значение по исходному телу, не снятое
+  /// схемой и не выключатель ([switchedOff]). Пример реестра —
+  /// `vless.flow ↔ transport`: с VLESS Encryption Vision идёт поверх слоя
+  /// шифрования, и транспорт ему не помеха.
+  bool _unlessHolds(
+      Map<String, dynamic> rel, Map<String, Object?> siblings, String prefix) {
+    final unless = rel['unless_set'];
+    if (unless is! List) return false;
+    for (final p in unless) {
+      if (p is String && _presentInSource(p, siblings, prefix)) return true;
+    }
+    return false;
+  }
+
+  /// Снят ли [path] (или объект над ним) как выключатель — см. [switchedOff].
+  bool _switchedOff(String path) {
+    if (switchedOff.isEmpty) return false;
+    var p = path;
+    while (true) {
+      if (switchedOff.contains(p)) return true;
+      final i = p.lastIndexOf('.');
+      if (i < 0) return false;
+      p = p.substring(0, i);
+    }
+  }
+
   /// §474 — сосед для `conflicts`: виден и в ИСХОДНОМ теле.
   ///
   /// Отличие от [_present] ровно одно и оно намеренное. `requires` судит
@@ -1485,10 +1529,12 @@ final class _Ctx {
       if (siblings.containsKey(path)) return _meaningful(siblings[path]);
       final abs = _join(prefix, path);
       if (explainedDrops.contains(abs)) return false;
+      if (_switchedOff(abs)) return false;
       if (sanitized.containsKey(abs)) return _meaningful(sanitized[abs]);
       return _meaningful(_rawAt(abs));
     }
     if (explainedDrops.contains(path)) return false;
+    if (_switchedOff(path)) return false;
     if (sanitized.containsKey(path)) return _meaningful(sanitized[path]);
     final parent = path.substring(0, path.lastIndexOf('.'));
     // Ветку уже разобрали, а ключа в снимке нет — поле снято проверкой
