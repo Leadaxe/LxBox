@@ -1,6 +1,6 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.54",
+  "contract_version": "1.1.55",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 96,
@@ -322,7 +322,6 @@
         "tls_insecure": 118,
         "uri_param_unknown": 248,
         "utls_fp_unknown": 1,
-        "vision_with_transport": 11,
         "ws_early_data_converted": 13,
         "xhttp_param_reset": 12
       }
@@ -442,7 +441,6 @@
         "unknown_key": 294,
         "uri_param_unknown": 2140,
         "utls_fp_unknown": 48,
-        "vision_with_transport": 1,
         "ws_early_data_converted": 67
       }
     },
