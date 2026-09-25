@@ -7,7 +7,6 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
-import '../services/builder/node_link_pool.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
@@ -27,8 +26,8 @@ import 'subscriptions_screen/paste_dialogs.dart';
 import 'subscriptions_screen/public_test_servers.dart';
 import '../models/source_chain.dart';
 import '../models/source_entry.dart';
+import 'chain_edit/chain_edit_flow.dart';
 import 'chain_edit/new_chain_dialog.dart';
-import 'chain_edit_screen.dart';
 import 'subscriptions_screen/widgets/add_icon_button.dart';
 import 'subscriptions_screen/widgets/parse_input_error_banner.dart';
 import 'subscriptions_screen/widgets/chains_section.dart';
@@ -377,37 +376,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<void> _editChain(SourceChain chain) async {
-    final directions = await SettingsStorage.getDirections();
-    if (!mounted) return;
-    final lists = [for (final e in widget.subController.entries) e.list];
-    final result = await openChainEditor(
+    final outcome = await editChainAndPersist(
       context,
-      initial: chain,
-      // Последний собранный конфиг — источник ОКОНЧАТЕЛЬНЫХ тегов позиций
-      // (префикс подписки приклеен, дубли уникализированы аллокатором).
-      config: widget.homeController.state.configModel,
-      directions: directions,
-      chains: _chains,
-      // §439 — пул ссылок: финальный тег позиции ↔ ссылка на узел.
-      pool: computeNodeLinkPool(lists, directions: directions),
-      lists: lists,
+      chain,
+      subController: widget.subController,
+      homeController: widget.homeController,
     );
-    if (result == null || !mounted) return;
-    var chainPositionsRemoved = 0;
-    if (result.wasDeleted) {
-      // §393 D2 — каскад через цепочки-позиции: удаление этой цепочки снимает
-      // её ПОЗИЦИЮ у остальных, но их самих не трогает.
-      final healed = await SettingsStorage.deleteChain(chain.tag);
-      chainPositionsRemoved = healed.positions;
-    } else if (result.saved != null) {
-      await SettingsStorage.updateChain(result.saved!);
-    }
+    if (outcome == null || !mounted) return;
     await _loadSourceOrder();
     if (!mounted) return;
     // Укороченный маршрут обязан быть замечен: цепочка ниже двух позиций
     // теперь не эмитится, 3+ хопов эмитится короче — пользователь узнаёт об
     // этом здесь, тем же механизмом, что rules/detours-heal (§202/§248).
-    _notifyChainPositionsRemoved(chainPositionsRemoved);
+    _notifyChainPositionsRemoved(outcome.positionsRemoved);
     // Цепочка — узел конфига: правка маршрута обязана доехать до сборки, иначе
     // пользователь увидит старый маршрут под новым именем.
     await _regenerateAndSave();
@@ -620,21 +601,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   /// [entryBaseline] — id записей до add; при успехе §504 прокручивает к первой
   /// новой и подсвечивает её, SnackBar — после прокрутки.
   Future<void> _regenerateAndSave({Set<String>? entryBaseline}) async {
-    final config = await widget.subController.generateConfig();
-    if (!mounted || config == null) return;
-    await widget.homeController.saveParsedConfig(config);
-    if (!mounted) return;
+    final applied = await regenerateSourcesConfig(
+        widget.subController, widget.homeController);
+    if (!mounted || applied == null) return;
     final n = widget.subController.entries
         .where((e) => e.enabled)
         .fold<int>(0, (s, e) => s + e.nodeCount);
-    // Директива оператора 24.08 («поменял цепочку — конфиг не перестроился
-    // сам»): правка источников при живом туннеле применяется сама через
-    // in-place reload (§367-механика, туннель не рвётся), а не баннером
-    // «перезапустите VPN». Гейт canReload даёт connected + cooldown 3s —
-    // серия быстрых правок не устроит шторм перезагрузок: применится
-    // последняя по баннеру, как раньше.
-    final applied = widget.homeController.canReload;
-    if (applied) unawaited(widget.homeController.reloadVpn());
     final newEntryId = entryBaseline == null
         ? null
         : _firstNewEntryId(entryBaseline, widget.subController);

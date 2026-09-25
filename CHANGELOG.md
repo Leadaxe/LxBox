@@ -42,6 +42,13 @@
   or template DNS server of an address type left without `server` is now dropped with
   a warning.
 
+### Fixed
+
+- **Links to a chain open the chain ([§558](docs/spec/tasks/558-chain-owner-navigation.md)).**
+  Tapping a chain on a node's screen, or a chain named in the detour-loop sheet, used
+  to show "Source not found in your lists". It now opens the chain editor, and a saved
+  change rebuilds the config and applies it to a running tunnel, same as in Servers.
+
 ## [2.25.5] — 2026-09-25
 
 Патч поверх [v2.25.4](docs/releases/v2.25.4.md): ядро `v1.14.2-lx.3` (VLESS
