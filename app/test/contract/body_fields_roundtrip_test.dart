@@ -195,9 +195,6 @@ const kNotModelled = <String, String>{
   // канонизируются одинаково, и поле переживает круг как любое другое.
 
   'masque.tls': 'шаг 7 фичи 472, сверить после',
-  'masque.sni': 'шаг 7 фичи 472: плоские legacy-ключи не принимаем (§393)',
-  'masque.skip_cert_verify': 'шаг 7 фичи 472: плоский legacy-ключ (§393)',
-  'masque.network': 'шаг 7 фичи 472: плоский legacy-ключ (§393)',
   'masque.network_list': 'шаг 7 фичи 472, сверить после',
   'masque.fragment': 'шаг 7 фичи 472, сверить после',
   'masque.fragment_fallback_delay': 'шаг 7 фичи 472, сверить после',

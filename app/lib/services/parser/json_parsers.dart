@@ -1286,8 +1286,10 @@ NodeSpec? parseSingboxEntry(
       final vhttpRaw = entry['vhttp']?.toString() ?? '';
       // SPEC 103 п.5 — невалидное значение форсится в h3, как в URI-парсере.
       // Контракт 0.11.1 — `auto` в тройке допустимых (ядро >= lx.27).
-      final vhttpJson = (vhttpRaw == 'h3' || vhttpRaw == 'h2' ||
-              vhttpRaw == 'auto')
+      // §556 (контракт 1.1.64) — тело без `vhttp` остаётся без него: у ядра
+      // это `auto`, и правила реестра судят его как отсутствие.
+      final vhttpJson = (vhttpRaw.isEmpty || vhttpRaw == 'h3' ||
+              vhttpRaw == 'h2' || vhttpRaw == 'auto')
           ? vhttpRaw
           : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ?? '';
@@ -1317,6 +1319,14 @@ NodeSpec? parseSingboxEntry(
         mtu: (entry['mtu'] as num?)?.toInt(),
         idleTimeout: entry['idle_timeout']?.toString() ?? '',
         keepAlive: entry['keep_alive_period']?.toString() ?? '',
+        tlsExtra: {
+          for (final e in tlsMap.entries)
+            if (e.key != 'server_name' &&
+                e.key != 'disable_sni' &&
+                e.key != 'enabled' &&
+                e.value != null)
+              '${e.key}': e.value as Object,
+        },
       );
     case 'tailscale':
       // §435 / контракт ## 13 (NODE_SECTIONS.md §6) — endpoint без адреса:

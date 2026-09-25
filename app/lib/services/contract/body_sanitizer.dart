@@ -362,6 +362,27 @@ final class _Ctx {
   /// готовому телу.
   final _repairs = <_Repair>[];
 
+  /// §556 — позиция в [warnings] сразу за кодами поля (абсолютный путь).
+  final _fieldEnd = <String, int>{};
+
+  /// Код связи поля [order]`[i]` — на место поля в обходе, а не в хвост.
+  void _relWarn(List<String> order, int i, String prefix, String code,
+      {String? path, Map<String, String> params = const {}}) {
+    final me = _join(prefix, order[i]);
+    final pos = _fieldEnd[me] ?? warnings.length;
+    warnings.insert(
+        pos, RegistryWarning(code: code, path: path, params: params));
+    final later = {for (final k in order.skip(i)) _join(prefix, k)};
+    for (final e in _fieldEnd.entries.toList()) {
+      if (e.value > pos || (e.value == pos && later.contains(e.key))) {
+        _fieldEnd[e.key] = e.value + 1;
+      }
+    }
+    for (final r in _repairs) {
+      if (r.index >= pos) r.index++;
+    }
+  }
+
   void warn(
     String code, {
     String? path,
@@ -413,7 +434,9 @@ final class _Ctx {
     // именно снято, а раннер тел молча расходился с контрактом на одном
     // недостающем поле. `secret` тут неоткуда взять: ключа в схеме нет, а
     // значит нет и его флага — печатаем как есть, ровно как вторая сторона.
-    for (final key in src.keys) {
+    // Контракт 1.1.57 — неизвестные ключи судятся по алфавиту (корпус
+    // `masque_legacy_flat_keys`), а не в порядке прибытия.
+    for (final key in src.keys.toList()..sort()) {
       if (fields.containsKey(key)) continue;
       if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
       warn('unknown_key', path: _join(prefix, key), value: src[key]);
@@ -438,7 +461,12 @@ final class _Ctx {
     Map<String, Object?> kept,
     Map<String, dynamic> out,
   ) {
+    String? prevPath;
     for (final key in order) {
+      // §556 — конец кодов поля в `warnings`: код связи встаёт сюда, как у
+      // лаунчера (поле судится целиком, прежде чем обход идёт дальше).
+      if (prevPath != null) _fieldEnd[prevPath] = warnings.length;
+      prevPath = _join(prefix, key);
       final f = fields[key];
       if (f == null) continue;
       final unset = !src.containsKey(key) || _unsetForDefault(src[key], f);
@@ -564,6 +592,7 @@ final class _Ctx {
     // §549 R2 — пути записанных ключей запоминаются: синхронизации после
     // связей нужны только они (ключа вне `kept` в снимке нет — других
     // писателей у `sanitized` нет, а пути у объектов разные).
+    if (prevPath != null) _fieldEnd[prevPath] = warnings.length;
     final written = <String, String>{};
     for (final e in kept.entries) {
       final path = _join(prefix, e.key);
@@ -1527,10 +1556,21 @@ final class _Ctx {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
         if (!_conditionHolds(rel['when'], kept)) continue;
-        if (!_presentInSource(with0, kept, prefix)) continue;
+        // Контракт 1.1.64 — сосед без точки, которого нет в своём объекте,
+        // — поле корня (`tls.fragment` ↔ `vhttp` у masque); у схемы без
+        // такого поля связь не срабатывает.
+        final rootRival = !with0.contains('.') &&
+            prefix.isNotEmpty &&
+            !fields.containsKey(with0);
+        if (rootRival
+            ? !_presentInSource(with0, const {}, '')
+            : !_presentInSource(with0, kept, prefix)) {
+          continue;
+        }
         if (_unlessHolds(rel, kept, prefix)) continue;
         kept.remove(key);
-        warn(rel['code'] as String? ?? 'field_conflict',
+        _relWarn(order, order.indexOf(key), prefix,
+            rel['code'] as String? ?? 'field_conflict',
             path: myPath, params: {'with': with0});
         // §474 — поле снято и причина названа: зависимым от него второго кода
         // не полагается (та же граница, что у `requires`).
@@ -1567,7 +1607,7 @@ final class _Ctx {
           final target = need.contains('.') ? need : _join(prefix, need);
           if (_pathAllowed(target)) {
             _repairs.add(_Repair.set(
-              index: warnings.length,
+              index: _fieldEnd[_join(prefix, key)] ?? warnings.length,
               path: _join(prefix, key),
               target: target,
               need: need,
@@ -1581,7 +1621,8 @@ final class _Ctx {
         // §472 шаг 3 — требуемое поле снял этот же прогон и уже объяснил
         // почему: молча уходим следом. См. [explainedDrops].
         if (!explainedDrops.contains(need)) {
-          warn(rel['code'] as String? ?? 'field_requires',
+          _relWarn(order, order.indexOf(key), prefix,
+              rel['code'] as String? ?? 'field_requires',
               path: _join(prefix, key), params: {'requires': need});
         }
         break;
@@ -2362,7 +2403,7 @@ final class _Repair {
   })  : target = null,
         need = null;
 
-  final int index;
+  int index;
   final String path;
   final String? target;
   final String? need;

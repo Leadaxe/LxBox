@@ -1104,6 +1104,11 @@ final class MasqueSpec extends NodeSpec {
   /// отрицательное = выключить. Только для `vhttp=h3`.
   final String keepAlive;
 
+  /// §556 (контракт 1.1.64) — прочие ключи `tls{}` тела (фрагментация и
+  /// т.п.), пережившие санитайзер: едут как есть. Какие из них годятся masque
+  /// при каком `vhttp`, решает реестр, не модель.
+  final Map<String, Object> tlsExtra;
+
   MasqueSpec({
     required super.id,
     required super.tag,
@@ -1121,6 +1126,7 @@ final class MasqueSpec extends NodeSpec {
     this.mtu,
     this.idleTimeout = '',
     this.keepAlive = '',
+    this.tlsExtra = const {},
     super.chained,
     super.warnings,
   });
@@ -1566,6 +1572,7 @@ NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
           mtu: s.mtu,
           idleTimeout: s.idleTimeout,
           keepAlive: s.keepAlive,
+          tlsExtra: s.tlsExtra,
           chained: chained,
           warnings: s.warnings,
         ),

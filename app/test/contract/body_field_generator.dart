@@ -288,7 +288,8 @@ final class _Generator {
         if (prefix.isNotEmpty && f.conflicts.isNotEmpty) {
           final rivals = [
             for (final r in f.conflicts)
-              if (r['with'] is String) r['with'] as String,
+              if (r['with'] is String && _rivalExists(r['with'] as String, prefix))
+                r['with'] as String,
           ];
           // Соперник-сосед по тому же объекту: его снимет ось.
           if (rivals.any((r) => r.split('.').last != key)) out.add(path);
@@ -530,7 +531,28 @@ final class _Generator {
   /// (`tls.ech.enabled` ↔ `tls.reality.enabled`), и без этого обе стороны
   /// считались бы присутствующими всегда — оба флага уступали бы друг другу и
   /// не попадали ни в одно тело.
+  /// Контракт 1.1.64 — сосед связи без точки ищется в своём объекте, иначе
+  /// в корне (`tls.fragment` ↔ `vhttp`); у схемы без такого поля связь не
+  /// срабатывает никогда.
+  bool _rivalExists(String with0, String prefix) {
+    if (with0.contains('.') || prefix.isEmpty) return true;
+    final root = ContractRegistry.I.schemaFor(scheme)?.fields;
+    Map<String, FieldSchema>? cur = root;
+    for (final seg in prefix.split('.')) {
+      cur = cur?[seg]?.fields;
+    }
+    if (cur != null && cur.containsKey(with0)) return true;
+    return root?.containsKey(with0) ?? false;
+  }
+
   bool _willBePresent(String path, _BuildCtx ctx) {
+    if (!path.contains('.') &&
+        !_kBuildManaged.contains(path) &&
+        path != 'transport' &&
+        !(ContractRegistry.I.schemaFor(scheme)?.fields.containsKey(path) ??
+            true)) {
+      return false;
+    }
     // Ключи, которые тело автора не несёт вовсе (`detour` ставит сборка):
     // конфликт с ними не срабатывает никогда, и поле остаётся.
     if (_kBuildManaged.contains(path)) return false;

@@ -689,6 +689,7 @@ class SubscriptionController extends ChangeNotifier {
       mtu: spec.mtu,
       idleTimeout: spec.idleTimeout,
       keepAlive: spec.keepAlive,
+      tlsExtra: spec.tlsExtra,
       warnings: spec.warnings,
     );
     _entries.add(SubscriptionEntry(
