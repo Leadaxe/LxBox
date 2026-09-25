@@ -311,7 +311,7 @@ jobs:
 
       - name: Upload corpus reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: public-subs-corpus-report
           path: |
@@ -486,7 +486,7 @@ jobs:
 
       - name: Upload APKs (release)
         # Все 4 таргета: universal + 3 per-ABI.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-apks-release
           path: app/build/app/outputs/flutter-apk/app-*-release.apk
@@ -526,7 +526,7 @@ jobs:
           ls -la build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB (release)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-aab-release
           path: app/build/app/outputs/bundle/release/app-release.aab
