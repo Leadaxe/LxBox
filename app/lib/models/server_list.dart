@@ -468,8 +468,12 @@ final class FolderMember {
 
   /// §439 — член-группа (запись `kind: auto`, `codec/auto_group_record.dart`):
   /// текста нет, узел — сама группа. detour и секций у группы не бывает.
-  FolderMember.auto(AutoSelectSpec group, {bool enabled = true})
-      : this(raw: '', enabled: enabled, node: group);
+  ///
+  /// Контракт 1.1.66 — у группы тела нет, и её `warnings` (например
+  /// `group_member_missing`) пересчитать нечем: они едут как есть.
+  FolderMember.auto(AutoSelectSpec group,
+      {bool enabled = true, List<StoredWarning> warnings = const []})
+      : this(raw: '', enabled: enabled, node: group, warnings: warnings);
 
   static NodeSpec? _parseFirst(String raw, String nameHint) {
     if (raw.trim().isEmpty) return null;

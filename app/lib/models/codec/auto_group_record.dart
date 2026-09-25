@@ -34,6 +34,8 @@ import 'package:collection/collection.dart';
 
 import '../../services/parser/uri_utils.dart' show newUuidV4;
 import '../auto_select.dart';
+import '../core_reject_verdict.dart'
+    show storedWarningsFromJson, storedWarningsToJson;
 import '../direction.dart' show StickyHashKey, UrltestMode;
 import '../node_link.dart';
 import '../node_spec.dart';
@@ -52,6 +54,8 @@ const String _kUntaggedAuto = 'Auto';
 /// `members_rule` и `pool_badge` на уровне узла — dev-форма до 1.0.1.
 const Set<String> _autoKeys = {
   'kind', 'tag', 'enabled', 'group', 'members_rule', 'pool_badge',
+  // Контракт 1.1.66 — записи узла-группы едут как есть (тела нет).
+  'warnings',
 };
 
 const Set<String> _groupKeys = {
@@ -81,6 +85,7 @@ Map<String, dynamic> autoGroupMemberToRecord(
     'kind': kNodeKindAuto,
     if (group.tag.isNotEmpty) 'tag': group.tag,
     'enabled': m.enabled,
+    if (m.warnings.isNotEmpty) 'warnings': storedWarningsToJson(m.warnings),
     'group': {
       'group_type': _kGroupUrltest,
       if (membership is ExplicitMembers)
@@ -242,6 +247,7 @@ AutoGroupRead autoGroupMemberFromRecord(
         manualDefault: manualDefault,
       ),
       enabled: enabled is bool ? enabled : true,
+      warnings: storedWarningsFromJson(j['warnings']),
     ),
     fromSelector: fromSelector,
   );
