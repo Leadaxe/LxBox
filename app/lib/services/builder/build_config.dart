@@ -108,6 +108,12 @@ class BuildSettings {
   /// `core_chain_capability.dart`).
   final String coreVersion;
 
+  /// Контракт 1.1.60 (§56) — теги сборки ядра для узлового гейта реестра
+  /// (`build_tag` + `on_core_unsupported`). Дефолт — теги встроенного AAR
+  /// ([kCoreBuildTags]); `null` — теги неизвестны, гейт по тегу не
+  /// применяется.
+  final Set<String>? coreBuildTags;
+
   /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
   /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
   final TunAppsConfig? tunApps;
@@ -169,6 +175,7 @@ class BuildSettings {
     this.directions = const [],
     this.chains = const [],
     this.coreVersion = '',
+    this.coreBuildTags = kCoreBuildTags,
     this.tunApps,
     this.vpnMode,
     this.idleSuspend = '',
@@ -359,7 +366,7 @@ Future<BuildResult> _buildConfig({
     reservedTags: [
       for (final c in directions) ...[c.tag, c.autoTag],
     ],
-    coreVersion: settings.coreVersion, // §435 — гейт tailscale
+    coreVersion: settings.coreVersion,
     linkTargets: linkTargets,
   );
   for (final list in lists) {
@@ -380,6 +387,7 @@ Future<BuildResult> _buildConfig({
   final registryReport = applyRegistryGate(
     [...ctx.outbounds, ...ctx.endpoints],
     coreVersion: settings.coreVersion,
+    coreBuildTags: settings.coreBuildTags,
     // §473 — записи с дословным JSON-телом (§455) идут в ядро как написаны:
     // правило условного потолка (`max_when`) им значение не подменяет.
     verbatim: ctx.verbatimEntries,
@@ -387,8 +395,9 @@ Future<BuildResult> _buildConfig({
   ctx.dropRegistryEntries(registryReport.dropped);
 
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
-  // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`
-  // (гейт ядра `tailscale_core_unsupported`).
+  // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`.
+  // Узловой гейт ядра (`tailscale_core_unsupported` и др., §56) — в
+  // `registryReport.warnings`.
   final emitWarnings = <String>[
     ...ctx.warnings,
     ...detourReport.warnings,
@@ -947,9 +956,12 @@ class _BuildCtx implements EmitContext {
   }
 
   /// §460 — убрать записи, снятые гардом реестра (`drop_node`): их тело ядро
-  /// не примет, а конфиг падает целиком, не одним узлом. Из `emittedTagByNode`
-  /// ничего не чистим: карта адресуется узлом, а гард работает уже над
-  /// эмитированными телами и исходный `NodeSpec` не знает.
+  /// не примет, а конфиг падает целиком, не одним узлом.
+  ///
+  /// §56 (контракт 1.1.60) — из `emittedTagByNode`/`emittedTagAliases` снятое
+  /// чистится по финальному тегу записи: секции узла (NODE_SECTIONS.md —
+  /// DNS-сервер `tailscale` со ссылкой на endpoint) без самого узла ядро
+  /// отвергло бы вместе со всем конфигом.
   void dropRegistryEntries(List<SingboxEntry> dropped) {
     if (dropped.isEmpty) return;
     bool gone(SingboxEntry e) => dropped.contains(e);
@@ -957,6 +969,9 @@ class _BuildCtx implements EmitContext {
     endpoints.removeWhere(gone);
     selectorEntries.removeWhere(gone);
     autoEntries.removeWhere(gone);
+    final tags = {for (final e in dropped) e.tag};
+    emittedTagByNode.removeWhere((_, tag) => tags.contains(tag));
+    emittedTagAliases.removeWhere((tag, _) => tags.contains(tag));
   }
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
@@ -993,9 +1008,6 @@ class _BuildCtx implements EmitContext {
 
   @override
   bool get passiveCheck => _passiveCheck; // §272/§322
-
-  @override
-  bool get coreSupportsTailscale => coreVersionSupportsTailscale(_coreVersion);
 
   @override
   String get coreVersion => _coreVersion;

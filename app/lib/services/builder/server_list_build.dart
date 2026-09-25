@@ -11,7 +11,6 @@ import '../node_identity.dart';
 import '../node_link_address.dart';
 import '../safe_regex.dart';
 import '../tag_resolver.dart';
-import 'core_chain_capability.dart';
 import 'node_link_resolve.dart';
 import 'verbatim_body.dart';
 
@@ -90,18 +89,6 @@ extension ServerListBuild on ServerList {
       }
       if (server is AutoSelectSpec) {
         autoSelects.add((server, i));
-        continue;
-      }
-      // §435 / контракт ## 13 — гейт ядра (`tailscale_core_unsupported`):
-      // ядро без `with_tailscale` отвергает конфиг ЦЕЛИКОМ на неизвестном
-      // типе endpoint'а, и один такой узел оставил бы пользователя без VPN.
-      // Узел живёт в состоянии, при сборке выбрасывается с warning'ом; его
-      // секции не инжектятся (в `noteEmitted` он не попадает).
-      if (server is TailscaleSpec && !ctx.coreSupportsTailscale) {
-        ctx.warn(tailscaleUnsupportedByCoreLine(
-          TagResolver.displayTag(tagPrefix, server.tag),
-          ctx.coreVersion,
-        ));
         continue;
       }
       final policy =

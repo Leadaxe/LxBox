@@ -123,39 +123,46 @@ bool coreSupportsChain(String coreVersion) {
   return v.compareTo(min) >= 0;
 }
 
-/// §435 / контракт ## 13 — минимальный релиз ядра с endpoint'ом `tailscale`
-/// в AAR (тег сборки `with_tailscale` + `ts_omit_*`,
-/// `sing-box-lx cmd/internal/build_libbox/main.go`, блок `no-tailscale`
-/// восстановлен апстримным append'ом): `1.14.0-lx.38`. Форк на момент
-/// реализации — lx.37, пин LxBox — lx.36: до бампа узел доезжает только до
-/// гейта.
-const String kTailscaleMinCoreVersion = '1.14.0-lx.38';
-
-/// §435 — знает ли ядро версии [coreVersion] endpoint `tailscale`
-/// (`tailscale_core_unsupported` контракта, D-103). Имя без `core…` в
-/// начале, чтобы не совпасть с одноимённым геттером `EmitContext`.
+/// Контракт 1.1.60 (§56) — теги сборки встроенного ядра (AAR
+/// `libbox.aar`, пин [kCoreBuildTagsPin]) для узлового гейта реестра
+/// (`build_tag` + `on_core_unsupported`, `nodeCoreRefusal`).
 ///
-/// Та же политика, что у [coreSupportsChain]: fail-open на всём, что не
-/// удалось разобрать — деградировать на догадке значило бы отнять рабочий
-/// узел, а конфиг, отвергнутый ядром, пользователь хотя бы увидит ошибкой
-/// старта.
-bool coreVersionSupportsTailscale(String coreVersion) {
-  final v = CoreVersion.parse(coreVersion);
-  if (v == null) return true;
-  final min = CoreVersion.parse(kTailscaleMinCoreVersion)!;
-  return v.compareTo(min) >= 0;
-}
+/// Биндинг libbox тегов не отдаёт (`Libbox.version()` — только строка
+/// версии, строки `Tags:` как у `sing-box version` нет), а ядро вкомпилировано
+/// в APK: теги известны на сборке. Список — `docs/KERNEL.md` (состав AAR) и
+/// `sing-box-lx cmd/internal/build_libbox/main.go`. Бамп ядра обязан
+/// сверить набор: `core_build_tags_pin_test` падает, пока [kCoreBuildTagsPin]
+/// не совпадёт с `app/android/libbox.version`.
+const String kCoreBuildTagsPin = 'v1.14.2-lx.4';
 
-/// EN-строка предупреждения `tailscale_core_unsupported` (реестр
-/// `registry/warnings.json`, severity warning): узел снят на сборке, конфиг
-/// собирается, остальные узлы на месте.
-String tailscaleUnsupportedByCoreLine(String tag, String coreVersion) {
-  final shown =
-      coreVersion.trim().isEmpty ? 'of unknown version' : coreVersion.trim();
-  return 'Tailscale node "$tag" was skipped: the VPN core ($shown) is older '
-      'than $kTailscaleMinCoreVersion and was built without Tailscale — it '
-      'would reject the whole config. Update the app to get a newer core.';
-}
+const Set<String> kCoreBuildTags = {
+  'with_gvisor',
+  'with_quic',
+  'with_wireguard',
+  'with_utls',
+  'with_naive_outbound',
+  'badlinkname',
+  'tfogo_checklinkname0',
+  'with_xhttp',
+  'with_awg',
+  'with_lx_command',
+  'with_lx_idle_suspend',
+  'with_lx_chain',
+  'with_openvpn',
+  'with_openconnect',
+  'with_tailscale',
+  'ts_omit_logtail',
+  'ts_omit_ssh',
+  'ts_omit_drive',
+  'ts_omit_taildrop',
+  'ts_omit_webclient',
+  'ts_omit_doctor',
+  'ts_omit_capture',
+  'ts_omit_kube',
+  'ts_omit_aws',
+  'ts_omit_synology',
+  'ts_omit_bird',
+};
 
 /// EN-строка предупреждения `chain_unsupported_by_core` (реестр
 /// `registry/warnings.json`, параметры `version` + `tag`).

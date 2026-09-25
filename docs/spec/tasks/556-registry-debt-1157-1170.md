@@ -4,8 +4,8 @@
 |------|----------|
 | Статус | Частично сделано (ветка `task-556`), остаток — в «Нерешённое» |
 | Дата старта | 2026-09-26 |
-| Дата завершения | 2026-09-26 (второй заход) |
-| Коммиты | 00de8b9e, e96e251d, 9235987a, 94c6eac5, 726f0406, f2c3dfca, e61dc45c (+ merge develop 4713576c, d2637807); второй заход: e013c3ba, 78eaa954, d3781509, e2e29a64, 00be38cd, 539148e6 |
+| Дата завершения | 2026-09-26 (третий заход, §56) |
+| Коммиты | 00de8b9e, e96e251d, 9235987a, 94c6eac5, 726f0406, f2c3dfca, e61dc45c (+ merge develop 4713576c, d2637807); второй заход: e013c3ba, 78eaa954, d3781509, e2e29a64, 00be38cd, 539148e6; третий заход (§56): ae72e927 |
 | Связанные spec'ы | §460 (реестр), §472 (конвейер разбора), §553 (разворот ссылок), §555 (язык шаблона — параллельная волна) |
 
 ## Проблема
@@ -115,6 +115,23 @@
   узле-группе. `core_rejected`: экспорт сервера/члена папки как есть с
   `enabled: false`, подписка — `disabled{}` без причины; импорт снимает
   запись, выключение из файла сохраняет (прежняя норма §489 включала узел).
+- **§56 (третий заход, ae72e927).** Узловой гейт ядра по реестру: `nodeCoreRefusal`
+  (`services/contract/node_core_gate.dart`, зеркало `nodeflow.NodeCoreRefusal`
+  лаунчера) судит `build_tag`/`min_core` рядом с `on_core_unsupported:
+  drop_node` у тела, поля и `range_form` (`awg_range`, форма `N-M`). Вызов —
+  в `applyRegistryGate` до санитайзера: запись снимается целиком, код и
+  `reason` — в отчёт сборки и `nodeBuildWarningsByEmittedTag`.
+  `dropRegistryEntries` чистит `emittedTagByNode`/`emittedTagAliases` по
+  тегу — секции снятого узла не инжектятся. Теги сборки: libbox их не отдаёт
+  (`Libbox.version()` — только версия), поэтому `kCoreBuildTags` +
+  `kCoreBuildTagsPin` (`core_chain_capability.dart`, набор `sharedTags`
+  `build_libbox/main.go` на `v1.14.2-lx.4`), тест сверяет пин с
+  `app/android/libbox.version`. `BuildSettings.coreBuildTags` (дефолт —
+  встроенный набор, `null` — теги неизвестны, гейт по тегу не применяется).
+  Снят гейт Tailscale по версии (`kTailscaleMinCoreVersion`,
+  `coreVersionSupportsTailscale`, `EmitContext.coreSupportsTailscale`).
+  Модель реестра: `CoreUnsupported`, `RangeForm`, `FieldSchema.buildTag/
+  level/levelMark`, `BodySchema.buildTag/minCore/levels`.
 - **§55 (539148e6).** `fieldByRole`, `carriesPrivateKeyByRegistry` (Copy
   link, Debug API `/nodes/link`) вместо переопределений
   `linkCarriesPrivateKey`; `credentialByRegistry`.
@@ -134,6 +151,13 @@
 `body_contract_test` — 28 красных, `contract_test` — 5 (старые пробелы, см.
 ниже).
 
+Третий заход (§56): `node_core_gate_test` 5/5 (новый),
+`node_sections_build_test` 15/15, `body_sanitizer_test` 84/84,
+`registry_invariant_test` 160 (17 skip), `build_config_test` 17/17,
+`registry_load_test` 11/11, `registry_dart_refs_test` 1/1,
+`registry_gate_test` 15/15, `registry_gate_item_pattern_test` 5 (1 skip),
+`import_rules_test` 44/44, `probe_test` 29/29, `registry_guard_perf_test` 1/1.
+
 Первый заход: `registry_load_test` 11/11, `preset_expand_test` 67/67,
 `mapper_sections_w4_test` 25/25, `heal_unknown_utls_fingerprints_test` 13/13,
 `reality_fingerprint_build_test` 8/8.
@@ -142,11 +166,13 @@
 
 Следствие бампа, не сделано:
 
-- **§56** `on_core_unsupported`/`levels`: общий гейт узла на сборке и
-  подпись уровня AWG из реестра не сделаны. Гейт Tailscale у нас — по
-  версии (`kTailscaleMinCoreVersion`), реестр гейтит по `build_tag`, строки
-  `Tags:` у нас нет — свести значит снять гейт; подпись уровня
-  (`config_node.dart _deriveAwgLevel`) — UI.
+- **§56** гейт закрыт (третий заход, см. выше). Остаток: подпись уровня AWG
+  (`config_node.dart _deriveAwgLevel`) на `levels`/`level`/`level_mark`/
+  `range_form.level` не переведена — модель есть, это UI; снятие расширения
+  по тегу (кнопка «убрать AmneziaWG» со схлопыванием диапазона) — там же.
+  Ядро: стоит экспортировать теги сборки из libbox (например
+  `Libbox.buildTags()` из `debug.ReadBuildInfo`), тогда `kCoreBuildTags`
+  станет запасным значением, а не единственным источником.
 - **§54** форма цепочки из `strip.order`/`default`, подпись транспорта;
   **§57** `on_hop_required` и `ChainIssueCode.stripUtlsOnReality` — UI.
 - **§59** распаковщик Amnezia по-прежнему вписывает MTU и DNS в текст INI:

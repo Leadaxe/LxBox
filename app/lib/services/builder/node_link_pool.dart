@@ -144,9 +144,6 @@ class _PoolCtx implements EmitContext {
   bool get passiveCheck => false;
 
   @override
-  bool get coreSupportsTailscale => true;
-
-  @override
   String get coreVersion => '';
 
   @override

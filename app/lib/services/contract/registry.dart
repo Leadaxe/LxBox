@@ -220,6 +220,28 @@ final class FieldSchema {
   /// ОС, на которой поле работает; на прочих ключ снимается на сборке.
   String? get platform => raw['platform'] as String?;
 
+  /// Контракт 1.1.60 — тег сборки ядра, без которого поле ядру неизвестно.
+  /// Сам по себе описателен; действует только вместе с [onCoreUnsupported].
+  String? get buildTag => raw['build_tag'] as String?;
+
+  /// Контракт 1.1.60 — узловой гейт ядра поля: `{action: drop_node, code}`.
+  /// Требование того же уровня ([buildTag]/[minCore]) не выполнено → узел
+  /// снимается на сборке ([nodeCoreRefusal]). Без атрибута `min_core` поля
+  /// работает прежним полевым гейтом (снимается ключ).
+  CoreUnsupported? get onCoreUnsupported =>
+      CoreUnsupported.tryParse(raw['on_core_unsupported']);
+
+  /// Контракт 1.1.60 — требования и уровень ФОРМЫ-ДИАПАЗОНА `N-M` у
+  /// `awg_range`, когда они отличаются от числовой формы.
+  RangeForm? get rangeForm => RangeForm.tryParse(raw['range_form']);
+
+  /// Контракт 1.1.60 — уровень протокола, который даёт заданное поле
+  /// (`BodySchema.levels`), и суффикс подписи (`level_mark`). Только модель:
+  /// подпись уровня узла из них пока не строится.
+  String? get level => raw['level'] as String?;
+
+  String? get levelMark => raw['level_mark'] as String?;
+
   num? get min => raw['min'] as num?;
 
   num? get max => raw['max'] as num?;
@@ -334,10 +356,27 @@ final class BodySchema {
     this.relations = const [],
     this.absentWhen,
     this.exitCapableWhen,
+    this.buildTag,
+    this.minCore,
+    this.onCoreUnsupported,
+    this.levels = const [],
   });
 
   /// Тег ядра, по которому сверен список полей.
   final String core;
+
+  /// Контракт 1.1.60 — тег сборки и минимальная версия ядра для протокола
+  /// целиком. Описательны, пока у тела нет [onCoreUnsupported].
+  final String? buildTag;
+  final String? minCore;
+
+  /// Контракт 1.1.60 — узловой гейт тела: требование не выполнено → узел
+  /// снимается на сборке с этим кодом ([nodeCoreRefusal]).
+  final CoreUnsupported? onCoreUnsupported;
+
+  /// Контракт 1.1.60 — уровни протокола по возрастанию (`wireguard`: awg …
+  /// awg3.1). Только модель: подпись уровня узла из них пока не строится.
+  final List<String> levels;
 
   final List<String> order;
 
@@ -361,6 +400,52 @@ final class BodySchema {
   /// `condition`, без `source_kind`): при каком готовом теле узел годится
   /// ВЫХОДОМ — кандидатом в пул Направления. `null` — годится всегда.
   final Map<String, dynamic>? exitCapableWhen;
+}
+
+/// Контракт 1.1.60 — `on_core_unsupported`: что делать с узлом, когда
+/// требование к ядру (`build_tag`/`min_core` того же уровня) не выполнено.
+final class CoreUnsupported {
+  const CoreUnsupported({required this.action, required this.code});
+
+  /// Единственное значение схемы — `drop_node`.
+  final String action;
+  final String code;
+
+  bool get dropsNode => action == 'drop_node';
+
+  static CoreUnsupported? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final action = raw['action'];
+    final code = raw['code'];
+    if (action is! String || code is! String) return null;
+    return CoreUnsupported(action: action, code: code);
+  }
+}
+
+/// Контракт 1.1.60 — `range_form` у `awg_range`: требования, уровень и
+/// узловой гейт формы-диапазона (`N-M`).
+final class RangeForm {
+  const RangeForm({
+    this.minCore,
+    this.buildTag,
+    this.level,
+    this.onCoreUnsupported,
+  });
+
+  final String? minCore;
+  final String? buildTag;
+  final String? level;
+  final CoreUnsupported? onCoreUnsupported;
+
+  static RangeForm? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    return RangeForm(
+      minCore: raw['min_core'] as String?,
+      buildTag: raw['build_tag'] as String?,
+      level: raw['level'] as String?,
+      onCoreUnsupported: CoreUnsupported.tryParse(raw['on_core_unsupported']),
+    );
+  }
 }
 
 /// Текст кода предупреждения из `registry/warnings.json`.
@@ -715,6 +800,12 @@ final class ContractRegistry {
       absentWhen: (body['absent_when'] as Map?)?.cast<String, dynamic>(),
       exitCapableWhen:
           (body['exit_capable_when'] as Map?)?.cast<String, dynamic>(),
+      buildTag: body['build_tag'] as String?,
+      minCore: body['min_core'] as String?,
+      onCoreUnsupported: CoreUnsupported.tryParse(body['on_core_unsupported']),
+      levels: [
+        for (final e in (body['levels'] as List?) ?? const []) '$e',
+      ],
     );
   }
 

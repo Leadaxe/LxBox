@@ -15,7 +15,9 @@ library;
 import '../../models/node_warning.dart';
 import '../../models/singbox_entry.dart';
 import '../contract/body_sanitizer.dart';
+import '../contract/node_core_gate.dart';
 import '../contract/registry.dart';
+import 'core_chain_capability.dart' show kCoreBuildTags;
 
 /// Результат прогона гарда по одной сборке.
 final class RegistryGateReport {
@@ -49,10 +51,18 @@ final class RegistryGateReport {
 /// узел sing-box-источника идёт в ядро дословно. Пустое множество —
 /// поведение как прежде.
 ///
+/// §56 (контракт 1.1.60) — до санитайзера каждую запись судит узловой гейт
+/// ядра реестра ([nodeCoreRefusal]): протокол, поле или форма-диапазон с
+/// `on_core_unsupported: drop_node`, чьё требование (`build_tag` — по
+/// [coreBuildTags], `min_core` — по [coreVersion]) ядро не выполняет, снимает
+/// запись целиком с кодом реестра. [coreBuildTags] `null` — теги неизвестны,
+/// гейт по тегу не применяется.
+///
 /// Реестр не загружен — no-op: приложение работает как до §460.
 RegistryGateReport applyRegistryGate(
   List<SingboxEntry> entries, {
   required String coreVersion,
+  Set<String>? coreBuildTags = kCoreBuildTags,
   Set<SingboxEntry> verbatim = const {},
 }) {
   final warnings = <String>[];
@@ -94,10 +104,30 @@ RegistryGateReport applyRegistryGate(
     );
   }
 
+  final core = CoreInfo(version: coreVersion, tags: coreBuildTags);
   for (final entry in entries) {
     final type = entry.map['type'];
     if (type is! String || type.isEmpty) continue;
     final tag = entry.tag;
+
+    // §56 — узловой гейт ядра: узел, который ядру не по силам, конфиг не
+    // собирает вовсе (ядро отвергло бы его целиком), поэтому снимается до
+    // санитайзера и его кодов.
+    final refusal = nodeCoreRefusal(type, entry.map, core);
+    if (refusal != null) {
+      final w = RegistryWarning(
+        code: refusal.code,
+        path: refusal.path,
+        params: {'reason': refusal.reason},
+        ownerTag: tag,
+      );
+      final where = refusal.path == null ? '' : ' [${refusal.path}]';
+      final line = '$tag: ${w.message()}$where';
+      if (!warnings.contains(line)) warnings.add(line);
+      warningsByEmittedTag.putIfAbsent(tag, () => []).add(w);
+      dropped.add(entry);
+      continue;
+    }
 
     final res = RegistrySanitizer.sanitize(
       Map<String, dynamic>.from(entry.map),
