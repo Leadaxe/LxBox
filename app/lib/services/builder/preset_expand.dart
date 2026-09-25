@@ -63,7 +63,7 @@ bool dnsServerMissingAddress(Map<String, dynamic> server) {
 }
 
 /// §555 — источник набора правил по его `type` (remote — `url`, local —
-/// `path`, inline — `rules`). Возвращает недостающее поле или null, если
+/// `path`, inline — ключ `rules` со списком, в т.ч. пустым). Возвращает недостающее поле или null, если
 /// источник на месте. Тип не распознан — `url/path`.
 String? ruleSetMissingSource(Map<String, dynamic> rs) {
   bool has(String k) {
@@ -76,7 +76,9 @@ String? ruleSetMissingSource(Map<String, dynamic> rs) {
   return switch (rs['type']) {
     'remote' => has('url') ? null : 'url',
     'local' => has('path') ? null : 'path',
-    'inline' => has('rules') ? null : 'rules',
+    // Источник inline-набора — сам ключ `rules` со списком; пустой список
+    // ядро принимает, это не «нет источника».
+    'inline' => rs['rules'] is List ? null : 'rules',
     _ => 'url/path',
   };
 }
