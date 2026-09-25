@@ -138,6 +138,51 @@ const _kDefaultInvalidCode = 'type_invalid';
 const _kWarningValueMax = 64;
 
 /// Санитайзер тела записи по схеме реестра.
+/// Контракт 1.1.64 — «оставил бы санитайзер поле [path] при этом теле»:
+/// поле объявлено схемой протокола (`type` тела), не запрещено ей
+/// (`forbidden_for`/`allowed_for`) и ни одна его связь `conflicts` при этом
+/// теле не действует (`when` верно, сосед `with` задан, `unless_set` не
+/// задан). Спрашивают сборочные трансформы, которые дописывают поле
+/// телам, — по телу узла, а не по схеме. Без реестра или схемы — `true`
+/// (судить нечем).
+bool fieldAllowedOn(Map<String, dynamic> body, String path) {
+  final type = '${body['type'] ?? ''}';
+  final schema = ContractRegistry.I.schemaFor(type);
+  if (schema == null) return true;
+  final segs = path.split('.');
+  Map<String, FieldSchema>? fields = schema.fields;
+  FieldSchema? f;
+  for (final seg in segs) {
+    f = fields?[seg];
+    if (f == null) return false;
+    if (f.forbiddenFor?.contains(type) ?? false) return false;
+    final allowed = f.allowedFor;
+    if (allowed != null && !allowed.contains(type)) return false;
+    fields = f.fields;
+  }
+  final parent = segs.sublist(0, segs.length - 1);
+  Object? at(String p) {
+    if (p.contains('.') || parent.isEmpty) return _Ctx.finalAt(body, p);
+    return _Ctx.finalAt(body, [...parent, p].join('.')) ??
+        _Ctx.finalAt(body, p);
+  }
+
+  for (final c in f!.conflicts) {
+    final withPath = c['with'];
+    if (withPath is! String) continue;
+    final when = c['when'];
+    if (when != null && !_Ctx.conditionOnFinalBody(when, body)) continue;
+    if (!_Ctx._meaningful(at(withPath))) continue;
+    final unless = c['unless_set'];
+    if (unless is List &&
+        unless.any((u) => u is String && _Ctx._meaningful(at(u)))) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 /// Контракт 1.1.63 — годится ли узел ВЫХОДОМ (кандидатом в пул
 /// Направления): `exit_capable_when` тела его протокола, судимый по готовому
 /// телу. Без атрибута (или без схемы) — годится всегда.
