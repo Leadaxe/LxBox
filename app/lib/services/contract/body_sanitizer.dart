@@ -1819,8 +1819,14 @@ String _normalizeString(String v, String norm) {
       // Декодер ЛЕНИВЫЙ — тот же, которым судит годность `base64_32`: канон
       // и суд обязаны читать значение одинаково, иначе ключ, признанный
       // годным, нормализация оставила бы неканоническим (или наоборот).
-      final decoded = decodeBase64Lenient(v.trim());
-      return decoded == null ? v : base64.encode(decoded);
+      final decoded = _decodeB64(v.trim());
+      if (decoded == null) return v;
+      final canon = base64.encode(decoded);
+      // §549 R4 — канон декодируется в те же байты: следом его судит
+      // `format: base64_32`, и второй декод того же ключа не нужен.
+      _b64Key = canon;
+      _b64Bytes = decoded;
+      return canon;
     // D133-30 (контракт 1.1.40) — `base64_rawurl`: симметрия к `base64_std`,
     // заведена по нашему же запросу 19.09.2026. Отличие только в ЦЕЛЕВОМ
     // алфавите: std с паддингом против url-safe без него. Какой нужен полю,
@@ -1843,9 +1849,12 @@ String _normalizeString(String v, String norm) {
     // работа `format base64_32` с его `on_invalid`, и в код обязано уехать
     // СЫРОЕ написание (та же причина, что у `pattern` и `normalize_code`).
     case 'base64_rawurl':
-      final raw = decodeBase64Lenient(v.trim());
+      final raw = _decodeB64(v.trim());
       if (raw == null || raw.length != 32) return v;
-      return base64Url.encode(raw).replaceAll('=', '');
+      final canon = base64Url.encode(raw).replaceAll('=', '');
+      _b64Key = canon;
+      _b64Bytes = raw;
+      return canon;
     // `cidr_prefix`: голый адрес получает префикс — `/32` у v4, `/128` у v6.
     // Применяется поэлементно: поле-список нормализуется вызывающим по
     // элементам, и скаляр с той же записью ведёт себя так же.
@@ -2111,7 +2120,22 @@ bool _formatOk(Object? v, String format) {
 /// ней `FormatException`. Строгим декодером длина такого ключа выходила
 /// `null`, и `format: base64_32` ронял ЗАКОННЫЙ узел кодом `wg_key_invalid`
 /// (корпус `uri_psk_keepalive`, где ключи лежат в query).
-int? _base64Bytes(String v) => decodeBase64Lenient(v.trim())?.length;
+int? _base64Bytes(String v) => _decodeB64(v.trim())?.length;
+
+/// §549 R4 — последний декод base64 (одна запись). Ключ WireGuard судят
+/// подряд `normalize: base64_std` и `format: base64_32`, и без памяти один
+/// ключ декодировался дважды (§548: ~40 % санитайзера WG-узла). Декод —
+/// чистая функция строки, поэтому запись верна всегда; байты только читают.
+String? _b64Key;
+List<int>? _b64Bytes;
+
+List<int>? _decodeB64(String s) {
+  if (s == _b64Key) return _b64Bytes;
+  final bytes = decodeBase64Lenient(s);
+  _b64Key = s;
+  _b64Bytes = bytes;
+  return bytes;
+}
 
 bool _ipv4Ok(String v) {
   final parts = v.split('.');

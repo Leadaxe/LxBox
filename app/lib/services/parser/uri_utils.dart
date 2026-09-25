@@ -85,8 +85,11 @@ final Map<int, int> _b64CharValue = {
 /// (корпус `uri_psk_keepalive`). Двум гардам одного ключа расходиться нельзя.
 List<int>? decodeBase64Lenient(String s) => _decodeBase64Lenient(s);
 
+/// Хвостовой паддинг base64 (§549 R4 — одна регулярка на модуль, не на вызов).
+final RegExp _reB64Padding = RegExp(r'=+$');
+
 List<int>? _decodeBase64Lenient(String s) {
-  final trimmed = s.replaceAll(RegExp(r'=+$'), '');
+  final trimmed = s.replaceAll(_reB64Padding, '');
   if (trimmed.isEmpty) return null;
   final values = <int>[];
   for (final unit in trimmed.codeUnits) {
