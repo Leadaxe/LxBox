@@ -654,4 +654,132 @@ void main() {
       );
     });
   });
+
+  group('контракт 1.1.63 — context, deref/ref, substitute, type_of', () {
+    MapperSection json(Map<String, dynamic> params) => _section({
+          'forms': [
+            {'id': 'j', 'space': 'json'},
+          ],
+          'params': params,
+        });
+
+    test('context.* читается источником и условием', () {
+      final res = runSectionOnJson(
+        json({
+          'mtu': {
+            'source': 'context.container.mtu',
+            'maps_to': 'mtu',
+            'type': 'int',
+            'when': {
+              'context.container.mtu': {'gt': 0},
+            },
+          },
+        }),
+        {'x': 1},
+        context: {
+          'container': {'mtu': '1376'},
+        },
+      );
+      expect(res!.body['mtu'], 1376);
+      final none = runSectionOnJson(
+        json({
+          'mtu': {
+            'source': 'context.container.mtu',
+            'maps_to': 'mtu',
+            'type': 'int',
+            'when': {
+              'context.container.mtu': {'gt': 0},
+            },
+          },
+          'x': {'source': 'json.x', 'maps_to': 'x', 'type': 'int'},
+        }),
+        {'x': 1},
+      );
+      expect(none!.body.containsKey('mtu'), isFalse);
+    });
+
+    Map<String, dynamic> derefParams() => {
+          'server': {'source': 'json.host', 'maps_to': 'server'},
+          'frag': {
+            'source': 'json.via',
+            'deref': {'key': 'tag', 'as': 'dialer'},
+            'maps_to': null,
+            'when': {
+              'ref.dialer.protocol': 'freedom',
+              'ref.dialer.settings.fragment': {'type_of': 'object'},
+            },
+            'implies': {'tls.fragment': true},
+          },
+        };
+
+    test('deref кладёт соседа слоем ref.<as>, type_of судит тип', () {
+      final doc = [
+        {'tag': 'me', 'host': 'a', 'via': 'f'},
+        {
+          'tag': 'f',
+          'protocol': 'freedom',
+          'settings': {
+            'fragment': {'length': '1-2'},
+          },
+        },
+      ];
+      final res = runSectionOnJson(json(derefParams()),
+          doc.first, document: doc);
+      expect((res!.body['tls'] as Map?)?['fragment'], isTrue);
+    });
+
+    test('сосед не нашёлся или fragment не объект — условие ложно', () {
+      final el = {'tag': 'me', 'host': 'a', 'via': 'f'};
+      final noDoc = runSectionOnJson(json(derefParams()), el);
+      expect(noDoc!.body.containsKey('tls'), isFalse);
+      final scalar = [
+        el,
+        {
+          'tag': 'f',
+          'protocol': 'freedom',
+          'settings': {'fragment': 'yes'},
+        },
+      ];
+      final res =
+          runSectionOnJson(json(derefParams()), el, document: scalar);
+      expect(res!.body.containsKey('tls'), isFalse);
+    });
+
+    MapperSection substituteSection() => json({
+          'x': {'source': 'json.x', 'maps_to': 'x'},
+          'dns': {
+            'source': 'json.dns',
+            'substitute': {
+              'sep': ',',
+              'join': ', ',
+              'tokens': {
+                r'$P': 'context.p.dns1',
+                r'$S': 'context.p.dns2',
+              },
+            },
+            'maps_to': 'dns',
+          },
+        });
+
+    test('substitute: плейсхолдер из источника, неразрешённый снимается', () {
+      final res = runSectionOnJson(
+        substituteSection(),
+        {'x': '1', 'dns': r'$P, $S'},
+        context: {
+          'p': {'dns1': '1.1.1.1'},
+        },
+      );
+      expect(res!.body['dns'], '1.1.1.1');
+    });
+
+    test('substitute: пустой итог = значения нет; без плейсхолдеров — как есть',
+        () {
+      final empty = runSectionOnJson(
+          substituteSection(), {'x': '1', 'dns': r'$P, $S'});
+      expect(empty!.body.containsKey('dns'), isFalse);
+      final plain = runSectionOnJson(
+          substituteSection(), {'x': '1', 'dns': '8.8.8.8,9.9.9.9'});
+      expect(plain!.body['dns'], '8.8.8.8,9.9.9.9');
+    });
+  });
 }

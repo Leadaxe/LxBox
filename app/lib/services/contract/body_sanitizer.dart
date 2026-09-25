@@ -138,6 +138,147 @@ const _kDefaultInvalidCode = 'type_invalid';
 const _kWarningValueMax = 64;
 
 /// Санитайзер тела записи по схеме реестра.
+/// Контракт 1.1.59 — поле ВЕРХНЕГО уровня тела с ролью [role]
+/// (`credential` | `private_key`) у схемы протокола [singboxType]; `null` —
+/// роли у схемы нет. Имён полей в коде нет: роль объявляет реестр.
+String? fieldByRole(String singboxType, String role) {
+  final schema = ContractRegistry.I.schemaFor(singboxType);
+  if (schema == null) return null;
+  for (final e in schema.fields.entries) {
+    if (e.value.raw['role'] == role) return e.key;
+  }
+  return null;
+}
+
+/// Контракт 1.1.59 — учётные данные узла по роли `credential`: строка по
+/// пути поля готового тела как есть; нет поля или не строка — пусто.
+String credentialByRegistry(Map<String, dynamic> body) {
+  final f = fieldByRole('${body['type'] ?? ''}', 'credential');
+  final v = f == null ? null : body[f];
+  return v is String ? v : '';
+}
+
+/// Контракт 1.1.59 — ссылка узла несёт приватный ключ владельца: поле роли
+/// `private_key` непусто (строка или список непустых строк у
+/// `listable_string`). Такую ссылку отдают только после подтверждения.
+bool carriesPrivateKeyByRegistry(Map<String, dynamic> body) {
+  final f = fieldByRole('${body['type'] ?? ''}', 'private_key');
+  if (f == null) return false;
+  final v = body[f];
+  if (v is String) return v.isNotEmpty;
+  if (v is List) return v.any((e) => e is String && e.isNotEmpty);
+  return false;
+}
+
+/// Контракт 1.1.64 — «оставил бы санитайзер поле [path] при этом теле»:
+/// поле объявлено схемой протокола (`type` тела), не запрещено ей
+/// (`forbidden_for`/`allowed_for`) и ни одна его связь `conflicts` при этом
+/// теле не действует (`when` верно, сосед `with` задан, `unless_set` не
+/// задан). Спрашивают сборочные трансформы, которые дописывают поле
+/// телам, — по телу узла, а не по схеме. Без реестра или схемы — `true`
+/// (судить нечем).
+bool fieldAllowedOn(Map<String, dynamic> body, String path) {
+  final type = '${body['type'] ?? ''}';
+  final schema = ContractRegistry.I.schemaFor(type);
+  if (schema == null) return true;
+  final segs = path.split('.');
+  Map<String, FieldSchema>? fields = schema.fields;
+  FieldSchema? f;
+  for (final seg in segs) {
+    f = fields?[seg];
+    if (f == null) return false;
+    if (f.forbiddenFor?.contains(type) ?? false) return false;
+    final allowed = f.allowedFor;
+    if (allowed != null && !allowed.contains(type)) return false;
+    fields = f.fields;
+  }
+  final parent = segs.sublist(0, segs.length - 1);
+  Object? at(String p) {
+    if (p.contains('.') || parent.isEmpty) return _Ctx.finalAt(body, p);
+    return _Ctx.finalAt(body, [...parent, p].join('.')) ??
+        _Ctx.finalAt(body, p);
+  }
+
+  for (final c in f!.conflicts) {
+    final withPath = c['with'];
+    if (withPath is! String) continue;
+    final when = c['when'];
+    if (when != null && !_Ctx.conditionOnFinalBody(when, body)) continue;
+    if (!_Ctx._meaningful(at(withPath))) continue;
+    final unless = c['unless_set'];
+    if (unless is List &&
+        unless.any((u) => u is String && _Ctx._meaningful(at(u)))) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+/// Контракт 1.1.65 (`YieldsTo`) — поля, которые УСТУПАЮТ managed-полю
+/// [managed] (сборка дописала его после санитайзера, у ядра это `detour`):
+/// связь `conflicts {with: managed}` при готовом теле действует (`when` верно,
+/// `unless_set` не задан, сам [managed] задан) — поле снимается с тела с кодом
+/// связи, params `tag` (тег узла) и `target` (значение [managed]). Имён схем
+/// и полей в коде нет: что уступает, решает реестр.
+List<RegistryWarning> yieldToManaged(
+    Map<String, dynamic> body, String managed) {
+  final target = body[managed];
+  if (!_Ctx._meaningful(target)) return const [];
+  final schema = ContractRegistry.I.schemaFor('${body['type'] ?? ''}');
+  if (schema == null) return const [];
+  final out = <RegistryWarning>[];
+  void walk(Map<String, FieldSchema> fields, Map<String, dynamic> obj,
+      String prefix) {
+    for (final e in fields.entries) {
+      if (!obj.containsKey(e.key)) continue;
+      final path = prefix.isEmpty ? e.key : '$prefix.${e.key}';
+      final v = obj[e.key];
+      final nested = e.value.fields;
+      if (nested != null && v is Map<String, dynamic>) {
+        walk(nested, v, path);
+        continue;
+      }
+      for (final c in e.value.conflicts) {
+        if (c['with'] != managed) continue;
+        final when = c['when'];
+        if (when != null && !_Ctx.conditionOnFinalBody(when, body)) continue;
+        final unless = c['unless_set'];
+        if (unless is List &&
+            unless.any((u) =>
+                u is String && _Ctx._meaningful(_Ctx.finalAt(body, u)))) {
+          continue;
+        }
+        obj.remove(e.key);
+        out.add(RegistryWarning(
+          code: '${c['code'] ?? 'field_conflict'}',
+          path: path,
+          params: {
+            'tag': '${body['tag'] ?? ''}',
+            'target': '$target',
+            'with': managed,
+          },
+          ownerTag: '${body['tag'] ?? ''}',
+        ));
+        break;
+      }
+    }
+  }
+
+  walk(schema.fields, body, '');
+  return out;
+}
+
+/// Контракт 1.1.63 — годится ли узел ВЫХОДОМ (кандидатом в пул
+/// Направления): `exit_capable_when` тела его протокола, судимый по готовому
+/// телу. Без атрибута (или без схемы) — годится всегда.
+bool exitCapableByRegistry(Map<String, dynamic> body) {
+  final when = ContractRegistry.I.schemaFor('${body['type'] ?? ''}')
+      ?.exitCapableWhen;
+  if (when == null) return true;
+  return _Ctx.conditionOnFinalBody(when, body);
+}
+
 final class RegistrySanitizer {
   const RegistrySanitizer._();
 
@@ -1777,7 +1918,18 @@ final class _Ctx {
   }
 
   /// Условие правила по ГОТОВОМУ телу (грамматика `condition`).
-  bool finalConditionHolds(Object? when, Map<String, dynamic> body) {
+  bool finalConditionHolds(Object? when, Map<String, dynamic> body) =>
+      conditionOnFinalBody(when, body, kinds: kinds);
+
+  /// Условие грамматики `condition` по ГОТОВОМУ телу — общий суд для
+  /// правил, которые спрашивают тело после санитайзера (`coerce_when`,
+  /// `exit_capable_when` контракта 1.1.63). `any_set` = поле задано и не
+  /// пустая строка.
+  static bool conditionOnFinalBody(
+    Object? when,
+    Map<String, dynamic> body, {
+    Set<String> kinds = const {},
+  }) {
     if (when is! Map) return true;
     var branches = false;
     for (final e in when.entries) {

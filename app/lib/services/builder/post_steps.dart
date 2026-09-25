@@ -8,6 +8,8 @@ import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart';
 import '../../models/source_chain.dart' show kChainOutboundType;
+import '../../models/node_warning.dart' show RegistryWarning;
+import '../contract/body_sanitizer.dart' show fieldAllowedOn, yieldToManaged;
 import '../core_duration.dart';
 import '../json_clone.dart';
 import '../parser/uri_utils.dart' show isValidRealityPublicKey;

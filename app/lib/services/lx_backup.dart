@@ -926,7 +926,8 @@ Map<String, dynamic>? _exportSource(
     UserServer() => BackupRecord.server,
     FolderServers() => BackupRecord.folder,
   };
-  final stored = sanitizeCoreRejectInBackupRecord(sourceToRecord(list), kind);
+  final stored = sanitizeCoreRejectInBackupRecord(sourceToRecord(list), kind,
+      forExport: true);
   final entity = switch (list) {
     SubscriptionServers s => s.name.isEmpty ? s.url : s.name,
     UserServer u =>
@@ -3041,6 +3042,8 @@ LxServer? _folderMember10(
         autoGroup: group,
         name: group.tag,
         enabled: read.member.enabled,
+        // Контракт 1.1.66 — записи группы читатель кладёт как есть.
+        warnings: read.member.warnings,
         folder: folder.name,
         folderRef: folder.key,
       );
@@ -4420,7 +4423,7 @@ int _mergeFolderAutoGroup(
   }
   merged[folderAt] = folder.copyWith(members: [
     ...folder.members,
-    FolderMember.auto(group, enabled: srv.enabled),
+    FolderMember.auto(group, enabled: srv.enabled, warnings: srv.warnings),
   ]);
   pending.add((
     folderAt: folderAt,
@@ -4461,7 +4464,8 @@ int _bindBackupAutoGroups(
         ]),
       );
     }
-    final member = FolderMember.auto(group, enabled: p.srv.enabled);
+    final member = FolderMember.auto(group,
+        enabled: p.srv.enabled, warnings: p.srv.warnings);
     if (folder.members[p.member] == member) continue;
     merged[p.folderAt] = folder.copyWith(
       members: folder.members.toList()..[p.member] = member,

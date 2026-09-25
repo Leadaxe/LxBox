@@ -211,7 +211,10 @@ void main() {
         'sni': '4pda.to',
       }) as MasqueSpec?;
       expect(m, isNotNull);
-      expect(m!.vhttp, 'h3', reason: 'legacy network игнорируется — дефолт');
+      // Контракт 1.1.64 (корпус body/singbox/masque_tls_owner_rules, узел
+      // masque-no-vhttp-fragment): тело без `vhttp` остаётся без него —
+      // у ядра это `auto` (default реестра), а не прежний местный h3.
+      expect(m!.vhttp, '', reason: 'legacy network игнорируется — ключа нет');
       expect(m.sni, isEmpty, reason: 'плоский sni не переносится');
       expect(m.disableSni, isFalse);
     });

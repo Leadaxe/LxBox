@@ -700,6 +700,11 @@ Future<BuildResult> _buildConfig({
     route['final'] = finalTag;
   }
 
+  // Контракт 1.1.65 — поля, уступающие дописанному сборкой `detour`
+  // (`listen_port` WireGuard), снимаются кодом связи реестра.
+  for (final w in applyDetourYields(config)) {
+    emitWarnings.add(w.renderEn());
+  }
   applyTlsFragment(config, vars);
   applyMixedCaseSni(config, vars);
 

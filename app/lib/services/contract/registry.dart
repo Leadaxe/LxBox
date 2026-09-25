@@ -333,6 +333,7 @@ final class BodySchema {
     required this.fields,
     this.relations = const [],
     this.absentWhen,
+    this.exitCapableWhen,
   });
 
   /// Тег ядра, по которому сверен список полей.
@@ -355,6 +356,11 @@ final class BodySchema {
   /// суб-схемы (`tls`), он при разрешении `ref` действует в каждом протоколе.
   /// Смысл и порядок — [FieldSchema.absentWhen] и CANON §6.1.
   final Map<String, dynamic>? absentWhen;
+
+  /// Контракт 1.1.63 — `exit_capable_when` тела протокола (грамматика
+  /// `condition`, без `source_kind`): при каком готовом теле узел годится
+  /// ВЫХОДОМ — кандидатом в пул Направления. `null` — годится всегда.
+  final Map<String, dynamic>? exitCapableWhen;
 }
 
 /// Текст кода предупреждения из `registry/warnings.json`.
@@ -707,6 +713,8 @@ final class ContractRegistry {
           if (e is Map) e.cast<String, dynamic>(),
       ],
       absentWhen: (body['absent_when'] as Map?)?.cast<String, dynamic>(),
+      exitCapableWhen:
+          (body['exit_capable_when'] as Map?)?.cast<String, dynamic>(),
     );
   }
 

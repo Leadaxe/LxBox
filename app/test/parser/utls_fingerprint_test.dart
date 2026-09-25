@@ -497,8 +497,9 @@ void main() {
     });
 
     test(
-        'РЕВЬЮ §281: REALITY + пустой/пробельный fingerprint → chrome '
-        '(иначе toSingbox не эмитит utls, а ядру uTLS при reality обязателен)',
+        'РЕВЬЮ §281 / контракт 1.1.61: REALITY + пустой/пробельный '
+        'fingerprint — uTLS эмитится без отпечатка (ядро читает пустой как '
+        'chrome, utls_client.go), пустое значение в теле законно',
         () {
       for (final fp in ['', '  ']) {
         final spec = parseSingboxEntry({
@@ -514,11 +515,11 @@ void main() {
             'reality': {'enabled': true, 'public_key': _validPbk},
           },
         })! as VlessSpec;
-        expect(spec.tls.fingerprint, 'chrome', reason: 'fp="$fp"');
+        expect(spec.tls.fingerprint, '', reason: 'fp="$fp"');
         expect(spec.tls.reality, isNotNull);
         final utls =
             (spec.emit(TemplateVars.empty).map['tls'] as Map)['utls'] as Map;
-        expect(utls['fingerprint'], 'chrome');
+        expect(utls, {'enabled': true});
       }
     });
 

@@ -5,6 +5,7 @@ import '../../models/auto_select.dart';
 import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
 import '../../models/singbox_entry.dart';
+import '../contract/body_sanitizer.dart' show exitCapableByRegistry;
 import '../node_hash.dart';
 import '../node_identity.dart';
 import '../node_link_address.dart';
@@ -209,11 +210,12 @@ extension ServerListBuild on ServerList {
       //     регистрируется по тем же register-тогглам (симметрия с ⚙ подписки).
       final isMainAsDetour = main.tag.startsWith(kDetourTagPrefix) ||
           (plan?.isChainLink(i) ?? false);
-      // §435 — Tailscale без `exit_node` в интернет не выпускает и «страной»
-      // не является (NODE_SECTIONS.md §6): в пул Направлений не идёт ни при
-      // какой политике. В `endpoints[]` он эмитирован (`addEntry` выше) —
-      // законная цель `detour`, `outbound` правила узла и позиции цепочки.
-      final tailnetOnly = server is TailscaleSpec && !server.hasExitNode;
+      // §435 / контракт 1.1.63 — узел, который реестр не считает выходом
+      // (`exit_capable_when` тела: у Tailscale — без `exit_node`), в пул
+      // Направлений не идёт ни при какой политике. В `endpoints[]` он
+      // эмитирован (`addEntry` выше) — законная цель `detour`, `outbound`
+      // правила узла и позиции цепочки.
+      final tailnetOnly = !exitCapableByRegistry(main.map);
       if (tailnetOnly) {
         // ничего: ни selector, ни auto
       } else if (!isMainAsDetour) {

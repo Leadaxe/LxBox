@@ -145,19 +145,6 @@ sealed class NodeSpec {
   /// Тип протокола — для UI иконок и дебага.
   String get protocol;
 
-  /// §466 — [toUri] этого узла несёт приватный ключ владельца.
-  ///
-  /// Признак для экрана, а не для эмиттера: `toUri()` у нас одновременно и
-  /// форма хранения (инвариант `parseUri(spec.toUri()) ≈ spec`), вырезать из
-  /// неё ключ нельзя — он потерялся бы при перезагрузке узла. Но ссылку
-  /// пересылают, и это другая граница доверия, чем локальное хранение:
-  /// «Copy URI» у такого узла спрашивает подтверждение (§466 заменил отказ
-  /// §463).
-  ///
-  /// Пароли, UUID и PSK признаком НЕ считаются: это секрет доступа к конкретному
-  /// прокси, а не ключ, которым владелец опознаётся где-то ещё.
-  bool get linkCarriesPrivateKey => false;
-
   /// §322 — узел-группа (пул автовыбора), а не соединение. У такого нет
   /// адреса: `server`/`port` пусты, пинг берётся у выбранного члена. Гейт для
   /// операций, требующих `server:port`, и для тех, что раздают ссылку наружу
@@ -600,11 +587,6 @@ final class SshSpec extends NodeSpec {
 
   @override
   String toUri() => e.uriViaEngineRequired(this);
-
-  /// §466 — `toUriSsh` пишет `private_key` в query только когда ключ непустой;
-  /// узел с одним паролем ключа в ссылке не несёт.
-  @override
-  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1048,11 +1030,6 @@ final class WireguardSpec extends NodeSpec {
 
   @override
   String toUri() => e.uriViaEngineRequired(this);
-
-  /// §466 — приватный ключ интерфейса уходит в userinfo ссылки. AWG (`awg`
-  /// != null) — тот же класс, тот же эмиттер, потому отдельной ветки нет.
-  @override
-  bool get linkCarriesPrivateKey => privateKey.isNotEmpty;
 }
 
 /// §130 — MASQUE (CONNECT-IP over HTTP/3/HTTP-2) для Cloudflare WARP.
@@ -1139,11 +1116,6 @@ final class MasqueSpec extends NodeSpec {
 
   @override
   String toUri() => e.uriViaEngineRequired(this);
-
-  /// §466 — `toUriMasque` кладёт [privateKeyDer] (SEC1 DER нашего ECDSA) в
-  /// userinfo ссылки.
-  @override
-  bool get linkCarriesPrivateKey => privateKeyDer.isNotEmpty;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1317,14 +1289,6 @@ final class TailscaleSpec extends NodeSpec {
 
   @override
   bool get isAddressless => true;
-
-  /// Непустой `exit_node` — узел выпускает в интернет и годится в
-  /// Направления; без него он только даёт доступ в tailnet (NODE_SECTIONS.md
-  /// §6): в пул Направлений не идёт, но законен как `detour` и `outbound`.
-  bool get hasExitNode {
-    final v = body['exit_node'];
-    return v is String && v.trim().isNotEmpty;
-  }
 
   @override
   SingboxEntry emitRaw(TemplateVars vars) => e.emitTailscale(this, vars);

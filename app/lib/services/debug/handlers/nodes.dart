@@ -1,5 +1,7 @@
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/node_spec.dart';
+import '../../../models/template_vars.dart';
+import '../../contract/body_sanitizer.dart' show carriesPrivateKeyByRegistry;
 import '../../tag_resolver.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -52,7 +54,7 @@ Future<DebugResponse> _link(DebugRequest req, DebugContext ctx) async {
     return JsonResponse({
       'tag': hit.tag,
       'protocol': hit.protocol,
-      'private_key': hit.linkCarriesPrivateKey,
+      'private_key': carriesPrivateKeyByRegistry(hit.emit(TemplateVars.empty).map),
       'error': 'reveal required',
     });
   }
@@ -70,7 +72,7 @@ Future<DebugResponse> _link(DebugRequest req, DebugContext ctx) async {
     'protocol': hit.protocol,
     'uri': uri,
     // §466 — ссылка несёт приватный ключ владельца.
-    'private_key': hit.linkCarriesPrivateKey,
+    'private_key': carriesPrivateKeyByRegistry(hit.emit(TemplateVars.empty).map),
   });
 }
 
