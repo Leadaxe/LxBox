@@ -33,6 +33,10 @@
   WireGuard `listen_port` yields to a detour added by the build, with a code in the
   build report. Backups carry an Auto group's warnings as they are; a node disabled
   after a core rejection stays disabled on import, without the verdict.
+  A node the core cannot run is now dropped at build time by the registry's
+  build-tag and version requirements (Tailscale without `with_tailscale`, AmneziaWG
+  3.x fields or a keepalive range on an older core), with its code in the build
+  report; the Tailscale gate no longer goes by core version.
 - **Template language parity with contract 1.1.68–1.1.70 ([§555](docs/spec/tasks/555-template-lang-spec143-parity.md)).**
   A list-valued `#if` branch inside an array now splices one level into the parent,
   `@runtime.platform/arch/target` drop their key instead of leaking into the config,
