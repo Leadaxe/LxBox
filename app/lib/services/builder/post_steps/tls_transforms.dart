@@ -90,3 +90,22 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
     tls['fragment_fallback_delay'] = fallbackDelay;
   }
 }
+
+/// Post-step (контракт 1.1.65): `detour` дописывает сборка ПОСЛЕ санитайзера,
+/// поэтому связи `conflicts {with: detour}` реестра перепроверяются здесь, по
+/// готовому телу каждого outbound/endpoint с `detour`: уступающие поля
+/// снимаются с кодом связи ([yieldToManaged]). Хоп сохраняется — снять
+/// detour значило бы тихий прямой дозвон.
+List<RegistryWarning> applyDetourYields(Map<String, dynamic> config) {
+  final out = <RegistryWarning>[];
+  for (final key in const ['outbounds', 'endpoints']) {
+    final list = config[key];
+    if (list is! List) continue;
+    for (final e in list) {
+      if (e is! Map<String, dynamic>) continue;
+      if (!e.containsKey('detour')) continue;
+      out.addAll(yieldToManaged(e, 'detour'));
+    }
+  }
+  return out;
+}

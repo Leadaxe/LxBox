@@ -183,6 +183,60 @@ bool fieldAllowedOn(Map<String, dynamic> body, String path) {
   return true;
 }
 
+/// Контракт 1.1.65 (`YieldsTo`) — поля, которые УСТУПАЮТ managed-полю
+/// [managed] (сборка дописала его после санитайзера, у ядра это `detour`):
+/// связь `conflicts {with: managed}` при готовом теле действует (`when` верно,
+/// `unless_set` не задан, сам [managed] задан) — поле снимается с тела с кодом
+/// связи, params `tag` (тег узла) и `target` (значение [managed]). Имён схем
+/// и полей в коде нет: что уступает, решает реестр.
+List<RegistryWarning> yieldToManaged(
+    Map<String, dynamic> body, String managed) {
+  final target = body[managed];
+  if (!_Ctx._meaningful(target)) return const [];
+  final schema = ContractRegistry.I.schemaFor('${body['type'] ?? ''}');
+  if (schema == null) return const [];
+  final out = <RegistryWarning>[];
+  void walk(Map<String, FieldSchema> fields, Map<String, dynamic> obj,
+      String prefix) {
+    for (final e in fields.entries) {
+      if (!obj.containsKey(e.key)) continue;
+      final path = prefix.isEmpty ? e.key : '$prefix.${e.key}';
+      final v = obj[e.key];
+      final nested = e.value.fields;
+      if (nested != null && v is Map<String, dynamic>) {
+        walk(nested, v, path);
+        continue;
+      }
+      for (final c in e.value.conflicts) {
+        if (c['with'] != managed) continue;
+        final when = c['when'];
+        if (when != null && !_Ctx.conditionOnFinalBody(when, body)) continue;
+        final unless = c['unless_set'];
+        if (unless is List &&
+            unless.any((u) =>
+                u is String && _Ctx._meaningful(_Ctx.finalAt(body, u)))) {
+          continue;
+        }
+        obj.remove(e.key);
+        out.add(RegistryWarning(
+          code: '${c['code'] ?? 'field_conflict'}',
+          path: path,
+          params: {
+            'tag': '${body['tag'] ?? ''}',
+            'target': '$target',
+            'with': managed,
+          },
+          ownerTag: '${body['tag'] ?? ''}',
+        ));
+        break;
+      }
+    }
+  }
+
+  walk(schema.fields, body, '');
+  return out;
+}
+
 /// Контракт 1.1.63 — годится ли узел ВЫХОДОМ (кандидатом в пул
 /// Направления): `exit_capable_when` тела его протокола, судимый по готовому
 /// телу. Без атрибута (или без схемы) — годится всегда.
