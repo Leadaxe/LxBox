@@ -1031,7 +1031,10 @@ final class _SectionPlan {
   _SectionPlan(MapperSection section)
       : selectors = _pass(section, selector: true),
         dependents = _pass(section, selector: false),
-        declared = _declaredOf(section);
+        declared = _declaredOf(section),
+        declaredIni = _declaredIniOf(section),
+        declaredJson = _declaredJsonOf(section),
+        labelKeys = _labelKeysOf(section);
 
   /// Записи прохода A (`selector: true`) в нормативном порядке.
   final List<MapperParam> selectors;
@@ -1051,7 +1054,23 @@ final class _SectionPlan {
   /// без `ed=` и любой параметр чужого транспорта давали бы info о
   /// «неизвестном параметре» на ровном месте — а это ровно то молчание
   /// наоборот, ради которого затеяна кампания.
+  ///
+  /// §551 — ВКЛЮЧАЯ носителей наложенных слоёв (`overlays[].source`): набор
+  /// читает `_Run._reportUnknown`, и до §551 он строился заново на каждом
+  /// прогоне секции. Overlays — поле самой секции, поэтому ключ кеша (её
+  /// экземпляр) их покрывает.
   final Set<String> declared;
+
+  /// То же для ini-документа (`ini.<Секция>.<Ключ>`), см. `_Run._declaredIni`.
+  final Set<String> declaredIni;
+
+  /// То же для объектного входа (`json.<имя>` верхнего уровня), см.
+  /// `_Run._declaredJson`.
+  final Set<String> declaredJson;
+
+  /// Ключи верхнего уровня, объявленные источником метки, см.
+  /// `_Run._labelKeys`.
+  final Set<String> labelKeys;
 
   /// Стабильная сортировка по `priority` с индексом ОБЪЯВЛЕНИЯ как
   /// тай-брейком (норма §7: порядок объявления нормативен).
@@ -1078,22 +1097,101 @@ final class _SectionPlan {
     return [for (final i in picked) all[i]];
   }
 
-  static Set<String> _declaredOf(MapperSection s) {
+  static Set<String> _declaredOf(MapperSection section) {
     final out = <String>{};
-    for (final p in s.params.values) {
-      for (final sp in p.spellings) {
-        out.add(sp.toLowerCase());
+    for (final p in section.params.values) {
+      for (final s in p.spellings) {
+        out.add(s.toLowerCase());
       }
       // Норма §10.3: имя из `source` объявлено НАРАВНЕ с именем записи —
       // запись читает `query.<name>`, и `<name>` бывает не равно её имени.
-      for (final src in [
+      final sources = [
         ...p.source,
         for (final l in p.sourceByForm.values) ...l,
-      ]) {
+      ];
+      for (final src in sources) {
         if (src.startsWith('query.')) {
           out.add(src.substring('query.'.length).toLowerCase());
         }
       }
+    }
+    // Параметр, НЕСУЩИЙ наложенный слой, объявлен самим слоем: `overlays[]`
+    // называет его своим `source`, и читают его записи под именем слоя
+    // (`extra.mode`), а не плоским `query.extra`. Без этой ветки набор видел
+    // только адресатов, а носитель оставался «никем не объявленным» и уезжал
+    // в `uri_param_unknown` — у корпуса это все шесть кейсов `xhttp_extra_*`,
+    // включая тот, где слой битый и записей не даёт вовсе.
+    for (final o in section.overlays) {
+      for (final src in o.source) {
+        if (src.startsWith('query.')) {
+          out.add(src.substring('query.'.length).toLowerCase());
+        }
+      }
+    }
+    return out;
+  }
+
+  static Set<String> _declaredIniOf(MapperSection section) {
+    final out = <String>{};
+    void declare(String src) {
+      if (!src.startsWith('ini.')) return;
+      final rest = src.substring('ini.'.length);
+      // `$comment.<Секция>` источником-ключом не является.
+      if (rest.startsWith(r'$')) return;
+      if (rest.split('.').length != 2) return;
+      out.add(rest.toLowerCase());
+    }
+
+    for (final p in section.params.values) {
+      for (final src in p.source) {
+        declare(src);
+      }
+      for (final l in p.sourceByForm.values) {
+        for (final src in l) {
+          declare(src);
+        }
+      }
+    }
+    for (final src in section.label.source) {
+      declare(src);
+    }
+    for (final l in section.label.sourceByForm.values) {
+      for (final src in l) {
+        declare(src);
+      }
+    }
+    return out;
+  }
+
+  static Set<String> _declaredJsonOf(MapperSection section) {
+    final out = <String>{};
+    for (final p in section.params.values) {
+      final sources = [
+        ...p.source,
+        for (final l in p.sourceByForm.values) ...l,
+      ];
+      for (final src in sources) {
+        if (!src.startsWith('json.')) continue;
+        final rest = src.substring('json.'.length);
+        final dot = rest.indexOf('.');
+        out.add((dot < 0 ? rest : rest.substring(0, dot)).toLowerCase());
+      }
+    }
+    return out;
+  }
+
+  static Set<String> _labelKeysOf(MapperSection section) {
+    final out = <String>{};
+    final byForm = section.label.sourceByForm;
+    final sources = [
+      ...section.label.source,
+      for (final l in byForm.values) ...l,
+    ];
+    for (final src in sources) {
+      if (!src.startsWith('json.')) continue;
+      final rest = src.substring('json.'.length);
+      final dot = rest.indexOf('.');
+      out.add((dot < 0 ? rest : rest.substring(0, dot)).toLowerCase());
     }
     return out;
   }
@@ -3630,37 +3728,7 @@ final class _Run {
   /// `ini.Peer.PersistentKeepalive`, и по имени записи объявленным не
   /// выглядел бы ни один ключ файла. Секция в имени значима: `MTU` у
   /// `[Interface]` и `MTU` у `[Peer]` — разные ключи.
-  late final Set<String> _declaredIni = () {
-    final out = <String>{};
-    void declare(String src) {
-      if (!src.startsWith('ini.')) return;
-      final rest = src.substring('ini.'.length);
-      // `$comment.<Секция>` источником-ключом не является.
-      if (rest.startsWith(r'$')) return;
-      if (rest.split('.').length != 2) return;
-      out.add(rest.toLowerCase());
-    }
-
-    for (final p in section.params.values) {
-      for (final src in p.source) {
-        declare(src);
-      }
-      for (final l in p.sourceByForm.values) {
-        for (final src in l) {
-          declare(src);
-        }
-      }
-    }
-    for (final src in section.label.source) {
-      declare(src);
-    }
-    for (final l in section.label.sourceByForm.values) {
-      for (final src in l) {
-        declare(src);
-      }
-    }
-    return out;
-  }();
+  Set<String> get _declaredIni => _plan.declaredIni;
 
   /// Все написания, ОБЪЯВЛЕННЫЕ таблицей: имя записи, её `aliases` и имена в
   /// `source` (`query.<имя>`).
@@ -3670,37 +3738,7 @@ final class _Run {
   /// `eh=` без `ed=` и любой параметр чужого транспорта давали бы info о
   /// «неизвестном параметре» на ровном месте — а это ровно то молчание
   /// наоборот, ради которого затеяна кампания.
-  late final Set<String> _declared = () {
-    final out = <String>{};
-    for (final p in section.params.values) {
-      for (final s in p.spellings) {
-        out.add(s.toLowerCase());
-      }
-      final sources = [
-        ...p.source,
-        for (final l in p.sourceByForm.values) ...l,
-      ];
-      for (final src in sources) {
-        if (src.startsWith('query.')) {
-          out.add(src.substring('query.'.length).toLowerCase());
-        }
-      }
-    }
-    // Параметр, НЕСУЩИЙ наложенный слой, объявлен самим слоем: `overlays[]`
-    // называет его своим `source`, и читают его записи под именем слоя
-    // (`extra.mode`), а не плоским `query.extra`. Без этой ветки набор видел
-    // только адресатов, а носитель оставался «никем не объявленным» и уезжал
-    // в `uri_param_unknown` — у корпуса это все шесть кейсов `xhttp_extra_*`,
-    // включая тот, где слой битый и записей не даёт вовсе.
-    for (final o in section.overlays) {
-      for (final src in o.source) {
-        if (src.startsWith('query.')) {
-          out.add(src.substring('query.'.length).toLowerCase());
-        }
-      }
-    }
-    return out;
-  }();
+  Set<String> get _declared => _plan.declared;
 
   /// То же, что [_declared], но для ОБЪЕКТНОГО входа: имена верхнего уровня,
   /// объявленные таблицей через `json.<имя>`.
@@ -3715,22 +3753,7 @@ final class _Run {
   /// ветка судит ровно верхний уровень, а вложенный лист ключом верхнего
   /// уровня не является — иначе запись, читающая лист, молча признавала бы
   /// объявленной всю ветку документа над ним.
-  late final Set<String> _declaredJson = () {
-    final out = <String>{};
-    for (final p in section.params.values) {
-      final sources = [
-        ...p.source,
-        for (final l in p.sourceByForm.values) ...l,
-      ];
-      for (final src in sources) {
-        if (!src.startsWith('json.')) continue;
-        final rest = src.substring('json.'.length);
-        final dot = rest.indexOf('.');
-        out.add((dot < 0 ? rest : rest.substring(0, dot)).toLowerCase());
-      }
-    }
-    return out;
-  }();
+  Set<String> get _declaredJson => _plan.declaredJson;
 
   /// Ключи ВЕРХНЕГО уровня объектного входа, объявленные источником МЕТКИ.
   ///
@@ -3738,21 +3761,7 @@ final class _Run {
   /// ключ, из которого имя берёт соседняя форма, чужим диалектом не
   /// становится. Путь режется до верхнего сегмента — ветка судит ровно
   /// верхний уровень.
-  late final Set<String> _labelKeys = () {
-    final out = <String>{};
-    final byForm = section.label.sourceByForm;
-    final sources = [
-      ...section.label.source,
-      for (final l in byForm.values) ...l,
-    ];
-    for (final src in sources) {
-      if (!src.startsWith('json.')) continue;
-      final rest = src.substring('json.'.length);
-      final dot = rest.indexOf('.');
-      out.add((dot < 0 ? rest : rest.substring(0, dot)).toLowerCase());
-    }
-    return out;
-  }();
+  Set<String> get _labelKeys => _plan.labelKeys;
 
   /// Регулярка реестра, скомпилированная и закэшированная.
   ///
