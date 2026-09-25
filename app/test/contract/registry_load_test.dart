@@ -40,10 +40,22 @@ void main() {
       expect(schema, isNotNull, reason: 'у vless обязана быть секция body');
       expect(schema!.core, '1.14.1-lx.4');
 
-      // Поля-ссылки остаются ссылками — санитайзер спускается в них сам.
-      expect(schema.fields['tls']!.ref, 'tls');
-      expect(schema.fields['transport']!.ref, 'transports');
-      expect(schema.fields['multiplex']!.ref, 'multiplex');
+      // §553 — ссылки развёрнуты в поля-объекты с вложенной схемой и
+      // пометкой происхождения; транспорт — с вариантами по `type`.
+      final tls = schema.fields['tls']!;
+      expect(tls.type, 'object');
+      expect(tls.originRef, 'tls');
+      expect(tls.order!.first, 'enabled');
+      expect(tls.fields!['reality']!.fields!['public_key'], isNotNull);
+      // `absent_when` секции переехал в поле.
+      expect(tls.absentWhen, {'enabled': false});
+      final transport = schema.fields['transport']!;
+      expect(transport.originRef, 'transports');
+      expect(transport.discriminator, 'type');
+      expect(transport.variants!['ws']!.fields!['path'], isNotNull);
+      expect(transport.variants!['xhttp']!.order, contains('mode'));
+      expect(schema.fields['multiplex']!.originRef, 'multiplex');
+      expect(schema.fields['multiplex']!.fields, isNotEmpty);
 
       // `__dialer` влился плоско: слота в порядке нет, а поля dialer есть,
       // причём ровно на его месте — в хвосте, как в структуре ядра.
@@ -68,7 +80,7 @@ void main() {
         if (fields == null) return;
         for (final e in fields.entries) {
           final path = '$prefix.${e.key}';
-          if (e.value.type == 'ref' && e.value.ref!.contains('.')) {
+          if (e.value.type == 'ref') {
             unresolved.add('$path → ${e.value.ref}');
           }
           walk(e.value.fields, path);
@@ -103,6 +115,15 @@ void main() {
       expect(nl.normalize, 'trim_lower');
       expect(nl.onInvalid?['code'], 'type_invalid');
       expect(nl.raw['impl'], contains('masque'));
+    });
+
+    test('§553 обёртка ужесточает required объектной ссылки', () {
+      // У суб-схемы tls обязательности нет, у hysteria2 её задаёт обёртка.
+      final h2 = ContractRegistry.I.schemaFor('hysteria2')!.fields['tls']!;
+      expect(h2.required, isTrue);
+      expect(h2.originRef, 'tls');
+      final vless = ContractRegistry.I.schemaFor('vless')!.fields['tls']!;
+      expect(vless.required, isFalse);
     });
 
     test('транспорт выбирается по дискриминатору transport.type', () {

@@ -147,6 +147,17 @@ void _collectPaths(
       _collectPaths(shared.order, shared.fields, path, out);
       continue;
     }
+    // Объект с вариантами (`transport`): поля варианта лежат под его именем.
+    final variants = f.variants;
+    if (variants != null) {
+      for (final t in _kTransportTypes) {
+        final v = variants[t];
+        final vf = v?.fields;
+        if (vf == null) continue;
+        _collectPaths(v!.order ?? vf.keys.toList(), vf, '$path.$t', out);
+      }
+      continue;
+    }
     final sub = f.fields;
     if (sub != null) {
       _collectPaths(f.order ?? sub.keys.toList(), sub, path, out);
@@ -164,19 +175,22 @@ bool forbiddenByRegistry(String scheme, String path) {
   final schema = ContractRegistry.I.schemaFor(scheme);
   if (schema == null) return false;
   Map<String, FieldSchema>? fields = schema.fields;
+  Map<String, FieldSchema>? variants;
   for (final seg in path.split('.')) {
+    // Звено после объекта с вариантами — имя варианта (`transport.ws`).
+    if (variants != null) {
+      fields = variants[seg]?.fields;
+      variants = null;
+      continue;
+    }
     final f = fields?[seg];
     if (f == null) return false;
     final forbidden = f.forbiddenFor;
     if (forbidden != null && forbidden.contains(scheme)) return true;
     final allowed = f.allowedFor;
     if (allowed != null && !allowed.contains(scheme)) return true;
-    final ref = f.ref;
-    if (f.type == 'ref' && ref != null && ref != 'transports') {
-      fields = ContractRegistry.I.sharedSchema(ref)?.fields;
-    } else {
-      fields = f.fields;
-    }
+    variants = f.variants;
+    fields = f.fields;
   }
   return false;
 }
@@ -586,6 +600,17 @@ final class _Generator {
 
     switch (f.type) {
       case 'object':
+        // Объект с вариантами (`transport`): вариант — по оси тела.
+        final variants = f.variants;
+        if (variants != null) {
+          final t = ctx.transport;
+          if (t == null) return _kOmit;
+          final v = variants[t];
+          final vf = v?.fields;
+          if (vf == null) return _kOmit;
+          final inner = _object(v!.order ?? vf.keys.toList(), vf, '$path.$t', ctx);
+          return <String, dynamic>{f.discriminator ?? 'type': t, ...inner};
+        }
         final sub = f.fields;
         // Объект без `fields` — свободная карта (`transport.headers`):
         // состав задаёт не реестр, кладём образец из одной пары.

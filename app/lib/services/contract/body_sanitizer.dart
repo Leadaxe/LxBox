@@ -701,6 +701,7 @@ final class _Ctx {
 
     switch (f.type) {
       case 'object':
+        if (f.variants != null) return _sanitizeVariantObject(value, f, path);
         return _sanitizeObjectField(value, f, path);
       case 'array':
         return _sanitizeArray(value, f, path);
@@ -756,6 +757,33 @@ final class _Ctx {
     return _Value.keep(cleaned);
   }
 
+  /// §553 — объект с вариантами по дискриминатору (`transport` по `type`):
+  /// реестр развернул ссылку `transports` при загрузке, вариант берётся из
+  /// самого поля ([FieldSchema.variants]).
+  _Value _sanitizeVariantObject(Object? value, FieldSchema f, String path) {
+    if (value is! Map) return _invalid(f, path, value);
+    final disc = f.discriminator ?? 'type';
+    final map = value.cast<String, dynamic>();
+    final type = map[disc];
+    if (type is! String) {
+      // Транспорт без `type` ядро не разберёт вовсе — тот же тип-фатал.
+      return _invalid(f, path, value);
+    }
+    final variant = f.variants![type];
+    if (variant == null) return _invalid(f, path, type);
+    // `type` — сам дискриминатор: в `order` варианта его нет, но снимать
+    // его нельзя, иначе транспорт перестанет быть транспортом.
+    final inner = Map<String, dynamic>.from(map)..remove(disc);
+    final cleaned = sanitizeObject(
+        inner, variant.order ?? const [], variant.fields ?? const {}, path);
+    return _Value.keep(<String, dynamic>{disc: type, ...cleaned});
+  }
+
+  /// Поле-объект: собственный объект схемы (`tls.reality`, `hysteria2.obfs`)
+  /// и развёрнутая ссылка на общую суб-схему (`tls`, `multiplex`, §553 —
+  /// у такого поля [FieldSchema.originRef]). Граница §472 шаг 5 у них одна:
+  /// не хватило `required` внутри объекта — снимается он, а не узел, и не
+  /// важно, описан объект ссылкой или на месте.
   _Value _sanitizeObjectField(Object? value, FieldSchema f, String path) {
     if (value is! Map) return _invalid(f, path, value);
     final map = value.cast<String, dynamic>();

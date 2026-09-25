@@ -715,7 +715,7 @@ final class ContractRegistry {
     final parts = ref.split('.');
     // `dialer.common.network` — секция `dialer.common`, поле названо явно.
     final section = parts.length >= 3 ? parts.take(2).join('.') : ref;
-    if (section == 'transports') return null;
+    if (section == 'transports') return _transportsAsObject(src);
     final sub = sharedSchema(section);
     if (sub == null) return null;
     if (ref.contains('.') && sub.fields.isNotEmpty) {
@@ -723,7 +723,7 @@ final class ContractRegistry {
       if (target == null) return null;
       return _mergeRefAttrs(src, target, section);
     }
-    return null;
+    return _refAsObject(src, sub, section);
   }
 
   /// Поле плоской суб-схемы, на которое указывает ссылка. Порядок, как у
