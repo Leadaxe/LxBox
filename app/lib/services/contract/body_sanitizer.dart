@@ -138,6 +138,38 @@ const _kDefaultInvalidCode = 'type_invalid';
 const _kWarningValueMax = 64;
 
 /// Санитайзер тела записи по схеме реестра.
+/// Контракт 1.1.59 — поле ВЕРХНЕГО уровня тела с ролью [role]
+/// (`credential` | `private_key`) у схемы протокола [singboxType]; `null` —
+/// роли у схемы нет. Имён полей в коде нет: роль объявляет реестр.
+String? fieldByRole(String singboxType, String role) {
+  final schema = ContractRegistry.I.schemaFor(singboxType);
+  if (schema == null) return null;
+  for (final e in schema.fields.entries) {
+    if (e.value.raw['role'] == role) return e.key;
+  }
+  return null;
+}
+
+/// Контракт 1.1.59 — учётные данные узла по роли `credential`: строка по
+/// пути поля готового тела как есть; нет поля или не строка — пусто.
+String credentialByRegistry(Map<String, dynamic> body) {
+  final f = fieldByRole('${body['type'] ?? ''}', 'credential');
+  final v = f == null ? null : body[f];
+  return v is String ? v : '';
+}
+
+/// Контракт 1.1.59 — ссылка узла несёт приватный ключ владельца: поле роли
+/// `private_key` непусто (строка или список непустых строк у
+/// `listable_string`). Такую ссылку отдают только после подтверждения.
+bool carriesPrivateKeyByRegistry(Map<String, dynamic> body) {
+  final f = fieldByRole('${body['type'] ?? ''}', 'private_key');
+  if (f == null) return false;
+  final v = body[f];
+  if (v is String) return v.isNotEmpty;
+  if (v is List) return v.any((e) => e is String && e.isNotEmpty);
+  return false;
+}
+
 /// Контракт 1.1.64 — «оставил бы санитайзер поле [path] при этом теле»:
 /// поле объявлено схемой протокола (`type` тела), не запрещено ей
 /// (`forbidden_for`/`allowed_for`) и ни одна его связь `conflicts` при этом

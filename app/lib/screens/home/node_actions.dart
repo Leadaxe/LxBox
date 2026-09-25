@@ -7,6 +7,9 @@ import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/node_spec.dart';
+import '../../models/template_vars.dart';
+import '../../services/contract/body_sanitizer.dart'
+    show carriesPrivateKeyByRegistry;
 import '../../services/tag_resolver.dart';
 import '../outbound_view_screen.dart';
 import '../../services/l10n/locale_controller.dart';
@@ -199,7 +202,7 @@ Future<void> copyNodeUri(BuildContext context, String tag,
   // молча вырезать ключ из неё нельзя — он потерялся бы при перезагрузке
   // узла. Отказ же ломал перенос своего узла между своими устройствами и был
   // непоследователен: у SSH ключ не отдавался вовсе, у WireGuard уезжал молча.
-  if (node.linkCarriesPrivateKey) {
+  if (carriesPrivateKeyByRegistry(node.emit(TemplateVars.empty).map)) {
     if (!context.mounted) return;
     final ok = await _confirmPrivateKeyInLink(context);
     if (!ok) return;
