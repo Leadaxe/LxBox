@@ -53,9 +53,56 @@ void main() {
       expect(schema.order.indexOf('bind_interface'),
           greaterThan(schema.order.indexOf('transport')));
 
-      // Скаляры dialer.common доступны по своим именам.
-      expect(schema.fields['server']!.ref, 'dialer.common');
-      expect(schema.fields['server_port']!.ref, 'dialer.common');
+      // Скаляры dialer.common развёрнуты в поля суб-схемы (§553).
+      expect(schema.fields['server']!.originRef, 'dialer.common');
+      expect(schema.fields['server_port']!.originRef, 'dialer.common');
+    });
+
+    // §553 — ссылки развёрнуты при загрузке, как у лаунчера (`registry.go`,
+    // `resolveSection`): читатель схемы не видит обёрток `type: ref`.
+    // Не разрешённая ссылка при загрузке остаётся обёрткой — здесь она и
+    // ловится.
+    test('§553 каждая ссылка бандла разрешена', () {
+      final unresolved = <String>[];
+      void walk(Map<String, FieldSchema>? fields, String prefix) {
+        if (fields == null) return;
+        for (final e in fields.entries) {
+          final path = '$prefix.${e.key}';
+          if (e.value.type == 'ref' && e.value.ref!.contains('.')) {
+            unresolved.add('$path → ${e.value.ref}');
+          }
+          walk(e.value.fields, path);
+          for (final v in (e.value.variants ?? const {}).entries) {
+            walk(v.value.fields, '$path.${v.key}');
+          }
+        }
+      }
+
+      for (final type in ContractRegistry.I.protocolNames) {
+        walk(ContractRegistry.I.schemaFor(type)?.fields, type);
+      }
+      expect(unresolved, isEmpty);
+    });
+
+    test('§553 именованная ссылка несёт правило суб-схемы', () {
+      for (final type in ContractRegistry.I.protocolNames) {
+        final server = ContractRegistry.I.schemaFor(type)?.fields['server'];
+        if (server == null) continue;
+        expect(server.required, isTrue, reason: '$type.server');
+        expect(server.onInvalid?['action'], 'drop_node',
+            reason: '$type.server');
+        expect(server.format, 'host', reason: '$type.server');
+      }
+      // masque.network_list → dialer.common.network: правило сетевое, имя
+      // поля своё, описание — обёртки.
+      final nl =
+          ContractRegistry.I.schemaFor('masque')!.fields['network_list']!;
+      expect(nl.originRef, 'dialer.common');
+      expect(nl.type, 'listable_string');
+      expect(nl.values, containsAll(['tcp', 'udp']));
+      expect(nl.normalize, 'trim_lower');
+      expect(nl.onInvalid?['code'], 'type_invalid');
+      expect(nl.raw['impl'], contains('masque'));
     });
 
     test('транспорт выбирается по дискриминатору transport.type', () {

@@ -45,13 +45,46 @@ const _kStandaloneShared = <String>['source_kinds.json'];
 /// точечно, и лишний слой конвертации разошёлся бы со схемой на первом же
 /// новом атрибуте. Геттеры — только для тех, что нужны санитайзеру.
 final class FieldSchema {
-  FieldSchema(this.raw);
+  FieldSchema(this.raw)
+      : _nested = null,
+        _variants = null;
+
+  /// §553 — поле, собранное разворотом ссылки ([ContractRegistry._expand]):
+  /// вложенная схема уже разобрана, второй раз её из [raw] не строим.
+  FieldSchema._expanded(this.raw, this._nested, this._variants);
 
   final Map<String, dynamic> raw;
 
+  final Map<String, FieldSchema>? _nested;
+  final Map<String, FieldSchema>? _variants;
+
   String get type => raw['type'] as String? ?? 'string';
 
+  /// Цель ссылки у НЕ развёрнутого поля (`type: ref`). После загрузки такое
+  /// поле остаётся только там, где ссылку разрешить не удалось (§553).
   String? get ref => raw['ref'] as String?;
+
+  /// §553 — из какой ссылки поле получено при развороте (`tls`, `multiplex`,
+  /// `dialer`, `transports`, `dialer.common`). У объекта это граница общей
+  /// суб-схемы: там действует норма §472 шаг 5 — не хватило `required`
+  /// внутри неё, снимается она, а не узел.
+  String? get originRef => raw['origin_ref'] as String?;
+
+  /// §553 — поле-объект с вариантами по дискриминатору (`transport` по
+  /// `type`). Ключ варианта — значение дискриминатора, вариант — объект с
+  /// `order`/`fields`. `null` — вариантов у поля нет.
+  String? get discriminator => raw['discriminator'] as String?;
+
+  late final Map<String, FieldSchema>? variants = _variants ?? _parseVariants();
+
+  Map<String, FieldSchema>? _parseVariants() {
+    final v = raw['variants'];
+    if (v is! Map) return null;
+    return {
+      for (final e in v.entries)
+        e.key as String: FieldSchema((e.value as Map).cast<String, dynamic>()),
+    };
+  }
 
   bool get inline => raw['inline'] == true;
 
@@ -275,7 +308,11 @@ final class FieldSchema {
   /// `transport.headers`) — свободная карта, внутрь санитайзер не смотрит.
   List<String>? get order => (raw['order'] as List?)?.cast<String>();
 
-  Map<String, FieldSchema>? get fields {
+  /// Разбирается один раз: реестр иммутабелен после загрузки, а санитайзер
+  /// спускается во вложенные объекты (`tls`, `tls.reality`) на каждом узле.
+  late final Map<String, FieldSchema>? fields = _nested ?? _parseFields();
+
+  Map<String, FieldSchema>? _parseFields() {
     final f = raw['fields'];
     if (f is! Map) return null;
     return {
@@ -504,9 +541,9 @@ final class ContractRegistry {
     _loaded = true;
   }
 
-  /// Схема тела по `type` записи sing-box. Ссылки (`ref`) уже развёрнуты —
-  /// кроме `transports`, который разворачивается по дискриминатору
-  /// `transport.type` в момент санитайзинга ([transportVariant]).
+  /// Схема тела по `type` записи sing-box. Ссылки (`ref`) уже развёрнуты
+  /// все (§553, [_expand]): `transport` — поле-объект с вариантами по
+  /// дискриминатору `type` ([FieldSchema.variants]).
   ///
   /// `null` — схемы нет (реестр не загружен либо тип чужой): санитайзер
   /// такую запись не трогает.
@@ -606,9 +643,21 @@ final class ContractRegistry {
   /// диалектам; [sharedSchema] отдаёт только схему ТЕЛА и про них не знает.
   Map<String, dynamic>? rawShared(String fileName) => _shared[fileName];
 
-  /// Разворот секции `body`: `ref` с `inline: true` вливает поля суб-схемы
-  /// плоско на место своего слота в `order` (`__dialer`), обычный `ref`
-  /// остаётся ссылкой — санитайзер спускается в него по имени.
+  /// Разворот секции `body` — все ссылки разрешаются здесь, один раз при
+  /// загрузке, и читатель схемы видит уже развёрнутые поля (§553). Три ветки,
+  /// зеркало лаунчера (`core/config/registry/registry.go`, `resolveSection`):
+  ///
+  /// 1. `inline: true` (`__dialer`) — поля суб-схемы вливаются плоско на
+  ///    место слота в `order`, без дублей;
+  /// 2. ссылка с точкой на плоскую суб-схему (`dialer.common`,
+  ///    `dialer.common.network`) — поле суб-схемы ([_resolveNamedRef]) с
+  ///    атрибутами обёртки поверх ([_mergeRefAttrs]);
+  /// 3. прочие (`tls`, `multiplex`, `dialer`, `transports`) — поле-объект со
+  ///    вложенной схемой ([_refAsObject]).
+  ///
+  /// Не разрешённая ссылка остаётся обёрткой `type: ref`: реестр, который
+  /// едет впереди клиента, не должен ронять загрузку. Такую ссылку ловит
+  /// `registry_load_test`.
   BodySchema _expand(Map<String, dynamic> body) {
     final rawFields = _fieldsOf(body);
     final rawOrder = ((body['order'] as List?) ?? const []).cast<String>();
@@ -632,15 +681,20 @@ final class ContractRegistry {
         continue;
       }
       order.add(key);
-      fields[key] = f;
+      fields[key] = f.type == 'ref' && f.ref != null
+          ? (_resolveRef(key, f, f.ref!) ?? f)
+          : f;
     }
     // Поля вне `order` (схема их иметь не должна, но молча терять их нельзя:
     // иначе неописанный в order ключ выглядел бы неизвестным и снимался).
     for (final e in rawFields.entries) {
       if (fields.containsKey(e.key)) continue;
       if (e.value.inline) continue;
+      final f = e.value;
       order.add(e.key);
-      fields[e.key] = e.value;
+      fields[e.key] = f.type == 'ref' && f.ref != null
+          ? (_resolveRef(e.key, f, f.ref!) ?? f)
+          : f;
     }
 
     return BodySchema(
@@ -654,6 +708,129 @@ final class ContractRegistry {
       absentWhen: (body['absent_when'] as Map?)?.cast<String, dynamic>(),
     );
   }
+
+  /// §553 — ветки 2 и 3 разворота. `null` — ссылку разрешить нечем (нет
+  /// суб-схемы, нет поля, неоднозначный `desc_en`).
+  FieldSchema? _resolveRef(String name, FieldSchema src, String ref) {
+    final parts = ref.split('.');
+    // `dialer.common.network` — секция `dialer.common`, поле названо явно.
+    final section = parts.length >= 3 ? parts.take(2).join('.') : ref;
+    if (section == 'transports') return null;
+    final sub = sharedSchema(section);
+    if (sub == null) return null;
+    if (ref.contains('.') && sub.fields.isNotEmpty) {
+      final target = _resolveNamedRef(name, src, parts, sub);
+      if (target == null) return null;
+      return _mergeRefAttrs(src, target, section);
+    }
+    return null;
+  }
+
+  /// Поле плоской суб-схемы, на которое указывает ссылка. Порядок, как у
+  /// лаунчера (`resolveNamedRef`): явное имя в ссылке → собственное имя поля
+  /// → единственное поле с тем же `desc_en`. Неоднозначность — ошибка
+  /// реестра, поле не выбирается.
+  static FieldSchema? _resolveNamedRef(
+      String name, FieldSchema src, List<String> parts, BodySchema sub) {
+    if (parts.length >= 3) return sub.fields[parts.skip(2).join('.')];
+    final own = sub.fields[name];
+    if (own != null) return own;
+    final desc = src.raw['desc_en'];
+    if (desc is! String || desc.isEmpty) return null;
+    FieldSchema? found;
+    for (final k in sub.order) {
+      final f = sub.fields[k];
+      if (f == null || f.raw['desc_en'] != desc) continue;
+      if (found != null) return null;
+      found = f;
+    }
+    return found;
+  }
+
+  /// Атрибуты обёртки поверх поля суб-схемы (лаунчер: `mergeRefAttrs`).
+  /// Обёртка может УЖЕСТОЧИТЬ `required` и задать `code`, `forbidden_for`,
+  /// `allowed_for`, `forbidden_codes`; правила значения (`on_invalid`,
+  /// `normalize`, `default_when`, `min_when`, `max_when`, связи) — только из
+  /// суб-схемы. Описание (`desc_*`, `impl`) — обёртки: это текст про поле
+  /// ЭТОЙ схемы (`masque.network_list`), а не про общее правило.
+  static FieldSchema _mergeRefAttrs(
+      FieldSchema src, FieldSchema target, String section) {
+    final raw = <String, dynamic>{...target.raw, 'origin_ref': section};
+    final w = src.raw;
+    if (w['required'] == true) raw['required'] = true;
+    for (final k in const [
+      'code',
+      'forbidden_for',
+      'allowed_for',
+      'forbidden_codes',
+      'desc_en',
+      'desc_ru',
+      'impl',
+    ]) {
+      final v = w[k];
+      if (v == null || (v is String && v.isEmpty)) continue;
+      if ((v is List && v.isEmpty) || (v is Map && v.isEmpty)) continue;
+      raw[k] = v;
+    }
+    return FieldSchema(Map.unmodifiable(raw));
+  }
+
+  /// Ссылка на общую суб-схему как поле-объект (лаунчер: `refAsObject`).
+  /// Атрибуты обёртки (`required`, `code`, `desc_*`, гейты) — у поля;
+  /// `absent_when` объявлен один раз у суб-схемы и переезжает сюда, если
+  /// обёртка не задала свой.
+  static FieldSchema _refAsObject(
+      FieldSchema src, BodySchema sub, String section) {
+    final raw = _wrapperAttrs(src, section);
+    raw['order'] = List<String>.unmodifiable(sub.order);
+    raw['fields'] = {
+      for (final k in sub.order)
+        if (sub.fields[k] != null) k: sub.fields[k]!.raw,
+    };
+    final aw = src.raw['absent_when'] ?? sub.absentWhen;
+    if (aw != null) raw['absent_when'] = aw;
+    return FieldSchema._expanded(
+        Map.unmodifiable(raw), Map.unmodifiable(sub.fields), null);
+  }
+
+  /// `transports` — вариантная суб-схема: поле-объект с вариантами по
+  /// дискриминатору (`type`). Варианты — те же, что отдаёт
+  /// [transportVariant].
+  FieldSchema? _transportsAsObject(FieldSchema src) {
+    final body =
+        (_shared['transports.json']?['body'] as Map?)?.cast<String, dynamic>();
+    final disc = body?['discriminator'];
+    final vs = body?['variants'];
+    if (disc is! String || disc.isEmpty || vs is! Map) return null;
+    final variants = <String, FieldSchema>{};
+    for (final e in vs.entries) {
+      final v = transportVariant(e.key as String);
+      if (v == null) continue;
+      variants[e.key as String] = FieldSchema._expanded(
+        Map.unmodifiable(<String, dynamic>{
+          'type': 'object',
+          'order': v.order,
+          'fields': {for (final f in v.fields.entries) f.key: f.value.raw},
+        }),
+        Map.unmodifiable(v.fields),
+        null,
+      );
+    }
+    final raw = _wrapperAttrs(src, 'transports');
+    raw['discriminator'] = disc;
+    raw['variants'] = {for (final e in variants.entries) e.key: e.value.raw};
+    return FieldSchema._expanded(
+        Map.unmodifiable(raw), null, Map.unmodifiable(variants));
+  }
+
+  static Map<String, dynamic> _wrapperAttrs(FieldSchema src, String section) =>
+      <String, dynamic>{
+        for (final e in src.raw.entries)
+          if (e.key != 'type' && e.key != 'ref' && e.key != 'inline')
+            e.key: e.value,
+        'type': 'object',
+        'origin_ref': section,
+      };
 
   Map<String, FieldSchema> _fieldsOf(Map<String, dynamic> section) {
     final f = section['fields'];
