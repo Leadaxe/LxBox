@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:re_editor/re_editor.dart';
+import 'package:re_highlight/languages/json.dart';
+import 'package:re_highlight/styles/atom-one-dark.dart';
+import 'package:re_highlight/styles/atom-one-light.dart';
 
 import '../services/l10n/locale_controller.dart';
 
@@ -24,6 +27,7 @@ class LxCodeEditor extends StatefulWidget {
     this.readOnly = false,
     this.showLineNumbers = false,
     this.wordWrap = true,
+    this.language,
   });
 
   final CodeLineEditingController controller;
@@ -33,8 +37,29 @@ class LxCodeEditor extends StatefulWidget {
   final bool showLineNumbers;
   final bool wordWrap;
 
+  /// §554 — язык подсветки синтаксиса. `null` — без подсветки (поле ссылки
+  /// в мастере). Подсветка живёт в `re_highlight`, тема — по яркости темы
+  /// приложения; ключ `root` темы вырезан, чтобы фон редактора остался
+  /// фоном экрана.
+  final LxCodeLanguage? language;
+
   @override
   State<LxCodeEditor> createState() => _LxCodeEditorState();
+}
+
+/// §554 — языки, которые умеет подсвечивать [LxCodeEditor].
+enum LxCodeLanguage { json }
+
+CodeHighlightTheme _highlightTheme(LxCodeLanguage language, Brightness b) {
+  final base = b == Brightness.dark ? atomOneDarkTheme : atomOneLightTheme;
+  final theme = Map<String, TextStyle>.of(base)..remove('root');
+  final mode = switch (language) {
+    LxCodeLanguage.json => CodeHighlightThemeMode(mode: langJson),
+  };
+  return CodeHighlightTheme(
+    languages: {language.name: mode},
+    theme: theme,
+  );
 }
 
 class _LxCodeEditorState extends State<LxCodeEditor> {
@@ -126,6 +151,9 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
           fontFamily: 'monospace',
           textColor: cs.onSurface,
           hintTextColor: cs.onSurfaceVariant,
+          codeTheme: widget.language == null
+              ? null
+              : _highlightTheme(widget.language!, Theme.of(context).brightness),
         ),
         toolbarController: _toolbar,
         indicatorBuilder: widget.showLineNumbers

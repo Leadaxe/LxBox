@@ -39,6 +39,7 @@ dependencies:
   crypto: ^3.0.3 # §283 — sha256 для identity-хеша ноды подписки
   pointycastle: ^4.0.0 # §130 — ECDSA P-256 keygen (pure-Dart, работает на Android; cryptography P-256 keygen не реализует)
   re_editor: ^0.10.0
+  re_highlight: ^0.0.3 # §554 — подсветка синтаксиса JSON в LxCodeEditor (langJson + темы atom-one)
   flutter_zxing: ^3.0.1 # §382 — QR-сканер (ZXing-C++ через FFI; §380 FOSS); §432 — zxing-cpp 3.1.1
   camera: ^0.12.0 # §382 — типы CameraController/CameraException в исходе сканера
 
