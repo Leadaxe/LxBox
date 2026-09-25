@@ -482,9 +482,46 @@ final class _Generator {
       if (!rel.containsKey('equals')) continue;
       final target = rel['path'] as String?;
       if (target == null) continue;
+      // §552 — контракт 1.1.56: `relation.when` включает связь по условию
+      // (`transport.uplink_data_placement` требует `mode: packet-up` только
+      // при header/cookie). Условие не выполнено на значениях этого тела —
+      // связи нет, поле остаётся.
+      if (!_relationWhenHolds(rel['when'], f, path, ctx)) continue;
       if (ctx.equalsValueFor(target) != rel['equals']) return true;
     }
     return false;
+  }
+
+  /// §552 — условие `relation.when` на значениях, которые генератор кладёт в
+  /// это тело. Грамматика — как у санитайзера (контракт 1.1.56): скаляр —
+  /// равенство, `{in: […]}` / `{not_in: […]}`; пустая строка — «не задано».
+  /// Путь, чьё последнее звено — само поле, берёт его значение в этом теле;
+  /// прочие — значение дискриминатора ([_BuildCtx.equalsValueFor]).
+  bool _relationWhenHolds(
+      Object? when, FieldSchema f, String path, _BuildCtx ctx) {
+    if (when is! Map) return true;
+    final own = path.split('.').last;
+    for (final e in when.entries) {
+      final key = '${e.key}';
+      if (key == 'any_set' || key == 'source_kind') continue;
+      final Object? got = key.split('.').last == own
+          ? (ctx.equalsForcedValue(path) ??
+              (f.values == null ? null : _firstUsable(f.values!)))
+          : ctx.equalsValueFor(key);
+      final present = got != null && !(got is String && got.isEmpty);
+      final want = e.value;
+      bool holds;
+      if (want is Map && want['in'] is List) {
+        holds = present && (want['in'] as List).any((v) => '$v' == '$got');
+      } else if (want is Map && want['not_in'] is List) {
+        holds =
+            !present || !(want['not_in'] as List).any((v) => '$v' == '$got');
+      } else {
+        holds = present && '$want' == '$got';
+      }
+      if (!holds) return false;
+    }
+    return true;
   }
 
   /// Будет ли сосед в этом теле — по осям совместимости. Точности хватает
