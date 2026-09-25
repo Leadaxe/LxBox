@@ -138,6 +138,16 @@ const _kDefaultInvalidCode = 'type_invalid';
 const _kWarningValueMax = 64;
 
 /// Санитайзер тела записи по схеме реестра.
+/// Контракт 1.1.63 — годится ли узел ВЫХОДОМ (кандидатом в пул
+/// Направления): `exit_capable_when` тела его протокола, судимый по готовому
+/// телу. Без атрибута (или без схемы) — годится всегда.
+bool exitCapableByRegistry(Map<String, dynamic> body) {
+  final when = ContractRegistry.I.schemaFor('${body['type'] ?? ''}')
+      ?.exitCapableWhen;
+  if (when == null) return true;
+  return _Ctx.conditionOnFinalBody(when, body);
+}
+
 final class RegistrySanitizer {
   const RegistrySanitizer._();
 
@@ -1777,7 +1787,18 @@ final class _Ctx {
   }
 
   /// Условие правила по ГОТОВОМУ телу (грамматика `condition`).
-  bool finalConditionHolds(Object? when, Map<String, dynamic> body) {
+  bool finalConditionHolds(Object? when, Map<String, dynamic> body) =>
+      conditionOnFinalBody(when, body, kinds: kinds);
+
+  /// Условие грамматики `condition` по ГОТОВОМУ телу — общий суд для
+  /// правил, которые спрашивают тело после санитайзера (`coerce_when`,
+  /// `exit_capable_when` контракта 1.1.63). `any_set` = поле задано и не
+  /// пустая строка.
+  static bool conditionOnFinalBody(
+    Object? when,
+    Map<String, dynamic> body, {
+    Set<String> kinds = const {},
+  }) {
     if (when is! Map) return true;
     var branches = false;
     for (final e in when.entries) {

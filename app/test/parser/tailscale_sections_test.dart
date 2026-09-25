@@ -1,11 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../contract_paths.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart'
+    show exitCapableByRegistry;
 import 'package:lxbox/services/node_identity.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
@@ -33,7 +36,6 @@ void main() {
       expect(ts.port, 0);
       expect(ts.isAddressless, isTrue);
       expect(ts.isGroup, isFalse);
-      expect(ts.hasExitNode, isFalse);
       expect(ts.body, {
         'auth_key': 'tskey-auth-xxx',
         'accept_routes': true,
@@ -52,15 +54,20 @@ void main() {
       expect(nodeIdentityKey(ts), isNull);
     });
 
-    test('тег пустой → tailscale; exit_node непустой → hasExitNode', () {
+    test('тег пустой → tailscale', () {
       final a = parseSingboxEntry({'type': 'tailscale'})! as TailscaleSpec;
       expect(a.tag, 'tailscale');
-      final b = parseSingboxEntry({'type': 'tailscale', 'tag': 'x', 'exit_node': 'srv'})!
-          as TailscaleSpec;
-      expect(b.hasExitNode, isTrue);
-      final c = parseSingboxEntry({'type': 'tailscale', 'tag': 'x', 'exit_node': ' '})!
-          as TailscaleSpec;
-      expect(c.hasExitNode, isFalse);
+    });
+
+    test('контракт 1.1.63: выход — по exit_capable_when реестра', () async {
+      await loadTestRegistry();
+      bool exit(Map<String, dynamic> body) => exitCapableByRegistry(
+          parseSingboxEntry(body)!.emit(TemplateVars.empty).map);
+      expect(exit({'type': 'tailscale', 'tag': 'x', 'exit_node': 'srv'}),
+          isTrue);
+      expect(exit({'type': 'tailscale', 'tag': 'x'}), isFalse);
+      expect(exit({'type': 'tailscale', 'tag': 'x', 'exit_node': ''}),
+          isFalse);
     });
 
     test('принимается из outbounds[] и endpoints[]', () {

@@ -224,7 +224,8 @@ List<NodeSpec> parseXrayElement(
       // (§551 follow-up: раньше тот же outbound сериализовался дважды).
       final compact = _prettyJson(ob);
       final verdict = XrayDropVerdict();
-      var spec = _xrayToSpec(ob, label, dropped: verdict, rawSource: compact);
+      var spec = _xrayToSpec(ob, label,
+          dropped: verdict, rawSource: compact, document: outbounds);
       if (spec == null && verdict.explicit) {
         // Причина — код реестра с тегом записи: `dropped[].ref` контракта
         // называет именно тег outbound'а (D-088), как и у прочих отбраковок.
@@ -259,14 +260,13 @@ List<NodeSpec> parseXrayElement(
       NodeSpec? chained;
       if (ref != null) {
         // §488 — цель `freedom` не хоп цепочки (anti-DPI fragment Xray, не
-        // релей). `_xrayBuildChain` любой служебный outbound считает
-        // негодным и роняет владельца — сюда не зовём.
-        final target = byTag[ref];
-        if (target != null &&
-            (target['protocol']?.toString() ?? '') == 'freedom') {
-          spec = _xrayApplyFreedomFragment(spec, target);
+        // релей): узел ходит наружу напрямую. Фрагментацию его TLS ставит
+        // запись реестра `fragment_via_dialer` (контракт 1.1.63, `deref`) —
+        // уровень документа freedom только не заводит звеном.
+        if (_isXrayFreedom(byTag[ref])) {
+          // прямой узел
         } else {
-          chained = _xrayBuildChain(ob, byTag, ref);
+          chained = _xrayBuildChain(ob, byTag, ref, outbounds);
           // §404 / D-085 — недостижимая цель роняет ВЛАДЕЛЬЦА целиком. Узел с
           // прямым путём тут был бы молчаливой деанонимизацией: провайдер
           // завернул дозвон в релей именно потому, что прямой путь зарезан.
@@ -617,6 +617,10 @@ String? _xrayIdentity(Map<String, dynamic> o) {
   return '$protocol|$server|$port|$cred';
 }
 
+/// §488 — служебный `freedom` (цель `dialerProxy`, не звено цепочки).
+bool _isXrayFreedom(Map<String, dynamic>? o) =>
+    o != null && (o['protocol']?.toString() ?? '') == 'freedom';
+
 /// §472 шаг 8 — Xray-outbound через ЕДИНЫЙ конвейер.
 ///
 /// Раньше здесь стоял диспетчер по `protocol` с отдельным конвертером на
@@ -638,6 +642,7 @@ NodeSpec? _xrayToSpec(
   XrayDropVerdict? dropped,
   bool allowSocks = false,
   String? rawSource,
+  List<dynamic>? document,
 }) {
   // §321 — SOCKS самостоятельным узлом подписки не становится: он бывает
   // только звеном цепочки `dialerProxy`, и зовут его оттуда явным флагом.
@@ -648,7 +653,8 @@ NodeSpec? _xrayToSpec(
   // §480 W5 — карту строит ДВИЖОК по секции `mappers.xray` реестра.
   // Диспетчера по имени протокола здесь больше нет: секцию выбирает `detect`
   // самой секции, то есть опознание элемента объявлено данными.
-  final mapping = mapJsonViaEngine('xray', o, dropped: dropped);
+  final mapping =
+      mapJsonViaEngine('xray', o, dropped: dropped, document: document);
   if (mapping == null) return null;
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
   return parseXrayViaPipeline(
@@ -678,12 +684,17 @@ NodeSpec? _xrayToSpec(
 ///
 /// Причины негодности: цели нет в элементе; цель — группа или служебный
 /// outbound; цель не конвертируется в узел; кольцо; глубже [kMaxDetourDepth].
-/// Цель `freedom` сюда не попадает: её разбирает [_xrayApplyFreedomFragment]
-/// (§488), до вызова.
+/// Цель `freedom` звеном не становится (§488): у владельца это прямой путь,
+/// у звена — конец цепочки. Фрагментацию TLS того, кто ходит через такой
+/// freedom, ставит реестр (`fragment_via_dialer`, контракт 1.1.63).
+///
+/// [document] — массив `outbounds` элемента: по нему запись с `deref`
+/// разыменовывает `dialerProxy` звена.
 NodeSpec? _xrayBuildChain(
   Map<String, dynamic> owner,
   Map<String, Map<String, dynamic>> byTag,
   String firstRef,
+  List<dynamic> document,
 ) {
   // Кольцо ищем по тегам ТЕКУЩЕЙ цепочки, а не по всему элементу: два разных
   // узла законно ссылаются на один релей.
@@ -718,7 +729,7 @@ NodeSpec? _xrayBuildChain(
     // sing-box `detour` живёт на любом outbound'е. SOCKS здесь РАЗРЕШЁН
     // явно: самостоятельным узлом подписки он не становится (§321), а
     // звеном бывает, и чаще прочих.
-    final spec = _xrayToSpec(target, ref, allowSocks: true);
+    final spec = _xrayToSpec(target, ref, allowSocks: true, document: document);
     if (spec == null) return null;
     // Группа цепочку не несёт (`withChained` вернул бы её как есть) —
     // конвертер её и не отдаёт, но инвариант проверяем явно.
@@ -729,6 +740,8 @@ NodeSpec? _xrayBuildChain(
     final sockopt = stream is Map ? stream['sockopt'] : null;
     final nextRef = sockopt is Map ? sockopt['dialerProxy']?.toString() : null;
     if (nextRef == null || nextRef.isEmpty) return spec;
+    // Звено ходит наружу через служебный freedom — оно последнее (§488).
+    if (_isXrayFreedom(byTag[nextRef])) return spec;
 
     final next = build(nextRef, depth + 1);
     // Негодное звено В СЕРЕДИНЕ цепочки роняет всю цепочку — и владельца
@@ -739,82 +752,6 @@ NodeSpec? _xrayBuildChain(
   }
 
   return build(firstRef, 0);
-}
-
-/// §488 — цель `dialerProxy` с `protocol: freedom`. Не хоп: узел прямой.
-/// При `settings.fragment` и включённом TLS — молча `tls.fragment: true`.
-/// `packets`/`length`/`interval` отбрасываются без кода. Freedom без
-/// fragment — ссылка игнорируется, узел как есть.
-NodeSpec _xrayApplyFreedomFragment(
-  NodeSpec spec,
-  Map<String, dynamic> freedom,
-) {
-  final settings = freedom['settings'];
-  if (settings is! Map || settings['fragment'] is! Map) return spec;
-  if (!_nodeTlsEnabled(spec)) return spec;
-  return _withTlsPassthroughBool(spec, 'fragment', true);
-}
-
-bool _nodeTlsEnabled(NodeSpec spec) => switch (spec) {
-      VlessSpec s => s.tls.enabled,
-      TrojanSpec s => s.tls.enabled,
-      VmessSpec s => s.tls.enabled,
-      _ => false,
-    };
-
-NodeSpec _withTlsPassthroughBool(NodeSpec spec, String key, bool value) {
-  TlsSpec patch(TlsSpec tls) =>
-      tls.copyWith(passthrough: {...tls.passthrough, key: value});
-  return switch (spec) {
-    VlessSpec s => VlessSpec(
-        id: s.id,
-        tag: s.tag,
-        label: s.label,
-        server: s.server,
-        port: s.port,
-        rawSource: s.rawSource,
-        uuid: s.uuid,
-        flow: s.flow,
-        tls: patch(s.tls),
-        transport: s.transport,
-        packetEncoding: s.packetEncoding,
-        encryption: s.encryption,
-        chained: s.chained,
-        tcpKeepAlive: s.tcpKeepAlive,
-        warnings: s.warnings,
-      ),
-    TrojanSpec s => TrojanSpec(
-        id: s.id,
-        tag: s.tag,
-        label: s.label,
-        server: s.server,
-        port: s.port,
-        rawSource: s.rawSource,
-        password: s.password,
-        tls: patch(s.tls),
-        transport: s.transport,
-        chained: s.chained,
-        tcpKeepAlive: s.tcpKeepAlive,
-        warnings: s.warnings,
-      ),
-    VmessSpec s => VmessSpec(
-        id: s.id,
-        tag: s.tag,
-        label: s.label,
-        server: s.server,
-        port: s.port,
-        rawSource: s.rawSource,
-        uuid: s.uuid,
-        alterId: s.alterId,
-        security: s.security,
-        tls: patch(s.tls),
-        transport: s.transport,
-        chained: s.chained,
-        tcpKeepAlive: s.tcpKeepAlive,
-        warnings: s.warnings,
-      ),
-    _ => spec,
-  };
 }
 
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).

@@ -153,10 +153,14 @@ EngineResult? runSectionOnJson(
   Map<String, dynamic> doc, {
   MapperTrace? trace,
   XrayDropVerdict? dropped,
+  Map<String, dynamic>? context,
+  List<dynamic>? document,
 }) {
   final space = _selectJsonForm(section, doc);
   if (space == null) return null;
-  return _Run(section, space, trace, dropped: dropped).execute();
+  return _Run(section, space, trace,
+          dropped: dropped, context: context, document: document)
+      .execute();
 }
 
 /// §480 — исполнить секцию на тексте INI (`.conf`).
@@ -179,11 +183,13 @@ EngineResult? runSectionOnIni(
   String? nameHint,
   MapperTrace? trace,
   XrayDropVerdict? dropped,
+  Map<String, dynamic>? context,
 }) {
   final space = _selectIniForm(section, text);
   if (space == null) return null;
   final parsed = parseIniSpace(text, section.iniDialect ?? const IniDialect());
-  return _Run(section, space, trace, nameHint: nameHint, dropped: dropped)
+  return _Run(section, space, trace,
+          nameHint: nameHint, dropped: dropped, context: context)
       .execute(inputCodes: parsed.codes);
 }
 
@@ -1214,9 +1220,24 @@ List<String> _segments(String path) => _segCache[path] ??= path.split('.');
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
   _Run(this.section, this.space, this._trace,
-      {this.nameHint, XrayDropVerdict? dropped})
+      {this.nameHint, XrayDropVerdict? dropped, this.context, this.document})
       : _plan = _planCache[section] ??= _SectionPlan(section),
         _dropped = dropped;
+
+  /// Контракт 1.1.63 (MAPPER_ENGINE, источник `context.<путь>`) — значение
+  /// JSON от ВЫЗЫВАЮЩЕГО: то, что лежит рядом с текстом, но не в нём
+  /// (объект контейнера, корень профиля). `null` — контекста нет, источники
+  /// `context.*` пусты.
+  final Map<String, dynamic>? context;
+
+  /// Контракт 1.1.63 (`deref`) — документ, в котором запись ищет соседа по
+  /// ссылке (у Xray — массив `outbounds` элемента). `null` — документа нет,
+  /// условия по слою `ref.*` ложны.
+  final List<dynamic>? document;
+
+  /// Слои `ref.<as>`: сосед, найденный `deref` записи. Кладётся ДО `when`
+  /// записи и читается этой и последующими записями.
+  final Map<String, Object?> _refs = {};
 
   /// План секции: проходы и множество объявленных — посчитаны один раз.
   final _SectionPlan _plan;
@@ -1852,6 +1873,9 @@ final class _Run {
     // конфига; поле пишет только сборка/эмит (dialer.detour).
     if (p.roundTripOnly == 'emit') return;
 
+    // Контракт 1.1.63 — `deref` кладёт слой `ref.<as>` ДО `when` записи.
+    _applyDeref(p);
+
     // Контракт 1.1.56 (MAPPER_ENGINE §10.4) — `$value` в `when`: СЕЛЕКТОР
     // записи, а не условие. Делит одно значение источника между записями с
     // одним `maps_to` (`uplinkDataPlacement` берёт header/cookie,
@@ -1915,7 +1939,7 @@ final class _Run {
     // по остальным записям узла не обрывается.
     _applyOnLenGt(p);
 
-    var raw = _valueOf(p);
+    var raw = _applySubstitute(p, _valueOf(p));
     final emptyRaw = raw == null || (raw is String && raw.isEmpty);
     if (emptyRaw) {
       // `on_empty` — код за ПУСТОЕ значение записи. Ставится до разбора
@@ -2635,6 +2659,8 @@ final class _Run {
       case 'fragment':
         return space.fragment;
     }
+    final layered = _readContextOrRef(src);
+    if (layered.hit) return layered.value;
     if (src.startsWith('json.')) {
       final path = _resolveBase(src.substring('json.'.length));
       _consumeJson(path);
@@ -2805,6 +2831,8 @@ final class _Run {
       } else if (key.startsWith('query.') ||
           key.startsWith('json.') ||
           key.startsWith('ini.') ||
+          key.startsWith('context.') ||
+          key.startsWith('ref.') ||
           _kLexicalSources.contains(key)) {
         actual = _readSourceBare(key);
       } else {
@@ -2861,6 +2889,8 @@ final class _Run {
       case 'hint':
         return nameHint;
     }
+    final layered = _readContextOrRef(src);
+    if (layered.hit) return layered.value;
     if (src.startsWith('json.')) {
       return jsonPathValue(
           space.json, _resolveBase(src.substring('json.'.length)));
@@ -2874,6 +2904,92 @@ final class _Run {
       if (layer != null) return layer.get(src.substring(dot + 1));
     }
     return null;
+  }
+
+  /// Источники вне документа (контракт 1.1.63): `context.<путь>` — значение
+  /// от вызывающего, `ref.<as>.<путь>` — сосед, положенный `deref`. `hit` —
+  /// адрес принадлежит одному из них (значение при этом может быть `null`).
+  ({bool hit, Object? value}) _readContextOrRef(String src) {
+    if (src.startsWith('context.')) {
+      final ctx = context;
+      return (
+        hit: true,
+        value: ctx == null
+            ? null
+            : jsonPathValue(ctx, src.substring('context.'.length)),
+      );
+    }
+    if (src.startsWith('ref.')) {
+      final rest = src.substring('ref.'.length);
+      final dot = rest.indexOf('.');
+      final name = dot < 0 ? rest : rest.substring(0, dot);
+      final layer = _refs[name];
+      if (layer == null) return (hit: true, value: null);
+      return (
+        hit: true,
+        value: dot < 0 ? layer : jsonPathValue(layer, rest.substring(dot + 1)),
+      );
+    }
+    return (hit: false, value: null);
+  }
+
+  /// `deref {key, as}` (контракт 1.1.63): значение записи — ссылка на соседа
+  /// по документу. Элемент, у которого значение по пути `key` дословно равно
+  /// значению записи, кладётся слоем `ref.<as>` ДО `when`. Документа нет,
+  /// значения нет или сосед не нашёлся — слой пуст, условия по нему ложны.
+  void _applyDeref(MapperParam p) {
+    final d = p.deref;
+    if (d == null) return;
+    final key = d['key'];
+    final as = d['as'];
+    if (key is! String || as is! String) return;
+    _refs.remove(as);
+    final doc = document;
+    if (doc == null) return;
+    final v = _valueOfBare(p);
+    if (v == null || v is Map || v is List) return;
+    final want = '$v';
+    for (final el in doc) {
+      if (el is! Map) continue;
+      final k = jsonPathValue(el, key);
+      if (k == null || k is Map || k is List) continue;
+      if ('$k' == want) {
+        _refs[as] = el;
+        return;
+      }
+    }
+  }
+
+  /// `substitute {sep, join, tokens}` (контракт 1.1.63): значение режется по
+  /// `sep`, элемент, дословно равный плейсхолдеру из `tokens`, заменяется
+  /// значением своего источника, неразрешённый снимается, остаток склеивается
+  /// `join`. Значение без плейсхолдеров не трогается; пустой итог = `null`.
+  Object? _applySubstitute(MapperParam p, Object? raw) {
+    final sub = p.substitute;
+    if (sub == null || raw is! String) return raw;
+    final sep = sub['sep'];
+    final join = sub['join'];
+    final tokens = (sub['tokens'] as Map?)?.cast<String, dynamic>();
+    if (sep is! String || sep.isEmpty || tokens == null || tokens.isEmpty) {
+      return raw;
+    }
+    final parts = raw.split(sep);
+    if (!parts.any((e) => tokens.containsKey(e.trim()))) return raw;
+    final out = <String>[];
+    for (final part in parts) {
+      final t = part.trim();
+      final srcName = tokens[t];
+      if (srcName is! String) {
+        if (t.isNotEmpty) out.add(t);
+        continue;
+      }
+      final v = _readSourceBare(srcName);
+      if (v == null || v is Map || v is List) continue;
+      final str = '$v'.trim();
+      if (str.isNotEmpty) out.add(str);
+    }
+    if (out.isEmpty) return null;
+    return out.join(join is String ? join : sep);
   }
 
   static const _kLexicalSources = {
@@ -2904,6 +3020,11 @@ final class _Run {
         return !list.contains(_fold(actual));
       }
       if (m.containsKey('not')) return !_matches(actual, m['not']);
+      // Контракт 1.1.63 — `type_of`: тип значения источника (как одноимённый
+      // предикат detect). Значения нет — условие ложно.
+      if (m.containsKey('type_of')) {
+        return actual != null && _isJsonType(actual, '${m['type_of']}');
+      }
       if (m.containsKey('present')) {
         return (actual != null) == (m['present'] == true);
       }

@@ -1318,14 +1318,6 @@ final class TailscaleSpec extends NodeSpec {
   @override
   bool get isAddressless => true;
 
-  /// Непустой `exit_node` — узел выпускает в интернет и годится в
-  /// Направления; без него он только даёт доступ в tailnet (NODE_SECTIONS.md
-  /// §6): в пул Направлений не идёт, но законен как `detour` и `outbound`.
-  bool get hasExitNode {
-    final v = body['exit_node'];
-    return v is String && v.trim().isNotEmpty;
-  }
-
   @override
   SingboxEntry emitRaw(TemplateVars vars) => e.emitTailscale(this, vars);
 
