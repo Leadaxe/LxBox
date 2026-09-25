@@ -263,15 +263,24 @@ void main() {
     });
 
     test('§358 — hysteria2 с неизвестным obfs: тип отброшен, конфиг цел', () {
-      final spec = parseSingboxEntry({
-        'type': 'hysteria2',
-        'tag': 'hy2',
-        'server': 'h.example',
-        'server_port': 443,
-        'password': 'secret',
-        'obfs': {'type': 'xyz', 'password': 'op'},
-      });
-      final hy = spec! as Hysteria2Spec;
+      // §547 A2 — obfs судит реестр: полный путь JSON-входа
+      // (`parseSingboxConfigs`, модель по карте санитайзера, §545).
+      final spec = parseSingboxConfigs([
+        {
+          'outbounds': [
+            {
+              'type': 'hysteria2',
+              'tag': 'hy2',
+              'server': 'h.example',
+              'server_port': 443,
+              'password': 'secret',
+              'obfs': {'type': 'xyz', 'password': 'op'},
+              'tls': {'enabled': true, 'server_name': 'h.example'},
+            },
+          ],
+        },
+      ]).single;
+      final hy = spec as Hysteria2Spec;
       expect(hy.obfs, isEmpty);
       expect(hy.emitRaw(TemplateVars.empty).map.containsKey('obfs'), isFalse);
     });

@@ -96,7 +96,7 @@ object before emitting.
 
 | Layer | Code | What it guards |
 |---|---|---|
-| 1 — URI parsing | `app/lib/services/parser/uri_parsers/**`, `uri_utils.dart`, `transport.dart`, `utls_fingerprint.dart`, `hysteria2_obfs.dart`, `ini_parser.dart`, `amnezia_link.dart`, `body_decoder.dart` | One link from a subscription body |
+| 1 — URI parsing | `app/lib/services/parser/uri_parsers/**`, `uri_utils.dart`, `transport.dart`, `utls_fingerprint.dart`, `ini_parser.dart`, `amnezia_link.dart`, `body_decoder.dart` | One link from a subscription body |
 | 2 — JSON branches | `app/lib/services/parser/singbox_config.dart`, `json_parsers.dart` | Imported sing-box and Xray configs |
 | 3 — node emission | `app/lib/models/transport_spec.dart`, `tls_spec.dart`, `node_spec_emit.dart`, `node_spec.dart` | The node → outbound JSON step, common to all sources |
 | 4 — config assembly | `app/lib/services/builder/**`, incl. `post_steps/**` and `validator.dart` | The whole file: graph, groups, rules, DNS |
@@ -385,13 +385,17 @@ The remaining nine schemes still run every rule below.
 | `fp` empty while `reality != null` | default `chrome` | silent | `utls_fingerprint.dart:78` | REALITY requires a uTLS block ("uTLS is required by reality client" — fatal on outbound creation), and an empty fingerprint emits no block | §281 |
 | `reality != null` and `fp` outside the chrome family (`firefox`, `safari`, `randomized`, …; `random` excluded) | **none** — the value stays in the node and in the config | `RealityFingerprintWarning` (`reality_fp_not_chrome`) | `utls_fingerprint.dart:110-113` | Xray servers since v26.9.8 reject a ClientHello without the `X25519MLKEM768` key share, which only the chrome family carries; the warning suggests `chrome`. The node's fingerprint comes from the subscription and goes into the config as is — the app does not rewrite the source's choice. 2.23.2 replaced it with `chrome` at build time (D-104); dropped in 2.24.0. `random` gets no warning: the parser's default for an empty `fp` cannot be told apart from an explicit one | §444 (D-119) |
 
-### 1.3 Hysteria2 obfuscation (`hysteria2_obfs.dart`)
+### 1.3 Hysteria2 obfuscation (registry)
 
 | Check | Sanitiser | User sees | Code | Why | Task |
 |---|---|---|---|---|---|
-| obfs type outside `{salamander, gecko}` | obfs dropped whole (type and password) | `UnknownObfsWarning` | `hysteria2_obfs.dart:38-41` | `Hysteria2Obfs.MarshalJSON` returns "unknown obfs type" — the config will not assemble at all | §358 |
-| Valid type, empty password | obfs dropped whole | `MissingObfsPasswordWarning` | `hysteria2_obfs.dart:42-45` | "missing obfs password" is fatal on outbound creation | §358 |
-| Type in another case / with spaces | `trim().toLowerCase()` | silent | `hysteria2_obfs.dart:36` | — | §358 |
+| obfs type outside `{salamander, gecko}` | obfs dropped whole (type and password) | `obfs_unknown` from the registry, with path and value | `registry/protocols/hysteria2.json` → `body.fields.obfs.type` (enum, `on_invalid: drop`; `type` is `required`, so the block goes) | `Hysteria2Obfs.MarshalJSON` returns "unknown obfs type" — the config will not assemble at all | §358, §547 |
+| Valid type, empty password | obfs dropped whole | `obfs_password_missing` from the registry, path `obfs.password`, `params.type` | `hysteria2.json` → `obfs.password` (`required` + own `code`) | "missing obfs password" is fatal on outbound creation | §358, §547 |
+| Type in another case / with spaces | `normalize: trim_lower` | silent | `hysteria2.json` → `obfs.type` | — | §358, §547 |
+
+Spec 547 A2 removed the hand-written copy (`hysteria2_obfs.dart`): links and
+sing-box JSON build the model from the sanitiser's map (§472, §545), and the
+build gate judges the body once more.
 
 ### 1.4 Transport and TLS from the query (`transport.dart`)
 
@@ -536,8 +540,8 @@ rows below are the guards that do something more than reject or default.
 | MASQUE flat legacy `network`/`sni`/`skip_cert_verify` | never read | silent | `json_parsers.dart:1307-1313` | a flat `sni` beside `tls.server_name` made the core fail fast | §393 |
 | `reality.enabled != true` or invalid `public_key` | `reality = null`, node stays plain TLS | silent | `json_parsers.dart:1385-1395` | do not poison config.json | §169 |
 | `reality.short_id` non-hex / odd / over 16 | dropped (`''`) | silent | `json_parsers.dart:1392-1394` | as in the URI branch | §343 |
-| `reality.key_share` in any case / with spaces (`Hybrid`) | `trim().toLowerCase()`, then the enum | silent (AppLog only) | `json_parsers.dart` `_realityKeyShare` | the core is case-sensitive, but the value is the source's intent — used to be lost silently | §459 (contract §24.2 item 7.12) |
-| `reality.key_share` outside `{hybrid, classical}` after normalisation (a number, an empty string) | field dropped, the node lives | silent (AppLog only) | `json_parsers.dart` `_realityKeyShare` | the core answers an unknown value with `unknown reality key_share` and refuses the outbound — and with it the whole config; degrade the field, not the config | §457, §459 |
+| `reality.key_share` in any case / with spaces (`Hybrid`) | `trim().toLowerCase()`, then the enum | silent | `registry/tls.json` → `reality.key_share` (`normalize: trim_lower`); the model is built from the sanitiser's map (§545) | the core is case-sensitive, but the value is the source's intent — used to be lost silently | §459, §547 |
+| `reality.key_share` outside `{hybrid, classical}` after normalisation (a number, an empty string) | field dropped, the node lives | `reality_key_share_invalid` from the registry | `registry/tls.json` → `reality.key_share`, enum + `on_invalid: drop`; spec 547 A1 removed the hand-written `kRealityKeyShares` | the core answers an unknown value with `unknown reality key_share` and refuses the outbound — and with it the whole config; degrade the field, not the config | §457, §459, §547 |
 | ws/httpupgrade `path` key absent | path `''`, no `/` default | silent | `json_parsers.dart:1412-1416` | canonical sing-box JSON does not write the default either | §103 D-016 |
 | Glued Xray path `/x?ed=N` in ws JSON | tail cut | silent (no warnings channel here) | `json_parsers.dart:1413-1415` | glued Xray paths reach the editor too | §303 |
 | JSON flavour unrecognised, or `clashYaml` | 0 nodes | silent | `body_decoder.dart:181-209`, `parse_all.dart:191-193` | the `xrayArray` branch works, and its classification must not shift on ambiguous input | §368 §7.1 |

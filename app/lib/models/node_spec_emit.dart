@@ -124,12 +124,12 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;
 
   // §335 — постквантовый слой VLESS. Плоское поле верхнего уровня (в Xray-JSON
-  // оно вложено в users[0], у ядра — рядом с uuid). Пишем только непустое и не
-  // "none": обычные узлы не должны измениться ни на байт. Значение как есть —
-  // битую строку отвергнет ядро на check с указанием сегмента.
-  if (s.encryption.isNotEmpty && s.encryption != 'none') {
-    out['encryption'] = s.encryption;
-  }
+  // оно вложено в users[0], у ядра — рядом с uuid). Пустое не пишем.
+  //
+  // §547 A3 — `none` отсекает реестр (`vless.encryption.absent_values:
+  // [none]`) на разборе, а гард сборки — ещё раз перед ядром; рукописное
+  // сравнение с `none` снято. Форму значения судит `pattern` реестра.
+  if (s.encryption.isNotEmpty) out['encryption'] = s.encryption;
 
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;

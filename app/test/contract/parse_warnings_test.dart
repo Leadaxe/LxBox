@@ -150,22 +150,17 @@ void main() {
     // и правило реестра говорят об одном поле, а у переехавшей схемы источник
     // кода по определению один.
     //
-    // §472 шаг 9 — шаги 6–7 держали пример на ИСКУССТВЕННОМ производителе
-    // (`AnyTlsMinIdleInvalidWarning` подсаживали руками), а шаг 9 снял и сам
-    // этот класс: производителей в lib/ у него не осталось. Пример вернулся на
-    // ЖИВОЙ путь — hysteria2-ТЕЛО с негодным `obfs.type`:
+    // §472 шаг 9 держал пример на ЖИВОМ рукописном производителе
+    // (`hysteria2_obfs.dart`); §547 A2 снял и его — обфускацию судит только
+    // реестр. Механизм дедупа остаётся (таблица `handwrittenWarningPath`
+    // живёт, пока живут рукописные классы), и проверяется подсадкой:
     //
-    // - рукописный `UnknownObfsWarning` ставит `hysteria2_obfs.dart` при
-    //   разборе, и путь `obfs.type` он объявляет таблицей
-    //   `handwrittenWarningPath`;
-    // - реестр судит то же поле по ДОСЛОВНОЙ карте тела (шаг 1,
-    //   `annotateFromRawBody`): `protocols/hysteria2.json` →
-    //   `body.fields.obfs.type`, enum + `on_invalid: drop`, код `obfs_unknown`.
+    // - рукописный `UnknownObfsWarning` объявляет путь `obfs.type`;
+    // - реестр судит то же поле по ДОСЛОВНОЙ карте тела (`annotateFromRawBody`):
+    //   `protocols/hysteria2.json` → `body.fields.obfs.type`, enum +
+    //   `on_invalid: drop`, код `obfs_unknown`.
     //
     // Два производителя, одна пара `(code, path)`, одна запись на выходе.
-    // Через `annotateWithRegistry` (по `emit()`) этот случай не виден вовсе:
-    // негодный блок `obfs` типизированный парсер снимает, и судить в
-    // очищенном теле уже нечего — потому здесь дословная карта.
     test('рукописный + реестровый с одной парой (code, path) → одна запись',
         () {
       const raw = '{"type":"hysteria2","tag":"h","server":"e.example",'
@@ -187,9 +182,10 @@ void main() {
       // Путь рукописного класса нормативен: дедуп считается по ПАРЕ.
       expect(handwrittenWarningPath(const UnknownObfsWarning('nonsense')), path);
 
-      // Контроль: без рукописного класса код реестра приходит, с путём и
-      // значением. Рукописный снимаем — иначе он этот код и закроет.
-      final plain = build()..warnings.clear();
+      // Разбор рукописного кода больше не ставит (§547 A2).
+      final plain = build();
+      expect(plain.warnings.whereType<UnknownObfsWarning>(), isEmpty,
+          reason: 'рукописного производителя obfs-кодов нет');
       annotateFromRawBody(plain);
       final fromRegistry = _registry(plain).where((w) => w.code == code).toList();
       expect(fromRegistry, hasLength(1),
@@ -197,12 +193,8 @@ void main() {
       expect(fromRegistry.single.path, path);
       expect(fromRegistry.single.value, 'nonsense');
 
-      // А теперь тот же узел, как его отдаёт разбор: рукописный класс на месте
-      // (его поставил `hysteria2_obfs.dart`), и запись остаётся ОДНА — та, у
-      // которой человеческий текст.
-      final seeded = build();
-      expect(seeded.warnings.whereType<UnknownObfsWarning>(), hasLength(1),
-          reason: 'производитель рукописного класса живой, подсадки не нужно');
+      // Подсадка рукописного класса: запись остаётся ОДНА.
+      final seeded = build()..warnings.add(const UnknownObfsWarning('nonsense'));
       annotateFromRawBody(seeded);
       expect(seeded.warnings.whereType<UnknownObfsWarning>(), hasLength(1),
           reason: 'рукописное предупреждение на месте');
@@ -223,14 +215,13 @@ void main() {
       expect(w.value, 'xtls-rprx-origin');
     });
 
-    test('обфускация: рукописный obfs_unknown не дублируется реестром', () {
+    test('обфускация из ссылки: obfs_unknown один, из реестра', () {
       final n = _one(
         'hysteria2://pass@example.com:443?obfs=nonsense&obfs-password=p#node',
       );
-      final codes = _registry(n).map((w) => w.code).toList();
-      if (n.warnings.whereType<UnknownObfsWarning>().isNotEmpty) {
-        expect(codes, isNot(contains('obfs_unknown')));
-      }
+      expect(n.warnings.whereType<UnknownObfsWarning>(), isEmpty);
+      expect(_registry(n).where((w) => w.code == 'obfs_unknown'),
+          hasLength(1));
     });
   });
 
@@ -747,18 +738,30 @@ void main() {
     });
 
     test('§469 п. 6 — obfs-коды hysteria2 доходят до узла и из тела', () {
+      // §547 A2 — источник кодов один: реестр (проход по дословной карте).
       final unknown = _one('''
 {"type":"hysteria2","tag":"n","server":"example-1.com","server_port":443,
- "password":"p","obfs":{"type":"wat","password":"x"}}
+ "password":"p","obfs":{"type":"wat","password":"x"},
+ "tls":{"enabled":true,"server_name":"example-1.com"}}
 ''');
-      expect(unknown.warnings.whereType<UnknownObfsWarning>(), hasLength(1));
+      final u = _byCode(unknown, 'obfs_unknown');
+      expect(u.path, 'obfs.type');
+      expect(u.value, 'wat');
+      expect(_registry(unknown).where((w) => w.code == 'obfs_unknown'),
+          hasLength(1));
+      expect((unknown as Hysteria2Spec).obfs, isEmpty);
+      expect(unknown.emit(TemplateVars.empty).map.containsKey('obfs'), isFalse);
 
       final noPass = _one('''
 {"type":"hysteria2","tag":"n","server":"example-1.com","server_port":443,
- "password":"p","obfs":{"type":"salamander"}}
+ "password":"p","obfs":{"type":"salamander"},
+ "tls":{"enabled":true,"server_name":"example-1.com"}}
 ''');
-      expect(noPass.warnings.whereType<MissingObfsPasswordWarning>(),
-          hasLength(1));
+      final m = _byCode(noPass, 'obfs_password_missing');
+      expect(m.path, 'obfs.password');
+      expect(m.params, {'type': 'salamander'});
+      expect((noPass as Hysteria2Spec).obfs, isEmpty);
+      expect(noPass.emit(TemplateVars.empty).map.containsKey('obfs'), isFalse);
     });
   });
 }

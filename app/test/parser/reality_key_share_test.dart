@@ -20,6 +20,9 @@ Map<String, dynamic> _vlessEntry(Map<String, dynamic> reality) => {
       'tls': {
         'enabled': true,
         'server_name': 'x.com',
+        // REALITY без uTLS реестр снимает (`tls.reality.requires`) — блок
+        // нужен, чтобы полный путь JSON-входа (§545) оставил reality.
+        'utls': {'enabled': true, 'fingerprint': 'chrome'},
         'reality': {'enabled': true, 'public_key': _validPbk, ...reality},
       },
     };
@@ -68,9 +71,12 @@ void main() {
           ['enabled', 'public_key', 'short_id', 'key_share']);
     });
 
+    // §547 A1 — нормализацию и enum судит реестр (`normalize: trim_lower`,
+    // `on_invalid: drop`), поэтому эти случаи идут полным путём JSON-входа:
+    // модель строится по карте санитайзера (§545).
     test('§459 регистр нормализуется — Hybrid/HYBRID/пробелы дают hybrid', () {
       for (final good in <String>['Hybrid', 'HYBRID', ' hybrid ', ' Classical']) {
-        final spec = parseSingboxEntry(_vlessEntry({'key_share': good}))!
+        final spec = _viaSingboxJson(_vlessEntry({'key_share': good}))
             as VlessSpec;
         final want = good.trim().toLowerCase();
         expect(spec.tls.reality!.keyShare, want, reason: 'good=$good');
@@ -80,7 +86,7 @@ void main() {
 
     test('вне enum — поле отброшено молча, узел жив', () {
       for (final bad in <dynamic>['x', 1, '', '  ', true]) {
-        final spec = parseSingboxEntry(_vlessEntry({'key_share': bad}))!
+        final spec = _viaSingboxJson(_vlessEntry({'key_share': bad}))
             as VlessSpec;
         expect(spec.tls.reality, isNotNull, reason: 'bad=$bad: REALITY цел');
         expect(spec.tls.reality!.keyShare, isNull, reason: 'bad=$bad');
@@ -210,10 +216,6 @@ void main() {
       const r =
           RealitySpec(publicKey: _validPbk, shortId: '', keyShare: '');
       expect(r.toSingbox().containsKey('key_share'), isFalse);
-    });
-
-    test('kRealityKeyShares — ровно hybrid и classical', () {
-      expect(kRealityKeyShares, {'hybrid', 'classical'});
     });
   });
 }
