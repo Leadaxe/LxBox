@@ -296,7 +296,12 @@ void main() {
         final all = src is List ? src : [src];
         for (final s in all) {
           expect(s, isA<String>(), reason: p.key);
-          expect((s as String).startsWith('ini.'), isTrue, reason: p.key);
+          // Контракт 1.1.63 — источник `context.<путь>` (значение от
+          // распаковщика контейнера: `mtu_container`) текста .conf не
+          // адресует и пространству INI не подчиняется.
+          final str = s as String;
+          expect(str.startsWith('ini.') || str.startsWith('context.'), isTrue,
+              reason: p.key);
         }
       }
     });
