@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **XHTTP с `uplinkDataPlacement=body`/`auto` больше не теряет настройку ([§547](docs/spec/tasks/547-last-registry-rule-copies.md)).**
+  Ядро требует режим `packet-up` только для `header`/`cookie`, а правило
+  судило любое значение: узлу с `body`/`auto` дописывался `packet-up`, а при
+  явном `stream-one`/`stream-up` placement снимался с ложным предупреждением
+  «параметр XHTTP сброшен». Теперь `body`/`auto` доезжают как есть при любом
+  режиме, на всех входах (ссылка, Xray, sing-box JSON). Правило для
+  `header`/`cookie` и снятие `plugin_opts` у shadowsocks без `plugin` судит
+  реестр протоколов, а не код сборки. Контракт 1.1.56.
+
 ## [2.25.5] — 2026-09-25
 
 Патч поверх [v2.25.4](docs/releases/v2.25.4.md): ядро `v1.14.2-lx.3` (VLESS

@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата старта | 2026-09-25 |
-| Дата завершения | — |
-| Коммиты | фаза A: `e98eb8e2` (код), docs — этот |
+| Дата завершения | 2026-09-25 |
+| Коммиты | фаза A: `e98eb8e2` (код), `6b7efac0` (docs); фаза B: коммиты `(547)` / `chore(contract)` 1.1.56 |
 | Связанные spec'ы | §546 (эмиттеры без копий правил, «Нерешённое»), §545 (JSON-вход через санитайзер), §544 (`unless_set`, контракт 1.1.55), §457 (`key_share`), §358 (obfs hysteria2), §416 (xhttp placement↔mode), §472 (конвейер разбора) |
 
 ## Проблема
@@ -105,6 +105,62 @@
 
 `flutter analyze` по затронутым файлам — 0.
 
+## Фаза B — сделано
+
+**Контракт 1.1.56** (лаунчер `d279cc8d` + `54928e51` — refs.dart; TASKS_LXBOX
+§52, MAPPER_ENGINE §10.4). Синк `sync_contract.sh --to 54928e51`.
+
+**Движок, три примитива.**
+- `condition` тела принимает предикаты по значению путей (скаляр / `in` /
+  `not_in`), И между собой и с веткой `any_set`/`source_kind`:
+  `_conditionHolds` → `_valuePredicateHolds` (`body_sanitizer.dart`).
+- `relation.when` у `requires`/`conflicts` — в `_applyRelations`.
+- `$value` в `when` маппера — селектор в `_applyParam`
+  (`engine/interpreter.dart`): промах — тихий пропуск без `on_when_false`,
+  источник чтением не отмечается (`_valueOfBare`).
+
+**Движок, три нормы.**
+1. Условия видят объект, обход которого ещё идёт: карта `_building` по
+   префиксу, поиск `_cleanAt` (снимок → строящийся объект → исходное тело).
+   Связи в Dart и так судятся после обхода объекта (материализованный `mode`
+   лежит в `kept`); норма нужна условиям `default_when.when`.
+2. Пустая строка у обычного поля (не `required`, не `tristate`) и литерал
+   `absent_values` = отсутствие ключа для `default_when` (`_unsetForDefault`).
+   Если `default_when` не сработал, выключатель снимается прежним путём (с
+   пометкой `switchedOff`), пустая строка — молча, как `omitAsUnset` у
+   лаунчера. Раньше пустая строка в enum-поле давала код негодного значения,
+   лаунчер снимал её молча — выровнено.
+3. Пустая строка не выполняет `any_set` и предикаты; `0` — значение.
+
+**B1.** `emitShadowsocks`: `plugin_opts` пишется, если непуст. Без `plugin`
+его снимает `plugin_opts.requires` (`field_requires`) на разборе и гардом
+сборки.
+
+**B2.** Ветка §416 в `XhttpTransport.toSingbox` снята, placement пишется как
+есть. Правило судит реестр на всех входах: ссылка и Xray — записи маппера
+`uplinkDataPlacement` (`$value in [header, cookie]`) и
+`uplinkDataPlacementOther`; JSON и редактор (через гард сборки) — тело xhttp.
+`cookie` теперь судится наравне с `header` (эмиттер знал только `header`).
+Путь в модель мимо санитайзера — тот же, что в фазе A («Нерешённое», п. 1);
+новых копий под него не заведено.
+
+**Проверка п. 4 ТЗ.** `body`/`auto` при любом mode (нет, auto, packet-up,
+stream-up, stream-one) на входах JSON, ссылка и Xray: mode не дописывается,
+placement не снимается, кодов нет — тест в `xhttp_test.dart` (группа §416).
+
+**Эталон публичных подписок** обновлён под 1.1.56: `xhttp_param_reset` у
+подписки 27 — 12 → 1, у 28 — 3 → 0. Это ложные коды на `body`/`auto` при
+явном режиме, их снял контракт; число узлов не изменилось.
+
+| Прогон | Итог |
+|---|---|
+| 9 новых кейсов корпуса (фильтр по имени: `uplink\|plugin_opts` в `body_contract_test`, `xhttp_uplink` в `contract_test`) | зелёные (8 тел; 5 URI `xhttp_uplink_*`, вкл. прежний `header_placement_reset`) |
+| `xhttp_test`, `node_spec_test`, `engine_emit_shape_test`, `mapper_sections_draft_test`, `shadowsocks_pipeline_invariants_test`, `registry_load_test`, `registry_dart_refs_test` | зелёные |
+| `LX_CORPUS_PUBLIC=1 test/public_subscriptions` | `+3`, эталон обновлён (см. выше) |
+| полные раннеры `contract_test` / `body_contract_test` | CI (по решению владельца локально не гонялись) |
+
+`flutter analyze` — 0.
+
 ## Нерешённое / follow-up
 
 1. **Тела нет — модель по сырой карте** (`_sanitizedEntry`, §545 п. 4).
@@ -123,3 +179,10 @@
    в тестах (`node_warning_test`, `ui_msg_test`, `node_notifications_test`,
    `locale_switch_simulation_test`). Снять вместе с l10n-ключами — отдельной
    чисткой.
+4. `XhttpModeForcedPacketUpWarning` и `XhttpParamResetWarning` (фаза B) —
+   тоже без производителей в `lib/`: коды `xhttp_mode_forced_packet_up` и
+   `xhttp_param_reset` ставит реестр (`RegistryWarning`, текст из
+   `warnings.json`). Классы держат `warning_codes.dart` (код и путь для
+   дедупа), `node_warning.dart` (текст по `XhttpResetReason`) и тесты
+   (`node_warning_test`, `corpus_warnings.dart`). Снять в той же чистке, что
+   п. 3.
