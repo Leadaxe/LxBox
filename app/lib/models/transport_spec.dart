@@ -239,56 +239,34 @@ final class XhttpTransport extends TransportSpec {
     if (path.isNotEmpty) m['path'] = path;
     final warnings = <NodeWarning>[];
 
-    // §217 — нормализация против правил ядра normalizeMeta (transport/v2rayxhttp/
-    // meta.go) остаётся для x_padding_placement/x_padding_method/seq_placement
-    // (не покрыты corpus-кейсами, поведение Go для них ещё не сверено).
-    // session_placement/uplink_data_placement/uplink_http_method ниже —
-    // pure passthrough (см. комментарии на местах, "go": null в
-    // registry/warnings.json xhttp_param_reset).
-
-    // --- placement/method enums: значение вне множества ядро роняет fatal ---
-    // §459 (контракт §24.2 п. 7.14) — регистр НЕ нормализуем: ядро
-    // case-sensitive, `queryInHeader` только camelCase (meta.go:20-35).
-    void putEnum(String key, String value, Set<String> allowed) {
-      if (value.isEmpty) return;
-      if (allowed.contains(value)) {
-        m[key] = value;
-      } else {
-        warnings.add(XhttpParamResetWarning(
-            key, XhttpResetReason.invalidEnumValue, value: value));
-      }
-    }
-
+    // Допустимые значения enum-полей (`mode`, placement'ы, `x_padding_method`)
+    // здесь не судятся: это правило реестра (`transports.json` → xhttp,
+    // `on_invalid` → `xhttp_param_reset`). Его исполняет санитайзер на
+    // каждом входе разбора и ещё раз гард сборки (`applyRegistryGate`) перед
+    // ядром, так что до эмита значение вне enum не доезжает. Эмиттер пишет
+    // непустое как есть.
     if (host.isNotEmpty) m['host'] = host;
-    // §459 (контракт §24.2 п. 7.14) — `mode` вне enum'а ядра
-    // (transport/v2rayxhttp/client.go:47-51) роняет ВЕСЬ конфиг; эмит —
-    // единственная воронка для URI, sing-box JSON, Xray JSON и редактора.
-    putEnum('mode', mode,
-        const {'auto', 'packet-up', 'stream-up', 'stream-one'});
+    if (mode.isNotEmpty) m['mode'] = mode;
     if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
     if (noGrpcHeader) m['no_grpc_header'] = true;
     if (noSseHeader) m['no_sse_header'] = true;
     if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
-    // SPEC 103 vless/xhttp_placement_bogus_reset — session_placement, ровно
-    // как uplink_data_placement/uplink_http_method ниже, идёт напрямую без
-    // enum-гейта: registry/warnings.json xhttp_param_reset документирует
-    // "go": null — Go пока не нормализует XHTTP-параметры вовсе
-    // (xhttpBuildTransport: "normalization is left to the core", SPEC 102 в
-    // работе). Канон = поведение Go (pass-through, core сам роняет мусор).
-    // §460 — реестр 1.1.0 (`transports.json` → xhttp.session_placement):
-    // enum path|query|header|cookie, мусор → снять с `xhttp_param_reset`
-    // (корпус vless/xhttp_placement_bogus_reset). Раньше шёл насквозь.
-    putEnum('session_placement', sessionPlacement,
-        const {'path', 'query', 'header', 'cookie'});
+    if (sessionPlacement.isNotEmpty) {
+      m['session_placement'] = sessionPlacement;
+    }
     if (sessionKey.isNotEmpty) m['session_key'] = sessionKey;
-    putEnum('seq_placement', seqPlacement,
-        const {'path', 'query', 'header', 'cookie'});
+    if (seqPlacement.isNotEmpty) m['seq_placement'] = seqPlacement;
     if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
 
-    // §416 — единственная точка, где uplink_data_placement уходит в конфиг:
-    // сюда сходятся ВСЕ ветки источника (URI, sing-box JSON, Xray JSON,
-    // ручной редактор), обойти guard нельзя.
+    // §416 — связь uplink_data_placement ↔ mode. §546: это копия правила
+    // реестра, но снять её пока нельзя. У ссылки и Xray-объекта правило есть
+    // в данных (`transports.json`, блоки `uri`/`xray` → `uplinkDataPlacement`:
+    // `when` по mode, `implies` packet-up), а у тела sing-box JSON его нет:
+    // схема `body.variants.xhttp.uplink_data_placement` знает только enum.
+    // Узел из JSON-подписки или редактора без этой проверки доехал бы до
+    // ядра с header вне packet-up. Снимается, когда связь появится в схеме
+    // тела (запрос лаунчеру, спека 546 → «Нерешённое»).
     //
     // Ядро (transport/v2rayxhttp/meta.go normalizeMeta) отвергает
     // `header`-placement вне packet-up с fatal на ВЕСЬ конфиг:
@@ -334,10 +312,10 @@ final class XhttpTransport extends TransportSpec {
     if (xPaddingObfsMode) m['x_padding_obfs_mode'] = true;
     if (xPaddingKey.isNotEmpty) m['x_padding_key'] = xPaddingKey;
     if (xPaddingHeader.isNotEmpty) m['x_padding_header'] = xPaddingHeader;
-    putEnum('x_padding_placement', xPaddingPlacement,
-        const {'cookie', 'header', 'query', 'queryInHeader'});
-    putEnum('x_padding_method', xPaddingMethod,
-        const {'repeat-x', 'tokenish'});
+    if (xPaddingPlacement.isNotEmpty) {
+      m['x_padding_placement'] = xPaddingPlacement;
+    }
+    if (xPaddingMethod.isNotEmpty) m['x_padding_method'] = xPaddingMethod;
     if (scMaxEachPostBytes.isNotEmpty) {
       m['sc_max_each_post_bytes'] = scMaxEachPostBytes;
     }

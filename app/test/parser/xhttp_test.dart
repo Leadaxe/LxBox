@@ -5,7 +5,9 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 import 'package:lxbox/services/parser/transport.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -43,6 +45,38 @@ TransportSpec? _viaUri(TransportSpec t) {
 /// сохранить.
 Map<String, dynamic> _bodyViaUri(TransportSpec t) =>
     _viaUri(t)!.toSingbox(TemplateVars.empty).$1;
+
+/// Тело транспорта узла, пришедшего sing-box JSON: `parseSingboxConfigs`
+/// строит модель по карте санитайзера реестра (§545), так что правила
+/// `transports.json` срабатывают здесь, а не в эмиттере (§546).
+Map<String, dynamic> _viaSingbox(Map<String, dynamic> transport) {
+  final node = parseSingboxConfigs([
+    {
+      'outbounds': [
+        {
+          'type': 'vless',
+          'tag': 'n',
+          'server': '1.2.3.4',
+          'server_port': 443,
+          'uuid': '11111111-2222-3333-4444-555555555555',
+          'transport': transport,
+        },
+      ],
+    },
+  ]).single;
+  return node.emit(TemplateVars.empty).map['transport'] as Map<String, dynamic>;
+}
+
+/// Тело транспорта и коды узла, пришедшего ссылкой с xhttp и параметрами
+/// [query] (имена параметров — snake_case, как читает секция `uri`).
+(Map<String, dynamic>, List<String?>) _viaUriQuery(String query) {
+  final node = parseUri('vless://11111111-2222-3333-4444-555555555555'
+      '@1.2.3.4:443?security=tls&type=xhttp&$query#n')!;
+  return (
+    node.emit(TemplateVars.empty).map['transport'] as Map<String, dynamic>,
+    node.warnings.map(warningCodeOf).toList(),
+  );
+}
 
 void main() {
   // §480 — разбор ссылки и Xray-элемента идёт ДВИЖКОМ по секциям реестра;
@@ -198,7 +232,7 @@ void main() {
     });
 
     test('snake_case формы расширенных полей тоже читаются', () {
-      // Парсинг дословный — поле читается как есть; нормализация в toSingbox.
+      // parseTransport читает поле как есть; значения судит реестр на разборе.
       final t = parseTransport({
         'type': 'xhttp',
         'session_placement': 'cookie',
@@ -245,38 +279,40 @@ void main() {
       expect(m3['uplink_data_placement'], 'cookie');
       expect(w3.whereType<XhttpParamResetWarning>(), isEmpty);
 
-      // §460 — session_placement вне enum реестра снимается (xhttp_param_reset),
-      // как seq_placement; см. тест ниже.
-      final t4 = parseTransport({'type': 'xhttp', 'session_placement': 'bogus'})!;
-      final (m4, w4) = t4.toSingbox(TemplateVars.empty);
-      expect(m4.containsKey('session_placement'), isFalse);
-      expect(w4.whereType<XhttpParamResetWarning>(), isNotEmpty);
+      // §460 — session_placement вне enum реестра снимается (xhttp_param_reset)
+      // на разборе, как seq_placement; см. группу ниже.
+      expect(
+          _viaSingbox({'type': 'xhttp', 'session_placement': 'bogus'})
+              .containsKey('session_placement'),
+          isFalse);
     });
 
     // §459 (контракт §24.2 п. 7.14) — mode/x_padding_placement/
-    // x_padding_method гейтятся enum'ом ядра в эмите: мусор там даёт fatal на
-    // ВЕСЬ конфиг (transport/v2rayxhttp/client.go:47-51, meta.go:151-160).
-    // Регистр НЕ нормализуем — ядро case-sensitive, `queryInHeader` только
-    // camelCase.
+    // x_padding_method: мусор даёт fatal на ВЕСЬ конфиг
+    // (transport/v2rayxhttp/client.go:47-51, meta.go:151-160). Регистр НЕ
+    // нормализуем — ядро case-sensitive, `queryInHeader` только camelCase.
+    //
+    // §546 — enum судит реестр (`transports.json` → xhttp, `on_invalid` →
+    // `xhttp_param_reset`) на разборе, эмиттер пишет как есть. Поэтому
+    // проверка идёт обоими входами: sing-box JSON (тело) и ссылкой (тело и
+    // код).
     group('§459 enum-гейт трёх полей', () {
-      (Map<String, dynamic>, List<NodeWarning>) emit(
-              String key, String value) =>
-          parseTransport({'type': 'xhttp', key: value})!
-              .toSingbox(TemplateVars.empty);
-
       void expectKept(String key, String value) {
-        final (m, w) = emit(key, value);
-        expect(m[key], value, reason: '$key=$value');
-        expect(w.whereType<XhttpParamResetWarning>(), isEmpty,
-            reason: '$key=$value');
+        expect(_viaSingbox({'type': 'xhttp', key: value})[key], value,
+            reason: 'json $key=$value');
+        final (m, codes) = _viaUriQuery('$key=${Uri.encodeQueryComponent(value)}');
+        expect(m[key], value, reason: 'uri $key=$value');
+        expect(codes, isNot(contains('xhttp_param_reset')),
+            reason: 'uri $key=$value');
       }
 
       void expectDropped(String key, String value) {
-        final (m, w) = emit(key, value);
-        expect(m.containsKey(key), isFalse, reason: '$key=$value');
-        final reset = w.whereType<XhttpParamResetWarning>().single;
-        expect(reset, XhttpParamResetWarning(
-            key, XhttpResetReason.invalidEnumValue, value: value));
+        expect(
+            _viaSingbox({'type': 'xhttp', key: value}).containsKey(key), isFalse,
+            reason: 'json $key=$value');
+        final (m, codes) = _viaUriQuery('$key=${Uri.encodeQueryComponent(value)}');
+        expect(m.containsKey(key), isFalse, reason: 'uri $key=$value');
+        expect(codes, contains('xhttp_param_reset'), reason: 'uri $key=$value');
       }
 
       test('mode: валидные значения ядра проходят', () {
@@ -310,12 +346,36 @@ void main() {
         }
       });
 
+      test('session_placement/seq_placement: мусор снят', () {
+        for (final key in ['session_placement', 'seq_placement']) {
+          expectKept(key, 'cookie');
+          expectDropped(key, 'bogus');
+        }
+      });
+
       test('пустое значение — ключа нет и предупреждения нет', () {
         for (final key in ['mode', 'x_padding_placement', 'x_padding_method']) {
-          final (m, w) = emit(key, '');
+          final (m, w) = parseTransport({'type': 'xhttp', key: ''})!
+              .toSingbox(TemplateVars.empty);
           expect(m.containsKey(key), isFalse, reason: key);
           expect(w, isEmpty, reason: key);
         }
+      });
+
+      test('эмиттер значение не судит: модель как есть → тело как есть', () {
+        final (m, w) = const XhttpTransport(
+          mode: 'bogus',
+          sessionPlacement: 'bogus',
+          seqPlacement: 'bogus',
+          xPaddingPlacement: 'queryinheader',
+          xPaddingMethod: 'fixed',
+        ).toSingbox(TemplateVars.empty);
+        expect(m['mode'], 'bogus');
+        expect(m['session_placement'], 'bogus');
+        expect(m['seq_placement'], 'bogus');
+        expect(m['x_padding_placement'], 'queryinheader');
+        expect(m['x_padding_method'], 'fixed');
+        expect(w, isEmpty);
       });
 
       test('mode-гейт не ломает §416 (header-placement без mode)', () {

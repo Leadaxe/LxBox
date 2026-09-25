@@ -7,6 +7,8 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/models/tls_spec.dart';
+import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/probe/probe_config.dart';
 import 'package:lxbox/services/probe/probe_runner.dart';
 
@@ -424,6 +426,70 @@ void main() {
       ]));
       expect(cfg.tagByIndex[0], 'Alpha');
       expect(cfg.tagByIndex[1], 'Alpha-2');
+    });
+  });
+
+  // §546 — эмиттер значений не судит, поэтому probe-конфиг, как и боевая
+  // сборка, проходит гард реестра: тело правится на месте, снятая запись
+  // выводит узел из батча с вердиктом `invalid: …`.
+  group('§546 гард реестра в probe-конфиге', () {
+    const uuid = '11111111-2222-3333-4444-555555555555';
+    const tls = TlsSpec(enabled: true, serverName: 'h.example');
+    VlessSpec vless(
+      String tag, {
+      String server = 'h.example',
+      String flow = '',
+      TransportSpec? transport,
+      NodeSpec? chained,
+    }) =>
+        VlessSpec(
+          id: tag,
+          tag: tag,
+          label: tag,
+          server: server,
+          port: 443,
+          rawSource: '',
+          uuid: uuid,
+          flow: flow,
+          tls: tls,
+          transport: transport,
+          chained: chained,
+        );
+    Map<String, dynamic> outboundOf(ProbeConfig cfg, String tag) =>
+        ((jsonDecode(cfg.configJson!) as Map)['outbounds'] as List)
+            .cast<Map<String, dynamic>>()
+            .firstWhere((o) => o['tag'] == tag);
+
+    test('модель с vision + ws → в probe-конфиге flow снят гардом', () {
+      final node = vless('V',
+          flow: 'xtls-rprx-vision', transport: const WsTransport(path: '/x'));
+      // Эмиттер пишет модель как есть — судит реестр.
+      expect(node.emit(TemplateVars.empty).map['flow'], 'xtls-rprx-vision');
+      final cfg = buildProbeConfig([node]);
+      final out = outboundOf(cfg, cfg.tagByIndex[0]!);
+      expect(out.containsKey('flow'), isFalse);
+      expect(out['transport'], {'type': 'ws', 'path': '/x'});
+    });
+
+    test('запись снята гардом → узел в brokenByIndex, прочие тестируются',
+        () {
+      final cfg = buildProbeConfig([vless('Bad', server: ''), vless('Good')]);
+      expect(cfg.brokenByIndex[0], startsWith('invalid: '));
+      expect(cfg.brokenByIndex[0], contains('field_missing'));
+      expect(cfg.tagByIndex.containsKey(0), isFalse);
+      expect(cfg.tagByIndex[1], 'Good');
+      final tags = ((jsonDecode(cfg.configJson!) as Map)['outbounds'] as List)
+          .map((o) => (o as Map)['tag'])
+          .toList();
+      expect(tags, isNot(contains('Bad')));
+    });
+
+    test('снят детур → узел не тестируется целиком', () {
+      final cfg = buildProbeConfig([
+        vless('Main', chained: vless('Hop', server: '')),
+      ]);
+      expect(cfg.configJson, isNull);
+      expect(cfg.brokenByIndex[0], startsWith('invalid: Hop: '));
     });
   });
 

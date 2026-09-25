@@ -5,6 +5,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
 
@@ -12,6 +13,15 @@ import 'engine_test_setup.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
+
+/// Узел, пришедший sing-box JSON полным путём входа: `parseSingboxConfigs`
+/// строит модель по карте санитайзера реестра (§545). Блоки utls/reality на
+/// QUIC снимает он, а не эмиттер (§546).
+NodeSpec _viaSingboxJson(Map<String, dynamic> entry) => parseSingboxConfigs([
+      {
+        'outbounds': [entry],
+      },
+    ]).single;
 
 /// §281 — uTLS fingerprint вне словаря ядра = fatal ВСЕГО конфига на старте
 /// («unknown uTLS fingerprint»). Xray-псевдонимы канонизируются молча,
@@ -355,7 +365,7 @@ void main() {
       final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
       // §472 шаг 5 — блок снят САНИТАЙЗЕРОМ, до модели он не доезжает.
       // Прежде он доезжал (`spec.tls.fingerprint == 'chrome'`) и срезался
-      // позже, на эмите: `toSingboxForQuic`. Тело узла от переезда не
+      // позже, на эмите: `toSingboxForQuic` (снят §546). Тело узла от переезда не
       // изменилось — `utls` в нём не было и тогда.
       expect(spec.tls.fingerprint, isNull);
       final tls = emitTls(spec);
@@ -367,7 +377,7 @@ void main() {
     test('hysteria2 round-trip: fp в ссылку не возвращается, и это верно', () {
       // ИЗМЕНЕНИЕ ПОВЕДЕНИЯ, названное в спеке 472 (раздел 11.6). Прежде
       // отпечаток жил в модели только ради обратной записи в ссылку: в тело
-      // он не попадал никогда (`toSingboxForQuic`), на соединение не влиял, а
+      // он не попадал никогда (`toSingboxForQuic`, снят §546), на соединение не влиял, а
       // `toUri()` его возвращал — и ссылка выглядела так, будто параметр
       // действует. Санитайзер снимает блок вместе со значением, и круг даёт
       // ссылку без мусора.
@@ -384,7 +394,7 @@ void main() {
     });
 
     test('tuic из sing-box JSON с fp → emit-конфиг БЕЗ utls', () {
-      final spec = parseSingboxEntry({
+      final spec = _viaSingboxJson({
         'type': 'tuic',
         'tag': 't',
         'server': 'h',
@@ -397,7 +407,7 @@ void main() {
           'alpn': ['h3'],
           'utls': {'enabled': true, 'fingerprint': 'chrome'},
         },
-      })!;
+      });
       final tls = emitTls(spec);
       expect(tls.containsKey('utls'), isFalse);
       expect(tls['alpn'], ['h3'], reason: 'alpn для QUIC валиден, не трогаем');
@@ -413,7 +423,7 @@ void main() {
     test('РЕВЬЮ §282: reality на tuic → emit БЕЗ reality и БЕЗ utls', () {
       // reality поверх QUIC тоже мёртв (RealityClientConfig.STDConfig ошибка);
       // reality на hy2/tuic = мусор подписок, срезаем оба блока.
-      final spec = parseSingboxEntry({
+      final spec = _viaSingboxJson({
         'type': 'tuic',
         'tag': 't',
         'server': 'h',
@@ -426,7 +436,7 @@ void main() {
           'reality': {'enabled': true, 'public_key': _validPbk},
           'utls': {'enabled': true, 'fingerprint': 'chrome'},
         },
-      })!;
+      });
       final tls = emitTls(spec);
       expect(tls.containsKey('utls'), isFalse);
       expect(tls.containsKey('reality'), isFalse);

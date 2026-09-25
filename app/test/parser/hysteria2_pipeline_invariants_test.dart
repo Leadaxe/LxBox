@@ -11,7 +11,7 @@ import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/node_hash.dart';
-import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 5, раздел 3 спеки — инварианты переезда hysteria2 на конвейер.
@@ -55,6 +55,15 @@ List<String> _corpusUris() {
 
 List<RegistryWarning> _registry(NodeSpec n) =>
     n.warnings.whereType<RegistryWarning>().toList();
+
+/// Узел, пришедший sing-box JSON полным путём входа: `parseSingboxConfigs`
+/// строит модель по карте санитайзера реестра (§545). Блоки utls/reality на
+/// QUIC снимает он, а не эмиттер (§546).
+NodeSpec _viaSingboxJson(Map<String, dynamic> entry) => parseSingboxConfigs([
+      {
+        'outbounds': [entry],
+      },
+    ]).single;
 
 void main() {
   final corpusSkip = corpusTestSkip('test/parser/hysteria2_pipeline_invariants_test.dart');
@@ -205,7 +214,7 @@ void main() {
     test('запрещённые на QUIC блоки судит САНИТАЙЗЕР, по одному коду на блок',
         () {
       // Главное отличие шага 5. Прежде блоки срезал ЭМИТТЕР
-      // (`toSingboxForQuic`), то есть раньше судьи, и код ставил рукописный
+      // (`toSingboxForQuic`, снят §546), то есть раньше судьи, и код ставил рукописный
       // проход `forbiddenTlsBlockWarnings` (§469). На конвейере блоки
       // доезжают до санитайзера в сырой карте, и правило
       // `forbidden_for`/`forbidden_codes` реестра снимает их само.
@@ -239,7 +248,7 @@ void main() {
       final fromUri = parseUri(
           'hysteria2://pass123@example-1.com:443?sni=x.example.com&fp=chrome'
           '#n')!;
-      final fromBody = parseSingboxEntry({
+      final fromBody = _viaSingboxJson({
         'type': 'hysteria2',
         'tag': 'n',
         'server': 'example-1.com',
@@ -250,7 +259,7 @@ void main() {
           'server_name': 'x.example.com',
           'utls': {'enabled': true, 'fingerprint': 'chrome'},
         },
-      })!;
+      });
       annotateAllFromRawBody([fromBody]);
       String codes(NodeSpec n) => _registry(n)
           .where((w) => w.code == 'tls_not_applicable_quic')

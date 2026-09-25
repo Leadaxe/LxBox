@@ -3,6 +3,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import 'engine_test_setup.dart';
@@ -27,6 +28,15 @@ Map<String, dynamic> _emittedReality(NodeSpec n) =>
     ((n.emitRaw(const TemplateVars()).map['tls'] as Map)['reality']
         as Map)
         .cast<String, dynamic>();
+
+/// Узел, пришедший sing-box JSON полным путём входа: `parseSingboxConfigs`
+/// строит модель по карте санитайзера реестра (§545). Блоки utls/reality на
+/// QUIC снимает он, а не эмиттер (§546).
+NodeSpec _viaSingboxJson(Map<String, dynamic> entry) => parseSingboxConfigs([
+      {
+        'outbounds': [entry],
+      },
+    ]).single;
 
 /// §457 — `tls.reality.key_share` (ядро ≥ v1.14.1-lx.4): hybrid | classical.
 /// Неизвестное значение ядро не понимает и отвергает outbound целиком, а с
@@ -89,7 +99,7 @@ void main() {
     });
 
     test('hysteria2 с reality — reality срезан, как и раньше (§282)', () {
-      final spec = parseSingboxEntry({
+      final spec = _viaSingboxJson({
         'type': 'hysteria2',
         'tag': 'h2',
         'server': 'h',
@@ -104,10 +114,11 @@ void main() {
             'key_share': 'hybrid',
           },
         },
-      })!;
-      // reality срезает эмит (toSingboxForQuic), не разбор: key_share уезжает
-      // вместе с блоком и в конфиг не попадает.
-      expect((spec as Hysteria2Spec).tls.reality!.keyShare, 'hybrid');
+      });
+      // §546 — блок снимает реестр на разборе (`forbidden_for` у
+      // `tls.reality`), эмиттер QUIC-срезов не делает: key_share уезжает
+      // вместе с блоком ещё до модели и в конфиг не попадает.
+      expect((spec as Hysteria2Spec).tls.reality, isNull);
       expect(
           (spec.emitRaw(const TemplateVars()).map['tls'] as Map)
               .containsKey('reality'),

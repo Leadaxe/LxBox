@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import '../../models/singbox_entry.dart';
+import '../builder/registry_gate.dart';
 
 /// §236/§296 — probe-конфиг для headless-сессии: ВСЕ переданные ноды (включая
 /// null-слоты для выключенных/битых) как outbounds/endpoints, БЕЗ inbound'ов
@@ -31,7 +33,8 @@ class ProbeConfig {
 
   /// index → причина, почему нода НЕ попала в конфиг:
   /// 'broken' (null-слот / raw не парсится) | 'group' (узел-группа §322/§336,
-  /// не тестируется) | 'invalid: …' (emit бросил).
+  /// не тестируется) | 'invalid: …' (emit бросил либо гард реестра снял
+  /// запись узла или его детура, §546).
   final Map<int, String> brokenByIndex;
 }
 
@@ -102,12 +105,18 @@ const _wireguardEndpointType = 'wireguard';
 /// §518/§523 — probe-конфиг строится батчами: см. [kProbeMaxNaivePerConfig] и
 /// [kProbeMaxWireguardPerConfig]. Совместимость: единственный батч, когда
 /// дорогих узлов не больше лимитов — поведение до §518 дословно.
-ProbeConfig buildProbeConfig(List<NodeSpec?> nodes) =>
-    buildProbeBatches(nodes).firstOrNull ??
+///
+/// [coreVersion] — версия ядра для гейтов реестра (`min_core`), та же, что у
+/// боевой сборки (`BuildSettings.coreVersion` ← `CoreVersionCache`).
+ProbeConfig buildProbeConfig(
+  List<NodeSpec?> nodes, {
+  String coreVersion = '',
+}) =>
+    buildProbeBatches(nodes, coreVersion: coreVersion).firstOrNull ??
     ProbeConfig(
       configJson: null,
       tagByIndex: const {},
-      brokenByIndex: _brokenOf(nodes),
+      brokenByIndex: _brokenOf(nodes, coreVersion),
     );
 
 /// §518/§523 — раскладывает [nodes] на probe-конфиги так, чтобы в каждом было
@@ -125,11 +134,14 @@ ProbeConfig buildProbeConfig(List<NodeSpec?> nodes) =>
 ///
 /// Пустой список — если тестировать нечего вовсе (все слоты битые/группы);
 /// вердикты таких узлов тогда берутся из [buildProbeConfig].
-List<ProbeConfig> buildProbeBatches(List<NodeSpec?> nodes) {
+List<ProbeConfig> buildProbeBatches(
+  List<NodeSpec?> nodes, {
+  String coreVersion = '',
+}) {
   final built = <int, _Built>{};
   final broken = <int, String>{};
   for (var i = 0; i < nodes.length; i++) {
-    final e = _buildOne(nodes[i]);
+    final e = _buildOne(nodes[i], coreVersion);
     if (e is String) {
       broken[i] = e;
     } else {
@@ -187,10 +199,10 @@ List<ProbeConfig> buildProbeBatches(List<NodeSpec?> nodes) {
   ];
 }
 
-Map<int, String> _brokenOf(List<NodeSpec?> nodes) {
+Map<int, String> _brokenOf(List<NodeSpec?> nodes, String coreVersion) {
   final broken = <int, String>{};
   for (var i = 0; i < nodes.length; i++) {
-    final e = _buildOne(nodes[i]);
+    final e = _buildOne(nodes[i], coreVersion);
     if (e is String) broken[i] = e;
   }
   return broken;
@@ -220,7 +232,7 @@ class _Built {
 }
 
 /// Собирает записи одного узла. Возвращает [_Built] или строку-вердикт.
-Object _buildOne(NodeSpec? node) {
+Object _buildOne(NodeSpec? node, String coreVersion) {
   if (node == null) return 'broken';
   // §336 — группа (§322) не тестируется: её emitRaw — заготовка urltest с
   // пустым outbounds (члены дописывает только боевой билдер), ядро валит
@@ -235,6 +247,21 @@ Object _buildOne(NodeSpec? node) {
     final raw = node.getEntries(null);
     // Зеркалим ServerListBuild: детуры первыми (main ссылается на tag).
     final entries = <SingboxEntry>[...raw.detours, raw.main];
+    // §546 — гард реестра, как у боевой сборки (`build_config.dart`): эмиттер
+    // значений не судит, и без гарда probe был бы единственным путём в ядро
+    // мимо реестра. Тело переписывается на месте. Снятая запись — узел не
+    // тестируется целиком: у снятого детура main сослался бы на тег, которого
+    // в конфиге нет, а ядро на этом отвергло бы весь батч.
+    //
+    // Вход `other`, а не `bodySourceOf(node)`: тело здесь всегда из `emit()`,
+    // а боевая сборка метит `singbox` только дословное тело UserServer/члена
+    // папки; узел JSON-подписки там идёт как `other`, `bodySourceOf` же
+    // назвал бы его `singbox`.
+    //
+    // Реестр не загружен — гард снимает только запись без `type`, остальное
+    // идёт как есть (деградированный путь, спека 546 → «Риски»).
+    final gate = applyRegistryGate(entries, coreVersion: coreVersion);
+    if (gate.dropped.isNotEmpty) return 'invalid: ${_dropReason(gate)}';
     var naive = 0;
     var wireguard = 0;
     for (final e in entries) {
@@ -263,6 +290,19 @@ Object _buildOne(NodeSpec? node) {
   } catch (e) {
     return 'invalid: $e';
   }
+}
+
+/// Причина снятия для `brokenByIndex`: тег записи и коды реестра по ней;
+/// у записи без `type` кодов по тегу нет — берём строку отчёта.
+String _dropReason(RegistryGateReport gate) {
+  final d = gate.dropped.first;
+  final codes = <String>{
+    for (final w in (gate.warningsByEmittedTag[d.tag] ?? const <NodeWarning>[])
+        .whereType<RegistryWarning>())
+      w.code,
+  };
+  if (codes.isNotEmpty) return '${d.tag}: ${codes.join(', ')}';
+  return gate.warnings.firstOrNull ?? '${d.tag}: dropped by registry';
 }
 
 ProbeConfig _assemble(
