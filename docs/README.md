@@ -31,6 +31,7 @@ hand”. Both describe the same operations from opposite sides.
 | [TEMPLATE.md](TEMPLATE.md) | The `wizard_template.json` schema (presets/vars/sections) plus the var substitution syntax |
 | [PROTOCOLS.md](PROTOCOLS.md) | VPN protocol details (vless/vmess/trojan/…): URI formats, parameters, sing-box mapping |
 | [KERNEL.md](KERNEL.md) | The sing-box-lx fork: build tags, the gotchas of a version bump, rc history |
+| [../SECURITY.md](../SECURITY.md) | Security policy — how to report a vulnerability privately, scope, supported versions |
 | [SECURITY.md](SECURITY.md) · [RU](SECURITY.ru.md) | Threat model — protection against traffic leaks, the local attack surface, on-device secrets |
 | [PRIVACY_POLICY.md](PRIVACY_POLICY.md) · [RU](PRIVACY_POLICY.ru.md) | What the app stores, which requests it makes on its own, and which permissions it needs |
 
