@@ -239,10 +239,10 @@ void main() {
     });
 
     test('WireGuard: private key + peer preserved', () {
-      final a = parseWireguardUri(
+      final a = parseLinkAs<WireguardSpec>(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@h:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420&keepalive=25#WG',
       )!;
-      final b = parseWireguardUri(a.toUri())!;
+      final b = parseLinkAs<WireguardSpec>(a.toUri())!;
       expect(b.privateKey, a.privateKey);
       expect(b.peers.first.publicKey, a.peers.first.publicKey);
       expect(b.mtu, a.mtu);

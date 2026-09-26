@@ -250,6 +250,11 @@ SourceSpace? _selectForm(MapperSection section, String text) {
     // Форма, чей предикат сошёлся хоть на одном из двух, — эта форма, как у
     // лаунчера. `scheme_in` раскрытием не меняется (схема остаётся на месте),
     // `json` судится ниже по разобранному объекту.
+    if (form.space == 'ini') {
+      final ini = _selectLinkIniForm(section, form, text);
+      if (ini != null) return ini;
+      continue;
+    }
     final rawHit = formMatchesText(form.detect, text);
     if (!rawHit && form.decode.isEmpty) continue;
     // `forms[].decode` — оболочка источника: тело после схемы бывает целиком
@@ -331,13 +336,49 @@ SourceSpace? _selectForm(MapperSection section, String text) {
           query: _flattenContainer(doc),
         );
       default:
-        // Прочее пространство (`ini`) разбирается своим входом. Молча выдавать
-        // пустое тело нельзя — это был бы узел из ничего, поэтому форма просто
-        // не отвечает.
+        // Неизвестное пространство: молча выдавать пустое тело нельзя — это
+        // был бы узел из ничего, поэтому форма просто не отвечает.
         continue;
     }
   }
   return null;
+}
+
+/// Ссылочная форма с пространством `ini` (`<схема>://<base64 .conf>#метка`):
+/// под оболочкой лежит целый `.conf`, а не ссылка.
+///
+/// Метка пишется СНАРУЖИ оболочки, поэтому фрагмент снимается до `detect` и
+/// декода (предикат формы — «пэйлоад целиком из алфавита base64» — про
+/// оболочку, `#метка` в неё не входит) и возвращается в пространство как
+/// источник `fragment`. Раскрытый текст раскладывается диалектом секции
+/// (`ini_dialect`; у ссылки — диалект протокола, [MapperSections]). Схема
+/// остаётся написанием источника (`scheme_sets`, фолбэк метки).
+SourceSpace? _selectLinkIniForm(
+    MapperSection section, MapperForm form, String text) {
+  final split = _splitScheme(text);
+  if (split == null) return null;
+  var payload = split.payload;
+  var fragment = '';
+  final hash = payload.indexOf('#');
+  if (hash >= 0) {
+    fragment = payload.substring(hash + 1);
+    payload = payload.substring(0, hash);
+  }
+  final bare = '${split.scheme}://$payload';
+  if (!formMatchesText(form.detect, bare)) return null;
+  final decoded = _applyFormDecode(form, bare);
+  if (decoded == null) return null;
+  final unwrapped = _applyScopedDecodeToPayload(form, decoded);
+  if (unwrapped == null) return null;
+  final conf = _splitScheme(unwrapped)?.payload ?? unwrapped;
+  final parsed =
+      parseIniSpace(conf, section.iniDialect ?? const IniDialect());
+  return SourceSpace(
+    formId: form.id,
+    scheme: split.scheme,
+    fragment: fragment,
+    ini: parsed.space,
+  );
 }
 
 /// Форма для объектного входа: `detect` формы судится предикатами `json`
@@ -3549,7 +3590,7 @@ final class _Run {
     // глушило следующие звенья: `trim` превратил бы его в пустую строку уже
     // после выбора, и узел остался бы вовсе без имени.
     for (final src in sources) {
-      final v = _readSourceBare(src);
+      final v = _readSourceBare(src) ?? _readLabelBodyPath(src);
       // Метка бывает НЕ СТРОКОЙ: в контейнере чужого диалекта `ps` приезжает
       // числом ровно так же, как `port`. Отбрасывать её за это значило бы
       // переименовать живой узел в фолбэк.
@@ -3572,6 +3613,20 @@ final class _Run {
     final tpl = section.label.fallbackTemplate;
     if (tpl != null && !tpl.contains('{')) return tpl;
     return '';
+  }
+
+  /// Звено метки — ПУТЬ ТЕЛА (`peers[].address`: хост Endpoint у ссылки
+  /// `<схема>://<base64 .conf>` без фрагмента, корпус
+  /// `awg_conf_base64_no_label`). Путь тела отличается от адреса пространства
+  /// маркером массива `[]`: у источников документа его нет.
+  ///
+  /// Читается только у входа со схемой (ссылка). У голого `.conf` то же
+  /// звено объявлено, но LxBox называет безымянный файл литералом фолбэка —
+  /// открытый пункт DELTAS реестра; прочитать звено там значило бы сменить
+  /// тег, а с ним identity уже сохранённых узлов.
+  Object? _readLabelBodyPath(String src) {
+    if (space.scheme.isEmpty || !src.contains('[]')) return null;
+    return _read(src);
   }
 
   /// Объявленная нормализация метки (G8), одна на все звенья цепочки.

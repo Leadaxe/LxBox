@@ -14,6 +14,7 @@ import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import '../../parser/engine_test_setup.dart';
+import '../../parser/parse_link_as.dart';
 
 /// §502/§505 — уведомления узла на главном экране: старший уровень и источники.
 void main() {
@@ -30,7 +31,7 @@ void main() {
   }
 
   WireguardSpec awgHomeNode() {
-    final spec = parseWireguardUri(
+    final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$testPriv@h.example:51820'
           '?publickey=$testPub&address=10.0.0.2/32&jc=4&mtu=1420#awg2-home',
         )!;

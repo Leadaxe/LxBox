@@ -1181,7 +1181,7 @@ NodeSpec? _parseSingboxEntryTyped(
       final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
       // §097/SPEC 103 D-026 — AWG: клампим MTU до 1280. Plain WG без mtu в
       // источнике поле не эмитит вовсе (ядро само ставит 1408) — зеркалим
-      // `wireguard_parser.dart`, чтобы модель не зависела от источника
+      // разбор ссылки движком, чтобы модель не зависела от источника
       // парсинга: JSON vs URI.
       final rawMtu = (entry['mtu'] as num?)?.toInt();
       // §025/§126 — WARP client_id. §219 — раньше JSON-парсер не заполнял

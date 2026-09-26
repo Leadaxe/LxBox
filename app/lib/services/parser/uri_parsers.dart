@@ -8,54 +8,11 @@ import 'drop_verdict.dart';
 import 'engine/interpreter.dart' show formMatchesText;
 import 'engine/section_loader.dart' show MapperSections;
 import 'uri_utils.dart';
-import 'uri_parsers/wireguard_parser.dart';
 
-// §566 — обёрток по схеме нет: ссылку разбирает [parseUri] (диспетчер) или
-// общий вход движка [parseLinkViaPipeline]. Под uri_parsers/ остался только
-// парсер формы, которую движок ссылок не исполняет (`ini`, §450).
+// §566 / §570 — обёрток по схеме нет: ссылку разбирает [parseUri] (диспетчер)
+// или общий вход движка [parseLinkViaPipeline]; формы секции, включая `ini`,
+// исполняет движок.
 export 'mappers/uri_pipeline.dart' show parseLinkViaPipeline;
-export 'uri_parsers/wireguard_parser.dart';
-
-/// §472 шаг 7 / §562 — ФОРМЫ ССЫЛКИ, которые движок ссылок не исполняет, и
-/// парсер, который их читает. Ключ — пространство формы (`forms[].space`
-/// секции `mappers.uri`), а не написание схемы: какая схема такую форму
-/// несёт, объявляет реестр.
-///
-/// Сегодня такая форма одна — `ini` (`<схема>://<base64 .conf>`, §450): её
-/// payload не URI, и распознать её надо ДО конвейера. Парсер сам пробует
-/// обе формы и отдаёт ссылочную конвейеру, поэтому схема с такой формой
-/// целиком идёт через него.
-const _kOutOfEngineLinkForms =
-    <String, NodeSpec? Function(String, {XrayDropVerdict? dropped})>{
-  'ini': parseWireguardUri,
-};
-
-/// Парсер вне движка для типа тела [type] — по формам его секции; `null` —
-/// все формы исполняет движок.
-///
-/// §551 — считается один раз на маршрут схем ([schemeRouteToken]), а не на
-/// каждой ссылке.
-NodeSpec? Function(String, {XrayDropVerdict? dropped})? _outOfEngineParser(
-    String type) {
-  final token = schemeRouteToken();
-  if (!identical(token, _outOfEngineToken)) {
-    _outOfEngineCache.clear();
-    _outOfEngineToken = token;
-  }
-  return _outOfEngineCache.putIfAbsent(type, () {
-    final forms = MapperSections.I.sectionFor('uri', type)?.forms;
-    if (forms == null) return null;
-    for (final f in forms) {
-      final p = _kOutOfEngineLinkForms[f.space];
-      if (p != null) return p;
-    }
-    return null;
-  });
-}
-
-Object? _outOfEngineToken;
-final _outOfEngineCache =
-    <String, NodeSpec? Function(String, {XrayDropVerdict? dropped})?>{};
 
 /// §110 / §562 — строка-КОНТЕЙНЕР профиля (Amnezia): признак объявляет вид
 /// источника `amnezia_link` в `source_kinds.json` (`detect`), а не литерал
@@ -150,11 +107,8 @@ NodeSpec? _parseUriInner(String uri, {XrayDropVerdict? dropped}) {
     // а снятое реестром перестаёт приниматься с кодом `scheme_unsupported`.
     final type = registrySchemeType(scheme);
     if (type != null) {
-      // §472 шаг 7 / §450 — у части секций есть форма, которую движок ссылок
-      // не исполняет (payload не URI); такую схему читает свой парсер, и
-      // выбирается он по форме секции, а не по написанию.
-      final outOfEngine = _outOfEngineParser(type);
-      if (outOfEngine != null) return outOfEngine(t, dropped: dropped);
+      // §570 — все формы секции, включая `ini` (`<схема>://<base64 .conf>`,
+      // §450), исполняет движок.
       return parseUriViaPipeline(t, scheme, dropped: dropped);
     }
     // §103 §9.B12 — контейнер профиля строкой внутри списка ссылок.

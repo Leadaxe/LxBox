@@ -56,26 +56,22 @@ void main() {
   // диспетчере — это возврат локальной копии правила реестра, которую §562
   // снял (таблица схем, набор схем, `switch` по написаниям).
   //
-  // Проверяются СТРОКОВЫЕ ЛИТЕРАЛЫ, а не весь текст: у диспетчера законные
-  // идентификаторы с именем схемы (`parseWireguardUri`, экспорты
-  // `uri_parsers/<схема>_parser.dart`) — это парсеры, а не правило выбора.
+  // Проверяются СТРОКОВЫЕ ЛИТЕРАЛЫ, а не весь текст.
   //
   // §566 — покрытие расширено на загрузку реестра (`registry.dart`: состав
   // `registry/protocols/` из каталога), распознавание ввода
-  // (`input_helpers.dart`) и весь каталог `uri_parsers/` (обёрток по схеме
-  // там больше нет). Разрешённые исключения — [allowed], каждое с причиной.
+  // (`input_helpers.dart`) и каталог `uri_parsers/` (§570 — снят целиком).
+  // Разрешённые исключения — [allowed], каждое с причиной.
   test('в диспетчере схем ссылки нет литералов схем (§562, §566)', () {
     final files = [
       'lib/services/parser/uri_parsers.dart',
       'lib/services/parser/mappers/uri_pipeline.dart',
       'lib/services/contract/registry.dart',
       'lib/services/subscription/input_helpers.dart',
-      for (final f in Directory('lib/services/parser/uri_parsers')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.dart')))
-        f.path,
     ];
+    // §570 — каталог `uri_parsers/` снят целиком (последняя обёртка — форма
+    // `ini` — ушла в движок); вернуться он не должен.
+    expect(Directory('lib/services/parser/uri_parsers').existsSync(), isFalse);
     // Файл → литералы, которые в нём законны, с причиной.
     const allowed = <String, Map<String, String>>{
       'lib/services/subscription/input_helpers.dart': {

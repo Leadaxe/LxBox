@@ -791,9 +791,9 @@ class SubscriptionController extends ChangeNotifier {
   Future<void> _addWarpPlain(
       WarpAccount account, String tag, bool includeReserved,
       {int? persistentKeepalive}) async {
-    final spec = parseWireguardUri(account.toWireguardUri(
+    final spec = parseLinkViaPipeline(account.toWireguardUri(
         includeReserved: includeReserved,
-        persistentKeepalive: persistentKeepalive));
+        persistentKeepalive: persistentKeepalive)) as WireguardSpec?;
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidWarpConfig);
       return;
