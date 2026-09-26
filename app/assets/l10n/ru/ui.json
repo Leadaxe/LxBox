@@ -1,7 +1,4 @@
 {
-  "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.": {
-    "value": "«selector» импортирован как группа автовыбора: самый быстрый узел выбирается по замерам, а не вручную."
-  },
   "%1$d +%2$d⚙ nodes": {
     "value": {
       "one": "%1$d узел +%2$d⚙",

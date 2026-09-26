@@ -1,7 +1,4 @@
 {
-  "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.": {
-    "value": "「selector」已作为自动选择分组导入：由延迟测速挑出最快节点，而非手动选择。"
-  },
   "%1$d +%2$d⚙ nodes": {
     "value": {
       "other": "%1$d 个节点 +%2$d⚙"

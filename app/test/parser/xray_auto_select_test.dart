@@ -139,7 +139,9 @@ void main() {
       ]).whereType<AutoSelectSpec>().single;
       final m = a.emitRaw(const TemplateVars()).map;
       expect(m['type'], 'urltest');
-      expect(m['outbounds'], isEmpty); // состав дописывает билдер
+      // §565 — состав, названный `selector`, тело разбора несёт сразу;
+      // итоговые теги дописывает билдер.
+      expect(m['outbounds'], ['Авто proxy-1']);
     });
   });
 

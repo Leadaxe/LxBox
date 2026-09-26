@@ -513,10 +513,10 @@ void main() {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  group('3k — `default` группы СКВОЗНОЙ', () {
-    // D133-53. Приведение РОДА и потеря ПОЛЯ — разные вещи: прежде круг
-    // «импорт → бэкап → импорт» терял выбор пользователя молча.
-    test('импорт selector: род urltest, код есть, `default` СОХРАНЁН', () {
+  group('3k — `default` группы selector (§565: род исполняется)', () {
+    // D133-53 → §565. Род selector больше не сводится к urltest: `default`
+    // активное поле рода.
+    test('импорт selector: род selector, кода нет, `default` СОХРАНЁН', () {
       final nodes = parseAll(decode(_json({
         'outbounds': [
           {
@@ -543,15 +543,16 @@ void main() {
       })));
 
       final group = nodes.whereType<AutoSelectSpec>().single;
-      expect(_codes(group.warnings), contains('selector_as_auto'),
-          reason: 'род приводится к urltest — это и объявлено кодом');
+      expect(_codes(group.warnings), isNot(contains('selector_as_auto')),
+          reason: 'род selector исполняется — сводить нечего');
+      expect(group.genus, 'selector');
       expect(group.manualDefault, 'n2',
           reason: 'ИМЯ ЧЛЕНА, выбранного вручную, обязано дожить в модели');
     });
 
-    test('в ТЕЛО ядра `default` НЕ идёт', () {
-      // Ядро декодирует с DisallowUnknownFields, и `default` при
-      // `type: urltest` роняет ВЕСЬ конфиг.
+    test('тело selector несёт `default` и состав', () {
+      // Ядро декодирует с DisallowUnknownFields: `default` допустим только
+      // при `type: selector`.
       final nodes = parseAll(decode(_json({
         'outbounds': [
           {
@@ -571,9 +572,11 @@ void main() {
       })));
       final group = nodes.whereType<AutoSelectSpec>().single;
       final body = group.emitRaw(const TemplateVars()).map;
-      expect(body.containsKey('default'), isFalse,
-          reason: 'эмит urltest поле не пишет — иначе падает весь конфиг');
-      expect(body['type'], 'urltest');
+      expect(body['type'], 'selector');
+      expect(body['default'], 'n1');
+      expect(body['outbounds'], ['n1']);
+      expect(body.containsKey('url'), isFalse,
+          reason: 'параметров замера у ручного рода нет');
     });
 
     test('группа БЕЗ `default` несёт пустую строку, а не мусор', () {
