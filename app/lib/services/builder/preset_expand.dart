@@ -1,6 +1,7 @@
 import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../contract/registry.dart';
 import '../json_clone.dart';
 import 'if_engine.dart';
 
@@ -89,6 +90,44 @@ String? ruleSetMissingSource(Map<String, dynamic> rs) {
 void reportFragmentDropped(String owner, String kind, String reason) =>
     reportTemplateWarning(templateWarnFragmentDropped,
         {'owner': owner, 'kind': kind, 'reason': reason});
+
+/// §571 — имена списков полей-условий в `registry/allowlists.json`
+/// (контракт 1.1.81, TEMPLATE_LANG §5.1).
+const _kRouteRuleConditions = 'route_rule_conditions';
+const _kDnsRuleConditions = 'dns_rule_conditions';
+
+/// §571 — в правиле после Dropped-каскада осталось хоть одно поле-условие
+/// из списка реестра [list]. Правило без условий матчило бы весь трафик
+/// (все запросы), поэтому выпадает; `action` в списки не входит.
+///
+/// Значение-условие считается, если оно не `null` и не пустой список (ядро
+/// пустой список условием не считает). Список объектов — под-правила
+/// логического правила: условие есть, если оно есть хоть у одного из них
+/// (по тому же списку, рекурсивно). Реестр не загружен или списка нет —
+/// гейт не срабатывает (правило остаётся как написано), как у Go
+/// `hasRuleCondition`.
+bool hasRuleCondition(Map<String, dynamic> rule, String list) {
+  final conds = ContractRegistry.I.allowlistValues(list);
+  if (conds == null || conds.isEmpty) return true;
+  return _hasCondition(rule, conds);
+}
+
+bool _hasCondition(Map<dynamic, dynamic> rule, Set<String> conds) {
+  for (final e in rule.entries) {
+    if (!conds.contains(e.key)) continue;
+    final v = e.value;
+    if (v == null) continue;
+    if (v is List) {
+      if (v.isEmpty) continue;
+      final subRules = v.whereType<Map>().toList();
+      if (subRules.isEmpty) return true;
+      if (subRules.any((m) => _hasCondition(m, conds))) return true;
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
 
 /// Результат merge всех preset-фрагментов от разных CustomRule'ов.
 class BundleMerge {
@@ -265,6 +304,12 @@ PresetFragments expandPreset(
           'value (${refTag.runtimeType}) — reference dropped',
         );
       }
+      // §571 — ни одного поля-условия (реестр, dns_rule_conditions): правило
+      // перехватывало бы все запросы. reason — как у Go (`isDNSRuleEmpty`).
+      if (!hasRuleCondition(result, _kDnsRuleConditions)) {
+        reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
+        continue;
+      }
       dnsRules.add(result);
     }
   }
@@ -365,8 +410,7 @@ PresetFragments expandPreset(
           // §570 — одна запись: код (подсказка про скачивание — строка набора
           // правил выше, «no cached file»), без второй строки.
           reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
-        } else {
-          routingRules.add(result);
+          continue;
         }
       } else if (refTag is List) {
         final present = refTag
@@ -377,16 +421,11 @@ PresetFragments expandPreset(
           // §570 — одна запись: код (подсказка про скачивание — строка набора
           // правил выше, «no cached file»), без второй строки.
           reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
-        } else {
-          // Один остался → даунгрейд до string. >1 → оставляем массив.
-          result['rule_set'] = present.length == 1 ? present.first : present;
-          routingRules.add(result);
+          continue;
         }
-      } else if (refTag == null) {
-        // Легитимно: правило без `rule_set` матчит по другим полям
-        // (domain/protocol/port/…). Оставляем как есть.
-        routingRules.add(result);
-      } else {
+        // Один остался → даунгрейд до string. >1 → оставляем массив.
+        result['rule_set'] = present.length == 1 ? present.first : present;
+      } else if (refTag != null) {
         // §219 — refTag не null, но и не валидная форма: пустая String либо
         // непредусмотренный тип (int/bool/Map из кривого шаблона). Раньше
         // молча проходило как валидное правило; теперь — drop + warning
@@ -396,8 +435,16 @@ PresetFragments expandPreset(
           'preset "${preset.presetId}": routing rule rule_set has invalid '
           'value (${refTag.runtimeType}) — reference dropped',
         );
-        routingRules.add(result);
       }
+      // Без `rule_set` правило матчит по другим полям (domain/protocol/
+      // port/…). §571 — если не осталось ни одного поля-условия (реестр,
+      // route_rule_conditions), правило матчило бы весь трафик и выпадает;
+      // reason — как у Go (`isRuleEmpty`).
+      if (!hasRuleCondition(result, _kRouteRuleConditions)) {
+        reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+        continue;
+      }
+      routingRules.add(result);
     }
   }
 

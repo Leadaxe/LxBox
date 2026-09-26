@@ -12,6 +12,8 @@ import 'package:lxbox/services/builder/if_engine.dart'
     show TemplateWarnings, collectTemplateWarnings, templateWarnFragmentDropped;
 import 'package:lxbox/services/builder/preset_expand.dart';
 
+import '../../contract_paths.dart' show loadTestRegistry;
+
 void main() {
   group('expandPreset (spec §033)', () {
     test('все vars заданы → полные fragments', () {
@@ -302,6 +304,50 @@ void main() {
       expect(f.warnings.single, contains('no cached file'));
       expect([for (final w in tw.items) (w.code, w.params['reason'])],
           [(templateWarnFragmentDropped, 'rule_set')]);
+    });
+
+    test('§571: правило без полей-условий реестра выпадает с кодом; '
+        'action условием не считается; логическое без условий в '
+        'под-правилах выпадает', () async {
+      await loadTestRegistry();
+      final preset = SelectableRule(
+        label: 'Conditions',
+        presetId: 'conds',
+        rule: const [
+          {'action': 'sniff'},
+          {'domain_suffix': ['example.com'], 'outbound': 'direct-out'},
+          {
+            'type': 'logical',
+            'mode': 'or',
+            'rules': [
+              <String, dynamic>{},
+              {'invert': true},
+            ],
+            'outbound': 'direct-out',
+          },
+        ],
+        dnsRule: const [
+          {'action': 'predefined', 'rcode': 'NOERROR'},
+          {'query_type': ['HTTPS'], 'action': 'predefined', 'rcode': 'NOERROR'},
+        ],
+      );
+      final rule = CustomRulePreset(name: 'Conditions', presetId: 'conds');
+
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
+
+      expect(f.routingRules,
+          [{'domain_suffix': ['example.com'], 'outbound': 'direct-out'}]);
+      expect(f.dnsRules, [
+        {'query_type': ['HTTPS'], 'action': 'predefined', 'rcode': 'NOERROR'}
+      ]);
+      expect([for (final w in tw.items) (w.params['kind'], w.params['reason'])], [
+        ('dns.rules', 'rule_set'),
+        // Два выпавших route-правила дают одинаковые параметры — накопитель
+        // схлопывает повтор в одну запись.
+        ('route.rules', 'rule_set'),
+      ]);
+      expect(tw.items.map((w) => w.code).toSet(), {templateWarnFragmentDropped});
     });
 
     // ─── §045: GeoIP fallback layer ────────────────────────────────────
@@ -1359,7 +1405,12 @@ void main() {
         label: 'X',
         presetId: 'x',
         dnsRule: const [
-          {'rule_set': 42, 'action': 'predefined', 'rcode': 'NOERROR'},
+          {
+            'rule_set': 42,
+            'query_type': ['A'],
+            'action': 'predefined',
+            'rcode': 'NOERROR',
+          },
         ],
       );
       final f = expandPreset(

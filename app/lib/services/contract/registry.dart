@@ -44,7 +44,7 @@ const _kSharedRefs = <String, String>{
 
 /// Общие файлы реестра БЕЗ цели `ref`: тело узла в них не спускается, их
 /// читают другие слои по имени файла ([ContractRegistry.rawShared]).
-const _kStandaloneShared = <String>['source_kinds.json'];
+const _kStandaloneShared = <String>['source_kinds.json', 'allowlists.json'];
 
 /// Описание поля тела — обёртка над картой реестра.
 ///
@@ -781,6 +781,18 @@ final class ContractRegistry {
   /// Движку маппера нужны `blocks` — исполняемые записи общих блоков по
   /// диалектам; [sharedSchema] отдаёт только схему ТЕЛА и про них не знает.
   Map<String, dynamic>? rawShared(String fileName) => _shared[fileName];
+
+  /// §571 — значения списка `allowlists.<name>.values` из
+  /// `registry/allowlists.json`; `null` — реестр не загружен или списка нет.
+  /// Списки — данные контракта (поля-условия правил, контракт 1.1.81):
+  /// читатель не держит имён полей в коде.
+  Set<String>? allowlistValues(String name) {
+    final lists = _shared['allowlists.json']?['allowlists'];
+    if (lists is! Map) return null;
+    final values = (lists[name] as Map?)?['values'];
+    if (values is! List) return null;
+    return values.whereType<String>().toSet();
+  }
 
   /// Разворот секции `body` — все ссылки разрешаются здесь, один раз при
   /// загрузке, и читатель схемы видит уже развёрнутые поля (§553). Три ветки,
