@@ -217,6 +217,16 @@ final class FieldSchema {
   /// Минимальная версия ядра; ниже неё ключ снимается на сборке (24.1.6).
   String? get minCore => raw['min_core'] as String?;
 
+  /// Контракт 1.1.60 — уровень протокола, о котором говорит заданное поле
+  /// (значение из `levels` тела), и суффикс подписи (`level_mark`).
+  String? get level => raw['level'] as String?;
+  String? get levelMark => raw['level_mark'] as String?;
+
+  /// Контракт 1.1.60 — `range_form` у `awg_range`: требования и уровень
+  /// формы-диапазона `N-M`.
+  Map<String, dynamic>? get rangeForm =>
+      (raw['range_form'] as Map?)?.cast<String, dynamic>();
+
   /// ОС, на которой поле работает; на прочих ключ снимается на сборке.
   String? get platform => raw['platform'] as String?;
 
@@ -334,6 +344,7 @@ final class BodySchema {
     this.relations = const [],
     this.absentWhen,
     this.exitCapableWhen,
+    this.levels = const [],
   });
 
   /// Тег ядра, по которому сверен список полей.
@@ -361,6 +372,10 @@ final class BodySchema {
   /// `condition`, без `source_kind`): при каком готовом теле узел годится
   /// ВЫХОДОМ — кандидатом в пул Направления. `null` — годится всегда.
   final Map<String, dynamic>? exitCapableWhen;
+
+  /// Контракт 1.1.60 — словарь уровней расширения протокола по возрастанию
+  /// (подпись узла). Пусто — подписи уровня у схемы нет.
+  final List<String> levels;
 }
 
 /// Текст кода предупреждения из `registry/warnings.json`.
@@ -715,6 +730,7 @@ final class ContractRegistry {
       absentWhen: (body['absent_when'] as Map?)?.cast<String, dynamic>(),
       exitCapableWhen:
           (body['exit_capable_when'] as Map?)?.cast<String, dynamic>(),
+      levels: _stringList(body['levels']),
     );
   }
 
