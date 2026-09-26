@@ -269,6 +269,7 @@ List<NodeSpec> _parseOne(
           _withLabel(ob, _entryLabel(tag: rawTag, index: i, tagUses: tagUses)),
         ),
         rawSource: compact,
+        sanitizedFrom: BodySource.singbox,
       );
       if (spec == null) {
         final type = ob['type']?.toString() ?? '';
@@ -625,6 +626,7 @@ NodeSpec? _buildChain(
       spec = parseSingboxEntry(
         _sanitizedEntry(target),
         rawSource: _prettyJson(target),
+        sanitizedFrom: BodySource.singbox,
       );
     } catch (_) {
       // Битое звено: узел-владелец важнее цепочки.

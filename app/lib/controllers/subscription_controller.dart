@@ -928,7 +928,7 @@ class SubscriptionController extends ChangeNotifier {
             mtu: spec.mtu,
             awg: spec.awg,
             warnings: spec.warnings,
-          );
+          )..bodyDelta = spec.bodyDelta; // §560 — поля тела вне модели
         }
         final wgServer = UserServer(
           id: newUuidV4(),

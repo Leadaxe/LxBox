@@ -5,12 +5,15 @@ import '../../models/direction.dart' show UrltestMode;
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
+import '../../models/template_vars.dart';
 import '../../models/transport_spec.dart';
 import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
 import 'engine/engine_mapper.dart' show mapJsonViaEngine;
 import 'mappers/uri_pipeline.dart'
     show parseXrayViaPipeline;
+import '../contract/body_sanitizer.dart' show BodySource;
+import 'body_delta_builder.dart';
 import 'drop_verdict.dart';
 import 'tcp_keep_alive.dart';
 import 'transport.dart';
@@ -767,6 +770,33 @@ NodeSpec? parseSingboxEntry(
   String? rawSource,
   String? label,
   bool wsEarlyDataHeaderImplicit = false,
+  BodySource? sanitizedFrom,
+}) {
+  final node = _parseSingboxEntryTyped(entry,
+      rawSource: rawSource,
+      label: label,
+      wsEarlyDataHeaderImplicit: wsEarlyDataHeaderImplicit);
+  // §560 — модель держит не все ключи тела и дописывает свои дефолты;
+  // дельта по схеме реестра возвращает телу то, что прислал провайдер.
+  // Только для тела, которое УЖЕ прошло санитайзер ([sanitizedFrom]): сырую
+  // карту дельта перенесла бы вместе с мусором, который модель отбрасывает.
+  // Дефолты ядра снимаются только у тела в форме ядра (`singbox`): там автор
+  // написал ровно то, что хотел, и дописанный моделью ключ ему чужой.
+  if (node != null && sanitizedFrom != null) {
+    node.bodyDelta = bodyDeltaFor(
+      entry,
+      node.emitRaw(TemplateVars.empty).map,
+      dropDefaults: sanitizedFrom == BodySource.singbox,
+    );
+  }
+  return node;
+}
+
+NodeSpec? _parseSingboxEntryTyped(
+  Map<String, dynamic> entry, {
+  String? rawSource,
+  String? label,
+  bool wsEarlyDataHeaderImplicit = false,
 }) {
   // §454 — источник узла из JSON: его собственный объект outbound'а. Вызов из
   // целого конфига передаёт оригинал (до подмены тега лейблом), одиночный
@@ -1374,8 +1404,13 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
       // `sni=`, которого автор не писал. Тело от этого не меняется — ключ
       // сквозной (`kTlsPassthroughKeys`) и сохраняется как есть, вместе с
       // явным `server_name`, если он там был.
-      serverName: raw['server_name']?.toString() ??
-          (raw['disable_sni'] == true ? null : server),
+      //
+      // §560 — откат на адрес СНЯТ из модели: его объявляет реестр там, где
+      // он нужен (`default_from: host` у блоков `tls#uri`), и маппер пишет
+      // имя в тело сам. Xray-блок отката не объявляет, у тела sing-box его
+      // делает ядро; модель, дописывавшая адрес всем, давала тело, которого
+      // провайдер не присылал (корпус xray/multinode_310).
+      serverName: raw['server_name']?.toString(),
       // §460 — `alpn` у ядра Listable: массив → типизированный список, строка
       // → сквозной ключ в форме прибытия (корпус outbound_array_tls_fields
       // `vless-alpn-str`); раньше `as List` на строке ронял узел целиком.

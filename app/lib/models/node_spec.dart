@@ -1,4 +1,5 @@
 import 'auto_select.dart';
+import 'body_delta.dart';
 import 'emit_context.dart';
 import 'node_entries.dart';
 import 'node_sections.dart';
@@ -82,6 +83,12 @@ sealed class NodeSpec {
   /// на каждом импорте/регидрации, храниться этому незачем.
   Map<String, dynamic>? patchedJson;
 
+  /// §560 — ключи тела, которых типизированная модель не держит (или держит
+  /// лишними): см. [BodyDelta]. Ставит разбор, накладывает [emit]. Mutable и
+  /// не сериализуется, как [patchedJson]: узел хранится текстом источника и
+  /// разбирается заново, дельта считается вместе с ним.
+  BodyDelta? bodyDelta;
+
   /// §302 — следы замен для UI («tls.utls.fingerprint: hello… → chrome»).
   /// Непустой ⇔ [patchedJson] != null; на нём значок «modified» и диалог
   /// «View replacements» в списке нод.
@@ -126,6 +133,8 @@ sealed class NodeSpec {
   /// пострадает. Отдача по ссылке накапливала префикс билдера в теге.
   SingboxEntry emit(TemplateVars vars) {
     final raw = emitRaw(vars);
+    final delta = bodyDelta;
+    if (delta != null) delta.applyTo(raw.map, deepCopyJson);
     final patch = patchedJson;
     if (patch == null) return raw;
     final copy = deepCopyJson(patch) as Map<String, dynamic>;
@@ -1327,7 +1336,10 @@ final class TailscaleSpec extends NodeSpec {
 ///
 /// Группа цепочку не несёт (`AutoSelectSpec` без `chained`) — возвращаем как
 /// есть; вызывающий такую ссылку отсеивает раньше, с warning'ом (§4 P5).
-NodeSpec withChained(NodeSpec spec, NodeSpec chained) => switch (spec) {
+NodeSpec withChained(NodeSpec spec, NodeSpec chained) =>
+    _withChainedTyped(spec, chained)..bodyDelta = spec.bodyDelta;
+
+NodeSpec _withChainedTyped(NodeSpec spec, NodeSpec chained) => switch (spec) {
       TailscaleSpec s => s.copyWith(chained: chained),
       VlessSpec s => VlessSpec(
           id: s.id,

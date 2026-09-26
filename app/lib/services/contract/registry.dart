@@ -88,6 +88,10 @@ final class FieldSchema {
 
   bool get inline => raw['inline'] == true;
 
+  /// §560 — поле пишет СБОРКА (`detour`), а не тело узла: разбор его не
+  /// переносит и не снимает.
+  bool get managed => raw['managed'] == true;
+
   bool get required => raw['required'] == true;
 
   bool get secret => raw['secret'] == true;

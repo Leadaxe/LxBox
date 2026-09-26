@@ -68,6 +68,17 @@ const Map<String, String> _expectedChanges = {
       'delta533: пара idle: 30 + interval: -5 даёт tcp_keep_alive: 30s БЕЗ '
       'флага disable_tcp_keep_alive — наш флаг на этой паре был ошибкой '
       '(body/xray/sockopt_keepalive_negative_interval)',
+  // §560 — тело Xray-узла больше не получает от МОДЕЛИ того, чего провайдер
+  // не присылал, и не теряет того, что прислал. Тег у всех пяти прежний.
+  'dialer_chain_vless_relay': 'delta560: tls.server_name больше не '
+      'дописывается адресом — Xray-блок tls отката не объявляет '
+      '(body/xray/dialer_chain_vless_relay)',
+  'multinode_310': 'delta560: то же у trojan без serverName '
+      '(body/xray/multinode_310)',
+  'b480_ws_eh_without_ed': 'delta560: то же (body/xray/ws_eh_without_ed)',
+  'vmess_tls': 'delta560: alter_id: 0 доезжает до тела — materialize_default '
+      'записи alterId (body/xray/vmess_tls)',
+  'vmess_security_junk': 'delta560: то же (body/xray/vmess_security_junk)',
 };
 
 Map<String, dynamic> _fixture() =>

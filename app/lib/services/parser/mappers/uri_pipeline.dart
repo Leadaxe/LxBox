@@ -562,8 +562,22 @@ NodeSpec? _runPipeline(
     rawSource: source,
     label: mapping.label,
     wsEarlyDataHeaderImplicit: mapping.wsEarlyDataHeaderImplicit,
+    sanitizedFrom: mapping.bodySource,
   );
   if (node == null) return null;
+
+  // §560 — поле, которое модель не держит, дельта тела возвращает узлу
+  // (`BodyDelta`). Кроме параметров ссылки, которые реестр числит за другой
+  // стороной (`uri.query.<имя>.ext`): их LxBox не переносил и не переносит —
+  // путь к файлу ключа у ssh на телефоне смысла не имеет. Поле, которое
+  // модель держит сама, этим не снимается: дельта его не касается.
+  if (mapping.bodySource == BodySource.uri) {
+    final delta = node.bodyDelta;
+    final foreign = _foreignSideParamPaths(body['type'] as String);
+    if (delta != null && foreign.isNotEmpty) {
+      node.bodyDelta = delta.withoutAdds(foreign);
+    }
+  }
 
   node.warnings.addAll(warnings);
   markPipelineParsed(node);
@@ -599,3 +613,24 @@ void markPipelineParsed(NodeSpec node) => _pipelineParsed[node] = true;
 
 /// Разобран ли узел конвейером (коды реестра на нём уже стоят).
 bool isPipelineParsed(NodeSpec node) => _pipelineParsed[node] == true;
+
+/// §560 — имя этой стороны в `ext` параметров `uri.query` реестра
+/// (`registry.schema.json`: `desktop` — лаунчер, `mobile` — LxBox).
+const _kThisSideExt = 'mobile';
+
+/// Пути тела, куда едут параметры ссылки, поддержанные только ДРУГОЙ
+/// стороной (`uri.query.<имя>.ext`).
+Set<String> _foreignSideParamPaths(String type) {
+  if (!ContractRegistry.I.isLoaded) return const {};
+  final query =
+      ((ContractRegistry.I.rawProtocol(type)?['uri'] as Map?)?['query'] as Map?);
+  if (query == null) return const {};
+  return {
+    for (final e in query.values)
+      if (e is Map &&
+          e['ext'] is String &&
+          e['ext'] != _kThisSideExt &&
+          e['maps_to'] is String)
+        e['maps_to'] as String,
+  };
+}
