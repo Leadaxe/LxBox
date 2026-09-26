@@ -63,6 +63,20 @@ const Map<String, String> _expectedChanges = {
       'delta533: пара idle: 30 + interval: -5 даёт tcp_keep_alive: 30s БЕЗ '
       'флага disable_tcp_keep_alive — наш флаг на этой паре был ошибкой '
       '(кейс body/xray/sockopt_keepalive_negative_interval)',
+  // §560 — тело Xray-узла приведено к норме реестра; снимок снят до неё.
+  // Тег у всех пяти прежний; хеш тела сдвигается вместе с телом. Норма —
+  // ожидания корпуса тел (зелёные), зеркально delta560 в
+  // xray_pipeline_invariants_test.
+  'dialer_chain_vless_relay': 'delta560: tls.server_name не дописывается '
+      'адресом — запись sni блока tls#xray (registry/tls.json) не объявляет '
+      'default_from; корпус body/xray/dialer_chain_vless_relay ждёт '
+      'tls: {enabled: true}',
+  'multinode_310': 'delta560: то же у trojan без serverName '
+      '(body/xray/multinode_310)',
+  'b480_ws_eh_without_ed': 'delta560: то же (body/xray/ws_eh_without_ed)',
+  'vmess_tls': 'delta560: alter_id: 0 в теле Xray-vmess — корпус '
+      'body/xray/vmess_tls ждёт alter_id: 0',
+  'vmess_security_junk': 'delta560: то же (body/xray/vmess_security_junk)',
 };
 
 /// §480 — ДВУСТОРОННЯЯ ПОМЕТКА: кейсы, добавленные ЭТОЙ правкой, и чем их
