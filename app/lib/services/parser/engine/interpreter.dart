@@ -2798,6 +2798,19 @@ final class _Run {
           p.valueMap[''];
       if (v != null) _write(path, v, p);
     }
+
+    // §560 — `omit_default` записи на входе: значение, РАВНОЕ объявленному,
+    // в тело не пишется (`alter_id` 0 у ссылки vmess, `false` у булевых
+    // tuic/masque). Тот же атрибут эмиттер читает на обратном ходе; на
+    // прямом его не исполнял никто, и ноль доезжал до тела. Сравнение по
+    // написанию: `"0"` из JSON-строки и `0` числом — одно значение.
+    final omit = p.raw['omit_default'];
+    if (omit != null && omit is! List && omit is! Map) {
+      final v = _read(path);
+      if (v != null && v is! Map && v is! List && '$v' == '$omit') {
+        _erase(path);
+      }
+    }
   }
 
   // ─────────────────────────── условия ───────────────────────────
