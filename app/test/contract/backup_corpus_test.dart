@@ -12,6 +12,7 @@ import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/codec/source_replace_record.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
@@ -36,12 +37,10 @@ import '../parser/engine_test_setup.dart';
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
 /// с работой, которая его закрывает.
 const Map<String, String> _pendingCases = {
-  // §565 фаза B — свёртка источника `replace {mode, tag, auto}` (контракт
-  // 1.1.78 §74) в LxBox ещё не реализована; снимается волной фазы B.
-  'replace_roundtrip': '§565 фаза B: replace не реализован',
-  'legacy_fold_to_replace': '§565 фаза B: replace не реализован',
-  'v10_direction_include': '§565 фаза B: replace не реализован',
-  'v10_sources_union': '§565 фаза B: replace не реализован',
+  // Решение владельца 26.09.2026 (бамп 1.1.79): legacy `fold`/`fold_tag`
+  // не читается и не мигрируется — неизвестные ключи с предупреждением.
+  // Кейс станет `legacy_fold_dropped`; до синка 1.1.79 ждёт.
+  'legacy_fold_to_replace': 'ждёт 1.1.79 (legacy fold не читается)',
 };
 
 
@@ -76,7 +75,7 @@ void main() {
   group('contract corpus: LX Backup', () {
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
-      test(name, skip: _pendingCases[name], () {
+      test(name, skip: _pendingCases[name], () async {
         final raw = File('$base.backup.json').readAsStringSync();
         // Кейс формата новее ЧИТАЕМОГО (`lx_backup` выше
         // kLxBackupVersion) сторона ПРОПУСКАЕТ по маркеру, как чужой
@@ -192,9 +191,11 @@ void main() {
         _checkDns(state, expected);
         _checkSections(state, expected);
 
-        // `replace_tags` не сверяется: свёртки источника в группу у LxBox нет
-        // (BACKUP.md §2, `fold`/`fold_tag` — поля лаунчера; класс различия A
-        // в `replace_tag_index.expected.lxbox.json`).
+        // Фича 565 фаза B (§74) — свёртка `replace` в состоянии и в
+        // повторном экспорте. `replace_tags` (дериватив legacy `fold`) не
+        // сверяется: legacy-форма у LxBox не читается (решение владельца
+        // 26.09.2026, контракт 1.1.79).
+        await _checkReplaces(state, expected);
 
         // §401 — упразднённый механизм `extensions` (схема 0.10.x): импортёр
         // обязан отбросить его и назвать ОДНИМ warning'ом на файл, а не
@@ -773,3 +774,51 @@ Map<String, dynamic> _canonOf(SourceChain c) => c.toCanonJson();
 /// «пусто»). `equals` для вложенных Map/List этого не даёт.
 Matcher _deepEqualsJson(Object? want) =>
     predicate<Object?>((got) => deepEqualsJson(got, want), 'deep-equals $want');
+
+/// Фича 565 фаза B (§74) — `replaces`: ключ — имя папки или адрес подписки,
+/// значение — объект `replace` как в файле. Сверяется модель после импорта и
+/// запись повторного экспорта. `auto` — по ключам ожидания: LxBox пишет форму
+/// целиком (умолчания [DirectionAuto] тоже), лишние ключи — не расхождение.
+Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
+  final want = (expected['replaces'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  String keyOf(ServerList l) => switch (l) {
+        SubscriptionServers s => s.url,
+        _ => l.name,
+      };
+  final got = <String, Map<String, dynamic>>{
+    for (final l in state.lists)
+      if (l.replace case final r?) keyOf(l): sourceReplaceToRecord(r),
+  };
+  final out = await buildLxBackup(
+      lists: state.lists, rules: const [], vars: const {});
+  final exported = <String, Map<String, dynamic>>{
+    for (final raw in (jsonDecode(out.json)['sources'] as List))
+      if (raw is Map && raw['replace'] is Map)
+        (raw['url'] is String ? raw['url'] as String : raw['name'] as String):
+            (raw['replace'] as Map).cast<String, dynamic>(),
+  };
+  void compare(String where, Map<String, Map<String, dynamic>> side) {
+    expect(side.keys.toSet(), want.keys.toSet(),
+        reason: '$where: набор свёрнутых источников');
+    for (final e in want.entries) {
+      final w = (e.value as Map).cast<String, dynamic>();
+      final g = side[e.key]!;
+      expect(g['mode'], w['mode'], reason: '$where ${e.key}: mode');
+      expect(g['tag'], w['tag'], reason: '$where ${e.key}: tag');
+      final wAuto = (w['auto'] as Map?)?.cast<String, dynamic>();
+      final gAuto = (g['auto'] as Map?)?.cast<String, dynamic>();
+      if (wAuto == null) {
+        expect(gAuto, isNull, reason: '$where ${e.key}: auto у manual');
+        continue;
+      }
+      expect(gAuto, isNotNull, reason: '$where ${e.key}: auto');
+      for (final a in wAuto.entries) {
+        expect(gAuto![a.key], a.value, reason: '$where ${e.key}: auto.${a.key}');
+      }
+    }
+  }
+
+  compare('состояние', got);
+  compare('повторный экспорт', exported);
+}

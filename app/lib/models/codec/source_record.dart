@@ -28,6 +28,7 @@ import '../server_list.dart';
 import '../subscription_meta.dart';
 import 'auto_group_record.dart';
 import 'node_link_record.dart';
+import 'source_replace_record.dart';
 
 const String kSourceKindSubscription = 'subscription';
 const String kSourceKindServer = 'server';
@@ -69,6 +70,8 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
       if (s.nodeWarnings.isNotEmpty)
         'warnings': storedWarningsMapToJson(s.nodeWarnings),
       ..._detourLinkToRecord(s.detourPolicy),
+      // Фича 565 фаза B — свёртка в группу (К, §74).
+      if (s.replace != null) 'replace': sourceReplaceToRecord(s.replace!),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(s.detourPolicy),
       if (s.importRules.isNotEmpty)
@@ -116,6 +119,8 @@ Map<String, dynamic> _folderToRecord(FolderServers f) => {
       'enabled': f.enabled,
       if (f.tagPrefix.isNotEmpty) 'tag_policy': _tagPolicyToRecord(f.tagPrefix),
       ..._detourLinkToRecord(f.detourPolicy),
+      // Фича 565 фаза B — свёртка в группу (К, §74).
+      if (f.replace != null) 'replace': sourceReplaceToRecord(f.replace!),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(f.detourPolicy),
       if (f.pingUrl != null) 'ping_url': f.pingUrl,
@@ -250,7 +255,7 @@ const Set<String> _subscriptionKeys = {
   'disabled', 'warnings', 'detour', 'detour_policy', 'import_rules',
   'import_rules_enabled', 'on_update_action', 'meta', 'last_updated',
   'last_update_attempt', 'last_update_status', 'last_node_count',
-  'consecutive_fails',
+  'consecutive_fails', 'replace',
 };
 
 const Set<String> _serverKeys = {
@@ -261,7 +266,7 @@ const Set<String> _serverKeys = {
 
 const Set<String> _folderKeys = {
   'kind', 'id', 'name', 'enabled', 'tag_policy', 'detour', 'detour_policy',
-  'ping_url', 'ping_timeout_ms', 'created_at', 'nodes',
+  'ping_url', 'ping_timeout_ms', 'created_at', 'nodes', 'replace',
 };
 
 const Set<String> _memberKeys = {
@@ -353,6 +358,7 @@ SubscriptionServers _subscriptionFromRecord(
     importRules: _importRulesFromRecord(j['import_rules'], where, notes),
     importRulesEnabled: _bool(j['import_rules_enabled'], true),
     onUpdateAction: SubscriptionOnUpdateAction.fromJson(j['on_update_action']),
+    replace: sourceReplaceFromRecord(j['replace'], unknown),
   );
 }
 
@@ -420,6 +426,7 @@ FolderServers _folderFromRecord(
         : null,
     pingTimeoutMs: pingTimeout is num ? pingTimeout.toInt() : null,
     createdAt: _date(j['created_at']),
+    replace: sourceReplaceFromRecord(j['replace'], unknown),
   );
 }
 

@@ -569,7 +569,11 @@ void main() {
       );
       // §439 N2 — группа «быстрые» папки ввозится autogroup'ом, потерей не
       // называется.
+      // Legacy `fold`/`fold_tag` (решение владельца 26.09.2026, контракт
+      // 1.1.79) не читаются: чужие ключи с предупреждением.
       expect([for (final w in file.warnings) '${w.code} ${w.detail}'], [
+        '$kWarnUnknownField sources[#2].fold',
+        '$kWarnUnknownField sources[#2].fold_tag',
         '$kWarnDnsEntrySkipped dns.servers: russian:yandex_udp',
         '$kWarnDnsEntrySkipped dns.rules: russian',
       ]);

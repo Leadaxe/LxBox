@@ -89,6 +89,7 @@ const List<BackupField> kBackupFields = [
   // страховки не едет (§489, решение 19.09.2026).
   BackupField(BackupRecord.subscription, 'warnings', _c),
   BackupField(BackupRecord.subscription, 'detour', _c),
+  BackupField(BackupRecord.subscription, 'replace', _c),
   BackupField(BackupRecord.subscription, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.subscription, 'import_rules', _s, declared: true),
   BackupField(BackupRecord.subscription, 'import_rules_enabled', _s,
@@ -125,6 +126,7 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folder, 'enabled', _c),
   BackupField(BackupRecord.folder, 'tag_policy', _c),
   BackupField(BackupRecord.folder, 'detour', _c),
+  BackupField(BackupRecord.folder, 'replace', _c),
   BackupField(BackupRecord.folder, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_url', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_timeout_ms', _s, declared: true),

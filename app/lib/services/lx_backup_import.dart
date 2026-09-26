@@ -211,7 +211,14 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
   // этот гейт — единственный на пути `bulkReplace`, который валидации не
   // делает.
   final directions = receiver.directions.toList();
-  final usedDirectionTags = [for (final d in directions) d.tag];
+  final usedDirectionTags = [
+    for (final d in directions) d.tag,
+    // Фича 565 фаза B (§74 п.5) — имена свёрток приёмника и файла заняты для
+    // Направлений: тёзка дал бы дубль тега группы в конфиге.
+    ...sourceReplaceNames(receiver.lists),
+    for (final s in decoded.subscriptions) ...?s.replace?.names,
+    for (final f in decoded.folders) ...?f.replace?.names,
+  ];
   final directionPing = <String, LxDirectionPing>{};
   var appliedDirections = 0;
   for (final d in decoded.directions) {
@@ -254,6 +261,11 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
       directions: directions,
       chainTags: chainTags,
       systemTags: receiver.systemTags,
+      // Фича 565 фаза B — свёртки приёмника и файла: корневые имена (§74 п.5).
+      replaceTags: [
+        ...sourceReplaceNames(subMerge.lists),
+        for (final f in decoded.folders) ...?f.replace?.names,
+      ],
     ),
   );
 

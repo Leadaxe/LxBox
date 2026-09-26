@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/chain_record.dart';
 import 'package:lxbox/models/codec/source_record.dart';
+import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/models/subscription_meta.dart';
 
 import '../parser/engine_test_setup.dart';
@@ -555,6 +557,69 @@ void main() {
       }).value! as FolderServers;
       expect(f.members.single.nameHint, 'Home WG');
       expect(f.members.single.node!.tag, 'Home WG');
+    });
+  });
+
+  // Фича 565 фаза B (§74) — свёртка `replace {mode, tag, auto}` у папки и
+  // подписки: одна форма в хранении и в бэкапе.
+  group('replace', () {
+    test('папка both с auto и подписка manual переживают перечитывание', () {
+      final folder = FolderServers(
+        id: 'f-rep',
+        name: 'Proton',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        createdAt: DateTime.utc(2026, 9, 26),
+        replace: const SourceReplace(
+          mode: ReplaceMode.both,
+          tag: 'Proton',
+          auto: DirectionAuto(interval: '15m', tolerance: 50),
+        ),
+      );
+      expect(_sourceRoundTrip(folder), folder);
+      final sub = SubscriptionServers(
+        id: 's-rep',
+        name: 'Provider',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://example-1.com/sub',
+        replace: const SourceReplace(mode: ReplaceMode.manual, tag: 'Sub-pick'),
+      );
+      final rec = sourceToRecord(sub);
+      expect(rec['replace'], {'mode': 'manual', 'tag': 'Sub-pick'});
+      expect(_sourceRoundTrip(sub), sub);
+    });
+
+    test('неизвестный mode — manual, auto у manual не читается', () {
+      final read = sourceFromRecord({
+        'kind': 'subscription',
+        'id': 's-x',
+        'url': 'https://example-1.com/x',
+        'replace': {
+          'mode': 'weird',
+          'tag': 'X',
+          'auto': {'mode': 'least_test'},
+          'extra': 1,
+        },
+      });
+      final r = (read.value! as SubscriptionServers).replace!;
+      expect(r.mode, ReplaceMode.manual);
+      expect(r.auto, isNull);
+      expect(read.unknownKeys, ['replace.extra']);
+    });
+
+    test('без объекта свёртки нет; fold не читается', () {
+      final read = sourceFromRecord({
+        'kind': 'folder',
+        'id': 'f-x',
+        'name': 'F',
+        'fold': {'mode': 'select'},
+        'fold_tag': 'F',
+      });
+      expect((read.value! as FolderServers).replace, isNull);
+      expect(read.unknownKeys, ['fold', 'fold_tag']);
     });
   });
 }
