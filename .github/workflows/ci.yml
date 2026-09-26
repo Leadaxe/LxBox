@@ -311,7 +311,7 @@ jobs:
 
       - name: Upload corpus reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: public-subs-corpus-report
           path: |
@@ -336,7 +336,7 @@ jobs:
           fetch-depth: 0
 
       - name: Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -486,7 +486,7 @@ jobs:
 
       - name: Upload APKs (release)
         # Все 4 таргета: universal + 3 per-ABI.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-apks-release
           path: app/build/app/outputs/flutter-apk/app-*-release.apk
@@ -526,7 +526,7 @@ jobs:
           ls -la build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload AAB (release)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: android-aab-release
           path: app/build/app/outputs/bundle/release/app-release.aab
@@ -577,7 +577,7 @@ jobs:
 
       - name: Download AAB
         if: steps.gate.outputs.enabled == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: android-aab-release
           path: play
@@ -648,7 +648,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Download APKs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: android-apks-release
           path: release-artifacts
@@ -670,7 +670,7 @@ jobs:
           ls -la LxBox-*.apk
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: LxBox ${{ needs.meta.outputs.version }}
