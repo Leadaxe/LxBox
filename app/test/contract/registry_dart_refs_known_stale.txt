@@ -3,3 +3,6 @@
 # Список самоочищается: тест падает, если запись устарела (файл появился
 # или ссылку убрали из реестра) — тогда строку удалить.
 lib/screens/add_server_wizard/tailscale_bundle.dart
+# §570 — форма ini ссылки ушла в движок; запрос лаунчеру: заменить на
+# app/lib/services/parser/engine/interpreter.dart:runSection
+app/lib/services/parser/uri_parsers/wireguard_parser.dart:parseWireguardUri
