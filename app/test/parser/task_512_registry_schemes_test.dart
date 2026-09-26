@@ -80,17 +80,16 @@ void main() {
     });
 
     test('рабочий набор ШИРЕ каждой из сторон: реестр добавляет, не отнимает', () {
-      // Реестр `scheme_in` НЕ объявляет `wg://` намеренно: Go IsDirectLink
-      // его не принимает (`wireguard.json` → note). Написание живо через
-      // `aliases` протокола — §562: диспетчер читает оба поля реестра, и
-      // литерального набора в Dart больше нет.
+      // С контракта 1.1.81 (§78) `wg` объявлен в `scheme_in` секции
+      // wireguard, а не только в `aliases` протокола. §562: диспетчер читает
+      // оба поля реестра, литерального набора в Dart больше нет.
       final working = pipelineSchemes();
       expect(working, containsAll(_kLegacySchemes),
           reason: 'ни одно живое написание не теряется при живом реестре');
       expect(working, contains('amneziawg'),
           reason: 'а новое из реестра добавляется без правки кода');
-      expect(registryUriSchemes(), isNot(contains('wg')),
-          reason: 'снимок разрыва: `wg` объявлен только в `aliases`');
+      expect(registryUriSchemes(), contains('wg'),
+          reason: 'контракт 1.1.81: `wg` в `scheme_in` секции wireguard');
       expect(registrySchemeType('wg'), 'wireguard',
           reason: 'алиас протокола ведёт в тот же тип тела');
     });
