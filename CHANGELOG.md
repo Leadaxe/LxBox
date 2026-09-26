@@ -57,6 +57,16 @@
 
 ### Fixed
 
+- **Imported nodes keep what the provider sent ([§560](docs/spec/tasks/560-xray-body-parse-gaps.md)).**
+  Fields the node model had no place for were dropped on import: `multiplex`,
+  `udp_over_tcp`, dial options (`connect_timeout`, `network_strategy`, `fallback_delay`
+  and others), WireGuard `workers` and `listen_port`, QUIC tuning, extra transport
+  fields. They now reach the config as written. Xray nodes no longer get a
+  `server_name` the provider did not set, sing-box `socks` bodies no longer gain
+  `version`, a VMess link with `aid=0` no longer writes `alter_id: 0`. An Xray
+  `socks` outbound becomes a node, and an Xray outbound nobody can read is reported
+  as rejected instead of disappearing.
+
 - **Links to a chain open the chain ([§558](docs/spec/tasks/558-chain-owner-navigation.md)).**
   Tapping a chain on a node's screen, or a chain named in the detour-loop sheet, used
   to show "Source not found in your lists". It now opens the chain editor, and a saved
