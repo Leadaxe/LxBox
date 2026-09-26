@@ -836,6 +836,254 @@ void main() {
       });
     });
 
+    // §573 / контракт 1.1.83 — вторая форма фрагментации Xray:
+    // `streamSettings.finalmask.tcp[type=fragment]`; шум `tcpSettings: {}` и
+    // тройки `extra`. Ожидания — кейсы корпуса body/xray/ того же имени.
+    group('§573 / контракт 1.1.83 — finalmask.tcp fragment', () {
+      const fragmentMask = {
+        'tcp': [
+          {
+            'type': 'fragment',
+            'settings': {
+              'packets': 'tlshello',
+              'length': '20-40',
+              'delay': '3-10',
+              'maxSplit': '3-6',
+            },
+          },
+        ],
+      };
+
+      Map<String, dynamic> vless(
+        Map<String, dynamic> streamSettings, {
+        String tag = 'proxy',
+        String address = 'example-1.com',
+      }) =>
+          {
+            'tag': tag,
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': address,
+                  'port': 443,
+                  'users': [
+                    {
+                      'id': '11111111-1111-1111-1111-111111111111',
+                      'encryption': 'none',
+                    },
+                  ],
+                },
+              ],
+            },
+            'streamSettings': streamSettings,
+          };
+
+      List<String> unknownPaths(NodeSpec n) => [
+            for (final w in n.warnings.whereType<RegistryWarning>())
+              if (w.code == 'json_field_unknown') w.path ?? '',
+          ];
+
+      Map? tlsOf(NodeSpec n) =>
+          (n as VlessSpec).emit(TemplateVars.empty).map['tls'] as Map?;
+
+      test('finalmask_tcp_fragment: xhttp + REALITY → tls.fragment, без кодов',
+          () {
+        final element = jsonDecode(
+          File('test/fixtures/xray/finalmask_tcp_fragment.json')
+              .readAsStringSync(),
+        ) as Map<String, dynamic>;
+        final nodes = parseXrayElement(element);
+        expect(nodes, hasLength(1));
+        final spec = nodes.single;
+        expect(spec.label, 'fm-frag');
+        expect(spec.chained, isNull);
+        final tls = tlsOf(spec)!;
+        expect(tls['fragment'], true);
+        expect(tls.containsKey('record_fragment'), isFalse);
+        // Фикстура несёт и `tcpSettings: {}`, и дубль `extra.mode`.
+        expect(unknownPaths(spec), isEmpty);
+        expect(spec.warnings, isEmpty);
+      });
+
+      test('finalmask_tcp_fragment_no_tls: флага нет, кодов нет', () {
+        final nodes = parseXrayElement({
+          'remarks': 'fm-frag-notls',
+          'outbounds': [
+            vless({
+              'network': 'tcp',
+              'security': 'none',
+              'finalmask': fragmentMask,
+            }),
+          ],
+        });
+        expect(nodes, hasLength(1));
+        final spec = nodes.single as VlessSpec;
+        expect(spec.tls.enabled, isFalse);
+        expect(spec.tls.passthrough.containsKey('fragment'), isFalse);
+        expect(unknownPaths(spec), isEmpty);
+      });
+
+      test('finalmask_tcp_fragment_with_hop: флага нет, цепочка как раньше',
+          () {
+        final nodes = parseXrayElement({
+          'remarks': 'fm-frag-hop',
+          'outbounds': [
+            vless({
+              'network': 'tcp',
+              'security': 'tls',
+              'tlsSettings': {'serverName': 'example-1.com'},
+              'sockopt': {'dialerProxy': 'relay'},
+              'finalmask': fragmentMask,
+            }),
+            vless({
+              'network': 'tcp',
+              'security': 'tls',
+              'tlsSettings': {'serverName': 'example-2.com'},
+            }, tag: 'relay', address: 'example-2.com'),
+          ],
+        });
+        expect(nodes, hasLength(1));
+        final spec = nodes.single;
+        expect(spec.chained, isNotNull);
+        expect(spec.chained!.server, 'example-2.com');
+        expect(tlsOf(spec)!.containsKey('fragment'), isFalse);
+        expect(unknownPaths(spec), isEmpty);
+      });
+
+      test('finalmask_tcp_fragment_freedom_dialer: freedom не хоп → флаг', () {
+        final nodes = parseXrayElement({
+          'remarks': 'fm-frag-freedom',
+          'outbounds': [
+            vless({
+              'network': 'tcp',
+              'security': 'tls',
+              'tlsSettings': {'serverName': 'example-1.com'},
+              'sockopt': {'dialerProxy': 'direct-out'},
+              'finalmask': fragmentMask,
+            }),
+            {
+              'tag': 'direct-out',
+              'protocol': 'freedom',
+              'settings': {'domainStrategy': 'UseIP'},
+            },
+          ],
+        });
+        expect(nodes, hasLength(1));
+        final spec = nodes.single;
+        expect(spec.chained, isNull);
+        expect(tlsOf(spec)!['fragment'], true);
+        expect(unknownPaths(spec), isEmpty);
+      });
+
+      test('finalmask_tcp_other_type: коды по полям элемента, флага нет', () {
+        final nodes = parseXrayElement({
+          'remarks': 'fm-other',
+          'outbounds': [
+            vless({
+              'network': 'tcp',
+              'security': 'tls',
+              'tlsSettings': {'serverName': 'example-1.com'},
+              'finalmask': {
+                'tcp': [
+                  {
+                    'type': 'header-custom',
+                    'settings': {
+                      'clients': ['x'],
+                    },
+                  },
+                ],
+              },
+            }),
+          ],
+        });
+        expect(nodes, hasLength(1));
+        final spec = nodes.single;
+        expect(tlsOf(spec)!.containsKey('fragment'), isFalse);
+        expect(
+          unknownPaths(spec),
+          unorderedEquals([
+            'streamSettings.finalmask.tcp.0.settings.clients.0',
+            'streamSettings.finalmask.tcp.0.type',
+          ]),
+        );
+      });
+
+      test('tcp_settings_empty: пустой tcpSettings кода не даёт', () {
+        final nodes = parseXrayElement({
+          'remarks': 'tcp-empty',
+          'outbounds': [
+            vless({
+              'network': 'tcp',
+              'security': 'tls',
+              'tlsSettings': {'serverName': 'example-1.com'},
+              'tcpSettings': <String, dynamic>{},
+            }),
+          ],
+        });
+        expect(nodes, hasLength(1));
+        expect(unknownPaths(nodes.single), isEmpty);
+      });
+
+      Map<String, dynamic> xhttpNode(Map<String, dynamic> xhttpSettings) =>
+          vless({
+            'network': 'xhttp',
+            'xhttpSettings': xhttpSettings,
+            'security': 'tls',
+            'tlsSettings': {'serverName': 'example-1.com'},
+          });
+
+      Map transportOf(NodeSpec n) =>
+          (n as VlessSpec).emit(TemplateVars.empty).map['transport'] as Map;
+
+      test('xhttp_extra_mode_duplicate: дубль extra.mode молчит', () {
+        final nodes = parseXrayElement({
+          'remarks': 'xhttp-extra-dup',
+          'outbounds': [
+            xhttpNode({
+              'path': '/x',
+              'mode': 'packet-up',
+              'extra': {'mode': 'packet-up'},
+            }),
+          ],
+        });
+        expect(nodes, hasLength(1));
+        expect(transportOf(nodes.single)['mode'], 'packet-up');
+        expect(unknownPaths(nodes.single), isEmpty);
+      });
+
+      test('xhttp_extra_mode_diverges: побеждает внешнее, кода нет', () {
+        final nodes = parseXrayElement({
+          'remarks': 'xhttp-extra-diff',
+          'outbounds': [
+            xhttpNode({
+              'path': '/x',
+              'mode': 'stream-one',
+              'extra': {'mode': 'packet-up'},
+            }),
+          ],
+        });
+        expect(nodes, hasLength(1));
+        expect(transportOf(nodes.single)['mode'], 'stream-one');
+        expect(unknownPaths(nodes.single), isEmpty);
+      });
+
+      test('xhttp_extra_mode_only: extra.mode не пишется, кода нет', () {
+        final nodes = parseXrayElement({
+          'remarks': 'xhttp-extra-only',
+          'outbounds': [
+            xhttpNode({
+              'path': '/x',
+              'extra': {'mode': 'packet-up'},
+            }),
+          ],
+        });
+        expect(nodes, hasLength(1));
+        expect(transportOf(nodes.single).containsKey('mode'), isFalse);
+        expect(unknownPaths(nodes.single), isEmpty);
+      });
+    });
+
     group('§404 многохоп и канон звена', () {
       test('релей звонит через следующий релей → ВЛОЖЕННЫЙ chained', () {
         final main = vless('proxy', 'main.example');

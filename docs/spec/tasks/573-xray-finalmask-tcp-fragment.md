@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — норма вышла, идёт часть B |
+| Статус | Done |
 | Дата старта | 2026-09-27 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-09-27 |
+| Коммиты | `chore(contract): синк 1.1.83 (2a373e8c)`; `feat(573): Xray finalmask.tcp fragment → tls.fragment; шум tcpSettings и extra` |
 | Контракт | 1.1.83, коммит лаунчера `2a373e8c`, `TASKS_LXBOX.md` §80 |
 | Связанные spec'ы | [§488](488-xray-dialer-proxy-freedom-fragment.md) (та же фрагментация через `dialerProxy` → freedom), [§572](572-notifications-group-by-code.md), features/321 xray-json-parsing, features/480 registry-driven-mapper |
 
@@ -211,6 +211,24 @@ Xray задаёт фрагментацию TLS ClientHello двумя форма
 5. Документация: строка в `docs/GUARDS.md` (слой JSON-веток, рядом с записью
    про `finalmask.quicParams`), раздел Xray в `docs/PROTOCOLS.md`, ссылка на
    эту задачу в §488.
+
+**Как сделано (часть B).**
+
+- Движок (`interpreter.dart`): `jsonPathValue` понимает сегмент `имя[ключ=значение]`
+  (`_parseSelector`, `_selectorMatches`), чем сразу покрыты `source`, ключи `when`
+  и raw-чтение; `expandSelectorPaths` раскрывает путь с селектором в числовые пути
+  всех подходящих элементов для `_declaredJsonPaths`. `_walkNested` больше не
+  считает пустой объект или массив листом. Гейт `$type not_in`, слой `ref.dialer`
+  из `deref` соседней записи и `$extra_base_triple` работали без правок.
+- Сборка: `server_list_build.dart` метит тела узлов, чей источник — Xray-outbound
+  (`isXrayOutboundSource`, без дословного тела и без правил импорта), через
+  `markXrayImpliedTlsFragment`; post-step `stripImpliedTlsFragmentUnderDetour`
+  (`tls_transforms.dart`, до `applyTlsFragment`) снимает у таких outbound'ов с
+  `detour` `fragment`, `record_fragment` и `fragment_fallback_delay`. Флаг из
+  sing-box JSON не метится и остаётся.
+- Тесты: группа §573 в `json_parsers_test.dart` (фикстура
+  `test/fixtures/xray/finalmask_tcp_fragment.json`), группа §573 в
+  `test/builder/detour_append_replace_test.dart`.
 
 ## Риски и edge cases
 

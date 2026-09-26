@@ -1,0 +1,58 @@
+{
+  "remarks": "fm-frag",
+  "outbounds": [
+    {
+      "tag": "proxy",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "example-1.com",
+            "port": 443,
+            "users": [
+              {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "encryption": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "xhttpSettings": {
+          "path": "/x",
+          "mode": "auto",
+          "extra": {
+            "mode": "auto"
+          }
+        },
+        "tcpSettings": {},
+        "security": "reality",
+        "realitySettings": {
+          "serverName": "example-2.com",
+          "publicKey": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+          "shortId": "01",
+          "fingerprint": "chrome"
+        },
+        "finalmask": {
+          "tcp": [
+            {
+              "type": "fragment",
+              "settings": {
+                "packets": "tlshello",
+                "length": "20-40",
+                "delay": "3-10",
+                "maxSplit": "3-6"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    }
+  ]
+}

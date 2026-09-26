@@ -91,6 +91,62 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
   }
 }
 
+/// §573 — тела outbound'ов, чей `tls.fragment` ВЫВЕДЕН из Xray (`implies`
+/// записей `fragment_via_dialer` / `fragment_via_finalmask*`), а не написан
+/// автором. Identity по объекту map: тело переписывается на месте, а в
+/// конфиг уходит тот же объект. `Expando` — метка живёт, пока живёт тело.
+final Expando<bool> _xrayImpliedTlsFragment =
+    Expando<bool>('xray implied tls.fragment');
+
+/// §573 — пометить тело узла, разобранного из Xray-outbound'а: его
+/// `tls.fragment` есть перенос Xray-фрагментации, и под `detour` он снимается
+/// ([stripImpliedTlsFragmentUnderDetour]). Тело без флага не метится.
+void markXrayImpliedTlsFragment(Map<String, dynamic> body) {
+  final tls = body['tls'];
+  if (tls is Map && tls['fragment'] == true) {
+    _xrayImpliedTlsFragment[body] = true;
+  }
+}
+
+/// §573 — источник узла есть Xray-outbound (`protocol`, без `type` ядра).
+/// Только такой узел несёт `tls.fragment`, выведенный реестром, а не
+/// написанный автором: у Xray поля `tls.fragment` нет.
+bool isXrayOutboundSource(String raw) {
+  final t = raw.trimLeft();
+  if (!t.startsWith('{')) return false;
+  try {
+    final v = jsonDecode(t);
+    return v is Map && v.containsKey('protocol') && !v.containsKey('type');
+  } on FormatException {
+    return false;
+  }
+}
+
+/// Post-step §573: у outbound'а с `detour` снимается `tls.fragment`,
+/// выведенный из Xray ([markXrayImpliedTlsFragment]), вместе с
+/// `record_fragment` и осиротевшим `fragment_fallback_delay`.
+///
+/// Под `detour` ожидание ACK недоступно, и явный `fragment` даёт паузу
+/// `fragment_fallback_delay` (500 мс) на каждый сегмент; без флагов ядро само
+/// включает `record_fragment` (SPEC 060 ядра). Правило то же, что у
+/// глобальной настройки ([applyTlsFragment] пропускает outbound с `detour`).
+/// Флаг, написанный автором sing-box JSON, не метится и остаётся байт в байт.
+/// Идёт после назначения `detour` (включая второй проход ссылок).
+void stripImpliedTlsFragmentUnderDetour(Map<String, dynamic> config) {
+  final outbounds = config['outbounds'] as List<dynamic>? ?? const [];
+  for (final ob in outbounds) {
+    if (ob is! Map<String, dynamic>) continue;
+    if (!ob.containsKey('detour')) continue;
+    if (_xrayImpliedTlsFragment[ob] != true) continue;
+    final tls = ob['tls'];
+    if (tls is! Map) continue;
+    tls
+      ..remove('fragment')
+      ..remove('record_fragment')
+      ..remove('fragment_fallback_delay');
+  }
+}
+
 /// Post-step (контракт 1.1.65): `detour` дописывает сборка ПОСЛЕ санитайзера,
 /// поэтому связи `conflicts {with: detour}` реестра перепроверяются здесь, по
 /// готовому телу каждого outbound/endpoint с `detour`: уступающие поля

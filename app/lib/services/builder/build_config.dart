@@ -817,6 +817,8 @@ Future<BuildResult> _buildConfig({
   for (final w in applyDetourYields(config)) {
     emitWarnings.add(w.renderEn());
   }
+  // §573 — Xray-фрагментация узла под `detour` не эмитится: дефолт ядра.
+  stripImpliedTlsFragmentUnderDetour(config);
   applyTlsFragment(config, vars);
   applyMixedCaseSni(config, vars);
 
