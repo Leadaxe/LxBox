@@ -964,7 +964,7 @@ vpn/BoxVpnService.kt         # the Android VpnService plus the PlatformInterface
                              #   The foreground/protect/override paths are tun-agnostic, so proxy mode is config-only and Kotlin is untouched
 vpn/BoxService.kt            # CommandServerHandler — it owns the libbox runtime (fileDescriptor/commandServer)
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
-vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singleton wifiObserver
+vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singletons wifiObserver, wifiStateCache
 vpn/CrashRecovery.kt         # §334 — “the previous run crashed” (a non-empty CrashReport-lxbox.log in
                              #   tempPath). The detection must run STRICTLY before Libbox.setup, which archives it
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
@@ -980,6 +980,7 @@ vpn/LxBoxTileService.kt      # the QS tile toggle (§032) with optimistic render
 vpn/QuickShortcuts.kt        # dynamic launcher shortcuts (Connect/Disconnect)
 vpn/LxBoxIntentReceiver.kt   # the §047 raw broadcast API: nine incoming actions, an optional permission gate, setEnabled
 vpn/WifiInfoReader.kt        # §051 the single source of the Wi-Fi SSID/BSSID (a permission preflight, a sealed Result)
+vpn/WifiStateCache.kt        # §569 API 31+: NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) → cached SSID/BSSID for WifiInfoReader
 vpn/WifiNetworkObserver.kt   # §051 auto-record: NetworkCallback → WifiHistoryBridge → Dart onWifiSeen
 vpn/PermissionUtils.kt · Extensions.kt  # the SDK-gated permission check; small Kotlin extensions
 
@@ -1521,6 +1522,7 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 │  • Libbox.setup(SetupOptions) async     │  │                                    │
 │  • libboxReady : CompletableDeferred    │  │                                    │
 │  • Singleton WifiNetworkObserver        │  │                                    │
+│  • Singleton WifiStateCache (§569)      │  │                                    │
 └─────────────────────────────────────────┘  └────────────────────────────────────┘
                                                            │ start/stop intent
                                                            ▼

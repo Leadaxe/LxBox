@@ -525,11 +525,37 @@ W WifiInfoReader: permission missing: android.permission.ACCESS_FINE_LOCATION
 W WifiInfoReader: location disabled: system location toggle is off
 W WifiInfoReader: unknown ssid: android returned ssid=<unknown ssid> bssid=02:00:00:00:00:00
 W WifiInfoReader: no wifi: connectionInfo is null
-D WifiInfoReader: ok: ssid='AndroidWifi' bssid='00:13:10:85:fe:01'
+W WifiInfoReader: no wifi: not connected (cache has no wifi network, connectionInfo bssid=null)
+D WifiInfoReader: ok: source=cache ssid='AndroidWifi' bssid='00:13:10:85:fe:01'
+D WifiInfoReader: ok: source=legacy ssid='AndroidWifi' bssid='00:13:10:85:fe:01'
 ```
 
+Where the name came from (§569). On Android 12+ the reader first takes the
+network from `WifiStateCache` — a `NetworkCallback` registered with
+`FLAG_INCLUDE_LOCATION_INFO`, which is the only way `NetworkCapabilities.transportInfo`
+carries the SSID — and falls back to the deprecated `getConnectionInfo()`
+when the cache is empty (the callback has not delivered yet, or there is no
+Wi-Fi) or holds a redacted SSID. Android 11 and older use only
+`getConnectionInfo()`. `source=cache` / `source=legacy` in the `ok:` line tells
+which path answered. The cache logs under its own tag:
+
+```text
+D WifiStateCache: started (perms=nearby=1 fine=1 bg=1 loc=1)
+D WifiStateCache: update: ssid='AndroidWifi' bssid='00:13:10:85:fe:01' net=101
+D WifiStateCache: lost: net=101
+D WifiStateCache: stopped
+D WifiStateCache: permissions changed (... -> ...), re-registering
+D WifiInfoReader: cache empty (registered=true), falling back: source=legacy
+D WifiInfoReader: cache has unknown ssid, falling back: source=legacy
+```
+
+`source=legacy` right after `started` is normal: the callback delivers the
+current network asynchronously, a moment after registration. A steady
+`source=legacy` with `registered=false` means registration failed — look for
+`W WifiStateCache: registerNetworkCallback ...`.
+
 ```bash
-adb logcat -d | grep -E "WifiInfoReader|PIW" | tail
+adb logcat -d | grep -E "WifiInfoReader|WifiStateCache|PIW" | tail
 adb shell dumpsys package com.leadaxe.lxbox | grep -E "granted=" | grep -iE "location|nearby"
 adb shell settings get secure location_mode   # 0 = off
 ```

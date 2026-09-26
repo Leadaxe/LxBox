@@ -74,6 +74,15 @@ Wi-Fi rules require special permissions, поскольку Android 13+ огра
 
 Permissions можно проверить заранее в `App Settings → Diagnostics → System setup` — там interactive ListTile-блок c live-статусом каждой permission.
 
+## Как читается SSID
+
+Все три потребителя (ядро через `readWIFIState`, кнопка **Add current**, авто-история) идут через один `WifiInfoReader.read`: сначала preflight разрешений и системной геолокации (§567), затем чтение.
+
+- **Android 12+ (API 31+)** — основной путь: кэш `WifiStateCache`, который наполняет `NetworkCallback` с `FLAG_INCLUDE_LOCATION_INFO` (`NetworkCapabilities.transportInfo`). Колбэк регистрируется при первом чтении с пройденным preflight, перерегистрируется при смене набора разрешений или тумблера геолокации и снимается, когда preflight не проходит. Пока колбэк не доставил сеть (первое чтение сразу после регистрации) или кэш получил SSID вырезанным — fallback на `WifiManager.getConnectionInfo()`.
+- **Android 11 и ниже** — только `getConnectionInfo()`, как раньше.
+
+Требования к разрешениям у обоих путей одни и те же (таблица выше). Какой путь сработал, видно в logcat по тегу `WifiInfoReader` (`source=cache` / `source=legacy`), см. [DIAGNOSTICS](../DIAGNOSTICS.md).
+
 ## Известные ограничения
 
 - **Cross-product trap** ([§051 spec](../spec/tasks/051-custom-rule-wifi-conditions.md)). Если в одном правиле перечислить много SSID и много доменов, sing-box интерпретирует это как cartesian product (каждый SSID × каждый домен). Для `wifi_ssid:[A,B,C], domain:[x.com, y.com, z.com]` это 9 условий. Производительности это не вредит, но семантика может быть неинтуитивной — каждое условие связкой OR. Если хочешь *именно* «(A OR B OR C) AND (x.com OR y.com OR z.com)» — это и так работает (стандартная sing-box rule). Документировано как известный риск.
