@@ -404,7 +404,8 @@ NodeSpec? _runPipeline(
   // именно потому, что источник имени недоступен.
   if (!ContractRegistry.I.isLoaded &&
       (mapping.kinds.contains('awg') || mapping.kinds.contains('awg3'))) {
-    final ceiling = awgMtuCeilingByRegistry();
+    final type = body['type'] as String? ?? '';
+    final ceiling = awgMtuCeilingByRegistry(type);
     if (ceiling != null) {
       final written = body['mtu'];
       if (written == null) {
@@ -413,7 +414,7 @@ NodeSpec? _runPipeline(
         body['mtu'] = ceiling;
       } else if (written is num && written > ceiling) {
         warnings.add(RegistryWarning(
-          code: awgMtuClampCodeByRegistry() ?? 'awg_mtu_clamped',
+          code: awgMtuClampCodeByRegistry(type) ?? 'awg_mtu_clamped',
           path: 'mtu',
           value: RegistrySanitizer.renderWarningValue(written),
         ));

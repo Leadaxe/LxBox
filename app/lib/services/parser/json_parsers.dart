@@ -1216,7 +1216,7 @@ NodeSpec? _parseSingboxEntryTyped(
         // (ключ корня или диапазонный keepalive) делает узел AmneziaWG
         // наравне с AWG2-полями.
         mtu: awg != null || Awg.hasAwg3Json(entry)
-            ? (rawMtu ?? awgMtuCeilingByRegistry())
+            ? (rawMtu ?? awgMtuCeilingByRegistry(type))
             : rawMtu,
         awg: awg,
       );
