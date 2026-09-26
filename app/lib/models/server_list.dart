@@ -9,6 +9,7 @@ import 'node_link.dart';
 import 'node_sections.dart';
 import 'node_spec.dart';
 import 'node_warning.dart';
+import 'source_replace.dart';
 import 'subscription_meta.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
@@ -33,7 +34,21 @@ sealed class ServerList {
   }) : nodes = nodes ?? <NodeSpec>[];
 
   String get type;
+
+  /// Фича 565 фаза B — свёртка источника в группу (§74). Бывает у папки и
+  /// подписки; у одиночного сервера её нет.
+  SourceReplace? get replace => null;
 }
+
+/// Фича 565 фаза B (§74 п.5) — корневые имена свёрток источников [lists]:
+/// `tag` и у `both` двойник `<tag>-auto`, в порядке источников. Имена заняты
+/// для Направлений и объявлены целями правил, `route.final` и опций
+/// Направлений независимо от того, включён ли источник: выпавшую на сборке
+/// группу снимают механизмы сборки, а не список целей.
+List<String> sourceReplaceNames(Iterable<ServerList> lists) => [
+      for (final l in lists)
+        if (l.replace case final r?) ...r.names,
+    ];
 
 /// Статус последней попытки auto-update подписки.
 enum UpdateStatus { never, ok, failed, inProgress }
@@ -215,6 +230,10 @@ final class SubscriptionServers extends ServerList {
   /// (регидрация), на каждом новом разборе заменяется целиком.
   final List<NodeWarning> dropped;
 
+  /// Фича 565 фаза B — свёртка подписки в группу; `null` — не свёрнута.
+  @override
+  final SourceReplace? replace;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -236,6 +255,7 @@ final class SubscriptionServers extends ServerList {
     this.importRulesEnabled = true,
     this.onUpdateAction = SubscriptionOnUpdateAction.rebuild,
     this.dropped = const [],
+    this.replace,
     super.nodes,
   });
 
@@ -269,6 +289,8 @@ final class SubscriptionServers extends ServerList {
     SubscriptionOnUpdateAction? onUpdateAction,
     List<NodeSpec>? nodes,
     List<NodeWarning>? dropped,
+    SourceReplace? replace,
+    bool clearReplace = false,
   }) =>
       SubscriptionServers(
         id: id,
@@ -293,6 +315,7 @@ final class SubscriptionServers extends ServerList {
         importRulesEnabled: importRulesEnabled ?? this.importRulesEnabled,
         onUpdateAction: onUpdateAction ?? this.onUpdateAction,
         dropped: dropped ?? this.dropped,
+        replace: clearReplace ? null : (replace ?? this.replace),
         nodes: nodes ?? this.nodes,
       );
 
@@ -321,7 +344,8 @@ final class SubscriptionServers extends ServerList {
           identity == other.identity &&
           _eq.equals(importRules, other.importRules) &&
           importRulesEnabled == other.importRulesEnabled &&
-          onUpdateAction == other.onUpdateAction);
+          onUpdateAction == other.onUpdateAction &&
+          replace == other.replace);
 
   @override
   int get hashCode => Object.hash(
@@ -344,6 +368,7 @@ final class SubscriptionServers extends ServerList {
         _eq.hash(importRules),
         importRulesEnabled,
         onUpdateAction,
+        replace,
       );
 }
 
@@ -557,6 +582,10 @@ final class FolderServers extends ServerList {
   final String? pingUrl;
   final int? pingTimeoutMs;
 
+  /// Фича 565 фаза B — свёртка папки в группу; `null` — не свёрнута.
+  @override
+  final SourceReplace? replace;
+
   FolderServers({
     required super.id,
     required super.name,
@@ -567,6 +596,7 @@ final class FolderServers extends ServerList {
     DateTime? createdAt,
     this.pingUrl,
     this.pingTimeoutMs,
+    this.replace,
   })  : members = members ?? <FolderMember>[],
         createdAt = createdAt ?? DateTime.now(),
         super(nodes: [
@@ -604,6 +634,8 @@ final class FolderServers extends ServerList {
     String? pingUrl,
     int? pingTimeoutMs,
     bool clearPing = false,
+    SourceReplace? replace,
+    bool clearReplace = false,
   }) =>
       FolderServers(
         id: id,
@@ -615,6 +647,7 @@ final class FolderServers extends ServerList {
         members: members ?? this.members,
         pingUrl: clearPing ? null : (pingUrl ?? this.pingUrl),
         pingTimeoutMs: clearPing ? null : (pingTimeoutMs ?? this.pingTimeoutMs),
+        replace: clearReplace ? null : (replace ?? this.replace),
       );
 
   /// Равенство записи (§439): `nodes` выводятся из [members].
@@ -630,11 +663,12 @@ final class FolderServers extends ServerList {
           _eq.equals(members, other.members) &&
           createdAt == other.createdAt &&
           pingUrl == other.pingUrl &&
-          pingTimeoutMs == other.pingTimeoutMs);
+          pingTimeoutMs == other.pingTimeoutMs &&
+          replace == other.replace);
 
   @override
   int get hashCode => Object.hash(id, name, enabled, tagPrefix, detourPolicy,
-      _eq.hash(members), createdAt, pingUrl, pingTimeoutMs);
+      _eq.hash(members), createdAt, pingUrl, pingTimeoutMs, replace);
 }
 
 /// §248 — сброс detour-ссылок на Направление [tag] (или его auto-двойник
