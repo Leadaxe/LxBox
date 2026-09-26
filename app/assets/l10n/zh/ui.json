@@ -5186,5 +5186,8 @@
     "value": {
       "other": "模板：%d 条警告"
     }
+  },
+  "Could not select this server": {
+    "value": "无法选择此服务器"
   }
 }

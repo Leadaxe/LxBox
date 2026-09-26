@@ -240,6 +240,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // §555 — предупреждения шаблона после сборки: снек со счётчиком.
     _prevTemplateStamp = _subController.templateWarningsStamp;
     _subController.addListener(_onTemplateWarnings);
+    // §565 / задача 570 — выбор члена selector-группы (главный экран, экран
+    // узла) запоминается у своей группы папки или подписки.
+    _controller.onMemberSelected = (group, node) => unawaited(
+        _subController.rememberGroupMember(group, node, live: true));
     // §076: global home-return observer триггерит auto-rebuild когда
     // юзер возвращается на home с любого settings screen'а.
     homeReturnObserver.setHandler(_onReturnToHome);
@@ -547,6 +551,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _controller.removeListener(_onControllerChange);
     _subController.removeListener(_onDirectionsWithoutNodes);
     _subController.removeListener(_onTemplateWarnings);
+    _controller.onMemberSelected = null;
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
     _autoUpdater.dispose();
@@ -982,7 +987,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // стартуем с pinned-конфигом.
     final inFlight = _rebuildInFlight;
     if (inFlight != null) await inFlight;
-    if (_subController.configDirty) await _rebuildAndClearDirty();
+    // §565 / задача 570 — выбор члена ручной группы, сделанный вживую, лежит
+    // в состоянии, а не в конфиге на диске: старт пересобирает и его.
+    if (_subController.configDirty || _subController.groupDefaultsPending) {
+      await _rebuildAndClearDirty();
+    }
     if (!mounted) return;
     // §254 — detour-цикл в свежей пересборке → sheet + отмена старта (см.
     // _rebuildAndStart).

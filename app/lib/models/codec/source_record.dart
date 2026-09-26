@@ -74,6 +74,10 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
       if (s.replace != null) 'replace': sourceReplaceToRecord(s.replace!),
       // L — настройки LxBox.
       ..._detourPolicyToRecord(s.detourPolicy),
+      // §565 / задача 570 — выбор члена групп ручного рода: сырой тег группы
+      // → сырой тег члена. В бэкап не едет (lx_backup_slice, рантайм).
+      if (s.groupDefaults.isNotEmpty)
+        'group_defaults': Map<String, String>.of(s.groupDefaults),
       if (s.importRules.isNotEmpty)
         'import_rules': [for (final r in s.importRules) r.toJson()],
       if (!s.importRulesEnabled) 'import_rules_enabled': false,
@@ -255,7 +259,7 @@ const Set<String> _subscriptionKeys = {
   'disabled', 'warnings', 'detour', 'detour_policy', 'import_rules',
   'import_rules_enabled', 'on_update_action', 'meta', 'last_updated',
   'last_update_attempt', 'last_update_status', 'last_node_count',
-  'consecutive_fails', 'replace',
+  'consecutive_fails', 'replace', 'group_defaults',
 };
 
 const Set<String> _serverKeys = {
@@ -359,7 +363,21 @@ SubscriptionServers _subscriptionFromRecord(
     importRulesEnabled: _bool(j['import_rules_enabled'], true),
     onUpdateAction: SubscriptionOnUpdateAction.fromJson(j['on_update_action']),
     replace: sourceReplaceFromRecord(j['replace'], unknown),
+    groupDefaults: _groupDefaultsFromRecord(j['group_defaults']),
   );
+}
+
+/// §565 / задача 570 — `group_defaults`: карта «тег группы → тег члена»;
+/// нестроковое и пустое отбрасывается молча (форма терпимая, как `disabled`).
+Map<String, String> _groupDefaultsFromRecord(Object? raw) {
+  if (raw is! Map) return const {};
+  final out = <String, String>{};
+  raw.forEach((k, v) {
+    if (k is String && k.isNotEmpty && v is String && v.isNotEmpty) {
+      out[k] = v;
+    }
+  });
+  return out;
 }
 
 /// §439 п. 1 — узлы перечитываются из текста; `tag` записи на чтении не

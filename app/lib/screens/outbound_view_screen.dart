@@ -100,6 +100,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// `default` конфига.
   String? get _manualSelected {
     if (!_isManualGroup) return null;
+    final picked = _pickedMember;
+    if (picked != null) return picked;
     final live = widget.homeController.state.groupOf(widget.tag)?.selected;
     if (live != null && live.isNotEmpty) return live;
     final def = widget.config[widget.tag]?.raw['default'];
@@ -111,6 +113,33 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// послойная проба обязана мерить работающий маршрут.
   List<String>? get _chainHops =>
       chainHopsFromConfig(widget.config[widget.tag]?.raw);
+
+  /// §565 / задача 570 — член, выбранный на этом экране, пока ядро (или
+  /// пересборка) его не подтвердили.
+  String? _pickedMember;
+
+  /// §565 / задача 570 — выбор члена ручной группы прямо на экране узла:
+  /// при туннеле — вживую через ядро (`selectOutbound`), выбор запоминается
+  /// у своей группы папки/подписки наблюдателем Home; без туннеля — сразу в
+  /// состояние, в конфиг он попадёт на следующей сборке.
+  Future<void> _selectMember(String member) async {
+    if (member == _manualSelected) return;
+    final prev = _pickedMember;
+    setState(() => _pickedMember = member);
+    final bool ok;
+    if (widget.homeController.state.tunnelUp) {
+      ok = await widget.homeController.selectInGroup(widget.tag, member);
+    } else {
+      ok = await widget.subController
+          .rememberGroupMember(widget.tag, member, live: false);
+    }
+    if (!mounted) return;
+    if (!ok) {
+      setState(() => _pickedMember = prev);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(getLocalText.s("Could not select this server"))));
+    }
+  }
 
   @override
   void initState() {
@@ -512,6 +541,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       // убираем разделители ExpansionTile — раздел плотный, kv-строки рядом
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
+        // §565 / задача 570 — у ручной группы состав и есть переключатель.
+        initiallyExpanded: _isManualGroup,
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(bottom: 4),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
@@ -559,17 +590,30 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           children: [
-            SizedBox(
-              width: 24,
-              // §565 — у ручной группы отмечен выбранный член.
-              child: chosen
-                  ? Icon(Icons.radio_button_checked,
-                      size: 15, color: cs.primary)
-                  : inPool == null
-                      ? null
-                      : Icon(Icons.check,
-                          size: 15, color: cs.onSurfaceVariant),
-            ),
+            // §565 / задача 570 — у ручной группы переключатель: тап по
+            // кружку выбирает члена, тап по строке ведёт к его владельцу.
+            if (_isManualGroup)
+              InkResponse(
+                key: ValueKey('member-select-$tag'),
+                radius: 16,
+                onTap: () => _selectMember(tag),
+                child: SizedBox(
+                  width: 24,
+                  child: Icon(
+                      chosen
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: chosen ? cs.primary : cs.onSurfaceVariant),
+                ),
+              )
+            else
+              SizedBox(
+                width: 24,
+                child: inPool == null
+                    ? null
+                    : Icon(Icons.check, size: 15, color: cs.onSurfaceVariant),
+              ),
             Expanded(
               child: Text(tag,
                   style: TextStyle(
