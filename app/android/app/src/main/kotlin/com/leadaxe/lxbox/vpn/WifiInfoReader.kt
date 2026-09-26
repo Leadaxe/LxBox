@@ -27,6 +27,8 @@ object WifiInfoReader {
     /// Не валидная пара, трактуем как unknown.
     private const val PLACEHOLDER_BSSID = "02:00:00:00:00:00"
 
+    private const val UNKNOWN_SSID = "<unknown ssid>"
+
     private const val TAG = "WifiInfoReader"
     const val PERM_NEARBY = "android.permission.NEARBY_WIFI_DEVICES"
     const val PERM_FINE = "android.permission.ACCESS_FINE_LOCATION"
@@ -47,16 +49,52 @@ object WifiInfoReader {
     ///
     /// §567: каждая нештатная ветка — одна строка `Log.w` с тегом [TAG]
     /// (только logcat, в диагностический экспорт не идёт).
+    ///
+    /// §569: на API 31+ сначала кэш [WifiStateCache] (колбэк с
+    /// `FLAG_INCLUDE_LOCATION_INFO`, `NetworkCapabilities.transportInfo`),
+    /// при пустом кэше или SSID, который кэш не получил, — fallback на
+    /// `getConnectionInfo()`. Успешное чтение пишет `Log.d` с `source=cache`
+    /// или `source=legacy`. API < 31 — только `getConnectionInfo()`.
     fun read(ctx: Context): Result {
-        val missing = missingPermissions(ctx)
-        if (missing.isNotEmpty()) {
-            Log.w(TAG, "permission missing: ${missing.joinToString(",")}")
-            return Result.PermissionMissing(missing)
+        val blocked = preflight(ctx)
+        if (blocked != null) {
+            when (blocked) {
+                is Result.PermissionMissing ->
+                    Log.w(TAG, "permission missing: ${blocked.missing.joinToString(",")}")
+                else -> Log.w(TAG, "location disabled: system location toggle is off")
+            }
+            // §569: колбэк зарегистрирован при другом наборе разрешений —
+            // снимаем, после восстановления ensureCurrent зарегистрирует заново.
+            if (Build.VERSION.SDK_INT >= 31) BoxApplication.wifiStateCacheOrNull?.stop()
+            return blocked
         }
-        if (!isLocationEnabled(ctx)) {
-            Log.w(TAG, "location disabled: system location toggle is off")
-            return Result.LocationDisabled
+
+        var cacheUnknown = false
+        if (Build.VERSION.SDK_INT >= 31) {
+            val cache = BoxApplication.wifiStateCacheOrNull
+            if (cache != null) {
+                cache.ensureCurrent()
+                val snap = cache.latest
+                if (snap != null && snap.ssid.isNotEmpty()) {
+                    Log.d(TAG, "ok: source=cache ssid='${snap.ssid}' bssid='${snap.bssid}'")
+                    return Result.Success(snap.ssid, snap.bssid)
+                }
+                if (snap != null) {
+                    // Кэш есть, но Android отдал его с вырезанным SSID.
+                    // Сверяемся со старым путём: результат не хуже, чем до §569.
+                    cacheUnknown = true
+                    Log.d(TAG, "cache has unknown ssid, falling back: source=legacy")
+                } else {
+                    Log.d(TAG, "cache empty (registered=${cache.isRegistered}), falling back: source=legacy")
+                }
+            }
         }
+        return readLegacy(cacheUnknown)
+    }
+
+    /// `WifiManager.getConnectionInfo()` — единственный путь на API < 31 и
+    /// fallback на 31+. [cacheUnknown] — только для строки лога.
+    private fun readLegacy(cacheUnknown: Boolean): Result {
         @Suppress("DEPRECATION")
         val info = try {
             BoxApplication.wifiManager.connectionInfo
@@ -75,21 +113,32 @@ object WifiInfoReader {
 
         val rawSsid = info.ssid
         val rawBssid = info.bssid
-        var ssid = rawSsid
-        if (ssid == null || ssid == "<unknown ssid>") {
-            Log.w(TAG, "unknown ssid: android returned ssid=$rawSsid bssid=$rawBssid")
+        val ssid = normalizeSsid(rawSsid)
+        val bssid = normalizeBssid(rawBssid)
+        if (ssid.isEmpty() || rawBssid?.lowercase() == PLACEHOLDER_BSSID) {
+            val suffix = if (cacheUnknown) " (cache also unknown)" else ""
+            Log.w(TAG, "unknown ssid: android returned ssid=$rawSsid bssid=$rawBssid$suffix")
             return Result.UnknownSsid
         }
-        if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
-            ssid = ssid.substring(1, ssid.length - 1)
-        }
-        val bssid = rawBssid?.lowercase() ?: ""
-        if (bssid == PLACEHOLDER_BSSID) {
-            Log.w(TAG, "unknown ssid: android returned ssid=$rawSsid bssid=$rawBssid")
-            return Result.UnknownSsid
-        }
-        Log.d(TAG, "ok: ssid='$ssid' bssid='$bssid'")
+        Log.d(TAG, "ok: source=legacy ssid='$ssid' bssid='$bssid'")
         return Result.Success(ssid, bssid)
+    }
+
+    /// §569 — нормализация SSID из `WifiInfo`: `null` и `<unknown ssid>` →
+    /// пустая строка, кавычки вокруг UTF-8 SSID снимаются.
+    fun normalizeSsid(raw: String?): String {
+        if (raw == null || raw == UNKNOWN_SSID) return ""
+        if (raw.length >= 2 && raw.startsWith("\"") && raw.endsWith("\"")) {
+            return raw.substring(1, raw.length - 1)
+        }
+        return raw
+    }
+
+    /// §569 — нормализация BSSID: lower-case; `null` и placeholder
+    /// `02:00:00:00:00:00` → пустая строка.
+    fun normalizeBssid(raw: String?): String {
+        val b = raw?.lowercase() ?: return ""
+        return if (b == PLACEHOLDER_BSSID) "" else b
     }
 
     /// Convenience для callers которым нужен WIFIState? (sing-box callback
@@ -99,6 +148,27 @@ object WifiInfoReader {
         is Result.Success -> WIFIState(r.ssid, r.bssid)
         is Result.UnknownSsid -> WIFIState("", "")
         else -> null
+    }
+
+    /// §567/§569 — preflight разрешений и геолокации. `null` — чтение
+    /// возможно; иначе причина: [Result.PermissionMissing] или
+    /// [Result.LocationDisabled]. Без логирования — пишет вызывающий.
+    fun preflight(ctx: Context): Result? {
+        val missing = missingPermissions(ctx)
+        if (missing.isNotEmpty()) return Result.PermissionMissing(missing)
+        if (!isLocationEnabled(ctx)) return Result.LocationDisabled
+        return null
+    }
+
+    /// §569 — снимок разрешений и геолокации для [WifiStateCache]: при его
+    /// смене колбэк с `FLAG_INCLUDE_LOCATION_INFO` перерегистрируется
+    /// (редактирование SSID фиксируется на момент регистрации).
+    fun permissionSnapshot(ctx: Context): String {
+        fun bit(v: Boolean) = if (v) '1' else '0'
+        val nearby = Build.VERSION.SDK_INT < 33 || PermissionUtils.has(ctx, PERM_NEARBY)
+        val fine = PermissionUtils.has(ctx, PERM_FINE)
+        val bg = Build.VERSION.SDK_INT < 29 || PermissionUtils.has(ctx, PERM_BACKGROUND)
+        return "nearby=${bit(nearby)} fine=${bit(fine)} bg=${bit(bg)} loc=${bit(isLocationEnabled(ctx))}"
     }
 
     /// §567 — permission preflight, возвращает список отсутствующих
