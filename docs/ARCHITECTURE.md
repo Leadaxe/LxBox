@@ -772,7 +772,7 @@ contract/                    # §460 the contract registry inside the app (contr
   body_sanitizer.dart        #   RegistrySanitizer.sanitize(body, scheme, coreVersion, platform) → SanitizeResult:
                              #   unknown_key, type/enum/format/bounds, on_invalid (drop/coerce/drop_node),
                              #   conflicts/requires, forbidden_for, min_core, platform, advisory, all_or_nothing.
-                             #   Defaults are NOT materialised (CANON §2.4), key order stays as it came in
+                             #   Defaults are NOT materialised (PARSING_PRINCIPLES §2.4), key order stays as it came in
                              #   (`order` governs the emitter — that is wave W2), `tag`/`detour`/`type` untouched
   registry_warning.dart      #   the render side of RegistryWarning (the class itself lives in models/node_warning.dart,
                              #   because NodeWarning is sealed): title_<lang>/text_<lang> from the registry, ru for a
@@ -1062,14 +1062,14 @@ Start
 Two real core starts per press, signalling and final; everything between them
 is `Libbox.checkConfig` with no tunnel and no service. The loop is finite by
 construction — each round switches one node off, and a round with nothing to
-switch off breaks out (CANON §9.5).
+switch off breaks out (PARSING_PRINCIPLES §9.5).
 
 The automaton (`services/core_reject/core_reject_guard.dart`) is pure: the
 core, the config build and the storage reach it through the `CoreRejectHost`
 interface, implemented over the controllers in
 `screens/home/core_reject_host.dart`. The core's error arrives asynchronously
 on the status event, so the real start is awaited through a completer
-(`HomeController.startAndAwaitVerdict`). The error string is parsed by CANON
+(`HomeController.startAndAwaitVerdict`). The error string is parsed by PARSING_PRINCIPLES
 §9.1–§9.2 (`core_error_parse.dart`) and the tag is resolved to its source node
 through `BuildResult.nodeByEmittedTag`, the reverse map the same build
 produced (§9.3) — so a derived entry (a chain hop, a folder member, WARP, a

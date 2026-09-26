@@ -583,7 +583,7 @@ void main() {
       // `vhttp_empty_defaults_to_h3` — КОНВЕНЦИЯ обеих сторон, не дефолт
       // ядра (у ядра `auto`). Значение входит в identity живых MASQUE-узлов,
       // поэтому маппер пишет его явно, а не полагается на `default` реестра
-      // (тот по CANON §2.4 в тело не материализуется).
+      // (тот по PARSING_PRINCIPLES §2.4 в тело не материализуется).
       final spec = parseUri(bare)!;
       expect(spec.emit(TemplateVars.empty).map['vhttp'], 'h3');
       // Явный `auto` при этом уезжает как написан: «нет параметра» и «оператор

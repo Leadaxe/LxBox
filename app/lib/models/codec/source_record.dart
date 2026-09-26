@@ -64,7 +64,7 @@ Map<String, dynamic> _subscriptionToRecord(SubscriptionServers s) => {
           for (final e in s.disabledHashes.entries)
             e.key: e.value.millisecondsSinceEpoch ~/ 1000,
         },
-      // Фича 478 / CANON §9.4 — вердикт ядра оверлеем тем же ключом, что и
+      // Фича 478 / PARSING_PRINCIPLES §9.4 — вердикт ядра оверлеем тем же ключом, что и
       // `disabled`: рядом с отметкой выключения, симметрично в бэкапе (§221).
       if (s.nodeWarnings.isNotEmpty)
         'warnings': storedWarningsMapToJson(s.nodeWarnings),

@@ -24,7 +24,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 - `contract/registry/protocols/<scheme>.json` — per-scheme query parameters,
   aliases, allowlists and degradation rules. Where this document and the
   registry disagree, the registry wins.
-- `contract/docs/CANON.md`, `IDENTITY.md` — how a parsed node is canonicalized
+- `contract/docs/PARSING_PRINCIPLES.md`, `IDENTITY.md` — how a parsed node is canonicalized
   and how its identity hash is computed. Both projects must agree, otherwise the
   same subscription yields different nodes on phone and desktop.
 - `contract/corpus/uri/` — conformance fixtures run by

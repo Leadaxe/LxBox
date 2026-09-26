@@ -242,7 +242,7 @@ void main() {
     });
 
     test('masque материализует дефолты profile/vhttp/mtu: default реестра в '
-        'тело не едет (CANON §2.4), а identity живых узлов на них стоит', () {
+        'тело не едет (PARSING_PRINCIPLES §2.4), а identity живых узлов на них стоит', () {
       final p = (section(uriSections['masque']!, 'uri')['params'] as Map)
           .cast<String, dynamic>();
       for (final f in const ['profile', 'vhttp', 'mtu']) {

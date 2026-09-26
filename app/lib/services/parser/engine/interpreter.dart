@@ -125,7 +125,7 @@ EngineResult? runSection(MapperSection section, String text,
     {MapperTrace? trace, XrayDropVerdict? dropped}) {
   final space = _selectForm(section, text);
   if (space == null) {
-    // §512 (контракт 1.1.49, CANON §4.1) — ФОРМА не опознана: схему секция
+    // §512 (контракт 1.1.49, PARSING_PRINCIPLES §4.1) — ФОРМА не опознана: схему секция
     // ведёт, но ни одна её форма текст не прочитала (оболочка не раскрылась,
     // пейлоад не JSON и не ini). Отличается от `field_missing` ниже: там
     // форма сработала, а обязательного значения в ней не нашлось.
@@ -160,7 +160,7 @@ EngineResult? runSectionOnJson(
   if (space == null) {
     // §560 — то же, что у текстового входа ([runSection]): секция элемент
     // опознала, но ни одна её форма его не прочитала (`streamSettings:
-    // "none"`). Причина называется кодом CANON §4.1 и едет в `dropped[]`, а
+    // "none"`). Причина называется кодом PARSING_PRINCIPLES §4.1 и едет в `dropped[]`, а
     // не теряется молча (корпус body/xray/malformed_stream).
     if (dropped != null && dropped.reason == null) {
       dropped.reason = const RegistryWarning(code: 'form_unrecognized');
@@ -3835,7 +3835,7 @@ final class _Run {
   /// `json_field_unknown`, `wgconf_param_unknown`.
   ///
   /// Имя едет ДВАЖДЫ и намеренно. В `path` — потому что дедуп идёт по паре
-  /// «код, путь» (CANON §6), и без него второй незнакомый параметр той же
+  /// «код, путь» (PARSING_PRINCIPLES §6), и без него второй незнакомый параметр той же
   /// ссылки исчезал бы молча. В `params.query_name` — потому что текст
   /// реестра у всех трёх кодов называет именно этот параметр
   /// (`{query_name}`), а подстановка `{path}` его не закрывает: незаполненный

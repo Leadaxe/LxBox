@@ -1289,7 +1289,7 @@ override'ов корпуса). Запись приведена к реестро
 
 | Кейс | Причина |
 |---|---|
-| `wireguard/reserved_*` (2) | CANON §6: границы `int_array` судятся ПОЭЛЕМЕНТНО, а в `value` кода уезжает ВСЁ ПОЛЕ (`[1 2 999]`). Мы показывали вырванный элемент |
+| `wireguard/reserved_*` (2) | PARSING_PRINCIPLES §6: границы `int_array` судятся ПОЭЛЕМЕНТНО, а в `value` кода уезжает ВСЁ ПОЛЕ (`[1 2 999]`). Мы показывали вырванный элемент |
 | `xray/ss_basic`, `xray/ss_method_legacy` | у секции `shadowsocks#xray` нет перечня `unknown_key.ignore` (`protocol`, `tag`, `remarks`, контейнеры), хотя у vless/vmess/trojan он есть и зовётся «общим, не нашим». Заведён оверлеем `xray/shadowsocks.json` до появления у реестра |
 | `folders_roundtrip`, `merge_sources_by_url` | `backup_corpus_test` не грузил секции движка: член папки строится из своей ссылки, и без реестра состав папки выходил списком ПУСТЫХ имён. Та же грабля, что у `direction_corpus` |
 
@@ -1589,7 +1589,7 @@ Q133-70…75, новые примитивы `round_trip_only: "emit"` и `emit.r
 
 **Забрано без правок кода:** тексты кодов en/ru (1.1.38); `on_len_gt` у
 `$extra_*` (1.1.42) — примитив уже исполнялся, кейс `body/xray/vless_extra_vnext`
-зелёный; порядок `warnings[]` по CANON §6 (коды записей маппера с
+зелёный; порядок `warnings[]` по PARSING_PRINCIPLES §6 (коды записей маппера с
 `maps_to:null` впереди кодов тела) — у нас уже так; `value` у
 `wgconf_dns_ignored` — приехал ожиданиями корпуса. Список
 `_awaitingLauncherGendocs` в `docs_mirror_test` пуст: якорь `password_empty`

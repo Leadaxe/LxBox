@@ -85,7 +85,7 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'identity', _c),
   BackupField(BackupRecord.subscription, 'update', _c),
   BackupField(BackupRecord.subscription, 'disabled', _c),
-  // Фича 478 / CANON §9.4 — ключ в allowlist хранения; в бэкап вердикт
+  // Фича 478 / PARSING_PRINCIPLES §9.4 — ключ в allowlist хранения; в бэкап вердикт
   // страховки не едет (§489, решение 19.09.2026).
   BackupField(BackupRecord.subscription, 'warnings', _c),
   BackupField(BackupRecord.subscription, 'detour', _c),

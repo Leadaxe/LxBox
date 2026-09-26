@@ -84,7 +84,7 @@ builder/build_config.dart ── после `list.build(ctx)`, до пост-ш�
 | `platform` | не `android` → снять |
 | `advisory` | значение в списке → info-код, поле не меняется (`ss_method_legacy`) |
 | `all_or_nothing` | **§467: действия не влечёт** — атрибут документирует поведение ядра (частичная секция = незаданные поля нулями), дописывать дефолты соседей нельзя. В W1 дописывал, код `partial_object_defaulted` снят вместе с правилом |
-| `tristate`, `managed`, `deprecated`, `decision_pending`, `default`, `drop_always`, `build_tag` | W1: не трогает (документировано); `default` не материализуется (CANON §2.4) |
+| `tristate`, `managed`, `deprecated`, `decision_pending`, `default`, `drop_always`, `build_tag` | W1: не трогает (документировано); `default` не материализуется (PARSING_PRINCIPLES §2.4) |
 
 Порядок ключей результата — `order` схемы (эмиттер по `body.order`,
 24.1.1); ключи вне `order` — в конец, как пришли.
@@ -125,7 +125,7 @@ builder/build_config.dart ── после `list.build(ctx)`, до пост-ш�
   не зависит); карточка узла — `text_<lang>`; ссылка на страницу кода
   (W2b: своя копия, `docs/contract/warnings.md#<code>` — раздел 10).
 - **Конформанс (W2):** раннер корпуса отдаёт `warnings[]` объектами
-  `{code, path, value}` (CANON §6); обновлённые `expected.json` — с W2c
+  `{code, path, value}` (PARSING_PRINCIPLES §6); обновлённые `expected.json` — с W2c
   лаунчера; до них per-app override со ссылкой на §24.2.
 
 ### 2.5 Рукописные правила
@@ -153,7 +153,7 @@ builder/build_config.dart ── после `list.build(ctx)`, до пост-ш�
 
 **Закрыто — конформанс с объектными warnings.** Раннер корпуса
 (`test/contract/contract_test.dart`) строит `warnings[]` объектами
-`{code, path?, value?, params?}` и сравнивает по правилу CANON §6/§7 (зеркало
+`{code, path?, value?, params?}` и сравнивает по правилу PARSING_PRINCIPLES §6/§7 (зеркало
 Go `normalizeWarningsForCompare`): `code` обязателен всегда, `path` и `value` —
 только там, где их назвало ожидание. Ожидания строками (by-design override'ы
 корпуса) продолжают читаться. Корпус зелёный целиком — 285 URI-кейсов и 38 тел,
@@ -320,7 +320,7 @@ Per-app override'ов W1 **не завёл ни одного**. Семь кра�
 | `advisory` с `except` | код на всём, КРОМЕ перечисленного (отпечатков у ядра три десятка, гибридных девять); пустое значение под правило не попадает | `body_sanitizer.dart:414` |
 | `advisory` с `when` | условие по другому полю тела (`tls.reality.enabled` задан) | `body_sanitizer.dart:421`, `_advisoryWhen` `:570` |
 | `requires` с `equals` | требуется КОНКРЕТНОЕ значение соседа (`obfs.type = gecko`), а не просто его наличие | `body_sanitizer.dart:538`, `_valueAt` `:556` |
-| `default_when` | дефолт, без которого ядро не поднимает outbound вовсе (полоса hysteria v1). В отличие от `default` (CANON §2.4) материализуется явно и кода не даёт | `registry.dart:73`, `body_sanitizer.dart:160` |
+| `default_when` | дефолт, без которого ядро не поднимает outbound вовсе (полоса hysteria v1). В отличие от `default` (PARSING_PRINCIPLES §2.4) материализуется явно и кода не даёт | `registry.dart:73`, `body_sanitizer.dart:160` |
 | тип `awg_range` | число ИЛИ диапазон «N-M» строкой; форма прибытия законна обе и не подменяется | `body_sanitizer.dart:804` |
 | тип `int_array` | массив целых (`peers[].reserved`) | `body_sanitizer.dart:815` |
 | `max_when` | УСЛОВНЫЙ потолок значения: обычный `max` делает значение негодным (`on_invalid` — поле снимается), этот оставляет узел жить, а решает по РОДУ узла. `max: 1280` у `wireguard.mtu` снял бы поле у каждого обычного WG-узла; AmneziaWG-узлу оно нужно. Три исхода: условие не выполнено — правила нет; выполнено, вход не в `except_sources` — замена потолком и `code`; выполнено, вход в `except_sources` — значение цело и `note_code`. Завела версия 1.1.5 (§473) | `registry.dart` `maxWhen`, `body_sanitizer.dart` `_applyMaxWhen` |
@@ -347,8 +347,8 @@ Per-app override'ов W1 **не завёл ни одного**. Семь кра�
 корпуса сверял состав узлов и отбраковку, но не `warnings[]`.
 
 **Сверка `warnings[]` в body-раннере (§470).** Дыру закрыли: правила записи
-(CANON §6 — дедуп по `(code, path)`, порядок `body.order` реестра) и правила
-сравнения (CANON §7 — объём сверки задаёт ожидание) вынесены из URI-раннера в
+(PARSING_PRINCIPLES §6 — дедуп по `(code, path)`, порядок `body.order` реестра) и правила
+сравнения (PARSING_PRINCIPLES §7 — объём сверки задаёт ожидание) вынесены из URI-раннера в
 общий `test/contract/corpus_warnings.dart`, и body-раннер сверяет коды по ним
 же. Одна копия на два раннера: правила нормативны, и вторая разошлась бы с
 контрактом на первом бампе. Список ожидающих решения — ПУСТ: корпус тел зелёный

@@ -34,7 +34,7 @@ const kWarningCodes = <Type, String>{
   DetourChainTooDeepWarning: 'detour_chain_too_deep',
   SelectorAsAutoWarning: 'selector_as_auto',
   GroupMemberMissingWarning: 'group_member_missing',
-  // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в конверт узла
+  // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в результат разбора узла
   // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.
   // `awg_header_invalid` и `awg3_field_invalid` здесь БОЛЬШЕ НЕТ: классы
   // сняты (контракт 1.1.33), коды приходят `RegistryWarning` и несут свой
@@ -44,7 +44,7 @@ const kWarningCodes = <Type, String>{
   Awg3RandomTrailersWideHeadersWarning: 'awg3_random_trailers_wide_headers',
   PacketEncodingUnknownWarning: 'packet_encoding_unknown',
   // §404 / D-085 — недостижимый `dialerProxy` роняет владельца целиком;
-  // причина уезжает в `dropped[]` конверта (corpus/README, D-088).
+  // причина уезжает в `dropped[]` результата разбора (corpus/README, D-088).
   DialerProxyUnusableWarning: 'dialer_proxy_unusable',
   // §538 — код НАШ, per-app: в `registry/warnings.json` его нет и не будет.
   // Схлопывание повторов внутри одной подписки делает только LxBox, и запись
@@ -72,7 +72,7 @@ String? warningCodeOf(NodeWarning w) =>
 /// таблицы разошлись бы на первом же новом классе.
 ///
 /// Приписывать путь классу, который его не знает, нельзя: `path` нормативен
-/// (CANON §6), и выдуманное значение расходилось бы с контрактом молча. Класс
+/// (PARSING_PRINCIPLES §6), и выдуманное значение расходилось бы с контрактом молча. Класс
 /// вне таблицы пути не имеет — и в дедупе закрывает свой код целиком.
 ///
 /// Кодов AWG здесь нет с контракта 1.1.33: классы сняты, и путь у них теперь

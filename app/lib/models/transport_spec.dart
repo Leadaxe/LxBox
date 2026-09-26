@@ -231,7 +231,7 @@ final class XhttpTransport extends TransportSpec {
 
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
-    // SPEC 103 CANON §2.4 — дефолтные поля не пишутся: path='/' в конструкторе
+    // SPEC 103 PARSING_PRINCIPLES §2.4 — дефолтные поля не пишутся: path='/' в конструкторе
     // ([XhttpTransport.new]) — дефолт для UI/редактора, а не для эмиссии;
     // Go эмитит path только когда он явно задан в источнике (в т.ч. path=%2F
     // → "/"), пустой (не заданный) — опускает целиком.

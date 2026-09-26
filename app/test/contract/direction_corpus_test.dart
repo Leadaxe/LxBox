@@ -500,7 +500,7 @@ List<Map<String, dynamic>> _stripUnnamedAutoDefaults(
 /// Go-раннер сравнивает `json.MarshalIndent` от `map[string]interface{}`, а
 /// Go сортирует ключи map — то есть порядок в самих `.expected.json`
 /// (`tag, type, default, outbounds`) до сравнения не доживает и там. Тот же
-/// приём, что в `contract_test.dart` (`_sortKeys`, CANON §2.3).
+/// приём, что в `contract_test.dart` (`_sortKeys`, PARSING_PRINCIPLES §2.3).
 ///
 /// Порядок СПИСКОВ и порядок ГРУПП, наоборот, нормативны (README корпуса) и
 /// сохраняются.

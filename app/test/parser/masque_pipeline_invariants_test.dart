@@ -217,7 +217,7 @@ void main() {
     });
 
     test('profile и mtu — дефолты ССЫЛКИ, пишутся явно', () {
-      // Реестр объявляет их `default`, но `default` по CANON §2.4 в тело не
+      // Реестр объявляет их `default`, но `default` по PARSING_PRINCIPLES §2.4 в тело не
       // материализуется; корпус их присутствия ждёт, и на них стоит identity.
       final body = parseUri(bare)!.emit(TemplateVars.empty).map;
       expect(body['profile'], 'cloudflare');

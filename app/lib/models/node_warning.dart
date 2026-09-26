@@ -755,7 +755,7 @@ final class RegistryWarning extends NodeWarning {
     this.ownerTag = '',
   });
 
-  /// Код из `registry/warnings.json` — он же код конформанса (CANON §6).
+  /// Код из `registry/warnings.json` — он же код конформанса (PARSING_PRINCIPLES §6).
   final String code;
 
   /// Путь поля в теле узла (`tls.reality.key_share`); `null` у кодов уровня

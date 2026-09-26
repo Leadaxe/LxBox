@@ -121,7 +121,7 @@ JsonMapping? mapJsonViaEngine(String kind, Map<String, dynamic> element,
   final section = MapperSections.I.matchJson(kind, element);
   if (section == null) {
     // §560 — элемент не опознала НИ ОДНА секция: протокол не ведётся
-    // (CANON §4.1 `protocol_unsupported`). Служебные outbound'ы сюда не
+    // (PARSING_PRINCIPLES §4.1 `protocol_unsupported`). Служебные outbound'ы сюда не
     // доходят — их отсеивает вызывающий до разбора.
     if (dropped != null && dropped.reason == null) {
       dropped.reason = const RegistryWarning(code: 'protocol_unsupported');

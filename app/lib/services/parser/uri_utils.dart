@@ -135,7 +135,7 @@ List<int>? _decodeBase64Lenient(String s) {
 /// `publickey=enabled` иначе не отсеять — D-023), возвращает канонический
 /// std-base64 (D-030: `…ccC=`/`…ccA=` декодируют в одни и те же 32 байта,
 /// но уезжают в конфиг по-разному → разные identity-хеши).
-/// `null` → нода отбрасывается вызывающим (parse_error, CANON §4).
+/// `null` → нода отбрасывается вызывающим (parse_error, PARSING_PRINCIPLES §4).
 String? normalizeWGKey(String value) {
   final raw = _decodeBase64Lenient(value);
   if (raw == null || raw.length != 32) return null;

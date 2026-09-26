@@ -352,7 +352,7 @@ class LxSubscription {
   /// на приёмнике первым разбором источника (§400).
   final Map<String, int> disabled;
 
-  /// Фича 478 / CANON §9.4 — вердикт ядра оверлеем тем же ключом, что и
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — вердикт ядра оверлеем тем же ключом, что и
   /// [disabled]: без него узел приехал бы выключенным без объяснения.
   /// Форма — `{identity: [{code, params}]}`, как в записи хранения.
   final Map<String, List<StoredWarning>> nodeWarnings;
@@ -433,7 +433,7 @@ class LxServer {
 
   final bool enabled;
 
-  /// Фича 478 / CANON §9.4 — вердикт ядра рядом с [enabled]: ручной сервер и
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — вердикт ядра рядом с [enabled]: ручной сервер и
   /// член папки несут его списком записей `{code, params}`.
   final List<StoredWarning> warnings;
 

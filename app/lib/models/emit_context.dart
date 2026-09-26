@@ -50,7 +50,7 @@ abstract class EmitContext {
   /// (`@self` → этот тег); узел, которого здесь нет, секций не даёт.
   void noteEmitted(NodeSpec node, String finalTag) {}
 
-  /// Фича 478 / CANON §9.3 — дополнительный outbound (хоп родной цепочки)
+  /// Фича 478 / PARSING_PRINCIPLES §9.3 — дополнительный outbound (хоп родной цепочки)
   /// ведёт к [owner], а не к своему звену. При коллизии с main-тегом того же
   /// узла побеждает [noteEmitted].
   void noteEmittedAlias(String finalTag, NodeSpec owner) {}

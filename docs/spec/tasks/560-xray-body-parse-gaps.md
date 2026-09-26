@@ -46,7 +46,7 @@
 | B. Модель дописывает лишнее | 7 xray-кейсов с `tls.server_name`, socks_version_absent/invalid | Откат `server_name` на адрес в `_tlsFromSingbox` (у Xray-блока реестра отката нет); `version: "5"` у socks из JSON |
 | C. `alter_id` | vmess_tls, vmess_security_junk (xray, ждут `0`); 8 URI-кейсов vmess (ждут отсутствие) | Движок не исполнял `omit_default` записи на входе |
 | D. Отбраковка | socks_settings_users, hysteria_version_3_unrecognized | Запрет §321 «socks только звеном» в обход реестра; непрочитанная запись не называлась в `dropped[]` |
-| E. Порядок warnings | list_non_string_items, hysteria2_bandwidth_suffix_finalmask_obfs | Раннер: ранг `server_ports[0]` не находился; `json_field_unknown` маппера шёл после кодов тела вопреки CANON §6 |
+| E. Порядок warnings | list_non_string_items, hysteria2_bandwidth_suffix_finalmask_obfs | Раннер: ранг `server_ports[0]` не находился; `json_field_unknown` маппера шёл после кодов тела вопреки PARSING_PRINCIPLES §6 |
 | F. Не решено | см. «Нерешённое» | Расхождение нормы и корпуса либо дизайн LxBox |
 
 ## Решение
@@ -68,7 +68,7 @@
    развёрнутыми `tls`/`multiplex`/`dialer`/транспортом), которых нет в `emit()`
    модели, запоминаются и накладываются на каждый `emit()`. Для тела в форме ядра
    (`singbox`) снимается ключ, который модель дописала сама, если он равен
-   `default` поля в реестре (CANON §2.4). Поля `managed` (`detour`) не трогаются,
+   `default` поля в реестре (PARSING_PRINCIPLES §2.4). Поля `managed` (`detour`) не трогаются,
    пустые значения не переносятся (`empty: absent`), внутри вариантов транспорта
    дефолты не снимаются (форма закреплена снимками «до §480»). Параметры ссылки,
    которые реестр числит за другой стороной (`uri.query.<имя>.ext: desktop`), дельта
@@ -122,7 +122,7 @@
    by-design разница (IDENTITY §4a-C), у соседних socks5-кейсов она закрыта
    `.expected.lxbox.json`; у этих двух override нет. Нужен override у лаунчера.
 3. **uri/vmess/not_base64_rejected** — корпус ждёт `field_missing`, у нас
-   `form_unrecognized`. CANON §4.1: «секция схему опознала, но ни одна её форма не
+   `form_unrecognized`. PARSING_PRINCIPLES §4.1: «секция схему опознала, но ни одна её форма не
    прочитала пейлоад» — `form_unrecognized`; `vmess://not-base64` ни одной формой
    не читается.
 4. **uri/wireguard/amneziawg_scheme_full_name** — `value` у `wgconf_dns_ignored`:

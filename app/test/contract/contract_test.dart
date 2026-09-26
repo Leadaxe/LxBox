@@ -41,8 +41,8 @@ import 'corpus_warnings.dart';
 /// бампе контракта.
 
 /// Соответствие имени каталога корпуса (= scheme из registry/protocols/*.json,
-/// contract/docs/CANON.md §1) типу kind в конверте. Все схемы вне карты —
-/// обычный outbound; wireguard — endpoint (CANON §1, registry: kind=endpoint).
+/// contract/docs/PARSING_PRINCIPLES.md §1) типу kind в результате разбора. Все схемы вне карты —
+/// обычный outbound; wireguard — endpoint (PARSING_PRINCIPLES §1, registry: kind=endpoint).
 const _endpointSchemes = {'wireguard', 'tailscale'}; // §435 — tailscale тоже endpoint
 
 /// Имя стороны в поле `extension` реестра/ожиданий (corpus/README «Отбраковки
@@ -74,7 +74,7 @@ Set<String> _foreignExtensionSchemes() {
 }
 
 /// Внутреннее имя протокола Dart → каноническое `scheme` контракта
-/// (CANON §1: канон берётся из `registry/protocols/<scheme>.json` → поле
+/// (PARSING_PRINCIPLES §1: канон берётся из `registry/protocols/<scheme>.json` → поле
 /// `scheme`). Расходится в одном месте: Dart зовёт протокол
 /// `shadowsocks`, канон схемы — `ss`. Раньше разницу закрывали per-app
 /// override'ы корпуса — но `scheme` определён контрактом одинаково для
@@ -84,20 +84,20 @@ const _canonScheme = <String, String>{
   'shadowsocks': 'ss',
 };
 
-/// §475 — `scheme` конверта у socks называет ВЕРСИЮ, а не только протокол.
+/// §475 — `scheme` результата разбора у socks называет ВЕРСИЮ, а не только протокол.
 ///
-/// Обычно схема конверта выводится из имени протокола: одному типу ядра
+/// Обычно схема результата разбора выводится из имени протокола: одному типу ядра
 /// отвечает одна схема ссылки, а её алиасы написания (`socks://`, `awg://`,
 /// `hy2://`) канонизируются к базовой (корпус: `socks_alias`, `awg_scheme_alias`
 /// — все дают `scheme: wireguard`/`socks`).
 ///
 /// У socks это не так с контракта 1.1.8: `socks4://` и `socks4a://` — НЕ
 /// написание, а дискриминатор версии протокола. Тип тела у всех четырёх один
-/// (`socks`), различает их поле `version`, и лаунчер пишет в конверт именно ту
+/// (`socks`), различает их поле `version`, и лаунчер пишет в результат разбора именно ту
 /// схему, которой узел эмитится (`node_parser_core.go:308-334`). Поэтому схему
 /// здесь выбирает то же правило реестра, что у маппера и эмиттера
 /// (`emit.form_from` секции `mappers.uri`), — копии правила не заводим:
-/// схема конверта это схема ссылки, которую узел эмитит (§562).
+/// схема результата разбора это схема ссылки, которую узел эмитит (§562).
 ///
 /// `socks5://` в эту ветку не попадает намеренно: у лаунчера он НЕ
 /// канонизируется (тег узла строится из схемы, и переименование сбросило бы
@@ -132,7 +132,7 @@ String? _readCorpusUri(File file) {
   return uri;
 }
 
-/// Канонизирует один узел в форму contract/schema/node.schema.json (CANON §1-2).
+/// Канонизирует один узел в форму contract/schema/node.schema.json (PARSING_PRINCIPLES §1-2).
 Map<String, dynamic> _canonNode(NodeSpec spec) {
   final entry = _canonEntryMap(spec);
 
@@ -151,7 +151,7 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
     node['chain'] = [_canonNode(spec.chained!)];
   }
 
-  // §470 — правила записи `warnings[]` (CANON §6: дедуп по `(code, path)`,
+  // §470 — правила записи `warnings[]` (PARSING_PRINCIPLES §6: дедуп по `(code, path)`,
   // порядок `body.order` реестра) живут в `corpus_warnings.dart`, общем с
   // body-раннером: они нормативны, и вторая копия разошлась бы с контрактом
   // на первом же бампе.
@@ -162,7 +162,7 @@ Map<String, dynamic> _canonNode(NodeSpec spec) {
   return node;
 }
 
-/// entry = spec.emit(TemplateVars.empty).map минус tag/detour (CANON §2.1-2.2),
+/// entry = spec.emit(TemplateVars.empty).map минус tag/detour (PARSING_PRINCIPLES §2.1-2.2),
 /// рекурсивно приведённое к каноническим значениям.
 Map<String, dynamic> _canonEntryMap(NodeSpec spec) {
   final SingboxEntry raw = spec.emit(TemplateVars.empty);
@@ -173,7 +173,7 @@ Map<String, dynamic> _canonEntryMap(NodeSpec spec) {
 }
 
 /// Рекурсивная канонизация значения: ключи map сортируются при сериализации
-/// ([canonEncode]), порядок списков сохраняется (CANON §2.3). Числа/bool уже
+/// ([canonEncode]), порядок списков сохраняется (PARSING_PRINCIPLES §2.3). Числа/bool уже
 /// приходят типизированными из Dart — отдельного приведения float->int, в
 /// отличие от Go-раннера (JSON round-trip через float64), не требуется.
 Object? _canonValue(Object? v) {
@@ -188,8 +188,8 @@ Object? _canonValue(Object? v) {
   return v;
 }
 
-/// Конверт целиком: {v, nodes[], dropped[]} (CANON §1). Порядок появления во
-/// входе — здесь единственный узел на файл, так что этот пункт CANON §3
+/// Конверт целиком: {v, nodes[], dropped[]} (PARSING_PRINCIPLES §1). Порядок появления во
+/// входе — здесь единственный узел на файл, так что этот пункт PARSING_PRINCIPLES §3
 /// вырожден для URI-корпуса (в отличие от body-фикстур).
 Map<String, dynamic> _buildEnvelope({
   List<Map<String, dynamic>> nodes = const [],
@@ -202,7 +202,7 @@ Map<String, dynamic> _buildEnvelope({
   };
 }
 
-/// Сравнение конвертов по значению — компактная канонизированная форма
+/// Сравнение результатов разбора по значению — компактная канонизированная форма
 /// (сортировка ключей, сохранённый порядок списков), не байты файла.
 ///
 /// `a` — наш результат, `b` — ожидание корпуса: порядок аргументов значим,
@@ -278,7 +278,7 @@ void main() {
         Map<String, dynamic> envelope;
         NodeSpec? spec;
         // §481 (контракт 1.1.11) — раннер читает КОД отбраковки. `code` в
-        // `dropped[]` нормативен (D-088); без него конверт не отличал «узел
+        // `dropped[]` нормативен (D-088); без него результат разбора не отличал «узел
         // выброшен за негодный ключ WG» от «за пересечение заголовков», то
         // есть проверить перенос правил в реестр было нечем.
         final verdict = XrayDropVerdict();
@@ -289,7 +289,7 @@ void main() {
         }
 
         if (spec == null) {
-          // CANON §4: битая/нераспознанная нода → dropped, подписка живёт.
+          // PARSING_PRINCIPLES §4: битая/нераспознанная нода → dropped, подписка живёт.
           // §512 (контракт 1.1.49 §45.4) — `index` обязателен у КАЖДОЙ
           // отбраковки: это позиция отвергнутого ЭЛЕМЕНТА в нарезке
           // `elements` вида источника. У одиночной ссылки элемент один, и

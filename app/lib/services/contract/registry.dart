@@ -153,7 +153,7 @@ final class FieldSchema {
   Map<String, dynamic>? get minWhen =>
       (raw['min_when'] as Map?)?.cast<String, dynamic>();
 
-  /// §481 (контракт 1.1.12, CANON §6.1) — ВЫКЛЮЧАТЕЛЬ ВНУТРИ САМОГО ОБЪЕКТА:
+  /// §481 (контракт 1.1.12, PARSING_PRINCIPLES §6.1) — ВЫКЛЮЧАТЕЛЬ ВНУТРИ САМОГО ОБЪЕКТА:
   /// совпали все перечисленные ключи — объект снимается ЦЕЛИКОМ и ТИХО.
   ///
   /// Форма: `{"enabled": false}`. Нужен там, где выключатель секции лежит
@@ -397,7 +397,7 @@ final class BodySchema {
 
   /// §481 (контракт 1.1.12) — `absent_when` секции: объявленный ОДИН раз у
   /// суб-схемы (`tls`), он при разрешении `ref` действует в каждом протоколе.
-  /// Смысл и порядок — [FieldSchema.absentWhen] и CANON §6.1.
+  /// Смысл и порядок — [FieldSchema.absentWhen] и PARSING_PRINCIPLES §6.1.
   final Map<String, dynamic>? absentWhen;
 
   /// Контракт 1.1.63 — `exit_capable_when` тела протокола (грамматика

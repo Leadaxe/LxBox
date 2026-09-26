@@ -34,7 +34,7 @@ the content.
 - `registry/**` — protocol dictionaries, allowlists, warning codes, limits,
   variables.
 - `schema/**`.
-- `docs/**` — CANON, IDENTITY, TEMPLATE_LANG, BACKUP.
+- `docs/**` — PARSING_PRINCIPLES, IDENTITY, TEMPLATE_LANG, BACKUP.
 - Code must match them, not the other way round: code is fitted to the
   fixtures, never the fixtures to the code.
 
@@ -48,7 +48,7 @@ the content.
   template-language construct is added **together with a fixture** — otherwise
   the other side learns about it from a user.
 - **Per-app override.** A deliberate difference is recorded as a per-app
-  override with a link to the decision (`IDENTITY.md` §4, `CANON.md` §7). An
+  override with a link to the decision (`IDENTITY.md` §4, `PARSING_PRINCIPLES.md` §7). An
   orphan override is an error.
 
 ## Syncing the copy

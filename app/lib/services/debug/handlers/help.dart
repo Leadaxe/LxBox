@@ -127,7 +127,7 @@ POST /action/check-config[?timeout_ms=N]       Run Libbox.checkConfig — the sa
                                                   without a tunnel. With a request body: checks THAT JSON text;
                                                   without a body: the CURRENTLY BUILT config on disk (not a fresh
                                                   rebuild). → {config_ok:bool, error, ms, bytes}. error is the
-                                                  core's RAW text (what CANON §9 parses). Waits at most timeout_ms
+                                                  core's RAW text (what PARSING_PRINCIPLES §9 parses). Waits at most timeout_ms
                                                   (default 10000, capped by the request timeout) → 409.
 POST /action/stop-vpn                          Stop it
 POST /action/force-stop-vpn                    Hard force-stop (doForceStop): teardown→stopSelf, frees CommandServer
@@ -700,7 +700,7 @@ const Map<String, dynamic> _capabilityJson = {
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
     {'method': 'POST', 'path': '/action/start-vpn-headless', 'params': {'guard': 'true|false (default false)'}, 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}. guard=true (feature 478): start through the core-reject guard asynchronously with headless real starts → {guard:true, started:true, async:true}; read phase/outcome via GET /core_reject (409 if already running). Queue POST /core_reject/prompt?answer=keep before or while awaiting the round-limit dialog.'},
-    {'method': 'POST', 'path': '/action/check-config', 'params': {'timeout_ms': 'N (default 10000, capped by the request timeout)'}, 'body': 'optional raw sing-box config JSON (checks this text; omit → built config on disk)', 'description': 'Run Libbox.checkConfig — the same check the guard loops on, once, without a tunnel → {config_ok, error, ms, bytes}. error is the core RAW text (what CANON §9 parses). 409 on timeout.'},
+    {'method': 'POST', 'path': '/action/check-config', 'params': {'timeout_ms': 'N (default 10000, capped by the request timeout)'}, 'body': 'optional raw sing-box config JSON (checks this text; omit → built config on disk)', 'description': 'Run Libbox.checkConfig — the same check the guard loops on, once, without a tunnel → {config_ok, error, ms, bytes}. error is the core RAW text (what PARSING_PRINCIPLES §9 parses). 409 on timeout.'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
     {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
     {'method': 'POST', 'path': '/action/reload-vpn', 'description': 'In-place sing-box reload (no service kill) → {applied}'},

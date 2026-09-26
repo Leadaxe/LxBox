@@ -324,7 +324,7 @@ List<NodeSpec> _parseOne(
       // §321 — «битые формы не роняют разбор целиком» на гранулярности УЗЛА:
       // мусорный тип поля бросает TypeError внутри конвертера, пропускаем этот
       // outbound. §561 — пропажа не молчаливая: форма не прочитана
-      // (CANON §4.1), запись — в `dropped[]`, не на соседа.
+      // (PARSING_PRINCIPLES §4.1), запись — в `dropped[]`, не на соседа.
       dropped?.add(
           RegistryWarning(code: 'form_unrecognized', ownerTag: rawTag));
     }

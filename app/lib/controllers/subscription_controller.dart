@@ -187,7 +187,7 @@ class SubscriptionController extends ChangeNotifier {
   List<ValidationIssue> get lastFatalIssues => _lastFatalIssues;
 
   /// Фича 478 — обратная карта последней сборки «финальный тег → исходный
-  /// узел» (CANON §9.3). Живёт ровно до следующей сборки: страховка
+  /// узел» (PARSING_PRINCIPLES §9.3). Живёт ровно до следующей сборки: страховка
   /// пересобирает конфиг перед каждым кругом и читает карту сразу.
   Map<String, NodeSpec> _lastTagMap = const {};
   Map<String, NodeSpec> get lastEmittedTagMap => _lastTagMap;
@@ -1868,7 +1868,7 @@ class SubscriptionController extends ChangeNotifier {
     } else {
       next[hash] = DateTime.now();
     }
-    // Фича 478 / CANON §9.4 — человек включил узел обратно: вердикт ядра
+    // Фича 478 / PARSING_PRINCIPLES §9.4 — человек включил узел обратно: вердикт ядра
     // стирается, следующий старт проверит узел заново. Выключение рукой
     // вердикта не ставит (его ставит только страховка).
     var nextList = list.copyWith(disabledHashes: next);
@@ -2001,7 +2001,7 @@ class SubscriptionController extends ChangeNotifier {
       sections: imported,
     );
     var current = members[memberIndex].node;
-    // Фича 478 / CANON §9.4 п. 1 — человек правил тело в редакторе: вердикт
+    // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело в редакторе: вердикт
     // ядра привязан к ТЕЛУ, и на изменённом теле он недействителен. Запись
     // стирается И узел включается обратно — тем же составом полей, что у
     // ручного включения (`toggleMemberAt`). Тело то же (правка имени, пробелы)
@@ -2487,7 +2487,7 @@ class SubscriptionController extends ChangeNotifier {
   /// Замена `entry.list` на новый ServerList (для экранов, меняющих политику
   /// или tagPrefix). Сам ServerList immutable; вызывающий строит новый через
   /// `copyWith` на subscription/user-обёртке.
-  /// Фича 478 / CANON §9.3 — выключить узел, названный ядром, и записать
+  /// Фича 478 / PARSING_PRINCIPLES §9.3 — выключить узел, названный ядром, и записать
   /// рядом вердикт. [tag] — ФИНАЛЬНЫЙ тег собранного конфига; узел ищется
   /// обратной картой последней сборки ([lastEmittedTagMap]), которую выдала
   /// та же сборка. Производные записи (хоп цепочки, узел папки, префикс
@@ -3079,7 +3079,7 @@ class SubscriptionController extends ChangeNotifier {
         disable: ruleMarks.disable,
         now: ruleNow,
       );
-      // Фича 478 / CANON §9.4 — вердикт привязан к ТЕЛУ узла: здесь старое и
+      // Фича 478 / PARSING_PRINCIPLES §9.4 — вердикт привязан к ТЕЛУ узла: здесь старое и
       // новое тела доступны одновременно. Тело то же → вердикт держится;
       // тело изменилось ИЛИ старого тела нет (кэш пуст) → вердикт снимается
       // И узел включается обратно. Обновление ядра вердикты НЕ сбрасывает.
@@ -3235,7 +3235,7 @@ class SubscriptionController extends ChangeNotifier {
       nodes.addAll(parseAll(decoded, nameHint: nameHint));
     }
     final before = _lists();
-    // Фича 478 / CANON §9.4 п. 1 — человек правил тело ручного сервера:
+    // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело ручного сервера:
     // вердикт ядра привязан к ТЕЛУ и на изменённом теле недействителен.
     // Запись стирается И узел включается обратно — тем же составом полей,
     // что у ручного включения (`enableNodeByCoreTag`). У `UserServer` узел

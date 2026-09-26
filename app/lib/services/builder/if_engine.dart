@@ -91,7 +91,7 @@ List<String> splitTextList(String raw) => [
 
 /// Коды warning'ов движка шаблонов (contract/registry/warnings.json).
 /// Отдаются в [TemplateWarnings] — код и параметры, а не отрендеренный текст
-/// (CANON §6): сравнение с корпусом языконезависимо, текст берётся из реестра
+/// (PARSING_PRINCIPLES §6): сравнение с корпусом языконезависимо, текст берётся из реестра
 /// в момент показа.
 const String templateWarnUnknownDirective = 'template_unknown_directive';
 const String templateWarnVarUndeclared = 'template_var_undeclared';

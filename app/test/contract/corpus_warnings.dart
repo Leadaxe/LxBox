@@ -9,8 +9,8 @@ import 'package:lxbox/services/contract/warning_codes.dart';
 // §470 — общая часть двух конформанс-раннеров корпуса: URI
 // (`contract_test.dart`) и тел подписки (`body_contract_test.dart`).
 //
-// Раньше правила записи `warnings[]` (CANON §6) и нормализация сравнения
-// (CANON §7, зеркало Go `normalizeWarningsForCompare`) жили только в
+// Раньше правила записи `warnings[]` (PARSING_PRINCIPLES §6) и нормализация сравнения
+// (PARSING_PRINCIPLES §7, зеркало Go `normalizeWarningsForCompare`) жили только в
 // URI-раннере, а body-раннер предупреждения не сверял вовсе. Кейсы, чей смысл
 // именно в кодах (`*_quic_tls_pair.body`, `outbound_array_tls_fields.body`),
 // были зелёными независимо от поведения — §469 наткнулся на это случайно:
@@ -20,7 +20,7 @@ import 'package:lxbox/services/contract/warning_codes.dart';
 // разъехались бы на первом же бампе контракта. Поэтому — один файл на обоих.
 
 /// Путь поля для рукописных классов — ТОЛЬКО там, где поле класса и есть
-/// путь (CANON §6: `path` обязателен у кодов уровня поля).
+/// путь (PARSING_PRINCIPLES §6: `path` обязателен у кодов уровня поля).
 ///
 /// §472 шаг 1 — таблица переехала в lib
 /// ([handwrittenWarningPath], `services/contract/warning_codes.dart`): у неё
@@ -45,15 +45,15 @@ String? _legacyWarningValue(NodeWarning w) => switch (w) {
       RealityFingerprintWarning(:final value) => value,
       UnknownObfsWarning(:final value) => value,
       // §467 — у `placementRequiresPacketUp` значение пустое (код про
-      // сочетание, не про значение), и пустое в конверт не пишется.
+      // сочетание, не про значение), и пустое в результат разбора не пишется.
       XhttpParamResetWarning(:final value) => value,
       _ => null,
     };
 
-/// Запись `warnings[]` конверта: `{code, path?, value?, params?}` (CANON §6).
+/// Запись `warnings[]` результата разбора: `{code, path?, value?, params?}` (PARSING_PRINCIPLES §6).
 ///
-/// Пустые поля не пишутся — их отсутствие нормативно, а `null` в конверте
-/// схема не допускает. Класса без кода в реестре в конверте нет вовсе:
+/// Пустые поля не пишутся — их отсутствие нормативно, а `null` в результате разбора
+/// схема не допускает. Класса без кода в реестре в результате разбора нет вовсе:
 /// код — единственное, что контракт от записи требует безусловно.
 Map<String, dynamic>? warningRecordOf(NodeWarning w) {
   final code = warningCodeOf(w);
@@ -83,7 +83,7 @@ Map<String, dynamic>? warningRecordOf(NodeWarning w) {
 }
 
 /// §464 — ранг пути в `body.order` схемы протокола: по нему сортируется
-/// `warnings[]` конверта (§24.7 п. 6).
+/// `warnings[]` результата разбора (§24.7 п. 6).
 ///
 /// Порядок читается ИЗ РЕЕСТРА, а не из таблицы в тесте: он нормативен для
 /// обеих сторон, и своя копия разошлась бы с ним на первом же бампе
@@ -201,7 +201,7 @@ void sortWarningsByBodyOrder(
     if (i >= 0) return i;
     // Код `unknown_key` СЕКЦИИ-маппера (`json_field_unknown` у
     // `streamSettings.network`) адресует ключ ИСТОЧНИКА, а не тела: по
-    // CANON §6 коды маппера впереди кодов тела. Какие коды это, говорит
+    // PARSING_PRINCIPLES §6 коды маппера впереди кодов тела. Какие коды это, говорит
     // реестр (`mappers.*.unknown_key.code`), а не тест.
     if (_mapperUnknownCodesFor(scheme).contains(w['code'])) return -1;
     return 1 << 20;
@@ -220,13 +220,13 @@ void sortWarningsByBodyOrder(
 }
 
 /// `warnings[]` узла из его классов: дедуп по `(code, path)` и порядок
-/// `body.order` реестра (CANON §6).
+/// `body.order` реестра (PARSING_PRINCIPLES §6).
 ///
 /// Конверт несёт объекты `{code, path?, value?}`, и каждая пара
 /// `(code, path)` в списке ровно один раз: зеркало Go `ParsedNode.AddWarning`
 /// (`configtypes/types.go`), который отбрасывает повтор. Dart-предупреждения
 /// при этом остаются пофакторными (два битых AWG-заголовка = два разных
-/// сообщения пользователю), но запись конверта у них одна на путь.
+/// сообщения пользователю), но запись результата разбора у них одна на путь.
 ///
 /// §464 (контракт W2d, §24.7 п. 6) — ПОРЯДОК списка = `body.order` реестра,
 /// а не порядок разбора: только так коды сравнимы поэлементно, а не как
@@ -248,7 +248,7 @@ List<Map<String, dynamic>> warningListOf(
   return warnings;
 }
 
-/// Приведение `warnings[]` обеих сторон к сравнимому виду (CANON §6, контракт
+/// Приведение `warnings[]` обеих сторон к сравнимому виду (PARSING_PRINCIPLES §6, контракт
 /// 1.1.0) — зеркало Go-раннера `normalizeWarningsForCompare`
 /// (`core/config/contract_test.go`).
 ///
@@ -301,7 +301,7 @@ void normalizeNodeWarnings(
 }
 
 /// `warnings[]` узла как изменяемые карты, ПЕРЕПИСЫВАЯ строки-коды объектами
-/// прямо в конверте: дальше сравниваются уже однородные значения.
+/// прямо в результате разбора: дальше сравниваются уже однородные значения.
 List<Map<String, dynamic>> warningObjects(Map<String, dynamic> node) {
   final list = node['warnings'];
   if (list is! List) return const [];
@@ -349,8 +349,8 @@ List<Map<String, dynamic>> nodeList(Map<String, dynamic> m, String key) {
   return [for (final e in list) if (e is Map<String, dynamic>) e];
 }
 
-/// Копия конверта под нормализацию: срезать поля в оригинале нельзя — тот же
-/// конверт печатается в диагностике падения целиком.
+/// Копия результата разбора под нормализацию: срезать поля в оригинале нельзя — тот же
+/// результат разбора печатается в диагностике падения целиком.
 Object? deepCopyEnvelope(Object? v) {
   if (v is Map) {
     return <String, dynamic>{
@@ -361,10 +361,10 @@ Object? deepCopyEnvelope(Object? v) {
   return v;
 }
 
-/// Сериализация по правилам CANON §2.3/2.6: ключи map отсортированы рекурсивно
+/// Сериализация по правилам PARSING_PRINCIPLES §2.3/2.6: ключи map отсортированы рекурсивно
 /// (byte-order), компактный JSON. Escaping здесь не проблема — Dart's
 /// `JsonEncoder` не HTML-экранирует `<`/`>`/`&` (в отличие от Go-энкодера по
-/// умолчанию), так что CANON §2.7 (D-007) выполняется без дополнительных мер.
+/// умолчанию), так что PARSING_PRINCIPLES §2.7 (D-007) выполняется без дополнительных мер.
 String canonEncode(Object? v) => json.encode(sortKeys(v));
 
 Object? sortKeys(Object? v) {
@@ -383,7 +383,7 @@ Object? sortKeys(Object? v) {
 }
 
 /// Pretty-print для диагностики и для файла ожидания (читаемость); сравнение
-/// всё равно идёт по значению после канонизации, не по байтам (CANON §7).
+/// всё равно идёт по значению после канонизации, не по байтам (PARSING_PRINCIPLES §7).
 String prettyPrintEnvelope(Map<String, dynamic> envelope) {
   final canon = sortKeys(envelope);
   const encoder = JsonEncoder.withIndent('  ');

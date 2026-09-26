@@ -345,7 +345,7 @@ void main() {
           .whereType<RegistryWarning>()
           .where((w) => w.code == 'tls_not_applicable_quic');
       expect(w, hasLength(1));
-      // CANON §6 — `value` называет написанное автором, а не подмену.
+      // PARSING_PRINCIPLES §6 — `value` называет написанное автором, а не подмену.
       expect(w.first.value, 'map[enabled:true fingerprint:bogus]');
     });
 

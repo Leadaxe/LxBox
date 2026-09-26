@@ -183,7 +183,7 @@ void _applyOnChange(
 
 dynamic _deepCopy(dynamic node) => jsonDecode(jsonEncode(node));
 
-/// Сравнение JSON-деревьев по значению, не по байтам (CANON §7).
+/// Сравнение JSON-деревьев по значению, не по байтам (PARSING_PRINCIPLES §7).
 bool _jsonEqual(dynamic a, dynamic b) =>
     const DeepCollectionEquality().equals(a, b);
 

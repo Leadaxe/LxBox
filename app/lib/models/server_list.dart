@@ -176,7 +176,7 @@ final class SubscriptionServers extends ServerList {
   /// кодеке записи и в copyWith — поле без чтения молча терялось бы.
   final Map<String, DateTime> disabledHashes;
 
-  /// Фича 478 / CANON §9.4 — оверлей ХРАНИМЫХ предупреждений узлов тем же
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — оверлей ХРАНИМЫХ предупреждений узлов тем же
   /// ключом, что и [disabledHashes]: тег-идентичность → записи
   /// `{code, params}`. Сегодня здесь живёт ровно `core_rejected` — вердикт
   /// ядра, который пересчётом по телу не воспроизводится; прочие
@@ -370,7 +370,7 @@ final class UserServer extends ServerList {
   /// перечитывании `raw_body`, на старте игнорируются.
   final NodeSections? sections;
 
-  /// Фича 478 / CANON §9.4 — хранимые предупреждения ручного сервера:
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — хранимые предупреждения ручного сервера:
   /// сегодня ровно `core_rejected`. Персистится рядом с `enabled` (ключ
   /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
@@ -445,7 +445,7 @@ final class FolderMember {
   final String raw;
   final bool enabled;
 
-  /// Фича 478 / CANON §9.4 — хранимые предупреждения члена: сегодня ровно
+  /// Фича 478 / PARSING_PRINCIPLES §9.4 — хранимые предупреждения члена: сегодня ровно
   /// `core_rejected`. Персистится рядом с [enabled] (ключ `warnings`
   /// записи члена). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;

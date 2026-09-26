@@ -288,7 +288,7 @@ void main() {
 
     test('обычный WG без mtu — поля в теле нет вовсе', () {
       // Ядро берёт свой 1408; наш дефолт спорил бы с ним и ломал identity
-      // (CANON §2.4).
+      // (PARSING_PRINCIPLES §2.4).
       final spec = parseUri(wg(''))!;
       expect(spec.emit(TemplateVars.empty).map.containsKey('mtu'), isFalse);
     });
@@ -323,7 +323,7 @@ void main() {
     });
 
     test('§463 — awg_header_invalid ставится ПОФАКТОРНО', () {
-      // Четыре битых заголовка — четыре сообщения человеку; конверт корпуса
+      // Четыре битых заголовка — четыре сообщения человеку; результат разбора корпуса
       // при этом несёт одну запись без пути (`awg_ranged_h_broken_dropped`).
       final spec = parseUri(wg('&h1=10-&h2=a-b&h3=-5&h4=1-2-3&jc=4'))!;
       // Код ставит РЕЕСТР, и приезжает он общим типом `RegistryWarning` с

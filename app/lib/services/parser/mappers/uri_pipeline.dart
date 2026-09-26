@@ -196,7 +196,7 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme,
   final singboxType = registrySchemeType(scheme);
   if (singboxType != null) {
     // §512 — код непрочитанного ставит ДВИЖОК (`runSection`): только он знает,
-    // что именно не сошлось — форма или обязательное значение (CANON §4.1).
+    // что именно не сошлось — форма или обязательное значение (PARSING_PRINCIPLES §4.1).
     final mapping = mapViaEngine(uri, singboxType, dropped: dropped);
     if (mapping == null) return null;
     return _runPipeline(uri, null, mapping: mapping, dropped: dropped);

@@ -19,6 +19,9 @@
 
 ### Changed
 
+- **Docs only: contract doc `CANON.md` renamed to `PARSING_PRINCIPLES.md` (§72).**
+  Internal comments and doc links updated to match; no behaviour change.
+
 - **Node names with broken bytes and old-style VMess links match the desktop app ([§563](docs/spec/tasks/563-form-redetect-and-utf8-series.md)).**
   A run of invalid bytes in a node name (for example cp1251 text in a link label)
   now shows as a single `�` instead of one per byte, so the node tag is the same on

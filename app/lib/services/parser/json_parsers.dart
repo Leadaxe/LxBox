@@ -186,7 +186,7 @@ List<NodeSpec> parseXrayElement(
 
   final result = <NodeSpec>[];
   // §561 — отбраковка записи элемента (протокол вне реестра, битая форма,
-  // недостижимый релей, вердикт реестра) едет ТОЛЬКО в [dropped] — конверт
+  // недостижимый релей, вердикт реестра) едет ТОЛЬКО в [dropped] — результат разбора
   // подписки (D-088). На соседа по элементу она больше не вешается: прежние
   // §321 P5 / §404 P3 показывали человеку на рабочем узле чужую ошибку.
   for (var i = 0; i < ordered.length; i++) {
@@ -242,7 +242,7 @@ List<NodeSpec> parseXrayElement(
         continue;
       }
       // §560/§561 — запись НЕ ПРОЧИТАНА (ни одна секция не опознала протокол
-      // либо ни одна форма секции — элемент): причина — код CANON §4.1 с
+      // либо ни одна форма секции — элемент): причина — код PARSING_PRINCIPLES §4.1 с
       // тегом записи (D-088), в `dropped[]` и только туда.
       if (spec == null) {
         dropped?.add(_unreadEntry(verdict.reason, ob, obTag));
@@ -300,7 +300,7 @@ List<NodeSpec> parseXrayElement(
       // мусорный тип поля (`streamSettings: "none"`, `settings: []`) бросает
       // TypeError внутри конвертера — пропускаем этот outbound, соседи по
       // элементу и остальная подписка живут. §561 — пропажа не молчаливая:
-      // форма не прочитана (CANON §4.1), запись — в `dropped[]`.
+      // форма не прочитана (PARSING_PRINCIPLES §4.1), запись — в `dropped[]`.
       dropped?.add(RegistryWarning(code: 'form_unrecognized', ownerTag: obTag));
     }
   }

@@ -492,7 +492,7 @@ class HomeController extends ChangeNotifier
       final reasonEn = stopReason?.renderEn() ?? '';
       // Фича 478 — отказ ядра: отдать его текст ждущей страховке. Берём
       // ДОСЛОВНЫЙ текст native-события, а не отрендеренную строку: разбор
-      // CANON §9 работает по формату ядра, а не по обёртке приложения.
+      // PARSING_PRINCIPLES §9 работает по формату ядра, а не по обёртке приложения.
       //
       // Д-1 — сначала `coreError`: это сырой `t.message` ядра, без единой
       // обёртки. `errorReason` рядом с ним — локализованный шаблон
@@ -809,7 +809,7 @@ class HomeController extends ChangeNotifier
   }
 
   /// Фича 478 — реальный старт ядра с ожиданием вердикта. `null` — принято;
-  /// строка — текст отказа ядра (её разбирает CANON §9). Таймаут отдаёт
+  /// строка — текст отказа ядра (её разбирает PARSING_PRINCIPLES §9). Таймаут отдаёт
   /// пустую строку: ответить нечем, страховка деградирует консервативно.
   Future<String?> startAndAwaitVerdict({
     Duration timeout = const Duration(seconds: 45),
