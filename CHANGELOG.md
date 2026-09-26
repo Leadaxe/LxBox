@@ -109,6 +109,14 @@
   Diagnostics location row reports precise location and the Location toggle. The
   reason is written to logcat under the `WifiInfoReader` tag.
 
+- **Wi-Fi rules read the network name the way Android 12+ expects ([§569](docs/spec/tasks/569-wifi-ssid-transport-info-api31.md)).**
+  On Android 12 and newer the Wi-Fi name and BSSID now come from a network
+  callback registered with location info, which replaces the deprecated
+  `getConnectionInfo()`; the old call stays as a fallback and is the only path on
+  Android 11 and older. Permissions are the same. With Wi-Fi off, Add current
+  says "Not connected to Wi-Fi." instead of blaming location permissions. Logcat
+  shows which path answered (`source=cache` / `source=legacy`).
+
 - **Imported nodes keep what the provider sent ([§560](docs/spec/tasks/560-xray-body-parse-gaps.md)).**
   Fields the node model had no place for were dropped on import: `multiplex`,
   `udp_over_tcp`, dial options (`connect_timeout`, `network_strategy`, `fallback_delay`
