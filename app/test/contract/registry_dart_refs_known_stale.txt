@@ -3,4 +3,3 @@
 # Список самоочищается: тест падает, если запись устарела (файл появился
 # или ссылку убрали из реестра) — тогда строку удалить.
 lib/screens/add_server_wizard/tailscale_bundle.dart
-app/lib/services/parser/uri_parsers/auto_group_parser.dart:11
