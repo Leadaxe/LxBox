@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | В работе (ветки `task-570-a`, `task-570-b`) |
+| Статус | В работе: волна B выполнена (ветка `task-570-b`), волна A — `task-570-a` |
 | Дата старта | 2026-09-26 |
 | Дата завершения | — |
-| Коммиты | — |
+| Коммиты | Волна B: `8732229e` переменные и Home, `4ae15377` выбор члена, `ae072a52` свёртка в UI, `13f0c8b2` отбраковки, docs — следующий |
 | Связанные spec'ы | §555, §556, §560, §561, §562, §563, §565, §566, §568 — секции «Нерешённое» |
 
 ## Проблема
@@ -77,12 +77,60 @@
 «доводить до конца». Имена схем/протоколов в Dart не появляются; коды — из
 `warnings.json`; identity не меняется.
 
+## Итог волны B
+
+1. **§555.** `TemplateVarListView` и параметры пресета: `text_list` +
+   `options` — чипы мультивыбора (`VarMultiSelect`), значение — выбранные
+   строки в порядке `options`; `options_open` — список плюс своё значение
+   (у `int` — цифры и clamp, у `text_list` — поле по одному на строку);
+   закрытые `options` у `text`/`int` — dropdown, свободного ввода нет
+   (TEMPLATE_LANG §2.1). Четыре переменные шаблона со свободным вводом
+   рядом со списком (`urltest_url`, `urltest_interval`, `urltest_tolerance`,
+   `proxy_listen`) получили `options_open: true` — поведение не изменилось.
+   `template_degraded`: `SubscriptionController.templateWarnings` + stamp,
+   Home — снек «Template: N warnings» с кнопкой в `showNodeWarningsSheet`
+   (тексты реестра); сохранение не блокируется.
+2. **§565.** Экран узла ручной группы: кружок у члена выбирает его —
+   при туннеле `HomeController.selectInGroup` (`selectOutbound`), без
+   туннеля — сразу в состояние. Выбор запоминает
+   `SubscriptionController.rememberGroupMember`: группа папки — её
+   `manualDefault`, группа подписки — `SubscriptionServers.groupDefaults`
+   (сырой тег группы → сырой тег члена, ключ записи `group_defaults`,
+   в бэкап не едет — `lx_backup_slice` рантайм: у `sourceSubscription` схемы
+   поля нет). Сборка накладывает выбор на копии узлов
+   (`withGroupDefaultsApplied`), обратная карта ведёт к оригиналам. Выбор с
+   главного экрана (`switchNode`) запоминается тем же путём. Живой выбор
+   не поднимает `configDirty` (плашка и автоперезапуск были бы шумом), но
+   ставит `groupDefaultsPending` — старт VPN пересобирает конфиг.
+3. **§568.** Редактор Направления: группы свёрток — кандидаты `include`
+   (`foldCandidatesOf`), в Routing и в правке фильтра с главного экрана;
+   попутно правка фильтра с главного экрана больше не вычёркивает опции
+   (кандидаты раньше не передавались). Редактор свёртки: подсказка под
+   именем, если оно занято узлом другого источника, другой свёрткой или
+   Направлением (`replaceTagOwnersOf`); сохранение не запрещено.
+4. **§561.** `NodeWarning.ownerTag` — геттер базы (пусто), поле у
+   `RegistryWarning` и `DialerProxyUnusableWarning` (было); шторка
+   показывает «Entry: <тег>» под заголовком записи. Диалог вставки из
+   буфера: `ClipboardAnalysis.dropped` — сухой разбор того же входа, строка
+   «N entries will be skipped» открывает шторку причин.
+
 ## Верификация
 
 По одному файлу, каждая волна — свои: корпуса `contract_test`,
 `body_contract_test`, `direction_corpus_test` (A); тесты редакторов и
 виджет-тесты (B); новые тесты на каждый пункт. Полный прогон — CI после
 слияния обеих.
+
+Волна B (по одному файлу): `test/widgets/template_var_options_test.dart`
+4/4 (новый), `template_var_list_test` 8/8, `template_var_list_pointwise_test`;
+`test/screens/template_warnings_snack_test.dart` 2/2 (новый);
+`selector_member_pick_test.dart` 4/4 (новый: хранение, кодек, экран узла);
+`fold_ui_570_test.dart` 3/3 (новый); `dropped_owner_paste_test.dart` 3/3
+(новый), `node_notifications_test`, `subscription_dropped_summary_test`;
+`lx_backup_test` + `record_codec_sources_test` + `lx_backup_slice_test`
+134/134; `tag_prefix_commit_test`, `clipboard_analysis_l10n_test`,
+`switch_node_noop_guard_test` зелёные. `dart analyze` изменённых файлов —
+0; `hardcoded_check` 0/0, `ui_check --strict` 0/0, `template_check` 0/0.
 
 ## Нерешённое / follow-up
 

@@ -5393,5 +5393,45 @@
   },
   "You pick the server; the first option picks by latency": {
     "value": "Сервер выбираете вы; первый вариант выбирает по задержке"
+  },
+  "Other values, one per line": {
+    "value": "Свои значения, по одному на строку"
+  },
+  "Template: %d warnings": {
+    "value": {
+      "one": "Шаблон: %d предупреждение",
+      "few": "Шаблон: %d предупреждения",
+      "many": "Шаблон: %d предупреждений",
+      "other": "Шаблон: %d предупреждения"
+    }
+  },
+  "Could not select this server": {
+    "value": "Не удалось выбрать этот сервер"
+  },
+  "Replace groups": {
+    "value": "Группы замены"
+  },
+  "a folder or subscription replaced with one group": {
+    "value": "папка или подписка, заменённая одной группой"
+  },
+  "A server already has this name — it will get a numeric suffix.": {
+    "value": "Это имя уже носит сервер — ему добавится числовой суффикс."
+  },
+  "Another replace group already has this name.": {
+    "value": "Это имя уже носит другая группа замены."
+  },
+  "A direction already has this name.": {
+    "value": "Это имя уже носит Направление."
+  },
+  "Entry: %s": {
+    "value": "Запись: %s"
+  },
+  "%d entries will be skipped": {
+    "value": {
+      "one": "%d запись будет пропущена",
+      "few": "%d записи будут пропущены",
+      "many": "%d записей будут пропущены",
+      "other": "%d записи будут пропущены"
+    }
   }
 }

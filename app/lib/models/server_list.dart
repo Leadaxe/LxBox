@@ -234,6 +234,17 @@ final class SubscriptionServers extends ServerList {
   @override
   final SourceReplace? replace;
 
+  /// §565 / задача 570 — выбор члена у групп ручного рода (`selector`) этой
+  /// подписки: сырой тег группы → сырой тег выбранного члена (адрес тот же,
+  /// что у `default` группы папки, `auto_group_record.dart`). Группа подписки
+  /// производна от тела, и её `default` провайдерский; выбор человека живёт
+  /// здесь, рядом с записью источника, и переживает обновление тела и
+  /// перезапуск. Сборка берёт его вместо провайдерского `default`
+  /// ([withGroupDefaultsApplied]). Ключ записи `group_defaults`; в бэкап не
+  /// едет (у `sourceSubscription` схемы поля для него нет — рантайм машины,
+  /// как выбор селектора в ядре).
+  final Map<String, String> groupDefaults;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -256,8 +267,28 @@ final class SubscriptionServers extends ServerList {
     this.onUpdateAction = SubscriptionOnUpdateAction.rebuild,
     this.dropped = const [],
     this.replace,
+    this.groupDefaults = const {},
     super.nodes,
   });
+
+  /// §565 / задача 570 — копия со [groupDefaults], наложенными на группы
+  /// ручного рода: `manualDefault` группы — выбор человека. Без выбора —
+  /// `this`. Оригиналы узлов не меняются (разбор их перезапишет).
+  SubscriptionServers withGroupDefaultsApplied() {
+    if (groupDefaults.isEmpty) return this;
+    var changed = false;
+    final next = <NodeSpec>[];
+    for (final n in nodes) {
+      final want = n is AutoSelectSpec && n.isManual ? groupDefaults[n.tag] : null;
+      if (n is AutoSelectSpec && want != null && want != n.manualDefault) {
+        next.add(n.copyWith(manualDefault: want));
+        changed = true;
+      } else {
+        next.add(n);
+      }
+    }
+    return changed ? copyWith(nodes: next) : this;
+  }
 
   /// §302 — правила, реально применяемые на импорте: набор включён + правило
   /// включено + паттерн валиден. Пусто → тело подписки не трогается.
@@ -291,6 +322,7 @@ final class SubscriptionServers extends ServerList {
     List<NodeWarning>? dropped,
     SourceReplace? replace,
     bool clearReplace = false,
+    Map<String, String>? groupDefaults,
   }) =>
       SubscriptionServers(
         id: id,
@@ -316,6 +348,7 @@ final class SubscriptionServers extends ServerList {
         onUpdateAction: onUpdateAction ?? this.onUpdateAction,
         dropped: dropped ?? this.dropped,
         replace: clearReplace ? null : (replace ?? this.replace),
+        groupDefaults: groupDefaults ?? this.groupDefaults,
         nodes: nodes ?? this.nodes,
       );
 
@@ -345,10 +378,11 @@ final class SubscriptionServers extends ServerList {
           _eq.equals(importRules, other.importRules) &&
           importRulesEnabled == other.importRulesEnabled &&
           onUpdateAction == other.onUpdateAction &&
-          replace == other.replace);
+          replace == other.replace &&
+          _eq.equals(groupDefaults, other.groupDefaults));
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
         id,
         name,
         enabled,
@@ -369,7 +403,8 @@ final class SubscriptionServers extends ServerList {
         importRulesEnabled,
         onUpdateAction,
         replace,
-      );
+        _eq.hash(groupDefaults),
+      ]);
 }
 
 /// §219 — origin: write-only диагностические метаданные (пишутся в JSON /

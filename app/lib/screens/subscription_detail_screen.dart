@@ -820,6 +820,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         unawaited(widget.controller.persistSources());
       },
       // Фича 565 фаза B — свёртка источника в группу (§74).
+      // §568 / задача 570 — занятые имена для редактора свёртки.
+      otherSources: [for (final e in widget.controller.entries) e.list],
       onReplaceChanged: (r) async {
         setState(() => widget.entry.replace = r);
         await widget.controller.persistSources();

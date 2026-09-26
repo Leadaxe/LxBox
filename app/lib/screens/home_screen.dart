@@ -53,6 +53,7 @@ import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/l10n/locale_controller.dart';
+import 'home/widgets/template_warnings_snack.dart';
 import '../services/probe/probe_lifecycle.dart';
 import '../services/workspaces/workspace_controller.dart';
 import 'home/widgets/workspace_menu.dart';
@@ -236,6 +237,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // SnackBar (паттерн §166: всплывашка снизу, не баннер).
     _prevNoNodesStamp = _subController.directionsWithoutNodesStamp;
     _subController.addListener(_onDirectionsWithoutNodes);
+    // §555 — предупреждения шаблона после сборки: снек со счётчиком.
+    _prevTemplateStamp = _subController.templateWarningsStamp;
+    _subController.addListener(_onTemplateWarnings);
+    // §565 / задача 570 — выбор члена selector-группы (главный экран, экран
+    // узла) запоминается у своей группы папки или подписки.
+    _controller.onMemberSelected = (group, node) => unawaited(
+        _subController.rememberGroupMember(group, node, live: true));
     // §076: global home-return observer триггерит auto-rebuild когда
     // юзер возвращается на home с любого settings screen'а.
     homeReturnObserver.setHandler(_onReturnToHome);
@@ -306,6 +314,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
       ));
+    });
+  }
+
+  /// §555 / задача 570 — предупреждения движка шаблона (`template_degraded`)
+  /// за сборку: короткий снек «Template: N warnings» с переходом в шторку
+  /// кодов (тексты реестра). Сохранение конфига они не блокируют; дедуп по
+  /// stamp — один показ на сборку.
+  int _prevTemplateStamp = 0;
+  void _onTemplateWarnings() {
+    final stamp = _subController.templateWarningsStamp;
+    if (stamp == _prevTemplateStamp) return;
+    _prevTemplateStamp = stamp;
+    final items = _subController.templateWarnings;
+    if (items.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showTemplateWarningsSnack(context, items);
     });
   }
 
@@ -525,6 +550,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
     _subController.removeListener(_onDirectionsWithoutNodes);
+    _subController.removeListener(_onTemplateWarnings);
+    _controller.onMemberSelected = null;
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
     _autoUpdater.dispose();
@@ -960,7 +987,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // стартуем с pinned-конфигом.
     final inFlight = _rebuildInFlight;
     if (inFlight != null) await inFlight;
-    if (_subController.configDirty) await _rebuildAndClearDirty();
+    // §565 / задача 570 — выбор члена ручной группы, сделанный вживую, лежит
+    // в состоянии, а не в конфиге на диске: старт пересобирает и его.
+    if (_subController.configDirty || _subController.groupDefaultsPending) {
+      await _rebuildAndClearDirty();
+    }
     if (!mounted) return;
     // §254 — detour-цикл в свежей пересборке → sheet + отмена старта (см.
     // _rebuildAndStart).

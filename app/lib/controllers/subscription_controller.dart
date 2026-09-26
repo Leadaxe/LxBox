@@ -39,6 +39,7 @@ import '../services/tailscale_state/state_keys.dart';
 import '../services/tailscale_state/state_store.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
+import '../services/builder/if_engine.dart' show TemplateWarning;
 import '../services/builder/core_chain_capability.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
@@ -218,6 +219,23 @@ class SubscriptionController extends ChangeNotifier {
   List<String> get directionsWithoutNodes => _directionsWithoutNodes;
   int _directionsWithoutNodesStamp = 0;
   int get directionsWithoutNodesStamp => _directionsWithoutNodesStamp;
+
+  /// §555 / задача 570 — предупреждения движка шаблона последней успешной
+  /// сборки (`template_degraded`): Home показывает их коротким снеком
+  /// «Template: N warnings» с переходом в шторку кодов. Сохранение они не
+  /// блокируют. Stamp растёт на каждую сборку с непустым списком — один
+  /// показ на сборку.
+  /// §565 / задача 570 — выбор члена ручной группы записан в состояние при
+  /// живом туннеле, а конфиг на диске не пересобран (ядро уже переключено
+  /// вживую). Старт VPN обязан пересобрать конфиг, иначе следующий запуск
+  /// взял бы прежний `default`. Сбрасывается любой сборкой.
+  bool _groupDefaultsPending = false;
+  bool get groupDefaultsPending => _groupDefaultsPending;
+
+  List<TemplateWarning> _templateWarnings = const [];
+  List<TemplateWarning> get templateWarnings => _templateWarnings;
+  int _templateWarningsStamp = 0;
+  int get templateWarningsStamp => _templateWarningsStamp;
 
   UiMsg? _progressMessage;
   UiMsg? get progressMessage => _progressMessage;
@@ -2489,6 +2507,68 @@ class SubscriptionController extends ChangeNotifier {
   /// Замена `entry.list` на новый ServerList (для экранов, меняющих политику
   /// или tagPrefix). Сам ServerList immutable; вызывающий строит новый через
   /// `copyWith` на subscription/user-обёртке.
+  /// §565 / задача 570 — запомнить выбранного члена группы ручного рода
+  /// (`selector`). [groupTag] и [memberTag] — ФИНАЛЬНЫЕ теги собранного
+  /// конфига; узлы ищутся обратной картой последней сборки. Группа папки —
+  /// её `manualDefault` (как в редакторе группы); группа подписки —
+  /// [SubscriptionServers.groupDefaults] рядом с записью источника.
+  ///
+  /// [live] — ядро уже переключено вживую (`selectOutbound`): конфиг на диске
+  /// тогда не помечается устаревшим (плашка и автоперезапуск были бы
+  /// шумом), но следующий старт VPN его пересоберёт
+  /// ([groupDefaultsPending]). Без туннеля — обычная правка: конфиг
+  /// устарел. `false` — группа не своя (Направление, свёртка) или член не
+  /// из неё: выбор живёт только в ядре.
+  Future<bool> rememberGroupMember(String groupTag, String memberTag,
+      {required bool live}) async {
+    final group = _lastTagMap[groupTag];
+    final member = _lastTagMap[memberTag];
+    if (group is! AutoSelectSpec || !group.isManual || member == null) {
+      return false;
+    }
+    for (final e in _entries) {
+      final list = e.list;
+      ServerList? next;
+      switch (list) {
+        case SubscriptionServers():
+          if (!list.nodes.contains(group) || !list.nodes.contains(member)) {
+            continue;
+          }
+          if (list.groupDefaults[group.tag] == member.tag) return true;
+          next = list.copyWith(
+              groupDefaults: {...list.groupDefaults, group.tag: member.tag});
+        case FolderServers():
+          final i = list.members.indexWhere((m) => m.node == group);
+          if (i < 0) continue;
+          final raw = list.members.firstWhere((m) => m.node == member,
+              orElse: () => FolderMember(raw: ''));
+          if (raw.node == null) return false;
+          final m = list.members[i];
+          final members = [...list.members];
+          final chosen = group.copyWith(manualDefault: raw.node!.tag);
+          members[i] = FolderMember.auto(chosen,
+              enabled: m.enabled, warnings: m.warnings);
+          next = list.copyWith(members: members);
+          // Узел группы сменился (равенство включает `manualDefault`):
+          // карта сборки ведёт к новому, иначе следующий выбор до
+          // пересборки его не нашёл бы.
+          _lastTagMap = {..._lastTagMap, groupTag: chosen};
+        case UserServer():
+          continue;
+      }
+      e._replaceList(next);
+      if (live) {
+        _groupDefaultsPending = true;
+        await _persist(keepDirtyFlag: true);
+      } else {
+        await _persist();
+      }
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
   /// Фича 478 / PARSING_PRINCIPLES §9.3 — выключить узел, названный ядром, и записать
   /// рядом вердикт. [tag] — ФИНАЛЬНЫЙ тег собранного конфига; узел ищется
   /// обратной картой последней сборки ([lastEmittedTagMap]), которую выдала
@@ -2810,7 +2890,24 @@ class SubscriptionController extends ChangeNotifier {
     _progressMessage = const SubStatusBuildingConfig();
     notifyListeners();
 
-    final lists = _entries.map((e) => e.list).toList();
+    // §565 / задача 570 — выбор члена групп ручного рода подписки
+    // (`groupDefaults`) накладывается на копии узлов только для сборки.
+    // Обратная карта сборки ниже возвращается к узлам-оригиналам: по ней
+    // экраны и страховка ищут узел в `_entries` равенством.
+    final originals = Map<NodeSpec, NodeSpec>.identity();
+    final lists = <ServerList>[];
+    for (final e in _entries) {
+      final l = e.list;
+      if (l is SubscriptionServers && l.groupDefaults.isNotEmpty) {
+        final applied = l.withGroupDefaultsApplied();
+        for (var k = 0; k < l.nodes.length; k++) {
+          originals[applied.nodes[k]] = l.nodes[k];
+        }
+        lists.add(applied);
+      } else {
+        lists.add(l);
+      }
+    }
     // §435 — корень `state_directory` узлов Tailscale: native filesDir
     // (кэш на процесс, как у §316; без канала — пусто, поле не пишется).
     final tailscaleStateRoot = await _tailscaleStateRoot();
@@ -2844,7 +2941,13 @@ class SubscriptionController extends ChangeNotifier {
     );
 
     final result = await buildConfig(lists: lists, settings: settings);
-    _lastTagMap = result.nodeByEmittedTag;
+    _lastTagMap = originals.isEmpty
+        ? result.nodeByEmittedTag
+        : {
+            for (final e in result.nodeByEmittedTag.entries)
+              e.key: originals[e.value] ?? e.value,
+          };
+    _groupDefaultsPending = false;
     _lastBuildWarningsByTag = result.nodeBuildWarningsByEmittedTag;
 
     // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
@@ -2879,6 +2982,11 @@ class SubscriptionController extends ChangeNotifier {
     _directionsWithoutNodes = result.directionsWithoutNodes;
     if (_directionsWithoutNodes.isNotEmpty) {
       _directionsWithoutNodesStamp++;
+      notifyListeners();
+    }
+    _templateWarnings = result.templateWarnings;
+    if (_templateWarnings.isNotEmpty) {
+      _templateWarningsStamp++;
       notifyListeners();
     }
     return result.configJson;

@@ -619,6 +619,7 @@
         {
           "name": "urltest_url",
           "type": "text",
+          "options_open": true,
           "wizard_ui": "edit",
           "title": "Test URL",
           "tooltip": "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best.",
@@ -632,6 +633,7 @@
         {
           "name": "urltest_interval",
           "type": "text",
+          "options_open": true,
           "wizard_ui": "edit",
           "title": "Test interval",
           "tooltip": "How often sing-box re-tests and re-picks. Lower → faster switching, but more background traffic and battery: each cycle dials the servers (waking suspended tunnels). 15m is the battery-friendly default.",
@@ -649,6 +651,7 @@
         {
           "name": "urltest_tolerance",
           "type": "int",
+          "options_open": true,
           "wizard_ui": "edit",
           "title": "Tolerance (ms)",
           "tooltip": "Only switch proxy if latency difference exceeds this",
@@ -863,6 +866,7 @@
         {
           "name": "proxy_listen",
           "type": "text",
+          "options_open": true,
           "wizard_ui": "hidden",
           "title": "Listen address",
           "tooltip": "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on.",

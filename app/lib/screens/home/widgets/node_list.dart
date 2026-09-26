@@ -640,6 +640,13 @@ class HomeNodeList extends StatelessWidget {
       initial: seeded,
       canDelete: !direction.isRequired,
       allNodeTags: allNodeTags,
+      // §393 A3 + §568 — те же кандидаты опций, что в Routing: без них
+      // сохранение отсюда вычёркивало бы опции Направления.
+      directionsAbove: idx <= 0 ? const [] : directions.sublist(0, idx),
+      foldCandidates: foldCandidatesOf([
+        for (final e in subController.entries)
+          (name: e.displayName, replace: e.list.replace),
+      ]),
     );
     if (result == null || result.saved == null || !context.mounted) return;
 
