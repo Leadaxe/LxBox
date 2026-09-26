@@ -156,11 +156,21 @@ List<NodeWarning> maskSecretDropWarnings(List<NodeWarning> dropped) {
 
 /// §561 — `dropped[]` разбора в том виде, в каком его держит сводка
 /// источника: по старшему уровню, секретные значения скрыты.
-List<NodeWarning> summaryDropped(List<NodeWarning> dropped) =>
-    dropped.isEmpty
-        ? const []
-        : List.unmodifiable(
-            maskSecretDropWarnings(sortedDropWarnings(dropped)));
+///
+/// §570 — одинаковые записи РАЗНЫХ элементов (тот же код с теми же
+/// параметрами у той же записи-источника, [NodeWarning.ownerTag]) сводятся в
+/// одну: сводка называет причины, а не повторяет их. Записи разных владельцев
+/// остаются порознь — это разные записи источника.
+List<NodeWarning> summaryDropped(List<NodeWarning> dropped) {
+  if (dropped.isEmpty) return const [];
+  final seen = <(NodeWarning, String)>{};
+  final unique = [
+    for (final w in dropped)
+      if (seen.add((w, w.ownerTag))) w,
+  ];
+  return List.unmodifiable(
+      maskSecretDropWarnings(sortedDropWarnings(unique)));
+}
 
 // `transport_unsupported` — текст в реестре (`transports.json` → fallback
 // транспорта). Класс снят (§485): код ставит движок, не парсер.

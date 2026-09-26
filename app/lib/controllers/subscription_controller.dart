@@ -3096,6 +3096,11 @@ class SubscriptionController extends ChangeNotifier {
           lastUpdateAttempt: attemptAt,
           lastUpdateStatus: UpdateStatus.failed,
           consecutiveFails: current.consecutiveFails + 1,
+          // §561/§570 — сводка держит причины ПОСЛЕДНЕГО разбора: пустой
+          // ответ объясняет себя там же, где и удачный (узлы остаются от
+          // прошлого, кэш тела не перезаписан — после перезапуска сводку
+          // восстановит разбор кэша).
+          dropped: summaryDropped(result.dropped),
         ));
         try {
           // §331 (ревью) — keepDirtyFlag: фейл-статус — метаданные, состав

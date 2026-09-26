@@ -223,8 +223,12 @@ List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
     final all = parseContainerLineAll(l, verdicts: verdicts);
     if (all != null) {
       nodes.addAll(all);
-      for (final v in verdicts) {
-        if (v.reason != null) dropped?.add(v.reason!);
+      for (var k = 0; k < verdicts.length; k++) {
+        final r = verdicts[k].reason;
+        if (r == null) continue;
+        // §570 — владелец: строка списка и номер контейнера в ней.
+        dropped?.add(withDropOwner(
+            r, verdicts.length > 1 ? '${l.trim()} #${k + 1}' : l.trim()));
       }
       continue;
     }
@@ -238,19 +242,25 @@ List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
       // построчных). Без этого отбраковка называлась именем класса
       // предупреждения, и кейс `uri_list/service_scheme_routing_ignored`
       // сверить было нечем.
-      final r = verdict.reason!;
-      dropped?.add(r.ownerTag.isEmpty
-          ? RegistryWarning(
-              code: r.code,
-              path: r.path,
-              value: r.value,
-              params: r.params,
-              ownerTag: l.trim(),
-            )
-          : r);
+      dropped?.add(withDropOwner(verdict.reason!, l.trim()));
     }
   }
   return nodes;
+}
+
+/// §570 — запись отбраковки с владельцем [owner], если своего у неё нет.
+/// Владелец есть только у [RegistryWarning] (прочие классы несут его сами).
+NodeWarning withDropOwner(NodeWarning w, String owner) {
+  if (owner.isEmpty || w.ownerTag.isNotEmpty || w is! RegistryWarning) {
+    return w;
+  }
+  return RegistryWarning(
+    code: w.code,
+    path: w.path,
+    value: w.value,
+    params: w.params,
+    ownerTag: owner,
+  );
 }
 
 List<NodeSpec> _parseIniConfigs(
@@ -267,7 +277,10 @@ List<NodeSpec> _parseIniConfigs(
     if (n != null) {
       nodes.add(n);
     } else if (verdict.reason != null) {
-      dropped?.add(verdict.reason!);
+      // §570 — запись отбраковки называет запись источника: имя контейнера
+      // (подсказка с индексом), без имени — его номер в теле.
+      dropped?.add(withDropOwner(
+          verdict.reason!, hint ?? (texts.length > 1 ? '#${i + 1}' : '')));
     }
   }
   return nodes;
