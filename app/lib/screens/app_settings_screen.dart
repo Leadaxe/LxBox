@@ -54,6 +54,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _notificationsEnabled = true;
   bool _backgroundLocationGranted = false;
   bool _nearbyWifiGranted = false;
+  String? _wifiLocationIssue;
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoUpdateDisabledSubs = false;
@@ -153,6 +154,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final notifications = await _vpn.areNotificationsEnabled();
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
+    final wifiLocationIssue = await _readWifiLocationIssue();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoUpdateDisabledSubs =
         await SettingsStorage.getAutoUpdateDisabledSubs();
@@ -200,6 +202,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _notificationsEnabled = notifications;
         _backgroundLocationGranted = bgLocation;
         _nearbyWifiGranted = nearbyWifi;
+        _wifiLocationIssue = wifiLocationIssue;
         _autoUpdateSubs = autoUpdateSubs;
         _autoUpdateDisabledSubs = autoUpdateDisabledSubs;
         _autoReloadOnChange = autoReloadOnChange;
@@ -396,12 +399,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final notifications = await _vpn.areNotificationsEnabled();
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
+    final wifiLocationIssue = await _readWifiLocationIssue();
     if (mounted) {
       setState(() {
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
         _backgroundLocationGranted = bgLocation;
         _nearbyWifiGranted = nearbyWifi;
+        _wifiLocationIssue = wifiLocationIssue;
       });
     }
   }
@@ -427,6 +432,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (mounted) setState(() => _nearbyWifiGranted = after);
   }
 
+  /// §567 — причина, по которой SSID не читается при выданных
+  /// разрешениях строки «Location (background)»: `fine_location_missing`
+  /// (FINE в списке отсутствующих) или `location_disabled`. Иначе null.
+  Future<String?> _readWifiLocationIssue() async {
+    final r = await ul.UrlLauncher.getCurrentWifiInfo();
+    if (r is! ul.WifiInfoError) return null;
+    if (r.missing.contains('android.permission.ACCESS_FINE_LOCATION')) {
+      return 'fine_location_missing';
+    }
+    return r.reason == 'location_disabled' ? 'location_disabled' : null;
+  }
+
   /// §051 — tap на «Location (background)» row.
   /// - granted → App Permissions screen
   /// - denied  → shared `WifiPermissionDialog` (для BACKGROUND_LOCATION
@@ -436,7 +453,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final granted =
         await ul.UrlLauncher.checkBackgroundLocationPermission();
     if (granted) {
-      await ul.UrlLauncher.openAppSettings();
+      // §567 — BACKGROUND есть, но SSID всё равно не читается: ведём туда,
+      // где чинится конкретная причина.
+      switch (await _readWifiLocationIssue()) {
+        case 'location_disabled':
+          await ul.UrlLauncher.openLocationSettings();
+        case 'fine_location_missing':
+          if (!mounted) return;
+          await WifiPermissionDialog.show(
+            context,
+            missing: const ['android.permission.ACCESS_FINE_LOCATION'],
+          );
+        default:
+          await ul.UrlLauncher.openAppSettings();
+      }
       return;
     }
     if (!mounted) return;
@@ -802,6 +832,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       notificationsEnabled: _notificationsEnabled,
       backgroundLocationGranted: _backgroundLocationGranted,
       nearbyWifiGranted: _nearbyWifiGranted,
+      wifiLocationIssue: _wifiLocationIssue,
       debugEnabled: _debugEnabled,
       debugPort: _debugPort,
       debugToken: _debugToken,

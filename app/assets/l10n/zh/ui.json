@@ -729,6 +729,9 @@
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ 需要此权限才能获取 SSID。点击授予。"
   },
+  "Android did not report the network name. Check that Location permission is set to \"Precise\" and \"Allow all the time\".": {
+    "value": "Android 未返回网络名称。请检查位置信息权限是否设为“精确”和“始终允许”。"
+  },
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android 为省电会限制后台活动。若未加入例外，熄屏后 VPN 隧道可能被终止——在重新打开 L×Box 之前连接会中断。\n\n请打开系统设置并选择「无限制」/「不优化」。"
   },
@@ -879,6 +882,9 @@
   "A–Z": {
     "value": "A–Z"
   },
+  "Background location missing": {
+    "value": "缺少后台位置权限"
+  },
   "BSSID (optional)": {
     "value": "BSSID（可选）"
   },
@@ -932,9 +938,6 @@
   },
   "Cancel": {
     "value": "取消"
-  },
-  "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.": {
-    "value": "无法读取 Wi-Fi 信息——请尝试关闭再打开 Wi-Fi。"
   },
   "Cannot read the selected file": {
     "value": "无法读取所选文件"
@@ -2508,6 +2511,12 @@
   "Location (background)": {
     "value": "位置信息（后台）"
   },
+  "Location is turned off": {
+    "value": "位置信息已关闭"
+  },
+  "Location is turned off. Turn it on in system settings.": {
+    "value": "位置信息已关闭。请在系统设置中开启。"
+  },
   "Lock config (debug)": {
     "value": "锁定配置（调试）"
   },
@@ -2613,6 +2622,9 @@
   "My DNS": {
     "value": "我的 DNS"
   },
+  "Nearby Wi-Fi permission missing": {
+    "value": "缺少“附近的 Wi-Fi 设备”权限"
+  },
   "NETWORK & PROTOCOL": {
     "value": "网络与协议"
   },
@@ -2648,9 +2660,6 @@
   },
   "Nearby Wi-Fi devices": {
     "value": "附近的 Wi-Fi 设备"
-  },
-  "Needs Location + Nearby Wi-Fi permissions. Tap to manage.": {
-    "value": "需要「位置信息」和「附近的 Wi-Fi 设备」权限。点击去设置。"
   },
   "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
     "value": "停留 ≥ 5 分钟的网络会出现在路由规则编辑器的「Pick saved」中。"
@@ -2846,6 +2855,12 @@
   },
   "Layout": {
     "value": "布局"
+  },
+  "Precise location is required. Open Settings → Permissions → Location and enable \"Use precise location\".": {
+    "value": "需要精确位置。请打开 设置 → 权限 → 位置信息，并开启“使用精确位置”。"
+  },
+  "Precise location permission missing": {
+    "value": "缺少精确位置权限"
   },
   "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
     "value": "窗口宽度不小于 600 dp 时（平板、横屏、分屏），节点列表以双栏显示。"

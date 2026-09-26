@@ -20,6 +20,8 @@ import '../services/l10n/locale_controller.dart';
 /// и т.д.). Внутренне выбирает какие кнопки показывать:
 /// - есть NEARBY_WIFI_DEVICES → button "Allow Wi-Fi info" (runtime prompt)
 /// - есть BACKGROUND_LOCATION → button "Open Settings" обязательна
+/// - есть ACCESS_FINE_LOCATION (§567) → текст про «Use precise location»,
+///   та же кнопка "Open Settings"
 /// - оба → обе кнопки
 class WifiPermissionDialog {
   WifiPermissionDialog._();
@@ -38,6 +40,10 @@ class WifiPermissionDialog {
     final needsNearby = missing.any((p) => p.endsWith('NEARBY_WIFI_DEVICES'));
     final needsBackgroundLocation =
         missing.any((p) => p.endsWith('ACCESS_BACKGROUND_LOCATION'));
+    // §567 — без «точного местоположения» Android молча отдаёт
+    // `<unknown ssid>`; чинится только в Settings, как и BACKGROUND.
+    final needsFineLocation =
+        missing.any((p) => p.endsWith('ACCESS_FINE_LOCATION'));
 
     final body = StringBuffer()
       ..writeln(
@@ -48,10 +54,14 @@ class WifiPermissionDialog {
       body.writeln(' • $p');
     }
     body.writeln();
-    if (needsNearby && !needsBackgroundLocation) {
+    if (needsFineLocation) {
+      body.writeln(getLocalText.s(
+          "Precise location is required. Open Settings → Permissions → Location and enable \"Use precise location\"."));
+    }
+    if (needsNearby && !needsBackgroundLocation && !needsFineLocation) {
       body.writeln(
           'Tap "Allow Wi-Fi info" to grant via system prompt, then restart the VPN.');
-    } else {
+    } else if (needsBackgroundLocation || !needsFineLocation) {
       body.writeln(
           'Background Location can only be granted in Settings → Permissions → '
           'Location → "Allow all the time". After granting, restart the VPN.');
