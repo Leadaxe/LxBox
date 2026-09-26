@@ -53,8 +53,6 @@ const _launcherOnlyBackupCodes = <String>{
   'backup_tag_mask_dropped',
   // Локальные Направления ИСТОЧНИКА — упразднённый класс лаунчера.
   'backup_local_direction_dropped',
-  // side: export — явный тег замены папки/подписки; свёртки у мобилы нет.
-  'backup_replace_tag_derived',
   // Контракт 1.0.1, ответ LxBox 5 (TASKS_LXBOX.md §17.8): неизвестную строку
   // include LxBox хранит и на импорте молчит, предупреждает сборка (кейс
   // v10_direction_include.expected.lxbox.json).
