@@ -697,7 +697,7 @@ class SubscriptionController extends ChangeNotifier {
       keepAlive: spec.keepAlive,
       tlsExtra: spec.tlsExtra,
       warnings: spec.warnings,
-    );
+    )..bodyDelta = spec.bodyDelta; // §560/§570 — поля тела вне модели
     _entries.add(SubscriptionEntry(
       list: UserServer(
         id: newUuidV4(),
@@ -768,7 +768,7 @@ class SubscriptionController extends ChangeNotifier {
       mtu: spec.mtu,
       awg: spec.awg,
       warnings: spec.warnings,
-    );
+    )..bodyDelta = spec.bodyDelta; // §560/§570 — поля тела вне модели
     // rawBody = toUri() (с тегом во фрагменте) → тег переживает reload/re-parse.
     _entries.add(SubscriptionEntry(
       list: UserServer(
@@ -811,7 +811,7 @@ class SubscriptionController extends ChangeNotifier {
       mtu: spec.mtu,
       awg: spec.awg,
       warnings: spec.warnings,
-    );
+    )..bodyDelta = spec.bodyDelta; // §560/§570 — поля тела вне модели
     _entries.add(SubscriptionEntry(
       list: UserServer(
         id: newUuidV4(),
