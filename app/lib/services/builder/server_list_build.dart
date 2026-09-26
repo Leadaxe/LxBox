@@ -15,8 +15,6 @@ import '../node_link_address.dart';
 import '../safe_regex.dart';
 import '../tag_resolver.dart';
 import 'node_link_resolve.dart';
-import 'post_steps.dart'
-    show isXrayOutboundSource, markXrayImpliedTlsFragment;
 import 'source_replace_build.dart';
 import 'verbatim_body.dart';
 
@@ -150,16 +148,6 @@ extension ServerListBuild on ServerList {
         // ядра. Гард реестра на сборке прочтёт метку и не подменит ему
         // значение, которому реестр ставит условный потолок (`max_when`).
         ctx.noteVerbatim(main);
-      } else if (server.patchedJson == null &&
-          isXrayOutboundSource(server.rawSource)) {
-        // §573 — `tls.fragment` узла из Xray выведен реестром (перенос
-        // Xray-фрагментации), и под `detour` сборка его снимет. Звенья родной
-        // цепочки — outbound'ы того же Xray-документа. Тело, изменённое
-        // правилами импорта (§302), не метится: флаг там мог поставить автор
-        // правила.
-        for (final e in raw.all) {
-          markXrayImpliedTlsFragment(e.map);
-        }
       }
 
       // Allocate tags (детуры первыми — чтобы main мог сослаться на tag).

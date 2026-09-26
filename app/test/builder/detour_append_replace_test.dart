@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/codec/source_record.dart';
@@ -7,8 +5,6 @@ import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
-import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import '../parser/engine_test_setup.dart';
@@ -366,104 +362,6 @@ void main() {
       // его предложил, был бы dangling. Picker теперь его skip'ает.
       expect(outs.map((o) => o['tag']).toSet().contains('Home WG'), false,
           reason: 'disabled UserServer не эмитит outbound');
-    });
-  });
-
-  // §573 — `tls.fragment`, выведенный из Xray, под `detour` не эмитится:
-  // действует дефолт ядра (`record_fragment`), без паузы 500 мс на сегмент.
-  group('§573 — Xray tls.fragment под detour', () {
-    NodeSpec xrayFragmentNode() => parseXrayElement({
-          'remarks': 'X',
-          'outbounds': [
-            {
-              'tag': 'proxy',
-              'protocol': 'vless',
-              'settings': {
-                'vnext': [
-                  {
-                    'address': 'example-1.com',
-                    'port': 443,
-                    'users': [
-                      {
-                        'id': '11111111-1111-1111-1111-111111111111',
-                        'encryption': 'none',
-                      },
-                    ],
-                  },
-                ],
-              },
-              'streamSettings': {
-                'network': 'tcp',
-                'security': 'tls',
-                'tlsSettings': {'serverName': 'example-1.com'},
-                'finalmask': {
-                  'tcp': [
-                    {
-                      'type': 'fragment',
-                      'settings': {'packets': 'tlshello'},
-                    },
-                  ],
-                },
-              },
-            },
-          ],
-        }).single;
-
-    Future<Map> buildMain(NodeSpec spec, {required bool detour}) async {
-      final list = UserServer(
-        id: 'u1',
-        name: 'Test',
-        enabled: true,
-        tagPrefix: '',
-        detourPolicy: detour
-            ? const DetourPolicy(overrideDetour: NodeLink(tag: 'jump-out'))
-            : const DetourPolicy(),
-        origin: UserSource.paste,
-        nodes: [spec],
-      );
-      final result = await buildConfig(
-        lists: [list],
-        template: template,
-        settings: const BuildSettings(
-          userVars: {'clash_api': '127.0.0.1:9090'},
-          enabledGroups: {'vpn-1', kAutoOutboundTag},
-        ),
-      );
-      expect(result.validation.isOk, true,
-          reason: result.validation.issues.join('\n'));
-      final outs = result.config['outbounds'] as List;
-      return outs.firstWhere((o) => (o as Map)['tag'] == spec.tag) as Map;
-    }
-
-    test('без detour флаг из finalmask доезжает', () async {
-      final main = await buildMain(xrayFragmentNode(), detour: false);
-      expect(main.containsKey('detour'), isFalse);
-      expect((main['tls'] as Map)['fragment'], true);
-    });
-
-    test('override_detour → fragment, record_fragment и delay сняты',
-        () async {
-      final main = await buildMain(xrayFragmentNode(), detour: true);
-      expect(main['detour'], 'jump-out');
-      final tls = main['tls'] as Map;
-      expect(tls['enabled'], true);
-      expect(tls.containsKey('fragment'), isFalse);
-      expect(tls.containsKey('record_fragment'), isFalse);
-      expect(tls.containsKey('fragment_fallback_delay'), isFalse);
-    });
-
-    test('sing-box JSON с fragment автора под detour — байт в байт', () async {
-      const raw = '{"type":"vless","tag":"S","server":"example-1.com",'
-          '"server_port":443,"uuid":"11111111-1111-1111-1111-111111111111",'
-          '"tls":{"enabled":true,"server_name":"example-1.com",'
-          '"fragment":true}}';
-      final spec = parseSingboxEntry(
-        jsonDecode(raw) as Map<String, dynamic>,
-        rawSource: raw,
-      )!;
-      final main = await buildMain(spec, detour: true);
-      expect(main['detour'], 'jump-out');
-      expect((main['tls'] as Map)['fragment'], true);
     });
   });
 

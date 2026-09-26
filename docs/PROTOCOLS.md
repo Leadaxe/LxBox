@@ -1767,7 +1767,6 @@ When `streamSettings.sockopt.dialerProxy` references another outbound tag:
 - `security: "tls"` -> standard TLS from `tlsSettings` (`serverName`, `fingerprint`, `allowInsecure`)
 - `flow` is taken verbatim from `users[0].flow`; it is **not** auto-derived from REALITY (§115). As in the URI path, Vision with a transport is dropped with a warning.
 - ClientHello fragmentation -> `tls.fragment: true` on a node with TLS, from either of two Xray forms: `sockopt.dialerProxy` pointing at a `freedom` with `settings.fragment` (§488), or an element with `type: fragment` in `streamSettings.finalmask.tcp[]` (§573, contract 1.1.83; the element is found by type, not position). Xray's `packets`/`length`/`delay`/`maxSplit` are dropped without a code — the core splits by SNI labels itself. No flag when the node dials through a proxy hop or runs over UDP (hysteria/hysteria2); a `dialerProxy` to any `freedom` is not a hop.
-- Under `detour` (chain or the subscription's override detour) the build drops this Xray-derived flag, together with `record_fragment` and `fragment_fallback_delay`, so the core's own default for detoured outbounds applies; a `tls.fragment` written in sing-box JSON is kept as written.
 
 **Transport (from `streamSettings.network`):**
 - `ws` -> `wsSettings` mapped to `{"type": "ws", "path": ..., "headers": {"Host": ...}}`

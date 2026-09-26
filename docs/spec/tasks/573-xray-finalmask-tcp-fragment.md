@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done |
+| Статус | Done (часть B без п. 4) |
 | Дата старта | 2026-09-27 |
 | Дата завершения | 2026-09-27 |
 | Коммиты | `chore(contract): синк 1.1.83 (2a373e8c)`; `feat(573): Xray finalmask.tcp fragment → tls.fragment; шум tcpSettings и extra` |
@@ -202,12 +202,8 @@ Xray задаёт фрагментацию TLS ClientHello двумя форма
 3. Тесты: `app/test/parser/json_parsers_test.dart` — кейсы по таблице A4 рядом
    с группой §488; фикстура `app/test/fixtures/xray/finalmask_tcp_fragment.json`.
    Тесты, читающие корпус, — под `corpusTestSkip`.
-4. Сборка конфига: у outbound, получившего `detour` (цепочка, `override_detour`
-   подписки), `tls.fragment`, пришедший из узла, в конфиг не эмитится. Тогда
-   действует дефолт ядра для узлов под `detour` (`record_fragment`), и нет
-   паузы 500 мс на каждый сегмент. Правило то же, что у глобальной настройки
-   (`applyTlsFragment` пропускает outbound с `detour`), и распространяется на
-   узлы §488.
+4. Сборка конфига: уступка `tls.fragment` под `detour` — норма контракта
+   1.1.84 (`TASKS_LXBOX.md` §81), выполняется отдельной задачей.
 5. Документация: строка в `docs/GUARDS.md` (слой JSON-веток, рядом с записью
    про `finalmask.quicParams`), раздел Xray в `docs/PROTOCOLS.md`, ссылка на
    эту задачу в §488.
@@ -220,15 +216,9 @@ Xray задаёт фрагментацию TLS ClientHello двумя форма
   всех подходящих элементов для `_declaredJsonPaths`. `_walkNested` больше не
   считает пустой объект или массив листом. Гейт `$type not_in`, слой `ref.dialer`
   из `deref` соседней записи и `$extra_base_triple` работали без правок.
-- Сборка: `server_list_build.dart` метит тела узлов, чей источник — Xray-outbound
-  (`isXrayOutboundSource`, без дословного тела и без правил импорта), через
-  `markXrayImpliedTlsFragment`; post-step `stripImpliedTlsFragmentUnderDetour`
-  (`tls_transforms.dart`, до `applyTlsFragment`) снимает у таких outbound'ов с
-  `detour` `fragment`, `record_fragment` и `fragment_fallback_delay`. Флаг из
-  sing-box JSON не метится и остаётся.
 - Тесты: группа §573 в `json_parsers_test.dart` (фикстура
-  `test/fixtures/xray/finalmask_tcp_fragment.json`), группа §573 в
-  `test/builder/detour_append_replace_test.dart`.
+  `test/fixtures/xray/finalmask_tcp_fragment.json`).
+- Пункт 4 в этой волне не делался (см. «Нерешённое»).
 
 ## Риски и edge cases
 
@@ -254,4 +244,5 @@ Xray задаёт фрагментацию TLS ClientHello двумя форма
 
 ## Нерешённое / follow-up
 
-Нет.
+- Уступка `tls.fragment` под `detour` и конфликт с системным TLS-движком —
+  контракт 1.1.84, отдельная задача.
