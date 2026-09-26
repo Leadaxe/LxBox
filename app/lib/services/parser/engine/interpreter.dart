@@ -23,7 +23,7 @@
 /// отсутствие ключа неотличимо от «не задано».
 library;
 
-import 'dart:convert' show Base64Codec, jsonDecode, utf8;
+import 'dart:convert' show Base64Codec, jsonDecode;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
@@ -618,8 +618,9 @@ abstract final class _RunDecode {
       // принимал каждый БАЙТ за символ latin-1, и любое не-ASCII имя узла
       // приезжало искажённым: «изPS» становилось «Ð¸Ð·PS». Малформед
       // допускается, а не бросается: мусорный байт в имени не стоит узлу
-      // разбора целиком.
-      return utf8.decode(_b64.decode(s), allowMalformed: true);
+      // разбора целиком. Серия битых байтов — ОДИН U+FFFD, как у лаунчера
+      // (контракт 1.1.74): метка входит в тег узла.
+      return decodeUtf8Lenient(_b64.decode(s));
     } catch (_) {
       return null;
     }
