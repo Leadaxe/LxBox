@@ -901,6 +901,9 @@
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
   },
+  "Android did not report the network name. Check that Location permission is set to \"Precise\" and \"Allow all the time\".": {
+    "value": "Android не сообщил имя сети. Проверьте, что для разрешения «Местоположение» выбраны «Точное» и «Разрешить в любом режиме»."
+  },
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android ограничивает фоновую активность ради экономии батареи. Без исключения туннель VPN может быть закрыт при выключении экрана — связь пропадёт, пока вы снова не откроете L×Box.\n\nОткройте системные настройки и выберите «Без ограничений» / «Не оптимизировать»."
   },
@@ -1051,6 +1054,9 @@
   "A–Z": {
     "value": "А–Я"
   },
+  "Background location missing": {
+    "value": "Нет доступа к местоположению в фоне"
+  },
   "BSSID (optional)": {
     "value": "BSSID (необязательно)"
   },
@@ -1104,9 +1110,6 @@
   },
   "Cancel": {
     "value": "Отмена"
-  },
-  "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.": {
-    "value": "Не удалось прочитать данные Wi-Fi — выключите и включите Wi-Fi."
   },
   "Cannot read the selected file": {
     "value": "Не удалось прочитать выбранный файл"
@@ -2720,6 +2723,12 @@
   "Location (background)": {
     "value": "Местоположение (в фоне)"
   },
+  "Location is turned off": {
+    "value": "Геолокация выключена"
+  },
+  "Location is turned off. Turn it on in system settings.": {
+    "value": "Геолокация выключена. Включите её в системных настройках."
+  },
   "Lock config (debug)": {
     "value": "Блокировать конфиг (debug)"
   },
@@ -2823,6 +2832,9 @@
   "My DNS": {
     "value": "Мой DNS"
   },
+  "Nearby Wi-Fi permission missing": {
+    "value": "Нет разрешения «Устройства Wi-Fi поблизости»"
+  },
   "NETWORK & PROTOCOL": {
     "value": "СЕТЬ И ПРОТОКОЛ"
   },
@@ -2858,9 +2870,6 @@
   },
   "Nearby Wi-Fi devices": {
     "value": "Устройства Wi-Fi поблизости"
-  },
-  "Needs Location + Nearby Wi-Fi permissions. Tap to manage.": {
-    "value": "Нужны разрешения «Местоположение» и «Устройства Wi-Fi поблизости». Нажмите, чтобы настроить."
   },
   "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
     "value": "Сети, где вы находитесь ≥ 5 минут, появляются в редакторе правила маршрутизации → «Pick saved»."
@@ -3054,6 +3063,12 @@
   },
   "Layout": {
     "value": "Компоновка"
+  },
+  "Precise location is required. Open Settings → Permissions → Location and enable \"Use precise location\".": {
+    "value": "Нужно точное местоположение. Откройте Настройки → Разрешения → Местоположение и включите «Точное местоположение»."
+  },
+  "Precise location permission missing": {
+    "value": "Нет разрешения на точное местоположение"
   },
   "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
     "value": "Показывать список узлов в две колонки, когда ширина окна не меньше 600 dp (планшеты, альбомная ориентация, разделённый экран)."

@@ -218,6 +218,7 @@ class ParamsTab extends StatelessWidget {
               onPickSaved: actions.onPickSavedWifi,
               onManual: actions.onManualAddWifi,
               onTapPermissionsHint: actions.onOpenWifiPermissions,
+              hint: actions.wifiHint,
             ),
           // §030/new_fields — INBOUND фильтр (tun-in / mixed-in). inline + srs.
           if (c.kind == CustomRuleKind.inline ||
@@ -267,6 +268,7 @@ class ParamsTabActions {
     required this.onShowCloudMenu,
     required this.onBoolVarFailed,
     required this.onOpenActionResolve,
+    this.wifiHint,
   });
 
   final VoidCallback onSave;
@@ -276,6 +278,10 @@ class ParamsTabActions {
   final VoidCallback onPickSavedWifi;
   final VoidCallback onManualAddWifi;
   final VoidCallback onOpenWifiPermissions;
+
+  /// §567 — текущая причина, по которой SSID не читается (null — всё в
+  /// порядке); экран проверяет один раз при открытии и после возврата.
+  final WifiHint? wifiHint;
   final void Function(Offset globalPos) onShowCloudMenu;
 
   /// §247 — открыть окно «Action & Resolve» (⚙ у Action-пикера).

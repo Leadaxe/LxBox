@@ -502,13 +502,45 @@ failure it shows `BoxService: [vpn] config requires WIFI state but missing: [...
 
 ### “`<unknown ssid>` in Wi-Fi rules”
 
-If logcat shows `PIW: readWIFIState: <unknown ssid>` (a debug log from
-[PlatformInterfaceWrapper](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt)),
-the permission grants are in place (no SecurityException) but `WifiInfo.ssid`
-returned `"<unknown ssid>"`. On Android 13+ that means **`NEARBY_WIFI_DEVICES` is
-missing**, even when ACCESS_FINE_LOCATION is granted (Google split Wi-Fi info from
-location in API 33). The action: add `NEARBY_WIFI_DEVICES` to the manifest and
-grant it through a runtime prompt.
+Android does not throw when it withholds the network name: `WifiInfo.ssid`
+silently comes back as `"<unknown ssid>"` with the placeholder BSSID
+`02:00:00:00:00:00`. Four conditions all have to hold (§567), and
+[WifiInfoReader](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/WifiInfoReader.kt)
+checks them in this order before asking Android:
+
+1. `NEARBY_WIFI_DEVICES` granted (API 33+).
+2. `ACCESS_FINE_LOCATION` granted — **precise** location. Since Android 12 the
+   location prompt has a “Precise” switch; with “Approximate” only COARSE is
+   granted, BACKGROUND can still be granted, and the SSID is hidden. A system
+   update or the “unused apps” permission reset produce the same picture,
+   which is why “it used to work”.
+3. `ACCESS_BACKGROUND_LOCATION` granted (API 29+, “Allow all the time”).
+4. The system Location toggle is on (`LocationManager.isLocationEnabled()`).
+
+Each failed check leaves one logcat line with the `WifiInfoReader` tag (logcat
+only, not the diagnostics export):
+
+```text
+W WifiInfoReader: permission missing: android.permission.ACCESS_FINE_LOCATION
+W WifiInfoReader: location disabled: system location toggle is off
+W WifiInfoReader: unknown ssid: android returned ssid=<unknown ssid> bssid=02:00:00:00:00:00
+W WifiInfoReader: no wifi: connectionInfo is null
+D WifiInfoReader: ok: ssid='AndroidWifi' bssid='00:13:10:85:fe:01'
+```
+
+```bash
+adb logcat -d | grep -E "WifiInfoReader|PIW" | tail
+adb shell dumpsys package com.leadaxe.lxbox | grep -E "granted=" | grep -iE "location|nearby"
+adb shell settings get secure location_mode   # 0 = off
+```
+
+On the core path (`PIW: readWIFIState`) a failed permission or Location check
+returns `null`, and `<unknown ssid>` returns an empty SSID; the reason is in the
+preceding `WifiInfoReader` line. In the UI the rule editor's Wi-Fi section shows
+a hint only when one of the checks fails (“Precise location permission
+missing”, “Background location missing”, “Nearby Wi-Fi permission missing”,
+“Location is turned off”), and the Diagnostics → “Location (background)” row
+shows the precise-location and Location-toggle state.
 
 ### “The VPN drops by itself / ‘Another VPN app took the system VPN slot’”
 
