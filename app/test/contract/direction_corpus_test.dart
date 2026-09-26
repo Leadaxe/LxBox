@@ -10,7 +10,9 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/codec/source_replace_record.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -56,12 +58,14 @@ const _autoDefaultKeys = {'url', 'interval', 'tolerance', 'idle_timeout'};
 
 // ── Скипы ───────────────────────────────────────────────────────────────────
 
-/// `fold_*` — SPEC 108, свёртка подписки в группу. Фаза E закрыта решением
-/// оператора (24.08.2026): свёртки на мобиле НЕ БУДЕТ. Кейсы остаются в
-/// общем корпусе ради лаунчера; для LxBox они не применимы навсегда, а не
-/// «пока».
-const _skipFold = 'na: свёртка подписки в группу (SPEC 108) на мобиле не '
-    'нужна — фаза E закрыта решением оператора 24.08.2026';
+/// `fold_*` — свёртка подписки в группу `replace {mode, tag, auto?}`
+/// (фича 565 фаза B, контракт 1.1.78 §74, вход корпуса с 1.1.79). Кейсы идут;
+/// кроме одного: ссылок на переменные шаблона (`@urltest_*`) в параметрах
+/// автовыбора у LxBox нет — `auto` хранит значения, как у Направления.
+const Map<String, String> _skipFold = {
+  'fold_auto_inherits_template_vars': 'na: ссылок на переменные шаблона в '
+      'auto у LxBox нет — параметры хранятся значениями',
+};
 
 /// Коды предупреждений корпуса → как их опознать в `emitWarnings` LxBox.
 ///
@@ -164,8 +168,8 @@ void main() {
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
       // §393 C — `chain_*` больше не скипаются: цепочки реализованы
-      // (C1–C5). `fold_*` скипнуты навсегда (фаза E закрыта).
-      final skip = name.startsWith('fold_') ? _skipFold : null;
+      // (C1–C5). `fold_*` идут с фазой B фичи 565, кроме [_skipFold].
+      final skip = _skipFold[name];
 
       test(name, () async {
         final input = jsonDecode(File('$base.direction.json').readAsStringSync())
@@ -218,7 +222,12 @@ Future<void> _runCase(
   final coreSupportsChain = input['core_supports_chain'] as bool? ?? true;
 
   final result = await buildConfig(
-    lists: nodeTags.isEmpty ? const [] : [_sourceFor(nodeTags, groupTags)],
+    lists: nodeTags.isEmpty
+        ? const []
+        : [
+            _sourceFor(nodeTags, groupTags,
+                replace: sourceReplaceFromRecord(input['replace'])),
+          ],
     template: _template(),
     settings: BuildSettings(
       directions: directions,
@@ -386,7 +395,13 @@ WizardTemplate _template() => WizardTemplate(
 /// sing-box-конфига» (README корпуса). У мобилы это [AutoSelectSpec]: тот же
 /// водораздел (нет server/port, `type: urltest` в конфиге), и билдер отличает
 /// её ровно по типу эмитированной записи.
-UserServer _sourceFor(List<String> nodeTags, Set<String> groupTags) {
+/// Фича 565 фаза B — вход `replace` делает источник свёрнутой подпиской:
+/// путь сборки у подписки тот же, узлы — те же.
+ServerList _sourceFor(
+  List<String> nodeTags,
+  Set<String> groupTags, {
+  SourceReplace? replace,
+}) {
   final nodes = <NodeSpec>[];
   for (var i = 0; i < nodeTags.length; i++) {
     final tag = nodeTags[i];
@@ -406,6 +421,18 @@ UserServer _sourceFor(List<String> nodeTags, Set<String> groupTags) {
         '?type=ws&security=tls#${Uri.encodeComponent(tag)}');
     expect(spec, isNotNull, reason: 'не разобрался узел корпуса "$tag"');
     nodes.add(spec!);
+  }
+  if (replace != null) {
+    return SubscriptionServers(
+      id: 'corpus',
+      name: 'corpus',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      url: 'https://example-1.com/corpus',
+      replace: replace,
+      nodes: nodes,
+    );
   }
   return UserServer(
     id: 'corpus',

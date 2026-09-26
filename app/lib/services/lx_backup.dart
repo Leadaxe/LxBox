@@ -1466,7 +1466,7 @@ const Set<String> _subscriptionKeys = {
   'warnings',
   'skip',
   'outbounds',
-  'fold',
+  // `fold` 0.x не читается (контракт 1.1.79 §76): чужой ключ с предупреждением.
   'identity',
   'exclude_from_global',
   'expose_group_tags_to_global',

@@ -772,7 +772,7 @@ Matcher _deepEqualsJson(Object? want) =>
     predicate<Object?>((got) => deepEqualsJson(got, want), 'deep-equals $want');
 
 /// Фича 565 фаза B (§74) — `replaces`: ключ — имя папки или адрес подписки,
-/// значение — объект `replace` как в файле. Сверяется модель после импорта и
+/// значение — объект `replace` как в файле, `null` — свёртки нет (§76). Сверяется модель после импорта и
 /// запись повторного экспорта. `auto` — по ключам ожидания: LxBox пишет форму
 /// целиком (умолчания [DirectionAuto] тоже), лишние ключи — не расхождение.
 Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
@@ -795,9 +795,13 @@ Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
             (raw['replace'] as Map).cast<String, dynamic>(),
   };
   void compare(String where, Map<String, Map<String, dynamic>> side) {
-    expect(side.keys.toSet(), want.keys.toSet(),
-        reason: '$where: набор свёрнутых источников');
+    // `null` у ключа — источник не свёрнут (контракт 1.1.79 §76).
+    expect(side.keys.toSet(), {
+      for (final e in want.entries)
+        if (e.value != null) e.key,
+    }, reason: '$where: набор свёрнутых источников');
     for (final e in want.entries) {
+      if (e.value == null) continue;
       final w = (e.value as Map).cast<String, dynamic>();
       final g = side[e.key]!;
       expect(g['mode'], w['mode'], reason: '$where ${e.key}: mode');
