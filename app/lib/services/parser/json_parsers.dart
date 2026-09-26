@@ -185,16 +185,14 @@ List<NodeSpec> parseXrayElement(
   }
 
   final result = <NodeSpec>[];
-  // §321 P5 — протоколы элемента, которые мы не умеем: висят на первом
-  // выжившем узле, чтобы пользователь видел, что провайдер прислал больше.
-  final unsupported = <String>{};
-  // §404 P3 — узлы, отбракованные из-за недостижимого релея. Вешаем их
-  // причины на первого выжившего ЭТОГО элемента (как P5); если не выжил
-  // никто — причины уже лежат в `dropped` и достанутся подписке целиком.
-  final rejected = <NodeWarning>[];
-  final unread = <NodeWarning>[];
+  // §561 — отбраковка записи элемента (протокол вне реестра, битая форма,
+  // недостижимый релей, вердикт реестра) едет ТОЛЬКО в [dropped] — конверт
+  // подписки (D-088). На соседа по элементу она больше не вешается: прежние
+  // §321 P5 / §404 P3 показывали человеку на рабочем узле чужую ошибку.
   for (var i = 0; i < ordered.length; i++) {
     final ob = ordered[i];
+    // Тег записи — `dropped[].ref` контракта (D-088); нужен и в `catch`.
+    final obTag = ob['tag']?.toString() ?? '';
     try {
       // §321 P6 — тег провайдера → ключ ПУЛА (грубая четвёрка `nodeIdentityKey`,
       // не подпись дедупа §404: `selector` провайдера называет сервер, а не
@@ -202,7 +200,6 @@ List<NodeSpec> parseXrayElement(
       // различаются («Испания» = `proxy`, «Лучший» =
       // `proxy-45-196-208-40-direct`), а §322 резолвит пул по чужим тегам.
       final identity = _xrayIdentity(ob);
-      final obTag = ob['tag']?.toString() ?? '';
       if (identity != null && obTag.isNotEmpty) synonyms?[obTag] = identity;
 
       // §310 — имя разводим на парсинге: `allocateTag` уникализирует теги лишь
@@ -242,27 +239,13 @@ List<NodeSpec> parseXrayElement(
           ownerTag: obTag,
         );
         dropped?.add(w);
-        rejected.add(w);
         continue;
       }
-      // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
-      // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
-      // NodeWarning нет носителя без узла); если соседей нет — элемент выпадает
-      // молча (документированное ограничение §321 P5, spec §Известные дыры).
+      // §560/§561 — запись НЕ ПРОЧИТАНА (ни одна секция не опознала протокол
+      // либо ни одна форма секции — элемент): причина — код CANON §4.1 с
+      // тегом записи (D-088), в `dropped[]` и только туда.
       if (spec == null) {
-        final proto = ob['protocol']?.toString() ?? '';
-        if (proto.isNotEmpty) unsupported.add(proto);
-        // §560 — запись НЕ ПРОЧИТАНА (ни одна секция не опознала протокол
-        // либо ни одна форма секции — элемент): причина — код CANON §4.1 с
-        // тегом записи (D-088), см. разбор `unread` в конце функции.
-        final r = verdict.reason;
-        if (r != null) {
-          unread.add(RegistryWarning(
-            code: r.code,
-            params: r.params,
-            ownerTag: obTag,
-          ));
-        }
+        dropped?.add(_unreadEntry(verdict.reason, ob, obTag));
         continue;
       }
 
@@ -290,9 +273,8 @@ List<NodeSpec> parseXrayElement(
             // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
             // не годится — он приходит из `remarks` элемента и на многоузловом
             // элементе одинаков у всех узлов.
-            final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
-            dropped?.add(w);
-            rejected.add(w);
+            dropped?.add(
+                DialerProxyUnusableWarning(label, ref, ownerTag: obTag));
             continue;
           }
         }
@@ -317,36 +299,11 @@ List<NodeSpec> parseXrayElement(
       // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
       // мусорный тип поля (`streamSettings: "none"`, `settings: []`) бросает
       // TypeError внутри конвертера — пропускаем этот outbound, соседи по
-      // элементу и остальная подписка живут. Протокол — в P5-warning, чтобы
-      // пропажа не была молчаливой.
-      final proto = ob['protocol']?.toString() ?? '';
-      unsupported.add(proto.isEmpty ? 'malformed' : proto);
+      // элементу и остальная подписка живут. §561 — пропажа не молчаливая:
+      // форма не прочитана (CANON §4.1), запись — в `dropped[]`.
+      dropped?.add(RegistryWarning(code: 'form_unrecognized', ownerTag: obTag));
     }
   }
-
-  // §321 P5 — развешиваем накопленное: по одному warning на протокол,
-  // на первом узле элемента (не на каждом — иначе N копий одного сообщения).
-  if (unsupported.isNotEmpty && result.isNotEmpty) {
-    for (final proto in unsupported) {
-      result.first.warnings.add(UnsupportedProtocolWarning(proto));
-    }
-  }
-
-  // §404 P3 — то же для отбракованных владельцев. Носитель нашёлся внутри
-  // элемента → причина висит на нём и из подписочного списка убирается, чтобы
-  // пользователь не увидел одно сообщение дважды. Носителя нет → строка
-  // остаётся в `dropped` и уедет на первый узел подписки (см. parse_all).
-  if (rejected.isNotEmpty && result.isNotEmpty) {
-    for (final w in rejected) {
-      result.first.warnings.add(w);
-      dropped?.remove(w);
-    }
-  }
-
-  // §560 — непрочитанные записи: соседа нет — причина едет в `dropped[]`;
-  // сосед есть — он уже несёт `UnsupportedProtocolWarning` (§321 P5), и
-  // второй раз то же сообщение человеку не показываем (§404 P3).
-  if (result.isEmpty) dropped?.addAll(unread);
 
   // §322 — балансировщик элемента → узел автовыбора. Ставим ПОСЛЕ узлов:
   // порядок списка = порядок появления, группа логично идёт за своими членами.
@@ -363,6 +320,25 @@ List<NodeSpec> parseXrayElement(
   if (auto != null) result.add(auto..sourceExtended = extended);
 
   return result;
+}
+
+/// §560/§561 — причина отбраковки непрочитанной записи для `dropped[]`.
+///
+/// Вердикт секции без причины (обязательная запись не нашла значения) —
+/// форма не прочитана. Код `protocol_unsupported` несёт параметр `scheme`
+/// (реестр предупреждений): движок ставит код без него — дописываем значение
+/// поля `protocol` самой записи, чтобы текст шторки назвал протокол.
+RegistryWarning _unreadEntry(
+    RegistryWarning? reason, Map<String, dynamic> ob, String obTag) {
+  final code = reason?.code ?? 'form_unrecognized';
+  final params = <String, String>{...?reason?.params};
+  final proto = ob['protocol']?.toString() ?? '';
+  if (code == 'protocol_unsupported' &&
+      proto.isNotEmpty &&
+      !params.containsKey('scheme')) {
+    params['scheme'] = proto;
+  }
+  return RegistryWarning(code: code, params: params, ownerTag: obTag);
 }
 
 /// §322 — `routing.balancers[0]` + `burstObservatory` → узел автовыбора.
