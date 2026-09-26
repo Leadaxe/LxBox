@@ -1368,4 +1368,81 @@ void main() {
       expect(r.warnings.map((w) => w.code), contains('type_invalid'));
     });
   });
+
+  // §574 (контракт 1.1.84, §81).
+  group('RegistrySanitizer — фрагментация TLS: detour и системный движок', () {
+    test('fragment + record_fragment при engine apple — сняты, движок остаётся',
+        () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'server_name': 'example.com',
+          'engine': 'apple',
+          'fragment': true,
+          'record_fragment': true,
+        },
+      }));
+      final tls = r.body!['tls'] as Map;
+      expect(tls['engine'], 'apple');
+      expect(tls.containsKey('fragment'), isFalse);
+      expect(tls.containsKey('record_fragment'), isFalse);
+      expect(
+          r.warnings
+              .where((w) => w.code == 'tls_fragment_system_engine')
+              .map((w) => w.path),
+          ['tls.fragment', 'tls.record_fragment']);
+      expect(_byCode(r, 'tls_fragment_system_engine').params['with'],
+          'tls.engine');
+    });
+
+    test('engine go — фрагментация остаётся', () {
+      final r = _san(_vless({
+        'tls': {
+          'enabled': true,
+          'server_name': 'example.com',
+          'engine': 'go',
+          'fragment': true,
+        },
+      }));
+      expect((r.body!['tls'] as Map)['fragment'], true);
+      expect(_codes(r), isNot(contains('tls_fragment_system_engine')));
+    });
+
+    test('detour во входе для связей соседей отсутствует — fragment остаётся',
+        () {
+      final r = _san(_vless({
+        'detour': 'other',
+        'tls': {
+          'enabled': true,
+          'server_name': 'example.com',
+          'fragment': true,
+        },
+      }));
+      expect((r.body!['tls'] as Map)['fragment'], true);
+      expect(_codes(r), isNot(contains('detour_with_tls_fragment')));
+    });
+
+    test('fieldAllowedOn: при engine windows фрагментацию не дописывать', () {
+      final body = _vless({
+        'tls': {'enabled': true, 'engine': 'windows'},
+      });
+      expect(fieldAllowedOn(body, 'tls.fragment'), isFalse);
+      expect(fieldAllowedOn(body, 'tls.record_fragment'), isFalse);
+    });
+
+    test('yieldToManaged: fragment уступает detour, record_fragment — нет', () {
+      final body = _vless({
+        'detour': 'hop',
+        'tls': {'enabled': true, 'fragment': true, 'record_fragment': true},
+      });
+      final ws = yieldToManaged(body, 'detour');
+      expect(ws.map((w) => w.code), ['detour_with_tls_fragment']);
+      expect(ws.single.path, 'tls.fragment');
+      expect(ws.single.params['tag'], 'n1');
+      expect(ws.single.params['target'], 'hop');
+      final tls = body['tls'] as Map;
+      expect(tls.containsKey('fragment'), isFalse);
+      expect(tls['record_fragment'], true);
+    });
+  });
 }

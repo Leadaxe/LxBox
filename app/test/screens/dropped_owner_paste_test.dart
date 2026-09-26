@@ -32,8 +32,10 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('notification-owner-bad-entry')),
-        findsOneWidget);
+    // §572 — две записи одного кода собраны в группу: запись источника
+    // называет строка своей записи, а не подзаголовок плитки.
+    expect(find.byType(ExpansionTile), findsOneWidget);
+    expect(find.text('Entry: bad-entry'), findsOneWidget);
   });
 
   test('анализ вставки несёт отбраковки разбора', () {

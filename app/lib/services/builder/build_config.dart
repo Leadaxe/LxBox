@@ -813,9 +813,16 @@ Future<BuildResult> _buildConfig({
   }
 
   // Контракт 1.1.65 — поля, уступающие дописанному сборкой `detour`
-  // (`listen_port` WireGuard), снимаются кодом связи реестра.
+  // (`listen_port` WireGuard), снимаются кодом связи реестра. Контракт 1.1.84
+  // — туда же `tls.fragment` (`detour_with_tls_fragment`). Код ложится и в
+  // предупреждения узла по его config-тегу — рядом с кодами гарда реестра.
   for (final w in applyDetourYields(config)) {
     emitWarnings.add(w.renderEn());
+    if (w.ownerTag.isNotEmpty) {
+      registryReport.warningsByEmittedTag
+          .putIfAbsent(w.ownerTag, () => [])
+          .add(w);
+    }
   }
   applyTlsFragment(config, vars);
   applyMixedCaseSni(config, vars);

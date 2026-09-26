@@ -1428,6 +1428,13 @@ when `vhttp: h2`: with h3 there is nothing to fragment (QUIC does not carry TLS
 over TCP), the core ignores such fields with a warning, and the builder skips h3
 nodes silently.
 
+**Fragmentation yields** (§574, contract 1.1.84). A node flag `tls.fragment`
+is removed when the build gives the node a `detour` (code
+`detour_with_tls_fragment`, info); `record_fragment` stays, it is the core's
+own default under `detour`. With `tls.engine` `apple`/`windows` both flags go
+(`tls_fragment_system_engine`): the system engine cannot fragment, and the core
+would not start.
+
 ### Reference
 
 - RFC 9484 (CONNECT-IP over MASQUE)
@@ -1766,6 +1773,7 @@ When `streamSettings.sockopt.dialerProxy` references another outbound tag:
 - `security: "reality"` -> `tls.reality.enabled: true` with `realitySettings` mapped to `public_key`, `short_id`. REALITY is only built when the public key is a valid X25519 key (base64/base64url → 32 bytes); an invalid key degrades to plain TLS with a warning (§169).
 - `security: "tls"` -> standard TLS from `tlsSettings` (`serverName`, `fingerprint`, `allowInsecure`)
 - `flow` is taken verbatim from `users[0].flow`; it is **not** auto-derived from REALITY (§115). As in the URI path, Vision with a transport is dropped with a warning.
+- ClientHello fragmentation -> `tls.fragment: true` on a node with TLS, from either of two Xray forms: `sockopt.dialerProxy` pointing at a `freedom` with `settings.fragment` (§488), or an element with `type: fragment` in `streamSettings.finalmask.tcp[]` (§573, contract 1.1.83; the element is found by type, not position). Xray's `packets`/`length`/`delay`/`maxSplit` are dropped without a code — the core splits by SNI labels itself. No flag when the node dials through a proxy hop or runs over UDP (hysteria/hysteria2); a `dialerProxy` to any `freedom` is not a hop.
 
 **Transport (from `streamSettings.network`):**
 - `ws` -> `wsSettings` mapped to `{"type": "ws", "path": ..., "headers": {"Host": ...}}`

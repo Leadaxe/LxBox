@@ -1081,6 +1081,21 @@ dynamic jsonPathValue(dynamic root, String path) {
   dynamic cur = root;
   for (final seg in path.split('.')) {
     if (seg.isEmpty) continue;
+    // Контракт 1.1.83 (MAPPER_ENGINE §4) — селектор элемента `имя[k=v]`.
+    final sel = _parseSelector(seg);
+    if (sel != null) {
+      final list = cur is Map ? cur[sel.name] : null;
+      if (list is! List) return null;
+      cur = null;
+      for (final el in list) {
+        if (_selectorMatches(el, sel)) {
+          cur = el;
+          break;
+        }
+      }
+      if (cur == null) return null;
+      continue;
+    }
     if (cur is Map) {
       cur = cur[seg];
     } else if (cur is List) {
@@ -1093,6 +1108,68 @@ dynamic jsonPathValue(dynamic root, String path) {
     if (cur == null) return null;
   }
   return cur;
+}
+
+/// Сегмент пути с селектором элемента: `имя[ключ=значение]`.
+typedef _Selector = ({String name, String key, String value});
+
+final RegExp _kSelectorRe = RegExp(r'^([^\[\]=]+)\[([^\[\]=]+)=([^\[\]]*)\]$');
+final Map<String, _Selector?> _selectorCache = {};
+
+_Selector? _parseSelector(String seg) {
+  if (!seg.endsWith(']')) return null;
+  return _selectorCache.putIfAbsent(seg, () {
+    final m = _kSelectorRe.firstMatch(seg);
+    if (m == null) return null;
+    return (name: m.group(1)!, key: m.group(2)!, value: m.group(3)!);
+  });
+}
+
+/// Элемент подходит селектору: объект, чей СКАЛЯР по `ключ` равен значению
+/// без учёта регистра (как `value_of`).
+bool _selectorMatches(dynamic el, _Selector sel) {
+  if (el is! Map) return false;
+  final v = el[sel.key];
+  if (v == null || v is Map || v is List) return false;
+  return v.toString().toLowerCase() == sel.value.toLowerCase();
+}
+
+/// Объявленность пути с селектором (MAPPER_ENGINE §8): путь раскрывается в
+/// числовые пути ВСЕХ подходящих элементов документа. Путь без селектора
+/// возвращается как есть. Раскрытие статично — от `when` не зависит.
+List<String> expandSelectorPaths(dynamic root, String path) {
+  if (!path.contains('[')) return [path];
+  var prefixes = <({String path, dynamic node})>[(path: '', node: root)];
+  for (final seg in path.split('.')) {
+    if (seg.isEmpty) continue;
+    final sel = _parseSelector(seg);
+    final next = <({String path, dynamic node})>[];
+    for (final p in prefixes) {
+      final base = p.path.isEmpty ? '' : '${p.path}.';
+      if (sel == null) {
+        final node = p.node;
+        dynamic child;
+        if (node is Map) {
+          child = node[seg];
+        } else if (node is List) {
+          final i = int.tryParse(seg);
+          if (i != null && i >= 0 && i < node.length) child = node[i];
+        }
+        next.add((path: '$base$seg', node: child));
+        continue;
+      }
+      final list = p.node is Map ? (p.node as Map)[sel.name] : null;
+      if (list is! List) continue;
+      for (var i = 0; i < list.length; i++) {
+        if (_selectorMatches(list[i], sel)) {
+          next.add((path: '$base${sel.name}.$i', node: list[i]));
+        }
+      }
+    }
+    prefixes = next;
+    if (prefixes.isEmpty) break;
+  }
+  return [for (final p in prefixes) p.path];
 }
 
 /// Нормализаторы, работающие над СПИСКОМ: применяются после разреза значения
@@ -3811,9 +3888,9 @@ final class _Run {
   /// а перечислить листья она не может — их имена принадлежат подписке) и
   /// `nested_quiet`.
   ///
-  /// ЛИСТОМ считается скаляр либо ПУСТОЙ объект/массив: путь внутреннего
-  /// объекта — лишь дорога к листьям, и звать неизвестным `streamSettings
-  /// .wsSettings` значило бы ругаться на контейнер, чьи листья секция как раз
+  /// ЛИСТОМ считается только скаляр (контракт 1.1.83: пустой объект/массив
+  /// листом не является): путь внутреннего объекта — лишь дорога к
+  /// листьям, и звать неизвестным `streamSettings.wsSettings` значило бы ругаться на контейнер, чьи листья секция как раз
   /// читает. Индекс массива входит в путь ЧИСЛОМ — тем же написанием, каким
   /// его адресует `source`, иначе объявленность не сверить.
   void _reportUnknownNested(String code, Map<String, dynamic> json) {
@@ -3854,22 +3931,18 @@ final class _Run {
     if (_nestedQuiet(path)) return;
 
     if (node is Map) {
-      if (node.isEmpty) {
-        // ПУСТОЙ объект — лист: дороги к листьям у него нет, и промолчать о
-        // нём значило бы потерять единственное, что он сообщает.
-        _noteNestedUnknown(path, found);
-        return;
-      }
+      // Контракт 1.1.83 (MAPPER_ENGINE §8): ПУСТОЙ объект листом не является
+      // — значения в нём нет, и потерять при разборе нечего
+      // (`tcpSettings: {}`).
+      if (node.isEmpty) return;
       for (final e in node.cast<String, dynamic>().entries) {
         _walkNested(code, '$path.${e.key}', e.value, depth + 1, found);
       }
       return;
     }
     if (node is List) {
-      if (node.isEmpty) {
-        _noteNestedUnknown(path, found);
-        return;
-      }
+      // То же для пустого массива (`tcp: []`).
+      if (node.isEmpty) return;
       for (var i = 0; i < node.length; i++) {
         _walkNested(code, '$path.$i', node[i], depth + 1, found);
       }
@@ -3911,7 +3984,13 @@ final class _Run {
     final out = <String>{};
     void add(String src) {
       if (!src.startsWith('json.')) return;
-      out.add(_resolveBase(src.substring('json.'.length)).toLowerCase());
+      final path = _resolveBase(src.substring('json.'.length));
+      // Селектор элемента объявляет КАЖДЫЙ подходящий элемент его числовым
+      // путём (контракт 1.1.83, MAPPER_ENGINE §8); элемент другого типа
+      // остаётся необъявленным.
+      for (final p in expandSelectorPaths(space.json, path)) {
+        out.add(p.toLowerCase());
+      }
     }
 
     for (final p in section.params.values) {
