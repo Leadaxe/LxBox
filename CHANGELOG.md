@@ -19,6 +19,14 @@
 
 ### Changed
 
+- **Dropped subscription entries show in the subscription summary, not on a working node ([§561](docs/spec/tasks/561-dropped-only-in-source-summary.md)).**
+  An entry the parser could not turn into a node (unknown protocol, broken fields,
+  unreachable relay) used to leave its error on a neighbouring node that had nothing
+  wrong with it. Now working nodes stay clean. The subscription screen shows
+  `N entries dropped`; tap it to see each reason. The subscription card in the list
+  shows the count. A subscription with no nodes at all still shows the error under
+  the input field.
+
 - **Chains with a REALITY hop no longer refuse to save when uTLS is stripped ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
   If a chain strips `tls.utls` and a later hop runs REALITY, the editor shows a warning
   instead of locking the Save button, the strip row reads `kept`, and the build keeps
