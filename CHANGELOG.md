@@ -62,6 +62,10 @@
   are deduplicated and come first in the build report without blocking save. A preset
   or template DNS server of an address type left without `server` is now dropped with
   a warning.
+- **Link schemes are recognised from the contract registry only ([§562](docs/spec/tasks/562-uri-scheme-dispatch-from-registry.md)).**
+  Internal: the parser's own scheme lists and the SOCKS version ↔ scheme table are gone;
+  the registry's scheme and alias declarations decide which links are accepted. Nodes and
+  their tags are unchanged.
 
 ### Fixed
 

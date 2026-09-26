@@ -9,7 +9,6 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
-import 'package:lxbox/services/parser/mappers/uri_pipeline.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §472 шаг 2 — страж покрытия секции `mapper` реестра.
@@ -171,6 +170,16 @@ List<String> _mapperRuleIds(String scheme) {
 List<String> _codes(NodeSpec n) =>
     [for (final w in n.warnings.whereType<RegistryWarning>()) w.code];
 
+/// Написания схемы, которые приложение принимало до §562 (прежний
+/// литеральный набор диспетчера). Диспетчер теперь строится из реестра, и
+/// этот снимок стережёт, что ни одно из них не потерялось.
+const _kLegacySchemes = <String>{
+  'trojan', 'vless', 'vmess', 'ss', 'hysteria2', 'hy2', 'tuic', 'anytls',
+  'naive+https', 'naive+quic', 'proxy-http', 'proxy-https', 'proxy+http',
+  'proxy+https', 'socks', 'socks5', 'socks4', 'socks4a', 'ssh', 'masque',
+  'wireguard', 'wg', 'awg',
+};
+
 void main() {
 
   setUpAll(() async {
@@ -181,7 +190,7 @@ void main() {
 
   group('§472 — секция mapper реестра покрыта для переехавших схем', () {
     test('у каждой переехавшей схемы каждое mapper-правило названо', () {
-      for (final scheme in kPipelineSchemes) {
+      for (final scheme in _kLegacySchemes) {
         for (final id in _mapperRuleIds(scheme)) {
           // Сначала запись ДЛЯ ЭТОЙ СХЕМЫ, потом общая: одно правило реестра
           // у разных схем бывает и реализовано, и нет (§472 шаг 5).
