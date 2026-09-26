@@ -1428,6 +1428,13 @@ when `vhttp: h2`: with h3 there is nothing to fragment (QUIC does not carry TLS
 over TCP), the core ignores such fields with a warning, and the builder skips h3
 nodes silently.
 
+**Fragmentation yields** (§574, contract 1.1.84). A node flag `tls.fragment`
+is removed when the build gives the node a `detour` (code
+`detour_with_tls_fragment`, info); `record_fragment` stays, it is the core's
+own default under `detour`. With `tls.engine` `apple`/`windows` both flags go
+(`tls_fragment_system_engine`): the system engine cannot fragment, and the core
+would not start.
+
 ### Reference
 
 - RFC 9484 (CONNECT-IP over MASQUE)

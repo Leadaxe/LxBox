@@ -484,6 +484,35 @@ void main() {
       expect(tags, isNot(contains('Bad')));
     });
 
+    // §574 (контракт 1.1.84) — probe назначает detour в обход buildConfig:
+    // tls.fragment уступает ему тем же вопросом к реестру, без кода.
+    test('fragment под detour цепочки снят, у хопа остаётся', () {
+      const fragTls = TlsSpec(
+        enabled: true,
+        serverName: 'h.example',
+        passthrough: {'fragment': true, 'fragment_fallback_delay': '500ms'},
+      );
+      VlessSpec frag(String tag, {NodeSpec? chained}) => VlessSpec(
+            id: tag,
+            tag: tag,
+            label: tag,
+            server: 'h.example',
+            port: 443,
+            rawSource: '',
+            uuid: uuid,
+            tls: fragTls,
+            chained: chained,
+          );
+      final cfg = buildProbeConfig([frag('Main', chained: frag('Hop'))]);
+      final main = outboundOf(cfg, cfg.tagByIndex[0]!);
+      expect(main['detour'], isNotNull);
+      final mainTls = main['tls'] as Map;
+      expect(mainTls.containsKey('fragment'), isFalse);
+      expect(mainTls.containsKey('fragment_fallback_delay'), isFalse);
+      final hop = outboundOf(cfg, main['detour'] as String);
+      expect((hop['tls'] as Map)['fragment'], true);
+    });
+
     test('снят детур → узел не тестируется целиком', () {
       final cfg = buildProbeConfig([
         vless('Main', chained: vless('Hop', server: '')),

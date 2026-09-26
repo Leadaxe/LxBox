@@ -472,6 +472,9 @@ final class _Generator {
       for (final rel in f.conflicts) {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
+        // Контракт 1.1.84 — связь с `when` (`tls.fragment` ↔ `tls.engine`
+        // только при apple/windows) судится на значениях этого тела.
+        if (!_relationWhenHolds(rel['when'], f, path, ctx)) continue;
         if (_willBePresent(with0, ctx)) return true;
       }
     }

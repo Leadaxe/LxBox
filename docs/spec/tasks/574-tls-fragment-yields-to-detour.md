@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата старта | 2026-09-27 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-09-27 |
+| Коммиты | `chore(contract): синк 1.1.84 (c5f489df)`; `feat(574): tls.fragment уступает detour сборки и системному TLS-движку` |
 | Контракт | 1.1.84, коммит лаунчера `c5f489df`, `TASKS_LXBOX.md` §81 |
 | Связанные spec'ы | [§573](573-xray-finalmask-tcp-fragment.md) (исследование ядра и факты для этой задачи), [§488](488-xray-dialer-proxy-freedom-fragment.md) |
 
@@ -74,6 +74,14 @@
    код `tls_fragment_system_engine`.
 5. Probe-конфиг: то же снятие `fragment` под `detour`. Кода там нет — у
    probe-сессии нет поверхности уведомлений.
+
+### Как сделано
+
+- Правило 1 исполняет прежний путь связи `listen_port` × `detour`: `applyDetourYields` (`post_steps/tls_transforms.dart`) → новая `yieldToBuildDetour` (`builder/detour_yields.dart`) → `yieldToManaged` (`body_sanitizer.dart`); сам код связи берётся из реестра. `yieldToBuildDetour` вслед за `tls.fragment` снимает осиротевший `fragment_fallback_delay`.
+- `build_config.dart`: коды `applyDetourYields` кладутся и в `emitWarnings`, и в `registryReport.warningsByEmittedTag` → `nodeBuildWarningsByEmittedTag` → `lastBuildWarningsByTag`, то есть в уведомления узла.
+- Правило 4: `_presentInSource` санитайзера считает `managed`-поле (`_managedAt`) отсутствующим для связей соседей. Правило 3 заработало само, от данных реестра.
+- Probe: `_assemble` в `probe_config.dart` зовёт `yieldToBuildDetour` сразу после назначения `detour`, код отбрасывается.
+- Генератор тел круга §476 (`test/contract/body_field_generator.dart`) учитывает `when` у `conflicts`.
 
 ## Риски и edge cases
 

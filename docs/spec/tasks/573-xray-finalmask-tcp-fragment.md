@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done (часть B без п. 4) |
+| Статус | Done |
 | Дата старта | 2026-09-27 |
 | Дата завершения | 2026-09-27 |
 | Коммиты | `chore(contract): синк 1.1.83 (2a373e8c)`; `feat(573): Xray finalmask.tcp fragment → tls.fragment; шум tcpSettings и extra` |
@@ -247,7 +247,7 @@ Xray задаёт фрагментацию TLS ClientHello двумя форма
 - Уступка `tls.fragment` под `detour` и конфликт с системным TLS-движком —
   контракт 1.1.84 (коммит лаунчера `c5f489df`, `TASKS_LXBOX.md` §81), отдельная
   задача. Коды нормы: `detour_with_tls_fragment` (info),
-  `tls_fragment_system_engine` (warning).
+  `tls_fragment_system_engine` (warning). Закрыто задачей 574.
 - Установлено при работе над частью B, нужно этой задаче:
   - Дефект есть на деле: узел из Xray с `finalmask` и `override_detour`
     подписки получает в конфиге и `detour`, и `tls.fragment: true`. Проверено

@@ -34,4 +34,48 @@ void main() {
     expect(applyDetourYields({'endpoints': [ep]}), isEmpty);
     expect(ep['listen_port'], 51820);
   });
+
+  // Контракт 1.1.84 (§81) — `tls.fragment` уступает detour; вслед уходит
+  // осиротевший `fragment_fallback_delay`, если `record_fragment` не задан.
+  Map<String, dynamic> vless(Map<String, dynamic> tls) => {
+        'type': 'vless',
+        'tag': 'v',
+        'server': 'example.com',
+        'server_port': 443,
+        'uuid': '11111111-1111-1111-1111-111111111111',
+        'detour': 'hop',
+        'tls': tls,
+      };
+
+  test('tls.fragment уступает detour вместе с осиротевшей паузой', () {
+    final ob = vless({
+      'enabled': true,
+      'fragment': true,
+      'fragment_fallback_delay': '500ms',
+    });
+    final ws = applyDetourYields({
+      'outbounds': [ob],
+    });
+    expect(ws.map((w) => w.code), ['detour_with_tls_fragment']);
+    expect(ws.single.params['target'], 'hop');
+    expect(ob['tls'], {'enabled': true});
+    expect(ob['detour'], 'hop');
+  });
+
+  test('при record_fragment пауза остаётся', () {
+    final ob = vless({
+      'enabled': true,
+      'fragment': true,
+      'record_fragment': true,
+      'fragment_fallback_delay': '500ms',
+    });
+    applyDetourYields({
+      'outbounds': [ob],
+    });
+    expect(ob['tls'], {
+      'enabled': true,
+      'record_fragment': true,
+      'fragment_fallback_delay': '500ms',
+    });
+  });
 }

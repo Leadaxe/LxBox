@@ -94,8 +94,13 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
 /// Post-step (контракт 1.1.65): `detour` дописывает сборка ПОСЛЕ санитайзера,
 /// поэтому связи `conflicts {with: detour}` реестра перепроверяются здесь, по
 /// готовому телу каждого outbound/endpoint с `detour`: уступающие поля
-/// снимаются с кодом связи ([yieldToManaged]). Хоп сохраняется — снять
+/// снимаются с кодом связи ([yieldToBuildDetour]). Хоп сохраняется — снять
 /// detour значило бы тихий прямой дозвон.
+///
+/// Контракт 1.1.84 (§81) — туда же `tls.fragment` (код
+/// `detour_with_tls_fragment`) у любого узлового флага, откуда бы он ни
+/// пришёл. Порядок в сборке: после проставления `detour` (цепочки,
+/// `override_detour`) и ДО [applyTlsFragment].
 List<RegistryWarning> applyDetourYields(Map<String, dynamic> config) {
   final out = <RegistryWarning>[];
   for (final key in const ['outbounds', 'endpoints']) {
@@ -104,7 +109,7 @@ List<RegistryWarning> applyDetourYields(Map<String, dynamic> config) {
     for (final e in list) {
       if (e is! Map<String, dynamic>) continue;
       if (!e.containsKey('detour')) continue;
-      out.addAll(yieldToManaged(e, 'detour'));
+      out.addAll(yieldToBuildDetour(e));
     }
   }
   return out;

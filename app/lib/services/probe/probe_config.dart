@@ -4,6 +4,7 @@ import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/singbox_entry.dart';
+import '../builder/detour_yields.dart' show yieldToBuildDetour;
 import '../builder/registry_gate.dart';
 
 /// §236/§296 — probe-конфиг для headless-сессии: ВСЕ переданные ноды (включая
@@ -337,6 +338,10 @@ ProbeConfig _assemble(
     main.map['tag'] = mainTag;
     if (b.detourCount > 0) {
       main.map['detour'] = b.entries[0].tag;
+      // Контракт 1.1.84 (§81) — detour назначен в обход buildConfig: поля,
+      // уступающие ему (`tls.fragment`, `listen_port`), снимаются тем же
+      // вопросом к реестру. Кода нет — у probe-сессии нет уведомлений узла.
+      yieldToBuildDetour(main.map);
     }
     for (final e in b.entries) {
       switch (e) {

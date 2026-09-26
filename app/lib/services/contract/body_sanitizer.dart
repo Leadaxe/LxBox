@@ -2088,15 +2088,21 @@ final class _Ctx {
   /// будет, нечему.
   bool _presentInSource(String path, Map<String, Object?> siblings, String prefix) {
     if (!path.contains('.')) {
+      final abs = _join(prefix, path);
+      // Контракт 1.1.84 (§81 п. 3) — managed-поле (`detour`) для связей
+      // соседей отсутствует: во входе оно до ядра не доезжает, его пишет
+      // сборка, и уступку по готовому телу исполняет она
+      // ([yieldToManaged]).
+      if (_managedAt(abs)) return false;
       // Сосед по тому же объекту: обход идёт по `order`, и поле, стоящее
       // позже, в `siblings` ещё не лежит — читаем исходную карту объекта.
       if (siblings.containsKey(path)) return _meaningful(siblings[path]);
-      final abs = _join(prefix, path);
       if (explainedDrops.contains(abs)) return false;
       if (_switchedOff(abs)) return false;
       if (sanitized.containsKey(abs)) return _meaningful(sanitized[abs]);
       return _meaningful(_rawAt(abs));
     }
+    if (_managedAt(path)) return false;
     if (explainedDrops.contains(path)) return false;
     if (_switchedOff(path)) return false;
     if (sanitized.containsKey(path)) return _meaningful(sanitized[path]);
@@ -2105,6 +2111,20 @@ final class _Ctx {
     // значения, и для конфликта его нет.
     if (sanitized.containsKey(parent) || _branchDone(parent)) return false;
     return _meaningful(_rawAt(path));
+  }
+
+  /// Объявлено ли поле по абсолютному пути [path] схемой [scheme] как
+  /// `managed` (его пишет сборка).
+  bool _managedAt(String path) {
+    Map<String, FieldSchema>? fields =
+        ContractRegistry.I.schemaFor(scheme)?.fields;
+    FieldSchema? f;
+    for (final seg in path.split('.')) {
+      f = fields?[seg];
+      if (f == null) return false;
+      fields = f.fields;
+    }
+    return f?.managed ?? false;
   }
 
   /// Значение по абсолютному пути в ИСХОДНОМ теле; `null` — пути нет.
