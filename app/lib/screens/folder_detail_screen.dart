@@ -1532,6 +1532,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         widget.entry.tagPrefix = val.trim();
         unawaited(widget.controller.persistSources());
       },
+      // Фича 565 фаза B — свёртка источника в группу (§74).
+      onReplaceChanged: (r) async {
+        setState(() => widget.entry.replace = r);
+        await widget.controller.persistSources();
+      },
       // §393 A6 — каскад на regex-фильтры Направлений (см. подписку).
       onTagPrefixCommitted: (_) => unawaited(_commitTagPrefix()),
       onSetDetourMode: _setDetourMode,

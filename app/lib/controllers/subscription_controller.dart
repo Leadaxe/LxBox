@@ -14,6 +14,7 @@ import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
+import '../models/source_replace.dart';
 import '../models/source_entry.dart';
 import '../models/tailscale_bundle.dart';
 import '../models/ui_msg.dart';

@@ -5372,5 +5372,26 @@
   },
   "Could not turn the node off.": {
     "value": "Не удалось выключить узел."
+  },
+  "Replace with a group": {
+    "value": "Заменить группой"
+  },
+  "Directions and rules see one group instead of every server": {
+    "value": "Направления и правила видят одну группу вместо каждого сервера"
+  },
+  "Group name": {
+    "value": "Имя группы"
+  },
+  "Both": {
+    "value": "Оба"
+  },
+  "You pick the server in the group": {
+    "value": "Сервер в группе выбираете вы"
+  },
+  "The group picks a server by latency": {
+    "value": "Группа выбирает сервер по задержке"
+  },
+  "You pick the server; the first option picks by latency": {
+    "value": "Сервер выбираете вы; первый вариант выбирает по задержке"
   }
 }

@@ -5157,5 +5157,26 @@
   },
   "Could not turn the node off.": {
     "value": "无法关闭节点。"
+  },
+  "Replace with a group": {
+    "value": "替换为分组"
+  },
+  "Directions and rules see one group instead of every server": {
+    "value": "方向和规则看到的是一个分组，而不是每台服务器"
+  },
+  "Group name": {
+    "value": "分组名称"
+  },
+  "Both": {
+    "value": "两者"
+  },
+  "You pick the server in the group": {
+    "value": "由您在分组中选择服务器"
+  },
+  "The group picks a server by latency": {
+    "value": "分组按延迟选择服务器"
+  },
+  "You pick the server; the first option picks by latency": {
+    "value": "由您选择服务器；第一个选项按延迟选择"
   }
 }

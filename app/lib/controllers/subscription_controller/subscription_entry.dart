@@ -256,6 +256,17 @@ class SubscriptionEntry extends ChangeNotifier {
   set replaceDetourChain(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));
 
+  /// Фича 565 фаза B — свёртка папки или подписки в группу (§74); `null` —
+  /// не свёрнута. У одиночного сервера свёртки нет — no-op.
+  SourceReplace? get replace => _list.replace;
+  set replace(SourceReplace? v) => switch (_list) {
+        final SubscriptionServers s =>
+          _replaceList(s.copyWith(replace: v, clearReplace: v == null)),
+        final FolderServers f =>
+          _replaceList(f.copyWith(replace: v, clearReplace: v == null)),
+        UserServer() => null,
+      };
+
   ServerList _copy({
     String? name,
     bool? enabled,
