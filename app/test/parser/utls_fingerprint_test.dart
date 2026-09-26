@@ -10,6 +10,7 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/utls_fingerprint.dart';
 
 import 'engine_test_setup.dart';
+import 'parse_link_as.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
@@ -122,7 +123,7 @@ void main() {
     test('REALITY + fp=firefox/safari → без предупреждения, значение сохранено',
         () {
       for (final fp in ['firefox', 'safari']) {
-        final spec = parseVless(
+        final spec = parseLinkAs<VlessSpec>(
             'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
             '&fp=$fp&pbk=$_validPbk#L')!;
         expect(spec.tls.fingerprint, fp,
@@ -142,7 +143,7 @@ void main() {
     // проверяли бы разбор без санитайзера, то есть не то поведение, которое
     // видит приложение.
     test('REALITY + fp=edge → reality_fp_not_chrome, значение сохранено', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&fp=edge&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'edge',
@@ -158,7 +159,7 @@ void main() {
 
     test('REALITY + xray-псевдоним hellofirefox_auto → firefox, без предупреждения',
         () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&fp=hellofirefox_auto&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'firefox');
@@ -166,7 +167,7 @@ void main() {
     });
 
     test('REALITY + xray-псевдоним helloqq_auto → qq + предупреждение', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&fp=helloqq_auto&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'qq');
@@ -182,7 +183,7 @@ void main() {
     test('REALITY + chrome-семейство и дефолтный random → без предупреждения',
         () {
       for (final q in ['&fp=chrome', '&fp=chrome_pq', '&fp=HelloChrome_120', '']) {
-        final spec = parseVless(
+        final spec = parseLinkAs<VlessSpec>(
             'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
             '$q&pbk=$_validPbk#L')!;
         expect(spec.warnings.whereType<RealityFingerprintWarning>(), isEmpty,
@@ -191,7 +192,7 @@ void main() {
     });
 
     test('plain TLS + fp=firefox → без предупреждения (сервер не REALITY)', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=tls&encryption=none'
           '&fp=firefox&sni=h#L')!;
       expect(spec.tls.reality, isNull);
@@ -219,7 +220,7 @@ void main() {
 
   group('VLESS (реальный кейс подписки)', () {
     test('REALITY + fp=hellochrome_120 → chrome, МОЛЧА, reality на месте', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=tcp&security=reality&encryption=none'
           '&flow=xtls-rprx-vision&fp=hellochrome_120&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'chrome');
@@ -229,7 +230,7 @@ void main() {
     });
 
     test('fp=QQ → qq (регистр)', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?type=grpc&security=reality&fp=QQ&pbk=$_validPbk#L')!;
       expect(spec.tls.fingerprint, 'qq');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
@@ -240,7 +241,7 @@ void main() {
     // путь и СЫРОЕ значение ссылки.
     test('мусор → chrome + код реестра utls_fp_unknown', () {
       final spec =
-          parseVless('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=garbage&sni=x.com#L')!;
+          parseLinkAs<VlessSpec>('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=garbage&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
             (w) => w.code == 'utls_fp_unknown',
@@ -251,7 +252,7 @@ void main() {
     });
 
     test('emit отдаёт канонизированный utls.fingerprint', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=hellochrome_120&sni=x.com#L')!;
       final out = spec.emit(TemplateVars.empty).map;
       final utls = (out['tls'] as Map)['utls'] as Map;
@@ -259,14 +260,14 @@ void main() {
     });
 
     test('пустой fp → существующий дефолт random (не тронут)', () {
-      final spec = parseVless('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=&sni=x.com#L')!;
+      final spec = parseLinkAs<VlessSpec>('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'random');
     });
   });
 
   group('остальные URI-парсеры', () {
     test('trojan: псевдоним молча', () {
-      final spec = parseTrojan(
+      final spec = parseLinkAs<TrojanSpec>(
           'trojan://p@h:443?security=tls&fp=hellofirefox_auto&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'firefox');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
@@ -279,7 +280,7 @@ void main() {
     // несёт путь со значением, чего у рукописного класса не было.
     test('trojan: мусор → chrome + код реестра utls_fp_unknown', () {
       final spec =
-          parseTrojan('trojan://p@h:443?security=tls&fp=bogus&sni=x.com#L')!;
+          parseLinkAs<TrojanSpec>('trojan://p@h:443?security=tls&fp=bogus&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
             (w) => w.code == 'utls_fp_unknown',
@@ -290,7 +291,7 @@ void main() {
     });
 
     test('trojan: пустой fp → null (без utls-блока)', () {
-      final spec = parseTrojan('trojan://p@h:443?security=tls&sni=x.com#L')!;
+      final spec = parseLinkAs<TrojanSpec>('trojan://p@h:443?security=tls&sni=x.com#L')!;
       expect(spec.tls.fingerprint, isNull);
     });
 
@@ -312,7 +313,7 @@ void main() {
         'path': '/',
       };
       final uri = 'vmess://${base64Encode(utf8.encode(jsonEncode(cfg)))}';
-      final spec = parseVmess(uri)!;
+      final spec = parseLinkAs<VmessSpec>(uri)!;
       expect(spec.tls.fingerprint, 'chrome');
       final w = spec.warnings.whereType<RegistryWarning>().firstWhere(
             (w) => w.code == 'utls_fp_unknown',
@@ -324,7 +325,7 @@ void main() {
 
     test('anytls: псевдоним молча (через VLESS-конвенцию)', () {
       final spec =
-          parseAnyTls('anytls://p@h:443?fp=hellochrome_131&sni=x.com#L')!;
+          parseLinkAs<AnyTlsSpec>('anytls://p@h:443?fp=hellochrome_131&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
     });
@@ -338,7 +339,7 @@ void main() {
       // отпечаток, который на QUIC в принципе не применяется, ядру
       // неизвестным быть не может — корпус его у QUIC-схем не ждёт. Прежде
       // код появлялся побочно, от `normalizeTlsFingerprint` на пути в модель.
-      final spec = parseHysteria2('hysteria2://p@h:443?fp=bogus&sni=x.com#L')!;
+      final spec = parseLinkAs<Hysteria2Spec>('hysteria2://p@h:443?fp=bogus&sni=x.com#L')!;
       expect(spec.tls.fingerprint, isNull, reason: 'блок снят санитайзером');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
       final w = spec.warnings
@@ -350,7 +351,7 @@ void main() {
     });
 
     test('proxy-https: псевдоним молча', () {
-      final spec = parseHttpProxy(
+      final spec = parseLinkAs<HttpSpec>(
           'proxy-https://u:p@h:443?fp=hellochrome_120&sni=x.com#L')!;
       expect(spec.tls.fingerprint, 'chrome');
       expect(spec.warnings.whereType<UnknownFingerprintWarning>(), isEmpty);
@@ -362,7 +363,7 @@ void main() {
         spec.emit(TemplateVars.empty).map['tls'] as Map<String, dynamic>;
 
     test('hysteria2 URI с fp → emit-конфиг БЕЗ utls', () {
-      final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
+      final spec = parseLinkAs<Hysteria2Spec>('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
       // §472 шаг 5 — блок снят САНИТАЙЗЕРОМ, до модели он не доезжает.
       // Прежде он доезжал (`spec.tls.fingerprint == 'chrome'`) и срезался
       // позже, на эмите: `toSingboxForQuic` (снят §546). Тело узла от переезда не
@@ -385,7 +386,7 @@ void main() {
       // Тот же класс, что `xhttp-mode-invalid` у vless на шаге 3: тело и
       // identity прежние, расходится только текст пересобранной ссылки — в
       // сторону очистки.
-      final spec = parseHysteria2('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
+      final spec = parseLinkAs<Hysteria2Spec>('hysteria2://p@h:443?fp=chrome&sni=x.com#L')!;
       expect(spec.toUri(), isNot(contains('fp=')));
       // Узел от этого не страдает: он и раньше поднимался без отпечатка.
       expect(spec.toUri(), contains('sni=x.com'));
@@ -415,7 +416,7 @@ void main() {
 
     test('TCP-протокол (vless) с fp → utls НА МЕСТЕ (контроль)', () {
       final spec =
-          parseVless('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=chrome&sni=x.com#L')!;
+          parseLinkAs<VlessSpec>('vless://8f2e1c44-0000-4000-8000-000000000001@h.example:443?security=tls&fp=chrome&sni=x.com#L')!;
       final tls = emitTls(spec);
       expect((tls['utls'] as Map)['fingerprint'], 'chrome');
     });

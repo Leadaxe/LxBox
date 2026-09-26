@@ -18,8 +18,8 @@ WireguardSpec? parseWireguardUri(String uri, {XrayDropVerdict? dropped}) {
 
   // §481 — вердикт отбраковки наружу: ключи WG и правила AWG судит реестр, и
   // раннер корпуса сверяет его `code`.
-  return parseUriViaPipeline(uri, 'wireguard', dropped: dropped)
-      as WireguardSpec?;
+  // §566 — тип тела по схеме самой ссылки (реестр), не литералом.
+  return parseLinkViaPipeline(uri, dropped: dropped) as WireguardSpec?;
 }
 
 

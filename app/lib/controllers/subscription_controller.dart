@@ -671,7 +671,8 @@ class SubscriptionController extends ChangeNotifier {
   /// §130 — MASQUE-узел через `masque://` URI (аналог [_addWarpPlain]).
   Future<void> _addMasqueNode(MasqueAccount account, String tag,
       {String vhttp = 'h3'}) async {
-    final spec = parseMasqueUri(account.toMasqueUri(vhttp: vhttp));
+    final spec =
+        parseLinkViaPipeline(account.toMasqueUri(vhttp: vhttp)) as MasqueSpec?;
     if (spec == null) {
       _lastError = const ErrMsg(ErrKey.invalidMasqueConfig);
       return;

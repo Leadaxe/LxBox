@@ -20,11 +20,18 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
 /// Чтение файла реестра. Инъекция ради тестов: прод читает `rootBundle`,
 /// тест — файловую систему, и сервис остаётся свободен от биндинга.
 typedef AssetLoader = Future<String> Function(String path);
+
+/// §566 — перечень путей бандла (для `registry/protocols/`). Инъекция ради
+/// тестов: прод читает манифест ассетов (`AssetManifest`).
+typedef AssetLister = Future<List<String>> Function();
+
+/// Каталог протоколов внутри корня контракта.
+const _kProtocolsDir = 'registry/protocols/';
 
 /// Схемы-ссылки (`ref`), которые тело узла разворачивает по имени.
 const _kSharedRefs = <String, String>{
@@ -546,20 +553,53 @@ final class ContractRegistry {
   /// Версия контракта из `contract/VERSION` (например `1.1.0`).
   String get version => _version;
 
-  /// Загрузка из assets. [loader] — для тестов; по умолчанию `rootBundle`.
-  Future<void> load({AssetLoader? loader}) async {
+  /// Загрузка из assets. [loader] и [lister] — для тестов; по умолчанию
+  /// `rootBundle` и манифест ассетов.
+  ///
+  /// §566 — состав `registry/protocols/` берётся из МАНИФЕСТА бандла, а не
+  /// из списка в коде: протокол, приехавший бампом контракта, грузится без
+  /// правки Dart (`pubspec.yaml` кладёт каталог целиком).
+  Future<void> load({AssetLoader? loader, AssetLister? lister}) async {
     final read = loader ?? (String p) => rootBundle.loadString(p);
-    await _load((rel) => read('$_assetRoot/$rel'));
+    final list = lister ??
+        () async =>
+            (await AssetManifest.loadFromAssetBundle(rootBundle)).listAssets();
+    const prefix = '$_assetRoot/$_kProtocolsDir';
+    await _load(
+      (rel) => read('$_assetRoot/$rel'),
+      () async => _protocolFileNames(
+          (await list()).where((p) => p.startsWith(prefix)).map(
+                (p) => p.substring(prefix.length),
+              )),
+    );
   }
 
   /// Загрузка из каталога на диске — путь к КОРНЮ контракта (`contract`),
   /// где лежат `VERSION` и `registry/`. Для юнит-тестов: биндинг Flutter не
   /// нужен, читается та же копия, которую сверяет `check_contract_lock`.
+  /// Состав `registry/protocols/` — листинг каталога (§566).
   Future<void> loadFromDirectory(String dir) async {
-    await _load((rel) => File('$dir/$rel').readAsString());
+    await _load(
+      (rel) => File('$dir/$rel').readAsString(),
+      () async => _protocolFileNames(Directory('$dir/$_kProtocolsDir')
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.uri.pathSegments.last)),
+    );
   }
 
-  Future<void> _load(Future<String> Function(String rel) read) async {
+  /// Имена файлов протоколов без `.json`, по алфавиту: порядок загрузки не
+  /// должен зависеть от того, в каком порядке их отдал манифест или ФС.
+  static List<String> _protocolFileNames(Iterable<String> names) => names
+      .where((n) => n.endsWith('.json') && !n.contains('/'))
+      .map((n) => n.substring(0, n.length - '.json'.length))
+      .toList()
+    ..sort();
+
+  Future<void> _load(
+    Future<String> Function(String rel) read,
+    Future<List<String>> Function() listProtocols,
+  ) async {
     _version = (await read('VERSION')).trim();
 
     for (final entry in _kSharedRefs.entries) {
@@ -587,8 +627,10 @@ final class ContractRegistry {
       }
     }
 
-    for (final scheme in _kProtocolFiles) {
-      final data = jsonDecode(await read('registry/protocols/$scheme.json'))
+    // §566 — состав протоколов даёт каталог реестра (манифест бандла или
+    // листинг на диске), а не список в коде.
+    for (final scheme in await listProtocols()) {
+      final data = jsonDecode(await read('$_kProtocolsDir$scheme.json'))
           as Map<String, dynamic>;
       // Ключ — singbox_type записи, а не имя файла: санитайзер получает
       // `type` из тела узла, и для схем-алиасов (hy2 → hysteria2) имя файла
@@ -982,16 +1024,19 @@ List<String> _stringList(Object? v) {
 /// `null` не возвращается никогда по той же причине — потолок у AWG есть
 /// всегда. Тип оставлен nullable ради вызывающего, который проверяет
 /// загруженность реестра сам.
-int? awgMtuCeilingByRegistry() {
+///
+/// §566 — [type] — тип тела узла (`entry.type`), по нему схема ищется в
+/// реестре; имени протокола здесь нет.
+int? awgMtuCeilingByRegistry(String type) {
   final ceiling =
-      ContractRegistry.I.schemaFor('wireguard')?.fields['mtu']?.maxWhen?['max'];
+      ContractRegistry.I.schemaFor(type)?.fields['mtu']?.maxWhen?['max'];
   return ceiling is num ? ceiling.toInt() : kAwgMtuFallback;
 }
 
 /// §473 — код о ЗАМЕНЕ `mtu` потолком, как его назвал реестр
 /// (`max_when.code`). Второй копии имени в Dart не заводится.
-String? awgMtuClampCodeByRegistry() => ContractRegistry.I
-    .schemaFor('wireguard')
+String? awgMtuClampCodeByRegistry(String type) => ContractRegistry.I
+    .schemaFor(type)
     ?.fields['mtu']
     ?.maxWhen?['code'] as String?;
 
@@ -1004,27 +1049,3 @@ String? awgMtuClampCodeByRegistry() => ContractRegistry.I
 /// молчание безопасно: выдуманный код хуже его отсутствия, а выдуманный MTU
 /// здесь — единственный рабочий.
 const kAwgMtuFallback = 1280;
-
-/// Файлы `registry/protocols/` — перечислены поимённо: `rootBundle` каталог
-/// не листает (AssetManifest дал бы список, но ценой второго формата
-/// чтения), а состав меняется только вместе с бампом контракта, и тогда
-/// список правится осознанно. Расхождение ловит `registry_load_test`.
-const _kProtocolFiles = <String>[
-  'anytls',
-  'chain',
-  'group',
-  'http',
-  'hysteria',
-  'hysteria2',
-  'masque',
-  'naive',
-  'shadowsocks',
-  'socks',
-  'ssh',
-  'tailscale',
-  'trojan',
-  'tuic',
-  'vless',
-  'vmess',
-  'wireguard',
-];

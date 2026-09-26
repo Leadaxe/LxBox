@@ -3,10 +3,11 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/contract/registry.dart';
-import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import 'engine_test_setup.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
+import 'parse_link_as.dart';
+import 'package:lxbox/models/node_spec.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта) для тестов.
 // Раньше тут стоял `pbk=PK` (2 символа) — с §169-валидацией это уже не REALITY.
@@ -24,7 +25,7 @@ void main() {
   // входе И (б) нет транспорта. Проверяем именно сгенерированный outbound.
   group('§115 flow-эмиссия (эталонная матрица)', () {
     String? emittedFlow(String uri) {
-      final spec = parseVless(uri)!;
+      final spec = parseLinkAs<VlessSpec>(uri)!;
       return spec.emit(TemplateVars.empty).map['flow'] as String?;
     }
 
@@ -67,7 +68,7 @@ void main() {
     test('§115: REALITY+bare TCP без flow → flow ПУСТОЙ (honor ссылку)', () {
       // Раньше навязывали xtls-rprx-vision → ломались валидные none-сетапы
       // (x3-ui flow: none). Теперь flow берём из ссылки как есть.
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk&sid=ABCD&sni=w.example.com&fp=chrome#L',
       );
       expect(spec, isNotNull);
@@ -78,7 +79,7 @@ void main() {
     });
 
     test('§115: явный flow=vision на bare TCP → сохраняется', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=$_validPbk&sid=ABCD#L',
       );
       expect(spec!.flow, 'xtls-rprx-vision');
@@ -95,7 +96,7 @@ void main() {
     test('§115/§474: vision + транспорт (ws) → flow погашен реестром',
         () async {
       await ContractRegistry.I.loadFromDirectory('assets/contract');
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=ws&path=/x&security=tls&flow=xtls-rprx-vision#L',
       );
       expect(spec!.flow, '', reason: 'vision несовместим с транспортом');
@@ -112,7 +113,7 @@ void main() {
     test('§115/§474: vision + xhttp → flow погашен (XHTTP+Vision protocol limit)',
         () async {
       await ContractRegistry.I.loadFromDirectory('assets/contract');
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=xhttp&host=cdn.example&security=reality&pbk=$_validPbk&flow=xtls-rprx-vision#L',
       );
       expect(spec!.flow, '');
@@ -125,7 +126,7 @@ void main() {
     });
 
     test('flow=xtls-rprx-vision-udp443 → vision + xudp packet encoding', () {
-      final spec = parseVless('vless://u@h:443?type=tcp&flow=xtls-rprx-vision-udp443');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp&flow=xtls-rprx-vision-udp443');
       expect(spec!.flow, 'xtls-rprx-vision');
       expect(spec.packetEncoding, 'xudp');
     });
@@ -135,21 +136,21 @@ void main() {
     // `…:8443` от перезаписи на 443 становился недозваниваемым.
     test('§459 flow=-udp443 не переписывает порт узла', () {
       final spec =
-          parseVless('vless://u@h:8443?type=tcp&flow=xtls-rprx-vision-udp443')!;
+          parseLinkAs<VlessSpec>('vless://u@h:8443?type=tcp&flow=xtls-rprx-vision-udp443')!;
       expect(spec.port, 8443);
       expect(spec.flow, 'xtls-rprx-vision');
       expect(spec.packetEncoding, 'xudp');
     });
 
     test('plaintext VLESS port keeps TLS disabled', () {
-      final spec = parseVless('vless://u@h:8080?type=ws&path=/x');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:8080?type=ws&path=/x');
       expect(spec!.tls.enabled, isFalse);
     });
   });
 
   group('VLESS transport', () {
     test('ws transport parsed', () {
-      final spec = parseVless('vless://u@h:443?type=ws&path=/p&host=h&security=tls');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=ws&path=/p&host=h&security=tls');
       expect(spec!.transport, isA<WsTransport>());
       final t = spec.transport as WsTransport;
       expect(t.path, '/p');
@@ -158,12 +159,12 @@ void main() {
 
     test('grpc transport parsed', () {
       final spec =
-          parseVless('vless://u@h:443?type=grpc&serviceName=svc&security=tls');
+          parseLinkAs<VlessSpec>('vless://u@h:443?type=grpc&serviceName=svc&security=tls');
       expect((spec!.transport as GrpcTransport).serviceName, 'svc');
     });
 
     test('§097 — xhttp transport → нативный emit (без fallback-warning)', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://u@h:443?type=xhttp&path=/x&host=h&mode=stream-one'
           '&xPaddingBytes=100-1000&noGRPCHeader=true&security=tls');
       final t = spec!.transport as XhttpTransport;
@@ -189,18 +190,18 @@ void main() {
     // другое значение → panic в libbox. См. normalizePacketEncoding.
 
     test('xudp passes through', () {
-      final spec = parseVless('vless://u@h:443?type=tcp&packetEncoding=xudp');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp&packetEncoding=xudp');
       expect(spec!.packetEncoding, 'xudp');
       expect(spec.emit(TemplateVars.empty).map['packet_encoding'], 'xudp');
     });
 
     test('XUDP normalized to lowercase', () {
-      final spec = parseVless('vless://u@h:443?type=tcp&packetEncoding=XUDP');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp&packetEncoding=XUDP');
       expect(spec!.packetEncoding, 'xudp');
     });
 
     test('PacketAddr normalized to lowercase', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&packetEncoding=PacketAddr',
       );
       expect(spec!.packetEncoding, 'packetaddr');
@@ -209,7 +210,7 @@ void main() {
     test('xray-style none silently dropped', () {
       // Реальный триггер краша libbox.so: panic в format.ToString при
       // unknown packet encoding. Должно стать omitted.
-      final spec = parseVless('vless://u@h:443?type=tcp&packetEncoding=none');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp&packetEncoding=none');
       expect(spec!.packetEncoding, '');
       expect(
         spec.emit(TemplateVars.empty).map.containsKey('packet_encoding'),
@@ -218,7 +219,7 @@ void main() {
     });
 
     test('garbage value dropped', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&packetEncoding=somethingweird',
       );
       expect(spec!.packetEncoding, '');
@@ -229,19 +230,19 @@ void main() {
     });
 
     test('absent → empty', () {
-      final spec = parseVless('vless://u@h:443?type=tcp');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp');
       expect(spec!.packetEncoding, '');
     });
 
     test('case-insensitive query key (packetencoding lowercase)', () {
-      final spec = parseVless('vless://u@h:443?type=tcp&packetencoding=xudp');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp&packetencoding=xudp');
       expect(spec!.packetEncoding, 'xudp');
     });
 
     test('vision-udp443 quirk wins over query value', () {
       // flow=xtls-rprx-vision-udp443 принудительно ставит xudp; неверный
       // packetEncoding=none из URI игнорируется (короткое замыкание).
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&flow=xtls-rprx-vision-udp443&packetEncoding=none',
       );
       expect(spec!.packetEncoding, 'xudp');
@@ -261,7 +262,7 @@ void main() {
 
   group('VLESS emit', () {
     test('produces sing-box vless outbound with uuid + flow + tls + transport', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=ws&path=/p&host=h&security=tls&sni=h&fp=chrome',
       );
       final m = spec!.emit(TemplateVars.empty).map;
@@ -288,7 +289,7 @@ void main() {
       // Битая подписка («BLACK LISTS») вешает pbk=enabled на обычную TLS-ноду.
       // Раньше: REALITY с мусорным ключом → sing-box отвергает весь config.
       // Теперь: нода остаётся рабочей plain TLS, reality не создаётся.
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&security=tls&pbk=enabled&sni=w.example.com#L',
       );
       expect(spec, isNotNull);
@@ -298,7 +299,7 @@ void main() {
     });
 
     test('security=reality + pbk=true → деградация в plain TLS', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&security=reality&pbk=true&sni=w.example.com#L',
       );
       expect(spec, isNotNull);
@@ -308,7 +309,7 @@ void main() {
     });
 
     test('валидный pbk → REALITY создаётся (контроль)', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk&sid=ABCD#L',
       );
       expect(spec!.tls.reality, isNotNull);
@@ -329,7 +330,7 @@ void main() {
     late final String encValue = 'mlkem768x25519plus.native.0rtt.$longKey';
 
     test('URI с encryption → поле в спеке, значение как есть', () {
-      final spec = parseVless('vless://u@h:1080?type=ws&path=/ws&'
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:1080?type=ws&path=/ws&'
           'security=none&encryption=$encValue#L');
       expect(spec, isNotNull);
       expect(spec!.encryption, encValue);
@@ -338,12 +339,12 @@ void main() {
     });
 
     test('URI без encryption → пустая строка', () {
-      final spec = parseVless('vless://u@h:443?type=tcp#L');
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp#L');
       expect(spec!.encryption, isEmpty);
     });
 
     test('непустое encryption → эмитится плоским полем рядом с uuid', () {
-      final spec = parseVless('vless://u@h:1080?type=ws&path=/ws&'
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:1080?type=ws&path=/ws&'
           'security=none&encryption=$encValue#L')!;
       final map = spec.emit(TemplateVars.empty).map;
       expect(map['encryption'], encValue);
@@ -351,21 +352,21 @@ void main() {
     });
 
     test('без encryption → ключа в конфиге нет вовсе', () {
-      final spec = parseVless('vless://u@h:443?type=tcp#L')!;
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp#L')!;
       expect(spec.emit(TemplateVars.empty).map.containsKey('encryption'),
           isFalse);
     });
 
     test('encryption=none → слой выключен, поле не эмитится', () {
-      final spec = parseVless('vless://u@h:443?type=tcp&encryption=none#L')!;
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:443?type=tcp&encryption=none#L')!;
       expect(spec.emit(TemplateVars.empty).map.containsKey('encryption'),
           isFalse);
     });
 
     test('round-trip parse → toUri → parse сохраняет значение', () {
-      final spec = parseVless('vless://u@h:1080?type=ws&path=/ws&'
+      final spec = parseLinkAs<VlessSpec>('vless://u@h:1080?type=ws&path=/ws&'
           'security=none&encryption=$encValue#L')!;
-      final reparsed = parseVless(spec.toUri());
+      final reparsed = parseLinkAs<VlessSpec>(spec.toUri());
       expect(reparsed, isNotNull);
       expect(reparsed!.encryption, encValue,
           reason: '§302-правила ходят через эмит-URI: потеря = мёртвый узел');

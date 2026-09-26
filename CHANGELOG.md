@@ -19,6 +19,10 @@
 
 ### Changed
 
+- **Internal: no protocol names left in link parsing code ([§566](docs/spec/tasks/566-scheme-literals-outside-dispatcher.md)).**
+  The list of protocol files now comes from the contract directory, per-protocol link parser wrappers are gone,
+  and input recognition reads the contract; no behaviour change.
+
 - **Docs only: contract doc `CANON.md` renamed to `PARSING_PRINCIPLES.md` (§72).**
   Internal comments and doc links updated to match; no behaviour change.
 

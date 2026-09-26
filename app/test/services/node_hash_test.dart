@@ -5,9 +5,9 @@ import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
-import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import '../parser/engine_test_setup.dart';
+import '../parser/parse_link_as.dart';
 
 /// §400 (контракт 0.10.0, IDENTITY.md) — идентичность узла = его ТЕГ,
 /// уникализированный внутри источника. Контент-хеш остался shim'ом
@@ -51,23 +51,23 @@ void main() {
         '?type=ws&security=tls&sni=x.com&fp=chrome#Label';
 
     test('один и тот же URI при повторном парсе → одинаковый хеш', () {
-      final a = parseVless(uri)!;
-      final b = parseVless(uri)!;
+      final a = parseLinkAs<VlessSpec>(uri)!;
+      final b = parseLinkAs<VlessSpec>(uri)!;
       expect(a.id == b.id, isFalse, reason: 'id эфемерен — новый на парс');
       expect(legacyNodeIdentityHash(a), legacyNodeIdentityHash(b));
     });
 
     test('смена только ремарки (#label → tag) хеш НЕ меняет', () {
-      final a = parseVless(uri)!;
-      final b = parseVless(uri.replaceFirst('#Label', '#Renamed%20NL-42'))!;
+      final a = parseLinkAs<VlessSpec>(uri)!;
+      final b = parseLinkAs<VlessSpec>(uri.replaceFirst('#Label', '#Renamed%20NL-42'))!;
       expect(a.tag == b.tag, isFalse);
       expect(legacyNodeIdentityHash(a), legacyNodeIdentityHash(b));
     });
 
     test('смена сути (uuid / порт) хеш меняет', () {
-      final a = parseVless(uri)!;
-      final otherUuid = parseVless(uri.replaceFirst('0aa41f0a', '1bb52f1b'))!;
-      final otherPort = parseVless(uri.replaceFirst(':443', ':8443'))!;
+      final a = parseLinkAs<VlessSpec>(uri)!;
+      final otherUuid = parseLinkAs<VlessSpec>(uri.replaceFirst('0aa41f0a', '1bb52f1b'))!;
+      final otherPort = parseLinkAs<VlessSpec>(uri.replaceFirst(':443', ':8443'))!;
       expect(legacyNodeIdentityHash(a), isNot(legacyNodeIdentityHash(otherUuid)));
       expect(legacyNodeIdentityHash(a), isNot(legacyNodeIdentityHash(otherPort)));
     });

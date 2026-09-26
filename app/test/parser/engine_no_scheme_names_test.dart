@@ -59,11 +59,33 @@ void main() {
   // Проверяются СТРОКОВЫЕ ЛИТЕРАЛЫ, а не весь текст: у диспетчера законные
   // идентификаторы с именем схемы (`parseWireguardUri`, экспорты
   // `uri_parsers/<схема>_parser.dart`) — это парсеры, а не правило выбора.
-  test('в диспетчере схем ссылки нет литералов схем (§562)', () {
-    const files = [
+  //
+  // §566 — покрытие расширено на загрузку реестра (`registry.dart`: состав
+  // `registry/protocols/` из каталога), распознавание ввода
+  // (`input_helpers.dart`) и весь каталог `uri_parsers/` (обёрток по схеме
+  // там больше нет). Разрешённые исключения — [allowed], каждое с причиной.
+  test('в диспетчере схем ссылки нет литералов схем (§562, §566)', () {
+    final files = [
       'lib/services/parser/uri_parsers.dart',
       'lib/services/parser/mappers/uri_pipeline.dart',
+      'lib/services/contract/registry.dart',
+      'lib/services/subscription/input_helpers.dart',
+      for (final f in Directory('lib/services/parser/uri_parsers')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart')))
+        f.path,
     ];
+    // Файл → литералы, которые в нём законны, с причиной.
+    const allowed = <String, Map<String, String>>{
+      'lib/services/subscription/input_helpers.dart': {
+        // Транспорт СКАЧИВАНИЯ подписки, а не схема узла: реестр такого
+        // набора не объявляет (source_kinds.json опознаёт уже скачанное
+        // тело). Запрос лаунчеру — «Нерешённое» задачи 566.
+        'http://': 'isSubscriptionUrl',
+        'https://': 'isSubscriptionUrl',
+      },
+    };
     const spellings = [
       ...forbidden,
       'ss', 'hy', 'hy2', 'wg', 'awg', 'amneziawg',
@@ -71,6 +93,7 @@ void main() {
       'naive+https', 'naive+quic',
       'proxy-http', 'proxy-https', 'proxy+http', 'proxy+https',
       'vpn', 'incy', 'happ',
+      'http', 'https', 'chain', 'group', 'tailscale',
     ];
     final literal = RegExp(r"'([^'\\]*)'" '|' r'"([^"\\]*)"');
     final hits = <String>[];
@@ -89,6 +112,7 @@ void main() {
           final v = (m.group(1) ?? m.group(2) ?? '').toLowerCase();
           final bare =
               v.endsWith('://') ? v.substring(0, v.length - 3) : v;
+          if (allowed[path]?.containsKey(v) ?? false) continue;
           if (spellings.contains(bare)) {
             hits.add('$path:${i + 1}: «$v» — ${line.trim()}');
           }
