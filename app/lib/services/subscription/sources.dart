@@ -9,6 +9,7 @@ import '../../models/server_list.dart';
 import '../../models/subscription_meta.dart';
 import '../app_log.dart';
 import '../parser/body_decoder.dart';
+import '../parser/engine/decoders.dart' show decodeUtf8Lenient;
 import '../parser/parse_all.dart';
 import 'subscription_identity.dart';
 import 'user_agent.dart';
@@ -299,7 +300,7 @@ String? _decodeBase64Title(String? raw) {
   if (!raw.startsWith(prefix)) return raw;
   try {
     final bytes = base64.decode(raw.substring(prefix.length));
-    return utf8.decode(bytes, allowMalformed: true);
+    return decodeUtf8Lenient(bytes);
   } catch (_) {
     return raw;
   }

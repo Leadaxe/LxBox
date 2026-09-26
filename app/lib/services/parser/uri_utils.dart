@@ -4,6 +4,7 @@ import 'dart:math';
 import '../../models/node_spec.dart' show Awg;
 import '../../models/node_warning.dart';
 import '../app_log.dart';
+import 'engine/decoders.dart' show decodeUtf8Lenient;
 
 /// Максимальная длина URI (защита от мусорных base64-бомб). Совпадает с v1.
 const int maxURILength = 65536;
@@ -156,9 +157,9 @@ List<int>? parseReserved(String raw) {
   return List<int>.from(bytes);
 }
 
-/// UTF-8 декод с fallback'ом на allowMalformed.
-String utf8Lossy(List<int> bytes) =>
-    utf8.decode(bytes, allowMalformed: true);
+/// UTF-8 с заменой битых байтов по правилу движка: серия невалидных байтов
+/// подряд — один U+FFFD (MAPPER_ENGINE §1, [decodeUtf8Lenient]).
+String utf8Lossy(List<int> bytes) => decodeUtf8Lenient(bytes);
 
 /// Удаление управляющих символов из display-строк (оставляем \t \n \r).
 String sanitizeForDisplay(String s) {

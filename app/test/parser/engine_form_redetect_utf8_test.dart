@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/parser/engine/decoders.dart';
 import 'package:lxbox/services/parser/engine/interpreter.dart';
 import 'package:lxbox/services/parser/engine/section.dart';
+import 'package:lxbox/services/parser/uri_utils.dart' show utf8Lossy;
 
 /// Выбор формы по раскрытому тексту (unwrap → redetect) и серия битых байтов
 /// UTF-8 → один U+FFFD (контракт 1.1.74/1.1.75, MAPPER_ENGINE §1).
@@ -106,5 +107,39 @@ void main() {
       expect(decodeUtf8Lenient([0xED, 0xA0, 0x80]), '\uFFFD');
       expect(decodeUtf8Lenient(utf8.encode('Привет €𝄞')), 'Привет €𝄞');
     });
+  });
+
+  group('форма default пробуется последней, где бы ни стояла', () {
+    final specific = {
+      'id': 'wrapped',
+      'detect': {'regex': r'^[^#]*@'},
+      'decode': _unwrap,
+      'space': 'url',
+    };
+    const fallback = {
+      'id': 'plain',
+      'detect': {'default': true},
+      'space': 'url',
+    };
+
+    test('default первой в списке не перехватывает оболочку', () {
+      final res = runSection(
+          _section([fallback, specific]), 'x://${_b64('u:p@h.example:443')}');
+      expect(res?.body['server'], 'h.example');
+      expect(res?.body['server_port'], 443);
+    });
+
+    test('порядок прочих форм сохраняется, default уходит в конец', () {
+      final forms = [
+        MapperForm.fromJson(fallback),
+        const MapperForm(id: 'a'),
+        const MapperForm(id: 'b'),
+      ];
+      expect(formsInTrialOrder(forms).map((f) => f.id), ['a', 'b', 'plain']);
+    });
+  });
+
+  test('utf8Lossy вне движка — то же правило серии', () {
+    expect(utf8Lossy([0x41, 0xCF, 0xF0, 0xE8, 0x42]), 'A\uFFFDB');
   });
 }

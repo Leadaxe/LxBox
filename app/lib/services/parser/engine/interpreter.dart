@@ -202,6 +202,21 @@ EngineResult? runSectionOnIni(
       .execute(inputCodes: parsed.codes);
 }
 
+/// Порядок проб форм: объявленный, но форма с `detect.default` — последней,
+/// независимо от места в списке (MAPPER_ENGINE: «всё остальное»; так же
+/// пробует лаунчер). Относительный порядок прочих форм не меняется.
+List<MapperForm> formsInTrialOrder(List<MapperForm> forms) {
+  if (forms.length < 2) return forms;
+  final i = forms.indexWhere((f) => f.detect?['default'] == true);
+  if (i < 0 || i == forms.length - 1) return forms;
+  return [
+    for (final f in forms)
+      if (f.detect?['default'] != true) f,
+    for (final f in forms)
+      if (f.detect?['default'] == true) f,
+  ];
+}
+
 /// Форма для входа INI: `detect` формы судится предикатами `ini` над УЖЕ
 /// разобранным пространством — язык предикатов один на оба уровня (§2 НОРМЫ).
 SourceSpace? _selectIniForm(MapperSection section, String text) {
@@ -209,7 +224,7 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
   final parsed = parseIniSpace(text, dialect);
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'ini', space: 'ini')]
-      : section.forms;
+      : formsInTrialOrder(section.forms);
   for (final form in forms) {
     if (!detectMatchesIni(form.detect, parsed.space)) continue;
     return SourceSpace(formId: form.id, ini: parsed.space);
@@ -220,11 +235,12 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
 /// Выбрать форму (P1) и построить пространство источников.
 ///
 /// Формы пробуются ПО ПОРЯДКУ, первая, чей `detect` сработал, выигрывает;
-/// `detect.default` — ветка «всё остальное».
+/// `detect.default` — ветка «всё остальное» и пробуется последней, где бы ни
+/// стояла в списке ([formsInTrialOrder]).
 SourceSpace? _selectForm(MapperSection section, String text) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'url', space: 'url')]
-      : section.forms;
+      : formsInTrialOrder(section.forms);
   for (final form in forms) {
     // Текстовый `detect` формы с оболочкой судится по ДВУМ текстам (unwrap →
     // redetect, MAPPER_ENGINE §1): сырому пэйлоаду и раскрытому. Предикаты
@@ -329,7 +345,7 @@ SourceSpace? _selectForm(MapperSection section, String text) {
 SourceSpace? _selectJsonForm(MapperSection section, Map<String, dynamic> doc) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'json', space: 'json')]
-      : section.forms;
+      : formsInTrialOrder(section.forms);
   for (final form in forms) {
     if (!detectMatchesJson(form.detect, doc)) continue;
     return SourceSpace(formId: form.id, json: doc, jsonBase: form.base);
