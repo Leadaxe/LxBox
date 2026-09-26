@@ -833,9 +833,10 @@ Default port: **1080**.
 **The scheme carries the protocol version.** A SOCKS link has no query
 parameter for the version in any dialect, so the scheme itself is the
 discriminator — the way the `proxy-https://` suffix discriminates TLS for the
-HTTP proxy. One table serves both ends, the link mapper and the share-URI
-emitter (`socksSchemeForVersion`, `uri_utils.dart`): a node parsed from
-`socks4://` is emitted back as `socks4://`.
+HTTP proxy. Both ends read the same registry entry (`socks.json`): the link
+mapper's `scheme_sets` (scheme → `version`) and the emitter's `emit.form_from`
+(`version` → scheme), so a node parsed from `socks4://` is emitted back as
+`socks4://`. There is no copy of the table in Dart (§562).
 
 | Scheme | `version` in the body |
 |---|---|

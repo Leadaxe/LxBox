@@ -407,6 +407,21 @@ W1 держала оверлеями. Закрыл их лаунчер, а не 
   чинился правкой этой копии — по одной схеме за находку;
 - `isWireGuardConfig` и `isAmneziaVpnLink` спрашивают реестр.
 
+§562 — диспетчер схем ссылки целиком из реестра. `kPipelineSchemes`,
+таблица «схема → тип тела» (`_kSchemeToType`) и `switch` по написаниям в
+`parseUri` сняты: `registrySchemeType` (`mappers/uri_pipeline.dart`) строится
+при загрузке из `detect.scheme_in` секций `mappers.uri` и `aliases` их
+протоколов (алиас не перекрывает написание секции), и `pipelineSchemes()` /
+`isDirectLink` читают тот же набор. Схема-дискриминатор (версия socks, TLS
+http, транспорт naive) остаётся делом `scheme_sets` на входе и
+`emit.form_from` на выходе — таблица `kSocksVersionByScheme` /
+`socksSchemeForVersion` снята. Ветка вне движка (base64 `.conf` у
+wireguard) выбирается по форме секции (`forms[].space: ini`), контейнер
+`vpn://` и служебные строки — по `source_kinds.json`. Реестра нет — ни одна
+ссылка не разбирается, запасных литералов нет. Греп-страж
+`engine_no_scheme_names_test` запрещает литералы схем в `uri_parsers.dart` и
+`uri_pipeline.dart`.
+
 Оболочки остались КОДОМ (`qCompress`+zlib предикатами не выражаются), но
 вызываются по ИМЕНИ из `unwrap` — так же у лаунчера. Вложенная оболочка
 снимается с потолком `max_unwrap_depth: 2`.

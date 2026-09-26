@@ -374,12 +374,19 @@ sing-box body ──► (already a sing-box map: the step-1 pass judges it verba
 
 Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**,
 **hysteria2**, **tuic**, **anytls**, **naive**, **http(s) proxy**, **socks**
-and **ssh** (`kPipelineSchemes`). The set lists every spelling the dispatcher
-routes by, because a scheme name can carry more than a spelling: `hy2` is a
-plain alias of `hysteria2`, but `naive+quic` differs from `naive+https` by the
-body it produces (`quic: true`), and `proxy-https` differs from `proxy-http` by
-whether the body has a `tls` block at all. Aliases that change nothing —
-`socks5` for `socks`, the `proxy+…` plus-forms of §268 — share one mapper.
+and **ssh**. Since §562 the dispatcher holds no scheme names: `parseUri` maps
+the link's spelling to a body type through `registrySchemeType`
+(`mappers/uri_pipeline.dart`), a map built once per registry load from the
+`detect.scheme_in` of every `mappers.uri` section plus the `aliases` of those
+protocols (`wg` lives only there). A spelling can carry more than a name —
+`naive+quic` differs from `naive+https` by `quic: true`, `proxy-https` from
+`proxy-http` by the `tls` block, `socks4` from `socks` by `version` — and that
+difference is the section's `scheme_sets` on the way in and `emit.form_from` on
+the way out, not the dispatcher's. A section whose `forms[]` include a form the
+link engine cannot run (`space: ini`, the base64 `.conf` link) is routed to its
+own parser by that form, and the `vpn://` container and provider service lines
+are recognised by `source_kinds.json`. Without a loaded registry no link is
+parsed; `engine_no_scheme_names_test` forbids scheme literals in the dispatcher.
 
 Step 7 brought over the last two schemes — **masque** and **wireguard/AWG** —
 and with them the **second input of the same scheme, the INI text**
