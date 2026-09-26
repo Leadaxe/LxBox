@@ -546,6 +546,166 @@ void main() {
     });
   });
 
+  group('§572 — группировка по коду', () {
+    // Узел VLESS·xhttp·Reality из Xray-JSON: по коду на каждое непрочитанное
+    // поле (`_unknownWarning` движка — имя и в path, и в params.query_name).
+    const paths = [
+      'streamSettings.finalmask.tcp.0.type',
+      'streamSettings.finalmask.tcp.0.settings.delay',
+      'streamSettings.finalmask.udp',
+      'streamSettings.sockopt.tcpFastOpen',
+      'streamSettings.xhttpSettings.extra',
+      'streamSettings.xhttpSettings.noGRPCHeader',
+      'streamSettings.tcpSettings',
+    ];
+    final unknownFields = [
+      for (final p in paths)
+        RegistryWarning(
+          code: 'json_field_unknown',
+          path: p,
+          value: '',
+          params: {'query_name': p},
+        ),
+    ];
+    const countKey = ValueKey('notification-group-count-info-json_field_unknown');
+    ValueKey<String> rowKey(int i) =>
+        ValueKey('notification-group-row-info-json_field_unknown-$i');
+
+    testWidgets('семь записей одного кода → одна плитка, число, строки, '
+        'один разбор', (tester) async {
+      await pumpView(tester, unknownFields);
+
+      expect(find.byType(ExpansionTile), findsOneWidget);
+      expect(
+          tester.widget<Text>(find.byKey(countKey)).data, '${paths.length}');
+      // Единственная плитка — развёрнута сразу.
+      for (var i = 0; i < paths.length; i++) {
+        final row = tester.widget<Text>(find.byKey(rowKey(i)));
+        expect(row.data, paths[i], reason: 'порядок записей — исходный');
+        expect(row.style?.fontFamily, 'monospace');
+      }
+      expect(find.text('What happened'), findsOneWidget);
+      expect(find.text('Why it happens'), findsOneWidget);
+      expect(find.text('What you can do'), findsOneWidget);
+      expect(find.text('Details'), findsOneWidget);
+    });
+
+    testWidgets('заголовок группы разных полей — «…», ни одного пути',
+        (tester) async {
+      await pumpView(tester, unknownFields);
+
+      final raw = ContractRegistry.I.textFor('json_field_unknown')!;
+      final title = raw.titleEn.replaceAll('{query_name}', '…');
+      expect(find.text(title), findsOneWidget);
+      // Путь встречается только в строке своей записи, не в заголовке и не
+      // в разборе.
+      for (final p in paths) {
+        expect(find.textContaining(p), findsOneWidget);
+      }
+      expect(find.textContaining('{query_name}'), findsNothing);
+    });
+
+    testWidgets('одинаковые path и value — подстановка обычная, без «…»',
+        (tester) async {
+      await pumpView(tester, const [
+        RegistryWarning(
+          code: 'reality_key_share_invalid',
+          path: 'tls.reality.key_share',
+          value: 'garbage',
+        ),
+        RegistryWarning(
+          code: 'reality_key_share_invalid',
+          path: 'tls.reality.key_share',
+          value: 'garbage',
+        ),
+      ]);
+
+      expect(find.byType(ExpansionTile), findsOneWidget);
+      expect(find.textContaining('…'), findsNothing);
+      expect(
+          tester
+              .widget<Text>(find.byKey(const ValueKey(
+                  'notification-group-row-info-reality_key_share_invalid-0')))
+              .data,
+          'tls.reality.key_share = garbage');
+      final raw = ContractRegistry.I.textFor('reality_key_share_invalid')!;
+      final title = raw.titleEn
+          .replaceAll('{path}', 'tls.reality.key_share')
+          .replaceAll('{value}', 'garbage');
+      expect(find.text(title), findsOneWidget);
+    });
+
+    testWidgets('одиночный код рядом с группой — обычная плитка, порядок по '
+        'первому вхождению', (tester) async {
+      await pumpView(tester, [
+        _infoTls,
+        unknownFields[0],
+        _infoFlow,
+        unknownFields[1],
+      ]);
+
+      // tls_insecure, группа json_field_unknown, flow_deprecated.
+      expect(find.byType(ExpansionTile), findsNWidgets(3));
+      final tlsTitle = ContractRegistry.I.textFor('tls_insecure')!.titleEn;
+      final groupTitle = ContractRegistry.I
+          .textFor('json_field_unknown')!
+          .titleEn
+          .replaceAll('{query_name}', '…');
+      final flowTitle = const RegistryWarning(
+        code: 'flow_deprecated',
+        path: 'flow',
+        value: 'xtls-rprx-direct',
+        params: {'flow': 'xtls-rprx-direct'},
+      ).message();
+      final titles = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data)
+          .where((s) => s == tlsTitle || s == groupTitle || s == flowTitle)
+          .toList();
+      expect(titles, [tlsTitle, groupTitle, flowTitle]);
+      expect(tester.widget<Text>(find.byKey(countKey)).data, '2');
+    });
+
+    testWidgets('счётчик шапки считает записи, а не группы', (tester) async {
+      await pumpView(tester, [...unknownFields, _infoTls]);
+
+      // Плиток две (группа и tls_insecure), а записей восемь.
+      expect(find.byType(ExpansionTile), findsNWidgets(2));
+      expect(find.text('${paths.length + 1}'), findsOneWidget);
+      expect(find.text('2'), findsNothing);
+    });
+
+    testWidgets('один код на разных уровнях в группу не сливается',
+        (tester) async {
+      // `duplicate` — per-app код (§538): класс даёт info, а RegistryWarning
+      // того же кода вне реестра — warning по умолчанию.
+      const inReg = RegistryWarning(code: 'duplicate', path: 'x');
+      expect(inReg.severity, WarningSeverity.warning);
+      await pumpView(tester, const [
+        DuplicateNodeWarning(winner: 'a'),
+        inReg,
+      ]);
+
+      expect(find.byType(ExpansionTile), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('notification-group-count-info-duplicate')),
+          findsNothing);
+      expect(
+          find.byKey(const ValueKey('notification-group-count-warning-duplicate')),
+          findsNothing);
+      expect(find.text('Warnings'), findsOneWidget);
+      expect(find.text('Info'), findsOneWidget);
+    });
+
+    test('groupWarningsByCode: код null в группу не входит', () {
+      final items = groupWarningsByCode(const [
+        SectionsConflictWarning(),
+        SectionsConflictWarning(),
+      ]);
+      // SectionsConflictWarning без кода в таблице — две отдельные плитки.
+      expect(items.map((g) => g.length), [1, 1]);
+    });
+  });
+
   group('§479 — шторка', () {
     testWidgets('заголовок шторки — Notifications', (tester) async {
       await pumpSheet(tester, const [_infoTls]);
