@@ -7,8 +7,10 @@ import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/template_vars.dart';
 import '../../models/transport_spec.dart';
+import '../contract/group_genus.dart';
 import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
+import '../safe_regex.dart';
 import 'engine/engine_mapper.dart' show mapJsonViaEngine;
 import 'mappers/uri_pipeline.dart'
     show parseXrayViaPipeline;
@@ -185,6 +187,9 @@ List<NodeSpec> parseXrayElement(
   }
 
   final result = <NodeSpec>[];
+  // §565 — тег outbound'а элемента → тег выпущенного узла: тело группы
+  // называет членов сразу при разборе.
+  final memberTagByObTag = <String, String>{};
   // §561 — отбраковка записи элемента (протокол вне реестра, битая форма,
   // недостижимый релей, вердикт реестра) едет ТОЛЬКО в [dropped] — результат разбора
   // подписки (D-088). На соседа по элементу она больше не вешается: прежние
@@ -294,6 +299,7 @@ List<NodeSpec> parseXrayElement(
         seen.add(signature);
       }
 
+      if (obTag.isNotEmpty) memberTagByObTag.putIfAbsent(obTag, () => node.tag);
       result.add(node..sourceExtended = extended == compact ? null : extended);
     } catch (_) {
       // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
@@ -316,7 +322,7 @@ List<NodeSpec> parseXrayElement(
     final k = _xrayIdentity(o);
     if (t.isNotEmpty && k != null) localSyn[t] = k;
   }
-  final auto = _xrayAutoSelect(element, remarks, localSyn);
+  final auto = _xrayAutoSelect(element, remarks, localSyn, memberTagByObTag);
   if (auto != null) result.add(auto..sourceExtended = extended);
 
   return result;
@@ -349,8 +355,9 @@ RegistryWarning _unreadEntry(
 AutoSelectSpec? _xrayAutoSelect(
   Map<String, dynamic> element,
   String remarks,
-  Map<String, String>? synonyms,
-) {
+  Map<String, String>? synonyms, [
+  Map<String, String> memberTags = const {},
+]) {
   final routing = element['routing'];
   final balancers = routing is Map ? routing['balancers'] : null;
   if (balancers is! List || balancers.isEmpty) return null;
@@ -425,13 +432,32 @@ AutoSelectSpec? _xrayAutoSelect(
   );
 
   final label = remarks.isNotEmpty ? remarks : (b['tag']?.toString() ?? 'auto');
+  final membership = RuleMembers.fromXraySelector(selector);
+  // §565 — члены, которых `selector` называет префиксами, в теле разбора
+  // перечисляются сразу (корпус `body/xray/balancer_group`); пул на сборке
+  // держит прежнее правило.
+  final inc = tryCompileRegex(membership.include);
+  final sourceMembers = <String>[
+    for (final e in memberTags.entries)
+      if (inc == null || inc.hasMatch(e.key)) e.value,
+  ];
   return AutoSelectSpec(
     id: newUuidV4(),
     tag: tagFromLabel(label, 'urltest', 'auto', 0),
     label: label,
-    membership: RuleMembers.fromXraySelector(selector),
+    membership: membership,
     params: params,
     tagSynonyms: synonyms == null ? const {} : Map.of(synonyms),
+    // §565 — балансировщик рода не объявляет: `genus.by_source.xray`.
+    genus: GroupGenus.forSource(kGenusSourceXray),
+    sourceMemberTags: sourceMembers.toSet().toList(),
+    // Объявлены источником: адрес и период замера из `pingConfig`, режим
+    // пула — из стратегии, если она раскладывает по пулу.
+    sourceParamKeys: {
+      if (ping['destination'] != null) 'url',
+      if (ping['interval'] != null) 'interval',
+      if (mode == UrltestMode.roundRobin) ...{'mode', 'balancer'},
+    },
   );
 }
 

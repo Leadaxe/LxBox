@@ -17,6 +17,14 @@
   and subscription updates until you turn it on or stop the VPN. In the list it
   shows an orange `off` and a dash instead of a ping.
 
+- **Selector groups keep their kind ([§565](docs/spec/features/565%20selector-group-genus/spec.md)).**
+  A `selector` group from a sing-box subscription or a backup is no longer
+  turned into an auto (latency) group: it stays manual, keeps its chosen
+  server and goes to the core as `selector`. In a folder, the group screen has
+  a Manual mode with the member list: pick a server there and the config is
+  rebuilt with it. The folder list shows the group kind and the chosen server;
+  the node screen marks the chosen member.
+
 ### Changed
 
 - **Internal: no protocol names left in link parsing code ([§566](docs/spec/tasks/566-scheme-literals-outside-dispatcher.md)).**

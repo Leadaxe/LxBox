@@ -252,16 +252,40 @@ extension ServerListBuild on ServerList {
         continue;
       }
 
-      final entry = spec.emit(ctx.vars);
+      // §565 — тело разбора + параметры замера, которых источник не объявил.
+      final entry = spec.coreEntry(spec.emit(ctx.vars));
       // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
       // узел и так подтверждён своим трафиком. Для пула из 15 узлов это
       // главная статья расхода батареи. Эмитим только при true (omitempty:
       // отсутствие = false = апстрим), как Направление в build_config.
-      if (ctx.passiveCheck) entry.map['passive_check'] = true;
+      // У ручного рода пробы нет — и поля тоже (ядро: unknown field).
+      if (ctx.passiveCheck && !spec.isManual) {
+        entry.map['passive_check'] = true;
+      }
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
       noteAddress(spec, spec.tag, entry.tag, group: true);
       entry.map['outbounds'] = members;
+      // §565 — `default` ручного рода: сырой тег члена → итоговый. Член не
+      // разрешился — поле снимается, ядро берёт первого живого члена;
+      // выпавшего члена явного состава отчёт уже назвал
+      // (`group_member_dropped`), иначе называем здесь.
+      if (spec.isManual) {
+        entry.map.remove('default');
+        final def = resolveAutoSelectDefault(
+          spec,
+          resolvedTags,
+          containerId: id,
+          rawTags: rawTags,
+          members: members,
+        );
+        if (def != null) {
+          entry.map['default'] = def;
+        } else if (spec.manualDefault.isNotEmpty &&
+            !_isExplicitMember(spec, spec.manualDefault)) {
+          ctx.warn(groupMemberDroppedLine(shown, spec.manualDefault));
+        }
+      }
       ctx.addEntry(entry);
       ctx.addToSelectorTagList(entry);
       // В ✨auto НЕ добавляем, и в urltest-двойник Направления группа тоже не
@@ -340,6 +364,30 @@ List<String> resolveAutoSelectMembers(
       }
   }
   return out;
+}
+
+/// §565 — итоговый тег члена, которого называет `default` группы ручного
+/// рода ([AutoSelectSpec.manualDefault], сырой тег члена контейнера).
+/// `null` — поля нет или член не вошёл в собранный состав [members].
+String? resolveAutoSelectDefault(
+  AutoSelectSpec spec,
+  Map<NodeSpec, String> resolved, {
+  String containerId = '',
+  Map<NodeSpec, String>? rawTags,
+  required List<String> members,
+}) {
+  final want = spec.manualDefault;
+  if (want.isEmpty) return null;
+  for (final e in resolved.entries) {
+    final raw = rawTags == null ? e.key.tag : rawTags[e.key];
+    if (raw == want && members.contains(e.value)) return e.value;
+  }
+  return members.contains(want) ? want : null;
+}
+
+bool _isExplicitMember(AutoSelectSpec spec, String rawTag) {
+  final m = spec.membership;
+  return m is ExplicitMembers && m.members.any((l) => l.tag == rawTag);
 }
 
 /// Контракт 1.1.67 (§63) — код записи отчёта сборки о члене Auto-группы,

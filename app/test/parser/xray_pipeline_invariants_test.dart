@@ -35,6 +35,20 @@ const Map<String, int> _droppedCountChanges = {
   'unsupported_protocol': 1,
 };
 
+/// §565 — тело узла-группы по контракту (PARSING_PRINCIPLES §5, корпус
+/// `body/xray/balancer_group`): состав назван сразу при разборе, параметры
+/// замера — только объявленные источником (полные дописывает сборка,
+/// `AutoSelectSpec.coreEntry`). Отпечаток тела группы сдвигается вместе с
+/// телом; тег и имя — прежние (идентичность узла — тег). Было:
+/// `{"tag":"bal","type":"urltest","outbounds":[],"url":"http://example.com",`
+/// `"interval":"30s","tolerance":50,"idle_timeout":"30m",`
+/// `"interrupt_exist_connections":false}`.
+const Map<String, String> _genusBodyDeltas = {
+  'balancer_group[1]':
+      '{"tag":"bal","type":"urltest","outbounds":["bal proxy"],'
+          '"url":"http://example.com","interval":"30s"}',
+};
+
 const Map<String, String> _expectedChanges = {
   // Битый percent-путь транспорта (`/bad%zz`) ТЕПЕРЬ СНИМАЕТСЯ С ТЕЛА, как
   // требует корпус (`uri/trojan/ws_path_broken_percent_kept`: поле снято,
@@ -141,9 +155,12 @@ void main() {
         for (var i = 0; i < wantNodes.length; i++) {
           final w = wantNodes[i].cast<String, dynamic>();
           final n = got[i];
-          expect(legacyNodeIdentityHash(n), w['identity'],
-              reason: 'identity $name[$i] изменилась: у пользователей слетят '
-                  'выбор узла, отключения и цепочки');
+          final genusDelta = _genusBodyDeltas['$name[$i]'];
+          if (genusDelta == null) {
+            expect(legacyNodeIdentityHash(n), w['identity'],
+                reason: 'identity $name[$i] изменилась: у пользователей '
+                    'слетят выбор узла, отключения и цепочки');
+          }
           expect(n.tag, w['tag'], reason: 'тег $name[$i]');
           expect(n.label, w['label'], reason: 'имя $name[$i]');
           // §454 — `rawSource` Xray-узла остаётся pretty-print ИСХОДНОГО
@@ -153,7 +170,8 @@ void main() {
           // Тело сверяется ТЕКСТОМ: порядок ключей нормативен, golden
           // сравнивается байт в байт (13.7), и пересборка через `Map`
           // спрятала бы сдвиг.
-          expect(jsonEncode(n.emit(TemplateVars.empty).map), w['body_json'],
+          expect(jsonEncode(n.emit(TemplateVars.empty).map),
+              genusDelta ?? w['body_json'],
               reason: 'тело $name[$i] (порядок ключей нормативен — golden '
                   'сравнивается байт в байт)');
           final wantChain = w['chained'];

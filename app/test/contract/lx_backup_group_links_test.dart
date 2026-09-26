@@ -75,14 +75,14 @@ void main() {
   }
 
   test('v10_group_links: члены и позиция на группу — на локальную папку, '
-      'selector → urltest с backup_group_degraded', () {
+      '§565 selector остаётся selector\'ом, без backup_group_degraded', () {
     final pre = _read('v10_group_links.pre.backup.json')!;
     final raw = _read('v10_group_links.backup.json')!;
     final before = _import(pre).lists;
     final got = _import(raw, lists: before);
 
     expect([for (final w in got.file.warnings) '${w.code} ${w.detail} ${w.reason}'],
-        ['$kWarnGroupDegraded Best $kGroupDegradedSelector']);
+        isEmpty);
 
     final work = _folder(got.lists, 'Work');
     expect(work.id, '01FLDGROUPLOCAL00000000000',
@@ -95,6 +95,7 @@ void main() {
       NodeLink(folderId: work.id, tag: 'de-1'),
       NodeLink(folderId: work.id, tag: 'de-2'),
     ]);
+    expect(best.genus, 'selector');
     // Позиция на группу — пара с СЫРЫМ тегом группы и локальным id.
     expect(got.chains.single.hops, [
       const NodeLink(tag: 'relay-root'),
@@ -103,11 +104,11 @@ void main() {
   });
 
   test('v10_dev_forms: члены {tag} — пары своей папки, позиция финальным '
-      'тегом группы (S3) — сырой тег, default строкой не хранится', () {
+      'тегом группы (S3) — сырой тег, default строкой читается', () {
     final raw = _read('v10_dev_forms.backup.json')!;
     final got = _import(raw);
-    expect([for (final w in got.file.warnings) w.code], [kWarnGroupDegraded],
-        reason: 'только selector → urltest; dev-формы молча');
+    expect([for (final w in got.file.warnings) w.code], isEmpty,
+        reason: '§565 — selector исполняется; dev-формы молча');
 
     final dev = _folder(got.lists, 'Dev');
     final g = _group(dev, 'G');
@@ -204,6 +205,7 @@ void main() {
     expect(_group(rules, 'pick').membership, isA<ExplicitMembers>());
     expect(
         [for (final w in got.file.warnings) '${w.code} ${w.detail} ${w.reason}'],
-        ['$kWarnGroupDegraded pick $kGroupDegradedSelector']);
+        isEmpty);
+    expect(_group(rules, 'pick').genus, 'selector');
   });
 }

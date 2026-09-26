@@ -32,6 +32,7 @@ library;
 
 import 'package:collection/collection.dart';
 
+import '../../services/contract/group_genus.dart';
 import '../../services/parser/uri_utils.dart' show newUuidV4;
 import '../auto_select.dart';
 import '../core_reject_verdict.dart'
@@ -45,8 +46,6 @@ import 'node_link_record.dart';
 /// Вид члена папки — узел автовыбора.
 const String kNodeKindAuto = 'auto';
 
-const String _kGroupUrltest = 'urltest';
-const String _kGroupSelector = 'selector';
 
 /// Тег записи без тега (так же называл безымянную группу прежний разбор).
 const String _kUntaggedAuto = 'Auto';
@@ -87,14 +86,16 @@ Map<String, dynamic> autoGroupMemberToRecord(
     'enabled': m.enabled,
     if (m.warnings.isNotEmpty) 'warnings': storedWarningsToJson(m.warnings),
     'group': {
-      'group_type': _kGroupUrltest,
+      // §565 — род группы как есть (`genus.values`).
+      'group_type': group.genus,
       if (membership is ExplicitMembers)
         'members': [
           for (final l in membership.members)
             nodeLinkToRecord(
                 l.isRoot ? NodeLink(folderId: folderId, tag: l.tag) : l),
         ],
-      'strategy': autoSelectParamsToStrategy(group.params),
+      // Параметры замера — у автовыбора; у ручного рода их нет.
+      if (!group.isManual) 'strategy': autoSelectParamsToStrategy(group.params),
       // Поля стороны LxBox (контракт 1.0.1).
       if (membership is RuleMembers)
         'members_rule': {
@@ -102,14 +103,32 @@ Map<String, dynamic> autoGroupMemberToRecord(
           'exclude': membership.exclude,
         },
       if (group.poolBadge != kDefaultPoolBadge) 'pool_badge': group.poolBadge,
-      // §514 / контракт 1.1.50 (D133-53) — `default` СКВОЗНОЙ. Поле рода,
-      // которое мы не исполняем (ручного выбора у нас нет), обязано ДОЖИТЬ в
-      // бэкапе, не интерпретируясь: иначе круг «импорт → бэкап → импорт»
-      // терял выбор пользователя молча. Пишется строкой как пришло — это и
-      // значит «preserve, а не map».
-      if (group.manualDefault.isNotEmpty) 'default': group.manualDefault,
+      // §565 — `default` ручного рода: ссылка NodeLink на члена (писатель
+      // пишет объект, BACKUP `autoGroup.default`).
+      if (group.isManual && group.manualDefault.isNotEmpty)
+        'default': nodeLinkToRecord(
+            _memberLink(membership, group.manualDefault, folderId)),
+      // Контракт 1.1.50 (`preserve_unexecuted`) — у автовыбора поле чужое:
+      // запись старого вида, где selector был сведён к urltest, несёт его
+      // сквозным, строкой как пришло.
+      if (!group.isManual && group.manualDefault.isNotEmpty)
+        'default': group.manualDefault,
     },
   };
+}
+
+/// Ссылка на члена с сырым тегом [tag]: член явного состава, иначе пара
+/// со своей папкой.
+NodeLink _memberLink(
+    AutoSelectMembership membership, String tag, String folderId) {
+  if (membership is ExplicitMembers) {
+    for (final l in membership.members) {
+      if (l.tag == tag) {
+        return l.isRoot ? NodeLink(folderId: folderId, tag: l.tag) : l;
+      }
+    }
+  }
+  return NodeLink(folderId: folderId, tag: tag);
 }
 
 /// [AutoSelectParams] → `strategy` формы `$defs/directionAuto`.
@@ -141,9 +160,9 @@ Map<String, dynamic> autoSelectParamsToStrategy(AutoSelectParams p) {
 
 // ─── чтение ─────────────────────────────────────────────────────────────────
 
-/// Итог чтения записи `kind: auto`: член папки и признак, что группа
-/// приехала `selector`'ом (импорт называет это предупреждением).
-typedef AutoGroupRead = ({FolderMember member, bool fromSelector});
+/// Итог чтения записи `kind: auto`: член папки. §565 — род selector
+/// исполняется, признака «приехала selector'ом» больше нет.
+typedef AutoGroupRead = ({FolderMember member});
 
 /// Запись `kind: auto` папки [folderId] → член-группа. Не бросает.
 ///
@@ -175,12 +194,17 @@ AutoGroupRead autoGroupMemberFromRecord(
   }
   _collectUnknown(group, _groupKeys, '${path}group.', unknown);
 
+  // §565 — род как записан; незнакомый — автовыбор с нотой. Запись без
+  // рода (старые файлы) — автовыбор молча.
   final type = group['group_type'];
-  final fromSelector = type == _kGroupSelector;
-  if (fromSelector) {
-    notes?.add('$where: selector group is read as urltest');
-  } else if (type != _kGroupUrltest) {
-    notes?.add('$where: group_type "$type" is read as urltest');
+  final String genus;
+  if (type is String && GroupGenus.isKnown(type)) {
+    genus = type;
+  } else {
+    genus = GroupGenus.auto;
+    if (type != null) {
+      notes?.add('$where: group_type "$type" is read as ${GroupGenus.auto}');
+    }
   }
 
   final links = <NodeLink>[];
@@ -197,11 +221,9 @@ AutoGroupRead autoGroupMemberFromRecord(
     }
   }
 
-  // §514 / контракт 1.1.50 (D133-53) — `default` СОХРАНЯЕТСЯ сквозным, а не
-  // теряется с нотой. Род группы у нас по-прежнему urltest (ручного выбора
-  // нет), но ПОЛЕ доживает: `preserve_unexecuted` у `genus.round_trip`.
-  // Значение берётся ИМЕНЕМ ЧЛЕНА — та же строка, что писал экспорт; объектная
-  // форма (ссылка S1/S2) сводится к тегу тем же правилом, что и прежде.
+  // §565 — `default` ручного рода: выбранный член, ссылкой (объект) или
+  // сырым тегом (dev-форма), сводится к тегу члена. У автовыбора поле чужое
+  // и доживает сквозным (контракт 1.1.50, `preserve_unexecuted`).
   final rawDefault = group['default'];
   var manualDefault = '';
   if (rawDefault != null) {
@@ -245,11 +267,11 @@ AutoGroupRead autoGroupMemberFromRecord(
         params: autoSelectParamsFromStrategy(strategy),
         poolBadge: badge is String ? badge : kDefaultPoolBadge,
         manualDefault: manualDefault,
+        genus: genus,
       ),
       enabled: enabled is bool ? enabled : true,
       warnings: storedWarningsFromJson(j['warnings']),
     ),
-    fromSelector: fromSelector,
   );
 }
 

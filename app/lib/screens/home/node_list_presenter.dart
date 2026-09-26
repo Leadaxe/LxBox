@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../controllers/home_controller.dart';
+import '../../services/contract/group_genus.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/node_spec.dart';
@@ -14,7 +15,10 @@ import 'source_lookup.dart';
 
 /// Короткий label протокола для строки ноды. TLS опускаем — у большинства
 /// протоколов (VLESS/Trojan/Hy2/TUIC) он дефолт, метить каждую — шум.
-String protoLabel(String type) => switch (type) {
+String protoLabel(String type) => type == GroupGenus.manual
+    // §565 — группа ручного рода (selector). l10n-exempt, как 'Auto' ниже.
+    ? 'Manual'
+    : switch (type) {
       'vless' => 'VLESS',
       'vmess' => 'VMess',
       'trojan' => 'Trojan',

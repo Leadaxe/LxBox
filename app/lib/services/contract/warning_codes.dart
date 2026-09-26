@@ -32,7 +32,6 @@ const kWarningCodes = <Type, String>{
   DetourTargetMissingWarning: 'detour_target_missing',
   DetourToGroupWarning: 'detour_to_group',
   DetourChainTooDeepWarning: 'detour_chain_too_deep',
-  SelectorAsAutoWarning: 'selector_as_auto',
   GroupMemberMissingWarning: 'group_member_missing',
   // §421 — AWG 3.x (SPEC 123): error-коды — причина drop, в результат разбора узла
   // не попадают (узел выброшен), но класс ↔ код зеркалятся для полноты.

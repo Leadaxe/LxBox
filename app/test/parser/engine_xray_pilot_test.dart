@@ -42,6 +42,20 @@ const Map<String, int> _droppedCountChanges = {
   'unsupported_protocol': 1,
 };
 
+/// §565 — тело узла-группы по контракту (PARSING_PRINCIPLES §5, корпус
+/// `body/xray/balancer_group`): состав назван сразу при разборе, параметры
+/// замера — только объявленные источником (полные дописывает сборка,
+/// `AutoSelectSpec.coreEntry`). Отпечаток тела группы сдвигается вместе с
+/// телом; тег и имя — прежние (идентичность узла — тег). Было:
+/// `{"tag":"bal","type":"urltest","outbounds":[],"url":"http://example.com",`
+/// `"interval":"30s","tolerance":50,"idle_timeout":"30m",`
+/// `"interrupt_exist_connections":false}`.
+const Map<String, String> _genusBodyDeltas = {
+  'balancer_group[1]':
+      '{"tag":"bal","type":"urltest","outbounds":["bal proxy"],'
+          '"url":"http://example.com","interval":"30s"}',
+};
+
 const Map<String, String> _expectedChanges = {
   'vless_ws_path_junk': 'битый путь снят с тела (format url_path), узел жив',
   'vless_encryption_junk': 'узел отбракован при разборе (drop_node §477)',
@@ -209,7 +223,8 @@ void main() {
         final w = wantNodes[i].cast<String, dynamic>();
         final n = got[i];
         final gotBody = jsonEncode(n.emit(TemplateVars.empty).map);
-        if (gotBody != w['body_json']) {
+        final genusDelta = _genusBodyDeltas['$name[$i]'];
+        if (gotBody != (genusDelta ?? w['body_json'])) {
           diffs.add('$name[$i] тело:\n  было  ${w['body_json']}\n'
               '  стало $gotBody');
         }
@@ -222,7 +237,7 @@ void main() {
         if (n.rawSource != w['rawSource']) {
           diffs.add('$name[$i] rawSource разошёлся');
         }
-        if (legacyNodeIdentityHash(n) != w['identity']) {
+        if (genusDelta == null && legacyNodeIdentityHash(n) != w['identity']) {
           diffs.add('$name[$i] identity сдвинулась');
         }
         final wantChain = w['chained'];

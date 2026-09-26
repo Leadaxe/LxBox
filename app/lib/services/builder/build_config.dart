@@ -10,6 +10,7 @@ import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
+import '../contract/group_genus.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
 import '../../config/consts.dart';
@@ -1140,9 +1141,10 @@ List<Map<String, dynamic>> _buildDirectionGroups({
   // §322 — узел автовыбора в urltest-двойник Направления не идёт: urltest внутри
   // urltest мерил бы уже выбранный внутренней группой узел, а не сервер.
   // Тип берём из эмитированных entry (там же, откуда его читает AWG-advisory).
+  // §565 — оба рода: selector внутри urltest мерил бы выбранного вручную.
   final groupTags = {
     for (final e in nodeEntries)
-      if (e['type'] == 'urltest') e['tag'] as String,
+      if (GroupGenus.isKnown('${e['type']}')) e['tag'] as String,
   };
   final autoSets = [
     for (final ms in memberSets)

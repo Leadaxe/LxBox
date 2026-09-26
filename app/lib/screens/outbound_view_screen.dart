@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
+import '../services/contract/group_genus.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
 import '../models/config_node.dart';
@@ -88,7 +89,21 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
 
   bool get _isGroupNode {
     final t = widget.config[widget.tag]?.type;
-    return t == 'urltest' || t == 'selector';
+    return t != null && GroupGenus.isKnown(t);
+  }
+
+  /// §565 — группа ручного рода: член выбирается вручную (`default`).
+  bool get _isManualGroup =>
+      widget.config[widget.tag]?.type == GroupGenus.manual;
+
+  /// §565 — выбранный член ручной группы: живой выбор ядра, без туннеля —
+  /// `default` конфига.
+  String? get _manualSelected {
+    if (!_isManualGroup) return null;
+    final live = widget.homeController.state.groupOf(widget.tag)?.selected;
+    if (live != null && live.isNotEmpty) return live;
+    final def = widget.config[widget.tag]?.raw['default'];
+    return def is String && def.isNotEmpty ? def : null;
   }
 
   /// §394 — позиции цепочки из СОБРАННОГО конфига (`null` = узел не цепочка).
@@ -411,9 +426,11 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         _kvRow(
             context,
             'Mode',
-            _isBalancer
-                ? getLocalText.s("Load balance")
-                : getLocalText.s("Fastest")),
+            _isManualGroup
+                ? getLocalText.s("Manual")
+                : _isBalancer
+                    ? getLocalText.s("Load balance")
+                    : getLocalText.s("Fastest")),
       if (_isBalancer && pool != null) _kvRow(context, 'Pool', '$pool'),
       if (_isBalancer && poolTolerance is int && poolTolerance > 0)
         _kvRow(context, 'Pool tolerance', '$poolTolerance ms'),
@@ -521,7 +538,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         ),
         children: [
           for (final m in members)
-            _memberRow(context, '$m', inPool: byTag['$m']),
+            _memberRow(context, '$m',
+                inPool: byTag['$m'], chosen: '$m' == _manualSelected),
         ],
       ),
     );
@@ -532,7 +550,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// Номера слотов здесь НЕ показываем (решение юзера 02.08.2026) — слот
   /// это деталь ротации, она к месту в попапе «View pool», а в составе
   /// группы важно лишь «в работе или нет». Клик ведёт на владельца.
-  Widget _memberRow(BuildContext context, String tag, {CcPoolSlot? inPool}) {
+  Widget _memberRow(BuildContext context, String tag,
+      {CcPoolSlot? inPool, bool chosen = false}) {
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () => _onTagTap(tag),
@@ -542,9 +561,14 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
           children: [
             SizedBox(
               width: 24,
-              child: inPool == null
-                  ? null
-                  : Icon(Icons.check, size: 15, color: cs.onSurfaceVariant),
+              // §565 — у ручной группы отмечен выбранный член.
+              child: chosen
+                  ? Icon(Icons.radio_button_checked,
+                      size: 15, color: cs.primary)
+                  : inPool == null
+                      ? null
+                      : Icon(Icons.check,
+                          size: 15, color: cs.onSurfaceVariant),
             ),
             Expanded(
               child: Text(tag,

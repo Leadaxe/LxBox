@@ -117,7 +117,6 @@ void main() {
         DetourChainTooDeepWarning() => 'detour_deep',
         // §404 — импорт Xray JSON: недостижимый dialerProxy
         DialerProxyUnusableWarning() => 'dialer_proxy_unusable',
-        SelectorAsAutoWarning() => 'selector_as_auto',
         GroupMemberMissingWarning() => 'group_member_missing',
         // §435 — только UI, кода контракта нет.
         SectionsRecordDroppedWarning() => 'sections_record_dropped',

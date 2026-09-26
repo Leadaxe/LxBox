@@ -564,7 +564,7 @@ void main() {
       expect(g.params.mode, d.mode);
     });
 
-    test('selector → группа + warning', () {
+    test('§565 selector → группа рода selector, без предупреждения', () {
       final r = parse([
         cfg([
           vless('a', 'a.com'),
@@ -572,7 +572,9 @@ void main() {
         ])
       ]);
       final g = r.last as AutoSelectSpec;
-      expect(g.warnings, contains(const SelectorAsAutoWarning()));
+      expect(g.genus, 'selector');
+      expect(g.isManual, isTrue);
+      expect(g.warnings, isEmpty);
     });
 
     test('вложенная группа выпадает из состава + warning', () {

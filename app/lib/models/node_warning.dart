@@ -499,20 +499,6 @@ final class DialerProxyUnusableWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.error;
 }
 
-/// §368 §5.1 — `type: selector` (ручной выбор) импортирован как автовыбор:
-/// своего типа узла у нас нет, а терять собранный руками состав хуже, чем
-/// сменить режим отбора.
-final class SelectorAsAutoWarning extends NodeWarning {
-  const SelectorAsAutoWarning();
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.");
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
 /// §368 §5.3 — член группы не доехал: тег не дал узла (служебный/битый
 /// outbound) либо это вложенная группа, а группа членом пула быть не может.
 final class GroupMemberMissingWarning extends NodeWarning {

@@ -1,3 +1,4 @@
+import '../services/contract/group_genus.dart';
 import 'auto_select.dart';
 import 'body_delta.dart';
 import 'emit_context.dart';
@@ -1169,33 +1170,52 @@ final class AutoSelectSpec extends NodeSpec {
     this.tagSynonyms = const {},
     this.poolBadge = kDefaultPoolBadge,
     this.manualDefault = '',
+    String? genus,
+    this.sourceParamKeys,
+    this.sourceMemberTags = const [],
     super.warnings,
     // §454 — у группы из sing-box-конфига источник — её объект; у групп,
     // собранных приложением (§208, папки), источника нет.
     super.rawSource = '',
-  }) : super(server: '', port: 0);
+  })  : genus = genus ?? GroupGenus.auto,
+        super(server: '', port: 0);
 
-  /// **`default` группы-selector — СКВОЗНОЕ поле** (контракт 1.1.50, D133-53,
-  /// решение владельца 24.09.2026).
+  /// §565 — род группы: значение `entry.type` из `genus.values` реестра
+  /// (PARSING_PRINCIPLES §5). Не задан — род автовыбора ([GroupGenus.auto]):
+  /// так рождаются группы, которые собирает само приложение.
+  final String genus;
+
+  /// Род ручного выбора: член выбирается [manualDefault], параметров
+  /// замера у группы нет.
+  bool get isManual => genus == GroupGenus.manual;
+
+  /// §565 — поля параметров, которые источник объявил сам (`url`,
+  /// `interval`, …). Тело результата разбора несёт только их (сторона не
+  /// дописывает свои умолчания в то, что пришло от провайдера); полные
+  /// параметры добавляет сборка ([coreEntry]). `null` — группа собрана
+  /// приложением, тело несёт все параметры.
+  final Set<String>? sourceParamKeys;
+
+  /// §565 — теги членов, которые источник назвал явно, но которые не
+  /// выражены ссылками состава: пул Xray-балансировщика (`selector`
+  /// префиксами) держится правилом, а тело разбора обязано назвать членов
+  /// сразу. Производное от тела подписки, в хранение не идёт.
+  final List<String> sourceMemberTags;
+
+  /// **`default` группы ручного рода** — сырой тег выбранного члена (§565).
   ///
-  /// Имя члена, выбранного ВРУЧНУЮ. Ручного рода у нас нет: обе формы
-  /// приводятся к `urltest` с кодом `selector_as_auto`, — но приведение РОДА и
-  /// потеря ПОЛЯ разные вещи. Прежде `default` исчезал безвозвратно, и круг
-  /// «импорт → бэкап → импорт» терял выбор пользователя МОЛЧА, без кода и без
-  /// возможности восстановления. Сохранение стоит ничего и возвращает полю
-  /// обратимость.
+  /// У рода [isManual] поле активное: идёт в тело (`default`), сборка
+  /// переводит его в итоговый тег члена. У рода автовыбора поле только
+  /// сохраняется сквозным (контракт 1.1.50, `preserve_unexecuted`) — для
+  /// старых записей, где selector был сведён к urltest: в тело ядра оно НЕ
+  /// идёт, ядро декодирует с `DisallowUnknownFields`, и `default` при
+  /// `type: urltest` роняет весь конфиг. Страж — `golden_config`.
   ///
-  /// **В ТЕЛО ЯДРА НЕ ИДЁТ.** Ядро декодирует с `DisallowUnknownFields`, и
-  /// `default`, дописанный к телу с `type: urltest`, роняет ВЕСЬ конфиг —
-  /// значит хранить его можно только ВНЕ тела (модель и бэкап), не подмешивая
-  /// к эмиту. Отсюда и имя нормы: preserve, а не map. Страж — `golden_config`.
-  ///
-  /// Не интерпретируется: значение едет строкой как пришло. Пустая строка —
-  /// «поля не было».
+  /// Пустая строка — «поля не было».
   final String manualDefault;
 
   @override
-  String get protocol => 'urltest';
+  String get protocol => genus;
 
   @override
   bool get isGroup => true;
@@ -1203,17 +1223,61 @@ final class AutoSelectSpec extends NodeSpec {
   @override
   bool get isAddressless => true;
 
-  /// Эмиссия у этого узла особая: состав пула известен только билдеру (теги
-  /// членов присваиваются `allocateTag` уже после `getEntries`), поэтому
-  /// собственный `emitRaw` отдаёт заготовку БЕЗ `outbounds` — билдер
-  /// дописывает их сам (см. `auto_select_build.dart`).
+  /// §565 — тело группы по роду.
+  ///
+  /// `outbounds` — состав, названный источником: ссылки явного состава
+  /// (сырые теги) или [sourceMemberTags]; у группы-правила папки — пусто,
+  /// состав знает только сборка (итоговые теги присваивает `allocateTag`),
+  /// она же перезаписывает `outbounds` (`server_list_build.dart`).
+  ///
+  /// Ручной род несёт `default`; автовыбор — параметры замера, у группы из
+  /// источника только объявленные им ([sourceParamKeys]).
   @override
-  SingboxEntry emitRaw(TemplateVars vars) => Outbound({
-        'tag': tag,
-        'type': 'urltest',
-        'outbounds': <String>[],
-        ...params.toJson(),
-      });
+  SingboxEntry emitRaw(TemplateVars vars) {
+    final m = membership;
+    final members = m is ExplicitMembers
+        ? [for (final l in m.members) l.tag]
+        : sourceMemberTags.toList();
+    final all = params.toJson();
+    final keys = sourceParamKeys;
+    return Outbound({
+      'tag': tag,
+      'type': genus,
+      'outbounds': members,
+      if (isManual) ...{
+        if (keys != null
+            ? keys.contains(kInterruptKey)
+            : params.interruptExistConnections)
+          kInterruptKey: params.interruptExistConnections,
+        if (manualDefault.isNotEmpty) 'default': manualDefault,
+      } else
+        for (final e in all.entries)
+          if (keys == null || keys.contains(e.key)) e.key: e.value,
+    });
+  }
+
+  /// Ключ `interrupt_exist_connections` — общий у обоих родов sing-box.
+  static const String kInterruptKey = 'interrupt_exist_connections';
+
+  /// §565 — тело для ядра: тело разбора [emitted], дополненное параметрами
+  /// замера, которых источник не объявил (у автовыбора умолчания LxBox, а не
+  /// ядра: `url`/`interval` у сторон разные). Порядок ключей — прежний
+  /// полный эмит. У ручного рода дополнять нечего.
+  SingboxEntry coreEntry(SingboxEntry emitted) {
+    if (isManual || sourceParamKeys == null) return emitted;
+    final map = emitted.map;
+    final full = <String, dynamic>{
+      'tag': map['tag'],
+      'type': map['type'],
+      'outbounds': map['outbounds'],
+      ...params.toJson(),
+      ...map,
+    };
+    return switch (emitted) {
+      Outbound() => Outbound(full),
+      Endpoint() => Endpoint(full),
+    };
+  }
 
   /// URI-формы у группы нет: в папке она хранится записью `kind: auto`
   /// (§439, кодек `codec/auto_group_record.dart`), в подписке производна от
@@ -1230,7 +1294,8 @@ final class AutoSelectSpec extends NodeSpec {
       membership == other.membership &&
       params == other.params &&
       poolBadge == other.poolBadge &&
-      manualDefault == other.manualDefault;
+      manualDefault == other.manualDefault &&
+      genus == other.genus;
 
   AutoSelectSpec copyWith({
     String? tag,
@@ -1240,6 +1305,7 @@ final class AutoSelectSpec extends NodeSpec {
     Map<String, String>? tagSynonyms,
     String? poolBadge,
     String? manualDefault,
+    String? genus,
   }) =>
       AutoSelectSpec(
         id: id,
@@ -1250,6 +1316,9 @@ final class AutoSelectSpec extends NodeSpec {
         tagSynonyms: tagSynonyms ?? this.tagSynonyms,
         poolBadge: poolBadge ?? this.poolBadge,
         manualDefault: manualDefault ?? this.manualDefault,
+        genus: genus ?? this.genus,
+        sourceParamKeys: sourceParamKeys,
+        sourceMemberTags: sourceMemberTags,
         warnings: warnings,
         rawSource: rawSource,
       );
