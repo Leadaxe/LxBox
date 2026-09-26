@@ -30,6 +30,18 @@ const _identityFixture = 'test/fixtures/xray/pipeline_identity_before.json';
 /// Два расхождения со снимком, объявленные ШАГОМ 8 фичи 472 (не этой волной):
 /// снимок снят ДО того, как Xray-вход получил судью, и оба кейса — работа
 /// санитайзера, которой на этом входе прежде не было вовсе.
+/// §561 — отбраковка элемента при разборе больше не вешается предупреждением
+/// на соседний узел, а идёт записью в `dropped[]` (решение владельца
+/// 26.09.2026, корпус `body/xray/{malformed_stream,unsupported_protocol}`
+/// зелёный). Снимок снят ДО этого: узлы, теги и тела прежние, меняется только
+/// число отбраковок входа. `hysteria_v1_skipped` — тот же механизм для
+/// протокола вне реестра mobile (`extension: desktop`).
+const Map<String, int> _droppedCountChanges = {
+  'hysteria_v1_skipped': 1,
+  'malformed_stream': 1,
+  'unsupported_protocol': 1,
+};
+
 const Map<String, String> _expectedChanges = {
   'vless_ws_path_junk': 'битый путь снят с тела (format url_path), узел жив',
   'vless_encryption_junk': 'узел отбракован при разборе (drop_node §477)',
@@ -223,9 +235,10 @@ void main() {
           diffs.add('$name[$i] identity звена сдвинулась');
         }
       }
-      if (dropped.length != want['dropped']) {
+      final wantDropped = _droppedCountChanges[name] ?? want['dropped'];
+      if (dropped.length != wantDropped) {
         diffs.add('$name: отбраковок ${dropped.length}, '
-            'ожидалось ${want['dropped']}');
+            'ожидалось $wantDropped');
       }
     }
     expect(diffs, isEmpty, reason: diffs.join('\n'));
