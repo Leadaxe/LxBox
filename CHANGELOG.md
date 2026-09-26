@@ -19,6 +19,15 @@
 
 ### Changed
 
+- **Chains with a REALITY hop no longer refuse to save when uTLS is stripped ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
+  If a chain strips `tls.utls` and a later hop runs REALITY, the editor shows a warning
+  instead of locking the Save button, the strip row reads `kept`, and the build keeps
+  uTLS on all hops and assembles the chain. The strip options, their defaults and
+  descriptions now come from the contract. The AmneziaWG level next to the protocol
+  in the node list (`awg2`, `awg1.5+`, …) is read from the contract as well. A member
+  of an Auto group that no longer resolves to a node is logged as
+  `group_member_dropped`, one line per member.
+
 - **Node sanitizer catches up with contract 1.1.57–1.1.67 ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
   REALITY without uTLS now gets uTLS switched on instead of losing REALITY, and a
   `random` fingerprint under REALITY becomes `chrome`, both with a code on the node;
