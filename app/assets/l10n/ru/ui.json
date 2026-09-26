@@ -2096,6 +2096,9 @@
   "Fastest": {
     "value": "Самый быстрый"
   },
+  "Manual": {
+    "value": "Вручную"
+  },
   "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
   "Feedback": {
     "value": "Отклик"
@@ -5239,6 +5242,12 @@
   },
   "single best server by latency": {
     "value": "один лучший сервер по задержке"
+  },
+  "Selected server": {
+    "value": "Выбранный сервер"
+  },
+  "you pick the server, no latency tests": {
+    "value": "сервер выбираете вы, без замеров задержки"
   },
   "slot %d": {
     "value": "слот %d"

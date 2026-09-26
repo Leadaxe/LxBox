@@ -1890,6 +1890,9 @@
   "Fastest": {
     "value": "最快"
   },
+  "Manual": {
+    "value": "手动"
+  },
   "Fastest — race, then stick to the winner": {
     "value": "最快 — 先并发测速，然后固定用胜出的节点"
   },
@@ -5022,6 +5025,12 @@
   },
   "single best server by latency": {
     "value": "按延迟选出的最优单台服务器"
+  },
+  "Selected server": {
+    "value": "已选服务器"
+  },
+  "you pick the server, no latency tests": {
+    "value": "由你选择服务器，不做延迟测试"
   },
   "slot %d": {
     "value": "通道 %d"

@@ -1245,7 +1245,9 @@ final class AutoSelectSpec extends NodeSpec {
       'type': genus,
       'outbounds': members,
       if (isManual) ...{
-        if (keys != null && keys.contains(kInterruptKey))
+        if (keys != null
+            ? keys.contains(kInterruptKey)
+            : params.interruptExistConnections)
           kInterruptKey: params.interruptExistConnections,
         if (manualDefault.isNotEmpty) 'default': manualDefault,
       } else
