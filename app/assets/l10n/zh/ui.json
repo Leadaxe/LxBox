@@ -139,9 +139,19 @@
       "other": "%d 个域名"
     }
   },
+  "%d dropped": {
+    "value": {
+      "other": "已丢弃 %d 条"
+    }
+  },
   "%d entries copied": {
     "value": {
       "other": "已复制 %d 条记录"
+    }
+  },
+  "%d entries dropped": {
+    "value": {
+      "other": "已丢弃 %d 条记录"
     }
   },
   "%d err": {

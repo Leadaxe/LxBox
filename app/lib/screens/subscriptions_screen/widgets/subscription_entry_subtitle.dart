@@ -105,6 +105,17 @@ Widget? buildSubscriptionEntrySubtitle(
         style: TextStyle(fontSize: 12, color: failColor),
       ));
     }
+
+    // §561 — счётчик записей тела, не ставших узлами; причины — в сводке
+    // на экране подписки.
+    final dropped = entry.dropped.length;
+    if (dropped > 0) {
+      parts.add(Icon(Icons.error_outline, size: 12, color: muted));
+      parts.add(Text(
+        getLocalText.plural("%d dropped", dropped),
+        style: textStyle,
+      ));
+    }
   }
 
   final warningRows = <Widget>[];

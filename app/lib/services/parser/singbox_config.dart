@@ -53,7 +53,12 @@ const _kSingboxGroupTypes = {'selector', 'urltest'};
 ///
 /// Не бросает: битая форма отдельного outbound'а гасится на его гранулярности,
 /// соседи и остальная подписка живут (§3.5).
-List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
+///
+/// §561 — [dropped] (необязательный) собирает причины отбраковки записей
+/// боевого прохода: тип вне ядра, битая форма. Только туда — на соседний
+/// узел они не вешаются.
+List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs,
+    {List<NodeWarning>? dropped}) {
   if (configs.isEmpty) return const [];
 
   // §321 P4 / §404 D-086 — накопитель ПОДПИСЕЙ дедупа на всю подписку. Между
@@ -106,6 +111,7 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
       synonyms: synonyms,
       ownedBy: (sig) => identical(owner[sig], cfg),
       pendingGroups: groups,
+      dropped: dropped,
     ));
   }
   return _bindGroupMembers(result, groups);
@@ -197,6 +203,7 @@ List<NodeSpec> _parseOne(
   required Map<String, String> synonyms,
   required Map<AutoSelectSpec, _GroupRefs> pendingGroups,
   bool Function(String signature)? ownedBy,
+  List<NodeWarning>? dropped,
 }) {
   final entries = _allEntries(config);
   if (entries.isEmpty) return const [];
@@ -231,7 +238,6 @@ List<NodeSpec> _parseOne(
   // Кандидаты в узлы: payload, не служебные, не группы, не цели detour.
   final candidates = <Map<String, dynamic>>[];
   final groups = <Map<String, dynamic>>[];
-  final unsupported = <String>{};
   for (final e in entries) {
     final type = e['type']?.toString() ?? '';
     if (_kSingboxServiceTypes.contains(type)) continue;
@@ -272,8 +278,14 @@ List<NodeSpec> _parseOne(
         sanitizedFrom: BodySource.singbox,
       );
       if (spec == null) {
+        // §561 — тип, которого ядро не ведёт: причина в `dropped[]` с тегом
+        // записи (D-088), параметр `scheme` — значение поля `type`.
         final type = ob['type']?.toString() ?? '';
-        if (type.isNotEmpty) unsupported.add(type);
+        dropped?.add(RegistryWarning(
+          code: 'protocol_unsupported',
+          params: {if (type.isNotEmpty) 'scheme': type},
+          ownerTag: rawTag,
+        ));
         continue;
       }
 
@@ -311,19 +323,10 @@ List<NodeSpec> _parseOne(
     } catch (_) {
       // §321 — «битые формы не роняют разбор целиком» на гранулярности УЗЛА:
       // мусорный тип поля бросает TypeError внутри конвертера, пропускаем этот
-      // outbound. Пропажа не молчаливая — тип уходит в P5-warning.
-      final type = ob['type']?.toString() ?? '';
-      unsupported.add(type.isEmpty ? 'malformed' : type);
-    }
-  }
-
-  // §3.5 — по одному warning на тип, на первом узле конфига (не на каждом —
-  // иначе N копий одного сообщения). Носителя без узла не существует: конфиг,
-  // не давший ни одного узла, теряется молча — компенсируется счётчиком
-  // «skipped» в диалоге импорта (§8).
-  if (unsupported.isNotEmpty && result.isNotEmpty) {
-    for (final type in unsupported) {
-      result.first.warnings.add(UnsupportedProtocolWarning(type));
+      // outbound. §561 — пропажа не молчаливая: форма не прочитана
+      // (CANON §4.1), запись — в `dropped[]`, не на соседа.
+      dropped?.add(
+          RegistryWarning(code: 'form_unrecognized', ownerTag: rawTag));
     }
   }
 

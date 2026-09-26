@@ -148,6 +148,14 @@ List<NodeWarning> maskSecretDropWarnings(List<NodeWarning> dropped) {
   ];
 }
 
+/// §561 — `dropped[]` разбора в том виде, в каком его держит сводка
+/// источника: по старшему уровню, секретные значения скрыты.
+List<NodeWarning> summaryDropped(List<NodeWarning> dropped) =>
+    dropped.isEmpty
+        ? const []
+        : List.unmodifiable(
+            maskSecretDropWarnings(sortedDropWarnings(dropped)));
+
 // `transport_unsupported` — текст в реестре (`transports.json` → fallback
 // транспорта). Класс снят (§485): код ставит движок, не парсер.
 

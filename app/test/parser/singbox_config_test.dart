@@ -28,8 +28,9 @@ Map<String, dynamic> cfg(List<Map<String, dynamic>> outbounds,
         {Map<String, dynamic>? extra}) =>
     {'outbounds': outbounds, ...?extra};
 
-List<NodeSpec> parse(List<Map<String, dynamic>> configs) =>
-    parseSingboxConfigs(configs);
+List<NodeSpec> parse(List<Map<String, dynamic>> configs,
+        [List<NodeWarning>? dropped]) =>
+    parseSingboxConfigs(configs, dropped: dropped);
 
 /// Разбор через публичный вход (decode → parseAll): проверяет и опознание
 /// вида источника.
@@ -263,20 +264,31 @@ void main() {
     });
   });
 
+  // §561 — отбраковка записи живёт только в `dropped[]`: сосед чист.
   group('§368 P5 — ничего не теряется молча', () {
-    test('неизвестный type → warning на соседе', () {
+    List<String> refs(List<NodeWarning> dropped, String code) => [
+          for (final w in dropped.whereType<RegistryWarning>())
+            if (w.code == code) w.ownerTag,
+        ];
+
+    test('неизвестный type → запись в dropped, сосед чист', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([
           vless('ok', 'a.com'),
           {'type': 'shadowtls', 'tag': 'st', 'server': 'b.com'},
         ])
-      ]);
+      ], dropped);
       expect(r, hasLength(1));
-      expect(r.single.warnings, contains(const UnsupportedProtocolWarning('shadowtls')));
+      expect(r.single.warnings, isEmpty);
+      expect(refs(dropped, 'protocol_unsupported'), ['st']);
+      expect(dropped.whereType<RegistryWarning>().single.params['scheme'],
+          'shadowtls');
     });
 
     test('битая форма outbound не роняет соседей', () {
       // `transport` строкой вместо объекта — конвертер бросит TypeError внутри.
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([
           vless('ok', 'a.com'),
@@ -289,25 +301,24 @@ void main() {
             'alter_id': 'не число',
           },
         ])
-      ]);
+      ], dropped);
       expect(r, hasLength(1));
       expect(r.single.server, 'a.com');
-      expect(r.single.warnings.whereType<UnsupportedProtocolWarning>(),
-          isNotEmpty);
+      expect(r.single.warnings, isEmpty);
+      expect(refs(dropped, 'form_unrecognized'), ['bad']);
     });
 
-    test('warning по одному на тип, не на каждый outbound', () {
+    test('одна запись на каждый отбракованный outbound', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         cfg([
           vless('ok', 'a.com'),
           {'type': 'shadowtls', 'tag': 'st1'},
           {'type': 'shadowtls', 'tag': 'st2'},
         ])
-      ]);
-      final unsupported = r.single.warnings
-          .whereType<UnsupportedProtocolWarning>()
-          .where((w) => w.scheme == 'shadowtls');
-      expect(unsupported, hasLength(1));
+      ], dropped);
+      expect(r.single.warnings, isEmpty);
+      expect(refs(dropped, 'protocol_unsupported'), ['st1', 'st2']);
     });
   });
 

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
+import 'node_warnings_sheet.dart';
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
 /// traffic quota bar, expiry, support/web-page chips. Extracted verbatim from
@@ -93,6 +94,12 @@ class SubscriptionMeta extends StatelessWidget {
               ),
             ],
           ),
+          // §561 — записи тела, не ставшие узлами (`dropped[]` последнего
+          // разбора): причины — в той же шторке уведомлений, что у узла.
+          if (entry.dropped.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _DroppedRow(entry: entry),
+          ],
           // Traffic quota
           if (entry.totalBytes > 0) ...[
             const SizedBox(height: 8),
@@ -159,6 +166,40 @@ class SubscriptionMeta extends StatelessWidget {
           style: theme.textTheme.bodySmall,
         ),
       ],
+    );
+  }
+}
+
+/// §561 — строка сводки «N entries dropped»; тап открывает шторку причин.
+class _DroppedRow extends StatelessWidget {
+  const _DroppedRow({required this.entry});
+
+  final SubscriptionEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dropped = entry.dropped;
+    final color = theme.colorScheme.error;
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () => showNodeWarningsSheet(context, dropped),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 14, color: color),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                getLocalText.plural("%d entries dropped", dropped.length),
+                style: theme.textTheme.bodySmall?.copyWith(color: color),
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 16, color: color),
+          ],
+        ),
+      ),
     );
   }
 }
