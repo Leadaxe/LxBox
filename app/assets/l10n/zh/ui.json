@@ -5189,5 +5189,20 @@
   },
   "Could not select this server": {
     "value": "无法选择此服务器"
+  },
+  "Replace groups": {
+    "value": "替换分组"
+  },
+  "a folder or subscription replaced with one group": {
+    "value": "被替换为一个分组的文件夹或订阅"
+  },
+  "A server already has this name — it will get a numeric suffix.": {
+    "value": "已有服务器使用此名称——该服务器将获得数字后缀。"
+  },
+  "Another replace group already has this name.": {
+    "value": "另一个替换分组已使用此名称。"
+  },
+  "A direction already has this name.": {
+    "value": "已有方向使用此名称。"
   }
 }

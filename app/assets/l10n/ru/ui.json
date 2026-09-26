@@ -5407,5 +5407,20 @@
   },
   "Could not select this server": {
     "value": "Не удалось выбрать этот сервер"
+  },
+  "Replace groups": {
+    "value": "Группы замены"
+  },
+  "a folder or subscription replaced with one group": {
+    "value": "папка или подписка, заменённая одной группой"
+  },
+  "A server already has this name — it will get a numeric suffix.": {
+    "value": "Это имя уже носит сервер — ему добавится числовой суффикс."
+  },
+  "Another replace group already has this name.": {
+    "value": "Это имя уже носит другая группа замены."
+  },
+  "A direction already has this name.": {
+    "value": "Это имя уже носит Направление."
   }
 }
