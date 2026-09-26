@@ -6,6 +6,53 @@
 
 ---
 
+## [2.25.7] — 2026-09-27
+
+### Added
+
+- **TLS fragmentation from Xray `finalmask.tcp` ([§573](docs/spec/tasks/573-xray-finalmask-tcp-fragment.md)).**
+  An Xray node that sets ClientHello fragmentation in
+  `streamSettings.finalmask.tcp` (an item with `type: fragment`) now gets the
+  core's `tls.fragment`. These fields used to be ignored, and the node went out
+  without fragmentation. The Xray parameters (`length`, `delay`, `maxSplit`)
+  are not carried over: the core splits the ClientHello at the domain labels
+  of the SNI. The older form (a `freedom` outbound through `dialerProxy`,
+  [§488](docs/spec/tasks/488-xray-dialer-proxy-freedom-fragment.md)) worked
+  before and is unchanged. Contract 1.1.83.
+
+### Changed
+
+- **TLS fragmentation yields to a hop ([§574](docs/spec/tasks/574-tls-fragment-yields-to-detour.md)).**
+  When the build sends a node through another node (a chain, or a
+  subscription's detour), `tls.fragment` is removed from it, together with an
+  orphaned `fragment_fallback_delay`, and the node gets the info notice
+  `detour_with_tls_fragment`. Under a hop the core cannot wait for a segment's
+  ACK and sleeps 500 ms after each one, and the explicit flag turns off the
+  core's own `record_fragment` default. This also applies to nodes whose
+  sing-box JSON sets `tls.fragment`. A `detour` written in the sing-box input itself does not
+  count: it never reaches the core. The same rule runs in probe configs.
+  Contract 1.1.84.
+- **TLS fragmentation with a system TLS engine ([§574](docs/spec/tasks/574-tls-fragment-yields-to-detour.md)).**
+  With `tls.engine` set to `apple` or `windows`, `fragment` and
+  `record_fragment` are removed with the warning `tls_fragment_system_engine`
+  instead of the config failing to start. The engine stays. These engines are
+  not used on Android.
+- **Node notifications are grouped by code ([§572](docs/spec/tasks/572-notifications-group-by-code.md)).**
+  Within a level, notifications that share a code become one entry with a
+  count, the list of fields and a single explanation. A code that occurs once
+  and notifications without a code are shown as before.
+- **Internal.** Contract synced to 1.1.84. GitHub Actions moved to Node 24
+  (`upload-artifact`/`download-artifact` v7, `setup-java` v6,
+  `action-gh-release` v3). No behaviour change.
+
+### Fixed
+
+- **Fewer "field not read" notifications on Xray nodes ([§573](docs/spec/tasks/573-xray-finalmask-tcp-fragment.md)).**
+  An empty `tcpSettings` object and `mode` / `path` / `host` inside
+  `xhttpSettings.extra` (and `splithttpSettings.extra`) no longer produce
+  `json_field_unknown`. Xray always overrides those three with the outer
+  values, so they are read and dropped without a code.
+
 ## [2.25.6] — 2026-09-26
 
 ### Added

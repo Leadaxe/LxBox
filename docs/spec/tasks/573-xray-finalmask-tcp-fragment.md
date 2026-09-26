@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done |
+| Статус | **Released в v2.25.7** (27.09.2026). Done |
 | Дата старта | 2026-09-27 |
 | Дата завершения | 2026-09-27 |
 | Коммиты | `chore(contract): синк 1.1.83 (2a373e8c)`; `feat(573): Xray finalmask.tcp fragment → tls.fragment; шум tcpSettings и extra` |
