@@ -19,6 +19,12 @@
 
 ### Changed
 
+- **Node names with broken bytes and old-style VMess links match the desktop app ([§563](docs/spec/tasks/563-form-redetect-and-utf8-series.md)).**
+  A run of invalid bytes in a node name (for example cp1251 text in a link label)
+  now shows as a single `�` instead of one per byte, so the node tag is the same on
+  both sides. Old-style `vmess://` links with `method:uuid@host:port` under base64
+  are recognised by what is inside the base64, as on desktop.
+
 - **Dropped subscription entries show in the subscription summary, not on a working node ([§561](docs/spec/tasks/561-dropped-only-in-source-summary.md)).**
   An entry the parser could not turn into a node (unknown protocol, broken fields,
   unreachable relay) used to leave its error on a neighbouring node that had nothing
