@@ -2067,10 +2067,26 @@ final class _Run {
     // («имя без точки и двоеточия адресом быть не может») перестаёт быть
     // веткой в коде и становится строкой таблицы — причём только у тех схем,
     // которые её объявили.
+    //
+    // Контракт 1.1.80 (MAPPER_ENGINE §10.5): негодное значение уступает
+    // сперва СЛЕДУЮЩЕМУ звену цепочки `source` с непустым годным значением
+    // (`sni=Germany&servername=real.host` → `real.host`), и только без
+    // такого звена — `default_from`. Код `on_invalid`, если объявлен, — в
+    // обоих случаях.
     if (p.onInvalid['action'] == 'default_from' && value is String) {
       final cond = (p.onInvalid['when'] as Map?)?.cast<String, dynamic>();
       final probe = cond == null ? null : cond['value'];
-      if (probe != null && _matches(value, probe)) return;
+      if (probe != null && _matches(value, probe)) {
+        final code = p.onInvalid['code'] as String?;
+        if (code != null) {
+          warnings.add(
+              NodeWarning.byCode(code, path: p.name, value: value.trim()));
+        }
+        final next = _nextValidSource(p, probe);
+        if (next == null) return;
+        raw = _applySubstitute(p, next);
+        value = raw;
+      }
     }
 
     // `decode_extra` — поверх первого прохода декодера формы.
@@ -2692,6 +2708,28 @@ final class _Run {
       final v = _readSource(src, p);
       if (v == null) continue;
       if (v is String && v.isEmpty && p.empty != 'significant') continue;
+      return v;
+    }
+    return null;
+  }
+
+  /// Следующее за ответившим звено цепочки `source` с непустым значением,
+  /// на котором условие [probe] `on_invalid.when` НЕ выполнено (§10.5);
+  /// `null` — такого звена нет.
+  dynamic _nextValidSource(MapperParam p, Object probe) {
+    final sources = p.sourceByForm.isNotEmpty
+        ? (p.sourceByForm[space.formId] ?? const <String>[])
+        : p.source;
+    var hit = false;
+    for (final src in sources) {
+      final v = _readSource(src, p);
+      if (v == null) continue;
+      if (v is String && v.isEmpty && p.empty != 'significant') continue;
+      if (!hit) {
+        hit = true;
+        continue;
+      }
+      if (v is String && _matches(v, probe)) continue;
       return v;
     }
     return null;
