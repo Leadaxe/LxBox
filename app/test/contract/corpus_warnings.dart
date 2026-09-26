@@ -164,6 +164,24 @@ Set<String> _mapperOnlyPathsFor(String scheme) =>
       return out;
     });
 
+final _mapperUnknownCodesCache = <String, Set<String>>{};
+
+Set<String> _mapperUnknownCodesFor(String scheme) =>
+    _mapperUnknownCodesCache.putIfAbsent(scheme, () {
+      final f = File('$kContractRoot/registry/protocols/$scheme.json');
+      if (!f.existsSync()) return const <String>{};
+      final data = json.decode(f.readAsStringSync()) as Map<String, dynamic>;
+      final mappers = data['mappers'];
+      if (mappers is! Map) return const <String>{};
+      return {
+        for (final section in mappers.values)
+          if (section is Map &&
+              section['unknown_key'] is Map &&
+              (section['unknown_key'] as Map)['code'] is String)
+            (section['unknown_key'] as Map)['code'] as String,
+      };
+    });
+
 void sortWarningsByBodyOrder(
     List<Map<String, dynamic>> warnings, String scheme) {
   if (warnings.length < 2) return;
@@ -176,8 +194,17 @@ void sortWarningsByBodyOrder(
     // Потеря на разборе — впереди всего тела: её место в списке определяет
     // стадия, а не ветка схемы, которой у неё нет.
     if (mapperOnly.contains(path)) return -1;
-    final i = order.indexOf(path.split('.').first);
-    return i < 0 ? 1 << 20 : i;
+    // §560 — индекс элемента (`server_ports[0]`, `tls.alpn[0]`) ветку поля не
+    // меняет: ранг ищется по имени поля без него.
+    final head = path.split('.').first.split('[').first;
+    final i = order.indexOf(head);
+    if (i >= 0) return i;
+    // Код `unknown_key` СЕКЦИИ-маппера (`json_field_unknown` у
+    // `streamSettings.network`) адресует ключ ИСТОЧНИКА, а не тела: по
+    // CANON §6 коды маппера впереди кодов тела. Какие коды это, говорит
+    // реестр (`mappers.*.unknown_key.code`), а не тест.
+    if (_mapperUnknownCodesFor(scheme).contains(w['code'])) return -1;
+    return 1 << 20;
   }
 
   // Устойчивая сортировка: коды одной ветки остаются в порядке разбора.
