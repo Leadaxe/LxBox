@@ -7,7 +7,9 @@ library;
 import 'package:flutter/material.dart';
 
 import '../models/direction.dart';
+import '../models/server_list.dart';
 import '../models/source_replace.dart';
+import '../services/tag_resolver.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/safe_bottom.dart';
 import '../widgets/urltest_idle_hint.dart';
@@ -15,17 +17,49 @@ import '../widgets/urltest_idle_hint.dart';
 /// Итог редактора: `null` у [replace] — свёртка снята.
 typedef SourceReplaceResult = ({SourceReplace? replace});
 
+/// §568 / задача 570 — кто уже носит имя, которое вводят группе свёртки.
+enum ReplaceTagOwner { node, fold, direction }
+
+/// §568 / задача 570 — занятые имена для предупреждения редактора свёртки:
+/// теги узлов других источников (с их префиксом), имена других свёрток и
+/// теги Направлений. Свой источник [selfId] не считается: его узлы свёртка
+/// и заменяет. При совпадении побеждает первый вид в порядке Направление →
+/// свёртка → узел.
+Map<String, ReplaceTagOwner> replaceTagOwnersOf({
+  required Iterable<ServerList> sources,
+  required String selfId,
+  List<Direction> directions = const [],
+}) {
+  final out = <String, ReplaceTagOwner>{};
+  for (final l in sources) {
+    if (l.id == selfId) continue;
+    for (final n in l.nodes) {
+      out[TagResolver.displayTag(l.tagPrefix, n.tag)] = ReplaceTagOwner.node;
+    }
+  }
+  for (final l in sources) {
+    final r = l.replace;
+    if (l.id == selfId || r == null || r.tag.trim().isEmpty) continue;
+    out[r.tag] = ReplaceTagOwner.fold;
+  }
+  for (final d in directions) {
+    out[d.tag] = ReplaceTagOwner.direction;
+  }
+  return out;
+}
+
 /// Открывает редактор. `null` — ушли без сохранения.
 Future<SourceReplaceResult?> openSourceReplaceEditor(
   BuildContext context, {
   required SourceReplace? initial,
   required String defaultTag,
+  Map<String, ReplaceTagOwner> takenTags = const {},
 }) =>
     Navigator.push<SourceReplaceResult>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            SourceReplaceScreen(initial: initial, defaultTag: defaultTag),
+        builder: (_) => SourceReplaceScreen(
+            initial: initial, defaultTag: defaultTag, takenTags: takenTags),
       ),
     );
 
@@ -34,9 +68,14 @@ class SourceReplaceScreen extends StatefulWidget {
     super.key,
     required this.initial,
     required this.defaultTag,
+    this.takenTags = const {},
   });
 
   final SourceReplace? initial;
+
+  /// §568 / задача 570 — занятые имена ([replaceTagOwnersOf]): редактор
+  /// предупреждает, но сохранять не мешает.
+  final Map<String, ReplaceTagOwner> takenTags;
 
   /// Имя группы по умолчанию — имя источника.
   final String defaultTag;
@@ -107,6 +146,22 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
     return v.isEmpty ? fallback : v;
   }
 
+  /// §568 / задача 570 — предупреждение о занятом имени (не запрет):
+  /// узел-тёзка получит суффикс, две свёртки с одним именем дадут две
+  /// группы с одним тегом, Направление-тёзка спорит с группой за ссылки.
+  String? _tagClash() {
+    final tag = _orDefault(_tagCtrl, widget.defaultTag.trim());
+    return switch (widget.takenTags[tag]) {
+      ReplaceTagOwner.node => getLocalText.s(
+          "A server already has this name — it will get a numeric suffix."),
+      ReplaceTagOwner.fold =>
+        getLocalText.s("Another replace group already has this name."),
+      ReplaceTagOwner.direction =>
+        getLocalText.s("A direction already has this name."),
+      null => null,
+    };
+  }
+
   SourceReplace? _snapshot() {
     if (!_on) return null;
     final tag = _orDefault(_tagCtrl, widget.defaultTag.trim());
@@ -174,6 +229,9 @@ class _SourceReplaceScreenState extends State<SourceReplaceScreen> {
                 hintText: widget.defaultTag,
                 border: const OutlineInputBorder(),
                 isDense: true,
+                helperText: _tagClash(),
+                helperMaxLines: 3,
+                helperStyle: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
             const SizedBox(height: 12),

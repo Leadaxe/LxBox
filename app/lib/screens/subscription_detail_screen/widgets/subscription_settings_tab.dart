@@ -50,11 +50,15 @@ class SubscriptionSettingsTab extends StatelessWidget {
     this.onEditIdentityVerOs,
     this.onEditIdentityDeviceModel,
     this.onReplaceChanged,
+    this.otherSources = const [],
   });
 
   /// Фича 565 фаза B — свёртка источника в группу сохранена (`null` — снята).
   /// Нет колбэка — секция не рисуется.
   final Future<void> Function(SourceReplace? replace)? onReplaceChanged;
+
+  /// §568 / задача 570 — все источники (для занятых имён группы свёртки).
+  final List<ServerList> otherSources;
 
   final SubscriptionEntry entry;
 
@@ -163,6 +167,12 @@ class SubscriptionSettingsTab extends StatelessWidget {
               context,
               initial: r,
               defaultTag: entry.displayName,
+              // §568 / задача 570 — предупреждение о занятом имени.
+              takenTags: replaceTagOwnersOf(
+                sources: otherSources,
+                selfId: entry.list.id,
+                directions: directions,
+              ),
             );
             if (res != null) await onReplaceChanged!(res.replace);
           },

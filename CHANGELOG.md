@@ -10,6 +10,21 @@
 
 ### Added
 
+- **Closing the selector, replace and template tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave B).**
+  Template variables with a list of values: a `text_list` with options is a
+  multi-select of chips, `options_open` lets you type your own value next to
+  the list (an `int` is still clamped), and a `text` with a closed list is a
+  dropdown. After a config build with template warnings, Home shows
+  "Template: N warnings" with a button that opens the codes. On the node
+  screen of a manual (`selector`) group, tap the circle next to a member to
+  pick it: live through the core when the VPN is up, otherwise on the next
+  build. The pick of a subscription's group is kept next to the subscription
+  and survives updates and restarts. The direction editor offers replace
+  groups as options; the replace editor warns when the group name is already
+  taken by a server, another replace group or a direction. The notification
+  sheet names the dropped entry, and the paste dialog shows how many entries
+  will be skipped and why.
+
 - **Turn a WireGuard/AmneziaWG node off without restarting the tunnel ([§557](docs/spec/tasks/557-kernel-lx4-wg-endpoint-toggle.md)).**
   Core `v1.14.2-lx.4`. A node's menu has Turn off / Turn on, and the node screen has
   a Node enabled switch. A node that is off drops its connections and refuses new

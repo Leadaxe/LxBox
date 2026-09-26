@@ -103,6 +103,10 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'last_update_status', _r),
   BackupField(BackupRecord.subscription, 'last_node_count', _r),
   BackupField(BackupRecord.subscription, 'consecutive_fails', _r),
+  // §565 / задача 570 — выбор члена групп ручного рода подписки: у
+  // `sourceSubscription` схемы поля нет; выбор — рантайм машины (как выбор
+  // селектора в ядре), срезается молча.
+  BackupField(BackupRecord.subscription, 'group_defaults', _r),
 
   // ── одиночный сервер ─────────────────────────────────────────────────────
   BackupField(BackupRecord.server, 'kind', _c),

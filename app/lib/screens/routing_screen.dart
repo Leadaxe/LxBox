@@ -522,6 +522,11 @@ class _RoutingScreenState extends State<RoutingScreen>
       canDelete: !direction.isRequired,
       allNodeTags: _allNodeTags(),
       directionsAbove: idx <= 0 ? const [] : _directions.sublist(0, idx),
+      // §568 / задача 570 — свёртки источников тоже законные опции.
+      foldCandidates: foldCandidatesOf([
+        for (final e in widget.subController.entries)
+          (name: e.displayName, replace: e.list.replace),
+      ]),
     );
     if (result == null || !mounted) return;
     if (result.wasDeleted) {

@@ -1659,6 +1659,35 @@ class HomeController extends ChangeNotifier
     await _pushNotificationLabels();
   }
 
+  /// §565 / задача 570 — наблюдатель выбора члена selector-группы (главный
+  /// экран и экран узла): Home передаёт его в `SubscriptionController`,
+  /// который запоминает выбор у своей группы (папки или подписки), чтобы он
+  /// пережил перезапуск. Зовётся только после принятого ядром выбора.
+  void Function(String group, String node)? onMemberSelected;
+
+  /// §565 / задача 570 — выбрать члена [nodeTag] в selector-группе [group]
+  /// вживую, не делая её выбранной группой главного экрана (экран узла).
+  /// `false` — туннеля нет или ядро выбор отвергло.
+  Future<bool> selectInGroup(String group, String nodeTag) async {
+    if (group == _state.selectedGroup) {
+      await switchNode(nodeTag);
+      return _state.activeInGroup == nodeTag;
+    }
+    if (!_state.tunnelUp) return false;
+    try {
+      final ok = await _cc.selectOutbound(group, nodeTag);
+      if (!ok) return false;
+      final fresh = await _cc.getGroups();
+      if (fresh != null) _applyGroups(fresh);
+      _addDebug(DebugSource.app, 'Node selected in $group: $nodeTag');
+      onMemberSelected?.call(group, nodeTag);
+      return true;
+    } catch (e) {
+      _addDebug(DebugSource.app, 'Node switch error: $e');
+      return false;
+    }
+  }
+
   Future<void> switchNode(String nodeTag) async {
     final group = _state.selectedGroup;
     if (group == null || !_state.tunnelUp) return;
@@ -1713,6 +1742,7 @@ class HomeController extends ChangeNotifier
         _emit(_state.copyWith(activeInGroup: nodeTag));
       }
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
+      onMemberSelected?.call(group, nodeTag);
       // §047 — outgoing state event (gated, default OFF). reason=user: явный
       // выбор ноды (через UI или automation SWITCH_NODE — оба идут сюда).
       AutomationEventEmitter.I
