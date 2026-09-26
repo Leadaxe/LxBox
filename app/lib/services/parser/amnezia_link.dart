@@ -259,14 +259,33 @@ String _withLastConfigMtu(String ini, Object? mtuRaw) {
 /// мешают и без подстановки (INI-парсер DNS игнорирует) — это fidelity
 /// сохраняемого источника узла (`rawSource`).
 String _substituteDns(String ini, Map<String, dynamic> root) {
-  var out = ini;
-  final dns1 = root['dns1'];
-  final dns2 = root['dns2'];
-  if (dns1 is String && dns1.isNotEmpty) {
-    out = out.replaceAll(r'$PRIMARY_DNS', dns1);
+  final values = <String, String>{
+    r'$PRIMARY_DNS': _profileString(root['dns1']),
+    r'$SECONDARY_DNS': _profileString(root['dns2']),
+  };
+  final out = <String>[];
+  for (final line in ini.split('\n')) {
+    final m = RegExp(r'^(\s*DNS\s*=\s*)(.*)$').firstMatch(line);
+    if (m == null) {
+      out.add(line);
+      continue;
+    }
+    final items = <String>[];
+    for (final raw in m.group(2)!.split(',')) {
+      var item = raw.trim();
+      if (item.isEmpty) continue;
+      if (item.startsWith(r'$')) {
+        // Контракт 1.1.72 (§68, substitute): плейсхолдер контейнера
+        // заменяется значением профиля; неразрешённый снимается.
+        item = values[item] ?? '';
+        if (item.isEmpty) continue;
+      }
+      items.add(item);
+    }
+    // Пустой итог удаляет строку DNS целиком.
+    if (items.isNotEmpty) out.add('${m.group(1)}${items.join(', ')}');
   }
-  if (dns2 is String && dns2.isNotEmpty) {
-    out = out.replaceAll(r'$SECONDARY_DNS', dns2);
-  }
-  return out;
+  return out.join('\n');
 }
+
+String _profileString(Object? v) => v is String ? v.trim() : '';
