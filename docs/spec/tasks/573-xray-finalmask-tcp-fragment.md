@@ -245,4 +245,15 @@ Xray задаёт фрагментацию TLS ClientHello двумя форма
 ## Нерешённое / follow-up
 
 - Уступка `tls.fragment` под `detour` и конфликт с системным TLS-движком —
-  контракт 1.1.84, отдельная задача.
+  контракт 1.1.84 (коммит лаунчера `c5f489df`, `TASKS_LXBOX.md` §81), отдельная
+  задача. Коды нормы: `detour_with_tls_fragment` (info),
+  `tls_fragment_system_engine` (warning).
+- Установлено при работе над частью B, нужно этой задаче:
+  - Дефект есть на деле: узел из Xray с `finalmask` и `override_detour`
+    подписки получает в конфиге и `detour`, и `tls.fragment: true`. Проверено
+    тестом через `buildConfig`; тест снят вместе с шагом (`9eba78cb`).
+  - Происхождение флага по модели различимо: у Xray поля `tls.fragment` нет,
+    поэтому у узла, чей `rawSource` — Xray-outbound (объект с `protocol` и без
+    `type`), флаг всегда выведен реестром.
+  - Probe-конфиг (`app/lib/services/probe/probe_config.dart`) назначает
+    `detour` в обход `buildConfig` — это место проверяется отдельно.
