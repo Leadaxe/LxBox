@@ -841,6 +841,7 @@ Future<BuildResult> _buildConfig({
     nodeServers: injected.dnsServers, // §435 — DNS-записи узлов в конец
     nodeRules: injected.dnsRules,
     resolverDefaults: resolverDefaults, // §441 — Н10
+    globalVars: vars, // §555/§570 — тела шаблонных серверов видят весь шаблон
   );
 
   // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —

@@ -238,11 +238,9 @@ PresetFragments expandPreset(
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
           reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
-          warnings.add(
-            'preset "${preset.presetId}": DNS rule skipped — references '
-            'missing rule_set "$refTag" (download SRS first)',
-          );
           continue;
         }
       } else if (refTag is List) {
@@ -251,11 +249,9 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
           reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
-          warnings.add(
-            'preset "${preset.presetId}": DNS rule skipped — none of '
-            '[${refTag.join(", ")}] available in expanded rule_sets',
-          );
           continue;
         }
         result['rule_set'] = present.length == 1 ? present.first : present;
@@ -366,11 +362,9 @@ PresetFragments expandPreset(
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
           reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
-          warnings.add(
-            'preset "${preset.presetId}": routing rule skipped — references '
-            'missing rule_set "$refTag" (download SRS first)',
-          );
         } else {
           routingRules.add(result);
         }
@@ -380,11 +374,9 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
           reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
-          warnings.add(
-            'preset "${preset.presetId}": routing rule skipped — none of '
-            '[${refTag.join(", ")}] available in expanded rule_sets',
-          );
         } else {
           // Один остался → даунгрейд до string. >1 → оставляем массив.
           result['rule_set'] = present.length == 1 ? present.first : present;

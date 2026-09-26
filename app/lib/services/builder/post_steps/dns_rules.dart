@@ -56,6 +56,8 @@ Future<void> applyCustomDns(
   // висячего detour ([healDetourDroppedDnsRefs]). `dns.final` на такой сервер
   // не заменяется, а снимается с заглушкой `reject`.
   Map<String, String> resolverDefaults = const {},
+  // §555/§570 (§66) — переменные шаблона для тел шаблонных DNS-серверов.
+  Map<String, String> globalVars = const {},
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -118,6 +120,7 @@ Future<void> applyCustomDns(
     nodeServers: nodeServers, // §435
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
     detourDroppedOut: detourDropped, // §441
+    globalVars: globalVars, // §555/§570
   );
   dns['servers'] = serverBodies;
 

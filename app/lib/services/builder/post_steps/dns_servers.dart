@@ -38,12 +38,18 @@ Map<String, Map<String, dynamic>> templateDnsServersByTag(
 /// `@name` ушёл бы в конфиг. Ключ с таким плейсхолдером выпадает, имя — в
 /// [unknownVarsOut] (сборка называет его warning'ом).
 ///
+/// §555 / §570 (контракт 1.1.70, §66) — телу видны ВСЕ переменные шаблона,
+/// как телам пресетов: имя, которого сервер не объявил, берётся из
+/// [globalVars] (свои `vars` сервера сильнее). Пустое значение — Dropped
+/// ключа. Неизвестным остаётся имя, которого нет ни у сервера, ни в шаблоне.
+///
 /// `detour` здесь НЕ нормализуется — это делает caller
 /// ([resolveDnsServersBodies] / UI), у которого есть контекст знакомых
 /// outbound'ов.
 Map<String, dynamic>? resolveTemplateDnsServerBody(
   Map<String, dynamic> wrapper, {
   Map<String, dynamic> varValues = const {},
+  Map<String, String> globalVars = const {},
   List<String>? unknownVarsOut,
 }) {
   final server = wrapper['server'];
@@ -62,6 +68,9 @@ Map<String, dynamic>? resolveTemplateDnsServerBody(
       final def = d['default_value']?.toString() ?? '';
       varsMap[name] = def.isEmpty ? null : def;
     }
+  }
+  for (final e in globalVars.entries) {
+    varsMap.putIfAbsent(e.key, () => e.value.isEmpty ? null : e.value);
   }
   final result = walk(body, (name) {
     if (!varsMap.containsKey(name)) {
@@ -197,6 +206,8 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   Set<String>? tailscaleEndpointTags,
   // §441 (Н10) — теги серверов, выпавших из-за висячего `detour`.
   Set<String>? detourDroppedOut,
+  // §555/§570 (§66) — переменные шаблона, видимые телам шаблонных серверов.
+  Map<String, String> globalVars = const {},
 }) {
   final out = <Map<String, dynamic>>[];
   final seen = <String>{};
@@ -226,7 +237,9 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       DnsServerInline(:final body) => Map<String, dynamic>.from(body),
       DnsServerTemplate(:final varValues) => switch (templateByTag[tag]) {
           final t? => resolveTemplateDnsServerBody(t,
-              varValues: varValues, unknownVarsOut: unknownVars),
+              varValues: varValues,
+              globalVars: globalVars,
+              unknownVarsOut: unknownVars),
           null => null,
         },
       DnsServerPreset() => switch (presetServersByTag[tag]) {
@@ -236,8 +249,8 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     };
     if (body == null) continue;
     for (final name in unknownVars.toSet()) {
-      warningsOut?.add('DNS server "$tag": "@$name" is not declared by the '
-          'server, the key with it is left out.');
+      warningsOut?.add('DNS server "$tag": "@$name" is declared neither by '
+          'the server nor by the template, the key with it is left out.');
     }
     body
       ..remove('enabled')
