@@ -10,20 +10,10 @@ import 'engine/section_loader.dart' show MapperSections;
 import 'uri_utils.dart';
 import 'uri_parsers/wireguard_parser.dart';
 
-// Per-protocol parsers live under uri_parsers/. Re-exported here so existing
-// imports of 'uri_parsers.dart' keep resolving every parse* entry point.
-export 'uri_parsers/anytls_parser.dart';
-export 'uri_parsers/http_parser.dart';
-export 'uri_parsers/hysteria2_parser.dart';
-export 'uri_parsers/masque_parser.dart';
-export 'uri_parsers/naive_parser.dart';
-export 'uri_parsers/shadowsocks_parser.dart';
-export 'uri_parsers/socks_parser.dart';
-export 'uri_parsers/ssh_parser.dart';
-export 'uri_parsers/trojan_parser.dart';
-export 'uri_parsers/tuic_parser.dart';
-export 'uri_parsers/vless_parser.dart';
-export 'uri_parsers/vmess_parser.dart';
+// §566 — обёрток по схеме нет: ссылку разбирает [parseUri] (диспетчер) или
+// общий вход движка [parseLinkViaPipeline]. Под uri_parsers/ остался только
+// парсер формы, которую движок ссылок не исполняет (`ini`, §450).
+export 'mappers/uri_pipeline.dart' show parseLinkViaPipeline;
 export 'uri_parsers/wireguard_parser.dart';
 
 /// §472 шаг 7 / §562 — ФОРМЫ ССЫЛКИ, которые движок ссылок не исполняет, и

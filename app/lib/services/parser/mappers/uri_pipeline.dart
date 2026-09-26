@@ -210,6 +210,19 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme,
   return _runPipeline(uri, mapper, dropped: dropped);
 }
 
+/// §566 — ОБЩИЙ ВХОД движка для одной ссылки: схема берётся из самой
+/// ссылки, тип тела — реестром ([registrySchemeType]).
+///
+/// Прежде у каждой схемы была своя обёртка (`uri_parsers/<схема>_parser.dart`),
+/// которая звала этот же конвейер с написанием схемы литералом. Своей логики
+/// ни у одной из них не было, и новая схема реестра обёртки не требовала бы —
+/// значит, и держать их незачем.
+NodeSpec? parseLinkViaPipeline(String uri, {XrayDropVerdict? dropped}) {
+  final sep = uri.indexOf('://');
+  if (sep <= 0) return null;
+  return parseUriViaPipeline(uri, uri.substring(0, sep), dropped: dropped);
+}
+
 /// §472 шаг 7 / §480 — тот же конвейер для входа, у которого СХЕМЫ НЕТ:
 /// текст INI (`wg-quick`).
 ///

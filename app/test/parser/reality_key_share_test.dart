@@ -4,9 +4,9 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/tls_spec.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/singbox_config.dart';
-import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import 'engine_test_setup.dart';
+import 'parse_link_as.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
@@ -135,16 +135,16 @@ void main() {
   group('§457 share-URI', () {
     test('key_share=classical при валидном pbk → модель и обратно в toUri()',
         () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
           '&sid=abcd&key_share=classical#L')!;
       expect(spec.tls.reality!.keyShare, 'classical');
       expect(spec.toUri(), contains('key_share=classical'));
-      expect(parseVless(spec.toUri())!.tls.reality!.keyShare, 'classical');
+      expect(parseLinkAs<VlessSpec>(spec.toUri())!.tls.reality!.keyShare, 'classical');
     });
 
     test('key_share=hybrid — то же', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
           '&key_share=hybrid#L')!;
       expect(spec.tls.reality!.keyShare, 'hybrid');
@@ -152,7 +152,7 @@ void main() {
     });
 
     test('key_share без валидного pbk — игнорируется', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://u@h:443?type=tcp&security=reality&pbk=enabled'
           '&key_share=classical#L')!;
       expect(spec.tls.reality, isNull);
@@ -162,7 +162,7 @@ void main() {
     test('§459 регистр нормализуется — Classical/HYBRID из ссылки принимаются',
         () {
       for (final good in <String>['Classical', 'HYBRID', '%20hybrid%20']) {
-        final spec = parseVless(
+        final spec = parseLinkAs<VlessSpec>(
             'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
             '&key_share=$good#L')!;
         final want = Uri.decodeComponent(good).trim().toLowerCase();
@@ -173,7 +173,7 @@ void main() {
 
     test('вне enum — поля нет, узел жив', () {
       for (final bad in ['x', '1', '']) {
-        final spec = parseVless(
+        final spec = parseLinkAs<VlessSpec>(
             'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk'
             '&key_share=$bad#L')!;
         expect(spec.tls.reality, isNotNull, reason: 'bad=$bad');
@@ -183,14 +183,14 @@ void main() {
     });
 
     test('узел без поля — URI прежний', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk&sid=abcd#L')!;
       expect(spec.tls.reality!.keyShare, isNull);
       expect(spec.toUri(), isNot(contains('key_share')));
     });
 
     test('anytls несёт key_share тем же путём, что и vless', () {
-      final spec = parseAnyTls(
+      final spec = parseLinkAs<AnyTlsSpec>(
           'anytls://p@h:443?security=reality&pbk=$_validPbk'
           '&key_share=hybrid#L')!;
       expect(spec.tls.reality!.keyShare, 'hybrid');

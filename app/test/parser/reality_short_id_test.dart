@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
 import 'engine_test_setup.dart';
+import 'parse_link_as.dart';
+import 'package:lxbox/models/node_spec.dart';
 
 // §169 — валидный X25519 public key (43-симв base64url = 32 байта).
 const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
@@ -52,7 +53,7 @@ void main() {
     });
 
     test('парсер: vless URI с нечётным sid → REALITY жив, sid пуст', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
         'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk&sid=abc&sni=w.example.com#L',
       );
       expect(spec, isNotNull);
