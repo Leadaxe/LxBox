@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата старта | 2026-09-26 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-09-26 |
+| Коммиты | ce3d1017 (код), docs-коммит с этой записью |
 | Связанные spec'ы | tasks/050, tasks/051 (Wi-Fi-условия custom-правил), docs/features/wifi-aware-routing.md, docs/DIAGNOSTICS.md |
 
 ## Проблема
@@ -102,6 +102,42 @@ Tap to manage.» в секции Wi-Fi показывается всегда, н
 - Автоматический запрос `ACCESS_FINE_LOCATION` через runtime prompt — приложение сознательно не запрашивает местоположение само (комментарий в манифесте), только ведёт в Settings. Не менять.
 - Флаг `neverForLocation` у `NEARBY_WIFI_DEVICES` не трогать; на AVD с ним SSID читается.
 
+### Что сделано (исполнитель)
+
+- `WifiInfoReader.kt`: `hasWifiInfoPermissions` заменён на `missingPermissions`
+  (порядок NEARBY → FINE → BACKGROUND, все отсутствующие одним списком) и
+  `isLocationEnabled` (API 28+ `LocationManager`, ниже `LOCATION_MODE`, при
+  исключении — «включено»). `Result.PermissionMissing(missing)`, новый
+  `Result.LocationDisabled`. `Log.w` на каждую нештатную ветку (для
+  `UnknownSsid` — сырые ssid/bssid), `Log.d` на успех. `readAsState` не менялся:
+  `LocationDisabled` уходит в `else -> null`. `WifiNetworkObserver` не менялся
+  (там тоже `else -> null`).
+- `MainActivity.kt`: Map `{"error", "missing"}`; код `fine_location_missing`,
+  если первое отсутствующее — FINE, иначе `permission_missing`;
+  `location_disabled`; метод канала `openLocationSettings`
+  (`ACTION_LOCATION_SOURCE_SETTINGS`).
+- `PlatformInterfaceWrapper.kt`: только текст двух строк лога (убрано
+  «likely missing NEARBY_WIFI_DEVICES»), поведение то же.
+- `url_launcher.dart`: `WifiInfoError.missing`, `openLocationSettings()`.
+- `wifi_section.dart`: `enum WifiHint` + `wifiHintFromError(reason, missing)`,
+  подсказка рисуется только при `hint != null`.
+- `custom_rule_edit_screen.dart`: проверка при открытии экрана и на
+  `AppLifecycleState.resumed` (возврат из системных настроек), после диалога
+  разрешений; `_addCurrentWifi` — диалог с реальным `missing`, SnackBar с
+  действием Settings для `location_disabled`, новый текст `unknown_ssid`. Tap по
+  подсказке: геолокация → `openLocationSettings`, разрешения → диалог (вместо
+  перехода в App Settings → Diagnostics).
+- `wifi_permission_dialog.dart`: ветка `ACCESS_FINE_LOCATION`.
+- Раздел 5: в Diagnostics есть строка «Location (background)» — расширена
+  полем `wifiLocationIssue` (`fine_location_missing` / `location_disabled`),
+  tap по ней при выданном BACKGROUND ведёт к конкретной причине.
+- l10n: 7 новых строк в `ru` и `zh`, 2 осиротевших ключа удалены.
+- Тест: `app/test/services/url_launcher_wifi_info_test.dart` (разбор Map,
+  `missing`, выбор подсказки) — 7/7.
+- `docs/DIAGNOSTICS.md`: раздел «`<unknown ssid>` in Wi-Fi rules» переписан.
+- Предсохранение правила (`_save`) по-прежнему проверяет только BACKGROUND и
+  NEARBY — в ТЗ не входило.
+
 ## Риски и edge cases
 
 - API 24–27: `isLocationEnabled` отсутствует, использовать `Settings.Secure.LOCATION_MODE`; при исключении считать, что геолокация включена (не блокировать чтение из-за проверки).
@@ -114,6 +150,25 @@ Tap to manage.» в секции Wi-Fi показывается всегда, н
 - Dart: точечно один тест на разбор Map в `UrlLauncher.getCurrentWifiInfo` (новые коды, `missing`), если есть существующий тест-файл для url_launcher — дополнить его, полный прогон не гонять.
 - Ручная проверка на AVD `LxBox_test` (API 34, эмулятор уже запущен, разрешения выданы): четыре варианта из таблицы диагностики + пятый: отозвать FINE → Add current показывает диалог с «Precise location…», подсказка в секции показывает «Precise location permission missing»; вернуть FINE → подсказка исчезает. Каждый вариант — строка в logcat `WifiInfoReader`.
 - Критерии приёмки: ни один из четырёх сценариев не показывает старый совет «toggling Wi-Fi off/on»; в logcat по каждому сценарию есть причина; CI зелёный.
+
+### Результат на AVD `LxBox_test` (API 34, 2.25.5-dev.97)
+
+| Сценарий | Подсказка в секции | Add current | logcat `WifiInfoReader` |
+|---|---|---|---|
+| Всё выдано, геолокация включена | нет | чип `AndroidWifi · 00:13:10:85:fe:01` | `D ok: ssid='AndroidWifi' …` |
+| Геолокация выключена (`location_mode 0`) | «Location is turned off» (появилась по resume) | SnackBar «Location is turned off…» + Settings → открывает `LocationSettingsActivity` | `W location disabled: system location toggle is off` |
+| FINE отозван | «Precise location permission missing» | диалог: `ACCESS_FINE_LOCATION` + «Precise location is required…», кнопка Open Settings | `W permission missing: android.permission.ACCESS_FINE_LOCATION` |
+| FINE выдан обратно | исчезла по resume | снова чип `AndroidWifi` | `D ok: …` |
+| BACKGROUND отозван | «Background location missing» | — | `W permission missing: …ACCESS_BACKGROUND_LOCATION` |
+| NEARBY отозван | «Nearby Wi-Fi permission missing» | — | `W permission missing: …NEARBY_WIFI_DEVICES` |
+| Diagnostics, FINE отозван / выдан | строка Location (background): «Precise location permission missing» / «Granted — …» | — | — |
+
+Старый совет «toggling Wi-Fi off/on» не показывается ни в одном сценарии (строка
+удалена). Путь ядра (`readWIFIState` с поднятым VPN) вручную не проверялся:
+по коду `LocationDisabled` → `readAsState` → `null`, как раньше
+`PermissionMissing`. Компиляция Kotlin и Dart — локальной сборкой
+`build-local-apk.sh` (успех). После проверки разрешения и геолокация на AVD
+возвращены.
 
 ## Нерешённое / follow-up
 

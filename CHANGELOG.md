@@ -90,6 +90,16 @@
 
 ### Fixed
 
+- **Wi-Fi rules: the app says why it cannot read the network name ([§567](docs/spec/tasks/567-wifi-ssid-read-preflight-and-diagnostics.md)).**
+  Android hides the Wi-Fi name without an error when location is set to
+  "Approximate" instead of "Precise" or the system Location toggle is off, so
+  `wifi_ssid` rules stopped matching and Add current suggested toggling Wi-Fi.
+  Add current now opens the permission dialog with a precise-location note, or
+  offers the Location settings when Location is off. The Wi-Fi section of the
+  rule editor shows a hint only when something is actually missing, and the
+  Diagnostics location row reports precise location and the Location toggle. The
+  reason is written to logcat under the `WifiInfoReader` tag.
+
 - **Imported nodes keep what the provider sent ([§560](docs/spec/tasks/560-xray-body-parse-gaps.md)).**
   Fields the node model had no place for were dropped on import: `multiplex`,
   `udp_over_tcp`, dial options (`connect_timeout`, `network_strategy`, `fallback_delay`
