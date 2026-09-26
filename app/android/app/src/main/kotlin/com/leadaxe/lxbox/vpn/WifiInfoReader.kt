@@ -70,6 +70,7 @@ object WifiInfoReader {
         }
 
         var cacheUnknown = false
+        var cacheNoWifi = false
         if (Build.VERSION.SDK_INT >= 31) {
             val cache = BoxApplication.wifiStateCacheOrNull
             if (cache != null) {
@@ -85,16 +86,22 @@ object WifiInfoReader {
                     cacheUnknown = true
                     Log.d(TAG, "cache has unknown ssid, falling back: source=legacy")
                 } else {
+                    cacheNoWifi = true
                     Log.d(TAG, "cache empty (registered=${cache.isRegistered}), falling back: source=legacy")
                 }
             }
         }
-        return readLegacy(cacheUnknown)
+        return readLegacy(cacheUnknown, cacheNoWifi)
     }
 
     /// `WifiManager.getConnectionInfo()` — единственный путь на API < 31 и
     /// fallback на 31+. [cacheUnknown] — только для строки лога.
-    private fun readLegacy(cacheUnknown: Boolean): Result {
+    /// [cacheNoWifi] (только 31+): у кэша нет Wi-Fi сети; если и
+    /// `connectionInfo` без BSSID — устройство не подключено к Wi-Fi,
+    /// возвращаем [Result.NoWifi], а не [Result.UnknownSsid] (для ядра
+    /// одно и то же: `null` и `WIFIState("", "")` libbox сводит к пустому
+    /// состоянию; для Add current — верный текст «Not connected to Wi-Fi»).
+    private fun readLegacy(cacheUnknown: Boolean, cacheNoWifi: Boolean = false): Result {
         @Suppress("DEPRECATION")
         val info = try {
             BoxApplication.wifiManager.connectionInfo
@@ -115,6 +122,10 @@ object WifiInfoReader {
         val rawBssid = info.bssid
         val ssid = normalizeSsid(rawSsid)
         val bssid = normalizeBssid(rawBssid)
+        if (cacheNoWifi && ssid.isEmpty() && rawBssid == null) {
+            Log.w(TAG, "no wifi: not connected (cache has no wifi network, connectionInfo bssid=null)")
+            return Result.NoWifi
+        }
         if (ssid.isEmpty() || rawBssid?.lowercase() == PLACEHOLDER_BSSID) {
             val suffix = if (cacheUnknown) " (cache also unknown)" else ""
             Log.w(TAG, "unknown ssid: android returned ssid=$rawSsid bssid=$rawBssid$suffix")
