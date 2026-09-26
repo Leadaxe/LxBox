@@ -11,6 +11,8 @@
 /// Пустая позиция и дубль не «чинятся»: их ловит `chainEmitError`.
 library;
 
+import '../../services/contract/chain_strip.dart'
+    show chainStripKeyKnown, orderedChainStrip;
 import '../../services/json_clone.dart' show deepCloneJson;
 import '../node_link.dart';
 import '../record_codec.dart' show RecordRead;
@@ -40,11 +42,7 @@ Map<String, dynamic> chainToRecord(SourceChain c) => {
         if (c.idleTimeout.isNotEmpty) 'idle_timeout': c.idleTimeout,
         // Трёхзначность: null = умолчание ядра, ключа нет.
         if (c.stripEvasion != null) 'strip_evasion': c.stripEvasion,
-        if (c.strip.isNotEmpty)
-          'strip': {
-            for (final key in kChainStripKeys)
-              if (c.strip.containsKey(key)) key: c.strip[key],
-          },
+        if (c.strip.isNotEmpty) 'strip': orderedChainStrip(c.strip),
         if (c.rewrite.isNotEmpty) 'rewrite': deepCloneJson(c.rewrite),
       },
       'hops': [for (final h in c.hops) nodeLinkToRecord(h)],
@@ -88,7 +86,8 @@ RecordRead<SourceChain> chainFromRecord(
   final rawStrip = body['strip'];
   if (rawStrip is Map) {
     for (final e in rawStrip.entries) {
-      if (kChainStripKeys.contains(e.key) && e.value is bool) {
+      final key = e.key;
+      if (key is String && chainStripKeyKnown(key) && e.value is bool) {
         strip['${e.key}'] = e.value as bool;
       } else {
         unknown.add('body.strip.${e.key}');
@@ -123,10 +122,7 @@ RecordRead<SourceChain> chainFromRecord(
       idleTimeout: idleTimeout is String ? idleTimeout : '',
       stripEvasion: stripEvasion is bool ? stripEvasion : null,
       // Каталожный порядок ключей, как у записи.
-      strip: {
-        for (final key in kChainStripKeys)
-          if (strip.containsKey(key)) key: strip[key]!,
-      },
+      strip: orderedChainStrip(strip),
       rewrite: rawRewrite is Map
           ? (deepCloneJson(rawRewrite) as Map).cast<String, dynamic>()
           : const {},

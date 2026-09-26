@@ -189,7 +189,7 @@ void main() {
         hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         idleTimeout: '0s',
         stripEvasion: false,
-        strip: {kChainStripTlsUtls: true},
+        strip: {'tls.utls': true},
         rewrite: {
           'vless': {'flow': null},
         },

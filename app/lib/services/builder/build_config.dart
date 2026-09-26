@@ -443,10 +443,17 @@ Future<BuildResult> _buildConfig({
     settings.chains,
     knownTags: knownChainTargets,
     targets: linkTargets,
+    hopBodies: {
+      for (final e in ctx.outbounds) e.tag: e.map,
+      for (final e in ctx.endpoints) e.tag: e.map,
+    },
     coreVersion: settings.coreVersion,
   );
   for (final d in chainResolution.degraded) {
     emitWarnings.add(d.reason);
+  }
+  for (final n in chainResolution.notes) {
+    emitWarnings.add(n.line);
   }
 
   // §393 C3 — цепочка идёт в пул отбора Направлений последней, ПОСЛЕ узлов

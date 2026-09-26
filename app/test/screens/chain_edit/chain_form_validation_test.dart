@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../contract_paths.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/chain_edit/chain_form_validation.dart';
@@ -11,12 +13,32 @@ import 'package:lxbox/screens/chain_edit/chain_hop_candidate.dart';
 // Тесты сверяют КОДЫ и УРОВНИ находок, не тексты: подпись меняется, инвариант
 // нет (AGENTS.md — тестов на формат UI-строк не писать).
 
+/// Тело vless-узла с REALITY: реестр (`tls.reality.enabled` requires
+/// `tls.utls.enabled` с `set`) требует у него путь `tls.utls`.
+Map<String, dynamic> _realityBody(String tag) => {
+      'type': 'vless',
+      'tag': tag,
+      'server': '203.0.113.7',
+      'server_port': 443,
+      'uuid': 'b831381d-6324-4d53-ad4f-8cda48b30811',
+      'tls': {
+        'enabled': true,
+        'server_name': 'example.com',
+        'utls': {'enabled': true, 'fingerprint': 'chrome'},
+        'reality': {
+          'enabled': true,
+          'public_key': 'jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0',
+          'short_id': '0123abcd',
+        },
+      },
+    };
+
 ChainHopCandidate _node(String tag,
         {bool reality = false, bool detour = false}) =>
     ChainHopCandidate(
         tag: tag,
         kind: ChainHopKind.node,
-        reality: reality,
+        body: reality ? _realityBody(tag) : null,
         detour: detour,
         outboundType: 'vless');
 
@@ -160,73 +182,59 @@ void main() {
     });
   });
 
-  group('reality + strip tls.utls (T4) — ядро падает на старте', () {
-    test('снятый utls на reality-ЗВЕНЕ блокирует', () {
+  // §57 (контракт 1.1.61) — REALITY × снятый uTLS больше не ошибка формы:
+  // `on_hop_required` реестра снимает ключ с патча, цепочка собирается,
+  // находка — предупреждение с кодом реестра.
+  group('reality + strip tls.utls — on_hop_required реестра', () {
+    setUpAll(loadTestRegistry);
+
+    test('снятый utls на reality-ЗВЕНЕ — предупреждение, сохранять можно', () {
       final issues = validateChainForm(
         const ChainFormState(
           tag: 'via-de',
           hops: ['home', 'de-reality'],
-          strip: {kChainStripTlsUtls: true},
+          strip: {'tls.utls': true},
         ),
         _ctx([_node('home'), _node('de-reality', reality: true)]),
       );
-      final bad = _find(issues, ChainIssueCode.realityUtlsStripped);
-      expect(bad, isNotNull);
-      expect(bad!.level, ChainIssueLevel.blocking);
-      expect(bad.hops, ['de-reality']);
-      expect(chainFormCanSave(issues), isFalse);
+      final kept = _find(issues, ChainIssueCode.stripKeptForHop);
+      expect(kept, isNotNull);
+      expect(kept!.level, ChainIssueLevel.warning);
+      expect(kept.hops, ['de-reality']);
+      expect(chainFormCanSave(issues), isTrue);
     });
 
-    test('reality на позиции 0 конфликтом не является: strip применяется к звеньям',
-        () {
+    test('reality на позиции 0 не судится: strip применяется к звеньям', () {
       final issues = validateChainForm(
         const ChainFormState(
           tag: 'via-de',
           hops: ['home-reality', 'de-exit'],
-          strip: {kChainStripTlsUtls: true},
+          strip: {'tls.utls': true},
         ),
         _ctx([_node('home-reality', reality: true), _node('de-exit')]),
       );
-      expect(_codes(issues),
-          isNot(contains(ChainIssueCode.realityUtlsStripped)));
+      expect(_codes(issues), isNot(contains(ChainIssueCode.stripKeptForHop)));
     });
 
-    test('utls по умолчанию НЕ снимается — конфликта нет', () {
-      // Каталог ядра: tls.utls единственный, который strip_evasion не трогает.
+    test('utls по умолчанию каталога не снимается — находки нет', () {
       final issues = validateChainForm(
         const ChainFormState(tag: 'via-de', hops: ['home', 'de-reality']),
         _ctx([_node('home'), _node('de-reality', reality: true)]),
       );
-      expect(_codes(issues),
-          isNot(contains(ChainIssueCode.realityUtlsStripped)));
-      expect(chainFormCanSave(issues), isTrue);
+      expect(_codes(issues), isNot(contains(ChainIssueCode.stripKeptForHop)));
     });
 
-    test('явно снятая галка утls перевешивает выключенный strip_evasion', () {
-      // Точечный патч старше общего тумблера — та же лестница, что в ядре.
+    test('явная галка перевешивает выключенный strip_evasion', () {
       final issues = validateChainForm(
         const ChainFormState(
           tag: 'via-de',
           hops: ['home', 'de-reality'],
           stripEvasion: false,
-          strip: {kChainStripTlsUtls: true},
+          strip: {'tls.utls': true},
         ),
         _ctx([_node('home'), _node('de-reality', reality: true)]),
       );
-      expect(_codes(issues), contains(ChainIssueCode.realityUtlsStripped));
-    });
-
-    test('явно оставленный utls при strip_evasion — конфликта нет', () {
-      final issues = validateChainForm(
-        const ChainFormState(
-          tag: 'via-de',
-          hops: ['home', 'de-reality'],
-          strip: {kChainStripTlsUtls: false},
-        ),
-        _ctx([_node('home'), _node('de-reality', reality: true)]),
-      );
-      expect(_codes(issues),
-          isNot(contains(ChainIssueCode.realityUtlsStripped)));
+      expect(_codes(issues), contains(ChainIssueCode.stripKeptForHop));
     });
   });
 
@@ -354,18 +362,13 @@ void main() {
         tag: 'via-de',
         hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
         stripEvasion: false,
-        strip: {kChainStripTlsUtls: true},
+        strip: {'tls.utls': true},
       );
       final s = ChainFormState.of(c);
       expect(s.tag, 'via-de');
       expect(s.hops, ['a', 'b']);
-      expect(s.stripsUtls, isTrue);
-    });
-
-    test('трёхзначность не теряется: нет ключа → умолчание каталога ядра', () {
-      const c = SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
-      // tls.utls — единственный ключ каталога, не снимаемый по умолчанию.
-      expect(ChainFormState.of(c).stripsUtls, isFalse);
+      expect(s.stripEvasion, isFalse);
+      expect(s.strip, {'tls.utls': true});
     });
   });
 }

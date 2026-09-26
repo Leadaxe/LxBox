@@ -1210,15 +1210,6 @@
   "Client subnet": {
     "value": "Подсеть клиента"
   },
-  "ClientHello fingerprint is stripped, but these positions are reality nodes that need it: %s. The core will not start — untick tls.utls.": {
-    "value": "Отпечаток ClientHello снят, но эти позиции — reality-узлы, которым он нужен: %s. Ядро не стартует — снимите галку tls.utls."
-  },
-  "ClientHello fingerprint — must not be stripped on reality nodes": {
-    "value": "Отпечаток ClientHello — на reality-узлах снимать нельзя"
-  },
-  "ClientHello fragmentation": {
-    "value": "фрагментация ClientHello"
-  },
   "Clipboard is empty": {
     "value": "Буфер обмена пуст"
   },
@@ -4982,9 +4973,6 @@
   "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
     "value": "Режим XHTTP установлен в «packet-up»: ссылка требует передавать данные восходящего потока в заголовке, а ядро принимает это только в таком режиме (иначе конфиг не загрузился бы)."
   },
-  "XHTTP padding": {
-    "value": "набивка XHTTP"
-  },
   "Xray config": {
     "value": "Конфиг Xray"
   },
@@ -5152,9 +5140,6 @@
   },
   "matches only domains in the rule-set": {
     "value": "совпадает только с доменами из rule-set"
-  },
-  "multiplex padding": {
-    "value": "набивка мультиплекса"
   },
   "never": {
     "value": "никогда"

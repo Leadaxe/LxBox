@@ -7,6 +7,9 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/chain_edit_screen.dart';
+import 'package:lxbox/services/contract/chain_strip.dart';
+
+import '../../contract_paths.dart';
 
 // §393 C7 — экран цепочки строится и переживает взаимодействие. Не тест на
 // вёрстку и не на тексты (AGENTS.md): проверяем, что форма поднимается, что
@@ -20,9 +23,18 @@ ParsedConfig _config() => ParsedConfig.parse(jsonEncode({
         {
           'tag': 'de-reality',
           'type': 'vless',
+          'server': '203.0.113.7',
+          'server_port': 443,
+          'uuid': 'b831381d-6324-4d53-ad4f-8cda48b30811',
           'tls': {
             'enabled': true,
-            'reality': {'enabled': true},
+            'server_name': 'example.com',
+            'utls': {'enabled': true, 'fingerprint': 'chrome'},
+            'reality': {
+              'enabled': true,
+              'public_key': 'jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0',
+              'short_id': '0123abcd',
+            },
           },
         },
       ],
@@ -38,6 +50,8 @@ Widget _host(SourceChain chain) => MaterialApp(
     );
 
 void main() {
+  setUpAll(loadTestRegistry);
+
   testWidgets('форма поднимается и показывает позиции', (tester) async {
     await tester.pumpWidget(_host(
         const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
@@ -84,17 +98,19 @@ void main() {
     expect(titles.indexOf('de-exit'), lessThan(titles.indexOf('home')));
   });
 
-  testWidgets('снятый tls.utls на reality-звене запирает сохранение',
+  // §57 — REALITY × снятый uTLS: предупреждение по реестру, не блокировка
+  // (сборка снимет ключ с патча и соберёт цепочку).
+  testWidgets('снятый tls.utls на reality-звене сохранение НЕ запирает',
       (tester) async {
     await tester.pumpWidget(_host(const SourceChain(
       tag: 'via-de',
       hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-reality')],
-      strip: {kChainStripTlsUtls: true},
+      strip: {'tls.utls': true},
     )));
     await tester.pumpAndSettle();
     final save = tester.widget<IconButton>(
         find.widgetWithIcon(IconButton, Icons.check));
-    expect(save.onPressed, isNull);
+    expect(save.onPressed, isNotNull);
   });
 
   testWidgets('пикер позиций открывается и не предлагает уже занятые',
@@ -117,8 +133,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(ExpansionTile));
     await tester.pumpAndSettle();
-    // Каталог strip закрыт четырьмя ключами ядра — показываем ровно их.
-    for (final key in kChainStripKeys) {
+    // Каталог strip — из реестра (chain.json): показываем ровно его ключи.
+    expect(chainStripKeys(), isNotEmpty);
+    for (final key in chainStripKeys()) {
       expect(find.text(key), findsOneWidget);
     }
   });
@@ -132,7 +149,7 @@ void main() {
     final boxes = tester
         .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
         .toList();
-    expect(boxes, hasLength(kChainStripKeys.length));
+    expect(boxes, hasLength(chainStripKeys().length));
     // Нетронутое состояние — именно null, а не false: «как у ядра» и «я так
     // решил» обязаны различаться уже в форме.
     expect(boxes.every((b) => b.value == null), isTrue);

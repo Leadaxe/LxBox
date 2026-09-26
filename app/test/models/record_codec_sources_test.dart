@@ -247,7 +247,7 @@ void main() {
         hops: [NodeLink(tag: 'PR NL-1'), NodeLink(tag: 'Tokyo'), NodeLink(tag: 'vpn-1')],
         idleTimeout: '5m',
         stripEvasion: false,
-        strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
+        strip: {'tls.utls': true, 'tls.fragment': false},
         rewrite: {
           'vless': {'flow': null, 'packet_encoding': 'xudp'},
         },
