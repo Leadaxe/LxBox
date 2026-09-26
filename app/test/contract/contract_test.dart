@@ -8,7 +8,6 @@ import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
-import 'package:lxbox/services/parser/uri_utils.dart' show socksSchemeForVersion;
 
 import 'corpus_warnings.dart';
 
@@ -96,8 +95,9 @@ const _canonScheme = <String, String>{
 /// написание, а дискриминатор версии протокола. Тип тела у всех четырёх один
 /// (`socks`), различает их поле `version`, и лаунчер пишет в конверт именно ту
 /// схему, которой узел эмитится (`node_parser_core.go:308-334`). Поэтому схему
-/// здесь выбирает та же таблица, что у маппера и эмиттера, — третьей копии
-/// правила не заводим.
+/// здесь выбирает то же правило реестра, что у маппера и эмиттера
+/// (`emit.form_from` секции `mappers.uri`), — копии правила не заводим:
+/// схема конверта это схема ссылки, которую узел эмитит (§562).
 ///
 /// `socks5://` в эту ветку не попадает намеренно: у лаунчера он НЕ
 /// канонизируется (тег узла строится из схемы, и переименование сбросило бы
@@ -106,7 +106,7 @@ const _canonScheme = <String, String>{
 /// раньше.
 String _envelopeScheme(NodeSpec spec) {
   if (spec is SocksSpec && spec.version != '5') {
-    return socksSchemeForVersion(spec.version);
+    return spec.toUri().split('://').first;
   }
   return _canonScheme[spec.protocol] ?? spec.protocol;
 }
