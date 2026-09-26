@@ -298,7 +298,10 @@ class SubscriptionController extends ChangeNotifier {
         if (body == null || body.isEmpty) continue;
         try {
           final decoded = decode(body);
-          final nodes = parseAll(decoded);
+          // §561 — `dropped[]` сводки источника восстанавливается тем же
+          // разбором кэша, что и узлы: в кодек записи он не пишется.
+          final dropped = <NodeWarning>[];
+          final nodes = parseAll(decoded, dropped: dropped);
           // §302 — применяем те же import-rules к кэшу: иначе после рестарта
           // узлы вернулись бы в ДОзаменном виде, их nodeIdentityHash не совпал
           // бы с персистентными DISABLE-хешами → выключение слетело бы до
@@ -342,6 +345,7 @@ class SubscriptionController extends ChangeNotifier {
             nodes: nodes,
             lastNodeCount: nodes.length,
             disabledHashes: migrated,
+            dropped: summaryDropped(dropped),
           );
           entry._replaceList(next);
           // Результат миграции обязан лечь на диск: иначе legacy-ключи
@@ -1103,6 +1107,7 @@ class SubscriptionController extends ChangeNotifier {
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: nodes.length,
         updateIntervalHours: -1, // §129 — файловая: авто-обновления нет
+        dropped: summaryDropped(dropped),
         nodes: nodes,
       );
       _entries.add(SubscriptionEntry(list: list, nodeCount: nodes.length));
@@ -1166,6 +1171,7 @@ class SubscriptionController extends ChangeNotifier {
           lastUpdateStatus: UpdateStatus.ok,
           lastNodeCount: nodes.length,
           updateIntervalHours: -1, // §129 — файловая: авто-обновления нет
+          dropped: summaryDropped(dropped),
           nodes: nodes,
         ),
         nodeCount: nodes.length,
@@ -1331,6 +1337,7 @@ class SubscriptionController extends ChangeNotifier {
       lastUpdateStatus: UpdateStatus.ok,
       lastNodeCount: result.nodes.length,
       updateIntervalHours: -1, // §129 — файловая: никогда не обновлять авто (-1)
+      dropped: summaryDropped(result.dropped),
       nodes: result.nodes,
     );
     final entry = SubscriptionEntry(list: list, nodeCount: result.nodes.length);
@@ -1397,6 +1404,7 @@ class SubscriptionController extends ChangeNotifier {
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
         updateIntervalHours: nextInterval,
+        dropped: summaryDropped(result.dropped),
         nodes: result.nodes,
       );
       entry._replaceList(next);
@@ -3100,6 +3108,7 @@ class SubscriptionController extends ChangeNotifier {
         updateIntervalHours: nextInterval,
         disabledHashes: verdicts.disabled,
         nodeWarnings: verdicts.warnings,
+        dropped: summaryDropped(result.dropped),
         nodes: result.nodes,
       );
       entry._replaceList(next);

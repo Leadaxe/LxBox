@@ -79,6 +79,12 @@ class SubscriptionEntry extends ChangeNotifier {
       ? (_list as SubscriptionServers).onUpdateAction
       : SubscriptionOnUpdateAction.rebuild;
 
+  /// §561 — отбраковка последнего разбора тела подписки (`dropped[]`), для
+  /// сводки источника. Пусто для не-подписок.
+  List<NodeWarning> get dropped => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).dropped
+      : const [];
+
   /// §289 — per-subscription слепок идентичности фетча. `null` = режим Default
   /// (глобальная идентичность). Пусто для не-подписок.
   SubscriptionIdentityOverride? get identity => _list is SubscriptionServers

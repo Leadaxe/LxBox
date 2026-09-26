@@ -8,6 +8,7 @@ import 'import_rule.dart';
 import 'node_link.dart';
 import 'node_sections.dart';
 import 'node_spec.dart';
+import 'node_warning.dart';
 import 'subscription_meta.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
@@ -206,6 +207,14 @@ final class SubscriptionServers extends ServerList {
   /// и copyWith (как §283 `disabledHashes`).
   final SubscriptionOnUpdateAction onUpdateAction;
 
+  /// §561 — `dropped[]` ПОСЛЕДНЕГО разбора тела (D-088): записи, не ставшие
+  /// узлами, с причиной. Показывается в сводке источника; на узлы подписки
+  /// эти причины не вешаются. Живёт рядом с [nodes] и так же производно:
+  /// кэш выдачи, в кодек записи и в бэкап не едет, в равенство не входит.
+  /// После перезапуска восстанавливается разбором кэшированного тела
+  /// (регидрация), на каждом новом разборе заменяется целиком.
+  final List<NodeWarning> dropped;
+
   SubscriptionServers({
     required super.id,
     required super.name,
@@ -226,6 +235,7 @@ final class SubscriptionServers extends ServerList {
     this.importRules = const [],
     this.importRulesEnabled = true,
     this.onUpdateAction = SubscriptionOnUpdateAction.rebuild,
+    this.dropped = const [],
     super.nodes,
   });
 
@@ -258,6 +268,7 @@ final class SubscriptionServers extends ServerList {
     bool? importRulesEnabled,
     SubscriptionOnUpdateAction? onUpdateAction,
     List<NodeSpec>? nodes,
+    List<NodeWarning>? dropped,
   }) =>
       SubscriptionServers(
         id: id,
@@ -281,6 +292,7 @@ final class SubscriptionServers extends ServerList {
         importRules: importRules ?? this.importRules,
         importRulesEnabled: importRulesEnabled ?? this.importRulesEnabled,
         onUpdateAction: onUpdateAction ?? this.onUpdateAction,
+        dropped: dropped ?? this.dropped,
         nodes: nodes ?? this.nodes,
       );
 
