@@ -53,6 +53,7 @@ import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/l10n/locale_controller.dart';
+import 'home/widgets/template_warnings_snack.dart';
 import '../services/probe/probe_lifecycle.dart';
 import '../services/workspaces/workspace_controller.dart';
 import 'home/widgets/workspace_menu.dart';
@@ -236,6 +237,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // SnackBar (паттерн §166: всплывашка снизу, не баннер).
     _prevNoNodesStamp = _subController.directionsWithoutNodesStamp;
     _subController.addListener(_onDirectionsWithoutNodes);
+    // §555 — предупреждения шаблона после сборки: снек со счётчиком.
+    _prevTemplateStamp = _subController.templateWarningsStamp;
+    _subController.addListener(_onTemplateWarnings);
     // §076: global home-return observer триггерит auto-rebuild когда
     // юзер возвращается на home с любого settings screen'а.
     homeReturnObserver.setHandler(_onReturnToHome);
@@ -306,6 +310,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
       ));
+    });
+  }
+
+  /// §555 / задача 570 — предупреждения движка шаблона (`template_degraded`)
+  /// за сборку: короткий снек «Template: N warnings» с переходом в шторку
+  /// кодов (тексты реестра). Сохранение конфига они не блокируют; дедуп по
+  /// stamp — один показ на сборку.
+  int _prevTemplateStamp = 0;
+  void _onTemplateWarnings() {
+    final stamp = _subController.templateWarningsStamp;
+    if (stamp == _prevTemplateStamp) return;
+    _prevTemplateStamp = stamp;
+    final items = _subController.templateWarnings;
+    if (items.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showTemplateWarningsSnack(context, items);
     });
   }
 
@@ -525,6 +546,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
     _subController.removeListener(_onDirectionsWithoutNodes);
+    _subController.removeListener(_onTemplateWarnings);
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
     _autoUpdater.dispose();

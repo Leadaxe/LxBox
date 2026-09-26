@@ -5393,5 +5393,16 @@
   },
   "You pick the server; the first option picks by latency": {
     "value": "Сервер выбираете вы; первый вариант выбирает по задержке"
+  },
+  "Other values, one per line": {
+    "value": "Свои значения, по одному на строку"
+  },
+  "Template: %d warnings": {
+    "value": {
+      "one": "Шаблон: %d предупреждение",
+      "few": "Шаблон: %d предупреждения",
+      "many": "Шаблон: %d предупреждений",
+      "other": "Шаблон: %d предупреждения"
+    }
   }
 }

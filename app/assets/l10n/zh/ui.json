@@ -5178,5 +5178,13 @@
   },
   "You pick the server; the first option picks by latency": {
     "value": "由您选择服务器；第一个选项按延迟选择"
+  },
+  "Other values, one per line": {
+    "value": "其他值，每行一个"
+  },
+  "Template: %d warnings": {
+    "value": {
+      "other": "模板：%d 条警告"
+    }
   }
 }

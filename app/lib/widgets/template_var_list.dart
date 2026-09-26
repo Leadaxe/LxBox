@@ -18,8 +18,12 @@ import '../services/l10n/locale_controller.dart';
 ///   fallback в text-input
 /// - `dns_servers` → dropdown из [dnsServerTags] (§117); без tags — fallback
 ///   в text-input
-/// - `text` → text-input; при наличии `options` — combo с suffix-▾ popup'ом
-///   пресетов. Юзер может и выбрать preset, и напечатать своё.
+/// - `text`/`int` → text-input; с закрытыми `options` — dropdown (TEMPLATE_LANG
+///   §2.1: без `options_open` своё значение ввести нельзя); с
+///   `options_open: true` — combo с suffix-▾ popup'ом: и выбрать из списка,
+///   и напечатать своё (приведение по `type`: у `int` — цифры и clamp).
+/// - `text_list` + `options` → множественный выбор чипами ([VarMultiSelect]);
+///   при `options_open` — плюс поле своих значений, по одному на строку.
 ///
 /// §232 — БЕЗ локальной копии значений: каждое поле подписано (one-way emit,
 /// [ValueListenableBuilder]) на СВОЙ ключ [VarValuesModel]. Программные
@@ -171,6 +175,19 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
       );
 
   Widget _buildControl(WizardVar v, String value) {
+    // §555 — `text_list` + `options`: множественный выбор (SPEC 143, D-125).
+    if (v.type == 'text_list' && v.options.isNotEmpty) {
+      return _LabelledField(
+        label: v.title.isNotEmpty ? v.title : v.name,
+        tooltip: v.tooltip,
+        field: VarMultiSelect(
+          key: ValueKey('multi-${v.name}'),
+          v: v,
+          value: value,
+          onChanged: (val) => _update(v.name, val),
+        ),
+      );
+    }
     switch (v.type) {
       case 'bool':
         return SwitchListTile(
@@ -183,28 +200,12 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         );
 
       case 'enum':
-        final hasCurrent = v.options.any((o) => o.value == value);
-        return _LabelledField(
-          label: v.title.isNotEmpty ? v.title : v.name,
-          tooltip: v.tooltip,
-          field: DropdownButton<String>(
-            isExpanded: true,
-            value: hasCurrent ? value : v.defaultValue,
-            items: v.options
-                .map((o) => DropdownMenuItem(
-                      value: o.value,
-                      child: Text(o.title),
-                    ))
-                .toList(),
-            onChanged: (val) {
-              if (val == null) return;
-              _update(v.name, val);
-            },
-          ),
-        );
+        // §555 — `options_open`: список плюс своё значение.
+        if (v.optionsOpen) return _buildTextField(v, value);
+        return _buildOptionsDropdown(v, value);
 
       case 'secret':
-        return _VarTextField(
+        return VarTextField(
           key: ValueKey('secret-${v.name}'),
           value: value,
           obscure: true,
@@ -266,8 +267,44 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         );
 
       default:
+        // §555 — закрытые `options` у `text`/`int`: только выбор из списка
+        // (TEMPLATE_LANG §2.1); `options_open` — combo со своим значением.
+        if (v.options.isNotEmpty &&
+            !v.optionsOpen &&
+            (v.type == 'text' || v.type == 'int')) {
+          return _buildOptionsDropdown(v, value);
+        }
         return _buildTextField(v, value);
     }
+  }
+
+  /// Закрытый список `options`. Значение вне списка (старое сохранённое) —
+  /// показываем `default_value`, а если и его нет в списке — первый пункт:
+  /// dropdown без совпавшего пункта падает.
+  Widget _buildOptionsDropdown(WizardVar v, String value) {
+    final values = v.optionValues;
+    final shown = values.contains(value)
+        ? value
+        : (values.contains(v.defaultValue) ? v.defaultValue : values.first);
+    return _LabelledField(
+      label: v.title.isNotEmpty ? v.title : v.name,
+      tooltip: v.tooltip,
+      field: DropdownButton<String>(
+        key: ValueKey('options-${v.name}'),
+        isExpanded: true,
+        value: shown,
+        items: v.options
+            .map((o) => DropdownMenuItem(
+                  value: o.value,
+                  child: Text(o.title),
+                ))
+            .toList(),
+        onChanged: (val) {
+          if (val == null) return;
+          _update(v.name, val);
+        },
+      ),
+    );
   }
 
   /// text: если есть options — добавляется combo-popup ▾ с пресетами.
@@ -277,7 +314,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   Widget _buildTextField(WizardVar v, String value) {
     final hasSuggestions = v.options.isNotEmpty;
     final isInt = v.type == 'int';
-    return _VarTextField(
+    return VarTextField(
       key: ValueKey('text-${v.name}'),
       value: value,
       width: hasSuggestions ? 220 : 180,
@@ -354,8 +391,8 @@ class TemplateSectionHeader extends StatelessWidget {
 /// - `suggestions` — список пресетов; suffix-▾ открывает popup с ✓ на
 ///   текущем значении. Совместим только с `!obscure` (для secrets
 ///   пресетов нет).
-class _VarTextField extends StatefulWidget {
-  const _VarTextField({
+class VarTextField extends StatefulWidget {
+  const VarTextField({
     super.key,
     required this.value,
     required this.label,
@@ -367,6 +404,8 @@ class _VarTextField extends StatefulWidget {
     this.suggestions = const [],
     this.numeric = false,
     this.errorText,
+    this.maxLines = 1,
+    this.hintText,
   });
 
   final String value;
@@ -385,11 +424,18 @@ class _VarTextField extends StatefulWidget {
   /// обязательного поля). null — поле валидно.
   final String? errorText;
 
+  /// §555 — многострочный ввод (свои значения `text_list`, по одному на
+  /// строку). `1` — обычное поле.
+  final int maxLines;
+
+  /// Подсказка в пустом поле.
+  final String? hintText;
+
   @override
-  State<_VarTextField> createState() => _VarTextFieldState();
+  State<VarTextField> createState() => _VarTextFieldState();
 }
 
-class _VarTextFieldState extends State<_VarTextField> {
+class _VarTextFieldState extends State<VarTextField> {
   late final TextEditingController _ctrl;
   late bool _obscured;
 
@@ -401,7 +447,7 @@ class _VarTextFieldState extends State<_VarTextField> {
   }
 
   @override
-  void didUpdateWidget(covariant _VarTextField old) {
+  void didUpdateWidget(covariant VarTextField old) {
     super.didUpdateWidget(old);
     if (widget.value != old.value && widget.value != _ctrl.text) {
       _ctrl.text = widget.value;
@@ -470,7 +516,11 @@ class _VarTextFieldState extends State<_VarTextField> {
     final field = TextField(
       controller: _ctrl,
       obscureText: _obscured,
-      keyboardType: widget.numeric ? TextInputType.number : null,
+      maxLines: widget.obscure ? 1 : widget.maxLines,
+      minLines: 1,
+      keyboardType: widget.numeric
+          ? TextInputType.number
+          : (widget.maxLines > 1 ? TextInputType.multiline : null),
       inputFormatters: widget.numeric
           ? [FilteringTextInputFormatter.digitsOnly]
           : null,
@@ -480,6 +530,7 @@ class _VarTextFieldState extends State<_VarTextField> {
         border: const OutlineInputBorder(),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        hintText: widget.hintText,
         errorText: widget.errorText, // §161: «Required» для пустого обяз. поля
         errorStyle: const TextStyle(fontSize: 11),
         suffixIcon: _buildSuffix(),
@@ -491,6 +542,9 @@ class _VarTextFieldState extends State<_VarTextField> {
       onChanged: widget.onChanged,
     );
 
+    // Без подписи — поле встроено в чужой контрол (свои значения в
+    // [VarMultiSelect]).
+    if (widget.label.isEmpty) return field;
     return _LabelledField(
       label: widget.label,
       tooltip: widget.tooltip,
@@ -500,6 +554,82 @@ class _VarTextFieldState extends State<_VarTextField> {
               widget.trailing!,
             ])
           : field,
+    );
+  }
+}
+
+/// §555 — множественный выбор `text_list` + `options` (TEMPLATE_LANG §2.1,
+/// SPEC 143 D-125): чип на каждую опцию; значение — выбранные строки по одной
+/// на строку, в порядке `options`. При `options_open` под чипами поле своих
+/// значений (по одному на строку): они идут в значение после выбранных и
+/// проходят то же приведение по `type` — построчный сплит, пустые строки
+/// отбрасываются. Без `options_open` строки вне списка из значения
+/// выпадают при первой правке — UI своего значения не даёт.
+class VarMultiSelect extends StatelessWidget {
+  const VarMultiSelect({
+    super.key,
+    required this.v,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final WizardVar v;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  static List<String> _lines(String s) => s
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList();
+
+  @override
+  Widget build(BuildContext context) {
+    final known = v.optionValues;
+    final lines = _lines(value);
+    final selected = lines.where(known.contains).toSet();
+    final extra = lines.where((l) => !known.contains(l)).toList();
+
+    String compose(Set<String> sel, List<String> own) => [
+          for (final o in known)
+            if (sel.contains(o)) o,
+          if (v.optionsOpen)
+            for (final l in own)
+              if (!known.contains(l)) l,
+        ].join('\n');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final o in v.options)
+              FilterChip(
+                key: ValueKey('multi-${v.name}-${o.value}'),
+                label: Text(o.title, style: const TextStyle(fontSize: 13)),
+                selected: selected.contains(o.value),
+                onSelected: (on) {
+                  final next = {...selected};
+                  on ? next.add(o.value) : next.remove(o.value);
+                  onChanged(compose(next, extra));
+                },
+              ),
+          ],
+        ),
+        if (v.optionsOpen) ...[
+          const SizedBox(height: 8),
+          VarTextField(
+            key: ValueKey('multi-own-${v.name}'),
+            value: extra.join('\n'),
+            label: '',
+            maxLines: 4,
+            hintText: getLocalText.s("Other values, one per line"),
+            onChanged: (raw) => onChanged(compose(selected, _lines(raw))),
+          ),
+        ],
+      ],
     );
   }
 }

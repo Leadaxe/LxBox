@@ -39,6 +39,7 @@ import '../services/tailscale_state/state_keys.dart';
 import '../services/tailscale_state/state_store.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
+import '../services/builder/if_engine.dart' show TemplateWarning;
 import '../services/builder/core_chain_capability.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
@@ -218,6 +219,16 @@ class SubscriptionController extends ChangeNotifier {
   List<String> get directionsWithoutNodes => _directionsWithoutNodes;
   int _directionsWithoutNodesStamp = 0;
   int get directionsWithoutNodesStamp => _directionsWithoutNodesStamp;
+
+  /// §555 / задача 570 — предупреждения движка шаблона последней успешной
+  /// сборки (`template_degraded`): Home показывает их коротким снеком
+  /// «Template: N warnings» с переходом в шторку кодов. Сохранение они не
+  /// блокируют. Stamp растёт на каждую сборку с непустым списком — один
+  /// показ на сборку.
+  List<TemplateWarning> _templateWarnings = const [];
+  List<TemplateWarning> get templateWarnings => _templateWarnings;
+  int _templateWarningsStamp = 0;
+  int get templateWarningsStamp => _templateWarningsStamp;
 
   UiMsg? _progressMessage;
   UiMsg? get progressMessage => _progressMessage;
@@ -2879,6 +2890,11 @@ class SubscriptionController extends ChangeNotifier {
     _directionsWithoutNodes = result.directionsWithoutNodes;
     if (_directionsWithoutNodes.isNotEmpty) {
       _directionsWithoutNodesStamp++;
+      notifyListeners();
+    }
+    _templateWarnings = result.templateWarnings;
+    if (_templateWarnings.isNotEmpty) {
+      _templateWarningsStamp++;
       notifyListeners();
     }
     return result.configJson;
