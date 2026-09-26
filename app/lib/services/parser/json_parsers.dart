@@ -192,6 +192,7 @@ List<NodeSpec> parseXrayElement(
   // причины на первого выжившего ЭТОГО элемента (как P5); если не выжил
   // никто — причины уже лежат в `dropped` и достанутся подписке целиком.
   final rejected = <NodeWarning>[];
+  final unread = <NodeWarning>[];
   for (var i = 0; i < ordered.length; i++) {
     final ob = ordered[i];
     try {
@@ -251,6 +252,17 @@ List<NodeSpec> parseXrayElement(
       if (spec == null) {
         final proto = ob['protocol']?.toString() ?? '';
         if (proto.isNotEmpty) unsupported.add(proto);
+        // §560 — запись НЕ ПРОЧИТАНА (ни одна секция не опознала протокол
+        // либо ни одна форма секции — элемент): причина — код CANON §4.1 с
+        // тегом записи (D-088), см. разбор `unread` в конце функции.
+        final r = verdict.reason;
+        if (r != null) {
+          unread.add(RegistryWarning(
+            code: r.code,
+            params: r.params,
+            ownerTag: obTag,
+          ));
+        }
         continue;
       }
 
@@ -330,6 +342,11 @@ List<NodeSpec> parseXrayElement(
       dropped?.remove(w);
     }
   }
+
+  // §560 — непрочитанные записи: соседа нет — причина едет в `dropped[]`;
+  // сосед есть — он уже несёт `UnsupportedProtocolWarning` (§321 P5), и
+  // второй раз то же сообщение человеку не показываем (§404 P3).
+  if (result.isEmpty) dropped?.addAll(unread);
 
   // §322 — балансировщик элемента → узел автовыбора. Ставим ПОСЛЕ узлов:
   // порядок списка = порядок появления, группа логично идёт за своими членами.
@@ -643,16 +660,15 @@ NodeSpec? _xrayToSpec(
   Map<String, dynamic> o,
   String remarks, {
   XrayDropVerdict? dropped,
-  bool allowSocks = false,
   String? rawSource,
   List<dynamic>? document,
 }) {
-  // §321 — SOCKS самостоятельным узлом подписки не становится: он бывает
-  // только звеном цепочки `dialerProxy`, и зовут его оттуда явным флагом.
-  // Маппер переводит socks наравне с прочими (звену нужна та же карта), так
-  // что отбор остался здесь, где он и был: прежний диспетчер ветки `socks`
-  // просто не имел.
-  if (!allowSocks && o['protocol']?.toString() == 'socks') return null;
+  // §560 — SOCKS-элемент Xray становится узлом, как любой другой: секция
+  // `mappers.xray` реестра у socks есть, и корпус (body/xray/
+  // socks_settings_users) ждёт узел. Прежний запрет §321 (socks — только
+  // звено `dialerProxy`) жил в коде в обход реестра, и узел терялся целиком.
+  // Звено `dialerProxy` по-прежнему не становится узлом подписки: его
+  // снимает отбор релеев выше, не протокол.
   // §480 W5 — карту строит ДВИЖОК по секции `mappers.xray` реестра.
   // Диспетчера по имени протокола здесь больше нет: секцию выбирает `detect`
   // самой секции, то есть опознание элемента объявлено данными.
@@ -732,7 +748,7 @@ NodeSpec? _xrayBuildChain(
     // sing-box `detour` живёт на любом outbound'е. SOCKS здесь РАЗРЕШЁН
     // явно: самостоятельным узлом подписки он не становится (§321), а
     // звеном бывает, и чаще прочих.
-    final spec = _xrayToSpec(target, ref, allowSocks: true, document: document);
+    final spec = _xrayToSpec(target, ref, document: document);
     if (spec == null) return null;
     // Группа цепочку не несёт (`withChained` вернул бы её как есть) —
     // конвертер её и не отдаёт, но инвариант проверяем явно.

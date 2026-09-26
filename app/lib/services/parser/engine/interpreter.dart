@@ -157,7 +157,16 @@ EngineResult? runSectionOnJson(
   List<dynamic>? document,
 }) {
   final space = _selectJsonForm(section, doc);
-  if (space == null) return null;
+  if (space == null) {
+    // §560 — то же, что у текстового входа ([runSection]): секция элемент
+    // опознала, но ни одна её форма его не прочитала (`streamSettings:
+    // "none"`). Причина называется кодом CANON §4.1 и едет в `dropped[]`, а
+    // не теряется молча (корпус body/xray/malformed_stream).
+    if (dropped != null && dropped.reason == null) {
+      dropped.reason = const RegistryWarning(code: 'form_unrecognized');
+    }
+    return null;
+  }
   return _Run(section, space, trace,
           dropped: dropped, context: context, document: document)
       .execute();

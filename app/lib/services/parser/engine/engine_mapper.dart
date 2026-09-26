@@ -119,7 +119,15 @@ final class JsonMapping {
 JsonMapping? mapJsonViaEngine(String kind, Map<String, dynamic> element,
     {XrayDropVerdict? dropped, List<dynamic>? document}) {
   final section = MapperSections.I.matchJson(kind, element);
-  if (section == null) return null;
+  if (section == null) {
+    // §560 — элемент не опознала НИ ОДНА секция: протокол не ведётся
+    // (CANON §4.1 `protocol_unsupported`). Служебные outbound'ы сюда не
+    // доходят — их отсеивает вызывающий до разбора.
+    if (dropped != null && dropped.reason == null) {
+      dropped.reason = const RegistryWarning(code: 'protocol_unsupported');
+    }
+    return null;
+  }
   final res = runSectionOnJson(section, element,
       dropped: dropped, document: document);
   if (res == null) return null;
