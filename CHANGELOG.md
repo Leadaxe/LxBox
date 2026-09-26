@@ -6,7 +6,162 @@
 
 ---
 
-## [Unreleased]
+## [2.25.6] — 2026-09-26
+
+### Added
+
+- **Rules left without conditions are dropped ([§571](docs/spec/tasks/571-rule-conditions-allowlist.md)).**
+  A preset route or DNS rule that has no matching condition left after variable
+  substitution (only an `action`, or a logical rule with empty sub-rules) is left
+  out with `template_fragment_dropped` instead of matching all traffic. The list of
+  condition fields comes from the contract registry.
+- **Closing the parser and build tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave A).**
+  A `vpn://` line inside a subscription list now gives every WireGuard/AmneziaWG
+  container of the profile, not only the default one. An `sni` that is a label
+  gives way to `servername` before falling back to the server address. A replace
+  group whose name is taken by a direction is not built, the source goes
+  unfolded, and the build report says so; an empty replace group is reported
+  once. A node whose detour goes through a replace group that ended up empty is
+  left out instead of going direct. Template DNS servers see every template
+  variable. Empty subscription updates keep their skip reasons in the source
+  summary, and repeated reasons are shown once.
+
+- **Closing the selector, replace and template tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave B).**
+  Template variables with a list of values: a `text_list` with options is a
+  multi-select of chips, `options_open` lets you type your own value next to
+  the list (an `int` is still clamped), and a `text` with a closed list is a
+  dropdown. After a config build with template warnings, Home shows
+  "Template: N warnings" with a button that opens the codes. On the node
+  screen of a manual (`selector`) group, tap the circle next to a member to
+  pick it: live through the core when the VPN is up, otherwise on the next
+  build. The pick of a subscription's group is kept next to the subscription
+  and survives updates and restarts. The direction editor offers replace
+  groups as options; the replace editor warns when the group name is already
+  taken by a server, another replace group or a direction. The notification
+  sheet names the dropped entry, and the paste dialog shows how many entries
+  will be skipped and why.
+
+- **Turn a WireGuard/AmneziaWG node off without restarting the tunnel ([§557](docs/spec/tasks/557-kernel-lx4-wg-endpoint-toggle.md)).**
+  Core `v1.14.2-lx.4`. A node's menu has Turn off / Turn on, and the node screen has
+  a Node enabled switch. A node that is off drops its connections and refuses new
+  ones; the rest of the tunnel keeps running. It stays off through config reloads
+  and subscription updates until you turn it on or stop the VPN. In the list it
+  shows an orange `off` and a dash instead of a ping.
+
+- **Selector groups keep their kind ([§565](docs/spec/features/565%20selector-group-genus/spec.md)).**
+  A `selector` group from a sing-box subscription or a backup is no longer
+  turned into an auto (latency) group: it stays manual, keeps its chosen
+  server and goes to the core as `selector`. In a folder, the group screen has
+  a Manual mode with the member list: pick a server there and the config is
+  rebuilt with it. The folder list shows the group kind and the chosen server;
+  the node screen marks the chosen member.
+
+- **Replace a folder or subscription with a group ([§568](docs/spec/tasks/568-source-replace-fold.md)).**
+  Settings of a folder or a subscription have Replace with a group: Manual
+  (you pick the server), Auto (picked by latency) or Both (a manual group whose
+  first option and default is the auto one, `<name>-auto`). Directions then
+  offer that one group instead of every server of the source, and rules and
+  the default route can point at it. The setting travels in backups as
+  `replace` (contract 1.1.78). The old launcher form `fold`/`fold_tag` is not
+  read: import names it as an unknown field.
+
+### Changed
+
+- **Internal: no protocol names left in link parsing code ([§566](docs/spec/tasks/566-scheme-literals-outside-dispatcher.md)).**
+  The list of protocol files now comes from the contract directory, per-protocol link parser wrappers are gone,
+  and input recognition reads the contract; no behaviour change.
+
+- **Docs only: contract doc `CANON.md` renamed to `PARSING_PRINCIPLES.md` (§72).**
+  Internal comments and doc links updated to match; no behaviour change.
+
+- **Node names with broken bytes and old-style VMess links match the desktop app ([§563](docs/spec/tasks/563-form-redetect-and-utf8-series.md)).**
+  A run of invalid bytes in a node name (for example cp1251 text in a link label)
+  now shows as a single `�` instead of one per byte, so the node tag is the same on
+  both sides. Old-style `vmess://` links with `method:uuid@host:port` under base64
+  are recognised by what is inside the base64, as on desktop.
+
+- **Dropped subscription entries show in the subscription summary, not on a working node ([§561](docs/spec/tasks/561-dropped-only-in-source-summary.md)).**
+  An entry the parser could not turn into a node (unknown protocol, broken fields,
+  unreachable relay) used to leave its error on a neighbouring node that had nothing
+  wrong with it. Now working nodes stay clean. The subscription screen shows
+  `N entries dropped`; tap it to see each reason. The subscription card in the list
+  shows the count. A subscription with no nodes at all still shows the error under
+  the input field.
+
+- **Chains with a REALITY hop no longer refuse to save when uTLS is stripped ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
+  If a chain strips `tls.utls` and a later hop runs REALITY, the editor shows a warning
+  instead of locking the Save button, the strip row reads `kept`, and the build keeps
+  uTLS on all hops and assembles the chain. The strip options, their defaults and
+  descriptions now come from the contract. The AmneziaWG level next to the protocol
+  in the node list (`awg2`, `awg1.5+`, …) is read from the contract as well. A member
+  of an Auto group that no longer resolves to a node is logged as
+  `group_member_dropped`, one line per member.
+
+- **Node sanitizer catches up with contract 1.1.57–1.1.67 ([§556](docs/spec/tasks/556-registry-debt-1157-1170.md)).**
+  REALITY without uTLS now gets uTLS switched on instead of losing REALITY, and a
+  `random` fingerprint under REALITY becomes `chrome`, both with a code on the node;
+  the build no longer patches this silently. MASQUE keeps `tls.fragment` and
+  `tls.record_fragment` on `h2`/`auto` and drops them on `h3`; a body without `vhttp`
+  stays without it. AmneziaWG `jmin > jmax` drops both bounds with a code, Tailscale
+  `advertise_routes` masks host bits and drops default routes with a code, and an
+  object sent where a string is expected (hysteria v1 `obfs`) is unwrapped by rule.
+  In an Xray chain, TLS fragmentation from a `freedom` dialer goes to the hop that
+  actually dials out, and such a chain is no longer dropped. The global TLS fragment
+  toggle asks the registry per node, so MASQUE without `vhttp` gets it too. A
+  WireGuard `listen_port` yields to a detour added by the build, with a code in the
+  build report. Backups carry an Auto group's warnings as they are; a node disabled
+  after a core rejection stays disabled on import, without the verdict.
+  A node the core cannot run is now dropped at build time by the registry's
+  build-tag and version requirements (Tailscale without `with_tailscale`, AmneziaWG
+  3.x fields or a keepalive range on an older core), with its code in the build
+  report; the Tailscale gate no longer goes by core version.
+- **Template language parity with contract 1.1.68–1.1.70 ([§555](docs/spec/tasks/555-template-lang-spec143-parity.md)).**
+  A list-valued `#if` branch inside an array now splices one level into the parent,
+  `@runtime.platform/arch/target` drop their key instead of leaking into the config,
+  variables accept `options_open`, and template warnings (undeclared variable, unknown
+  directive, clamped or invalid number, dropped preset fragment) carry their parameters,
+  are deduplicated and come first in the build report without blocking save. A preset
+  or template DNS server of an address type left without `server` is now dropped with
+  a warning.
+- **Link schemes are recognised from the contract registry only ([§562](docs/spec/tasks/562-uri-scheme-dispatch-from-registry.md)).**
+  Internal: the parser's own scheme lists and the SOCKS version ↔ scheme table are gone;
+  the registry's scheme and alias declarations decide which links are accepted. Nodes and
+  their tags are unchanged.
+
+### Fixed
+
+- **Wi-Fi rules: the app says why it cannot read the network name ([§567](docs/spec/tasks/567-wifi-ssid-read-preflight-and-diagnostics.md)).**
+  Android hides the Wi-Fi name without an error when location is set to
+  "Approximate" instead of "Precise" or the system Location toggle is off, so
+  `wifi_ssid` rules stopped matching and Add current suggested toggling Wi-Fi.
+  Add current now opens the permission dialog with a precise-location note, or
+  offers the Location settings when Location is off. The Wi-Fi section of the
+  rule editor shows a hint only when something is actually missing, and the
+  Diagnostics location row reports precise location and the Location toggle. The
+  reason is written to logcat under the `WifiInfoReader` tag.
+
+- **Wi-Fi rules read the network name the way Android 12+ expects ([§569](docs/spec/tasks/569-wifi-ssid-transport-info-api31.md)).**
+  On Android 12 and newer the Wi-Fi name and BSSID now come from a network
+  callback registered with location info, which replaces the deprecated
+  `getConnectionInfo()`; the old call stays as a fallback and is the only path on
+  Android 11 and older. Permissions are the same. With Wi-Fi off, Add current
+  says "Not connected to Wi-Fi." instead of blaming location permissions. Logcat
+  shows which path answered (`source=cache` / `source=legacy`).
+
+- **Imported nodes keep what the provider sent ([§560](docs/spec/tasks/560-xray-body-parse-gaps.md)).**
+  Fields the node model had no place for were dropped on import: `multiplex`,
+  `udp_over_tcp`, dial options (`connect_timeout`, `network_strategy`, `fallback_delay`
+  and others), WireGuard `workers` and `listen_port`, QUIC tuning, extra transport
+  fields. They now reach the config as written. Xray nodes no longer get a
+  `server_name` the provider did not set, sing-box `socks` bodies no longer gain
+  `version`, a VMess link with `aid=0` no longer writes `alter_id: 0`. An Xray
+  `socks` outbound becomes a node, and an Xray outbound nobody can read is reported
+  as rejected instead of disappearing.
+
+- **Links to a chain open the chain ([§558](docs/spec/tasks/558-chain-owner-navigation.md)).**
+  Tapping a chain on a node's screen, or a chain named in the detour-loop sheet, used
+  to show "Source not found in your lists". It now opens the chain editor, and a saved
+  change rebuilds the config and applies it to a running tunnel, same as in Servers.
 
 ## [2.25.5] — 2026-09-25
 

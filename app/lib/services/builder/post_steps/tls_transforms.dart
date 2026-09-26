@@ -54,6 +54,12 @@ String _randomizeHostCase(String host, Random rng) {
 
 /// Post-step: применение tls_fragment к first-hop'ам (без `detour`).
 /// Inner hops уже в туннеле, DPI не видит их TLS — фрагментация не нужна.
+///
+/// Контракт 1.1.64 — годность поля узлу спрашивается у реестра ПО ТЕЛУ
+/// ([fieldAllowedOn]): «оставил бы санитайзер `tls.fragment` при этом
+/// теле». Так naive (`forbidden_for`) и masque на `vhttp: h3` (связь
+/// `conflicts` с `when`) фрагментацию не получают, masque на h2/auto —
+/// получает, без списка схем в коде.
 void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
   final fragment = vars['tls_fragment'] == 'true';
   final recordFragment = vars['tls_record_fragment'] == 'true';
@@ -64,30 +70,42 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
   for (final ob in outbounds) {
     if (ob is! Map<String, dynamic>) continue;
     if (ob.containsKey('detour')) continue;
-    // §270 — naive-outbound отвергает fragment/record_fragment на уровне ядра
-    // (fatal «fragment is not supported on naive outbound»). naive принимает в
-    // TLS только enabled/server_name — глобальный fragment ему не наложить.
-    if (ob['type'] == 'naive') continue;
-    // §393 — masque: TLS всегда включён по природе транспорта, поля `enabled`
-    // у него нет, а блок `tls{}` появляется только если задан SNI. Фрагментация
-    // осмысленна лишь на `vhttp: h2` (TCP+TLS); при h3 ядро пишет предупреждение
-    // и игнорирует её — пропускаем молча, глобальный тумблер не должен ругаться
-    // на каждый неподходящий узел. Legacy-имя `network` читаем для конфигов,
-    // написанных до миграции (ручной редактор, чужой JSON).
+    final addFragment = fragment && fieldAllowedOn(ob, 'tls.fragment');
+    final addRecord =
+        recordFragment && fieldAllowedOn(ob, 'tls.record_fragment');
+    if (!addFragment && !addRecord) continue;
+    Map<String, dynamic> tls;
+    // §393 — masque: TLS всегда включён по природе транспорта, выключателя
+    // `enabled` у него нет, а блок `tls{}` появляется только если задан SNI.
     if (ob['type'] == 'masque') {
-      final v = ob['vhttp'] ?? ob['network'];
-      if (v != 'h2') continue;
-      final mTls = (ob['tls'] ??= <String, dynamic>{}) as Map<String, dynamic>;
-      if (fragment) mTls['fragment'] = true;
-      if (recordFragment) mTls['record_fragment'] = true;
-      mTls['fragment_fallback_delay'] = fallbackDelay;
-      continue;
+      tls = (ob['tls'] ??= <String, dynamic>{}) as Map<String, dynamic>;
+    } else {
+      final t = ob['tls'];
+      if (t is! Map<String, dynamic>) continue;
+      if (t['enabled'] != true) continue;
+      tls = t;
     }
-    final tls = ob['tls'];
-    if (tls is! Map<String, dynamic>) continue;
-    if (tls['enabled'] != true) continue;
-    if (fragment) tls['fragment'] = true;
-    if (recordFragment) tls['record_fragment'] = true;
+    if (addFragment) tls['fragment'] = true;
+    if (addRecord) tls['record_fragment'] = true;
     tls['fragment_fallback_delay'] = fallbackDelay;
   }
+}
+
+/// Post-step (контракт 1.1.65): `detour` дописывает сборка ПОСЛЕ санитайзера,
+/// поэтому связи `conflicts {with: detour}` реестра перепроверяются здесь, по
+/// готовому телу каждого outbound/endpoint с `detour`: уступающие поля
+/// снимаются с кодом связи ([yieldToManaged]). Хоп сохраняется — снять
+/// detour значило бы тихий прямой дозвон.
+List<RegistryWarning> applyDetourYields(Map<String, dynamic> config) {
+  final out = <RegistryWarning>[];
+  for (final key in const ['outbounds', 'endpoints']) {
+    final list = config[key];
+    if (list is! List) continue;
+    for (final e in list) {
+      if (e is! Map<String, dynamic>) continue;
+      if (!e.containsKey('detour')) continue;
+      out.addAll(yieldToManaged(e, 'detour'));
+    }
+  }
+  return out;
 }

@@ -1,6 +1,7 @@
 import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../contract/registry.dart';
 import '../json_clone.dart';
 import 'if_engine.dart';
 
@@ -47,6 +48,86 @@ const _kIntermediateActions = {'resolve', 'sniff', 'route-options'};
 /// у ядра `route` И `evaluate` без server = fatal на старте, а неизвестный
 /// action = decode error; опечатка в шаблоне не должна доезжать до ядра.
 const _kServerlessDnsActions = {'predefined', 'reject', 'route-options'};
+
+/// §555 (контракт 1.1.70): типы DNS-серверов sing-box, у которых адрес
+/// (`server`) обязателен. Это схема ядра, а не имена переменных шаблона.
+const _kAddressDnsServerTypes = {'udp', 'tcp', 'tls', 'https', 'quic', 'h3'};
+
+/// §555 — DNS-сервер адресного типа без `server` после подстановки (пустая
+/// переменная дала Dropped ключа). Ядро такой сервер не примет. Легаси-форма
+/// без `type` сюда не попадает.
+bool dnsServerMissingAddress(Map<String, dynamic> server) {
+  final type = server['type'];
+  if (type is! String || !_kAddressDnsServerTypes.contains(type)) return false;
+  final address = server['server'];
+  return address is! String || address.trim().isEmpty;
+}
+
+/// §555 — источник набора правил по его `type` (remote — `url`, local —
+/// `path`, inline — ключ `rules` со списком, в т.ч. пустым). Возвращает недостающее поле или null, если
+/// источник на месте. Тип не распознан — `url/path`.
+String? ruleSetMissingSource(Map<String, dynamic> rs) {
+  bool has(String k) {
+    final v = rs[k];
+    if (v is String) return v.trim().isNotEmpty;
+    if (v is List) return v.isNotEmpty;
+    return v != null;
+  }
+
+  return switch (rs['type']) {
+    'remote' => has('url') ? null : 'url',
+    'local' => has('path') ? null : 'path',
+    // Источник inline-набора — сам ключ `rules` со списком; пустой список
+    // ядро принимает, это не «нет источника».
+    'inline' => rs['rules'] is List ? null : 'rules',
+    _ => 'url/path',
+  };
+}
+
+/// §555 — фрагмент выпал гейтом валидности после Dropped-каскада: код
+/// `template_fragment_dropped {owner, kind, reason}` в накопитель сборки.
+/// Фрагмент, целиком снятый `#if`/`#enable` автора, сюда не приходит.
+void reportFragmentDropped(String owner, String kind, String reason) =>
+    reportTemplateWarning(templateWarnFragmentDropped,
+        {'owner': owner, 'kind': kind, 'reason': reason});
+
+/// §571 — имена списков полей-условий в `registry/allowlists.json`
+/// (контракт 1.1.81, TEMPLATE_LANG §5.1).
+const _kRouteRuleConditions = 'route_rule_conditions';
+const _kDnsRuleConditions = 'dns_rule_conditions';
+
+/// §571 — в правиле после Dropped-каскада осталось хоть одно поле-условие
+/// из списка реестра [list]. Правило без условий матчило бы весь трафик
+/// (все запросы), поэтому выпадает; `action` в списки не входит.
+///
+/// Значение-условие считается, если оно не `null` и не пустой список (ядро
+/// пустой список условием не считает). Список объектов — под-правила
+/// логического правила: условие есть, если оно есть хоть у одного из них
+/// (по тому же списку, рекурсивно). Реестр не загружен или списка нет —
+/// гейт не срабатывает (правило остаётся как написано), как у Go
+/// `hasRuleCondition`.
+bool hasRuleCondition(Map<String, dynamic> rule, String list) {
+  final conds = ContractRegistry.I.allowlistValues(list);
+  if (conds == null || conds.isEmpty) return true;
+  return _hasCondition(rule, conds);
+}
+
+bool _hasCondition(Map<dynamic, dynamic> rule, Set<String> conds) {
+  for (final e in rule.entries) {
+    if (!conds.contains(e.key)) continue;
+    final v = e.value;
+    if (v == null) continue;
+    if (v is List) {
+      if (v.isEmpty) continue;
+      final subRules = v.whereType<Map>().toList();
+      if (subRules.isEmpty) return true;
+      if (subRules.any((m) => _hasCondition(m, conds))) return true;
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
 
 /// Результат merge всех preset-фрагментов от разных CustomRule'ов.
 class BundleMerge {
@@ -123,7 +204,12 @@ PresetFragments expandPreset(
     final result = substituteVars(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
-    if (result['type'] is! String) continue;
+    // §555 — набор без источника по `type` не выпадает молча.
+    final missingSource = ruleSetMissingSource(result);
+    if (missingSource != null) {
+      reportFragmentDropped(preset.presetId, 'route.rule_set', missingSource);
+      continue;
+    }
     // Служебные ключи гейта — прочь из результата. ВАЖНО: `enabled` снимается
     // ТОЛЬКО в строковой форме "@var" (наша мета-конвенция). Булев `enabled`
     // — настоящее поле sing-box (`tls.enabled`, `cache_file.enabled`), его
@@ -179,7 +265,10 @@ PresetFragments expandPreset(
       final action = result['action'];
       final serverless =
           action is String && _kServerlessDnsActions.contains(action);
-      if (result['server'] is! String && !serverless) continue;
+      if (result['server'] is! String && !serverless) {
+        reportFragmentDropped(preset.presetId, 'dns.rules', 'server/action');
+        continue;
+      }
 
       // Dangling-rule_set guard — паритет с route-правилами (§011/§045):
       // DNS-правило со ссылкой на незарегистрированный tag уронило бы ядро
@@ -188,10 +277,9 @@ PresetFragments expandPreset(
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
-          warnings.add(
-            'preset "${preset.presetId}": DNS rule skipped — references '
-            'missing rule_set "$refTag" (download SRS first)',
-          );
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
           continue;
         }
       } else if (refTag is List) {
@@ -200,10 +288,9 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
-          warnings.add(
-            'preset "${preset.presetId}": DNS rule skipped — none of '
-            '[${refTag.join(", ")}] available in expanded rule_sets',
-          );
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
           continue;
         }
         result['rule_set'] = present.length == 1 ? present.first : present;
@@ -216,6 +303,12 @@ PresetFragments expandPreset(
           'preset "${preset.presetId}": DNS rule rule_set has invalid '
           'value (${refTag.runtimeType}) — reference dropped',
         );
+      }
+      // §571 — ни одного поля-условия (реестр, dns_rule_conditions): правило
+      // перехватывало бы все запросы. reason — как у Go (`isDNSRuleEmpty`).
+      if (!hasRuleCondition(result, _kDnsRuleConditions)) {
+        reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
+        continue;
       }
       dnsRules.add(result);
     }
@@ -238,7 +331,8 @@ PresetFragments expandPreset(
       final result = item;
       if (result['outbound'] is! String && result['action'] is! String) {
         // После substitute нет ни outbound, ни action (optional-var
-        // выпал / кривой шаблон) → элемент дропается silently (§033).
+        // выпал / кривой шаблон) → элемент выпадает с кодом (§033, §555).
+        reportFragmentDropped(preset.presetId, 'route.rules', 'outbound/action');
         continue;
       }
 
@@ -313,12 +407,10 @@ PresetFragments expandPreset(
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
-          warnings.add(
-            'preset "${preset.presetId}": routing rule skipped — references '
-            'missing rule_set "$refTag" (download SRS first)',
-          );
-        } else {
-          routingRules.add(result);
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+          continue;
         }
       } else if (refTag is List) {
         final present = refTag
@@ -326,20 +418,14 @@ PresetFragments expandPreset(
             .where(expandedTags.contains)
             .toList();
         if (present.isEmpty) {
-          warnings.add(
-            'preset "${preset.presetId}": routing rule skipped — none of '
-            '[${refTag.join(", ")}] available in expanded rule_sets',
-          );
-        } else {
-          // Один остался → даунгрейд до string. >1 → оставляем массив.
-          result['rule_set'] = present.length == 1 ? present.first : present;
-          routingRules.add(result);
+          // §570 — одна запись: код (подсказка про скачивание — строка набора
+          // правил выше, «no cached file»), без второй строки.
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+          continue;
         }
-      } else if (refTag == null) {
-        // Легитимно: правило без `rule_set` матчит по другим полям
-        // (domain/protocol/port/…). Оставляем как есть.
-        routingRules.add(result);
-      } else {
+        // Один остался → даунгрейд до string. >1 → оставляем массив.
+        result['rule_set'] = present.length == 1 ? present.first : present;
+      } else if (refTag != null) {
         // §219 — refTag не null, но и не валидная форма: пустая String либо
         // непредусмотренный тип (int/bool/Map из кривого шаблона). Раньше
         // молча проходило как валидное правило; теперь — drop + warning
@@ -349,8 +435,16 @@ PresetFragments expandPreset(
           'preset "${preset.presetId}": routing rule rule_set has invalid '
           'value (${refTag.runtimeType}) — reference dropped',
         );
-        routingRules.add(result);
       }
+      // Без `rule_set` правило матчит по другим полям (domain/protocol/
+      // port/…). §571 — если не осталось ни одного поля-условия (реестр,
+      // route_rule_conditions), правило матчило бы весь трафик и выпадает;
+      // reason — как у Go (`isRuleEmpty`).
+      if (!hasRuleCondition(result, _kRouteRuleConditions)) {
+        reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+        continue;
+      }
+      routingRules.add(result);
     }
   }
 
@@ -392,6 +486,12 @@ PresetFragments expandPreset(
     final result = substituteVars(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
+    // §555 — адресный сервер без адреса ядро не примет: выпадает с кодом,
+    // правила на него отсеет фильтр эмитированных тегов (dns_rules).
+    if (dnsServerMissingAddress(result)) {
+      reportFragmentDropped(preset.presetId, 'dns.servers', 'server');
+      continue;
+    }
     normalizeDnsDetour(result);
     dnsServers.add(result);
   }

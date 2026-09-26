@@ -1,21 +1,34 @@
-/// Фича 478 — вердикт страховки в бэкап не едет (решение владельца 19.09.2026).
+/// Фича 478 / контракт 1.1.67 (PARSING_PRINCIPLES §9.4, BACKUP.md §2) — `core_rejected`
+/// при переносе бэкапом.
 ///
-/// Диагностические отметки — кэш, а не истина: в бэкап идут настройки, а не
-/// выводы о них. Локальное хранилище не трогаем — здесь только запись и чтение файла.
+/// Запись — кэш вердикта конкретного ядра на конкретной машине, а не свойство
+/// узла. Норма переноса (решение владельца 25.09.2026):
+///
+/// - экспорт пишет запись сервера и члена папки как есть, вместе с
+///   `enabled: false`; узлы подписки едут картой `disabled{}` без причины
+///   (формат не расширяется);
+/// - импорт запись СНИМАЕТ, `enabled`/`disabled{}` берёт из файла как есть —
+///   узел остаётся выключенным, импорт его не включает. Вердикт заново
+///   вынесет ядро приёмника, когда человек включит узел.
+///
+/// Локальное хранилище не трогаем — здесь только запись и чтение файла.
 library;
 
 import '../../models/core_reject_verdict.dart';
 import '../lx_backup_slice.dart';
 
-/// Убирает `core_rejected` и выключение, поставленное страховкой. Человеческое
-/// выключение (без вердикта) остаётся. Вызывается на экспорте и на импорте
-/// (в т.ч. для старых файлов, где вердикты ещё были).
+/// Снимает `core_rejected` с записи источника. [forExport] — сторона
+/// экспорта: сервер и член папки едут как есть, у подписки снимается только
+/// причина (карта `warnings`), выключение остаётся. Выключение (`enabled`,
+/// `disabled{}`) не трогается ни на одной стороне.
 Map<String, dynamic> sanitizeCoreRejectInBackupRecord(
   Map<String, dynamic> record,
-  BackupRecord kind,
-) {
+  BackupRecord kind, {
+  bool forExport = false,
+}) {
   switch (kind) {
     case BackupRecord.folder:
+      if (forExport) return record;
       final nodes = record['nodes'];
       if (nodes is! List) return record;
       return {
@@ -35,6 +48,7 @@ Map<String, dynamic> sanitizeCoreRejectInBackupRecord(
       return _sanitizeSubscriptionRecord(record);
     case BackupRecord.server:
     case BackupRecord.folderNode:
+      if (forExport) return record;
       return _sanitizeServerLikeRecord(record);
     default:
       return record;
@@ -42,35 +56,20 @@ Map<String, dynamic> sanitizeCoreRejectInBackupRecord(
 }
 
 Map<String, dynamic> _sanitizeSubscriptionRecord(Map<String, dynamic> record) {
-  final disabled = _stringKeyMap(record['disabled']);
   final warnings = _stringKeyMap(record['warnings']);
-
-  final strippedDisabled = <String, dynamic>{};
-  for (final e in disabled.entries) {
-    final ws = storedWarningsFromJson(warnings[e.key]);
-    if (!ws.any((w) => w.isCoreRejected)) strippedDisabled[e.key] = e.value;
-  }
-
   final strippedWarnings = <String, dynamic>{};
   for (final e in warnings.entries) {
     final kept = _withoutCoreRejected(storedWarningsFromJson(e.value));
     if (kept.isNotEmpty) strippedWarnings[e.key] = storedWarningsToJson(kept);
   }
-
   final out = Map<String, dynamic>.from(record);
-  _setOrRemove(out, 'disabled', strippedDisabled);
   _setOrRemove(out, 'warnings', strippedWarnings);
   return out;
 }
 
 Map<String, dynamic> _sanitizeServerLikeRecord(Map<String, dynamic> record) {
-  final ws = storedWarningsFromJson(record['warnings']);
-  final kept = _withoutCoreRejected(ws);
-  final wasInsurance =
-      record['enabled'] == false && ws.any((w) => w.isCoreRejected);
-
+  final kept = _withoutCoreRejected(storedWarningsFromJson(record['warnings']));
   final out = Map<String, dynamic>.from(record);
-  if (wasInsurance) out['enabled'] = true;
   _setOrRemove(out, 'warnings', kept.isEmpty ? null : storedWarningsToJson(kept));
   return out;
 }

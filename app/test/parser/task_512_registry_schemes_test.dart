@@ -49,6 +49,16 @@ String _awgLink(String scheme,
     '&publickey=$_publicKey'
     '&s1=57&s2=105&s3=52&s4=12#DE-example-awg';
 
+/// Написания схемы, которые приложение принимало до §562 (прежний
+/// литеральный набор диспетчера). Диспетчер теперь строится из реестра, и
+/// этот снимок стережёт, что ни одно из них не потерялось.
+const _kLegacySchemes = <String>{
+  'trojan', 'vless', 'vmess', 'ss', 'hysteria2', 'hy2', 'tuic', 'anytls',
+  'naive+https', 'naive+quic', 'proxy-http', 'proxy-https', 'proxy+http',
+  'proxy+https', 'socks', 'socks5', 'socks4', 'socks4a', 'ssh', 'masque',
+  'wireguard', 'wg', 'awg',
+};
+
 void main() {
   setUpAll(loadEngineSections);
 
@@ -70,18 +80,18 @@ void main() {
     });
 
     test('рабочий набор ШИРЕ каждой из сторон: реестр добавляет, не отнимает', () {
-      // Реестр `scheme_in` НЕ объявляет `wg://` намеренно: написание знает
-      // только Dart (`wireguard.json` → note, разрыв с Go IsDirectLink).
-      // Поэтому объединение, а не замена — иначе синк молча снял бы живое
-      // написание, и это выглядело бы следствием контракта, а не решением.
+      // С контракта 1.1.81 (§78) `wg` объявлен в `scheme_in` секции
+      // wireguard, а не только в `aliases` протокола. §562: диспетчер читает
+      // оба поля реестра, литерального набора в Dart больше нет.
       final working = pipelineSchemes();
-      expect(working, containsAll(kPipelineSchemes),
+      expect(working, containsAll(_kLegacySchemes),
           reason: 'ни одно живое написание не теряется при живом реестре');
       expect(working, contains('amneziawg'),
           reason: 'а новое из реестра добавляется без правки кода');
-      expect(registryUriSchemes(), isNot(contains('wg')),
-          reason: 'снимок разрыва: `wg` держат литералы, и это НЕ опечатка — '
-              'уедет вместе с решением владельца, а не попутно');
+      expect(registryUriSchemes(), contains('wg'),
+          reason: 'контракт 1.1.81: `wg` в `scheme_in` секции wireguard');
+      expect(registrySchemeType('wg'), 'wireguard',
+          reason: 'алиас протокола ведёт в тот же тип тела');
     });
 
     test('классификатор вставки берёт тот же набор', () {

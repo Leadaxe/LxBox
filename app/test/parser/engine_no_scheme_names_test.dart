@@ -50,4 +50,74 @@ void main() {
         reason: 'движок обязан быть общим: правило схемы живёт в секции '
             'реестра, а не в коде.\n${hits.join('\n')}');
   });
+
+  // §562 — ДИСПЕТЧЕР СХЕМ ССЫЛКИ: написание схемы → тип тела читается из
+  // реестра (`scheme_in` секций и `aliases` протоколов). Литерал схемы в
+  // диспетчере — это возврат локальной копии правила реестра, которую §562
+  // снял (таблица схем, набор схем, `switch` по написаниям).
+  //
+  // Проверяются СТРОКОВЫЕ ЛИТЕРАЛЫ, а не весь текст.
+  //
+  // §566 — покрытие расширено на загрузку реестра (`registry.dart`: состав
+  // `registry/protocols/` из каталога), распознавание ввода
+  // (`input_helpers.dart`) и каталог `uri_parsers/` (§570 — снят целиком).
+  // Разрешённые исключения — [allowed], каждое с причиной.
+  test('в диспетчере схем ссылки нет литералов схем (§562, §566)', () {
+    final files = [
+      'lib/services/parser/uri_parsers.dart',
+      'lib/services/parser/mappers/uri_pipeline.dart',
+      'lib/services/contract/registry.dart',
+      'lib/services/subscription/input_helpers.dart',
+    ];
+    // §570 — каталог `uri_parsers/` снят целиком (последняя обёртка — форма
+    // `ini` — ушла в движок); вернуться он не должен.
+    expect(Directory('lib/services/parser/uri_parsers').existsSync(), isFalse);
+    // Файл → литералы, которые в нём законны, с причиной.
+    const allowed = <String, Map<String, String>>{
+      'lib/services/subscription/input_helpers.dart': {
+        // Транспорт СКАЧИВАНИЯ подписки, а не схема узла: реестр такого
+        // набора не объявляет (source_kinds.json опознаёт уже скачанное
+        // тело). Запрос лаунчеру — «Нерешённое» задачи 566.
+        'http://': 'isSubscriptionUrl',
+        'https://': 'isSubscriptionUrl',
+      },
+    };
+    const spellings = [
+      ...forbidden,
+      'ss', 'hy', 'hy2', 'wg', 'awg', 'amneziawg',
+      'socks4', 'socks4a', 'socks5',
+      'naive+https', 'naive+quic',
+      'proxy-http', 'proxy-https', 'proxy+http', 'proxy+https',
+      'vpn', 'incy', 'happ',
+      'http', 'https', 'chain', 'group', 'tailscale',
+    ];
+    final literal = RegExp(r"'([^'\\]*)'" '|' r'"([^"\\]*)"');
+    final hits = <String>[];
+    for (final path in files) {
+      final f = File(path);
+      expect(f.existsSync(), isTrue, reason: 'нет файла $path');
+      final lines = f.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        final code = line.trimLeft();
+        if (code.startsWith('//')) continue;
+        // Род узла (`kind_when` секции), а не написание схемы: запасной
+        // потолок mtu без реестра читает его из карты маппера.
+        if (line.contains('mapping.kinds.contains(')) continue;
+        for (final m in literal.allMatches(line)) {
+          final v = (m.group(1) ?? m.group(2) ?? '').toLowerCase();
+          final bare =
+              v.endsWith('://') ? v.substring(0, v.length - 3) : v;
+          if (allowed[path]?.containsKey(v) ?? false) continue;
+          if (spellings.contains(bare)) {
+            hits.add('$path:${i + 1}: «$v» — ${line.trim()}');
+          }
+        }
+      }
+    }
+    expect(hits, isEmpty,
+        reason: 'написание схемы ведёт реестр (`scheme_in`, `aliases`, '
+            '`scheme_sets`, `emit.form_from`), а не диспетчер.\n'
+            '${hits.join('\n')}');
+  });
 }

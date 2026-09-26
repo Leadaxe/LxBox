@@ -58,7 +58,7 @@ void main() {
       expect(r.body!['uuid'], '11111111-1111-1111-1111-111111111111');
     });
 
-    // §470 — `unknown_key` несёт и СНЯТОЕ ЗНАЧЕНИЕ: конверт корпуса называет
+    // §470 — `unknown_key` несёт и СНЯТОЕ ЗНАЧЕНИЕ: результат разбора корпуса называет
     // его (`body/singbox/manual_object_junk`), и лаунчер печатает `src[name]`
     // (`nodeflow/sanitize.go`). Без `value` человек узнавал, что ключ снят,
     // но не ЧТО снято, а body-раннер расходился с контрактом молча — ровно
@@ -68,7 +68,7 @@ void main() {
       expect(_byCode(r, 'unknown_key').value, 'whatever');
     });
 
-    // Форма `value` нормативна (CANON §6): объект — `map[k:v k:v]` с ключами
+    // Форма `value` нормативна (PARSING_PRINCIPLES §6): объект — `map[k:v k:v]` с ключами
     // по алфавиту, и у снятого ключа она та же, что у прочих кодов.
     test('unknown_key печатает объект по канону корпуса', () {
       final r = _san(_vless({
@@ -494,7 +494,7 @@ void main() {
           ['type', 'tag', 'server', 'server_port', 'uuid']);
     });
 
-    test('дефолты не материализуются (CANON §2.4)', () {
+    test('дефолты не материализуются (PARSING_PRINCIPLES §2.4)', () {
       final r = _san(_vless());
       // packet_encoding, flow, network в теле не заданы — и не появляются.
       expect(r.body!.containsKey('packet_encoding'), isFalse);
@@ -559,12 +559,12 @@ void main() {
   // §464 — выражения реестра, приехавшие с W2d лаунчера. По кейсу на
   // выражение: реестр нормативен для обеих сторон, и «санитайзер молча не
   // знает правила» неотличимо от «правила нет».
-  // §470 — форма `value` нормативна для ВСЕХ реализаций (CANON §6, лаунчер
+  // §470 — форма `value` нормативна для ВСЕХ реализаций (PARSING_PRINCIPLES §6, лаунчер
   // `8068f7a0`): корпус сверяет её побайтно, и своего смысла у неё нет —
   // это Go-печать `%v`, которую не-Go сторона воспроизводит сама. Кейс на
   // каждое правило текста канона: скаляр, объект, массив, вложенность,
   // обрезка по рунам, `secret`.
-  group('renderWarningValue — CANON §6', () {
+  group('renderWarningValue — PARSING_PRINCIPLES §6', () {
     test('скаляр — как есть, без кавычек', () {
       expect(RegistrySanitizer.renderWarningValue(true), 'true');
       expect(RegistrySanitizer.renderWarningValue(443), '443');
@@ -911,7 +911,7 @@ void main() {
       expect(_codes(awg), isEmpty, reason: 'дефолт — не замена, кода нет');
 
       // Обычному WireGuard поля не достаётся: ядро берёт свой 1408, и наш
-      // дефолт спорил бы с ним и ломал identity-хеш (CANON §2.4).
+      // дефолт спорил бы с ним и ломал identity-хеш (PARSING_PRINCIPLES §2.4).
       final plain = _san(wg(), scheme: 'wireguard');
       expect(plain.body!.containsKey('mtu'), isFalse);
       expect(_codes(plain), isEmpty);
@@ -1215,7 +1215,7 @@ void main() {
       expect(_codes(r), contains('wg_key_invalid'));
     });
 
-    // ───── §481 (контракт 1.1.12, CANON §6.1) — `absent_when` ─────
+    // ───── §481 (контракт 1.1.12, PARSING_PRINCIPLES §6.1) — `absent_when` ─────
 
     test('absent_when: tls{enabled:false} снимается ЦЕЛИКОМ и ТИХО', () {
       final r = _san(_vless({
@@ -1330,6 +1330,42 @@ void main() {
       expect(coreAtLeast('1.14.2', '1.14.1-lx.1'), isTrue);
       // Версия неизвестна — гейт не применяем.
       expect(coreAtLeast('', '1.14.1-lx.4'), isTrue);
+    });
+  });
+
+  // §556 (контракт 1.1.57) — `on_invalid: unwrap`, общий обход атрибута.
+  group('on_invalid unwrap', () {
+    Map<String, dynamic> hy(Object obfs) => {
+          'type': 'hysteria',
+          'tag': 'h',
+          'server': 'example.com',
+          'server_port': 443,
+          'up_mbps': 10,
+          'down_mbps': 50,
+          'tls': {'enabled': true, 'server_name': 'example.com'},
+          'obfs': obfs,
+        };
+
+    test('объект с годным членом → член и код', () {
+      final r = RegistrySanitizer.sanitize(hy({'type': 'salamander', 'password': 'pw'}),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!['obfs'], 'pw');
+      expect(r.warnings.map((w) => w.code), contains('obfs_object_flattened'));
+    });
+
+    test('объект без члена → поле снято, else_code с параметром type', () {
+      final r = RegistrySanitizer.sanitize(hy({'type': 'salamander'}),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!.containsKey('obfs'), isFalse);
+      final w = r.warnings.singleWhere((w) => w.code == 'obfs_password_missing');
+      expect(w.params['type'], 'salamander');
+    });
+
+    test('не объект и не строка → type_invalid', () {
+      final r = RegistrySanitizer.sanitize(hy([1, 2]),
+          scheme: 'hysteria', coreVersion: '9.9.9');
+      expect(r.body!.containsKey('obfs'), isFalse);
+      expect(r.warnings.map((w) => w.code), contains('type_invalid'));
     });
   });
 }

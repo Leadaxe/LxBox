@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/config_node.dart';
 
+import '../contract_paths.dart';
+
 /// §091 — unit tests for ConfigNode / ParsedConfig (structural per-node meta).
 void main() {
   String cfg(Map<String, dynamic> m) => jsonEncode(m);
@@ -159,7 +161,11 @@ void main() {
   });
 
   group('§102 — transport/security слоты для subtitle', () {
-    final pc = ParsedConfig.parse(cfg({
+    // Подпись уровня (awg*) — данные реестра (§56/§60): разбор после загрузки.
+    late ParsedConfig pc;
+    setUpAll(() async {
+      await loadTestRegistry();
+      pc = ParsedConfig.parse(cfg({
       'outbounds': [
         {
           'tag': 'xh',
@@ -252,6 +258,7 @@ void main() {
         {'tag': 'awg31p', 'type': 'wireguard', 'random_trailers': true, 'ib': 'y'},
       ],
     }));
+    });
 
     test('transport: явный type; http → h2; v2ray-дефолт → tcp', () {
       expect(pc['xh']?.transportLabel, 'xhttp');

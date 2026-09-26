@@ -23,6 +23,7 @@ import '../../models/node_warning.dart';
 import '../../models/record_codec.dart';
 import '../node_hash.dart';
 import '../contract/body_sanitizer.dart';
+import '../contract/group_genus.dart';
 import '../contract/registry.dart';
 import '../node_identity.dart';
 import 'json_parsers.dart';
@@ -41,9 +42,9 @@ export 'uri_utils.dart' show kMaxDetourDepth;
 /// в 1.11, но встречаются в конфигах, которые пользователь переносит.
 const _kSingboxServiceTypes = {'direct', 'block', 'dns'};
 
-/// §368 §3.1 — типы-группы: узлом-сервером не становятся, приезжают как
-/// `AutoSelectSpec` (§5).
-const _kSingboxGroupTypes = {'selector', 'urltest'};
+/// §368 §3.1 / §565 — типы-группы (род, `genus.values` реестра): узлом-
+/// сервером не становятся, приезжают как `AutoSelectSpec` (§5).
+bool _isGroupType(String type) => GroupGenus.isKnown(type);
 
 /// Разбор массива sing-box конфигов в список узлов.
 ///
@@ -53,7 +54,12 @@ const _kSingboxGroupTypes = {'selector', 'urltest'};
 ///
 /// Не бросает: битая форма отдельного outbound'а гасится на его гранулярности,
 /// соседи и остальная подписка живут (§3.5).
-List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
+///
+/// §561 — [dropped] (необязательный) собирает причины отбраковки записей
+/// боевого прохода: тип вне ядра, битая форма. Только туда — на соседний
+/// узел они не вешаются.
+List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs,
+    {List<NodeWarning>? dropped}) {
   if (configs.isEmpty) return const [];
 
   // §321 P4 / §404 D-086 — накопитель ПОДПИСЕЙ дедупа на всю подписку. Между
@@ -106,6 +112,7 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
       synonyms: synonyms,
       ownedBy: (sig) => identical(owner[sig], cfg),
       pendingGroups: groups,
+      dropped: dropped,
     ));
   }
   return _bindGroupMembers(result, groups);
@@ -113,7 +120,10 @@ List<NodeSpec> parseSingboxConfigs(List<Map<String, dynamic>> configs) {
 
 /// §439 — члены группы до связывания: узел этого конфига или ключ пула
 /// соседнего элемента (§3.6), плюс число потерянных на разборе.
-typedef _GroupRefs = ({List<Object> refs, int lost});
+///
+/// §565 — [def] — член, которого называет `default` selector'а (узел или
+/// ключ пула), чтобы связывание перевело его в тот же сырой тег, что состав.
+typedef _GroupRefs = ({List<Object> refs, int lost, Object? def});
 
 /// §439 — состав групп → ссылки на СЫРЫЕ теги членов (NODE_LINK §2.2).
 ///
@@ -157,8 +167,18 @@ List<NodeSpec> _bindGroupMembers(
     if (lost > 0) n.warnings.add(GroupMemberMissingWarning(lost));
     // §5.1 — пустой urltest роняет старт ядра: группу без членов не выпускаем.
     if (links.isEmpty) continue;
-    out.add(n.copyWith(membership: ExplicitMembers(links))
-      ..sourceExtended = n.sourceExtended);
+    // §565 — `default` называет члена тем же сырым тегом, что и состав;
+    // член, не давший узла, — прежняя строка (сборка отпустит её к первому
+    // живому члену).
+    final defRef = pending.def;
+    final defNode = defRef is NodeSpec
+        ? defRef
+        : (defRef == null ? null : byKey[defRef]);
+    final defRaw = defNode == null ? null : rawTags[defNode];
+    out.add(n.copyWith(
+      membership: ExplicitMembers(links),
+      manualDefault: defRaw ?? n.manualDefault,
+    )..sourceExtended = n.sourceExtended);
   }
   return out;
 }
@@ -170,7 +190,7 @@ int _payloadCount(Map<String, dynamic> config) {
   for (final o in _allEntries(config)) {
     final type = o['type']?.toString() ?? '';
     if (_kSingboxServiceTypes.contains(type)) continue;
-    if (_kSingboxGroupTypes.contains(type)) continue;
+    if (_isGroupType(type)) continue;
     n++;
   }
   return n;
@@ -197,6 +217,7 @@ List<NodeSpec> _parseOne(
   required Map<String, String> synonyms,
   required Map<AutoSelectSpec, _GroupRefs> pendingGroups,
   bool Function(String signature)? ownedBy,
+  List<NodeWarning>? dropped,
 }) {
   final entries = _allEntries(config);
   if (entries.isEmpty) return const [];
@@ -231,11 +252,10 @@ List<NodeSpec> _parseOne(
   // Кандидаты в узлы: payload, не служебные, не группы, не цели detour.
   final candidates = <Map<String, dynamic>>[];
   final groups = <Map<String, dynamic>>[];
-  final unsupported = <String>{};
   for (final e in entries) {
     final type = e['type']?.toString() ?? '';
     if (_kSingboxServiceTypes.contains(type)) continue;
-    if (_kSingboxGroupTypes.contains(type)) {
+    if (_isGroupType(type)) {
       groups.add(e);
       continue;
     }
@@ -269,10 +289,17 @@ List<NodeSpec> _parseOne(
           _withLabel(ob, _entryLabel(tag: rawTag, index: i, tagUses: tagUses)),
         ),
         rawSource: compact,
+        sanitizedFrom: BodySource.singbox,
       );
       if (spec == null) {
+        // §561 — тип, которого ядро не ведёт: причина в `dropped[]` с тегом
+        // записи (D-088), параметр `scheme` — значение поля `type`.
         final type = ob['type']?.toString() ?? '';
-        if (type.isNotEmpty) unsupported.add(type);
+        dropped?.add(RegistryWarning(
+          code: 'protocol_unsupported',
+          params: {if (type.isNotEmpty) 'scheme': type},
+          ownerTag: rawTag,
+        ));
         continue;
       }
 
@@ -310,19 +337,10 @@ List<NodeSpec> _parseOne(
     } catch (_) {
       // §321 — «битые формы не роняют разбор целиком» на гранулярности УЗЛА:
       // мусорный тип поля бросает TypeError внутри конвертера, пропускаем этот
-      // outbound. Пропажа не молчаливая — тип уходит в P5-warning.
-      final type = ob['type']?.toString() ?? '';
-      unsupported.add(type.isEmpty ? 'malformed' : type);
-    }
-  }
-
-  // §3.5 — по одному warning на тип, на первом узле конфига (не на каждом —
-  // иначе N копий одного сообщения). Носителя без узла не существует: конфиг,
-  // не давший ни одного узла, теряется молча — компенсируется счётчиком
-  // «skipped» в диалоге импорта (§8).
-  if (unsupported.isNotEmpty && result.isNotEmpty) {
-    for (final type in unsupported) {
-      result.first.warnings.add(UnsupportedProtocolWarning(type));
+      // outbound. §561 — пропажа не молчаливая: форма не прочитана
+      // (PARSING_PRINCIPLES §4.1), запись — в `dropped[]`, не на соседа.
+      dropped?.add(
+          RegistryWarning(code: 'form_unrecognized', ownerTag: rawTag));
     }
   }
 
@@ -609,7 +627,7 @@ NodeSpec? _buildChain(
     // §4 P5 — цепочка на группу: типово выразима, семантически не поддержана
     // (getEntries развернёт группу в detour-список без её членов).
     final type = target['type']?.toString() ?? '';
-    if (_kSingboxGroupTypes.contains(type)) {
+    if (_isGroupType(type)) {
       warnings.add(DetourToGroupWarning(raw));
       return null;
     }
@@ -625,6 +643,7 @@ NodeSpec? _buildChain(
       spec = parseSingboxEntry(
         _sanitizedEntry(target),
         rawSource: _prettyJson(target),
+        sanitizedFrom: BodySource.singbox,
       );
     } catch (_) {
       // Битое звено: узел-владелец важнее цепочки.
@@ -659,9 +678,9 @@ AutoSelectSpec? _groupToSpec(
   final warnings = <NodeWarning>[];
   final type = group['type']?.toString() ?? '';
 
-  // §5.1 — ручной выбор своим типом узла у нас не представлен. Терять состав,
-  // собранный руками, хуже, чем сменить режим отбора.
-  if (type == 'selector') warnings.add(const SelectorAsAutoWarning());
+  // §565 — род несёт сам тип (`genus.by_source.singbox` = `$as_is`):
+  // selector остаётся selector'ом, urltest — urltest'ом.
+  final genus = GroupGenus.resolve(kGenusSourceSingbox, type) ?? GroupGenus.auto;
 
   // §5.2 — состав по ТОЧНЫМ идентичностям, а не regex'ом (как §322 для Xray):
   // тег внутри конфига ведёт ровно к одному outbound'у, который мы уже
@@ -674,6 +693,8 @@ AutoSelectSpec? _groupToSpec(
   final keys = <String>[];
   final refs = <Object>[];
   var lost = 0;
+  final rawDefault = group['default']?.toString() ?? '';
+  Object? def;
   for (final tag in memberTags) {
     // Свой узел этого конфига — приоритет; иначе тег соседнего элемента через
     // таблицу синонимов (§3.6).
@@ -685,6 +706,7 @@ AutoSelectSpec? _groupToSpec(
       lost++;
       continue;
     }
+    if (tag == rawDefault) def ??= node ?? key;
     if (keys.contains(key)) continue;
     keys.add(key);
     refs.add(node ?? key);
@@ -719,15 +741,19 @@ AutoSelectSpec? _groupToSpec(
     // — они ограничивают пул правила (§321 P6).
     membership: const ExplicitMembers([]),
     params: params,
-    // §514 / контракт 1.1.50 (D133-53) — `default` СОХРАНЯЕТСЯ сквозным, не
-    // интерпретируясь. Прежде круг «импорт → бэкап → импорт» у selector'а
-    // терял выбор пользователя молча. В тело ядра поле не идёт (эмит urltest
-    // его не пишет — ядро декодирует с DisallowUnknownFields).
+    genus: genus,
+    // §565 — тело разбора несёт только то, что объявил источник.
+    sourceParamKeys: {
+      for (final k in params.toJson().keys)
+        if (group.containsKey(k)) k,
+    },
+    // §565 — у selector'а `default` — выбранный член, у urltest поле чужое:
+    // сохраняется сквозным (контракт 1.1.50) и в тело не идёт.
     manualDefault: group['default']?.toString() ?? '',
     warnings: warnings,
     rawSource: _prettyJson(group), // §454 — источник группы = её объект
   );
-  groups[spec] = (refs: refs, lost: lost);
+  groups[spec] = (refs: refs, lost: lost, def: def);
   return spec;
 }
 

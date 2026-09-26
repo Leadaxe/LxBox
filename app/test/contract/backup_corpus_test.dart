@@ -12,6 +12,7 @@ import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/codec/source_replace_record.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
@@ -35,7 +36,8 @@ import '../parser/engine_test_setup.dart';
 /// Кейсы, которые сторона пока не проходит по известной причине: имя кейса →
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
 /// с работой, которая его закрывает.
-const Map<String, String> _pendingCases = {};
+const Map<String, String> _pendingCases = {
+};
 
 
 void main() {
@@ -69,7 +71,7 @@ void main() {
   group('contract corpus: LX Backup', () {
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
-      test(name, skip: _pendingCases[name], () {
+      test(name, skip: _pendingCases[name], () async {
         final raw = File('$base.backup.json').readAsStringSync();
         // Кейс формата новее ЧИТАЕМОГО (`lx_backup` выше
         // kLxBackupVersion) сторона ПРОПУСКАЕТ по маркеру, как чужой
@@ -185,9 +187,11 @@ void main() {
         _checkDns(state, expected);
         _checkSections(state, expected);
 
-        // `replace_tags` не сверяется: свёртки источника в группу у LxBox нет
-        // (BACKUP.md §2, `fold`/`fold_tag` — поля лаунчера; класс различия A
-        // в `replace_tag_index.expected.lxbox.json`).
+        // Фича 565 фаза B (§74) — свёртка `replace` в состоянии и в
+        // повторном экспорте. `replace_tags` (дериватив legacy `fold`) не
+        // сверяется: legacy-форма у LxBox не читается (решение владельца
+        // 26.09.2026, контракт 1.1.79).
+        await _checkReplaces(state, expected);
 
         // §401 — упразднённый механизм `extensions` (схема 0.10.x): импортёр
         // обязан отбросить его и назвать ОДНИМ warning'ом на файл, а не
@@ -540,8 +544,8 @@ void _checkDetours(_State state, Map<String, dynamic> expected) {
 /// Контракт 1.0.1 — `groups`: тег провайдерской группы (`kind: auto` в папке)
 /// → `members` по порядку и `default`. Карта ИСЧЕРПЫВАЮЩАЯ, как `detours`.
 /// Член без `folder_id` внутри папки — член этой папки (NODE_LINK §5.1 № 8);
-/// группа по правилу явного состава не несёт — `members: []`. `default` у
-/// urltest-группы LxBox нет: ожидание с ключом `default` расходится.
+/// группа по правилу явного состава не несёт — `members: []`. `default` —
+/// тег выбранного члена (§565), сверяется как ссылка на члена папки.
 void _checkGroups(_State state, Map<String, dynamic> expected) {
   final want = (expected['groups'] as Map?)?.cast<String, dynamic>();
   if (want == null) return;
@@ -563,6 +567,17 @@ void _checkGroups(_State state, Map<String, dynamic> expected) {
               RuleMembers() => const <String>[],
             },
   };
+  final gotDefault = <String, String?>{
+    for (final l in state.lists)
+      if (l is FolderServers)
+        for (final m in l.members)
+          if (m.node case final AutoSelectSpec g)
+            g.tag: g.manualDefault.isEmpty
+                ? null
+                : _resolveHop(NodeLink(folderId: l.id, tag: g.manualDefault),
+                        state.lists)
+                    .view,
+  };
   expect(got.keys.toSet(), want.keys.toSet(), reason: 'набор групп');
   for (final entry in want.entries) {
     final w = (entry.value as Map).cast<String, dynamic>();
@@ -574,8 +589,12 @@ void _checkGroups(_State state, Map<String, dynamic> expected) {
       ],
       reason: '${entry.key}: члены группы',
     );
-    expect(w.containsKey('default'), isFalse,
-        reason: '${entry.key}: default у urltest-группы LxBox не хранится');
+    // §565 фаза A — род `selector` исполняется: `default` хранится тегом
+    // члена ([AutoSelectSpec.manualDefault]) и обязан совпасть с ожиданием.
+    expect(gotDefault[entry.key], w.containsKey('default')
+        ? _wantLinkView((w['default'] as Map).cast<String, dynamic>())
+        : null,
+        reason: '${entry.key}: default группы');
   }
 }
 
@@ -751,3 +770,55 @@ Map<String, dynamic> _canonOf(SourceChain c) => c.toCanonJson();
 /// «пусто»). `equals` для вложенных Map/List этого не даёт.
 Matcher _deepEqualsJson(Object? want) =>
     predicate<Object?>((got) => deepEqualsJson(got, want), 'deep-equals $want');
+
+/// Фича 565 фаза B (§74) — `replaces`: ключ — имя папки или адрес подписки,
+/// значение — объект `replace` как в файле, `null` — свёртки нет (§76). Сверяется модель после импорта и
+/// запись повторного экспорта. `auto` — по ключам ожидания: LxBox пишет форму
+/// целиком (умолчания [DirectionAuto] тоже), лишние ключи — не расхождение.
+Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
+  final want = (expected['replaces'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  String keyOf(ServerList l) => switch (l) {
+        SubscriptionServers s => s.url,
+        _ => l.name,
+      };
+  final got = <String, Map<String, dynamic>>{
+    for (final l in state.lists)
+      if (l.replace case final r?) keyOf(l): sourceReplaceToRecord(r),
+  };
+  final out = await buildLxBackup(
+      lists: state.lists, rules: const [], vars: const {});
+  final exported = <String, Map<String, dynamic>>{
+    for (final raw in (jsonDecode(out.json)['sources'] as List))
+      if (raw is Map && raw['replace'] is Map)
+        (raw['url'] is String ? raw['url'] as String : raw['name'] as String):
+            (raw['replace'] as Map).cast<String, dynamic>(),
+  };
+  void compare(String where, Map<String, Map<String, dynamic>> side) {
+    // `null` у ключа — источник не свёрнут (контракт 1.1.79 §76).
+    expect(side.keys.toSet(), {
+      for (final e in want.entries)
+        if (e.value != null) e.key,
+    }, reason: '$where: набор свёрнутых источников');
+    for (final e in want.entries) {
+      if (e.value == null) continue;
+      final w = (e.value as Map).cast<String, dynamic>();
+      final g = side[e.key]!;
+      expect(g['mode'], w['mode'], reason: '$where ${e.key}: mode');
+      expect(g['tag'], w['tag'], reason: '$where ${e.key}: tag');
+      final wAuto = (w['auto'] as Map?)?.cast<String, dynamic>();
+      final gAuto = (g['auto'] as Map?)?.cast<String, dynamic>();
+      if (wAuto == null) {
+        expect(gAuto, isNull, reason: '$where ${e.key}: auto у manual');
+        continue;
+      }
+      expect(gAuto, isNotNull, reason: '$where ${e.key}: auto');
+      for (final a in wAuto.entries) {
+        expect(gAuto![a.key], a.value, reason: '$where ${e.key}: auto.${a.key}');
+      }
+    }
+  }
+
+  compare('состояние', got);
+  compare('повторный экспорт', exported);
+}

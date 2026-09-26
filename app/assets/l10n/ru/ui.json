@@ -1,7 +1,4 @@
 {
-  "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.": {
-    "value": "«selector» импортирован как группа автовыбора: самый быстрый узел выбирается по замерам, а не вручную."
-  },
   "%1$d +%2$d⚙ nodes": {
     "value": {
       "one": "%1$d узел +%2$d⚙",
@@ -196,12 +193,28 @@
       "other": "%d домена"
     }
   },
+  "%d dropped": {
+    "value": {
+      "one": "отброшено: %d",
+      "few": "отброшено: %d",
+      "many": "отброшено: %d",
+      "other": "отброшено: %d"
+    }
+  },
   "%d entries copied": {
     "value": {
       "one": "%d запись скопирована",
       "few": "%d записи скопировано",
       "many": "%d записей скопировано",
       "other": "%d записи скопировано"
+    }
+  },
+  "%d entries dropped": {
+    "value": {
+      "one": "%d запись отброшена",
+      "few": "%d записи отброшено",
+      "many": "%d записей отброшено",
+      "other": "%d записи отброшено"
     }
   },
   "%d err": {
@@ -888,6 +901,9 @@
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ требует это разрешение для SSID. Нажмите, чтобы выдать."
   },
+  "Android did not report the network name. Check that Location permission is set to \"Precise\" and \"Allow all the time\".": {
+    "value": "Android не сообщил имя сети. Проверьте, что для разрешения «Местоположение» выбраны «Точное» и «Разрешить в любом режиме»."
+  },
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android ограничивает фоновую активность ради экономии батареи. Без исключения туннель VPN может быть закрыт при выключении экрана — связь пропадёт, пока вы снова не откроете L×Box.\n\nОткройте системные настройки и выберите «Без ограничений» / «Не оптимизировать»."
   },
@@ -1038,6 +1054,9 @@
   "A–Z": {
     "value": "А–Я"
   },
+  "Background location missing": {
+    "value": "Нет доступа к местоположению в фоне"
+  },
   "BSSID (optional)": {
     "value": "BSSID (необязательно)"
   },
@@ -1091,9 +1110,6 @@
   },
   "Cancel": {
     "value": "Отмена"
-  },
-  "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.": {
-    "value": "Не удалось прочитать данные Wi-Fi — выключите и включите Wi-Fi."
   },
   "Cannot read the selected file": {
     "value": "Не удалось прочитать выбранный файл"
@@ -1209,15 +1225,6 @@
   },
   "Client subnet": {
     "value": "Подсеть клиента"
-  },
-  "ClientHello fingerprint is stripped, but these positions are reality nodes that need it: %s. The core will not start — untick tls.utls.": {
-    "value": "Отпечаток ClientHello снят, но эти позиции — reality-узлы, которым он нужен: %s. Ядро не стартует — снимите галку tls.utls."
-  },
-  "ClientHello fingerprint — must not be stripped on reality nodes": {
-    "value": "Отпечаток ClientHello — на reality-узлах снимать нельзя"
-  },
-  "ClientHello fragmentation": {
-    "value": "фрагментация ClientHello"
   },
   "Clipboard is empty": {
     "value": "Буфер обмена пуст"
@@ -2092,6 +2099,9 @@
   "Fastest": {
     "value": "Самый быстрый"
   },
+  "Manual": {
+    "value": "Вручную"
+  },
   "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
   "Feedback": {
     "value": "Отклик"
@@ -2713,6 +2723,12 @@
   "Location (background)": {
     "value": "Местоположение (в фоне)"
   },
+  "Location is turned off": {
+    "value": "Геолокация выключена"
+  },
+  "Location is turned off. Turn it on in system settings.": {
+    "value": "Геолокация выключена. Включите её в системных настройках."
+  },
   "Lock config (debug)": {
     "value": "Блокировать конфиг (debug)"
   },
@@ -2816,6 +2832,9 @@
   "My DNS": {
     "value": "Мой DNS"
   },
+  "Nearby Wi-Fi permission missing": {
+    "value": "Нет разрешения «Устройства Wi-Fi поблизости»"
+  },
   "NETWORK & PROTOCOL": {
     "value": "СЕТЬ И ПРОТОКОЛ"
   },
@@ -2851,9 +2870,6 @@
   },
   "Nearby Wi-Fi devices": {
     "value": "Устройства Wi-Fi поблизости"
-  },
-  "Needs Location + Nearby Wi-Fi permissions. Tap to manage.": {
-    "value": "Нужны разрешения «Местоположение» и «Устройства Wi-Fi поблизости». Нажмите, чтобы настроить."
   },
   "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
     "value": "Сети, где вы находитесь ≥ 5 минут, появляются в редакторе правила маршрутизации → «Pick saved»."
@@ -3047,6 +3063,12 @@
   },
   "Layout": {
     "value": "Компоновка"
+  },
+  "Precise location is required. Open Settings → Permissions → Location and enable \"Use precise location\".": {
+    "value": "Нужно точное местоположение. Откройте Настройки → Разрешения → Местоположение и включите «Точное местоположение»."
+  },
+  "Precise location permission missing": {
+    "value": "Нет разрешения на точное местоположение"
   },
   "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
     "value": "Показывать список узлов в две колонки, когда ширина окна не меньше 600 dp (планшеты, альбомная ориентация, разделённый экран)."
@@ -4982,9 +5004,6 @@
   "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
     "value": "Режим XHTTP установлен в «packet-up»: ссылка требует передавать данные восходящего потока в заголовке, а ядро принимает это только в таком режиме (иначе конфиг не загрузился бы)."
   },
-  "XHTTP padding": {
-    "value": "набивка XHTTP"
-  },
   "Xray config": {
     "value": "Конфиг Xray"
   },
@@ -5153,9 +5172,6 @@
   "matches only domains in the rule-set": {
     "value": "совпадает только с доменами из rule-set"
   },
-  "multiplex padding": {
-    "value": "набивка мультиплекса"
-  },
   "never": {
     "value": "никогда"
   },
@@ -5242,6 +5258,12 @@
   "single best server by latency": {
     "value": "один лучший сервер по задержке"
   },
+  "Selected server": {
+    "value": "Выбранный сервер"
+  },
+  "you pick the server, no latency tests": {
+    "value": "сервер выбираете вы, без замеров задержки"
+  },
   "slot %d": {
     "value": "слот %d"
   },
@@ -5317,5 +5339,99 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ Только резолв%s"
+  },
+  "off": {
+    "value": "off"
+  },
+  "Turn on": {
+    "value": "Включить"
+  },
+  "Turn off": {
+    "value": "Выключить"
+  },
+  "Node enabled": {
+    "value": "Узел включён"
+  },
+  "Stays off until you turn it on or stop the VPN.": {
+    "value": "Остаётся выключенным, пока вы не включите его или не остановите VPN."
+  },
+  "The running config has no node %s.": {
+    "value": "В работающем конфиге нет узла %s."
+  },
+  "Only WireGuard and AmneziaWG nodes can be turned off.": {
+    "value": "Выключить можно только узлы WireGuard и AmneziaWG."
+  },
+  "VPN is not running or is restarting. Try again.": {
+    "value": "VPN не запущен или перезапускается. Повторите попытку."
+  },
+  "The node did not wake up. The next connection through it will retry.": {
+    "value": "Узел не проснулся. Следующее соединение через него попробует снова."
+  },
+  "Could not turn the node on.": {
+    "value": "Не удалось включить узел."
+  },
+  "Could not turn the node off.": {
+    "value": "Не удалось выключить узел."
+  },
+  "Replace with a group": {
+    "value": "Заменить группой"
+  },
+  "Directions and rules see one group instead of every server": {
+    "value": "Направления и правила видят одну группу вместо каждого сервера"
+  },
+  "Group name": {
+    "value": "Имя группы"
+  },
+  "Both": {
+    "value": "Оба"
+  },
+  "You pick the server in the group": {
+    "value": "Сервер в группе выбираете вы"
+  },
+  "The group picks a server by latency": {
+    "value": "Группа выбирает сервер по задержке"
+  },
+  "You pick the server; the first option picks by latency": {
+    "value": "Сервер выбираете вы; первый вариант выбирает по задержке"
+  },
+  "Other values, one per line": {
+    "value": "Свои значения, по одному на строку"
+  },
+  "Template: %d warnings": {
+    "value": {
+      "one": "Шаблон: %d предупреждение",
+      "few": "Шаблон: %d предупреждения",
+      "many": "Шаблон: %d предупреждений",
+      "other": "Шаблон: %d предупреждения"
+    }
+  },
+  "Could not select this server": {
+    "value": "Не удалось выбрать этот сервер"
+  },
+  "Replace groups": {
+    "value": "Группы замены"
+  },
+  "a folder or subscription replaced with one group": {
+    "value": "папка или подписка, заменённая одной группой"
+  },
+  "A server already has this name — it will get a numeric suffix.": {
+    "value": "Это имя уже носит сервер — ему добавится числовой суффикс."
+  },
+  "Another replace group already has this name.": {
+    "value": "Это имя уже носит другая группа замены."
+  },
+  "A direction already has this name.": {
+    "value": "Это имя уже носит Направление."
+  },
+  "Entry: %s": {
+    "value": "Запись: %s"
+  },
+  "%d entries will be skipped": {
+    "value": {
+      "one": "%d запись будет пропущена",
+      "few": "%d записи будут пропущены",
+      "many": "%d записей будут пропущены",
+      "other": "%d записи будут пропущены"
+    }
   }
 }

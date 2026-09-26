@@ -121,12 +121,10 @@ TlsSpec normalizeTlsFingerprint(TlsSpec tls, List<NodeWarning>? warnings) {
   if (!tls.enabled) return tls;
   final fp = tls.fingerprint ?? '';
   final n = normalizeUtlsFingerprintValue(fp);
-  var value = n.value;
-  // REALITY требует uTLS-блок («uTLS is required by reality client» — fatal
-  // при создании outbound), а TlsSpec.toSingbox не эмитит utls при пустом
-  // fingerprint. Пустое/пробельное значение при reality → chrome (дефолт
-  // ядра для пустой строки).
-  if (value.isEmpty && tls.reality != null) value = 'chrome';
+  final value = n.value;
+  // Контракт 1.1.61: REALITY без uTLS-блока чинит правило реестра
+  // `requires[].set` в санитайзере (`{enabled: true}` без отпечатка, код
+  // reality_utls_enabled) — своей подстановки `chrome` здесь нет.
   if (n.junk) warnings?.add(UnknownFingerprintWarning(fp));
   // SPEC 083/086/087 — REALITY + отпечаток без гибридного key share: Xray
   // ≥ v26.9.8 такое приветствие отвергает молча. §444 — только
@@ -136,6 +134,7 @@ TlsSpec normalizeTlsFingerprint(TlsSpec tls, List<NodeWarning>? warnings) {
   // неотличим → без предупреждения; post-step `healUnknownUtlsFingerprints`
   // пишет вместо него `chrome` (наш дефолт).
   if (tls.reality != null &&
+      value.isNotEmpty &&
       value != 'random' &&
       !isRealityHybridFingerprint(value)) {
     warnings?.add(RealityFingerprintWarning(value));

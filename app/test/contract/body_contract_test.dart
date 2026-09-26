@@ -28,9 +28,9 @@ import 'corpus_warnings.dart';
 // молчал, и отступление жило годами.
 //
 // `entry` берётся как у URI-раннера — `spec.emit(TemplateVars.empty).map`
-// минус `tag`/`detour` (CANON §2.1-2.2), и сверяется глубоким сравнением
+// минус `tag`/`detour` (PARSING_PRINCIPLES §2.1-2.2), и сверяется глубоким сравнением
 // через `canonEncode` (ключи сортируются, порядок списков сохраняется,
-// CANON §2.3).
+// PARSING_PRINCIPLES §2.3).
 //
 // D-088 / §404 — к составу добавлена ОТБРАКОВКА (`dropped[]`). Пустой
 // `nodes[]` без `dropped[]` и пустой с ним — разные вещи: первое значит «тело
@@ -93,7 +93,7 @@ String _nodeSignature(NodeSpec spec) {
 }
 
 /// `entry` узла: `spec.emit(TemplateVars.empty).map` минус `tag`/`detour`
-/// (CANON §2.1-2.2), рекурсивно канонизованный. Тот же вид, в каком тело
+/// (PARSING_PRINCIPLES §2.1-2.2), рекурсивно канонизованный. Тот же вид, в каком тело
 /// лежит в ожиданиях корпуса, и тот же, что строит URI-раннер.
 Map<String, dynamic> _canonEntryMap(NodeSpec spec) {
   final SingboxEntry raw = spec.emit(TemplateVars.empty);
@@ -103,7 +103,7 @@ Map<String, dynamic> _canonEntryMap(NodeSpec spec) {
   return _canonValue(copy) as Map<String, dynamic>;
 }
 
-/// Рекурсивная канонизация значения (CANON §2.3): ключи map сортируются уже
+/// Рекурсивная канонизация значения (PARSING_PRINCIPLES §2.3): ключи map сортируются уже
 /// при сериализации [canonEncode], порядок списков сохраняется как есть.
 Object? _canonValue(Object? v) {
   if (v is Map) {
@@ -178,7 +178,7 @@ String _droppedRef(NodeWarning w) => switch (w) {
       _ => w.runtimeType.toString(),
     };
 
-/// Цепочка хопов узла как список label'ов, ближний хоп первым (CANON §2.2).
+/// Цепочка хопов узла как список label'ов, ближний хоп первым (PARSING_PRINCIPLES §2.2).
 List<String> _chainLabels(NodeSpec spec) {
   final out = <String>[];
   for (var hop = spec.chained; hop != null; hop = hop.chained) {
@@ -334,8 +334,11 @@ void main() {
         }
 
         // §470 — `warnings[]` по тем же правилам, что у URI-раннера
-        // (`corpus_warnings.dart`, CANON §6/§7). Узлы ищутся по подписи: у
+        // (`corpus_warnings.dart`, PARSING_PRINCIPLES §6/§7). Узлы ищутся по подписи: у
         // многоузловых тел ожидание и результат уже сверены по составу выше.
+        // §556 — узлы с одной подписью (`masque_tls_owner_rules`: три узла
+        // на одном server:port) сверяются по порядку появления.
+        final sigSeen = <String, int>{};
         for (final wantNode in wantNodes) {
           final scheme = '${wantNode['scheme']}';
           final entry =
@@ -350,6 +353,8 @@ void main() {
           }
           final matched = specs.where((s) => _nodeSignature(s) == sig).toList();
           if (matched.isEmpty) continue;
+          final nth = sigSeen[sig] = (sigSeen[sig] ?? -1) + 1;
+          final spec0 = nth < matched.length ? matched[nth] : matched.first;
 
           // §472 шаг 1 — читается ОДИН источник, `node.warnings`. До него
           // раннер склеивал здесь два пути (`_allWarningsOf`): санитайзер при
@@ -358,7 +363,7 @@ void main() {
           // Теперь санитайзер идёт по дословной карте (`rawSource`) в самом
           // разборе, и раннер сверяет ровно то, что видит пользователь в
           // строке узла.
-          final gotW = warningListOf(matched.first.warnings, scheme);
+          final gotW = warningListOf(spec0.warnings, scheme);
           final gotNode = <String, dynamic>{
             if (gotW.isNotEmpty) 'warnings': gotW,
           };

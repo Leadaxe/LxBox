@@ -1,7 +1,4 @@
 {
-  "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.": {
-    "value": "「selector」已作为自动选择分组导入：由延迟测速挑出最快节点，而非手动选择。"
-  },
   "%1$d +%2$d⚙ nodes": {
     "value": {
       "other": "%1$d 个节点 +%2$d⚙"
@@ -139,9 +136,19 @@
       "other": "%d 个域名"
     }
   },
+  "%d dropped": {
+    "value": {
+      "other": "已丢弃 %d 条"
+    }
+  },
   "%d entries copied": {
     "value": {
       "other": "已复制 %d 条记录"
+    }
+  },
+  "%d entries dropped": {
+    "value": {
+      "other": "已丢弃 %d 条记录"
     }
   },
   "%d err": {
@@ -722,6 +729,9 @@
   "Android 13+ requires this for SSID. Tap to grant.": {
     "value": "Android 13+ 需要此权限才能获取 SSID。点击授予。"
   },
+  "Android did not report the network name. Check that Location permission is set to \"Precise\" and \"Allow all the time\".": {
+    "value": "Android 未返回网络名称。请检查位置信息权限是否设为“精确”和“始终允许”。"
+  },
   "Android restricts background activity to save battery. Without an exception, the VPN tunnel may be killed when the screen turns off — your connection drops until you reopen L×Box.\n\nOpen system settings and choose \"Unrestricted\" / \"Not optimized\".": {
     "value": "Android 为省电会限制后台活动。若未加入例外，熄屏后 VPN 隧道可能被终止——在重新打开 L×Box 之前连接会中断。\n\n请打开系统设置并选择「无限制」/「不优化」。"
   },
@@ -872,6 +882,9 @@
   "A–Z": {
     "value": "A–Z"
   },
+  "Background location missing": {
+    "value": "缺少后台位置权限"
+  },
   "BSSID (optional)": {
     "value": "BSSID（可选）"
   },
@@ -925,9 +938,6 @@
   },
   "Cancel": {
     "value": "取消"
-  },
-  "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.": {
-    "value": "无法读取 Wi-Fi 信息——请尝试关闭再打开 Wi-Fi。"
   },
   "Cannot read the selected file": {
     "value": "无法读取所选文件"
@@ -1037,15 +1047,6 @@
   },
   "Client subnet": {
     "value": "客户端子网"
-  },
-  "ClientHello fingerprint is stripped, but these positions are reality nodes that need it: %s. The core will not start — untick tls.utls.": {
-    "value": "ClientHello 指纹已去除，但以下位置是需要它的 reality 节点：%s。内核无法启动——请取消勾选 tls.utls。"
-  },
-  "ClientHello fingerprint — must not be stripped on reality nodes": {
-    "value": "ClientHello 指纹 —— 在 reality 节点上不可去除"
-  },
-  "ClientHello fragmentation": {
-    "value": "ClientHello 分片"
   },
   "Clipboard is empty": {
     "value": "剪贴板为空"
@@ -1892,6 +1893,9 @@
   "Fastest": {
     "value": "最快"
   },
+  "Manual": {
+    "value": "手动"
+  },
   "Fastest — race, then stick to the winner": {
     "value": "最快 — 先并发测速，然后固定用胜出的节点"
   },
@@ -2507,6 +2511,12 @@
   "Location (background)": {
     "value": "位置信息（后台）"
   },
+  "Location is turned off": {
+    "value": "位置信息已关闭"
+  },
+  "Location is turned off. Turn it on in system settings.": {
+    "value": "位置信息已关闭。请在系统设置中开启。"
+  },
   "Lock config (debug)": {
     "value": "锁定配置（调试）"
   },
@@ -2612,6 +2622,9 @@
   "My DNS": {
     "value": "我的 DNS"
   },
+  "Nearby Wi-Fi permission missing": {
+    "value": "缺少“附近的 Wi-Fi 设备”权限"
+  },
   "NETWORK & PROTOCOL": {
     "value": "网络与协议"
   },
@@ -2647,9 +2660,6 @@
   },
   "Nearby Wi-Fi devices": {
     "value": "附近的 Wi-Fi 设备"
-  },
-  "Needs Location + Nearby Wi-Fi permissions. Tap to manage.": {
-    "value": "需要「位置信息」和「附近的 Wi-Fi 设备」权限。点击去设置。"
   },
   "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.": {
     "value": "停留 ≥ 5 分钟的网络会出现在路由规则编辑器的「Pick saved」中。"
@@ -2845,6 +2855,12 @@
   },
   "Layout": {
     "value": "布局"
+  },
+  "Precise location is required. Open Settings → Permissions → Location and enable \"Use precise location\".": {
+    "value": "需要精确位置。请打开 设置 → 权限 → 位置信息，并开启“使用精确位置”。"
+  },
+  "Precise location permission missing": {
+    "value": "缺少精确位置权限"
   },
   "Show the node list in two columns when the window is at least 600 dp wide (tablets, landscape, split-screen).": {
     "value": "窗口宽度不小于 600 dp 时（平板、横屏、分屏），节点列表以双栏显示。"
@@ -4774,9 +4790,6 @@
   "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
     "value": "XHTTP 模式已设为「packet-up」：链接要求把上行数据放在请求头中，而内核只在该模式下接受（否则配置无法加载）。"
   },
-  "XHTTP padding": {
-    "value": "XHTTP 填充"
-  },
   "Xray config": {
     "value": "Xray 配置"
   },
@@ -4945,9 +4958,6 @@
   "matches only domains in the rule-set": {
     "value": "只匹配规则集中的域名"
   },
-  "multiplex padding": {
-    "value": "多路复用填充"
-  },
   "never": {
     "value": "从不"
   },
@@ -5031,6 +5041,12 @@
   "single best server by latency": {
     "value": "按延迟选出的最优单台服务器"
   },
+  "Selected server": {
+    "value": "已选服务器"
+  },
+  "you pick the server, no latency tests": {
+    "value": "由你选择服务器，不做延迟测试"
+  },
   "slot %d": {
     "value": "通道 %d"
   },
@@ -5108,5 +5124,93 @@
   },
   "✳ Resolve only%s": {
     "value": "✳ 仅解析%s"
+  },
+  "off": {
+    "value": "off"
+  },
+  "Turn on": {
+    "value": "开启"
+  },
+  "Turn off": {
+    "value": "关闭"
+  },
+  "Node enabled": {
+    "value": "节点已启用"
+  },
+  "Stays off until you turn it on or stop the VPN.": {
+    "value": "在您重新开启或停止 VPN 之前保持关闭。"
+  },
+  "The running config has no node %s.": {
+    "value": "运行中的配置里没有节点 %s。"
+  },
+  "Only WireGuard and AmneziaWG nodes can be turned off.": {
+    "value": "只有 WireGuard 和 AmneziaWG 节点可以关闭。"
+  },
+  "VPN is not running or is restarting. Try again.": {
+    "value": "VPN 未运行或正在重启，请重试。"
+  },
+  "The node did not wake up. The next connection through it will retry.": {
+    "value": "节点未能唤醒，下一次经由它的连接会重试。"
+  },
+  "Could not turn the node on.": {
+    "value": "无法开启节点。"
+  },
+  "Could not turn the node off.": {
+    "value": "无法关闭节点。"
+  },
+  "Replace with a group": {
+    "value": "替换为分组"
+  },
+  "Directions and rules see one group instead of every server": {
+    "value": "方向和规则看到的是一个分组，而不是每台服务器"
+  },
+  "Group name": {
+    "value": "分组名称"
+  },
+  "Both": {
+    "value": "两者"
+  },
+  "You pick the server in the group": {
+    "value": "由您在分组中选择服务器"
+  },
+  "The group picks a server by latency": {
+    "value": "分组按延迟选择服务器"
+  },
+  "You pick the server; the first option picks by latency": {
+    "value": "由您选择服务器；第一个选项按延迟选择"
+  },
+  "Other values, one per line": {
+    "value": "其他值，每行一个"
+  },
+  "Template: %d warnings": {
+    "value": {
+      "other": "模板：%d 条警告"
+    }
+  },
+  "Could not select this server": {
+    "value": "无法选择此服务器"
+  },
+  "Replace groups": {
+    "value": "替换分组"
+  },
+  "a folder or subscription replaced with one group": {
+    "value": "被替换为一个分组的文件夹或订阅"
+  },
+  "A server already has this name — it will get a numeric suffix.": {
+    "value": "已有服务器使用此名称——该服务器将获得数字后缀。"
+  },
+  "Another replace group already has this name.": {
+    "value": "另一个替换分组已使用此名称。"
+  },
+  "A direction already has this name.": {
+    "value": "已有方向使用此名称。"
+  },
+  "Entry: %s": {
+    "value": "条目：%s"
+  },
+  "%d entries will be skipped": {
+    "value": {
+      "other": "将跳过 %d 个条目"
+    }
   }
 }

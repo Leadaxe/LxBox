@@ -232,7 +232,7 @@ void main() {
           'tls.reality|map[enabled:true public_key:'
               'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5…',
         ],
-        reason: 'по одному коду на блок, значение по CANON §6',
+        reason: 'по одному коду на блок, значение по PARSING_PRINCIPLES §6',
       );
       // Тело от переезда не изменилось: блоков в нём не было и раньше.
       final tls = spec.emit(TemplateVars.empty).map['tls'] as Map;

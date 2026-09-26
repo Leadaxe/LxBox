@@ -27,7 +27,7 @@ import 'uri_parsers.dart';
 /// подписка вырождается в пустую, причина не доезжает и до
 /// `nodes.first.warnings`. Параметр не меняет поведения ни одного текущего
 /// вызывающего (все передают его `null`) и нужен конформанс-раннеру корпуса:
-/// конверт контракта несёт `dropped[]` наравне с `nodes[]`.
+/// результат разбора контракта несёт `dropped[]` наравне с `nodes[]`.
 ///
 /// §460 W2a — узкая общая воронка разбора: ЧЕРЕЗ НЕЁ проходят все входы
 /// (тела подписок, URI-строки, sing-box/Xray JSON, INI, серверы и члены
@@ -69,7 +69,7 @@ List<NodeSpec> parseAll(
   // чтобы быть снятым там, а до тех пор стоял бы в списке рабочим.
   //
   // Где это делается — тут, а не внутри прохода: `dropped[]` принадлежит
-  // `parseAll`, и конверт контракта (D-088) различает «запись отвергли» и
+  // `parseAll`, и результат разбора контракта (D-088) различает «запись отвергли» и
   // «тело не распознано» именно этим списком.
   final byRegistry = annotateAllFromRawBody(nodes);
   if (byRegistry.isNotEmpty) {
@@ -218,6 +218,20 @@ List<NodeSpec> _decodeFailed(String reason, List<NodeWarning>? dropped) {
 List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
   final nodes = <NodeSpec>[];
   for (final l in lines) {
+    // §570 / контракт 1.1.80 — строка-контейнер профиля даёт все контейнеры.
+    final verdicts = <XrayDropVerdict>[];
+    final all = parseContainerLineAll(l, verdicts: verdicts);
+    if (all != null) {
+      nodes.addAll(all);
+      for (var k = 0; k < verdicts.length; k++) {
+        final r = verdicts[k].reason;
+        if (r == null) continue;
+        // §570 — владелец: строка списка и номер контейнера в ней.
+        dropped?.add(withDropOwner(
+            r, verdicts.length > 1 ? '${l.trim()} #${k + 1}' : l.trim()));
+      }
+      continue;
+    }
     final verdict = XrayDropVerdict();
     final n = parseUri(l, dropped: verdict);
     if (n != null) {
@@ -228,19 +242,25 @@ List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
       // построчных). Без этого отбраковка называлась именем класса
       // предупреждения, и кейс `uri_list/service_scheme_routing_ignored`
       // сверить было нечем.
-      final r = verdict.reason!;
-      dropped?.add(r.ownerTag.isEmpty
-          ? RegistryWarning(
-              code: r.code,
-              path: r.path,
-              value: r.value,
-              params: r.params,
-              ownerTag: l.trim(),
-            )
-          : r);
+      dropped?.add(withDropOwner(verdict.reason!, l.trim()));
     }
   }
   return nodes;
+}
+
+/// §570 — запись отбраковки с владельцем [owner], если своего у неё нет.
+/// Владелец есть только у [RegistryWarning] (прочие классы несут его сами).
+NodeWarning withDropOwner(NodeWarning w, String owner) {
+  if (owner.isEmpty || w.ownerTag.isNotEmpty || w is! RegistryWarning) {
+    return w;
+  }
+  return RegistryWarning(
+    code: w.code,
+    path: w.path,
+    value: w.value,
+    params: w.params,
+    ownerTag: owner,
+  );
 }
 
 List<NodeSpec> _parseIniConfigs(
@@ -257,7 +277,10 @@ List<NodeSpec> _parseIniConfigs(
     if (n != null) {
       nodes.add(n);
     } else if (verdict.reason != null) {
-      dropped?.add(verdict.reason!);
+      // §570 — запись отбраковки называет запись источника: имя контейнера
+      // (подсказка с индексом), без имени — его номер в теле.
+      dropped?.add(withDropOwner(
+          verdict.reason!, hint ?? (texts.length > 1 ? '#${i + 1}' : '')));
     }
   }
   return nodes;
@@ -312,7 +335,7 @@ List<NodeSpec> _parseJson(JsonConfig j, List<NodeWarning>? out) {
 
   return mapper == 'xray'
       ? _parseXrayDocument(groups, out)
-      : parseSingboxConfigs(groups);
+      : parseSingboxConfigs(groups, dropped: out);
 }
 
 /// §310/§321/§342/§404 — СБОРКА ДОКУМЕНТА Xray из его элементов.
@@ -338,10 +361,10 @@ List<NodeSpec> _parseXrayDocument(
       // СЕРВЕР, а не конкретную запись подписки, и подпись §404 (которая
       // разводит два SNI одного сервера) растащила бы состав пула.
       final synonyms = <String, String>{};
-      // §404 / D-085 — причины отбраковки узлов с недостижимым релеем, которым
-      // не нашлось носителя внутри своего элемента (в элементе не выжил
-      // никто). Вешаем их на первый узел подписки: причина обязана дойти до
-      // пользователя, иначе узел исчезает молча.
+      // §404 / D-085 / §561 — причины отбраковки записей элементов
+      // (недостижимый релей, непрочитанная запись, вердикт реестра). Едут
+      // наружу в `dropped[]` результата разбора и только туда: на узлы подписки они не
+      // вешаются, сводка источника показывает их отдельно.
       final dropped = <NodeWarning>[];
 
       // §342 — ДВА прохода: «кто даёт узлу имя» и «в каком порядке узлы идут»
@@ -391,19 +414,10 @@ List<NodeSpec> _parseXrayDocument(
                 dropped: dropped,
               ))
           .toList();
-      // §404 P3 — то, что осталось в `dropped`, носителя в своём элементе не
-      // нашло. Последний носитель — первый узел подписки; если и его нет,
-      // подписка пустая и сообщать некому (та же документированная дыра, что
-      // у §321 P5).
-      // D-088 — отбраковка едет наружу ЦЕЛИКОМ, независимо от того, нашёлся ли
-      // ей носитель среди узлов: конверт контракта различает «запись отвергли»
-      // и «тело не распознано», а `nodes.first.warnings` этого различия не
-      // несёт и на пустой подписке пропадает совсем.
+      // D-088 / §561 — отбраковка едет наружу ЦЕЛИКОМ: результат разбора контракта
+      // различает «запись отвергли» и «тело не распознано». Прежний перенос
+      // остатка на первый узел подписки (§404 P3) снят — чужая ошибка на
+      // рабочем узле.
       out?.addAll(dropped);
-      if (dropped.isNotEmpty && nodes.isNotEmpty) {
-        for (final w in dropped) {
-          if (!nodes.first.warnings.contains(w)) nodes.first.warnings.add(w);
-        }
-      }
       return nodes;
 }

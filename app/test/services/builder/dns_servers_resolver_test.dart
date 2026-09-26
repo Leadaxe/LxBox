@@ -158,6 +158,40 @@ void main() {
       final body = resolveTemplateDnsServerBody(wrapper);
       expect(body!.containsKey('detour'), false);
     });
+
+    // §555/§570 (контракт 1.1.70, §66) — телу видны все переменные шаблона.
+    test('необъявленное сервером имя берётся из переменных шаблона', () {
+      final wrapper = {
+        'server': {
+          'type': 'udp',
+          'tag': 't',
+          'server': '@dns_addr',
+          'strategy': '@resolve_strategy',
+          'detour': '@outbound',
+          'client_subnet': '@nowhere',
+        },
+        'vars': [
+          {'name': 'outbound', 'type': 'outbound', 'default_value': 'vpn-1'},
+        ],
+      };
+      final unknown = <String>[];
+      final body = resolveTemplateDnsServerBody(
+        wrapper,
+        globalVars: const {
+          'dns_addr': '9.9.9.9',
+          'resolve_strategy': '',
+          'outbound': 'shadowed',
+        },
+        unknownVarsOut: unknown,
+      );
+      expect(body, {
+        'type': 'udp',
+        'tag': 't',
+        'server': '9.9.9.9',
+        'detour': 'vpn-1',
+      }, reason: 'свои vars сильнее, пустое значение шаблона — Dropped');
+      expect(unknown, ['nowhere']);
+    });
   });
 
   group('resolveDnsServersList', () {

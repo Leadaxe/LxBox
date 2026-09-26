@@ -19,6 +19,7 @@ library;
 
 import 'dart:convert' show base64, base64Url;
 import 'dart:io' show InternetAddress, InternetAddressType;
+import 'dart:typed_data' show Uint8List;
 
 import '../../models/node_warning.dart';
 import '../app_log.dart';
@@ -137,6 +138,147 @@ const _kDefaultInvalidCode = 'type_invalid';
 const _kWarningValueMax = 64;
 
 /// Санитайзер тела записи по схеме реестра.
+/// Контракт 1.1.59 — поле ВЕРХНЕГО уровня тела с ролью [role]
+/// (`credential` | `private_key`) у схемы протокола [singboxType]; `null` —
+/// роли у схемы нет. Имён полей в коде нет: роль объявляет реестр.
+String? fieldByRole(String singboxType, String role) {
+  final schema = ContractRegistry.I.schemaFor(singboxType);
+  if (schema == null) return null;
+  for (final e in schema.fields.entries) {
+    if (e.value.raw['role'] == role) return e.key;
+  }
+  return null;
+}
+
+/// Контракт 1.1.59 — учётные данные узла по роли `credential`: строка по
+/// пути поля готового тела как есть; нет поля или не строка — пусто.
+String credentialByRegistry(Map<String, dynamic> body) {
+  final f = fieldByRole('${body['type'] ?? ''}', 'credential');
+  final v = f == null ? null : body[f];
+  return v is String ? v : '';
+}
+
+/// Контракт 1.1.59 — ссылка узла несёт приватный ключ владельца: поле роли
+/// `private_key` непусто (строка или список непустых строк у
+/// `listable_string`). Такую ссылку отдают только после подтверждения.
+bool carriesPrivateKeyByRegistry(Map<String, dynamic> body) {
+  final f = fieldByRole('${body['type'] ?? ''}', 'private_key');
+  if (f == null) return false;
+  final v = body[f];
+  if (v is String) return v.isNotEmpty;
+  if (v is List) return v.any((e) => e is String && e.isNotEmpty);
+  return false;
+}
+
+/// Контракт 1.1.64 — «оставил бы санитайзер поле [path] при этом теле»:
+/// поле объявлено схемой протокола (`type` тела), не запрещено ей
+/// (`forbidden_for`/`allowed_for`) и ни одна его связь `conflicts` при этом
+/// теле не действует (`when` верно, сосед `with` задан, `unless_set` не
+/// задан). Спрашивают сборочные трансформы, которые дописывают поле
+/// телам, — по телу узла, а не по схеме. Без реестра или схемы — `true`
+/// (судить нечем).
+bool fieldAllowedOn(Map<String, dynamic> body, String path) {
+  final type = '${body['type'] ?? ''}';
+  final schema = ContractRegistry.I.schemaFor(type);
+  if (schema == null) return true;
+  final segs = path.split('.');
+  Map<String, FieldSchema>? fields = schema.fields;
+  FieldSchema? f;
+  for (final seg in segs) {
+    f = fields?[seg];
+    if (f == null) return false;
+    if (f.forbiddenFor?.contains(type) ?? false) return false;
+    final allowed = f.allowedFor;
+    if (allowed != null && !allowed.contains(type)) return false;
+    fields = f.fields;
+  }
+  final parent = segs.sublist(0, segs.length - 1);
+  Object? at(String p) {
+    if (p.contains('.') || parent.isEmpty) return _Ctx.finalAt(body, p);
+    return _Ctx.finalAt(body, [...parent, p].join('.')) ??
+        _Ctx.finalAt(body, p);
+  }
+
+  for (final c in f!.conflicts) {
+    final withPath = c['with'];
+    if (withPath is! String) continue;
+    final when = c['when'];
+    if (when != null && !_Ctx.conditionOnFinalBody(when, body)) continue;
+    if (!_Ctx._meaningful(at(withPath))) continue;
+    final unless = c['unless_set'];
+    if (unless is List &&
+        unless.any((u) => u is String && _Ctx._meaningful(at(u)))) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+/// Контракт 1.1.65 (`YieldsTo`) — поля, которые УСТУПАЮТ managed-полю
+/// [managed] (сборка дописала его после санитайзера, у ядра это `detour`):
+/// связь `conflicts {with: managed}` при готовом теле действует (`when` верно,
+/// `unless_set` не задан, сам [managed] задан) — поле снимается с тела с кодом
+/// связи, params `tag` (тег узла) и `target` (значение [managed]). Имён схем
+/// и полей в коде нет: что уступает, решает реестр.
+List<RegistryWarning> yieldToManaged(
+    Map<String, dynamic> body, String managed) {
+  final target = body[managed];
+  if (!_Ctx._meaningful(target)) return const [];
+  final schema = ContractRegistry.I.schemaFor('${body['type'] ?? ''}');
+  if (schema == null) return const [];
+  final out = <RegistryWarning>[];
+  void walk(Map<String, FieldSchema> fields, Map<String, dynamic> obj,
+      String prefix) {
+    for (final e in fields.entries) {
+      if (!obj.containsKey(e.key)) continue;
+      final path = prefix.isEmpty ? e.key : '$prefix.${e.key}';
+      final v = obj[e.key];
+      final nested = e.value.fields;
+      if (nested != null && v is Map<String, dynamic>) {
+        walk(nested, v, path);
+        continue;
+      }
+      for (final c in e.value.conflicts) {
+        if (c['with'] != managed) continue;
+        final when = c['when'];
+        if (when != null && !_Ctx.conditionOnFinalBody(when, body)) continue;
+        final unless = c['unless_set'];
+        if (unless is List &&
+            unless.any((u) =>
+                u is String && _Ctx._meaningful(_Ctx.finalAt(body, u)))) {
+          continue;
+        }
+        obj.remove(e.key);
+        out.add(RegistryWarning(
+          code: '${c['code'] ?? 'field_conflict'}',
+          path: path,
+          params: {
+            'tag': '${body['tag'] ?? ''}',
+            'target': '$target',
+            'with': managed,
+          },
+          ownerTag: '${body['tag'] ?? ''}',
+        ));
+        break;
+      }
+    }
+  }
+
+  walk(schema.fields, body, '');
+  return out;
+}
+
+/// Контракт 1.1.63 — годится ли узел ВЫХОДОМ (кандидатом в пул
+/// Направления): `exit_capable_when` тела его протокола, судимый по готовому
+/// телу. Без атрибута (или без схемы) — годится всегда.
+bool exitCapableByRegistry(Map<String, dynamic> body) {
+  final when = ContractRegistry.I.schemaFor('${body['type'] ?? ''}')
+      ?.exitCapableWhen;
+  if (when == null) return true;
+  return _Ctx.conditionOnFinalBody(when, body);
+}
+
 final class RegistrySanitizer {
   const RegistrySanitizer._();
 
@@ -201,6 +343,10 @@ final class RegistrySanitizer {
     // бы узел кодом `awg_headers_overlap` вместо честного `awg_header_invalid`
     // на самом поле — вина уезжала бы не на того.
     if (!ctx.dropNode) ctx.applyBodyRelations(out, schema.relations);
+    // Контракт 1.1.61 — правила-починки (`requires[].set`, `coerce_when`)
+    // судятся по ГОТОВОМУ телу, после всех снятий; у отбракованного узла не
+    // исполняются.
+    if (!ctx.dropNode) ctx.applyRepairs(out);
     if (ctx.dropNode) {
       return SanitizeResult(null, ctx.warnings,
           explicitDropNode: ctx.explicitDropNode);
@@ -353,6 +499,32 @@ final class _Ctx {
   /// — `building` в `nodeflow/sanitize.go`.
   final _building = <String, Map<String, Object?>>{};
 
+  /// Контракт 1.1.61 — отложенные правила-починки: записываются по ходу
+  /// обхода (там, где встал бы их код), исполняются [applyRepairs] по
+  /// готовому телу.
+  final _repairs = <_Repair>[];
+
+  /// §556 — позиция в [warnings] сразу за кодами поля (абсолютный путь).
+  final _fieldEnd = <String, int>{};
+
+  /// Код связи поля [order]`[i]` — на место поля в обходе, а не в хвост.
+  void _relWarn(List<String> order, int i, String prefix, String code,
+      {String? path, Map<String, String> params = const {}}) {
+    final me = _join(prefix, order[i]);
+    final pos = _fieldEnd[me] ?? warnings.length;
+    warnings.insert(
+        pos, RegistryWarning(code: code, path: path, params: params));
+    final later = {for (final k in order.skip(i)) _join(prefix, k)};
+    for (final e in _fieldEnd.entries.toList()) {
+      if (e.value > pos || (e.value == pos && later.contains(e.key))) {
+        _fieldEnd[e.key] = e.value + 1;
+      }
+    }
+    for (final r in _repairs) {
+      if (r.index >= pos) r.index++;
+    }
+  }
+
   void warn(
     String code, {
     String? path,
@@ -404,7 +576,9 @@ final class _Ctx {
     // именно снято, а раннер тел молча расходился с контрактом на одном
     // недостающем поле. `secret` тут неоткуда взять: ключа в схеме нет, а
     // значит нет и его флага — печатаем как есть, ровно как вторая сторона.
-    for (final key in src.keys) {
+    // Контракт 1.1.57 — неизвестные ключи судятся по алфавиту (корпус
+    // `masque_legacy_flat_keys`), а не в порядке прибытия.
+    for (final key in src.keys.toList()..sort()) {
       if (fields.containsKey(key)) continue;
       if (prefix.isEmpty && _kBuildManagedKeys.contains(key)) continue;
       warn('unknown_key', path: _join(prefix, key), value: src[key]);
@@ -429,7 +603,12 @@ final class _Ctx {
     Map<String, Object?> kept,
     Map<String, dynamic> out,
   ) {
+    String? prevPath;
     for (final key in order) {
+      // §556 — конец кодов поля в `warnings`: код связи встаёт сюда, как у
+      // лаунчера (поле судится целиком, прежде чем обход идёт дальше).
+      if (prevPath != null) _fieldEnd[prevPath] = warnings.length;
+      prevPath = _join(prefix, key);
       final f = fields[key];
       if (f == null) continue;
       final unset = !src.containsKey(key) || _unsetForDefault(src[key], f);
@@ -542,7 +721,10 @@ final class _Ctx {
         }
         return out;
       }
-      if (res.keep) kept[key] = res.value;
+      if (res.keep) {
+        kept[key] = res.value;
+        _recordCoerceWhen(f, path, res.value);
+      }
     }
 
     // Состояние ПОСЛЕ проверки значений: связи обязаны видеть его, а не
@@ -552,6 +734,7 @@ final class _Ctx {
     // §549 R2 — пути записанных ключей запоминаются: синхронизации после
     // связей нужны только они (ключа вне `kept` в снимке нет — других
     // писателей у `sanitized` нет, а пути у объектов разные).
+    if (prevPath != null) _fieldEnd[prevPath] = warnings.length;
     final written = <String, String>{};
     for (final e in kept.entries) {
       final path = _join(prefix, e.key);
@@ -792,6 +975,25 @@ final class _Ctx {
         for (final e in v)
           if (e is String) _normalizeString(e, norm) else e,
       ];
+    }
+    // Контракт 1.1.63 — `item_forbidden`: запрещённый элемент (после
+    // normalize) снимается элементом со своим кодом, годные остаются.
+    final itemForbidden = f.raw['item_forbidden'];
+    if (itemForbidden is Map && v is List) {
+      final banned =
+          ((itemForbidden['values'] as List?) ?? const []).map((e) => '$e');
+      final kept0 = [];
+      for (var i = 0; i < v.length; i++) {
+        final e = v[i];
+        if (banned.contains('$e')) {
+          warn(itemForbidden['code'] as String? ?? _kDefaultInvalidCode,
+              path: '$path[$i]', value: e);
+        } else {
+          kept0.add(e);
+        }
+      }
+      if (kept0.isEmpty) return const _Value.drop();
+      v = kept0;
     }
 
     // §477 (контракт 1.1.9) — `absent_values`: значения-ВЫКЛЮЧАТЕЛИ.
@@ -1094,6 +1296,10 @@ final class _Ctx {
         _applyCooccurrence(clean, rel);
         continue;
       }
+      if (kind == 'ordered') {
+        _applyOrdered(clean, rel);
+        continue;
+      }
       if (kind != 'ranges_disjoint') {
         _logUnknownExpression('relation', '$kind');
         continue;
@@ -1150,6 +1356,39 @@ final class _Ctx {
   /// человек начнёт разбираться. Повтор одного кода по одному пути снимается —
   /// связей с общим кодом в реестре бывает несколько, а сообщение об одной и
   /// той же цене человеку нужно один раз.
+  /// Контракт 1.1.63 — `ordered`: значения `paths` по неубыванию (у
+  /// диапазона `N-M` верхняя граница левого не выше нижней правого).
+  /// Участник без значения пары не образует. `drop` снимает все участвующие
+  /// поля, узел живёт; код — на первом пути.
+  void _applyOrdered(Map<String, dynamic> clean, Map<String, dynamic> rel) {
+    final paths = [
+      for (final p in (rel['paths'] as List?) ?? const [])
+        if (clean.containsKey('$p') && _rangeSpan(clean['$p']) != null) '$p',
+    ];
+    for (var i = 0; i + 1 < paths.length; i++) {
+      final a = paths[i], b = paths[i + 1];
+      if (_rangeSpan(clean[a])!.$2 <= _rangeSpan(clean[b])!.$1) continue;
+      final code = rel['code'] as String?;
+      if (code != null) {
+        warn(code, path: a, params: {
+          'a': a,
+          'b': b,
+          'value': '${clean[a]}',
+          'with': '${clean[b]}',
+        });
+      }
+      if (rel['action'] == 'drop_node') {
+        dropNode = true;
+        explicitDropNode = true;
+      } else if (rel['action'] == 'drop') {
+        for (final p in (rel['paths'] as List?) ?? const []) {
+          clean.remove('$p');
+        }
+      }
+      return;
+    }
+  }
+
   void _applyCooccurrence(Map<String, dynamic> clean, Map<String, dynamic> rel) {
     final when = rel['when'];
     if (when is! Map) return;
@@ -1465,6 +1704,48 @@ final class _Ctx {
       case 'coerce':
         warn(code, path: path, value: value, secret: secret || f.secret);
         return _Value.keep(rule?['value']);
+      // Контракт 1.1.57 — `unwrap`: значение приехало обёрткой соседнего
+      // диалекта (объект вместо скаляра). Годный член `key` становится
+      // значением поля с кодом `code`; объект без годного члена — поле
+      // снято с `else_code` (параметры — скалярные члены объекта, кроме
+      // `key`); не объект — `type_invalid`.
+      case 'unwrap':
+        if (value is! Map) {
+          warn(_kDefaultInvalidCode,
+              path: path, value: value, secret: secret || f.secret);
+          explainedDrops.add(path);
+          return const _Value.drop();
+        }
+        final key = rule?['key'] as String?;
+        final member = key == null ? null : value[key];
+        if (member != null) {
+          final probe = _Ctx(
+            scheme: scheme,
+            coreVersion: coreVersion,
+            platform: platform,
+            applyCoreGates: applyCoreGates,
+            source: source,
+            kinds: kinds,
+            root: root,
+          );
+          final plain = FieldSchema({...f.raw}..remove('on_invalid'));
+          final res = probe._sanitizeScalar(member, plain, path);
+          final blank = res.value is String && (res.value as String).trim().isEmpty;
+          if (res.keep && probe.warnings.isEmpty && !blank) {
+            warn(code, path: path, value: member, secret: secret || f.secret);
+            return _Value.keep(res.value);
+          }
+        }
+        final params = <String, String>{
+          for (final e in value.entries)
+            if (e.key != key &&
+                (e.value is String || e.value is num || e.value is bool))
+              '${e.key}': '${e.value}',
+        };
+        warn(rule?['else_code'] as String? ?? _kDefaultInvalidCode,
+            path: path, params: params);
+        explainedDrops.add(path);
+        return const _Value.drop();
       case 'drop_node':
         dropNode = true;
         explicitDropNode = true;
@@ -1515,10 +1796,21 @@ final class _Ctx {
         final with0 = rel['with'] as String?;
         if (with0 == null) continue;
         if (!_conditionHolds(rel['when'], kept)) continue;
-        if (!_presentInSource(with0, kept, prefix)) continue;
+        // Контракт 1.1.64 — сосед без точки, которого нет в своём объекте,
+        // — поле корня (`tls.fragment` ↔ `vhttp` у masque); у схемы без
+        // такого поля связь не срабатывает.
+        final rootRival = !with0.contains('.') &&
+            prefix.isNotEmpty &&
+            !fields.containsKey(with0);
+        if (rootRival
+            ? !_presentInSource(with0, const {}, '')
+            : !_presentInSource(with0, kept, prefix)) {
+          continue;
+        }
         if (_unlessHolds(rel, kept, prefix)) continue;
         kept.remove(key);
-        warn(rel['code'] as String? ?? 'field_conflict',
+        _relWarn(order, order.indexOf(key), prefix,
+            rel['code'] as String? ?? 'field_conflict',
             path: myPath, params: {'with': with0});
         // §474 — поле снято и причина названа: зависимым от него второго кода
         // не полагается (та же граница, что у `requires`).
@@ -1548,16 +1840,153 @@ final class _Ctx {
             : _present(need, kept, prefix);
         if (ok) continue;
         if (_unlessHolds(rel, kept, prefix)) continue;
+        // Контракт 1.1.61 — `requires[].set`: недостающий путь не снимает
+        // поле, а материализуется значением `set` по готовому телу. Путь,
+        // который схема не допускает, — обычное снятие ниже.
+        if (rel.containsKey('set')) {
+          final target = need.contains('.') ? need : _join(prefix, need);
+          if (_pathAllowed(target)) {
+            _repairs.add(_Repair.set(
+              index: _fieldEnd[_join(prefix, key)] ?? warnings.length,
+              path: _join(prefix, key),
+              target: target,
+              need: need,
+              value: rel['set'],
+              code: rel['code'] as String? ?? 'field_requires',
+            ));
+            continue;
+          }
+        }
         kept.remove(key);
         // §472 шаг 3 — требуемое поле снял этот же прогон и уже объяснил
         // почему: молча уходим следом. См. [explainedDrops].
         if (!explainedDrops.contains(need)) {
-          warn(rel['code'] as String? ?? 'field_requires',
+          _relWarn(order, order.indexOf(key), prefix,
+              rel['code'] as String? ?? 'field_requires',
               path: _join(prefix, key), params: {'requires': need});
         }
         break;
       }
     }
+  }
+
+  /// Контракт 1.1.61 — `coerce_when`: годное значение из `values` поля
+  /// запоминается; замена — по готовому телу в [applyRepairs].
+  void _recordCoerceWhen(FieldSchema f, String path, Object? v) {
+    final rule = f.raw['coerce_when'];
+    if (rule is! Map) return;
+    final values = rule['values'];
+    if (values is! List || !values.any((e) => '$e' == '$v')) return;
+    _repairs.add(_Repair.coerce(
+      index: warnings.length,
+      path: path,
+      original: v,
+      value: rule['value'],
+      when: rule['when'],
+      code: rule['code'] as String?,
+    ));
+  }
+
+  /// Допускает ли схема путь [path] (каждый сегмент объявлен и не запрещён
+  /// схеме записи) — только тогда `requires[].set` вправе его завести.
+  bool _pathAllowed(String path) {
+    Map<String, FieldSchema>? fields =
+        ContractRegistry.I.schemaFor(scheme)?.fields;
+    for (final seg in path.split('.')) {
+      final f = fields?[seg];
+      if (f == null) return false;
+      if (f.forbiddenFor?.contains(scheme) ?? false) return false;
+      final allowed = f.allowedFor;
+      if (allowed != null && !allowed.contains(scheme)) return false;
+      fields = f.fields;
+    }
+    return true;
+  }
+
+  /// Исполнить отложенные починки по готовому телу [out]. Код встаёт в
+  /// `warnings` туда, где встал бы при обходе.
+  void applyRepairs(Map<String, dynamic> out) {
+    if (_repairs.isEmpty) return;
+    final inserts = <(int, RegistryWarning)>[];
+    for (final r in _repairs) {
+      final w = r.apply(out, this);
+      if (w != null) inserts.add((r.index, w));
+    }
+    for (var i = inserts.length - 1; i >= 0; i--) {
+      warnings.insert(inserts[i].$1, inserts[i].$2);
+    }
+  }
+
+  /// Условие правила по ГОТОВОМУ телу (грамматика `condition`).
+  bool finalConditionHolds(Object? when, Map<String, dynamic> body) =>
+      conditionOnFinalBody(when, body, kinds: kinds);
+
+  /// Условие грамматики `condition` по ГОТОВОМУ телу — общий суд для
+  /// правил, которые спрашивают тело после санитайзера (`coerce_when`,
+  /// `exit_capable_when` контракта 1.1.63). `any_set` = поле задано и не
+  /// пустая строка.
+  static bool conditionOnFinalBody(
+    Object? when,
+    Map<String, dynamic> body, {
+    Set<String> kinds = const {},
+  }) {
+    if (when is! Map) return true;
+    var branches = false;
+    for (final e in when.entries) {
+      final key = '${e.key}';
+      if (key == 'any_set' || key == 'source_kind') {
+        branches = true;
+        continue;
+      }
+      final got = finalAt(body, key);
+      final present = got != null && !(got is String && got.isEmpty);
+      final want = e.value;
+      if (want is Map) {
+        final inList = want['in'];
+        final notIn = want['not_in'];
+        if (inList is List) {
+          if (!(present && inList.any((x) => '$x' == '$got'))) return false;
+        } else if (notIn is List) {
+          if (present && notIn.any((x) => '$x' == '$got')) return false;
+        } else if (want.containsKey('type_of')) {
+          if (!_typeOf(got, '${want['type_of']}')) return false;
+        } else {
+          return false;
+        }
+      } else if (!(present && '$want' == '$got')) {
+        return false;
+      }
+    }
+    if (!branches) return true;
+    final sourceKind = (when['source_kind'] as List?)?.map((e) => '$e');
+    if (sourceKind != null && sourceKind.any(kinds.contains)) return true;
+    final anySet = (when['any_set'] as List?)?.map((e) => '$e');
+    if (anySet != null) {
+      for (final k in anySet) {
+        final v = finalAt(body, k);
+        if (v != null && !(v is String && v.isEmpty)) return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _typeOf(Object? v, String t) => switch (t) {
+        'object' => v is Map,
+        'array' => v is List,
+        'string' => v is String,
+        'number' => v is num,
+        'bool' => v is bool,
+        _ => false,
+      };
+
+  /// Значение по абсолютному пути готового тела; `null` — пути нет.
+  static Object? finalAt(Map<String, dynamic> body, String path) {
+    Object? cur = body;
+    for (final seg in path.split('.')) {
+      if (cur is! Map || !cur.containsKey(seg)) return null;
+      cur = cur[seg];
+    }
+    return cur;
   }
 
   /// Значение по пути связи — для `requires` с `equals`.
@@ -1773,6 +2202,11 @@ String _normalizeString(String v, String norm) {
     //
     // Голое число («5») свопать нечего — возвращается как есть; мусор тоже
     // проходит насквозь, его судит `type`/`on_invalid` следом.
+    // Контракт 1.1.63 — `cidr_masked`: голый адрес получает префикс хоста,
+    // биты за длиной префикса обнуляются; мусор уезжает как есть (его судит
+    // `format: cidr`).
+    case 'cidr_masked':
+      return _cidrMasked(v);
     case 'range_order':
       final s = v.trim();
       final dash = s.indexOf('-');
@@ -2029,6 +2463,27 @@ bool _uint32Ok(int n) => n >= 0 && n <= 0xFFFFFFFF;
 /// §481 — отрезок значения `awg_range` для `ranges_disjoint`: голое число `N`
 /// — отрезок `[N, N]`, диапазон `"N-M"` — `[N, M]`. `null` — значение не в
 /// форме диапазона (его уже осудил `on_invalid`, второй раз не судим).
+String _cidrMasked(String v) {
+  final s = v.trim();
+  final slash = s.indexOf('/');
+  final addrText = slash < 0 ? s : s.substring(0, slash);
+  final addr = InternetAddress.tryParse(addrText);
+  if (addr == null) return v;
+  final bits = addr.rawAddress.length * 8;
+  final len = slash < 0 ? bits : int.tryParse(s.substring(slash + 1));
+  if (len == null || len < 0 || len > bits) return v;
+  final raw = List<int>.of(addr.rawAddress);
+  for (var i = 0; i < raw.length; i++) {
+    final keep = len - i * 8;
+    if (keep >= 8) continue;
+    raw[i] = keep <= 0 ? 0 : raw[i] & (0xff << (8 - keep)) & 0xff;
+  }
+  final masked = InternetAddress.fromRawAddress(
+      Uint8List.fromList(raw),
+      type: addr.type);
+  return '${masked.address}/$len';
+}
+
 (int, int)? _rangeSpan(Object? raw) {
   if (raw is int) return (raw, raw);
   if (raw is! String) return null;
@@ -2200,4 +2655,78 @@ final class _Value {
 
   final bool keep;
   final Object? value;
+}
+
+/// Контракт 1.1.61 — отложенное правило-починка (`requires[].set` либо
+/// `coerce_when`), исполняемое по готовому телу.
+final class _Repair {
+  _Repair.set({
+    required this.index,
+    required this.path,
+    required String this.target,
+    required String this.need,
+    required this.value,
+    required this.code,
+  })  : original = null,
+        when = null;
+
+  _Repair.coerce({
+    required this.index,
+    required this.path,
+    required this.original,
+    required this.value,
+    required this.when,
+    required this.code,
+  })  : target = null,
+        need = null;
+
+  int index;
+  final String path;
+  final String? target;
+  final String? need;
+  final Object? original;
+  final Object? value;
+  final Object? when;
+  final String? code;
+
+  RegistryWarning? apply(Map<String, dynamic> out, _Ctx ctx) {
+    final t = target;
+    if (t != null) {
+      // Декларант не пережил своих правил — дописывать нечего.
+      if (!_Ctx._meaningful(_Ctx.finalAt(out, path))) return null;
+      if (_Ctx._meaningful(_Ctx.finalAt(out, t))) return null;
+      final segs = t.split('.');
+      Map<String, dynamic> cur = out;
+      for (final seg in segs.sublist(0, segs.length - 1)) {
+        final next = cur[seg];
+        if (next is Map<String, dynamic>) {
+          cur = next;
+        } else if (next == null) {
+          final m = <String, dynamic>{};
+          cur[seg] = m;
+          cur = m;
+        } else {
+          return null;
+        }
+      }
+      cur[segs.last] = value;
+      return RegistryWarning(
+          code: code ?? 'field_requires', path: path, params: {'requires': need!});
+    }
+    final got = _Ctx.finalAt(out, path);
+    if (got == null || '$got' != '$original') return null;
+    if (!ctx.finalConditionHolds(when, out)) return null;
+    final segs = path.split('.');
+    final parent = segs.length == 1
+        ? out
+        : _Ctx.finalAt(out, segs.sublist(0, segs.length - 1).join('.'));
+    if (parent is! Map) return null;
+    parent[segs.last] = value;
+    final c = code;
+    if (c == null) return null;
+    return RegistryWarning(
+        code: c,
+        path: path,
+        value: RegistrySanitizer.renderWarningValue(original as Object));
+  }
 }

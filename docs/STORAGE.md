@@ -789,7 +789,7 @@ A folder member of `kind: chain` is not supported and is dropped with a note.
 Written only when a flag differs from the default. The detour target itself is the
 record's `detour` (a NodeLink), the model field `DetourPolicy.overrideDetour`.
 
-### `warnings` (shared) — the core's verdict (feature 478, CANON §9.4)
+### `warnings` (shared) — the core's verdict (feature 478, PARSING_PRINCIPLES §9.4)
 
 A node's warnings are **not stored**: they are recomputed on every parse
 (`NodeSpec.warnings`), and a subscription's nodes are not stored at all — only

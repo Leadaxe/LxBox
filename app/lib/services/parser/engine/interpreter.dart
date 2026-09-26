@@ -23,7 +23,7 @@
 /// отсутствие ключа неотличимо от «не задано».
 library;
 
-import 'dart:convert' show Base64Codec, jsonDecode, utf8;
+import 'dart:convert' show Base64Codec, jsonDecode;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
@@ -125,7 +125,7 @@ EngineResult? runSection(MapperSection section, String text,
     {MapperTrace? trace, XrayDropVerdict? dropped}) {
   final space = _selectForm(section, text);
   if (space == null) {
-    // §512 (контракт 1.1.49, CANON §4.1) — ФОРМА не опознана: схему секция
+    // §512 (контракт 1.1.49, PARSING_PRINCIPLES §4.1) — ФОРМА не опознана: схему секция
     // ведёт, но ни одна её форма текст не прочитала (оболочка не раскрылась,
     // пейлоад не JSON и не ini). Отличается от `field_missing` ниже: там
     // форма сработала, а обязательного значения в ней не нашлось.
@@ -153,10 +153,23 @@ EngineResult? runSectionOnJson(
   Map<String, dynamic> doc, {
   MapperTrace? trace,
   XrayDropVerdict? dropped,
+  Map<String, dynamic>? context,
+  List<dynamic>? document,
 }) {
   final space = _selectJsonForm(section, doc);
-  if (space == null) return null;
-  return _Run(section, space, trace, dropped: dropped).execute();
+  if (space == null) {
+    // §560 — то же, что у текстового входа ([runSection]): секция элемент
+    // опознала, но ни одна её форма его не прочитала (`streamSettings:
+    // "none"`). Причина называется кодом PARSING_PRINCIPLES §4.1 и едет в `dropped[]`, а
+    // не теряется молча (корпус body/xray/malformed_stream).
+    if (dropped != null && dropped.reason == null) {
+      dropped.reason = const RegistryWarning(code: 'form_unrecognized');
+    }
+    return null;
+  }
+  return _Run(section, space, trace,
+          dropped: dropped, context: context, document: document)
+      .execute();
 }
 
 /// §480 — исполнить секцию на тексте INI (`.conf`).
@@ -179,12 +192,29 @@ EngineResult? runSectionOnIni(
   String? nameHint,
   MapperTrace? trace,
   XrayDropVerdict? dropped,
+  Map<String, dynamic>? context,
 }) {
   final space = _selectIniForm(section, text);
   if (space == null) return null;
   final parsed = parseIniSpace(text, section.iniDialect ?? const IniDialect());
-  return _Run(section, space, trace, nameHint: nameHint, dropped: dropped)
+  return _Run(section, space, trace,
+          nameHint: nameHint, dropped: dropped, context: context)
       .execute(inputCodes: parsed.codes);
+}
+
+/// Порядок проб форм: объявленный, но форма с `detect.default` — последней,
+/// независимо от места в списке (MAPPER_ENGINE: «всё остальное»; так же
+/// пробует лаунчер). Относительный порядок прочих форм не меняется.
+List<MapperForm> formsInTrialOrder(List<MapperForm> forms) {
+  if (forms.length < 2) return forms;
+  final i = forms.indexWhere((f) => f.detect?['default'] == true);
+  if (i < 0 || i == forms.length - 1) return forms;
+  return [
+    for (final f in forms)
+      if (f.detect?['default'] != true) f,
+    for (final f in forms)
+      if (f.detect?['default'] == true) f,
+  ];
 }
 
 /// Форма для входа INI: `detect` формы судится предикатами `ini` над УЖЕ
@@ -194,7 +224,7 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
   final parsed = parseIniSpace(text, dialect);
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'ini', space: 'ini')]
-      : section.forms;
+      : formsInTrialOrder(section.forms);
   for (final form in forms) {
     if (!detectMatchesIni(form.detect, parsed.space)) continue;
     return SourceSpace(formId: form.id, ini: parsed.space);
@@ -205,19 +235,40 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
 /// Выбрать форму (P1) и построить пространство источников.
 ///
 /// Формы пробуются ПО ПОРЯДКУ, первая, чей `detect` сработал, выигрывает;
-/// `detect.default` — ветка «всё остальное».
+/// `detect.default` — ветка «всё остальное» и пробуется последней, где бы ни
+/// стояла в списке ([formsInTrialOrder]).
 SourceSpace? _selectForm(MapperSection section, String text) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'url', space: 'url')]
-      : section.forms;
+      : formsInTrialOrder(section.forms);
   for (final form in forms) {
-    if (!formMatchesText(form.detect, text)) continue;
+    // Текстовый `detect` формы с оболочкой судится по ДВУМ текстам (unwrap →
+    // redetect, MAPPER_ENGINE §1): сырому пэйлоаду и раскрытому. Предикаты
+    // законно пишут про обе вещи: «тело — один base64-блоб без `@`» — про
+    // оболочку (на раскрытом тексте он ложен по построению), а `^[^#]*@` у
+    // формы `method:uuid@host` — про то, что под ней (на блобе `@` нет).
+    // Форма, чей предикат сошёлся хоть на одном из двух, — эта форма, как у
+    // лаунчера. `scheme_in` раскрытием не меняется (схема остаётся на месте),
+    // `json` судится ниже по разобранному объекту.
+    if (form.space == 'ini') {
+      final ini = _selectLinkIniForm(section, form, text);
+      if (ini != null) return ini;
+      continue;
+    }
+    final rawHit = formMatchesText(form.detect, text);
+    if (!rawHit && form.decode.isEmpty) continue;
     // `forms[].decode` — оболочка источника: тело после схемы бывает целиком
     // base64 (перекодированные подписки). Декодер работает над ПЭЙЛОАДОМ, а
     // схему возвращает на место: написание схемы — источник (`scheme_sets`,
     // `label_fallback`), и потерять его нельзя.
     final decoded = _applyFormDecode(form, text);
     if (decoded == null) continue;
+    if (!rawHit) {
+      final revealed = _applyScopedDecodeToPayload(form, decoded);
+      if (revealed == null || !formMatchesText(form.detect, revealed)) {
+        continue;
+      }
+    }
     switch (form.space) {
       case 'url':
         final space = lexUri(decoded, formId: form.id);
@@ -285,13 +336,49 @@ SourceSpace? _selectForm(MapperSection section, String text) {
           query: _flattenContainer(doc),
         );
       default:
-        // Прочее пространство (`ini`) разбирается своим входом. Молча выдавать
-        // пустое тело нельзя — это был бы узел из ничего, поэтому форма просто
-        // не отвечает.
+        // Неизвестное пространство: молча выдавать пустое тело нельзя — это
+        // был бы узел из ничего, поэтому форма просто не отвечает.
         continue;
     }
   }
   return null;
+}
+
+/// Ссылочная форма с пространством `ini` (`<схема>://<base64 .conf>#метка`):
+/// под оболочкой лежит целый `.conf`, а не ссылка.
+///
+/// Метка пишется СНАРУЖИ оболочки, поэтому фрагмент снимается до `detect` и
+/// декода (предикат формы — «пэйлоад целиком из алфавита base64» — про
+/// оболочку, `#метка` в неё не входит) и возвращается в пространство как
+/// источник `fragment`. Раскрытый текст раскладывается диалектом секции
+/// (`ini_dialect`; у ссылки — диалект протокола, [MapperSections]). Схема
+/// остаётся написанием источника (`scheme_sets`, фолбэк метки).
+SourceSpace? _selectLinkIniForm(
+    MapperSection section, MapperForm form, String text) {
+  final split = _splitScheme(text);
+  if (split == null) return null;
+  var payload = split.payload;
+  var fragment = '';
+  final hash = payload.indexOf('#');
+  if (hash >= 0) {
+    fragment = payload.substring(hash + 1);
+    payload = payload.substring(0, hash);
+  }
+  final bare = '${split.scheme}://$payload';
+  if (!formMatchesText(form.detect, bare)) return null;
+  final decoded = _applyFormDecode(form, bare);
+  if (decoded == null) return null;
+  final unwrapped = _applyScopedDecodeToPayload(form, decoded);
+  if (unwrapped == null) return null;
+  final conf = _splitScheme(unwrapped)?.payload ?? unwrapped;
+  final parsed =
+      parseIniSpace(conf, section.iniDialect ?? const IniDialect());
+  return SourceSpace(
+    formId: form.id,
+    scheme: split.scheme,
+    fragment: fragment,
+    ini: parsed.space,
+  );
 }
 
 /// Форма для объектного входа: `detect` формы судится предикатами `json`
@@ -299,7 +386,7 @@ SourceSpace? _selectForm(MapperSection section, String text) {
 SourceSpace? _selectJsonForm(MapperSection section, Map<String, dynamic> doc) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'json', space: 'json')]
-      : section.forms;
+      : formsInTrialOrder(section.forms);
   for (final form in forms) {
     if (!detectMatchesJson(form.detect, doc)) continue;
     return SourceSpace(formId: form.id, json: doc, jsonBase: form.base);
@@ -603,8 +690,9 @@ abstract final class _RunDecode {
       // принимал каждый БАЙТ за символ latin-1, и любое не-ASCII имя узла
       // приезжало искажённым: «изPS» становилось «Ð¸Ð·PS». Малформед
       // допускается, а не бросается: мусорный байт в имени не стоит узлу
-      // разбора целиком.
-      return utf8.decode(_b64.decode(s), allowMalformed: true);
+      // разбора целиком. Серия битых байтов — ОДИН U+FFFD, как у лаунчера
+      // (контракт 1.1.74): метка входит в тег узла.
+      return decodeUtf8Lenient(_b64.decode(s));
     } catch (_) {
       return null;
     }
@@ -1214,9 +1302,24 @@ List<String> _segments(String path) => _segCache[path] ??= path.split('.');
 /// Исполнение одной записи: состояние живёт ровно на время разбора.
 final class _Run {
   _Run(this.section, this.space, this._trace,
-      {this.nameHint, XrayDropVerdict? dropped})
+      {this.nameHint, XrayDropVerdict? dropped, this.context, this.document})
       : _plan = _planCache[section] ??= _SectionPlan(section),
         _dropped = dropped;
+
+  /// Контракт 1.1.63 (MAPPER_ENGINE, источник `context.<путь>`) — значение
+  /// JSON от ВЫЗЫВАЮЩЕГО: то, что лежит рядом с текстом, но не в нём
+  /// (объект контейнера, корень профиля). `null` — контекста нет, источники
+  /// `context.*` пусты.
+  final Map<String, dynamic>? context;
+
+  /// Контракт 1.1.63 (`deref`) — документ, в котором запись ищет соседа по
+  /// ссылке (у Xray — массив `outbounds` элемента). `null` — документа нет,
+  /// условия по слою `ref.*` ложны.
+  final List<dynamic>? document;
+
+  /// Слои `ref.<as>`: сосед, найденный `deref` записи. Кладётся ДО `when`
+  /// записи и читается этой и последующими записями.
+  final Map<String, Object?> _refs = {};
 
   /// План секции: проходы и множество объявленных — посчитаны один раз.
   final _SectionPlan _plan;
@@ -1852,6 +1955,9 @@ final class _Run {
     // конфига; поле пишет только сборка/эмит (dialer.detour).
     if (p.roundTripOnly == 'emit') return;
 
+    // Контракт 1.1.63 — `deref` кладёт слой `ref.<as>` ДО `when` записи.
+    _applyDeref(p);
+
     // Контракт 1.1.56 (MAPPER_ENGINE §10.4) — `$value` в `when`: СЕЛЕКТОР
     // записи, а не условие. Делит одно значение источника между записями с
     // одним `maps_to` (`uplinkDataPlacement` берёт header/cookie,
@@ -1915,7 +2021,7 @@ final class _Run {
     // по остальным записям узла не обрывается.
     _applyOnLenGt(p);
 
-    var raw = _valueOf(p);
+    var raw = _applySubstitute(p, _valueOf(p));
     final emptyRaw = raw == null || (raw is String && raw.isEmpty);
     if (emptyRaw) {
       // `on_empty` — код за ПУСТОЕ значение записи. Ставится до разбора
@@ -1961,10 +2067,26 @@ final class _Run {
     // («имя без точки и двоеточия адресом быть не может») перестаёт быть
     // веткой в коде и становится строкой таблицы — причём только у тех схем,
     // которые её объявили.
+    //
+    // Контракт 1.1.80 (MAPPER_ENGINE §10.5): негодное значение уступает
+    // сперва СЛЕДУЮЩЕМУ звену цепочки `source` с непустым годным значением
+    // (`sni=Germany&servername=real.host` → `real.host`), и только без
+    // такого звена — `default_from`. Код `on_invalid`, если объявлен, — в
+    // обоих случаях.
     if (p.onInvalid['action'] == 'default_from' && value is String) {
       final cond = (p.onInvalid['when'] as Map?)?.cast<String, dynamic>();
       final probe = cond == null ? null : cond['value'];
-      if (probe != null && _matches(value, probe)) return;
+      if (probe != null && _matches(value, probe)) {
+        final code = p.onInvalid['code'] as String?;
+        if (code != null) {
+          warnings.add(
+              NodeWarning.byCode(code, path: p.name, value: value.trim()));
+        }
+        final next = _nextValidSource(p, probe);
+        if (next == null) return;
+        raw = _applySubstitute(p, next);
+        value = raw;
+      }
     }
 
     // `decode_extra` — поверх первого прохода декодера формы.
@@ -2591,6 +2713,28 @@ final class _Run {
     return null;
   }
 
+  /// Следующее за ответившим звено цепочки `source` с непустым значением,
+  /// на котором условие [probe] `on_invalid.when` НЕ выполнено (§10.5);
+  /// `null` — такого звена нет.
+  dynamic _nextValidSource(MapperParam p, Object probe) {
+    final sources = p.sourceByForm.isNotEmpty
+        ? (p.sourceByForm[space.formId] ?? const <String>[])
+        : p.source;
+    var hit = false;
+    for (final src in sources) {
+      final v = _readSource(src, p);
+      if (v == null) continue;
+      if (v is String && v.isEmpty && p.empty != 'significant') continue;
+      if (!hit) {
+        hit = true;
+        continue;
+      }
+      if (v is String && _matches(v, probe)) continue;
+      return v;
+    }
+    return null;
+  }
+
   dynamic _readSource(String src, MapperParam p) {
     if (src.startsWith('query.')) {
       final name = src.substring('query.'.length);
@@ -2635,6 +2779,8 @@ final class _Run {
       case 'fragment':
         return space.fragment;
     }
+    final layered = _readContextOrRef(src);
+    if (layered.hit) return layered.value;
     if (src.startsWith('json.')) {
       final path = _resolveBase(src.substring('json.'.length));
       _consumeJson(path);
@@ -2735,9 +2881,21 @@ final class _Run {
         // источника у поля нет вовсе: у объектного входа адрес лежит под
         // якорем формы, и общий блок (tls) его пути не знает — знать его
         // значило бы завести в общем блоке запись про конкретный диалект.
-        final v = src.startsWith('body.')
+        var v = src.startsWith('body.')
             ? _read(src.substring('body.'.length))
             : _readSource(src, p);
+        // Имя без префикса, не давшее значения как ИСТОЧНИК, читается как
+        // ПУТЬ ТЕЛА (MAPPER_ENGINE, норма `default_from` у Go-движка:
+        // `space.Lookup`, затем `getPath(body, name)`). Адрес у разных форм
+        // приезжает из разных источников, а путь `server` к этому моменту
+        // уже заполнила запись, чей источник объявлен по формам; назвать
+        // источник значило бы назвать одну форму, и у другой откат молча
+        // не срабатывал.
+        if ((v == null || (v is String && v.isEmpty)) &&
+            !src.startsWith('body.')) {
+          final bv = _read(src);
+          if (bv is String || bv is num) v = '$bv';
+        }
         if (v == null) continue;
         if (v is String && v.isEmpty) continue;
         // ФОРМА значения у отката та же, что у самого поля: путь, куда едет
@@ -2772,6 +2930,19 @@ final class _Run {
           p.valueMap[''];
       if (v != null) _write(path, v, p);
     }
+
+    // §560 — `omit_default` записи на входе: значение, РАВНОЕ объявленному,
+    // в тело не пишется (числовой ноль или `false`, объявленные секцией как
+    // «не сказано»). Тот же атрибут эмиттер читает на обратном ходе; на
+    // прямом его не исполнял никто, и ноль доезжал до тела. Сравнение по
+    // написанию: `"0"` из JSON-строки и `0` числом — одно значение.
+    final omit = p.raw['omit_default'];
+    if (omit != null && omit is! List && omit is! Map) {
+      final v = _read(path);
+      if (v != null && v is! Map && v is! List && '$v' == '$omit') {
+        _erase(path);
+      }
+    }
   }
 
   // ─────────────────────────── условия ───────────────────────────
@@ -2805,6 +2976,8 @@ final class _Run {
       } else if (key.startsWith('query.') ||
           key.startsWith('json.') ||
           key.startsWith('ini.') ||
+          key.startsWith('context.') ||
+          key.startsWith('ref.') ||
           _kLexicalSources.contains(key)) {
         actual = _readSourceBare(key);
       } else {
@@ -2861,6 +3034,8 @@ final class _Run {
       case 'hint':
         return nameHint;
     }
+    final layered = _readContextOrRef(src);
+    if (layered.hit) return layered.value;
     if (src.startsWith('json.')) {
       return jsonPathValue(
           space.json, _resolveBase(src.substring('json.'.length)));
@@ -2874,6 +3049,92 @@ final class _Run {
       if (layer != null) return layer.get(src.substring(dot + 1));
     }
     return null;
+  }
+
+  /// Источники вне документа (контракт 1.1.63): `context.<путь>` — значение
+  /// от вызывающего, `ref.<as>.<путь>` — сосед, положенный `deref`. `hit` —
+  /// адрес принадлежит одному из них (значение при этом может быть `null`).
+  ({bool hit, Object? value}) _readContextOrRef(String src) {
+    if (src.startsWith('context.')) {
+      final ctx = context;
+      return (
+        hit: true,
+        value: ctx == null
+            ? null
+            : jsonPathValue(ctx, src.substring('context.'.length)),
+      );
+    }
+    if (src.startsWith('ref.')) {
+      final rest = src.substring('ref.'.length);
+      final dot = rest.indexOf('.');
+      final name = dot < 0 ? rest : rest.substring(0, dot);
+      final layer = _refs[name];
+      if (layer == null) return (hit: true, value: null);
+      return (
+        hit: true,
+        value: dot < 0 ? layer : jsonPathValue(layer, rest.substring(dot + 1)),
+      );
+    }
+    return (hit: false, value: null);
+  }
+
+  /// `deref {key, as}` (контракт 1.1.63): значение записи — ссылка на соседа
+  /// по документу. Элемент, у которого значение по пути `key` дословно равно
+  /// значению записи, кладётся слоем `ref.<as>` ДО `when`. Документа нет,
+  /// значения нет или сосед не нашёлся — слой пуст, условия по нему ложны.
+  void _applyDeref(MapperParam p) {
+    final d = p.deref;
+    if (d == null) return;
+    final key = d['key'];
+    final as = d['as'];
+    if (key is! String || as is! String) return;
+    _refs.remove(as);
+    final doc = document;
+    if (doc == null) return;
+    final v = _valueOfBare(p);
+    if (v == null || v is Map || v is List) return;
+    final want = '$v';
+    for (final el in doc) {
+      if (el is! Map) continue;
+      final k = jsonPathValue(el, key);
+      if (k == null || k is Map || k is List) continue;
+      if ('$k' == want) {
+        _refs[as] = el;
+        return;
+      }
+    }
+  }
+
+  /// `substitute {sep, join, tokens}` (контракт 1.1.63): значение режется по
+  /// `sep`, элемент, дословно равный плейсхолдеру из `tokens`, заменяется
+  /// значением своего источника, неразрешённый снимается, остаток склеивается
+  /// `join`. Значение без плейсхолдеров не трогается; пустой итог = `null`.
+  Object? _applySubstitute(MapperParam p, Object? raw) {
+    final sub = p.substitute;
+    if (sub == null || raw is! String) return raw;
+    final sep = sub['sep'];
+    final join = sub['join'];
+    final tokens = (sub['tokens'] as Map?)?.cast<String, dynamic>();
+    if (sep is! String || sep.isEmpty || tokens == null || tokens.isEmpty) {
+      return raw;
+    }
+    final parts = raw.split(sep);
+    if (!parts.any((e) => tokens.containsKey(e.trim()))) return raw;
+    final out = <String>[];
+    for (final part in parts) {
+      final t = part.trim();
+      final srcName = tokens[t];
+      if (srcName is! String) {
+        if (t.isNotEmpty) out.add(t);
+        continue;
+      }
+      final v = _readSourceBare(srcName);
+      if (v == null || v is Map || v is List) continue;
+      final str = '$v'.trim();
+      if (str.isNotEmpty) out.add(str);
+    }
+    if (out.isEmpty) return null;
+    return out.join(join is String ? join : sep);
   }
 
   static const _kLexicalSources = {
@@ -2904,6 +3165,11 @@ final class _Run {
         return !list.contains(_fold(actual));
       }
       if (m.containsKey('not')) return !_matches(actual, m['not']);
+      // Контракт 1.1.63 — `type_of`: тип значения источника (как одноимённый
+      // предикат detect). Значения нет — условие ложно.
+      if (m.containsKey('type_of')) {
+        return actual != null && _isJsonType(actual, '${m['type_of']}');
+      }
       if (m.containsKey('present')) {
         return (actual != null) == (m['present'] == true);
       }
@@ -3362,7 +3628,7 @@ final class _Run {
     // глушило следующие звенья: `trim` превратил бы его в пустую строку уже
     // после выбора, и узел остался бы вовсе без имени.
     for (final src in sources) {
-      final v = _readSourceBare(src);
+      final v = _readSourceBare(src) ?? _readLabelBodyPath(src);
       // Метка бывает НЕ СТРОКОЙ: в контейнере чужого диалекта `ps` приезжает
       // числом ровно так же, как `port`. Отбрасывать её за это значило бы
       // переименовать живой узел в фолбэк.
@@ -3385,6 +3651,20 @@ final class _Run {
     final tpl = section.label.fallbackTemplate;
     if (tpl != null && !tpl.contains('{')) return tpl;
     return '';
+  }
+
+  /// Звено метки — ПУТЬ ТЕЛА (`peers[].address`: хост Endpoint у ссылки
+  /// `<схема>://<base64 .conf>` без фрагмента, корпус
+  /// `awg_conf_base64_no_label`). Путь тела отличается от адреса пространства
+  /// маркером массива `[]`: у источников документа его нет.
+  ///
+  /// Читается только у входа со схемой (ссылка). У голого `.conf` то же
+  /// звено объявлено, но LxBox называет безымянный файл литералом фолбэка —
+  /// открытый пункт DELTAS реестра; прочитать звено там значило бы сменить
+  /// тег, а с ним identity уже сохранённых узлов.
+  Object? _readLabelBodyPath(String src) {
+    if (space.scheme.isEmpty || !src.contains('[]')) return null;
+    return _read(src);
   }
 
   /// Объявленная нормализация метки (G8), одна на все звенья цепочки.
@@ -3664,7 +3944,7 @@ final class _Run {
   /// `json_field_unknown`, `wgconf_param_unknown`.
   ///
   /// Имя едет ДВАЖДЫ и намеренно. В `path` — потому что дедуп идёт по паре
-  /// «код, путь» (CANON §6), и без него второй незнакомый параметр той же
+  /// «код, путь» (PARSING_PRINCIPLES §6), и без него второй незнакомый параметр той же
   /// ссылки исчезал бы молча. В `params.query_name` — потому что текст
   /// реестра у всех трёх кодов называет именно этот параметр
   /// (`{query_name}`), а подстановка `{path}` его не закрывает: незаполненный

@@ -819,6 +819,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
         widget.entry.tagPrefix = val.trim();
         unawaited(widget.controller.persistSources());
       },
+      // Фича 565 фаза B — свёртка источника в группу (§74).
+      // §568 / задача 570 — занятые имена для редактора свёртки.
+      otherSources: [for (final e in widget.controller.entries) e.list],
+      onReplaceChanged: (r) async {
+        setState(() => widget.entry.replace = r);
+        await widget.controller.persistSources();
+      },
       // §393 A6 — каскад на regex-фильтры Направлений, написанные под
       // СТАРЫЙ префикс: считается на коммите поля, не на каждой клавише.
       onTagPrefixCommitted: (_) => unawaited(_commitTagPrefix()),

@@ -1,17 +1,21 @@
+import 'package:collection/collection.dart' show mergeSort;
+
 import '../../config/consts.dart';
 import '../../models/emit_context.dart';
 import '../../models/server_list.dart';
 import '../../models/auto_select.dart';
 import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart' show RegistryWarning;
 import '../../models/singbox_entry.dart';
+import '../contract/body_sanitizer.dart' show exitCapableByRegistry;
 import '../node_hash.dart';
 import '../node_identity.dart';
 import '../node_link_address.dart';
 import '../safe_regex.dart';
 import '../tag_resolver.dart';
-import 'core_chain_capability.dart';
 import 'node_link_resolve.dart';
+import 'source_replace_build.dart';
 import 'verbatim_body.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
@@ -73,6 +77,29 @@ extension ServerListBuild on ServerList {
     final identities =
         disabledHashes == null ? null : sourceNodeIdentities(nodes);
 
+    // Фича 565 фаза B (§74) — свёрнутый источник отдаёт узлы не в пул
+    // Направлений, а плану свёртки; члены копятся с позицией узла в модели,
+    // чтобы провайдерские группы (второй проход) встали на своё место.
+    // Пустой `tag` групп не даёт (§74 п.1) — источник идёт в пул как обычно,
+    // и это называется.
+    final rep = replace;
+    if (rep != null && rep.tag.trim().isEmpty) {
+      ctx.warn('Replace group of "$name" has no name — the source was not '
+          'replaced, its nodes go to directions one by one.');
+    }
+    // §77 п.5 — тег свёртки занят другим объявленным именем: источник идёт
+    // несвёрнутым, код ставит сборка.
+    final fold = rep == null || rep.tag.trim().isEmpty || ctx.isReplaceBlocked(id)
+        ? null
+        : rep;
+    final foldSelector = <(int, SingboxEntry)>[];
+    final foldAuto = <(int, SingboxEntry)>[];
+    void toSelector(int i, SingboxEntry e) => fold == null
+        ? ctx.addToSelectorTagList(e)
+        : foldSelector.add((i, e));
+    void toAuto(int i, SingboxEntry e) =>
+        fold == null ? ctx.addToAutoList(e) : foldAuto.add((i, e));
+
     // §322 — узлы автовыбора собираем ВТОРЫМ проходом: их `outbounds` — теги
     // членов, а те присваиваются `allocateTag` только в цикле ниже. Копим
     // соответствие «узел → его итоговый тег», по нему потом резолвим пулы.
@@ -89,18 +116,6 @@ extension ServerListBuild on ServerList {
       }
       if (server is AutoSelectSpec) {
         autoSelects.add((server, i));
-        continue;
-      }
-      // §435 / контракт ## 13 — гейт ядра (`tailscale_core_unsupported`):
-      // ядро без `with_tailscale` отвергает конфиг ЦЕЛИКОМ на неизвестном
-      // типе endpoint'а, и один такой узел оставил бы пользователя без VPN.
-      // Узел живёт в состоянии, при сборке выбрасывается с warning'ом; его
-      // секции не инжектятся (в `noteEmitted` он не попадает).
-      if (server is TailscaleSpec && !ctx.coreSupportsTailscale) {
-        ctx.warn(tailscaleUnsupportedByCoreLine(
-          TagResolver.displayTag(tagPrefix, server.tag),
-          ctx.coreVersion,
-        ));
         continue;
       }
       final policy =
@@ -140,7 +155,7 @@ extension ServerListBuild on ServerList {
       for (final d in detours) {
         detourBases.add(d.tag);
         d.map['tag'] = ctx.allocateTag(TagResolver.displayTag(tagPrefix, d.tag));
-        // Фича 478 — хоп цепочки ведёт к исходному узлу (CANON §9.3).
+        // Фича 478 — хоп цепочки ведёт к исходному узлу (PARSING_PRINCIPLES §9.3).
         ctx.noteEmittedAlias(d.map['tag'] as String, server);
       }
       final mainBase = main.tag;
@@ -209,23 +224,24 @@ extension ServerListBuild on ServerList {
       //     регистрируется по тем же register-тогглам (симметрия с ⚙ подписки).
       final isMainAsDetour = main.tag.startsWith(kDetourTagPrefix) ||
           (plan?.isChainLink(i) ?? false);
-      // §435 — Tailscale без `exit_node` в интернет не выпускает и «страной»
-      // не является (NODE_SECTIONS.md §6): в пул Направлений не идёт ни при
-      // какой политике. В `endpoints[]` он эмитирован (`addEntry` выше) —
-      // законная цель `detour`, `outbound` правила узла и позиции цепочки.
-      final tailnetOnly = server is TailscaleSpec && !server.hasExitNode;
+      // §435 / контракт 1.1.63 — узел, который реестр не считает выходом
+      // (`exit_capable_when` тела: у Tailscale — без `exit_node`), в пул
+      // Направлений не идёт ни при какой политике. В `endpoints[]` он
+      // эмитирован (`addEntry` выше) — законная цель `detour`, `outbound`
+      // правила узла и позиции цепочки.
+      final tailnetOnly = !exitCapableByRegistry(main.map);
       if (tailnetOnly) {
         // ничего: ни selector, ни auto
       } else if (!isMainAsDetour) {
-        ctx.addToSelectorTagList(main);
-        ctx.addToAutoList(main);
+        toSelector(i, main);
+        toAuto(i, main);
       } else {
-        if (detourPolicy.registerDetourServers) ctx.addToSelectorTagList(main);
-        if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(main);
+        if (detourPolicy.registerDetourServers) toSelector(i, main);
+        if (detourPolicy.registerDetourInAuto) toAuto(i, main);
       }
       for (final d in detours) {
-        if (detourPolicy.registerDetourServers) ctx.addToSelectorTagList(d);
-        if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(d);
+        if (detourPolicy.registerDetourServers) toSelector(i, d);
+        if (detourPolicy.registerDetourInAuto) toAuto(i, d);
       }
     }
 
@@ -239,14 +255,15 @@ extension ServerListBuild on ServerList {
             !autoSelects.any((a) => a.$1.membership is ExplicitMembers)
         ? null
         : sourceNodeRawTags(nodes);
-    for (final (spec, _) in autoSelects) {
+    for (final (spec, index) in autoSelects) {
       final shown = TagResolver.displayTag(tagPrefix, spec.tag);
       final members = resolveAutoSelectMembers(
         spec,
         resolvedTags,
         containerId: id,
         rawTags: rawTags,
-        warn: (line) => ctx.warn('Auto node "$shown": $line'),
+        groupTag: shown,
+        warn: ctx.warn,
       );
       // Пустой urltest роняет старт ядра (validator.dart) — достижимо, если
       // все члены выключены (§283) или подписка обновилась и пул опустел.
@@ -261,20 +278,62 @@ extension ServerListBuild on ServerList {
         continue;
       }
 
-      final entry = spec.emit(ctx.vars);
+      // §565 — тело разбора + параметры замера, которых источник не объявил.
+      final entry = spec.coreEntry(spec.emit(ctx.vars));
       // §272/§322 — глобальный «Passive health check»: пропускаем пробу, пока
       // узел и так подтверждён своим трафиком. Для пула из 15 узлов это
       // главная статья расхода батареи. Эмитим только при true (omitempty:
       // отсутствие = false = апстрим), как Направление в build_config.
-      if (ctx.passiveCheck) entry.map['passive_check'] = true;
+      // У ручного рода пробы нет — и поля тоже (ядро: unknown field).
+      if (ctx.passiveCheck && !spec.isManual) {
+        entry.map['passive_check'] = true;
+      }
       entry.map['tag'] =
           ctx.allocateTag(TagResolver.displayTag(tagPrefix, spec.tag));
       noteAddress(spec, spec.tag, entry.tag, group: true);
       entry.map['outbounds'] = members;
+      // §565 — `default` ручного рода: сырой тег члена → итоговый. Член не
+      // разрешился — поле снимается, ядро берёт первого живого члена;
+      // выпавшего члена явного состава отчёт уже назвал
+      // (`group_member_dropped`), иначе называем здесь.
+      if (spec.isManual) {
+        entry.map.remove('default');
+        final def = resolveAutoSelectDefault(
+          spec,
+          resolvedTags,
+          containerId: id,
+          rawTags: rawTags,
+          members: members,
+        );
+        if (def != null) {
+          entry.map['default'] = def;
+        } else if (spec.manualDefault.isNotEmpty &&
+            !_isExplicitMember(spec, spec.manualDefault)) {
+          ctx.warn(groupMemberDroppedLine(shown, spec.manualDefault));
+        }
+      }
       ctx.addEntry(entry);
-      ctx.addToSelectorTagList(entry);
+      // Фича 565 фаза B (§74 п.3) — у свёртки провайдерская группа — член
+      // ручного селектора, не автовыбора.
+      toSelector(index, entry);
       // В ✨auto НЕ добавляем, и в urltest-двойник Направления группа тоже не
       // попадёт — билдер отсекает её по `type: urltest` (build_config).
+    }
+
+    if (fold != null) {
+      // Стабильная сортировка по позиции узла в модели: порядок членов —
+      // порядок источника (§74 п.3).
+      int byIndex((int, SingboxEntry) a, (int, SingboxEntry) b) =>
+          a.$1.compareTo(b.$1);
+      mergeSort(foldSelector, compare: byIndex);
+      mergeSort(foldAuto, compare: byIndex);
+      final plan = ReplacePlan(
+        replace: fold,
+        source: name.isNotEmpty ? name : fold.tag,
+      );
+      plan.selectorMembers.addAll([for (final (_, e) in foldSelector) e]);
+      plan.autoMembers.addAll([for (final (_, e) in foldAuto) e]);
+      ctx.addReplacePlan(plan);
     }
   }
 }
@@ -288,14 +347,18 @@ extension ServerListBuild on ServerList {
 /// (пустой `folderId` — свой контейнер, NODE_LINK §5.1 № 8). Сырой тег узла —
 /// [rawTags] (уникализированный в источнике, `sourceNodeRawTags`), без карты
 /// — `NodeSpec.tag` (член папки); у тёзок побеждает первый. Член, который не
-/// разрешился, отсекается строкой в [warn].
+/// разрешился, отсекается записью отчёта сборки в [warn] — код реестра
+/// `group_member_dropped {tag, member}` (контракт 1.1.67), одна на члена.
+/// [groupTag] — показанный тег группы (пусто — `spec.tag`).
 List<String> resolveAutoSelectMembers(
   AutoSelectSpec spec,
   Map<NodeSpec, String> resolved, {
   String containerId = '',
   Map<NodeSpec, String>? rawTags,
+  String groupTag = '',
   void Function(String line)? warn,
 }) {
+  final group = groupTag.isEmpty ? spec.tag : groupTag;
   final out = <String>[];
   switch (spec.membership) {
     case ExplicitMembers(:final members):
@@ -309,15 +372,13 @@ List<String> resolveAutoSelectMembers(
       for (final link in members) {
         if (!link.isRoot && link.folderId != containerId) {
           // Группа не выходит за свой контейнер (§322 §2).
-          warn?.call('member "${link.tag}" was dropped: it is not a node of '
-              'this container');
+          warn?.call(groupMemberDroppedLine(group, link.tag));
           continue;
         }
         final tag = byRaw[link.tag];
         if (tag == null) {
           // Выключен, удалён, исчез из подписки — один исход (NODE_LINK §5.1 № 3).
-          warn?.call('member "${link.tag}" was dropped: it has no node '
-              '"${link.tag}"');
+          warn?.call(groupMemberDroppedLine(group, link.tag));
           continue;
         }
         if (!out.contains(tag)) out.add(tag);
@@ -347,6 +408,45 @@ List<String> resolveAutoSelectMembers(
       }
   }
   return out;
+}
+
+/// §565 — итоговый тег члена, которого называет `default` группы ручного
+/// рода ([AutoSelectSpec.manualDefault], сырой тег члена контейнера).
+/// `null` — поля нет или член не вошёл в собранный состав [members].
+String? resolveAutoSelectDefault(
+  AutoSelectSpec spec,
+  Map<NodeSpec, String> resolved, {
+  String containerId = '',
+  Map<NodeSpec, String>? rawTags,
+  required List<String> members,
+}) {
+  final want = spec.manualDefault;
+  if (want.isEmpty) return null;
+  for (final e in resolved.entries) {
+    final raw = rawTags == null ? e.key.tag : rawTags[e.key];
+    if (raw == want && members.contains(e.value)) return e.value;
+  }
+  return members.contains(want) ? want : null;
+}
+
+bool _isExplicitMember(AutoSelectSpec spec, String rawTag) {
+  final m = spec.membership;
+  return m is ExplicitMembers && m.members.any((l) => l.tag == rawTag);
+}
+
+/// Контракт 1.1.67 (§63) — код записи отчёта сборки о члене Auto-группы,
+/// не разрешившемся в узел.
+const kGroupMemberDroppedCode = 'group_member_dropped';
+
+/// Строка отчёта сборки `group_member_dropped`: заголовок кода реестра тем
+/// же рендером, что у кодов узла ([RegistryWarning.renderEn]), и сам код в
+/// скобках — по нему запись ищется в логе.
+String groupMemberDroppedLine(String group, String member) {
+  final w = RegistryWarning(
+    code: kGroupMemberDroppedCode,
+    params: {'tag': group, 'member': member},
+  );
+  return '${w.renderEn()} [$kGroupMemberDroppedCode]';
 }
 
 /// §239 — план detour-структуры папки. Считается один раз на build:

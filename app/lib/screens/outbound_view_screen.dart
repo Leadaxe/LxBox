@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
+import '../services/contract/group_genus.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/direction.dart';
 import '../models/config_node.dart';
@@ -15,6 +16,7 @@ import '../widgets/chain_positions_block.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
+import 'home/node_actions.dart' show toggleEndpoint;
 import 'owner_navigation.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 import '../services/l10n/locale_controller.dart';
@@ -87,7 +89,23 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
 
   bool get _isGroupNode {
     final t = widget.config[widget.tag]?.type;
-    return t == 'urltest' || t == 'selector';
+    return t != null && GroupGenus.isKnown(t);
+  }
+
+  /// §565 — группа ручного рода: член выбирается вручную (`default`).
+  bool get _isManualGroup =>
+      widget.config[widget.tag]?.type == GroupGenus.manual;
+
+  /// §565 — выбранный член ручной группы: живой выбор ядра, без туннеля —
+  /// `default` конфига.
+  String? get _manualSelected {
+    if (!_isManualGroup) return null;
+    final picked = _pickedMember;
+    if (picked != null) return picked;
+    final live = widget.homeController.state.groupOf(widget.tag)?.selected;
+    if (live != null && live.isNotEmpty) return live;
+    final def = widget.config[widget.tag]?.raw['default'];
+    return def is String && def.isNotEmpty ? def : null;
   }
 
   /// §394 — позиции цепочки из СОБРАННОГО конфига (`null` = узел не цепочка).
@@ -95,6 +113,33 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// послойная проба обязана мерить работающий маршрут.
   List<String>? get _chainHops =>
       chainHopsFromConfig(widget.config[widget.tag]?.raw);
+
+  /// §565 / задача 570 — член, выбранный на этом экране, пока ядро (или
+  /// пересборка) его не подтвердили.
+  String? _pickedMember;
+
+  /// §565 / задача 570 — выбор члена ручной группы прямо на экране узла:
+  /// при туннеле — вживую через ядро (`selectOutbound`), выбор запоминается
+  /// у своей группы папки/подписки наблюдателем Home; без туннеля — сразу в
+  /// состояние, в конфиг он попадёт на следующей сборке.
+  Future<void> _selectMember(String member) async {
+    if (member == _manualSelected) return;
+    final prev = _pickedMember;
+    setState(() => _pickedMember = member);
+    final bool ok;
+    if (widget.homeController.state.tunnelUp) {
+      ok = await widget.homeController.selectInGroup(widget.tag, member);
+    } else {
+      ok = await widget.subController
+          .rememberGroupMember(widget.tag, member, live: false);
+    }
+    if (!mounted) return;
+    if (!ok) {
+      setState(() => _pickedMember = prev);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(getLocalText.s("Could not select this server"))));
+    }
+  }
 
   @override
   void initState() {
@@ -410,16 +455,58 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         _kvRow(
             context,
             'Mode',
-            _isBalancer
-                ? getLocalText.s("Load balance")
-                : getLocalText.s("Fastest")),
+            _isManualGroup
+                ? getLocalText.s("Manual")
+                : _isBalancer
+                    ? getLocalText.s("Load balance")
+                    : getLocalText.s("Fastest")),
       if (_isBalancer && pool != null) _kvRow(context, 'Pool', '$pool'),
       if (_isBalancer && poolTolerance is int && poolTolerance > 0)
         _kvRow(context, 'Pool tolerance', '$poolTolerance ms'),
       if (members is List) _membersTile(context, members),
-      if (_endpointStateValue(node) case final v?)
-        _kvRow(context, 'Endpoint state', v),
+      // §557 — состояние и выключатель слушают контроллер: heartbeat и
+      // ответ выключателя обновляют их без перехода на экран заново.
+      if (node.type == 'wireguard' || node.type == 'awg')
+        ListenableBuilder(
+          listenable: widget.homeController,
+          builder: (context, _) => _endpointBlock(context, node),
+        ),
     ];
+  }
+
+  bool _endpointToggleBusy = false;
+
+  /// §557 (ядро SPEC 106) — строка состояния endpoint'а (§540) и выключатель
+  /// узла. Выключатель есть, только пока туннель поднят и ядро отдало
+  /// состояние узла. Выбранный в selector узел выключать можно (решение Б1).
+  Widget _endpointBlock(BuildContext context, ConfigNode node) {
+    final hs = widget.homeController.state;
+    final st = hs.endpointStates[widget.tag] ?? '';
+    final value = _endpointStateValue(node);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (value != null) _kvRow(context, 'Endpoint state', value),
+        if (hs.tunnelUp && st.isNotEmpty)
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText.s("Node enabled")),
+            subtitle: Text(getLocalText
+                .s("Stays off until you turn it on or stop the VPN.")),
+            value: st != CcEndpointState.disabled,
+            onChanged: _endpointToggleBusy
+                ? null
+                : (_) => unawaited(_toggleEndpoint()),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _toggleEndpoint() async {
+    setState(() => _endpointToggleBusy = true);
+    await toggleEndpoint(context, widget.homeController, widget.tag);
+    if (mounted) setState(() => _endpointToggleBusy = false);
   }
 
   /// §540 — полное состояние WG/AWG-endpoint'а (строка ядра, не переводится)
@@ -431,6 +518,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     final hs = widget.homeController.state;
     final st = hs.endpointStates[widget.tag];
     if (st == null || st.isEmpty) return null;
+    // §557 — выключен вручную: своя подпись, простой не показываем.
+    if (st == CcEndpointState.disabled) return getLocalText.s("off");
     final idle = hs.endpointIdleSince[widget.tag];
     if (st == CcEndpointState.asleep && idle != null && idle > 0) {
       return '$st · idle for $idle s';
@@ -452,6 +541,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       // убираем разделители ExpansionTile — раздел плотный, kv-строки рядом
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
+        // §565 / задача 570 — у ручной группы состав и есть переключатель.
+        initiallyExpanded: _isManualGroup,
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(bottom: 4),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
@@ -478,7 +569,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         ),
         children: [
           for (final m in members)
-            _memberRow(context, '$m', inPool: byTag['$m']),
+            _memberRow(context, '$m',
+                inPool: byTag['$m'], chosen: '$m' == _manualSelected),
         ],
       ),
     );
@@ -489,7 +581,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// Номера слотов здесь НЕ показываем (решение юзера 02.08.2026) — слот
   /// это деталь ротации, она к месту в попапе «View pool», а в составе
   /// группы важно лишь «в работе или нет». Клик ведёт на владельца.
-  Widget _memberRow(BuildContext context, String tag, {CcPoolSlot? inPool}) {
+  Widget _memberRow(BuildContext context, String tag,
+      {CcPoolSlot? inPool, bool chosen = false}) {
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: () => _onTagTap(tag),
@@ -497,12 +590,30 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           children: [
-            SizedBox(
-              width: 24,
-              child: inPool == null
-                  ? null
-                  : Icon(Icons.check, size: 15, color: cs.onSurfaceVariant),
-            ),
+            // §565 / задача 570 — у ручной группы переключатель: тап по
+            // кружку выбирает члена, тап по строке ведёт к его владельцу.
+            if (_isManualGroup)
+              InkResponse(
+                key: ValueKey('member-select-$tag'),
+                radius: 16,
+                onTap: () => _selectMember(tag),
+                child: SizedBox(
+                  width: 24,
+                  child: Icon(
+                      chosen
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: chosen ? cs.primary : cs.onSurfaceVariant),
+                ),
+              )
+            else
+              SizedBox(
+                width: 24,
+                child: inPool == null
+                    ? null
+                    : Icon(Icons.check, size: 15, color: cs.onSurfaceVariant),
+              ),
             Expanded(
               child: Text(tag,
                   style: TextStyle(

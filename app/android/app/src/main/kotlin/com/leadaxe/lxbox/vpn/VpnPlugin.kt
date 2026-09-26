@@ -984,6 +984,27 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §557 (ядро SPEC 106) — вкл/выкл WG/AWG-узла на лету. Успех →
+            // строка состояния узла; отказ ядра → PlatformException с кодом
+            // (not_found / invalid_argument / failed_precondition / unavailable
+            // / error). Dispatchers.IO — unary RPC на main = ANR (§122).
+            "ccSetEndpointEnabled" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val enabled = call.argument<Boolean>("enabled") ?: true
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        cc?.setEndpointEnabled(tag, enabled)
+                            ?: mapOf("error" to "error", "message" to "no command client")
+                    }
+                    val err = r["error"]
+                    if (err != null) {
+                        result.error(err, r["message"], null)
+                    } else {
+                        result.success(r["state"] ?: "")
+                    }
+                }
+            }
             "ccCloseConnection" -> {
                 val cc = BoxService.commandClient
                 val id = call.argument<String>("id") ?: ""

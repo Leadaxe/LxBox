@@ -223,7 +223,7 @@ void main() {
       expect(node.tag, '🪢 My tailnet');
       expect(entry.displayName, '🪢 My tailnet');
       expect(node.isAddressless, isTrue);
-      expect((node as TailscaleSpec).hasExitNode, isFalse);
+      expect((node as TailscaleSpec).body.containsKey('exit_node'), isFalse);
       expect(node.body['auth_key'], 'tskey-auth-secret');
       // §449 — Hostname приходит с дефолтом; в тестах модель устройства пуста
       // (`SubscriptionIdentity.init` не звался), отсюда голый префикс.
@@ -316,7 +316,6 @@ void main() {
       expect(node.body['exit_node'], 'exit-1');
       expect(node.body['ephemeral'], isTrue);
       expect(node.body['accept_routes'], isTrue);
-      expect(node.hasExitNode, isTrue);
     });
 
     testWidgets('пустой Auth key → валидатор не пускает, ничего не добавлено',

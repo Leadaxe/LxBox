@@ -228,7 +228,7 @@ final _runs = int.tryParse(Platform.environment['LX_PERF_RUNS'] ?? '') ?? 3;
 
 /// Версия ядра — текущий пин (`docs/KERNEL.md`): гейты `min_core` реестра
 /// сравниваются с ней, как в боевой сборке.
-const _core = '1.14.2-lx.3';
+const _core = '1.14.2-lx.4';
 
 const _pbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
 const _uuid = '8f2e1c44-0000-4000-8000-0000000000';

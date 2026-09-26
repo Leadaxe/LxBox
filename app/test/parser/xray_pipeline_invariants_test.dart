@@ -25,6 +25,30 @@ const _identityFixture = 'test/fixtures/xray/pipeline_identity_before.json';
 /// Всё остальное обязано совпасть побуквенно: тег И ЕСТЬ identity
 /// (`node_hash.dart`), и сдвиг у живого узла означает слетевшие выбор узла,
 /// отключения и цепочки.
+/// §561 — число отбраковок входа, изменённое решением владельца 26.09.2026:
+/// отбраковка записи элемента едет в `dropped[]` подписки ВСЕГДА (прежде при
+/// живом соседе она висела на нём предупреждением, а при пустом вердикте
+/// секции пропадала молча). Узлы, теги и тела этих входов не меняются.
+const Map<String, int> _droppedCountChanges = {
+  'hysteria_v1_skipped': 1,
+  'malformed_stream': 1,
+  'unsupported_protocol': 1,
+};
+
+/// §565 — тело узла-группы по контракту (PARSING_PRINCIPLES §5, корпус
+/// `body/xray/balancer_group`): состав назван сразу при разборе, параметры
+/// замера — только объявленные источником (полные дописывает сборка,
+/// `AutoSelectSpec.coreEntry`). Отпечаток тела группы сдвигается вместе с
+/// телом; тег и имя — прежние (идентичность узла — тег). Было:
+/// `{"tag":"bal","type":"urltest","outbounds":[],"url":"http://example.com",`
+/// `"interval":"30s","tolerance":50,"idle_timeout":"30m",`
+/// `"interrupt_exist_connections":false}`.
+const Map<String, String> _genusBodyDeltas = {
+  'balancer_group[1]':
+      '{"tag":"bal","type":"urltest","outbounds":["bal proxy"],'
+          '"url":"http://example.com","interval":"30s"}',
+};
+
 const Map<String, String> _expectedChanges = {
   // Битый percent-путь транспорта (`/bad%zz`) ТЕПЕРЬ СНИМАЕТСЯ С ТЕЛА, как
   // требует корпус (`uri/trojan/ws_path_broken_percent_kept`: поле снято,
@@ -68,6 +92,17 @@ const Map<String, String> _expectedChanges = {
       'delta533: пара idle: 30 + interval: -5 даёт tcp_keep_alive: 30s БЕЗ '
       'флага disable_tcp_keep_alive — наш флаг на этой паре был ошибкой '
       '(body/xray/sockopt_keepalive_negative_interval)',
+  // §560 — тело Xray-узла больше не получает от МОДЕЛИ того, чего провайдер
+  // не присылал, и не теряет того, что прислал. Тег у всех пяти прежний.
+  'dialer_chain_vless_relay': 'delta560: tls.server_name больше не '
+      'дописывается адресом — Xray-блок tls отката не объявляет '
+      '(body/xray/dialer_chain_vless_relay)',
+  'multinode_310': 'delta560: то же у trojan без serverName '
+      '(body/xray/multinode_310)',
+  'b480_ws_eh_without_ed': 'delta560: то же (body/xray/ws_eh_without_ed)',
+  'vmess_tls': 'delta560: alter_id: 0 доезжает до тела — materialize_default '
+      'записи alterId (body/xray/vmess_tls)',
+  'vmess_security_junk': 'delta560: то же (body/xray/vmess_security_junk)',
 };
 
 Map<String, dynamic> _fixture() =>
@@ -120,9 +155,12 @@ void main() {
         for (var i = 0; i < wantNodes.length; i++) {
           final w = wantNodes[i].cast<String, dynamic>();
           final n = got[i];
-          expect(legacyNodeIdentityHash(n), w['identity'],
-              reason: 'identity $name[$i] изменилась: у пользователей слетят '
-                  'выбор узла, отключения и цепочки');
+          final genusDelta = _genusBodyDeltas['$name[$i]'];
+          if (genusDelta == null) {
+            expect(legacyNodeIdentityHash(n), w['identity'],
+                reason: 'identity $name[$i] изменилась: у пользователей '
+                    'слетят выбор узла, отключения и цепочки');
+          }
           expect(n.tag, w['tag'], reason: 'тег $name[$i]');
           expect(n.label, w['label'], reason: 'имя $name[$i]');
           // §454 — `rawSource` Xray-узла остаётся pretty-print ИСХОДНОГО
@@ -132,7 +170,8 @@ void main() {
           // Тело сверяется ТЕКСТОМ: порядок ключей нормативен, golden
           // сравнивается байт в байт (13.7), и пересборка через `Map`
           // спрятала бы сдвиг.
-          expect(jsonEncode(n.emit(TemplateVars.empty).map), w['body_json'],
+          expect(jsonEncode(n.emit(TemplateVars.empty).map),
+              genusDelta ?? w['body_json'],
               reason: 'тело $name[$i] (порядок ключей нормативен — golden '
                   'сравнивается байт в байт)');
           final wantChain = w['chained'];
@@ -147,7 +186,7 @@ void main() {
                 reason: 'тег звена $name[$i]');
           }
         }
-        expect(dropped, hasLength(want['dropped']),
+        expect(dropped, hasLength(_droppedCountChanges[name] ?? want['dropped']),
             reason: 'число отбраковок входа $name изменилось');
       }
     });
@@ -297,15 +336,14 @@ void main() {
       ], dropped);
       expect(nodes, hasLength(1));
       expect(nodes.first.emit(TemplateVars.empty).map['server'], 'b.example');
-      // §404 P3 — причина висит на СОСЕДЕ по элементу и из подписочного
-      // списка убирается: иначе человек прочёл бы одно сообщение дважды.
-      // В `dropped[]` она остаётся только когда носителя не нашлось.
-      expect(dropped, isEmpty);
-      final carried = _codeOf(nodes.single, 'vless_encryption_invalid');
-      expect(carried, isNotNull,
+      // §561 — причина только в `dropped[]` подписки, сосед чист.
+      expect(_codeOf(nodes.single, 'vless_encryption_invalid'), isNull,
+          reason: 'чужая отбраковка на рабочем соседе не висит');
+      final w = dropped.whereType<RegistryWarning>().single;
+      expect(w.code, 'vless_encryption_invalid',
           reason: 'пропажа узла не должна быть молчаливой');
-      expect(carried!.ownerTag, 'bad',
-          reason: 'причина названа тегом ОТВЕРГНУТОЙ записи, не носителя');
+      expect(w.ownerTag, 'bad',
+          reason: 'причина названа тегом ОТВЕРГНУТОЙ записи');
     });
   });
 
@@ -596,6 +634,7 @@ void main() {
       // `streamSettings: "none"` обязан бросить внутри маппера: вызывающий
       // пропускает такой outbound и называет протокол в P5-warning. Мягкое
       // чтение сделало бы из битой записи РАБОЧИЙ узел без транспорта.
+      final dropped = <NodeWarning>[];
       final nodes = _parse([
         {
           'remarks': 'malformed',
@@ -634,11 +673,13 @@ void main() {
             },
           ],
         },
-      ], []);
+      ], dropped);
       expect(nodes, hasLength(1));
       expect(nodes.single.emit(TemplateVars.empty).map['server'], 'b.example');
-      expect(nodes.single.warnings.whereType<UnsupportedProtocolWarning>(),
-          hasLength(1));
+      // §561 — пропажа не молчаливая: запись в `dropped[]`, сосед чист.
+      expect(nodes.single.warnings, isEmpty);
+      expect(
+          dropped.whereType<RegistryWarning>().map((w) => w.ownerTag), ['bad']);
     });
 
     test('§459 — суффикс -udp443 не переписывает порт узла', () {

@@ -6,6 +6,7 @@ import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import '../parser/engine_test_setup.dart';
+import '../parser/parse_link_as.dart';
 
 /// §130 — MasqueSpec emit (Outbound-схема ядра) + URI round-trip.
 ///
@@ -64,7 +65,7 @@ void main() {
     final s = spec();
     final uri = s.toUri();
     expect(uri, startsWith('masque://'));
-    final parsed = parseMasqueUri(uri);
+    final parsed = parseLinkAs<MasqueSpec>(uri);
     expect(parsed, isNotNull);
     expect(parsed!.privateKeyDer, s.privateKeyDer);
     expect(parsed.publicKeyDer, s.publicKeyDer);
@@ -116,11 +117,11 @@ void main() {
     // выпущенный до миграции, парсится, но параметр игнорируется (узел
     // живёт на дефолте, а не на значении из ссылки).
     final legacy = uri.replaceAll('vhttp=h3', 'network=h2');
-    expect(parseMasqueUri(legacy)!.vhttp, 'h3');
+    expect(parseLinkAs<MasqueSpec>(legacy)!.vhttp, 'h3');
 
     // Оба имени сразу: vhttp читается, network не влияет ни на что.
     final both = '$uri&network=h2';
-    expect(parseMasqueUri(both)!.vhttp, 'h3');
+    expect(parseLinkAs<MasqueSpec>(both)!.vhttp, 'h3');
   });
 
   test('§393 — disable_sni в URI round-trip', () {
@@ -136,7 +137,7 @@ void main() {
       localAddresses: ['172.16.0.2/32'],
       disableSni: true,
     );
-    expect(parseMasqueUri(s.toUri())!.disableSni, isTrue);
+    expect(parseLinkAs<MasqueSpec>(s.toUri())!.disableSni, isTrue);
     // Параметр снимается ПО ИМЕНИ, а не по написанию значения: написание
     // булева на выходе — дело записи реестра (§532 дефект 4, умолчание —
     // слово `true`), и `replaceAll('disable_sni=1')` молча превращался в
@@ -144,14 +145,14 @@ void main() {
     // ещё раз».
     final stripped = s.toUri().replaceAll(RegExp(r'[?&]disable_sni=[^&#]*'), '');
     expect(stripped, isNot(contains('disable_sni')));
-    expect(parseMasqueUri(stripped)!.disableSni, isFalse);
+    expect(parseLinkAs<MasqueSpec>(stripped)!.disableSni, isFalse);
   });
 
   // §402 / контракт 0.11.1 — `vhttp=auto` (h3 с откатом на h2). Ядро понимает
   // его с lx.27; до этого значение было бы мусором и форсилось в h3.
   group('§402 vhttp=auto', () {
     test('auto принимается и доезжает до эмиссии', () {
-      final parsed = parseMasqueUri(
+      final parsed = parseLinkAs<MasqueSpec>(
           spec().toUri().replaceAll('vhttp=h3', 'vhttp=auto'))!;
       expect(parsed.vhttp, 'auto');
       expect(parsed.warnings, isEmpty,
@@ -163,7 +164,7 @@ void main() {
       // «Параметра нет» и «оператор выбрал auto» — не одно и то же:
       // auto разрешает откат на h2, и подставлять его молча нельзя.
       final noParam = spec().toUri().replaceAll('&vhttp=h3', '');
-      expect(parseMasqueUri(noParam)!.vhttp, 'h3');
+      expect(parseLinkAs<MasqueSpec>(noParam)!.vhttp, 'h3');
     });
 
     test('мусорное значение → форс h3 + код реестра (SPEC 103 п.5)', () {
@@ -171,7 +172,7 @@ void main() {
       // `masque.body.fields.vhttp` (enum + `on_invalid: coerce h3`), и код
       // приходит из реестра — с путём и значением, которых у рукописного
       // `MasqueVhttpInvalidWarning` не было.
-      final parsed = parseMasqueUri(
+      final parsed = parseLinkAs<MasqueSpec>(
           spec().toUri().replaceAll('vhttp=h3', 'vhttp=h9'))!;
       expect(parsed.vhttp, 'h3', reason: 'форсится дефолт, а не едет как есть');
       final w = parsed.warnings
@@ -185,7 +186,7 @@ void main() {
 
     test('h2 остаётся валидным (тройка контракта целиком)', () {
       expect(
-          parseMasqueUri(spec().toUri().replaceAll('vhttp=h3', 'vhttp=h2'))!
+          parseLinkAs<MasqueSpec>(spec().toUri().replaceAll('vhttp=h3', 'vhttp=h2'))!
               .vhttp,
           'h2');
     });

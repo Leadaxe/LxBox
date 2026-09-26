@@ -188,10 +188,10 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         val state = WifiInfoReader.readAsState(BoxApplication.application)
         if (state == null) {
             android.util.Log.w("PIW",
-                "readWIFIState: null (permission missing / no wifi / runtime error)")
+                "readWIFIState: null (permission missing / location off / no wifi / runtime error)")
         } else if (state.ssid.isEmpty()) {
             android.util.Log.w("PIW",
-                "readWIFIState: <unknown ssid> — likely missing NEARBY_WIFI_DEVICES")
+                "readWIFIState: <unknown ssid> — see WifiInfoReader log for the reason")
         } else {
             android.util.Log.d("PIW",
                 "readWIFIState: ssid='${state.ssid}' bssid='${state.bssid}'")

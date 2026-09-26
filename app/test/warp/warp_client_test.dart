@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:lxbox/models/node_spec.dart' show Awg;
+import 'package:lxbox/models/node_spec.dart' show Awg, WireguardSpec;
 import 'package:lxbox/services/parser/ini_parser.dart';
-import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 import 'package:lxbox/services/warp/warp_client.dart';
 
 import '../parser/engine_test_setup.dart';
+import '../parser/parse_link_as.dart';
 
 /// §025 — WarpClient: keygen, register, license. HTTP замокан.
 void main() {
@@ -176,7 +176,7 @@ void main() {
       final acc = await account();
       final uri = acc.toWireguardUri(persistentKeepalive: 25);
       expect(Uri.parse(uri).queryParameters['keepalive'], '25');
-      final spec = parseWireguardUri(uri);
+      final spec = parseLinkAs<WireguardSpec>(uri);
       expect(spec!.peers.first.persistentKeepalive, 25);
     });
 

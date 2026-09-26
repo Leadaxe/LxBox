@@ -5,6 +5,7 @@ import '../../../screens/chain_edit/chain_form_validation.dart';
 import '../../../screens/chain_edit/chain_hop_candidate.dart';
 import '../../../screens/chain_edit/chain_hop_targets.dart';
 import '../../builder/node_link_pool.dart';
+import '../../contract/chain_strip.dart' show chainStripKeyKnown, chainStripKeys;
 import '../../probe/chain_layer_probe.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -400,9 +401,9 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
     strip = {};
     for (final e in raw.entries) {
       final key = e.key;
-      if (key is! String || !kChainStripDefault.containsKey(key)) {
+      if (key is! String || !chainStripKeyKnown(key)) {
         throw BadRequest('field "strip": unknown key "$key" '
-            '(allowed: ${kChainStripKeys.join(', ')})');
+            '(allowed: ${chainStripKeys().join(', ')})');
       }
       final v = e.value;
       if (v is! bool) {

@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Ожидает контракт 1.1.68 (фикстуры корпуса и §64 `TASKS_LXBOX.md`) |
+| Статус | Сделано (пункты 1–6); UI мультивыбора и свободного ввода — follow-up |
 | Дата старта | 2026-09-25 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-09-26 |
+| Коммиты | ac3fd07b (движок: сплайс, `runtime.*`, `options_open`, накопитель), 257b0e1d (гейты `template_fragment_dropped`, отчёт сборки), docs — см. историю ветки task-555 |
 | Связанные spec'ы | §120 (движок шаблона), §033 (пресеты), §103 (`#if` в массиве); лаунчер SPEC 143 §7, §3.2 |
 
 ## Проблема
@@ -81,6 +81,45 @@ Dart-движка показала четыре расхождения; оста
 
 ## Верификация
 
+**Результат (2026-09-26).** `test/contract/template_contract_test.dart` —
+118/118 зелёные, включая `array_element/literal_array_branch_splices`,
+`array_element/double_brackets_nest`, `array_element/text_list_branch_splices`.
+`test/builder/if_engine_test.dart` — 53/53, новый интеграционный тест группы
+«§555»: `@runtime.platform`/`arch`/`target` дают Dropped и не попадают в JSON,
+`@runtime.nope` дважды — одна запись `template_var_undeclared {name:
+runtime.nope}`; сплайс ветки-массива и `[[..]]`. `dart analyze` по
+изменённым файлам — без замечаний. Полный прогон — CI.
+
+Встроенный шаблон `app/assets/wizard_template.json`: массив-веток `#if` в
+позиции элемента нет (скрипт обхода JSON + `grep '"value": \['` по
+`app/assets` — единственное попадание в реестре wireguard, не шаблон);
+поведение встроенных пресетов сплайс не меняет.
+
+**Что сделано по пунктам.**
+1. `_walkList`: `List`-результат ветки — `addAll`, иначе `add`; голая
+   `@ref` в элементе идёт через `walk` (Dropped выпадает, `runtime.*` тоже).
+2. `WizardVar.optionsOpen` (`options_open`), `acceptsValue` для UI;
+   `coerceVarValue` по-прежнему только по `type`.
+3. `_resolveRef`: известные поля `runtime.*` → Dropped, в предикате `false`
+   явно; неизвестные → `template_var_undeclared {name}` + плейсхолдер;
+   валидатор предикатов пропускает известные `runtime.*`.
+4. `TemplateWarning {code, params}`, `TemplateWarnings` (дедуп по
+   (код, params)), сбор через зону (`collectTemplateWarnings`) вместо
+   глобального `onTemplateWarning`; `int_clamped`/`int_invalid` с
+   `{name, value}` из `coerceVarValue`, `unknown_directive {key}`.
+   `buildConfig` идёт в зоне накопителя, `BuildResult.templateWarnings`,
+   EN-строки (заголовок реестра) первыми в `emitWarnings` → AppLog;
+   сохранение не блокируют.
+5. Гейты `preset_expand.dart` с кодом `template_fragment_dropped {owner,
+   kind, reason}`: `route.rules` без `outbound/action`, `dns.rules` без
+   `server/action`, правило без `rule_set` после чистки ссылок (оба вида),
+   `route.rule_set` без источника по `type` (`url`/`path`/`rules`,
+   нераспознанный тип — `url/path`), новый гейт `dns.servers` адресного типа
+   без `server` — у пресетных (`expandPreset`) и шаблонных
+   (`resolveDnsServersBodies`, owner — тег) серверов.
+6. `features/120 …/spec.md` — параграф «Нормы контракта 1.1.68–1.1.70»,
+   строка в `CHANGELOG.md`.
+
 - Один затронутый тест: `app/test/contract/template_contract_test.dart` на
   новых фикстурах 1.1.68 (`array_element/literal_array_branch_splices`,
   `array_element/double_brackets_nest`, `array_element/text_list_branch_splices`,
@@ -95,7 +134,46 @@ Dart-движка показала четыре расхождения; оста
 
 ## Нерешённое / follow-up
 
-- UI мультивыбора (`text_list` + `options`) и свободного ввода
+- **Закрыто задачей 570 (`8732229e`):** Home после сборки показывает снек
+  «Template: N warnings» со шторкой кодов. Было: отдельной UI-поверхности для `template_degraded` (снекбар/лента на Home)
+  нет: записи идут первыми в `emitWarnings` → AppLog, как весь отчёт сборки
+  сегодня. Новый видимый экран — по решению владельца (UI молча не меняем).
+- **Закрыто задачей 570 (`8ae0ad9b`):** вторая строка снята, выпавшее
+  правило называется одним кодом `template_fragment_dropped` (reason
+  `rule_set`); подсказку про скачивание несёт строка самого набора («no
+  cached file (download first)»). Было: строковые предупреждения пресетов «rule skipped — references missing
+  rule_set (download SRS first)» оставлены рядом с кодом: они несут подсказку
+  про скачивание SRS, которой в коде нет.
+- **Закрыто задачей 570 (`8ae0ad9b`):** телу шаблонного сервера видны все
+  переменные шаблона (свои `vars` сильнее, пустое — Dropped ключа);
+  неизвестным остаётся имя, которого нет ни у сервера, ни в шаблоне. Было:
+  шаблонные DNS-серверы видят только свои `vars` (§441), не все переменные
+  шаблона, как на desktop; необъявленное имя в их теле по-прежнему даёт
+  Dropped ключа + строковое предупреждение §441. Расхождение с §66 — вынести
+  отдельной задачей, если лаунчер потребует.
+- **Закрыто задачей 571 (`16b4c60b`, контракт 1.1.81 §78):** гейт общий по
+  спискам полей-условий реестра (`registry/allowlists.json`). Было:
+  гейт «правило без условий» реализован как выпадение правила, у которого
+  после чистки ссылок не осталось ни одного `rule_set` (reason `rule_set`);
+  общий критерий «нет ни одного поля-условия» без списка полей sing-box не
+  выразим — при необходимости уточнить у лаунчера (`isRuleEmpty`).
+  **Задача 570: остаётся узким.** Реестр полей-условий правила не размечает
+  (ни `registry/*.json`, ни `schema/`), у лаунчера список живёт кодом
+  (`core/build/preset_expand.go:isRuleEmpty` — ключи вне `outbound`,
+  `action`, `method`, `if`, `if_or`; `isDNSRuleEmpty` — свой набор). Запрос
+  лаунчеру: объявить в реестре, какие ключи правила `route.rules` и
+  `dns.rules` — условия (или обратный набор служебных), тогда гейт
+  становится общим по данным.
+
+- **Закрыто задачей 570 (`8732229e`):** мультивыбор чипами, своё значение
+  при `options_open`, закрытый список — dropdown. Было: UI мультивыбора (`text_list` + `options`) и свободного ввода
   (`options_open`) в редакторе переменных — отдельная задача после этой.
-- Просьба лаунчеру (отправлена 25.09): в §64 явно зафиксировать, что на mobile
-  `runtime.*` = «объявлено, null» (Dropped), а не «не объявлено» (плейсхолдер).
+- Формулировка про `runtime.*` на mobile («объявлено, null» → Dropped)
+  зафиксирована лаунчером в §64 и TEMPLATE_LANG §7.2 — закрыто.
+- Способ синка контракта: LxBox на 1.1.56, шаблонный материал в 1.1.68–1.1.70;
+  между ними §53–§63 (примитивы реестра, 69 файлов корпуса) в LxBox не сделаны.
+  Вариант 1 — точечно положить в gitignored `app/contract` только
+  `docs/TEMPLATE_LANG.md`, `registry/vars.json`, `registry/warnings.json`
+  (коды шаблона) и `corpus/template`, зеркало и lock не трогать, полный бамп
+  отдельной волной. Вариант 2 — полный синк 1.1.70 и задача поверх. Решает
+  владелец.

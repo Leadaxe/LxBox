@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/template_vars.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart'
+    show carriesPrivateKeyByRegistry, credentialByRegistry;
 import 'package:lxbox/screens/home/node_actions.dart';
 
 import '../../parser/engine_test_setup.dart';
@@ -119,22 +122,32 @@ void main() {
         uuid: '11111111-2222-3333-4444-555555555555',
       );
 
-  group('геттер linkCarriesPrivateKey', () {
+  // Контракт 1.1.59 — признак по роли `private_key` реестра, не по классу.
+  bool pk(NodeSpec n) =>
+      carriesPrivateKeyByRegistry(n.emit(TemplateVars.empty).map);
+
+  group('роль private_key', () {
     test('true у SSH с ключом, false у SSH только с паролем', () {
-      expect(ssh(privateKey: '-----BEGIN-----').linkCarriesPrivateKey, isTrue);
-      expect(ssh(password: 'p').linkCarriesPrivateKey, isFalse);
+      expect(pk(ssh(privateKey: '-----BEGIN-----')), isTrue);
+      expect(pk(ssh(password: 'p')), isFalse);
     });
 
     test('true у WireGuard (в т.ч. AWG — тот же класс)', () {
-      expect(wg().linkCarriesPrivateKey, isTrue);
+      expect(pk(wg()), isTrue);
     });
 
     test('true у MASQUE с приватником', () {
-      expect(masque().linkCarriesPrivateKey, isTrue);
+      expect(pk(masque()), isTrue);
     });
 
     test('false у vless — UUID ключом не считается', () {
-      expect(vless().linkCarriesPrivateKey, isFalse);
+      expect(pk(vless()), isFalse);
+    });
+
+    test('роль credential: учётные данные из готового тела', () {
+      expect(credentialByRegistry(vless().emit(TemplateVars.empty).map),
+          isNotEmpty);
+      expect(credentialByRegistry(wg().emit(TemplateVars.empty).map), '');
     });
 
     test('ключ действительно попадает в ссылку', () {

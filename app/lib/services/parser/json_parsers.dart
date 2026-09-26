@@ -5,12 +5,17 @@ import '../../models/direction.dart' show UrltestMode;
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
+import '../../models/template_vars.dart';
 import '../../models/transport_spec.dart';
+import '../contract/group_genus.dart';
 import '../contract/registry.dart' show awgMtuCeilingByRegistry;
 import '../node_hash.dart';
+import '../safe_regex.dart';
 import 'engine/engine_mapper.dart' show mapJsonViaEngine;
 import 'mappers/uri_pipeline.dart'
     show parseXrayViaPipeline;
+import '../contract/body_sanitizer.dart' show BodySource;
+import 'body_delta_builder.dart';
 import 'drop_verdict.dart';
 import 'tcp_keep_alive.dart';
 import 'transport.dart';
@@ -182,15 +187,17 @@ List<NodeSpec> parseXrayElement(
   }
 
   final result = <NodeSpec>[];
-  // §321 P5 — протоколы элемента, которые мы не умеем: висят на первом
-  // выжившем узле, чтобы пользователь видел, что провайдер прислал больше.
-  final unsupported = <String>{};
-  // §404 P3 — узлы, отбракованные из-за недостижимого релея. Вешаем их
-  // причины на первого выжившего ЭТОГО элемента (как P5); если не выжил
-  // никто — причины уже лежат в `dropped` и достанутся подписке целиком.
-  final rejected = <NodeWarning>[];
+  // §565 — тег outbound'а элемента → тег выпущенного узла: тело группы
+  // называет членов сразу при разборе.
+  final memberTagByObTag = <String, String>{};
+  // §561 — отбраковка записи элемента (протокол вне реестра, битая форма,
+  // недостижимый релей, вердикт реестра) едет ТОЛЬКО в [dropped] — результат разбора
+  // подписки (D-088). На соседа по элементу она больше не вешается: прежние
+  // §321 P5 / §404 P3 показывали человеку на рабочем узле чужую ошибку.
   for (var i = 0; i < ordered.length; i++) {
     final ob = ordered[i];
+    // Тег записи — `dropped[].ref` контракта (D-088); нужен и в `catch`.
+    final obTag = ob['tag']?.toString() ?? '';
     try {
       // §321 P6 — тег провайдера → ключ ПУЛА (грубая четвёрка `nodeIdentityKey`,
       // не подпись дедупа §404: `selector` провайдера называет сервер, а не
@@ -198,7 +205,6 @@ List<NodeSpec> parseXrayElement(
       // различаются («Испания» = `proxy`, «Лучший» =
       // `proxy-45-196-208-40-direct`), а §322 резолвит пул по чужим тегам.
       final identity = _xrayIdentity(ob);
-      final obTag = ob['tag']?.toString() ?? '';
       if (identity != null && obTag.isNotEmpty) synonyms?[obTag] = identity;
 
       // §310 — имя разводим на парсинге: `allocateTag` уникализирует теги лишь
@@ -224,7 +230,8 @@ List<NodeSpec> parseXrayElement(
       // (§551 follow-up: раньше тот же outbound сериализовался дважды).
       final compact = _prettyJson(ob);
       final verdict = XrayDropVerdict();
-      var spec = _xrayToSpec(ob, label, dropped: verdict, rawSource: compact);
+      var spec = _xrayToSpec(ob, label,
+          dropped: verdict, rawSource: compact, document: outbounds);
       if (spec == null && verdict.explicit) {
         // Причина — код реестра с тегом записи: `dropped[].ref` контракта
         // называет именно тег outbound'а (D-088), как и у прочих отбраковок.
@@ -237,16 +244,13 @@ List<NodeSpec> parseXrayElement(
           ownerTag: obTag,
         );
         dropped?.add(w);
-        rejected.add(w);
         continue;
       }
-      // §321 P5 — неподдержанный protocol не исчезает молча: узел не собрался,
-      // но провайдер его прислал. Warning вешаем на СОСЕДА по элементу (у
-      // NodeWarning нет носителя без узла); если соседей нет — элемент выпадает
-      // молча (документированное ограничение §321 P5, spec §Известные дыры).
+      // §560/§561 — запись НЕ ПРОЧИТАНА (ни одна секция не опознала протокол
+      // либо ни одна форма секции — элемент): причина — код PARSING_PRINCIPLES §4.1 с
+      // тегом записи (D-088), в `dropped[]` и только туда.
       if (spec == null) {
-        final proto = ob['protocol']?.toString() ?? '';
-        if (proto.isNotEmpty) unsupported.add(proto);
+        dropped?.add(_unreadEntry(verdict.reason, ob, obTag));
         continue;
       }
 
@@ -259,14 +263,13 @@ List<NodeSpec> parseXrayElement(
       NodeSpec? chained;
       if (ref != null) {
         // §488 — цель `freedom` не хоп цепочки (anti-DPI fragment Xray, не
-        // релей). `_xrayBuildChain` любой служебный outbound считает
-        // негодным и роняет владельца — сюда не зовём.
-        final target = byTag[ref];
-        if (target != null &&
-            (target['protocol']?.toString() ?? '') == 'freedom') {
-          spec = _xrayApplyFreedomFragment(spec, target);
+        // релей): узел ходит наружу напрямую. Фрагментацию его TLS ставит
+        // запись реестра `fragment_via_dialer` (контракт 1.1.63, `deref`) —
+        // уровень документа freedom только не заводит звеном.
+        if (_isXrayFreedom(byTag[ref])) {
+          // прямой узел
         } else {
-          chained = _xrayBuildChain(ob, byTag, ref);
+          chained = _xrayBuildChain(ob, byTag, ref, outbounds);
           // §404 / D-085 — недостижимая цель роняет ВЛАДЕЛЬЦА целиком. Узел с
           // прямым путём тут был бы молчаливой деанонимизацией: провайдер
           // завернул дозвон в релей именно потому, что прямой путь зарезан.
@@ -275,9 +278,8 @@ List<NodeSpec> parseXrayElement(
             // отвергнутую запись в `dropped[].ref` (D-088). `label` для этого
             // не годится — он приходит из `remarks` элемента и на многоузловом
             // элементе одинаков у всех узлов.
-            final w = DialerProxyUnusableWarning(label, ref, ownerTag: obTag);
-            dropped?.add(w);
-            rejected.add(w);
+            dropped?.add(
+                DialerProxyUnusableWarning(label, ref, ownerTag: obTag));
             continue;
           }
         }
@@ -297,34 +299,15 @@ List<NodeSpec> parseXrayElement(
         seen.add(signature);
       }
 
+      if (obTag.isNotEmpty) memberTagByObTag.putIfAbsent(obTag, () => node.tag);
       result.add(node..sourceExtended = extended == compact ? null : extended);
     } catch (_) {
       // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
       // мусорный тип поля (`streamSettings: "none"`, `settings: []`) бросает
       // TypeError внутри конвертера — пропускаем этот outbound, соседи по
-      // элементу и остальная подписка живут. Протокол — в P5-warning, чтобы
-      // пропажа не была молчаливой.
-      final proto = ob['protocol']?.toString() ?? '';
-      unsupported.add(proto.isEmpty ? 'malformed' : proto);
-    }
-  }
-
-  // §321 P5 — развешиваем накопленное: по одному warning на протокол,
-  // на первом узле элемента (не на каждом — иначе N копий одного сообщения).
-  if (unsupported.isNotEmpty && result.isNotEmpty) {
-    for (final proto in unsupported) {
-      result.first.warnings.add(UnsupportedProtocolWarning(proto));
-    }
-  }
-
-  // §404 P3 — то же для отбракованных владельцев. Носитель нашёлся внутри
-  // элемента → причина висит на нём и из подписочного списка убирается, чтобы
-  // пользователь не увидел одно сообщение дважды. Носителя нет → строка
-  // остаётся в `dropped` и уедет на первый узел подписки (см. parse_all).
-  if (rejected.isNotEmpty && result.isNotEmpty) {
-    for (final w in rejected) {
-      result.first.warnings.add(w);
-      dropped?.remove(w);
+      // элементу и остальная подписка живут. §561 — пропажа не молчаливая:
+      // форма не прочитана (PARSING_PRINCIPLES §4.1), запись — в `dropped[]`.
+      dropped?.add(RegistryWarning(code: 'form_unrecognized', ownerTag: obTag));
     }
   }
 
@@ -339,10 +322,29 @@ List<NodeSpec> parseXrayElement(
     final k = _xrayIdentity(o);
     if (t.isNotEmpty && k != null) localSyn[t] = k;
   }
-  final auto = _xrayAutoSelect(element, remarks, localSyn);
+  final auto = _xrayAutoSelect(element, remarks, localSyn, memberTagByObTag);
   if (auto != null) result.add(auto..sourceExtended = extended);
 
   return result;
+}
+
+/// §560/§561 — причина отбраковки непрочитанной записи для `dropped[]`.
+///
+/// Вердикт секции без причины (обязательная запись не нашла значения) —
+/// форма не прочитана. Код `protocol_unsupported` несёт параметр `scheme`
+/// (реестр предупреждений): движок ставит код без него — дописываем значение
+/// поля `protocol` самой записи, чтобы текст шторки назвал протокол.
+RegistryWarning _unreadEntry(
+    RegistryWarning? reason, Map<String, dynamic> ob, String obTag) {
+  final code = reason?.code ?? 'form_unrecognized';
+  final params = <String, String>{...?reason?.params};
+  final proto = ob['protocol']?.toString() ?? '';
+  if (code == 'protocol_unsupported' &&
+      proto.isNotEmpty &&
+      !params.containsKey('scheme')) {
+    params['scheme'] = proto;
+  }
+  return RegistryWarning(code: code, params: params, ownerTag: obTag);
 }
 
 /// §322 — `routing.balancers[0]` + `burstObservatory` → узел автовыбора.
@@ -353,8 +355,9 @@ List<NodeSpec> parseXrayElement(
 AutoSelectSpec? _xrayAutoSelect(
   Map<String, dynamic> element,
   String remarks,
-  Map<String, String>? synonyms,
-) {
+  Map<String, String>? synonyms, [
+  Map<String, String> memberTags = const {},
+]) {
   final routing = element['routing'];
   final balancers = routing is Map ? routing['balancers'] : null;
   if (balancers is! List || balancers.isEmpty) return null;
@@ -429,13 +432,32 @@ AutoSelectSpec? _xrayAutoSelect(
   );
 
   final label = remarks.isNotEmpty ? remarks : (b['tag']?.toString() ?? 'auto');
+  final membership = RuleMembers.fromXraySelector(selector);
+  // §565 — члены, которых `selector` называет префиксами, в теле разбора
+  // перечисляются сразу (корпус `body/xray/balancer_group`); пул на сборке
+  // держит прежнее правило.
+  final inc = tryCompileRegex(membership.include);
+  final sourceMembers = <String>[
+    for (final e in memberTags.entries)
+      if (inc == null || inc.hasMatch(e.key)) e.value,
+  ];
   return AutoSelectSpec(
     id: newUuidV4(),
     tag: tagFromLabel(label, 'urltest', 'auto', 0),
     label: label,
-    membership: RuleMembers.fromXraySelector(selector),
+    membership: membership,
     params: params,
     tagSynonyms: synonyms == null ? const {} : Map.of(synonyms),
+    // §565 — балансировщик рода не объявляет: `genus.by_source.xray`.
+    genus: GroupGenus.forSource(kGenusSourceXray),
+    sourceMemberTags: sourceMembers.toSet().toList(),
+    // Объявлены источником: адрес и период замера из `pingConfig`, режим
+    // пула — из стратегии, если она раскладывает по пулу.
+    sourceParamKeys: {
+      if (ping['destination'] != null) 'url',
+      if (ping['interval'] != null) 'interval',
+      if (mode == UrltestMode.roundRobin) ...{'mode', 'balancer'},
+    },
   );
 }
 
@@ -617,6 +639,10 @@ String? _xrayIdentity(Map<String, dynamic> o) {
   return '$protocol|$server|$port|$cred';
 }
 
+/// §488 — служебный `freedom` (цель `dialerProxy`, не звено цепочки).
+bool _isXrayFreedom(Map<String, dynamic>? o) =>
+    o != null && (o['protocol']?.toString() ?? '') == 'freedom';
+
 /// §472 шаг 8 — Xray-outbound через ЕДИНЫЙ конвейер.
 ///
 /// Раньше здесь стоял диспетчер по `protocol` с отдельным конвертером на
@@ -636,19 +662,20 @@ NodeSpec? _xrayToSpec(
   Map<String, dynamic> o,
   String remarks, {
   XrayDropVerdict? dropped,
-  bool allowSocks = false,
   String? rawSource,
+  List<dynamic>? document,
 }) {
-  // §321 — SOCKS самостоятельным узлом подписки не становится: он бывает
-  // только звеном цепочки `dialerProxy`, и зовут его оттуда явным флагом.
-  // Маппер переводит socks наравне с прочими (звену нужна та же карта), так
-  // что отбор остался здесь, где он и был: прежний диспетчер ветки `socks`
-  // просто не имел.
-  if (!allowSocks && o['protocol']?.toString() == 'socks') return null;
+  // §560 — SOCKS-элемент Xray становится узлом, как любой другой: секция
+  // `mappers.xray` реестра у socks есть, и корпус (body/xray/
+  // socks_settings_users) ждёт узел. Прежний запрет §321 (socks — только
+  // звено `dialerProxy`) жил в коде в обход реестра, и узел терялся целиком.
+  // Звено `dialerProxy` по-прежнему не становится узлом подписки: его
+  // снимает отбор релеев выше, не протокол.
   // §480 W5 — карту строит ДВИЖОК по секции `mappers.xray` реестра.
   // Диспетчера по имени протокола здесь больше нет: секцию выбирает `detect`
   // самой секции, то есть опознание элемента объявлено данными.
-  final mapping = mapJsonViaEngine('xray', o, dropped: dropped);
+  final mapping =
+      mapJsonViaEngine('xray', o, dropped: dropped, document: document);
   if (mapping == null) return null;
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
   return parseXrayViaPipeline(
@@ -678,12 +705,17 @@ NodeSpec? _xrayToSpec(
 ///
 /// Причины негодности: цели нет в элементе; цель — группа или служебный
 /// outbound; цель не конвертируется в узел; кольцо; глубже [kMaxDetourDepth].
-/// Цель `freedom` сюда не попадает: её разбирает [_xrayApplyFreedomFragment]
-/// (§488), до вызова.
+/// Цель `freedom` звеном не становится (§488): у владельца это прямой путь,
+/// у звена — конец цепочки. Фрагментацию TLS того, кто ходит через такой
+/// freedom, ставит реестр (`fragment_via_dialer`, контракт 1.1.63).
+///
+/// [document] — массив `outbounds` элемента: по нему запись с `deref`
+/// разыменовывает `dialerProxy` звена.
 NodeSpec? _xrayBuildChain(
   Map<String, dynamic> owner,
   Map<String, Map<String, dynamic>> byTag,
   String firstRef,
+  List<dynamic> document,
 ) {
   // Кольцо ищем по тегам ТЕКУЩЕЙ цепочки, а не по всему элементу: два разных
   // узла законно ссылаются на один релей.
@@ -718,7 +750,7 @@ NodeSpec? _xrayBuildChain(
     // sing-box `detour` живёт на любом outbound'е. SOCKS здесь РАЗРЕШЁН
     // явно: самостоятельным узлом подписки он не становится (§321), а
     // звеном бывает, и чаще прочих.
-    final spec = _xrayToSpec(target, ref, allowSocks: true);
+    final spec = _xrayToSpec(target, ref, document: document);
     if (spec == null) return null;
     // Группа цепочку не несёт (`withChained` вернул бы её как есть) —
     // конвертер её и не отдаёт, но инвариант проверяем явно.
@@ -729,6 +761,8 @@ NodeSpec? _xrayBuildChain(
     final sockopt = stream is Map ? stream['sockopt'] : null;
     final nextRef = sockopt is Map ? sockopt['dialerProxy']?.toString() : null;
     if (nextRef == null || nextRef.isEmpty) return spec;
+    // Звено ходит наружу через служебный freedom — оно последнее (§488).
+    if (_isXrayFreedom(byTag[nextRef])) return spec;
 
     final next = build(nextRef, depth + 1);
     // Негодное звено В СЕРЕДИНЕ цепочки роняет всю цепочку — и владельца
@@ -741,82 +775,6 @@ NodeSpec? _xrayBuildChain(
   return build(firstRef, 0);
 }
 
-/// §488 — цель `dialerProxy` с `protocol: freedom`. Не хоп: узел прямой.
-/// При `settings.fragment` и включённом TLS — молча `tls.fragment: true`.
-/// `packets`/`length`/`interval` отбрасываются без кода. Freedom без
-/// fragment — ссылка игнорируется, узел как есть.
-NodeSpec _xrayApplyFreedomFragment(
-  NodeSpec spec,
-  Map<String, dynamic> freedom,
-) {
-  final settings = freedom['settings'];
-  if (settings is! Map || settings['fragment'] is! Map) return spec;
-  if (!_nodeTlsEnabled(spec)) return spec;
-  return _withTlsPassthroughBool(spec, 'fragment', true);
-}
-
-bool _nodeTlsEnabled(NodeSpec spec) => switch (spec) {
-      VlessSpec s => s.tls.enabled,
-      TrojanSpec s => s.tls.enabled,
-      VmessSpec s => s.tls.enabled,
-      _ => false,
-    };
-
-NodeSpec _withTlsPassthroughBool(NodeSpec spec, String key, bool value) {
-  TlsSpec patch(TlsSpec tls) =>
-      tls.copyWith(passthrough: {...tls.passthrough, key: value});
-  return switch (spec) {
-    VlessSpec s => VlessSpec(
-        id: s.id,
-        tag: s.tag,
-        label: s.label,
-        server: s.server,
-        port: s.port,
-        rawSource: s.rawSource,
-        uuid: s.uuid,
-        flow: s.flow,
-        tls: patch(s.tls),
-        transport: s.transport,
-        packetEncoding: s.packetEncoding,
-        encryption: s.encryption,
-        chained: s.chained,
-        tcpKeepAlive: s.tcpKeepAlive,
-        warnings: s.warnings,
-      ),
-    TrojanSpec s => TrojanSpec(
-        id: s.id,
-        tag: s.tag,
-        label: s.label,
-        server: s.server,
-        port: s.port,
-        rawSource: s.rawSource,
-        password: s.password,
-        tls: patch(s.tls),
-        transport: s.transport,
-        chained: s.chained,
-        tcpKeepAlive: s.tcpKeepAlive,
-        warnings: s.warnings,
-      ),
-    VmessSpec s => VmessSpec(
-        id: s.id,
-        tag: s.tag,
-        label: s.label,
-        server: s.server,
-        port: s.port,
-        rawSource: s.rawSource,
-        uuid: s.uuid,
-        alterId: s.alterId,
-        security: s.security,
-        tls: patch(s.tls),
-        transport: s.transport,
-        chained: s.chained,
-        tcpKeepAlive: s.tcpKeepAlive,
-        warnings: s.warnings,
-      ),
-    _ => spec,
-  };
-}
-
 /// sing-box outbound / endpoint JSON → NodeSpec (§4 round-trip).
 /// Используется для JSON-редактора и Smart-Paste одиночного sing-box entry.
 ///
@@ -826,6 +784,33 @@ NodeSpec _withTlsPassthroughBool(NodeSpec spec, String key, bool value) {
 /// `trojan-host-443` при пустом имени, и подставить его в `label` значило бы
 /// вернуть выдуманное `#trojan-host-443` из `toUri()`.
 NodeSpec? parseSingboxEntry(
+  Map<String, dynamic> entry, {
+  String? rawSource,
+  String? label,
+  bool wsEarlyDataHeaderImplicit = false,
+  BodySource? sanitizedFrom,
+}) {
+  final node = _parseSingboxEntryTyped(entry,
+      rawSource: rawSource,
+      label: label,
+      wsEarlyDataHeaderImplicit: wsEarlyDataHeaderImplicit);
+  // §560 — модель держит не все ключи тела и дописывает свои дефолты;
+  // дельта по схеме реестра возвращает телу то, что прислал провайдер.
+  // Только для тела, которое УЖЕ прошло санитайзер ([sanitizedFrom]): сырую
+  // карту дельта перенесла бы вместе с мусором, который модель отбрасывает.
+  // Дефолты ядра снимаются только у тела в форме ядра (`singbox`): там автор
+  // написал ровно то, что хотел, и дописанный моделью ключ ему чужой.
+  if (node != null && sanitizedFrom != null) {
+    node.bodyDelta = bodyDeltaFor(
+      entry,
+      node.emitRaw(TemplateVars.empty).map,
+      dropDefaults: sanitizedFrom == BodySource.singbox,
+    );
+  }
+  return node;
+}
+
+NodeSpec? _parseSingboxEntryTyped(
   Map<String, dynamic> entry, {
   String? rawSource,
   String? label,
@@ -1196,7 +1181,7 @@ NodeSpec? parseSingboxEntry(
       final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
       // §097/SPEC 103 D-026 — AWG: клампим MTU до 1280. Plain WG без mtu в
       // источнике поле не эмитит вовсе (ядро само ставит 1408) — зеркалим
-      // `wireguard_parser.dart`, чтобы модель не зависела от источника
+      // разбор ссылки движком, чтобы модель не зависела от источника
       // парсинга: JSON vs URI.
       final rawMtu = (entry['mtu'] as num?)?.toInt();
       // §025/§126 — WARP client_id. §219 — раньше JSON-парсер не заполнял
@@ -1257,7 +1242,7 @@ NodeSpec? parseSingboxEntry(
         // (ключ корня или диапазонный keepalive) делает узел AmneziaWG
         // наравне с AWG2-полями.
         mtu: awg != null || Awg.hasAwg3Json(entry)
-            ? (rawMtu ?? awgMtuCeilingByRegistry())
+            ? (rawMtu ?? awgMtuCeilingByRegistry(type))
             : rawMtu,
         awg: awg,
       );
@@ -1286,8 +1271,10 @@ NodeSpec? parseSingboxEntry(
       final vhttpRaw = entry['vhttp']?.toString() ?? '';
       // SPEC 103 п.5 — невалидное значение форсится в h3, как в URI-парсере.
       // Контракт 0.11.1 — `auto` в тройке допустимых (ядро >= lx.27).
-      final vhttpJson = (vhttpRaw == 'h3' || vhttpRaw == 'h2' ||
-              vhttpRaw == 'auto')
+      // §556 (контракт 1.1.64) — тело без `vhttp` остаётся без него: у ядра
+      // это `auto`, и правила реестра судят его как отсутствие.
+      final vhttpJson = (vhttpRaw.isEmpty || vhttpRaw == 'h3' ||
+              vhttpRaw == 'h2' || vhttpRaw == 'auto')
           ? vhttpRaw
           : 'h3';
       final sniRaw = tlsMap['server_name']?.toString() ?? '';
@@ -1317,6 +1304,14 @@ NodeSpec? parseSingboxEntry(
         mtu: (entry['mtu'] as num?)?.toInt(),
         idleTimeout: entry['idle_timeout']?.toString() ?? '',
         keepAlive: entry['keep_alive_period']?.toString() ?? '',
+        tlsExtra: {
+          for (final e in tlsMap.entries)
+            if (e.key != 'server_name' &&
+                e.key != 'disable_sni' &&
+                e.key != 'enabled' &&
+                e.value != null)
+              '${e.key}': e.value as Object,
+        },
       );
     case 'tailscale':
       // §435 / контракт ## 13 (NODE_SECTIONS.md §6) — endpoint без адреса:
@@ -1427,8 +1422,13 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
       // `sni=`, которого автор не писал. Тело от этого не меняется — ключ
       // сквозной (`kTlsPassthroughKeys`) и сохраняется как есть, вместе с
       // явным `server_name`, если он там был.
-      serverName: raw['server_name']?.toString() ??
-          (raw['disable_sni'] == true ? null : server),
+      //
+      // §560 — откат на адрес СНЯТ из модели: его объявляет реестр там, где
+      // он нужен (`default_from: host` у блоков `tls#uri`), и маппер пишет
+      // имя в тело сам. Xray-блок отката не объявляет, у тела sing-box его
+      // делает ядро; модель, дописывавшая адрес всем, давала тело, которого
+      // провайдер не присылал (корпус xray/multinode_310).
+      serverName: raw['server_name']?.toString(),
       // §460 — `alpn` у ядра Listable: массив → типизированный список, строка
       // → сквозной ключ в форме прибытия (корпус outbound_array_tls_fields
       // `vless-alpn-str`); раньше `as List` на строке ронял узел целиком.
@@ -1437,7 +1437,10 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
         _ => const [],
       },
       insecure: raw['insecure'] == true,
-      fingerprint: utls?['fingerprint']?.toString(),
+      // Контракт 1.1.61 — включённый uTLS без отпечатка (его дописывает
+      // `requires[].set` у REALITY) держится в модели пустой строкой.
+      fingerprint: utls?['fingerprint']?.toString() ??
+          (utls?['enabled'] == true ? '' : null),
       // §454 — пин (D-078) из JSON раньше не читался вовсе: только из
       // `pinSHA256=` hysteria2-URI. Listable ядра: строка или массив.
       certificatePublicKeySha256: switch (raw['certificate_public_key_sha256']) {

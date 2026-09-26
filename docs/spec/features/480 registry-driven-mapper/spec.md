@@ -407,6 +407,50 @@ W1 держала оверлеями. Закрыл их лаунчер, а не 
   чинился правкой этой копии — по одной схеме за находку;
 - `isWireGuardConfig` и `isAmneziaVpnLink` спрашивают реестр.
 
+§562 — диспетчер схем ссылки целиком из реестра. `kPipelineSchemes`,
+таблица «схема → тип тела» (`_kSchemeToType`) и `switch` по написаниям в
+`parseUri` сняты: `registrySchemeType` (`mappers/uri_pipeline.dart`) строится
+при загрузке из `detect.scheme_in` секций `mappers.uri` и `aliases` их
+протоколов (алиас не перекрывает написание секции), и `pipelineSchemes()` /
+`isDirectLink` читают тот же набор. Схема-дискриминатор (версия socks, TLS
+http, транспорт naive) остаётся делом `scheme_sets` на входе и
+`emit.form_from` на выходе — таблица `kSocksVersionByScheme` /
+`socksSchemeForVersion` снята. Ветка вне движка (base64 `.conf` у
+wireguard) выбирается по форме секции (`forms[].space: ini`), контейнер
+`vpn://` и служебные строки — по `source_kinds.json`. Реестра нет — ни одна
+ссылка не разбирается, запасных литералов нет. Греп-страж
+`engine_no_scheme_names_test` запрещает литералы схем в `uri_parsers.dart` и
+`uri_pipeline.dart`.
+
+§566 — литералы схем сняты и вне диспетчера. Состав `registry/protocols/`
+загрузчик реестра берёт из каталога: в бандле — манифест ассетов
+(`AssetManifest`), на диске — листинг; списка файлов в коде нет, новый
+протокол контракта грузится без правки Dart. Обёртки
+`uri_parsers/<схема>_parser.dart` (двенадцать, все без своей логики) сняты:
+общий вход движка для ссылки — `parseLinkViaPipeline` (схема из самой
+ссылки, тип тела — реестром); в `uri_parsers/` остался только парсер формы
+`ini`. Рукописный `parseNaiveExtraHeaders` снят — пары `extra-headers`
+отсеивает правило реестра. Распознавание ввода: контейнер Amnezia — только по
+виду источника `amnezia_link` (запасного `vpn://` нет), метка `.conf` в
+шторке — тип секции вида источника. Исключение одно — `http(s)://` у
+`isSubscriptionUrl` (транспорт скачивания подписки, не схема узла; реестр
+такого набора не объявляет). Страж покрывает `registry.dart`,
+`input_helpers.dart` и весь каталог `uri_parsers/`, исключения перечислены в
+нём с причиной.
+
+§563 — `forms[].detect` формы с оболочкой (`decode`) судится по ДВУМ
+текстам (MAPPER_ENGINE §1, «unwrap → redetect»): текстовый предикат
+(`regex`, `text.*`) сходится на сыром пэйлоаде ИЛИ на тексте после цепочки
+`decode` до структурного шага (`json`/`ini`/`reparse`) — как у лаунчера
+(`UnwrapURI`). Оба смысла законны: «тело — один base64-блоб без `@`»
+(hysteria2 `wrapped`, wireguard `conf_b64`) описывает оболочку и на
+раскрытом тексте ложен, `^[^#]*@` у vmess `legacy` описывает то, что под
+ней, и на блобе ложен. `scheme_in` раскрытием не меняется, `json` судится
+по разобранному объекту, как и раньше. Там же: серия невалидных байтов
+UTF-8 после `base64`/percent даёт ОДИН U+FFFD (`decodeUtf8Lenient`,
+`decoders.dart`; как `strings.ToValidUTF8`, контракт 1.1.75) — метка входит
+в тег узла; U+FFFD, закодированный в источнике, не трогается.
+
 Оболочки остались КОДОМ (`qCompress`+zlib предикатами не выражаются), но
 вызываются по ИМЕНИ из `unwrap` — так же у лаунчера. Вложенная оболочка
 снимается с потолком `max_unwrap_depth: 2`.
@@ -1261,7 +1305,7 @@ override'ов корпуса). Запись приведена к реестро
 
 | Кейс | Причина |
 |---|---|
-| `wireguard/reserved_*` (2) | CANON §6: границы `int_array` судятся ПОЭЛЕМЕНТНО, а в `value` кода уезжает ВСЁ ПОЛЕ (`[1 2 999]`). Мы показывали вырванный элемент |
+| `wireguard/reserved_*` (2) | PARSING_PRINCIPLES §6: границы `int_array` судятся ПОЭЛЕМЕНТНО, а в `value` кода уезжает ВСЁ ПОЛЕ (`[1 2 999]`). Мы показывали вырванный элемент |
 | `xray/ss_basic`, `xray/ss_method_legacy` | у секции `shadowsocks#xray` нет перечня `unknown_key.ignore` (`protocol`, `tag`, `remarks`, контейнеры), хотя у vless/vmess/trojan он есть и зовётся «общим, не нашим». Заведён оверлеем `xray/shadowsocks.json` до появления у реестра |
 | `folders_roundtrip`, `merge_sources_by_url` | `backup_corpus_test` не грузил секции движка: член папки строится из своей ссылки, и без реестра состав папки выходил списком ПУСТЫХ имён. Та же грабля, что у `direction_corpus` |
 
@@ -1561,7 +1605,7 @@ Q133-70…75, новые примитивы `round_trip_only: "emit"` и `emit.r
 
 **Забрано без правок кода:** тексты кодов en/ru (1.1.38); `on_len_gt` у
 `$extra_*` (1.1.42) — примитив уже исполнялся, кейс `body/xray/vless_extra_vnext`
-зелёный; порядок `warnings[]` по CANON §6 (коды записей маппера с
+зелёный; порядок `warnings[]` по PARSING_PRINCIPLES §6 (коды записей маппера с
 `maps_to:null` впереди кодов тела) — у нас уже так; `value` у
 `wgconf_dns_ignored` — приехал ожиданиями корпуса. Список
 `_awaitingLauncherGendocs` в `docs_mirror_test` пуст: якорь `password_empty`

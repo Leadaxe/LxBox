@@ -28,6 +28,8 @@ import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
 import '../../models/subscription_meta.dart';
+import '../contract/chain_strip.dart'
+    show chainStripKeyKnown, orderedChainStrip;
 import '../json_clone.dart' show deepCloneJson;
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
@@ -206,11 +208,13 @@ LegacyChain readLegacyChain(Map<String, dynamic> json) {
       idleTimeout: json['idle_timeout'] as String? ?? '',
       stripEvasion:
           json['strip_evasion'] is bool ? json['strip_evasion'] as bool : null,
-      strip: {
-        for (final key in kChainStripKeys)
-          if ((json['strip'] as Map?)?[key] is bool)
-            key: (json['strip'] as Map)[key] as bool,
-      },
+      strip: orderedChainStrip({
+        for (final e in ((json['strip'] as Map?) ?? const {}).entries)
+          if (e.key is String &&
+              chainStripKeyKnown(e.key as String) &&
+              e.value is bool)
+            e.key as String: e.value as bool,
+      }),
       rewrite:
           (deepCloneJson(json['rewrite']) as Map?)?.cast<String, dynamic>() ??
               const {},

@@ -1,7 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/subscription/input_helpers.dart';
 
+import '../parser/engine_test_setup.dart';
+
 void main() {
+  // §562 — набор схем ссылки даёт только реестр: литеральной копии в Dart нет.
+  setUpAll(loadEngineSections);
+
   group('isSubscriptionUrl (night T5-3)', () {
     test('https URL → true', () {
       expect(isSubscriptionUrl('https://p.example/sub'), isTrue);

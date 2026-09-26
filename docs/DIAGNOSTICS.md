@@ -502,13 +502,71 @@ failure it shows `BoxService: [vpn] config requires WIFI state but missing: [...
 
 ### “`<unknown ssid>` in Wi-Fi rules”
 
-If logcat shows `PIW: readWIFIState: <unknown ssid>` (a debug log from
-[PlatformInterfaceWrapper](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt)),
-the permission grants are in place (no SecurityException) but `WifiInfo.ssid`
-returned `"<unknown ssid>"`. On Android 13+ that means **`NEARBY_WIFI_DEVICES` is
-missing**, even when ACCESS_FINE_LOCATION is granted (Google split Wi-Fi info from
-location in API 33). The action: add `NEARBY_WIFI_DEVICES` to the manifest and
-grant it through a runtime prompt.
+Android does not throw when it withholds the network name: `WifiInfo.ssid`
+silently comes back as `"<unknown ssid>"` with the placeholder BSSID
+`02:00:00:00:00:00`. Four conditions all have to hold (§567), and
+[WifiInfoReader](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/WifiInfoReader.kt)
+checks them in this order before asking Android:
+
+1. `NEARBY_WIFI_DEVICES` granted (API 33+).
+2. `ACCESS_FINE_LOCATION` granted — **precise** location. Since Android 12 the
+   location prompt has a “Precise” switch; with “Approximate” only COARSE is
+   granted, BACKGROUND can still be granted, and the SSID is hidden. A system
+   update or the “unused apps” permission reset produce the same picture,
+   which is why “it used to work”.
+3. `ACCESS_BACKGROUND_LOCATION` granted (API 29+, “Allow all the time”).
+4. The system Location toggle is on (`LocationManager.isLocationEnabled()`).
+
+Each failed check leaves one logcat line with the `WifiInfoReader` tag (logcat
+only, not the diagnostics export):
+
+```text
+W WifiInfoReader: permission missing: android.permission.ACCESS_FINE_LOCATION
+W WifiInfoReader: location disabled: system location toggle is off
+W WifiInfoReader: unknown ssid: android returned ssid=<unknown ssid> bssid=02:00:00:00:00:00
+W WifiInfoReader: no wifi: connectionInfo is null
+W WifiInfoReader: no wifi: not connected (cache has no wifi network, connectionInfo bssid=null)
+D WifiInfoReader: ok: source=cache ssid='AndroidWifi' bssid='00:13:10:85:fe:01'
+D WifiInfoReader: ok: source=legacy ssid='AndroidWifi' bssid='00:13:10:85:fe:01'
+```
+
+Where the name came from (§569). On Android 12+ the reader first takes the
+network from `WifiStateCache` — a `NetworkCallback` registered with
+`FLAG_INCLUDE_LOCATION_INFO`, which is the only way `NetworkCapabilities.transportInfo`
+carries the SSID — and falls back to the deprecated `getConnectionInfo()`
+when the cache is empty (the callback has not delivered yet, or there is no
+Wi-Fi) or holds a redacted SSID. Android 11 and older use only
+`getConnectionInfo()`. `source=cache` / `source=legacy` in the `ok:` line tells
+which path answered. The cache logs under its own tag:
+
+```text
+D WifiStateCache: started (perms=nearby=1 fine=1 bg=1 loc=1)
+D WifiStateCache: update: ssid='AndroidWifi' bssid='00:13:10:85:fe:01' net=101
+D WifiStateCache: lost: net=101
+D WifiStateCache: stopped
+D WifiStateCache: permissions changed (... -> ...), re-registering
+D WifiInfoReader: cache empty (registered=true), falling back: source=legacy
+D WifiInfoReader: cache has unknown ssid, falling back: source=legacy
+```
+
+`source=legacy` right after `started` is normal: the callback delivers the
+current network asynchronously, a moment after registration. A steady
+`source=legacy` with `registered=false` means registration failed — look for
+`W WifiStateCache: registerNetworkCallback ...`.
+
+```bash
+adb logcat -d | grep -E "WifiInfoReader|WifiStateCache|PIW" | tail
+adb shell dumpsys package com.leadaxe.lxbox | grep -E "granted=" | grep -iE "location|nearby"
+adb shell settings get secure location_mode   # 0 = off
+```
+
+On the core path (`PIW: readWIFIState`) a failed permission or Location check
+returns `null`, and `<unknown ssid>` returns an empty SSID; the reason is in the
+preceding `WifiInfoReader` line. In the UI the rule editor's Wi-Fi section shows
+a hint only when one of the checks fails (“Precise location permission
+missing”, “Background location missing”, “Nearby Wi-Fi permission missing”,
+“Location is turned off”), and the Diagnostics → “Location (background)” row
+shows the precise-location and Location-toggle state.
 
 ### “The VPN drops by itself / ‘Another VPN app took the system VPN slot’”
 

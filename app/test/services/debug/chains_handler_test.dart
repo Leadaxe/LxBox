@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_link.dart';
-import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
@@ -16,6 +15,8 @@ import 'package:lxbox/services/debug/transport/response.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+
+import '../../contract_paths.dart';
 
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
@@ -30,6 +31,9 @@ class _FakePathProvider extends PathProviderPlatform
 /// §393 C — `/chains/*` handler поверх реального SettingsStorage
 /// (temp-dir через fake path provider, как в directions_handler_test.dart).
 void main() {
+  // Каталог strip — данные реестра (chain.json).
+  setUpAll(loadTestRegistry);
+
   late Directory tempDir;
 
   DebugContext ctx() => DebugContext(
@@ -249,11 +253,11 @@ void main() {
     test('strip — только ключи каталога, неизвестный → 400', () async {
       final r = await chainsHandler(
         req('PATCH', '/chains/chain-1', body: {
-          'strip': {kChainStripTlsUtls: false},
+          'strip': {'tls.utls': false},
         }),
         ctx(),
       );
-      expect((asMap(r)['strip'] as Map)[kChainStripTlsUtls], isFalse);
+      expect((asMap(r)['strip'] as Map)['tls.utls'], isFalse);
       await expectLater(
         chainsHandler(
           req('PATCH', '/chains/chain-1', body: {

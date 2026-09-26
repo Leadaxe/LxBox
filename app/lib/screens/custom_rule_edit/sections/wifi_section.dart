@@ -4,8 +4,34 @@ import '../../../widgets/wifi_entry.dart';
 import '../widgets/section_header.dart';
 import '../../../services/l10n/locale_controller.dart';
 
+/// §567 — почему SSID сейчас не читается; подсказка в секции рисуется
+/// только для этих причин (всё в порядке / нет Wi-Fi / `unknown_ssid` —
+/// подсказки нет).
+enum WifiHint { preciseLocation, backgroundLocation, nearbyWifi, locationOff }
+
+/// §567 — код ошибки `getCurrentWifiInfo` → подсказка. [missing] — полные
+/// имена разрешений в порядке приоритета (первое определяет подсказку).
+WifiHint? wifiHintFromError(String reason, List<String> missing) {
+  switch (reason) {
+    case 'location_disabled':
+      return WifiHint.locationOff;
+    case 'fine_location_missing':
+      return WifiHint.preciseLocation;
+    case 'permission_missing':
+      final first = missing.isEmpty ? '' : missing.first;
+      if (first.endsWith('NEARBY_WIFI_DEVICES')) return WifiHint.nearbyWifi;
+      if (first.endsWith('ACCESS_FINE_LOCATION')) {
+        return WifiHint.preciseLocation;
+      }
+      return WifiHint.backgroundLocation;
+    default:
+      return null;
+  }
+}
+
 /// §053 Stage 2 — WI-FI NETWORK section. Chip-list + 3 action buttons
-/// (Add current / Pick saved / Manual) + permissions hint.
+/// (Add current / Pick saved / Manual) + permissions hint (§567: только
+/// при реальной проблеме с чтением SSID).
 ///
 /// Callbacks обрабатываются parent State'ом (он знает про
 /// `WifiPermissionDialog`, `getCurrentWifiInfo`, `wifi_history`, etc.).
@@ -18,6 +44,7 @@ class WifiSection extends StatelessWidget {
     required this.onPickSaved,
     required this.onManual,
     required this.onTapPermissionsHint,
+    this.hint,
   });
 
   final List<WifiEntry> networks;
@@ -26,6 +53,9 @@ class WifiSection extends StatelessWidget {
   final VoidCallback onPickSaved;
   final VoidCallback onManual;
   final VoidCallback onTapPermissionsHint;
+
+  /// §567 — null → подсказку не рисовать.
+  final WifiHint? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -85,30 +115,41 @@ class WifiSection extends StatelessWidget {
                 onPressed: onManual),
           ],
         ),
-        const SizedBox(height: 4),
-        InkWell(
-          onTap: onTapPermissionsHint,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline,
-                    size: 14, color: t.colorScheme.onSurfaceVariant),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    getLocalText.s("Needs Location + Nearby Wi-Fi permissions. Tap to manage."),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: t.colorScheme.onSurfaceVariant,
-                      decoration: TextDecoration.underline,
+        if (hint != null) ...[
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: onTapPermissionsHint,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 14, color: t.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      switch (hint!) {
+                        WifiHint.preciseLocation =>
+                          getLocalText.s("Precise location permission missing"),
+                        WifiHint.backgroundLocation =>
+                          getLocalText.s("Background location missing"),
+                        WifiHint.nearbyWifi =>
+                          getLocalText.s("Nearby Wi-Fi permission missing"),
+                        WifiHint.locationOff =>
+                          getLocalText.s("Location is turned off"),
+                      },
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: t.colorScheme.onSurfaceVariant,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

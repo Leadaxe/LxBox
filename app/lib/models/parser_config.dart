@@ -495,6 +495,7 @@ class WizardVar {
     required this.defaultValue,
     this.wizardUI = 'edit',
     this.options = const [],
+    this.optionsOpen = false,
     this.title = '',
     this.tooltip = '',
     this.section = '',
@@ -514,7 +515,19 @@ class WizardVar {
       type; // bool, int, text, text_list, enum, secret, outbound, dns_servers
   final String defaultValue;
   final String wizardUI; // edit, fix, hidden
-  final List<WizardOption> options; // for enum / text-with-suggestions
+  /// Допустимые значения (TEMPLATE_LANG §2.1): закрытое множество при любом
+  /// `type`, кроме `bool`. `type` и `options` ортогональны (SPEC 143, D-125):
+  /// объектная форма `{title, value}` тип не меняет, `enum` = `text` +
+  /// закрытые `options`, `text_list` + `options` — множественный выбор
+  /// (значение — выбранные строки по одной на строку). Приведение в JSON —
+  /// только по `type` (`coerceVarValue`).
+  final List<WizardOption> options;
+
+  /// `options_open` (§2.1): `true` разрешает значение вне [options] —
+  /// свободный ввод рядом со списком; такое значение проходит то же
+  /// приведение по `type`. Без [options] флаг ничего не значит; по умолчанию
+  /// `false`, и существующие объявления ведут себя как раньше.
+  final bool optionsOpen;
   final String title;
   final String tooltip;
   final String section;
@@ -551,6 +564,23 @@ class WizardVar {
   /// которому нужен plain `List<String>` (валидация, sing-box emit).
   List<String> get optionValues =>
       options.map((o) => o.value).toList(growable: false);
+
+  /// Допустимо ли [value] по [options]/[optionsOpen] (§2.1). Движок это не
+  /// enforce'ит — это правило для UI-редактора. Без `options` и при
+  /// `options_open` допустимо любое; у `text_list` каждая непустая строка
+  /// обязана быть из списка (множественный выбор).
+  bool acceptsValue(String value) {
+    if (options.isEmpty || optionsOpen) return true;
+    final allowed = optionValues.toSet();
+    if (type == 'text_list') {
+      return value
+          .split('\n')
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty)
+          .every(allowed.contains);
+    }
+    return allowed.contains(value);
+  }
 
   factory WizardVar.fromJson(
     Map<String, dynamic> json, {
@@ -590,6 +620,7 @@ class WizardVar {
               .where((o) => o.value.isNotEmpty)
               .toList() ??
           const [],
+      optionsOpen: json['options_open'] == true,
       title: json['title'] as String? ?? '',
       tooltip: json['tooltip'] as String? ?? '',
       section: section,

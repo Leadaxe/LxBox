@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../models/parser_config.dart' show WizardVar;
 import '../../../widgets/outbound_picker.dart';
+import '../../../widgets/template_var_list.dart'
+    show VarMultiSelect, VarTextField;
 import '../edit_controller.dart';
 import 'params_tab.dart' show ParamsTabActions;
 import '../../../services/l10n/locale_controller.dart';
@@ -86,6 +88,7 @@ class PresetParamsTab extends StatelessWidget {
           defaultValue: g.defaultValue,
           wizardUI: g.wizardUI,
           options: g.options,
+          optionsOpen: g.optionsOpen,
           title: g.title,
           tooltip: g.tooltip,
           required: g.required,
@@ -265,8 +268,59 @@ class _PresetVarWidget extends StatelessWidget {
         ? v.tooltip
         : (v.tooltip.isEmpty ? '(optional)' : '${v.tooltip} · (optional)');
 
+    // §555 — значение и запись для типов без собственной семантики хранения
+    // (text / int / text_list / enum с `options_open`): ref-var — глобальный
+    // userVars, обычная — varsValues; нет ключа — `default_value`.
+    String currentValue() {
+      if (v.isRef) return c.globalVars[v.ref] ?? v.defaultValue;
+      return c.varsValues.containsKey(v.name)
+          ? (c.varsValues[v.name] ?? '')
+          : v.defaultValue;
+    }
+
+    void write(String val) =>
+        v.isRef ? c.setGlobalVar(v.ref, val) : c.setVarValue(v.name, val);
+
+    // Ветки ниже: `text_list` + `options` — множественный выбор; `options_open`
+    // — список плюс своё значение; закрытые `options` у `text`/`int` — как
+    // `enum` (TEMPLATE_LANG §2.1, SPEC 143 D-125).
+    final kind = (v.type == 'text_list' && v.options.isNotEmpty)
+        ? 'multi'
+        : (v.options.isNotEmpty &&
+                v.optionsOpen &&
+                const {'enum', 'text', 'int'}.contains(v.type))
+            ? 'open'
+            : (v.options.isNotEmpty &&
+                    const {'text', 'int'}.contains(v.type))
+                ? 'enum'
+                : (const {'text', 'int', 'text_list'}.contains(v.type)
+                    ? 'open'
+                    : v.type);
+
     Widget control;
-    switch (v.type) {
+    switch (kind) {
+      case 'multi':
+        control = VarMultiSelect(
+          key: ValueKey('preset-multi-${v.name}'),
+          v: v,
+          value: currentValue(),
+          onChanged: write,
+        );
+      case 'open':
+        final isInt = v.type == 'int';
+        control = VarTextField(
+          key: ValueKey('preset-text-${v.name}'),
+          value: currentValue(),
+          label: '',
+          numeric: isInt,
+          maxLines: v.type == 'text_list' ? 4 : 1,
+          suggestions: v.optionValues,
+          onChanged: (val) {
+            if (!isInt || val.isEmpty) return write(val);
+            final n = int.tryParse(val);
+            write(n == null ? val : n.clamp(0, 65535).toString());
+          },
+        );
       case 'outbound':
         // §265 — ref-var: значение/запись через глобальный userVars.
         final current = v.isRef
@@ -324,6 +378,7 @@ class _PresetVarWidget extends StatelessWidget {
           },
         );
       case 'enum':
+        // §555 — сюда же `text`/`int` с закрытыми `options`.
         // §265 — ref-var: значение из глобального userVars (globalVars),
         // запись через setGlobalVar; обычная var — из varsValues/setVarValue.
         final String currentKey;

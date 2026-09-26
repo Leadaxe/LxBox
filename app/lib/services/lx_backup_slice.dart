@@ -85,10 +85,11 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'identity', _c),
   BackupField(BackupRecord.subscription, 'update', _c),
   BackupField(BackupRecord.subscription, 'disabled', _c),
-  // Фича 478 / CANON §9.4 — ключ в allowlist хранения; в бэкап вердикт
+  // Фича 478 / PARSING_PRINCIPLES §9.4 — ключ в allowlist хранения; в бэкап вердикт
   // страховки не едет (§489, решение 19.09.2026).
   BackupField(BackupRecord.subscription, 'warnings', _c),
   BackupField(BackupRecord.subscription, 'detour', _c),
+  BackupField(BackupRecord.subscription, 'replace', _c),
   BackupField(BackupRecord.subscription, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.subscription, 'import_rules', _s, declared: true),
   BackupField(BackupRecord.subscription, 'import_rules_enabled', _s,
@@ -102,6 +103,10 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.subscription, 'last_update_status', _r),
   BackupField(BackupRecord.subscription, 'last_node_count', _r),
   BackupField(BackupRecord.subscription, 'consecutive_fails', _r),
+  // §565 / задача 570 — выбор члена групп ручного рода подписки: у
+  // `sourceSubscription` схемы поля нет; выбор — рантайм машины (как выбор
+  // селектора в ядре), срезается молча.
+  BackupField(BackupRecord.subscription, 'group_defaults', _r),
 
   // ── одиночный сервер ─────────────────────────────────────────────────────
   BackupField(BackupRecord.server, 'kind', _c),
@@ -125,6 +130,7 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folder, 'enabled', _c),
   BackupField(BackupRecord.folder, 'tag_policy', _c),
   BackupField(BackupRecord.folder, 'detour', _c),
+  BackupField(BackupRecord.folder, 'replace', _c),
   BackupField(BackupRecord.folder, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_url', _s, declared: true),
   BackupField(BackupRecord.folder, 'ping_timeout_ms', _s, declared: true),

@@ -4,6 +4,7 @@ import 'dart:math';
 import '../../models/node_spec.dart' show Awg;
 import '../../models/node_warning.dart';
 import '../app_log.dart';
+import 'engine/decoders.dart' show decodeUtf8Lenient;
 
 /// Максимальная длина URI (защита от мусорных base64-бомб). Совпадает с v1.
 const int maxURILength = 65536;
@@ -23,17 +24,6 @@ const int kMaxDetourDepth = 8;
 /// общий [maxURILength]: под общим лимитом такая ссылка молча терялась, хотя
 /// десктоп её принимал (§103 §9.B12).
 const int maxAmneziaLinkLength = 524288;
-
-/// §084 M7 — charset валидного имени HTTP-заголовка из DuckSoft de-facto
-/// спеки naive URI: `! # $ % & ' * + - . 0-9 A-Z \ ^ _ ` a-z | ~`.
-/// Единый источник для parser (uri_parsers) и emit (node_spec_emit).
-final RegExp naiveHeaderNameRe =
-    RegExp(r"^[!#$%&'*+\-.0-9A-Z\\^_`a-z|~]+$");
-
-/// True если `name` — валидное имя naive HTTP-заголовка (непустое +
-/// matches [naiveHeaderNameRe]).
-bool isValidNaiveHeaderName(String name) =>
-    name.isNotEmpty && naiveHeaderNameRe.hasMatch(name);
 
 /// Безопасный base64-decode с пробой 4 вариантов (standard/url-safe ×
 /// padded/unpadded). Возвращает bytes или null. Порт v1 `_decodeBase64`.
@@ -135,7 +125,7 @@ List<int>? _decodeBase64Lenient(String s) {
 /// `publickey=enabled` иначе не отсеять — D-023), возвращает канонический
 /// std-base64 (D-030: `…ccC=`/`…ccA=` декодируют в одни и те же 32 байта,
 /// но уезжают в конфиг по-разному → разные identity-хеши).
-/// `null` → нода отбрасывается вызывающим (parse_error, CANON §4).
+/// `null` → нода отбрасывается вызывающим (parse_error, PARSING_PRINCIPLES §4).
 String? normalizeWGKey(String value) {
   final raw = _decodeBase64Lenient(value);
   if (raw == null || raw.length != 32) return null;
@@ -167,9 +157,9 @@ List<int>? parseReserved(String raw) {
   return List<int>.from(bytes);
 }
 
-/// UTF-8 декод с fallback'ом на allowMalformed.
-String utf8Lossy(List<int> bytes) =>
-    utf8.decode(bytes, allowMalformed: true);
+/// UTF-8 с заменой битых байтов по правилу движка: серия невалидных байтов
+/// подряд — один U+FFFD (MAPPER_ENGINE §1, [decodeUtf8Lenient]).
+String utf8Lossy(List<int> bytes) => decodeUtf8Lenient(bytes);
 
 /// Удаление управляющих символов из display-строк (оставляем \t \n \r).
 String sanitizeForDisplay(String s) {
@@ -557,39 +547,6 @@ bool isLegacyShadowsocksMethod(String method) =>
 
 /// VLESS-порты, на которых обычно plain HTTP (без TLS) — как в v1.
 const plaintextVlessPorts = {80, 8080, 8880, 2052, 2082, 2086, 2095};
-
-// ════════════════════════════════════════════════════════════════════════════
-// §475 — SOCKS: версию протокола несёт СХЕМА ссылки
-// ════════════════════════════════════════════════════════════════════════════
-
-/// Схема ссылки → значение `version` в теле (mapper-правило
-/// `socks_scheme_is_version`, `registry/protocols/socks.json`).
-///
-/// Своего query-параметра под версию у socks-ссылки нет ни в одном диалекте,
-/// поэтому дискриминатором работает схема — ровно как суффикс
-/// `proxy-https://` работает TLS-дискриминатором у http.
-///
-/// **Таблица одна на оба конца** — её читают маппер ссылки
-/// (`mappers/socks_mapper.dart`) и эмиттер (`toUriSocks`). Живёт она здесь, а
-/// не у маппера, именно поэтому: `node_spec_emit.dart` мапперов не знает и
-/// знать не должен (слой модели ниже слоя разбора), а две копии разъехались
-/// бы на первой же правке — и узел с `version: "4"` перестал бы переживать
-/// круг своей же ссылки, причём молча.
-const kSocksVersionByScheme = <String, String>{
-  'socks': '5',
-  'socks5': '5',
-  'socks4': '4',
-  'socks4a': '4a',
-};
-
-/// Обратное направление той же таблицы: версия тела → схема ссылки.
-///
-/// Версия вне таблицы даёт `socks5://` — ту же форму, что была до §475, и ту
-/// же, какую ядро примет по своему дефолту. Негодное значение сюда не
-/// доезжает: его снимает enum реестра (`type_invalid`), и модель получает
-/// дефолт.
-String socksSchemeForVersion(String version) =>
-    switch (version) { '4' => 'socks4', '4a' => 'socks4a', _ => 'socks5' };
 
 /// URL-encode query-параметра (для `toUri()`). Пробел → `%20`, не `+`.
 String encodeParam(String s) => Uri.encodeQueryComponent(s).replaceAll('+', '%20');

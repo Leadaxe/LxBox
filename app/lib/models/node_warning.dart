@@ -99,6 +99,12 @@ sealed class NodeWarning {
 
   WarningSeverity get severity;
 
+  /// §561 / задача 570 — тег (имя) записи источника, к которой относится
+  /// отбраковка (`dropped[]`); пусто — не отбраковка или запись без имени.
+  /// Заполняет разбор; шторка показывает его строкой под заголовком. Вне
+  /// [props]: говорит «с какой записью», а не «что случилось».
+  String get ownerTag => '';
+
   /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
   /// данным, НЕ по отрендеренной строке (§279: строка locale-зависима,
   /// равенство по ней ломало бы dedup при смене языка).
@@ -146,6 +152,24 @@ List<NodeWarning> maskSecretDropWarnings(List<NodeWarning> dropped) {
     for (final w in dropped)
       if (w is RegistryWarning) w.withSecretValueMasked() else w,
   ];
+}
+
+/// §561 — `dropped[]` разбора в том виде, в каком его держит сводка
+/// источника: по старшему уровню, секретные значения скрыты.
+///
+/// §570 — одинаковые записи РАЗНЫХ элементов (тот же код с теми же
+/// параметрами у той же записи-источника, [NodeWarning.ownerTag]) сводятся в
+/// одну: сводка называет причины, а не повторяет их. Записи разных владельцев
+/// остаются порознь — это разные записи источника.
+List<NodeWarning> summaryDropped(List<NodeWarning> dropped) {
+  if (dropped.isEmpty) return const [];
+  final seen = <(NodeWarning, String)>{};
+  final unique = [
+    for (final w in dropped)
+      if (seen.add((w, w.ownerTag))) w,
+  ];
+  return List.unmodifiable(
+      maskSecretDropWarnings(sortedDropWarnings(unique)));
 }
 
 // `transport_unsupported` — текст в реестре (`transports.json` → fallback
@@ -473,6 +497,7 @@ final class DialerProxyUnusableWarning extends NodeWarning {
 
   /// Тег отвергнутого outbound'а — `dropped[].ref` контракта. Пусто, если
   /// провайдер тега не дал: тогда опознать запись можно только по label.
+  @override
   final String ownerTag;
 
   const DialerProxyUnusableWarning(this.label, this.target,
@@ -489,20 +514,6 @@ final class DialerProxyUnusableWarning extends NodeWarning {
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
-}
-
-/// §368 §5.1 — `type: selector` (ручной выбор) импортирован как автовыбор:
-/// своего типа узла у нас нет, а терять собранный руками состав хуже, чем
-/// сменить режим отбора.
-final class SelectorAsAutoWarning extends NodeWarning {
-  const SelectorAsAutoWarning();
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "\"selector\" was imported as an auto-select group: the fastest member is picked by latency tests instead of manually.");
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
 }
 
 /// §368 §5.3 — член группы не доехал: тег не дал узла (служебный/битый
@@ -747,7 +758,7 @@ final class RegistryWarning extends NodeWarning {
     this.ownerTag = '',
   });
 
-  /// Код из `registry/warnings.json` — он же код конформанса (CANON §6).
+  /// Код из `registry/warnings.json` — он же код конформанса (PARSING_PRINCIPLES §6).
   final String code;
 
   /// Путь поля в теле узла (`tls.reality.key_share`); `null` у кодов уровня
@@ -769,6 +780,7 @@ final class RegistryWarning extends NodeWarning {
   /// идёт дедуп (§279). Тег же говорит не «что случилось», а «с какой
   /// записью», и включение его в идентичность развело бы на два сообщения
   /// один и тот же код об одном и том же поле у соседних узлов.
+  @override
   final String ownerTag;
 
   /// §500 — копия с `value: ***`, если путь — секретное поле реестра.

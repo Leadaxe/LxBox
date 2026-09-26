@@ -196,6 +196,7 @@ void main() {
     expect(nodes.map((n) => n.protocol), containsAll(['vless', 'hysteria2']));
     expect(nodes, hasLength(2));
   });
+  // §561 — отбраковка живёт только в `dropped[]` подписки: сосед чист.
   group('§321 P5 — неподдержанный протокол не пропадает молча', () {
     Map<String, dynamic> ob(String proto, String tag) => {
           'tag': tag,
@@ -214,10 +215,19 @@ void main() {
           'streamSettings': {'network': 'tcp', 'security': 'none'},
         };
 
-    List<NodeSpec> parse(List<Map<String, dynamic>> obs) =>
-        parseAll(decode(jsonEncode([
-          {'remarks': 'X', 'outbounds': obs}
-        ])));
+    List<NodeSpec> parse(List<Map<String, dynamic>> obs,
+            [List<NodeWarning>? dropped]) =>
+        parseAll(
+            decode(jsonEncode([
+              {'remarks': 'X', 'outbounds': obs}
+            ])),
+            dropped: dropped);
+
+    /// Теги отбракованных записей с кодом `protocol_unsupported`.
+    List<String> unsupportedRefs(List<NodeWarning> dropped) => [
+          for (final w in dropped.whereType<RegistryWarning>())
+            if (w.code == 'protocol_unsupported') w.ownerTag,
+        ];
 
     // §514 / контракт 1.1.50 — `wireguard` БОЛЬШЕ НЕ «неподдержанный»: волна
     // привезла `mappers.xray` этой схемы, и элемент `protocol: "wireguard"`
@@ -225,27 +235,34 @@ void main() {
     // бы проверять ОБРАТНОЕ заявленному, поэтому здесь, как и у лаунчера
     // (фикстуры `unsupported_protocol` корпуса и Go-теста), он заменён на
     // `trojan-go` — имя, которого не ведёт ни одна секция реестра.
-    test('warning висит на соседе по элементу', () {
-      final r = parse([ob('vless', 'v'), ob('trojan-go', 'w')]);
+    test('причина в dropped, сосед по элементу чист', () {
+      final dropped = <NodeWarning>[];
+      final r = parse([ob('vless', 'v'), ob('trojan-go', 'w')], dropped);
       expect(r, hasLength(1));
-      expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
-          hasLength(1));
+      expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(), isEmpty);
+      expect(unsupportedRefs(dropped), ['w']);
+      final w = dropped.whereType<RegistryWarning>().single;
+      expect(w.params['scheme'], 'trojan-go',
+          reason: 'текст кода называет протокол записи');
     });
 
-    test('один warning на протокол, не на каждый outbound', () {
+    test('одна запись на каждый отбракованный outbound', () {
+      final dropped = <NodeWarning>[];
       final r = parse([
         ob('vless', 'v'),
         ob('trojan-go', 'w1'),
         ob('trojan-go', 'w2'),
-      ]);
-      expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
-          hasLength(1));
+      ], dropped);
+      expect(r.first.warnings, isEmpty);
+      expect(unsupportedRefs(dropped), ['w1', 'w2']);
     });
 
-    test('разные протоколы → разные warnings', () {
-      final r = parse([ob('vless', 'v'), ob('trojan-go', 'w'), ob('ssh', 's')]);
-      expect(r.first.warnings.whereType<UnsupportedProtocolWarning>(),
-          hasLength(2));
+    test('разные протоколы → разные записи dropped', () {
+      final dropped = <NodeWarning>[];
+      final r =
+          parse([ob('vless', 'v'), ob('trojan-go', 'w'), ob('ssh', 's')], dropped);
+      expect(r.first.warnings, isEmpty);
+      expect(unsupportedRefs(dropped), ['w', 's']);
     });
 
     test('`protocol: wireguard` СОБИРАЕТСЯ в узел, а не в warning', () {

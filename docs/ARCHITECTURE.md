@@ -374,12 +374,19 @@ sing-box body ──► (already a sing-box map: the step-1 pass judges it verba
 
 Migrated so far: **trojan**, **vless**, **vmess**, **shadowsocks**,
 **hysteria2**, **tuic**, **anytls**, **naive**, **http(s) proxy**, **socks**
-and **ssh** (`kPipelineSchemes`). The set lists every spelling the dispatcher
-routes by, because a scheme name can carry more than a spelling: `hy2` is a
-plain alias of `hysteria2`, but `naive+quic` differs from `naive+https` by the
-body it produces (`quic: true`), and `proxy-https` differs from `proxy-http` by
-whether the body has a `tls` block at all. Aliases that change nothing —
-`socks5` for `socks`, the `proxy+…` plus-forms of §268 — share one mapper.
+and **ssh**. Since §562 the dispatcher holds no scheme names: `parseUri` maps
+the link's spelling to a body type through `registrySchemeType`
+(`mappers/uri_pipeline.dart`), a map built once per registry load from the
+`detect.scheme_in` of every `mappers.uri` section plus the `aliases` of those
+protocols (`wg` lives only there). A spelling can carry more than a name —
+`naive+quic` differs from `naive+https` by `quic: true`, `proxy-https` from
+`proxy-http` by the `tls` block, `socks4` from `socks` by `version` — and that
+difference is the section's `scheme_sets` on the way in and `emit.form_from` on
+the way out, not the dispatcher's. A section whose `forms[]` include a form the
+link engine cannot run (`space: ini`, the base64 `.conf` link) is routed to its
+own parser by that form, and the `vpn://` container and provider service lines
+are recognised by `source_kinds.json`. Without a loaded registry no link is
+parsed; `engine_no_scheme_names_test` forbids scheme literals in the dispatcher.
 
 Step 7 brought over the last two schemes — **masque** and **wireguard/AWG** —
 and with them the **second input of the same scheme, the INI text**
@@ -765,7 +772,7 @@ contract/                    # §460 the contract registry inside the app (contr
   body_sanitizer.dart        #   RegistrySanitizer.sanitize(body, scheme, coreVersion, platform) → SanitizeResult:
                              #   unknown_key, type/enum/format/bounds, on_invalid (drop/coerce/drop_node),
                              #   conflicts/requires, forbidden_for, min_core, platform, advisory, all_or_nothing.
-                             #   Defaults are NOT materialised (CANON §2.4), key order stays as it came in
+                             #   Defaults are NOT materialised (PARSING_PRINCIPLES §2.4), key order stays as it came in
                              #   (`order` governs the emitter — that is wave W2), `tag`/`detour`/`type` untouched
   registry_warning.dart      #   the render side of RegistryWarning (the class itself lives in models/node_warning.dart,
                              #   because NodeWarning is sealed): title_<lang>/text_<lang> from the registry, ru for a
@@ -957,7 +964,7 @@ vpn/BoxVpnService.kt         # the Android VpnService plus the PlatformInterface
                              #   The foreground/protect/override paths are tun-agnostic, so proxy mode is config-only and Kotlin is untouched
 vpn/BoxService.kt            # CommandServerHandler — it owns the libbox runtime (fileDescriptor/commandServer)
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
-vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singleton wifiObserver
+vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singletons wifiObserver, wifiStateCache
 vpn/CrashRecovery.kt         # §334 — “the previous run crashed” (a non-empty CrashReport-lxbox.log in
                              #   tempPath). The detection must run STRICTLY before Libbox.setup, which archives it
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
@@ -973,6 +980,7 @@ vpn/LxBoxTileService.kt      # the QS tile toggle (§032) with optimistic render
 vpn/QuickShortcuts.kt        # dynamic launcher shortcuts (Connect/Disconnect)
 vpn/LxBoxIntentReceiver.kt   # the §047 raw broadcast API: nine incoming actions, an optional permission gate, setEnabled
 vpn/WifiInfoReader.kt        # §051 the single source of the Wi-Fi SSID/BSSID (a permission preflight, a sealed Result)
+vpn/WifiStateCache.kt        # §569 API 31+: NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) → cached SSID/BSSID for WifiInfoReader
 vpn/WifiNetworkObserver.kt   # §051 auto-record: NetworkCallback → WifiHistoryBridge → Dart onWifiSeen
 vpn/PermissionUtils.kt · Extensions.kt  # the SDK-gated permission check; small Kotlin extensions
 
@@ -1055,14 +1063,14 @@ Start
 Two real core starts per press, signalling and final; everything between them
 is `Libbox.checkConfig` with no tunnel and no service. The loop is finite by
 construction — each round switches one node off, and a round with nothing to
-switch off breaks out (CANON §9.5).
+switch off breaks out (PARSING_PRINCIPLES §9.5).
 
 The automaton (`services/core_reject/core_reject_guard.dart`) is pure: the
 core, the config build and the storage reach it through the `CoreRejectHost`
 interface, implemented over the controllers in
 `screens/home/core_reject_host.dart`. The core's error arrives asynchronously
 on the status event, so the real start is awaited through a completer
-(`HomeController.startAndAwaitVerdict`). The error string is parsed by CANON
+(`HomeController.startAndAwaitVerdict`). The error string is parsed by PARSING_PRINCIPLES
 §9.1–§9.2 (`core_error_parse.dart`) and the tag is resolved to its source node
 through `BuildResult.nodeByEmittedTag`, the reverse map the same build
 produced (§9.3) — so a derived entry (a chain hop, a folder member, WARP, a
@@ -1514,6 +1522,7 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 │  • Libbox.setup(SetupOptions) async     │  │                                    │
 │  • libboxReady : CompletableDeferred    │  │                                    │
 │  • Singleton WifiNetworkObserver        │  │                                    │
+│  • Singleton WifiStateCache (§569)      │  │                                    │
 └─────────────────────────────────────────┘  └────────────────────────────────────┘
                                                            │ start/stop intent
                                                            ▼

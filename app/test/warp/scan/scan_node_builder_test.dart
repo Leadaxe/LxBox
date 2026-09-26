@@ -1,12 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/template_vars.dart';
-import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/warp/masque_account.dart';
 import 'package:lxbox/services/warp/scan/scan_models.dart';
 import 'package:lxbox/services/warp/scan/scan_node_builder.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 
 import '../../parser/engine_test_setup.dart';
+import 'package:lxbox/models/node_spec.dart';
+import '../../parser/parse_link_as.dart';
 
 /// §284 — сборка URI-узла кандидата из WARP-аккаунта (переиспользование кредов
 /// одной регистрации на любом IP:port).
@@ -87,7 +88,7 @@ void main() {
 
     /// URI узла → эмит sing-box (то, что реально уйдёт в ядро).
     Map<String, dynamic> emitOf(String uri) =>
-        parseWireguardUri(uri)!.emit(TemplateVars.empty).map;
+        parseLinkAs<WireguardSpec>(uri)!.emit(TemplateVars.empty).map;
 
     test('пул с keepalive → в узле persistent_keepalive_interval', () {
       final b = ScanNodeBuilder(warp: warp(), wgKeepalive: 25);

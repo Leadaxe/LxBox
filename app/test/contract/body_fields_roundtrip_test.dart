@@ -84,128 +84,24 @@ const kNotModelled = <String, String>{
 
   // --- 2. ядро принимает, приложение не поддерживает --------------------
   //
-  // Общие dial-поля ядра (`dialer.json`). Модель несёт из них ровно один
-  // `tcp_keep_alive` (§453) — остальные не читаются и не эмитятся.
-  '*.bind_interface': 'dial-поле ядра: ни в модели, ни в эмиттере (не §453)',
-  '*.inet4_bind_address': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.inet6_bind_address': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.connect_timeout': 'dial-поле ядра: ни в модели, ни в эмиттере',
+  // §560 — поля, которых нет в типизированной модели, круг теперь переживают
+  // дельтой тела по реестру (`BodyDelta`): dial-поля, `multiplex`,
+  // `udp_over_tcp`, тюнинг QUIC, поля транспортов и ssh/wireguard/masque.
+  // Здесь осталось то, что модель держит САМА и решает иначе, чем тело.
   '*.tcp_fast_open': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.udp_fragment': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.network_strategy': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.network_type': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.fallback_network_type': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.fallback_delay': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  '*.disable_tcp_keep_alive': 'dial-поле ядра: ни в модели, ни в эмиттере',
-  // §453 завёл TCP keep-alive только НОСИТЕЛЯМ TCP: у hysteria2, tuic,
-  // wireguard и masque конструктор его не принимает вовсе — соединение у них
-  // QUIC/UDP, и TCP-таймеров там нет. Значит поле не «теряется», а не
-  // относится к узлу.
-  'hysteria2.tcp_keep_alive': '§453: не-носитель TCP (QUIC), поля нет в модели',
-  'hysteria2.tcp_keep_alive_interval': '§453: не-носитель TCP (QUIC)',
-  'tuic.tcp_keep_alive': '§453: не-носитель TCP (QUIC), поля нет в модели',
-  'tuic.tcp_keep_alive_interval': '§453: не-носитель TCP (QUIC)',
-  '*.network': 'tcp/udp-ограничение узла: ни в модели, ни в эмиттере',
 
   // kTLS ядро принимает только на Linux; Android им не является в смысле
   // этого поля — ядро LxBox его не строит.
   'tls.kernel_tx': 'kTLS: ядро LxBox на Android не поддерживает',
   'tls.kernel_rx': 'kTLS: ядро LxBox на Android не поддерживает',
 
-  // Мультиплекс (`multiplex.json`) приложение не поддерживает целиком: ни
-  // модели, ни эмиссии. Заводить его — отдельная задача с UI.
-  '*.multiplex': 'мультиплекс не поддержан: ни модели, ни эмиссии',
-
-  // Поля транспортов, которых нет в `TransportSpec`. Ключ БЕЗ сегмента
-  // варианта: в теле узла транспорт лежит одной картой (`transport.path`), и
-  // имя варианта в путь не входит — оно только дискриминатор `transport.type`.
-  'transport.idle_timeout': 'поля нет в Grpc/HttpTransport и в эмиссии',
-  'transport.ping_timeout': 'поля нет в Grpc/HttpTransport и в эмиссии',
-  'transport.permit_without_stream': 'поля нет в GrpcTransport и в эмиссии',
-  'transport.method': 'поля нет в HttpTransport и в эмиссии',
-  'transport.session_table': 'поля нет в XhttpTransport и в эмиссии',
-  'transport.session_length': 'поля нет в XhttpTransport и в эмиссии',
-  'transport.sc_max_concurrent_posts': 'поля нет в XhttpTransport',
-  'transport.server_max_header_bytes': 'поля нет в XhttpTransport',
-  // QUIC-транспорт ядро знает, приложение его не строит вовсе: `TransportSpec`
-  // такого варианта не имеет, и `_transportFromSingbox` отдаёт `null`, отчего
-  // пропадает и сам дискриминатор `transport.type`.
-  'transport.type': 'вариант quic не поддержан: его нет в TransportSpec, '
-      'и вместе с ним пропадает сам дискриминатор',
-
-  // Тюнинг QUIC у hysteria2/tuic/naive — ни модели, ни эмиссии.
-  '*.connection_receive_window': 'тюнинг QUIC: ни модели, ни эмиссии',
-  '*.stream_receive_window': 'тюнинг QUIC: ни модели, ни эмиссии',
-  '*.quic_session_receive_window': 'тюнинг QUIC: ни модели, ни эмиссии',
-  '*.max_concurrent_streams': 'тюнинг QUIC: ни модели, ни эмиссии',
-  '*.disable_path_mtu_discovery': 'тюнинг QUIC: ни модели, ни эмиссии',
-  '*.initial_packet_size': 'тюнинг QUIC: ни модели, ни эмиссии',
-  '*.keep_alive_period': 'тюнинг QUIC: ни модели, ни эмиссии',
-  '*.idle_timeout': 'тюнинг QUIC: ни модели, ни эмиссии',
-  'hysteria2.bbr_profile': 'профиль BBR: ни модели, ни эмиссии',
-  'hysteria2.brutal_debug': 'отладка Brutal: ни модели, ни эмиссии',
-  'hysteria2.disable_chrome_parrot': 'мимикрия Chrome: ни модели, ни эмиссии',
-  'hysteria2.hop_interval': 'port hopping: интервала нет в модели',
-  'hysteria2.hop_interval_max': 'port hopping: интервала нет в модели',
-  'naive.insecure_concurrency': 'поля нет в NaiveSpec и в эмиссии',
-  'tuic.udp_over_stream': 'поля нет в TuicSpec и в эмиссии',
-
-  // UDP-over-TCP (`udp_over_tcp`) — ни модели, ни эмиссии ни у одной схемы.
-  '*.udp_over_tcp': 'UDP-over-TCP не поддержан: ни модели, ни эмиссии',
-
-  // Прочее по схемам.
-  'vmess.packet_encoding': 'у VmessSpec поля нет (есть только у VlessSpec), '
-      'эмиттер vmess его не пишет',
-  'vmess.authenticated_length': 'поля нет в VmessSpec и в эмиссии',
-  'vmess.global_padding': 'поля нет в VmessSpec и в эмиссии',
-  'anytls.client_metadata': 'поля нет в AnyTlsSpec и в эмиссии',
-  'ssh.client_version': 'поля нет в SshSpec и в эмиссии',
-  'ssh.cipher': 'список шифров: поля нет в SshSpec и в эмиссии',
-  'ssh.kex_algorithm': 'список KEX: поля нет в SshSpec и в эмиссии',
-  'ssh.mac': 'список MAC: поля нет в SshSpec и в эмиссии',
-  'ssh.private_key_path': 'путь к ключу: поля нет в SshSpec и в эмиссии',
   // `private_key` у ssh реестр числит `listable_string` — модель держит
   // строку, и списочная форма схлопывается. Значение не теряется, но круг
   // сравнивает форму, а не смысл.
   'ssh.private_key': 'реестр зовёт поле listable_string, модель держит строку',
 
   // --- 3. ждёт другой задачи --------------------------------------------
-  // §475 ЗАКРЫТ: записи `socks.version` здесь больше нет — ветка socks
-  // `parseSingboxEntry` поле читает, модель хранит, `emitSocks` пишет. Страж
-  // это и требовал: запись, ставшая лишней, роняет тест.
-
-  // Шаг 7 фичи 472 переводит wireguard и masque на единый конвейер; их ветки
-  // разбора сейчас правит соседний заход, и трогать их здесь нельзя.
-  // ПОСЛЕ шага 7 список пересмотреть: что он починил — отсюда снять (страж
-  // сам скажет, лишняя запись = падение).
-  'wireguard.system': 'шаг 7 фичи 472, сверить после',
-  'wireguard.name': 'шаг 7 фичи 472, сверить после',
-  'wireguard.listen_port': 'шаг 7 фичи 472, сверить после',
-  'wireguard.workers': 'шаг 7 фичи 472, сверить после',
-  'wireguard.udp_timeout': 'шаг 7 фичи 472, сверить после',
-  'wireguard.udp_mapping': 'шаг 7 фичи 472, сверить после',
-  'wireguard.udp_filtering': 'шаг 7 фичи 472, сверить после',
-  'wireguard.udp_nat_max': 'шаг 7 фичи 472, сверить после',
-  'wireguard.tcp_keep_alive': '§453: не-носитель TCP (UDP-туннель)',
-  'wireguard.tcp_keep_alive_interval': '§453: не-носитель TCP (UDP-туннель)',
-  // Ключи WG (private_key, header_protection_key, ключи пира) отсюда СНЯТЫ
-  // контрактом 1.1.22: нормализация `base64_std` переехала из маппера в
-  // `body.fields` (D133-22), и канон теперь ставит САНИТАЙЗЕР — на всех
-  // входах, а не только там, где значение пришло ссылкой. Обе стороны круга
-  // канонизируются одинаково, и поле переживает круг как любое другое.
-
   'masque.tls': 'шаг 7 фичи 472, сверить после',
-  'masque.sni': 'шаг 7 фичи 472: плоские legacy-ключи не принимаем (§393)',
-  'masque.skip_cert_verify': 'шаг 7 фичи 472: плоский legacy-ключ (§393)',
-  'masque.network': 'шаг 7 фичи 472: плоский legacy-ключ (§393)',
-  'masque.network_list': 'шаг 7 фичи 472, сверить после',
-  'masque.fragment': 'шаг 7 фичи 472, сверить после',
-  'masque.fragment_fallback_delay': 'шаг 7 фичи 472, сверить после',
-  'masque.record_fragment': 'шаг 7 фичи 472, сверить после',
-  'masque.ipv6': 'шаг 7 фичи 472: адрес едет через localAddresses',
-  'masque.uri': 'шаг 7 фичи 472, сверить после',
-  'masque.tcp_keep_alive': '§453: не-носитель TCP (QUIC)',
-  'masque.tcp_keep_alive_interval': '§453: не-носитель TCP (QUIC)',
 };
 
 /// Круг одного тела: санитайзер → модель → emit. `null` — узел не построился.
@@ -222,7 +118,9 @@ const kNotModelled = <String, String>{
   if (clean == null) return null;
   // `tag` ставит конвейер перед вызовом модели — иначе узел безымянен.
   final withTag = <String, dynamic>{...clean, 'tag': 'roundtrip'};
-  final node = parseSingboxEntry(withTag);
+  // §560 — тело прошло санитайзер, как на настоящем пути JSON-вкладки
+  // (`singbox_config.dart`), и модель получает дельту тела по реестру.
+  final node = parseSingboxEntry(withTag, sanitizedFrom: BodySource.singbox);
   if (node == null) return null;
   return (sanitized: clean, emitted: node.emit(TemplateVars.empty).map);
 }

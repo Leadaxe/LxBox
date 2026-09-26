@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-25 |
 | Дата завершения | — |
 | Коммиты | — |
-| Связанные spec'ы | tasks/512, tasks/514, tasks/533, tasks/544; `app/contract/docs/CANON.md`, `IDENTITY.md`, `corpus/README.md` |
+| Связанные spec'ы | tasks/512, tasks/514, tasks/533, tasks/544; `app/contract/docs/PARSING_PRINCIPLES.md`, `IDENTITY.md`, `corpus/README.md` |
 
 ## Проблема
 
@@ -30,7 +30,7 @@
 
 Порядок: контракт восстановлен `bash app/tool/sync_contract.sh` (sha256 совпал с
 `contract.lock`). Раннеры прогнаны по одному файлу Sonnet-субагентом, каждый
-кейс разобран Opus-субагентами по реестру, CANON и эталону Go
+кейс разобран Opus-субагентами по реестру, PARSING_PRINCIPLES и эталону Go
 (`git show 1cdb3279:…`) без правок кода.
 
 Классы: **A** — LxBox отстаёт, чинить Dart; **B** — фикстура/норма, запрос
@@ -44,7 +44,7 @@
 | `socks/socks5_base64_userinfo{,_colon_password}` (2) | B | Отличается только `scheme` (`socks`↔`socks5`), IDENTITY §4a класс C. У шести соседних кейсов `.expected.lxbox.json` есть, у этих двух — нет |
 | `naive/empty_host_rejected` | A | want `reason:emit_error, code:field_missing`. Санитайзер в ветке отсутствующего поля не разрешает `ref: dialer.common` и не видит `required` (`body_sanitizer.dart:~457`); узел умирает молча в `json_parsers.dart:1034` |
 | `vmess/not_base64_rejected` | A | want `field_missing`, got `form_unrecognized`. Go-декодер base64 нестрогий (хвостовые биты), `not-base64` у него декодируется как RawURL; Dart `Base64Codec` строгий (`interpreter.dart:597`, `_tryBase64`). Вопрос §514 §4б закрыт |
-| `wireguard/amneziawg_scheme_full_name` | A | `value` у `wgconf_dns_ignored` — по CANON:109 сырое значение до декода. Go отдаёт `+` как есть, Dart — после `_decodeQueryValue` (`interpreter.dart:1893`). Вывод §512/§514 «прав Dart» ошибочен |
+| `wireguard/amneziawg_scheme_full_name` | A | `value` у `wgconf_dns_ignored` — по PARSING_PRINCIPLES:109 сырое значение до декода. Go отдаёт `+` как есть, Dart — после `_decodeQueryValue` (`interpreter.dart:1893`). Вывод §512/§514 «прав Dart» ошибочен |
 
 ### Раннер тел (27)
 
@@ -55,16 +55,16 @@
 | `xray/mux_concurrency` | A | Нет `MultiplexSpec` в модели (`multiplex.json:140`) |
 | `xray/shadowsocks_uot` | A | Нет `udp_over_tcp` у SS (`shadowsocks.json:472`) |
 | `xray/vmess_security_junk`, `xray/vmess_tls` | A | `materialize_default: true` (наша же заявка), а модель с `int alterId = 0` и эмиттер `if (alterId != 0)` (`node_spec_emit.dart:155`) ноль от отсутствия не отличают |
-| `singbox/socks_version_absent` | A | Дефолт `'5'` материализуется (`json_parsers.dart:1143`, `node_spec_emit.dart:354`), CANON §2.4 запрещает |
-| **Группа S:** `singbox/socks_version_invalid`, `list_non_string_items`, `tls_alpn_item_nonstring`, `outbound_array_tls_fields` (часть «пин»), `tls_disabled_block` | A | JSON sing-box идёт в модель мимо санитайзера (§472 шаг 1 «тело не меняется»), CANON §8 требует маппер → санитайзер → эмиттер. Коды санитайзер ставит верно, очищенную карту выбрасывают. Правка — `singbox_config.dart:265` подавать `RegistrySanitizer.sanitize(...).body`, как xray (`uri_pipeline.dart:385`); плюс `toString()` у `alpn`/`server_ports` (`json_parsers.dart:~1439, 537`) |
+| `singbox/socks_version_absent` | A | Дефолт `'5'` материализуется (`json_parsers.dart:1143`, `node_spec_emit.dart:354`), PARSING_PRINCIPLES §2.4 запрещает |
+| **Группа S:** `singbox/socks_version_invalid`, `list_non_string_items`, `tls_alpn_item_nonstring`, `outbound_array_tls_fields` (часть «пин»), `tls_disabled_block` | A | JSON sing-box идёт в модель мимо санитайзера (§472 шаг 1 «тело не меняется»), PARSING_PRINCIPLES §8 требует маппер → санитайзер → эмиттер. Коды санитайзер ставит верно, очищенную карту выбрасывают. Правка — `singbox_config.dart:265` подавать `RegistrySanitizer.sanitize(...).body`, как xray (`uri_pipeline.dart:385`); плюс `toString()` у `alpn`/`server_ports` (`json_parsers.dart:~1439, 537`) |
 | `singbox/outbound_array_tls_fields` (часть `disable_sni:false`, `insecure:false`) | A после B | Явные `false` теряются (`kTlsBoolKeys` только `true`). Проза `tls.json emit_allowlist` («булевы только при true») противоречит фикстуре → вопрос лаунчеру |
 | `xray/{dialer_chain_vless_relay, multinode_310, reality_key_share_not_carried, ws_ed_flat_only, ws_ed_path_tail_beats_flat, ws_eh_without_ed}` (6) | A, нужно решение владельца | Одна причина: откат `serverName ?? server` (`json_parsers.dart:1434`, §472 шаг 5). У `tls#xray` нет `default_from`. Identity по IDENTITY §1 (тег) не меняется; меняются снапшоты `legacyNodeIdentityHash` (`before_480_identity_snapshot`, `engine_xray_pilot`), дедуп-подпись и `sni=` в `toUri()` |
-| `xray/hysteria_version_3_unrecognized`, `malformed_stream`, `unsupported_protocol` | A | Отбраковка элемента Xray уходит warning'ом на соседа или пропадает (§321 P5; `json_parsers.dart:240, 300, 313-329`). CANON §4.1 требует запись в `dropped[]` на каждую |
+| `xray/hysteria_version_3_unrecognized`, `malformed_stream`, `unsupported_protocol` | A | Отбраковка элемента Xray уходит warning'ом на соседа или пропадает (§321 P5; `json_parsers.dart:240, 300, 313-329`). PARSING_PRINCIPLES §4.1 требует запись в `dropped[]` на каждую |
 | `xray/hysteria_v1_skipped` | B | В ожидании нет `meta.extension: desktop` (`hysteria.json:14`, `corpus/README.md:70`) |
-| `xray/vless_encryption_junk` | B | want `ref:"enc-junk"` (метка из remarks); по CANON §4.1 ref у JSON-тела — тег outbound (`proxy`), как у соседних кейсов |
+| `xray/vless_encryption_junk` | B | want `ref:"enc-junk"` (метка из remarks); по PARSING_PRINCIPLES §4.1 ref у JSON-тела — тег outbound (`proxy`), как у соседних кейсов |
 | `xray/socks_settings_users` | C | Отбор §321 (socks из Xray — только звено `dialerProxy`, `json_parsers.dart:647`). Оставить → запрос override в лаунчер; снять → узел появится |
-| `xray/hysteria2_bandwidth_suffix_finalmask_obfs` | D | Код верен. Раннер: `sortWarningsByBodyOrder` (`corpus_warnings.dart`) опознаёт коды маппера по пути, а не по коду (`json_field_unknown` уезжает за `tls.*`); `normalizeNodeWarnings` сопоставляет по позиции и стирает `value`. Предложение §514 «сортировать по паре» снято: порядок теперь нормирован CANON §6 |
-| `xray/balancer_group` | D + B | (D) `AutoSelectSpec.emitRaw` отдаёт `outbounds:[]`, раннер состав не раскрывает. (B) want `outbounds:["bal proxy"]` — тег Go вопреки CANON §5 («члены по label»); `group.json` без секции `body`, лишние `tolerance/idle_timeout/interrupt_exist_connections` не нормированы |
+| `xray/hysteria2_bandwidth_suffix_finalmask_obfs` | D | Код верен. Раннер: `sortWarningsByBodyOrder` (`corpus_warnings.dart`) опознаёт коды маппера по пути, а не по коду (`json_field_unknown` уезжает за `tls.*`); `normalizeNodeWarnings` сопоставляет по позиции и стирает `value`. Предложение §514 «сортировать по паре» снято: порядок теперь нормирован PARSING_PRINCIPLES §6 |
+| `xray/balancer_group` | D + B | (D) `AutoSelectSpec.emitRaw` отдаёт `outbounds:[]`, раннер состав не раскрывает. (B) want `outbounds:["bal proxy"]` — тег Go вопреки PARSING_PRINCIPLES §5 («члены по label»); `group.json` без секции `body`, лишние `tolerance/idle_timeout/interrupt_exist_connections` не нормированы |
 
 **Итого (33):** A — 25 (из них 6 ждут решения по `server_name`, 1 — ответа по
 `listen_port`, 1 частично ждёт ответа по bool'ам TLS), B — 5 (+ B-части у
@@ -83,7 +83,7 @@
      (`"scheme": "socks"`), в IDENTITY §4a «6 кейсов» → «8»;
    - `body/xray/hysteria_v1_skipped` — `meta.extension: "desktop"`;
    - `body/xray/vless_encryption_junk` — `dropped[0].ref` = `proxy` (тег), и Go;
-   - `body/xray/balancer_group` — члены по label (CANON §5) или правка §5;
+   - `body/xray/balancer_group` — члены по label (PARSING_PRINCIPLES §5) или правка §5;
      нормировать поля тела группы / override;
    - `tls.json emit_allowlist` — подтвердить, что явный `false` из тела
      sing-box сохраняется, поправить прозу;

@@ -45,7 +45,7 @@ class ChainHopCandidate {
     required this.tag,
     required this.kind,
     this.below = false,
-    this.reality = false,
+    this.body,
     this.detour = false,
     this.outboundType = '',
     this.masqueVhttp = '',
@@ -83,9 +83,10 @@ class ChainHopCandidate {
   /// деградирует всю цепочку на сборке.
   final bool below;
 
-  /// Узел поднимает reality: снятый `tls.utls` не даст ядру стартовать
-  /// (SPEC 110 T4, §393 L4 — `check` этого НЕ ловит).
-  final bool reality;
+  /// Тело узла собранного конфига (`null` — не узел или неизвестно). По нему
+  /// движок реестра судит `on_hop_required` каталога strip (§57): какие
+  /// снимаемые пути звено требует.
+  final Map<String, dynamic>? body;
 
   /// У узла есть собственный `detour`. Что он значит внутри цепочки —
   /// зависит от ПОЗИЦИИ (см. `chain_form_validation.dart`).

@@ -1,8 +1,11 @@
-// §489 — вердикт страховки в бэкап не едет; локальное хранилище не трогаем.
+// §489 / контракт 1.1.67 — `core_rejected` при переносе бэкапом: экспорт
+// сервера пишет как есть, подписка — картой disabled{} без причины; импорт
+// запись снимает, выключение берёт из файла (узел не включается).
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/core_reject_verdict.dart';
+import 'package:lxbox/models/node_spec.dart' show AutoSelectSpec;
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/core_reject/core_reject_backup.dart';
 import 'package:lxbox/services/core_reject/core_reject_guard.dart';
@@ -55,7 +58,7 @@ SubscriptionServers _sub({
 void main() {
   setUpAll(loadEngineSections);
 
-  group('§221 — warnings в allowlist, в бэкап вердикт не едет', () {
+  group('§221 — warnings в allowlist; причина у подписки не едет', () {
     test('warnings объявлен в slice-таблице у всех трёх видов записи', () {
       for (final r in [
         BackupRecord.subscription,
@@ -71,7 +74,7 @@ void main() {
       }
     });
 
-    test('страховка: вердикт и выключение не попадают в файл', () async {
+    test('подписка: выключение едет картой disabled без причины', () async {
       final out = await _export([
         _sub(
           disabled: {'Tokyo': DateTime.utc(2026, 9, 19)},
@@ -84,7 +87,7 @@ void main() {
       expect(out.json.contains('core_rejected'), isFalse);
       final sub = _source(out.json, 'subscription');
       expect(sub.containsKey('warnings'), false);
-      expect(sub.containsKey('disabled'), false);
+      expect((sub['disabled'] as Map).keys, ['Tokyo']);
     });
 
     test('ручное выключение без вердикта экспортируется', () async {
@@ -98,7 +101,7 @@ void main() {
   });
 
   group('экспорт → импорт', () {
-    test('страховка: после импорта узел включён, вердикта нет', () async {
+    test('страховка: после импорта узел выключен, вердикта нет', () async {
       final local = _sub(
         disabled: {'Tokyo': DateTime.utc(2026, 9, 19)},
         warnings: {'Tokyo': [StoredWarning.coreRejected('bad tokyo')]},
@@ -109,11 +112,11 @@ void main() {
         LxImportReceiver(lists: const [], receiverTargets: const {'vpn-1'}),
       );
       final sub = plan.lists.whereType<SubscriptionServers>().single;
-      expect(sub.disabledHashes.containsKey('Tokyo'), false);
+      expect(sub.disabledHashes.containsKey('Tokyo'), true);
       expect(sub.nodeWarnings.containsKey('Tokyo'), false);
     });
 
-    test('старый файл с вердиктом: импорт игнорирует, узел включён', () async {
+    test('файл с вердиктом: запись снята, узел остаётся выключенным', () async {
       final json = jsonEncode({
         'lx_backup': 2,
         'exported_by': {'app': 'test', 'version': '0'},
@@ -145,7 +148,7 @@ void main() {
       );
       expect(plan.file.warnings, isEmpty);
       final sub = plan.lists.whereType<SubscriptionServers>().single;
-      expect(sub.disabledHashes.containsKey('Tokyo'), false);
+      expect(sub.disabledHashes.containsKey('Tokyo'), true);
       expect(sub.nodeWarnings.containsKey('Tokyo'), false);
     });
 
@@ -170,7 +173,7 @@ void main() {
       expect(sub.disabledHashes.containsKey('Tokyo'), true);
     });
 
-    test('ручная отметка из файла доливается, страховочная — нет', () async {
+    test('отметки из файла доливаются, вердикт файла — нет', () async {
       final json = jsonEncode({
         'lx_backup': 2,
         'exported_by': {'app': 'test', 'version': '0'},
@@ -206,12 +209,12 @@ void main() {
         LxImportReceiver(lists: [local], receiverTargets: const {'vpn-1'}),
       );
       final sub = plan.lists.whereType<SubscriptionServers>().single;
-      expect(sub.disabledHashes.keys.toSet(), {'Tokyo', 'Osaka'});
-      expect(sub.disabledHashes.containsKey('Kyoto'), false);
+      expect(sub.disabledHashes.keys.toSet(), {'Tokyo', 'Osaka', 'Kyoto'});
+      expect(sub.nodeWarnings.containsKey('Kyoto'), false);
       expect(sub.nodeWarnings['Tokyo']!.single.reason, 'bad tokyo');
     });
 
-    test('ручной сервер: страховка не едет, ручное выключение — да',
+    test('ручной сервер: экспорт как есть, импорт снимает вердикт',
         () async {
       final outInsurance = await _export([
         UserServer(
@@ -225,8 +228,11 @@ void main() {
           warnings: [StoredWarning.coreRejected('bad server')],
         ),
       ]);
-      expect(_source(outInsurance.json, 'server')['enabled'], true);
-      expect(_source(outInsurance.json, 'server').containsKey('warnings'), false);
+      expect(_source(outInsurance.json, 'server')['enabled'], false);
+      expect(
+          (_source(outInsurance.json, 'server')['warnings'] as List).single
+              ['code'],
+          'core_rejected');
 
       final plan = planLxBackupImport(
         outInsurance.json,
@@ -234,7 +240,7 @@ void main() {
       );
       expect(plan.file.warnings, isEmpty);
       final srv = plan.lists.whereType<UserServer>().single;
-      expect(srv.enabled, true);
+      expect(srv.enabled, false);
       expect(srv.warnings, isEmpty);
 
       final outManual = await _export([
@@ -258,7 +264,7 @@ void main() {
       expect(planManual.lists.whereType<UserServer>().single.enabled, false);
     });
 
-    test('в одной подписке: страховка срезается, ручное выключение остаётся',
+    test('в одной подписке: причина срезается, оба выключения остаются',
         () async {
       final out = await _export([
         _sub(
@@ -272,7 +278,7 @@ void main() {
         ),
       ]);
       final sub = _source(out.json, 'subscription');
-      expect((sub['disabled'] as Map).keys.toSet(), {'Osaka'});
+      expect((sub['disabled'] as Map).keys.toSet(), {'Tokyo', 'Osaka'});
       expect(sub.containsKey('warnings'), false);
 
       final plan = planLxBackupImport(
@@ -281,11 +287,11 @@ void main() {
       );
       expect(plan.file.warnings, isEmpty);
       final got = plan.lists.whereType<SubscriptionServers>().single;
-      expect(got.disabledHashes.keys.toSet(), {'Osaka'});
+      expect(got.disabledHashes.keys.toSet(), {'Tokyo', 'Osaka'});
       expect(got.nodeWarnings, isEmpty);
     });
 
-    test('старый файл ручного сервера с вердиктом: импорт без ошибок, узел включён',
+    test('файл ручного сервера с вердиктом: импорт без ошибок, узел выключен',
         () async {
       final json = jsonEncode({
         'lx_backup': 2,
@@ -313,13 +319,13 @@ void main() {
       );
       expect(plan.file.warnings, isEmpty);
       final srv = plan.lists.whereType<UserServer>().single;
-      expect(srv.enabled, true);
+      expect(srv.enabled, false);
       expect(srv.warnings, isEmpty);
     });
   });
 
   group('sanitizeCoreRejectInBackupRecord', () {
-    test('папка: член со страховкой в файле включён', () {
+    test('папка: у члена вердикт снят, выключение осталось', () {
       final out = sanitizeCoreRejectInBackupRecord({
         'kind': 'folder',
         'nodes': [
@@ -338,7 +344,7 @@ void main() {
         ],
       }, BackupRecord.folder);
       final node = (out['nodes'] as List).single as Map;
-      expect(node['enabled'], true);
+      expect(node['enabled'], false);
       expect(node.containsKey('warnings'), false);
     });
   });
@@ -346,7 +352,7 @@ void main() {
   group('папка: экспорт → импорт', () {
     const other = 'trojan://secret@example-3.com:443#Osaka';
 
-    test('страховка включена и без вердикта, ручное выключение остаётся',
+    test('экспорт как есть; импорт снимает вердикт, выключения остаются',
         () async {
       final out = await _export([
         FolderServers(
@@ -372,8 +378,8 @@ void main() {
           );
       final insurance = nodeWith('example-2.com');
       final manual = nodeWith('example-3.com');
-      expect(insurance['enabled'], true);
-      expect(insurance.containsKey('warnings'), false);
+      expect(insurance['enabled'], false);
+      expect((insurance['warnings'] as List).single['code'], 'core_rejected');
       expect(manual['enabled'], false);
 
       final plan = planLxBackupImport(
@@ -384,12 +390,12 @@ void main() {
       final got = plan.lists.whereType<FolderServers>().single;
       FolderMember memberWith(String hay) =>
           got.members.firstWhere((m) => m.raw.contains(hay));
-      expect(memberWith('example-2.com').enabled, true);
+      expect(memberWith('example-2.com').enabled, false);
       expect(memberWith('example-2.com').warnings, isEmpty);
       expect(memberWith('example-3.com').enabled, false);
     });
 
-    test('старый файл папки с вердиктом: импорт без ошибок, узел включён',
+    test('файл папки с вердиктом: импорт без ошибок, узел выключен',
         () async {
       final json = jsonEncode({
         'lx_backup': 2,
@@ -432,9 +438,47 @@ void main() {
       final got = plan.lists.whereType<FolderServers>().single;
       FolderMember memberWith(String hay) =>
           got.members.firstWhere((m) => m.raw.contains(hay));
-      expect(memberWith('example-2.com').enabled, true);
+      expect(memberWith('example-2.com').enabled, false);
       expect(memberWith('example-2.com').warnings, isEmpty);
       expect(memberWith('example-3.com').enabled, false);
+    });
+  });
+
+  group('контракт 1.1.66 — warnings узла-группы едут как есть', () {
+    test('экспорт пишет, импорт кладёт в состояние; core_rejected снят',
+        () async {
+      final out = await _export([
+        FolderServers(
+          id: 'fold-g',
+          name: 'EU',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          members: [
+            FolderMember(raw: _uri),
+            FolderMember.auto(
+              AutoSelectSpec(id: 'g', tag: 'Auto', label: 'Auto'),
+              warnings: const [
+                StoredWarning(
+                    code: 'group_member_missing', params: {'count': '2'}),
+              ],
+            ),
+          ],
+        ),
+      ]);
+      final nodes = (_source(out.json, 'folder')['nodes'] as List)
+          .cast<Map<String, dynamic>>();
+      final auto = nodes.firstWhere((n) => n['kind'] == 'auto');
+      expect((auto['warnings'] as List).single['code'], 'group_member_missing');
+
+      final plan = planLxBackupImport(
+        out.json,
+        LxImportReceiver(lists: const [], receiverTargets: const {'vpn-1'}),
+      );
+      final got = plan.lists.whereType<FolderServers>().single;
+      final g = got.members.firstWhere((m) => m.node is AutoSelectSpec);
+      expect(g.warnings.map((w) => w.code), ['group_member_missing']);
+      expect(g.warnings.single.params['count'], '2');
     });
   });
 

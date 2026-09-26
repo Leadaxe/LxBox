@@ -10,7 +10,9 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/source_chain.dart';
+import 'package:lxbox/models/codec/source_replace_record.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
@@ -56,12 +58,11 @@ const _autoDefaultKeys = {'url', 'interval', 'tolerance', 'idle_timeout'};
 
 // ── Скипы ───────────────────────────────────────────────────────────────────
 
-/// `fold_*` — SPEC 108, свёртка подписки в группу. Фаза E закрыта решением
-/// оператора (24.08.2026): свёртки на мобиле НЕ БУДЕТ. Кейсы остаются в
-/// общем корпусе ради лаунчера; для LxBox они не применимы навсегда, а не
-/// «пока».
-const _skipFold = 'na: свёртка подписки в группу (SPEC 108) на мобиле не '
-    'нужна — фаза E закрыта решением оператора 24.08.2026';
+/// `fold_*` — свёртка подписки в группу `replace {mode, tag, auto?}`
+/// (фича 565 фаза B, контракт 1.1.78 §74, вход корпуса с 1.1.79). Идут все:
+/// `@имя` в параметрах автовыбора свёртки раскрывается переменной шаблона,
+/// как у Направления (§570).
+const Map<String, String> _skipFold = {};
 
 /// Коды предупреждений корпуса → как их опознать в `emitWarnings` LxBox.
 ///
@@ -164,8 +165,8 @@ void main() {
     for (final base in cases) {
       final name = base.substring(root.path.length + 1);
       // §393 C — `chain_*` больше не скипаются: цепочки реализованы
-      // (C1–C5). `fold_*` скипнуты навсегда (фаза E закрыта).
-      final skip = name.startsWith('fold_') ? _skipFold : null;
+      // (C1–C5). `fold_*` идут с фазой B фичи 565, кроме [_skipFold].
+      final skip = _skipFold[name];
 
       test(name, () async {
         final input = jsonDecode(File('$base.direction.json').readAsStringSync())
@@ -218,7 +219,12 @@ Future<void> _runCase(
   final coreSupportsChain = input['core_supports_chain'] as bool? ?? true;
 
   final result = await buildConfig(
-    lists: nodeTags.isEmpty ? const [] : [_sourceFor(nodeTags, groupTags)],
+    lists: nodeTags.isEmpty
+        ? const []
+        : [
+            _sourceFor(nodeTags, groupTags,
+                replace: sourceReplaceFromRecord(input['replace'])),
+          ],
     template: _template(),
     settings: BuildSettings(
       directions: directions,
@@ -268,19 +274,29 @@ Future<void> _runCase(
   // ── предупреждения ────────────────────────────────────────────────────────
   final wantCodes =
       ((expected['warnings'] as List?) ?? const []).cast<String>().toSet();
+  // Контракт 1.1.80 — коды уровня сборки (`replace_*`) сборка отдаёт
+  // КОДАМИ (`BuildResult.buildCodes`), как раннер лаунчера собирает их из
+  // записей отчёта сборки; прочие — строкой через [_warningProbes].
+  final gotCodes = {for (final w in result.buildCodes) w.code};
   for (final code in wantCodes) {
     expect(_unsupportedCodes.contains(code), isFalse,
         reason: '$doc\nкод "$code" объявлен неподдерживаемым, но кейс не '
             'скипнут — либо реализуйте, либо скипните кейс явно');
+    if (gotCodes.contains(code)) continue;
     final probe = _warningProbes[code];
     expect(probe, isNotNull,
-        reason: '$doc\nкод "$code" не описан в _warningProbes раннера');
+        reason: '$doc\nкод "$code" не получен сборкой и не описан в '
+            '_warningProbes раннера; коды сборки: $gotCodes');
     expect(result.emitWarnings.any(probe!), isTrue,
         reason: '$doc\nожидалось предупреждение "$code", получено:\n'
             '${result.emitWarnings.join('\n')}');
   }
   // Обратная сторона: код, которого корпус НЕ ждёт, не должен возникать —
   // иначе «предупреждаем всегда» проходило бы корпус молча.
+  for (final code in gotCodes) {
+    expect(wantCodes.contains(code), isTrue,
+        reason: '$doc\nлишний код сборки "$code"');
+  }
   for (final entry in _warningProbes.entries) {
     if (wantCodes.contains(entry.key)) continue;
     expect(result.emitWarnings.any(entry.value), isFalse,
@@ -364,7 +380,16 @@ DirectionAuto _toAuto(Map<String, dynamic> a) {
 WizardTemplate _template() => WizardTemplate(
       parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(),
-      vars: const [],
+      // Переменные автовыбора шаблона лаунчера: кейс
+      // `fold_auto_inherits_template_vars` проверяет, что `@urltest_*` в
+      // `auto` свёртки берут значения шаблона, а у шаблона лаунчера они такие.
+      vars: [
+        WizardVar(
+            name: 'urltest_url',
+            type: 'text',
+            defaultValue: 'https://cp.cloudflare.com/generate_204'),
+        WizardVar(name: 'urltest_interval', type: 'text', defaultValue: '5m'),
+      ],
       varSections: const [],
       config: {
         'outbounds': [
@@ -386,7 +411,13 @@ WizardTemplate _template() => WizardTemplate(
 /// sing-box-конфига» (README корпуса). У мобилы это [AutoSelectSpec]: тот же
 /// водораздел (нет server/port, `type: urltest` в конфиге), и билдер отличает
 /// её ровно по типу эмитированной записи.
-UserServer _sourceFor(List<String> nodeTags, Set<String> groupTags) {
+/// Фича 565 фаза B — вход `replace` делает источник свёрнутой подпиской:
+/// путь сборки у подписки тот же, узлы — те же.
+ServerList _sourceFor(
+  List<String> nodeTags,
+  Set<String> groupTags, {
+  SourceReplace? replace,
+}) {
   final nodes = <NodeSpec>[];
   for (var i = 0; i < nodeTags.length; i++) {
     final tag = nodeTags[i];
@@ -406,6 +437,18 @@ UserServer _sourceFor(List<String> nodeTags, Set<String> groupTags) {
         '?type=ws&security=tls#${Uri.encodeComponent(tag)}');
     expect(spec, isNotNull, reason: 'не разобрался узел корпуса "$tag"');
     nodes.add(spec!);
+  }
+  if (replace != null) {
+    return SubscriptionServers(
+      id: 'corpus',
+      name: 'corpus',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      url: 'https://example-1.com/corpus',
+      replace: replace,
+      nodes: nodes,
+    );
   }
   return UserServer(
     id: 'corpus',
@@ -500,7 +543,7 @@ List<Map<String, dynamic>> _stripUnnamedAutoDefaults(
 /// Go-раннер сравнивает `json.MarshalIndent` от `map[string]interface{}`, а
 /// Go сортирует ключи map — то есть порядок в самих `.expected.json`
 /// (`tag, type, default, outbounds`) до сравнения не доживает и там. Тот же
-/// приём, что в `contract_test.dart` (`_sortKeys`, CANON §2.3).
+/// приём, что в `contract_test.dart` (`_sortKeys`, PARSING_PRINCIPLES §2.3).
 ///
 /// Порядок СПИСКОВ и порядок ГРУПП, наоборот, нормативны (README корпуса) и
 /// сохраняются.

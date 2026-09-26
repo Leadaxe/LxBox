@@ -7,6 +7,13 @@ import 'dart:convert';
 import '../parser/engine/section_loader.dart' show MapperSections;
 import '../parser/mappers/uri_pipeline.dart' show pipelineSchemes;
 
+/// URL подписки — то, что приложение СКАЧИВАЕТ своим HTTP-клиентом.
+///
+/// §566 — это транспорт скачивания, а не схема узла: реестр такого набора не
+/// объявляет (`source_kinds.json` опознаёт уже скачанное ТЕЛО), и страж
+/// `engine_no_scheme_names_test` держит эти два литерала явным исключением.
+/// Ссылки на узел с этими написаниями приходят своими схемами реестра
+/// (`aliases` протокола), поэтому голые `http(s)://` заняты здесь.
 bool isSubscriptionUrl(String input) {
   final t = input.trim();
   return t.startsWith('http://') || t.startsWith('https://');
@@ -63,21 +70,29 @@ String? documentKindOf(String input) {
   return best.kind;
 }
 
-bool isWireGuardConfig(String input) {
-  final kind = documentKindOf(input);
-  if (kind != null) return kind == 'wireguard_conf';
-  // Реестр не загружен — запасной признак тот же, что у реестра
-  // (`source_kinds.json`): секция `[Interface]`; `[Peer]` не требуется.
-  return input.trim().contains('[Interface]');
+/// Тип тела, в который переводит документ вида [kind]: секция его `mapper`
+/// в реестре, если она ровно одна. `null` — реестра нет или типов несколько.
+String? _bodyTypeOfKind(String kind) {
+  final mapper = MapperSections.I.documents?.sourceByKind(kind)?.mapper;
+  if (mapper == null) return null;
+  final types = MapperSections.I.typesFor(mapper);
+  return types.length == 1 ? types.single : null;
 }
 
-/// §110 — Amnezia `vpn://`-ссылка (контейнерный экспорт Amnezia/awg2).
-/// Не direct link: внутри не одноузловой URI, а base64-контейнер.
-bool isAmneziaVpnLink(String input) {
-  final kind = documentKindOf(input);
-  if (kind != null) return kind == 'amnezia_link';
-  return input.trim().startsWith('vpn://');
+bool isWireGuardConfig(String input) {
+  // Вид документа судит только реестр (`source_kinds.json`); без него ничего
+  // не опознаётся, как и ссылки (§562, §566).
+  return documentKindOf(input) == 'wireguard_conf';
 }
+
+/// §110 — ссылка-контейнер Amnezia (контейнерный экспорт Amnezia/awg2).
+/// Не direct link: внутри не одноузловой URI, а base64-контейнер.
+///
+/// §566 — признак объявляет вид источника `amnezia_link` (`detect` в
+/// `source_kinds.json`); литерального запасного префикса нет, как и у
+/// диспетчера схем (§562): реестра нет — контейнера нет.
+bool isAmneziaVpnLink(String input) =>
+    documentKindOf(input) == 'amnezia_link';
 
 /// §500 — метка в шапке шторки при отказе одиночного ввода: фрагмент ссылки
 /// (`#tag`) или схема/тип входа.
@@ -93,7 +108,11 @@ String inputSourceLabel(String input) {
     final scheme = firstLine.split('://').first.toLowerCase();
     if (scheme.isNotEmpty) return scheme;
   }
-  if (isWireGuardConfig(t)) return 'wireguard';
+  // §566 — род тела называет реестр (тип секции вида источника), а не
+  // литерал: `.conf` переводится секцией `conf`.
+  if (isWireGuardConfig(t)) {
+    return _bodyTypeOfKind(documentKindOf(t) ?? '') ?? 'input';
+  }
   if (firstLine.startsWith('{') || firstLine.startsWith('[')) {
     try {
       final decoded = jsonDecode(t);

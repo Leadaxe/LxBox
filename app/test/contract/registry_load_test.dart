@@ -20,9 +20,13 @@ void main() {
   group('ContractRegistry', () {
     setUpAll(loadTestRegistry);
 
-    test('реестр 1.1.56 грузится', () {
+    // Версия — из VERSION зеркала, литерал устаревал бы на каждом бампе.
+    final assetsVersion =
+        File('assets/contract/VERSION').readAsStringSync().trim();
+
+    test('реестр грузится с версией из VERSION', () {
       expect(ContractRegistry.I.isLoaded, isTrue);
-      expect(ContractRegistry.I.version, '1.1.56');
+      expect(ContractRegistry.I.version, assetsVersion);
     });
 
     // §468 (контракт 1.1.2) — severity кода живёт в реестре, а рукописный
@@ -161,26 +165,38 @@ void main() {
       expect(w.params, contains('value'));
     });
 
-    test('каждый файл protocols/ прочитан — состав списка не разошёлся', () {
-      // Список файлов в registry.dart перечислен поимённо (rootBundle каталог
-      // не листает). Бамп контракта, добавивший протокол, обязан попасть и
-      // туда — иначе схема новой записи молча не нашлась бы.
+    test('§566 каждый файл protocols/ прочитан — состав из каталога', () {
+      // Состав протоколов берётся листингом каталога (на диске) или
+      // манифестом ассетов (бандл), а не списком в коде: протокол, приехавший
+      // бампом контракта, обязан загрузиться без правки Dart.
       final onDisk = Directory('$kRegistryRoot/registry/protocols')
           .listSync()
           .whereType<File>()
           .where((f) => f.path.endsWith('.json'))
           .length;
-      var loaded = 0;
-      for (final type in const [
-        'anytls', 'chain', 'http', 'hysteria', 'hysteria2', 'masque', 'naive',
-        'shadowsocks', 'socks', 'ssh', 'tailscale', 'trojan', 'tuic', 'vless',
-        'vmess', 'wireguard',
-      ]) {
-        if (ContractRegistry.I.schemaFor(type) != null) loaded++;
-      }
-      // group.json схемы тела не несёт (selector|urltest) — отсюда −1.
-      expect(loaded, onDisk - 1,
-          reason: 'список _kProtocolFiles разошёлся с registry/protocols/');
+      // Ключ записи — `singbox_type`, у всех файлов он свой.
+      expect(ContractRegistry.I.protocolNames.length, onDisk);
+    });
+
+    test('§566 load() берёт состав protocols/ из манифеста', () async {
+      // Манифест бандла подменяется листингом зеркала: ровно то, что прод
+      // получил бы от `AssetManifest`, плюс посторонний путь, который в
+      // состав попадать не должен.
+      const root = 'assets/contract';
+      final paths = [
+        for (final f in Directory('$root/registry/protocols')
+            .listSync()
+            .whereType<File>())
+          '$root/registry/protocols/${f.uri.pathSegments.last}',
+        '$root/registry/tls.json',
+      ];
+      final before = ContractRegistry.I.protocolNames.toSet();
+      ContractRegistry.I.resetForTesting();
+      await ContractRegistry.I.load(
+        loader: (p) => File(p).readAsString(),
+        lister: () async => paths,
+      );
+      expect(ContractRegistry.I.protocolNames.toSet(), before);
     });
 
     test('зеркало assets совпадает с копией контракта', () async {
@@ -188,7 +204,7 @@ void main() {
       // check_contract_lock; здесь при наличии вендоренной копии сверяем
       // версию с ней. Без копии (CI, чистый worktree) кейс не скипается:
       // зеркало уже проверено тестами выше.
-      expect(ContractRegistry.I.version, '1.1.56');
+      expect(ContractRegistry.I.version, assetsVersion);
       expect(ContractRegistry.I.schemaFor('vless'), isNotNull);
       if (!hasVendorContract) return;
       final mirrorVersion = ContractRegistry.I.version;

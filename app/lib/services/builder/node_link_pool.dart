@@ -20,6 +20,7 @@ import '../tag_resolver.dart';
 import 'node_link_resolve.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
+import 'source_replace_build.dart' show ReplacePlan;
 
 /// Пул ссылок источников [lists]: словарь с финальными тегами узлов и
 /// корневыми именами ([directions] и их `-auto`, служебные outbound'ы).
@@ -32,12 +33,15 @@ NodeLinkTargets computeNodeLinkPool(
       kDirectOutboundTag,
       kBlockOutboundTag,
       for (final d in directions) ...[d.tag, d.autoTag],
+      // Фича 565 фаза B — имена свёрток: корневые цели ссылок (§74 п.5).
+      ...sourceReplaceNames(lists),
     ]);
   for (final l in lists) {
     if (l is! UserServer) targets.noteContainer(l.id, l.name);
   }
   final ctx = _PoolCtx(targets, [
     for (final d in directions) ...[d.tag, d.autoTag],
+    ...sourceReplaceNames(lists),
   ]);
   for (final l in lists) {
     try {
@@ -144,9 +148,6 @@ class _PoolCtx implements EmitContext {
   bool get passiveCheck => false;
 
   @override
-  bool get coreSupportsTailscale => true;
-
-  @override
   String get coreVersion => '';
 
   @override
@@ -167,6 +168,12 @@ class _PoolCtx implements EmitContext {
 
   @override
   void addToAutoList(SingboxEntry entry) {}
+
+  @override
+  void addReplacePlan(ReplacePlan plan) {}
+
+  @override
+  bool isReplaceBlocked(String listId) => false;
 
   @override
   void noteEmitted(node, String finalTag) {}

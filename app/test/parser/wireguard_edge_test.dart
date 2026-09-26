@@ -5,8 +5,8 @@ import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/mappers/draft_sections.dart';
-import 'package:lxbox/services/parser/uri_parsers/wireguard_parser.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
+import 'parse_link_as.dart';
 
 // SPEC 103 D-023/D-030 — валидные 32-байтные base64-ключи для фикстур (эталон
 // Go wgTestPub, node_parser_wireguard_test.go). normalizeWGKey (wireguard_
@@ -29,7 +29,7 @@ void main() {
 
   group('§106 — raw `/` в private key (userInfo)', () {
     test('сырой `/` в ключе → парсится, privateKey восстановлен', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$_testPrivSlash@'
           'h.example:51820?publickey=$_testPub&address=10.0.0.2/32');
       expect(spec, isNotNull, reason: 'раньше → null (rejected)');
@@ -38,7 +38,7 @@ void main() {
 
     test('уже-`%2F`-энкоден → без двойного декода', () {
       final encoded = _testPrivSlash.replaceAll('/', '%2F');
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$encoded@h.example:51820'
           '?publickey=$_testPub&address=10.0.0.2/32');
       expect(spec!.privateKey, _testPrivSlash);
@@ -61,7 +61,7 @@ void main() {
     });
 
     test('URI: bare address + bare allowed_ips → CIDR в emit', () {
-      final spec = parseWireguardUri(
+      final spec = parseLinkAs<WireguardSpec>(
           'wireguard://$_testPub@h.example:51820?publickey=$_testPub&'
           'address=172.16.0.2&allowedips=10.0.0.5,fd00::2');
       expect(spec!.localAddresses, ['172.16.0.2/32']);

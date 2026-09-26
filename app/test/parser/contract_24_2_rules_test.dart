@@ -9,6 +9,7 @@ import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
+import 'parse_link_as.dart';
 
 // §463 — целевые правила контракта §24.2/§24.6, принятые владельцем
 // 18.09.2026. Корпус (test/contract/) нормирует их там, где у лаунчера есть
@@ -56,7 +57,7 @@ void main() {
         'hellorandomizednoalpn': 'randomized',
       };
       for (final e in cases.entries) {
-        final spec = parseVless(
+        final spec = parseLinkAs<VlessSpec>(
             'vless://11111111-1111-1111-1111-111111111111@e.example.com:443?security=tls&fp=${e.key}#n');
         expect(spec!.tls.fingerprint, e.value, reason: e.key);
         // Значение опознано — подменой оно не считается, кода нет.
@@ -69,20 +70,20 @@ void main() {
   group('§24.2 п. 7.5 — anytls мусорный SNI', () {
     test('имя без точки и двоеточия заменяется адресом сервера', () {
       final spec =
-          parseAnyTls('anytls://pass123@a.example.com:443?sni=%F0%9F%94%92#n');
+          parseLinkAs<AnyTlsSpec>('anytls://pass123@a.example.com:443?sni=%F0%9F%94%92#n');
       expect(spec!.tls.serverName, 'a.example.com');
     });
 
     test('нормальный SNI не трогается', () {
       final spec =
-          parseAnyTls('anytls://pass123@a.example.com:443?sni=cover.example#n');
+          parseLinkAs<AnyTlsSpec>('anytls://pass123@a.example.com:443?sni=cover.example#n');
       expect(spec!.tls.serverName, 'cover.example');
     });
   });
 
   group('§24.2 п. 7.7 — дефолты TUIC не пишутся', () {
     test('без congestion_control/alpn в ссылке поля не эмитятся', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
           'tuic://11111111-2222-3333-4444-555555555555:pass123@t.example.com:443#n');
       final entry = spec!.emit(TemplateVars.empty).map;
       expect(entry.containsKey('congestion_control'), isFalse);
@@ -92,7 +93,7 @@ void main() {
 
   group('§24.2 п. 7.8 — TUIC udp_relay_mode', () {
     test('мусор снимается с кодом, а не подменяется на native', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
           'tuic://11111111-2222-3333-4444-555555555555:pass123@t.example.com:443?udp_relay_mode=quiс#n');
       expect(spec!.udpRelayMode, isNull);
       expect(_codes(spec), contains('tuic_udp_relay_mode_invalid'));
@@ -102,7 +103,7 @@ void main() {
 
     test('валидные значения проходят без кода', () {
       for (final v in const ['native', 'quic']) {
-        final spec = parseTuic(
+        final spec = parseLinkAs<TuicSpec>(
             'tuic://11111111-2222-3333-4444-555555555555:pass123@t.example.com:443?udp_relay_mode=$v#n');
         expect(spec!.udpRelayMode, v);
         expect(_codes(spec), isNot(contains('tuic_udp_relay_mode_invalid')));
@@ -112,7 +113,7 @@ void main() {
 
   group('§24.2 п. 7.9 — пустой пароль', () {
     test('anytls без пароля отбраковывается', () {
-      expect(parseAnyTls('anytls://@a.example.com:443#n'), isNull);
+      expect(parseLinkAs<AnyTlsSpec>('anytls://@a.example.com:443#n'), isNull);
     });
 
     // РЕШЕНО ВЛАДЕЛЬЦЕМ (дельта `delta480-7`), и решение противоположно
@@ -125,7 +126,7 @@ void main() {
     // 1.1.35): данными он не выражается, кейса корпуса под него нет. Наша
     // сторона решена, и расхождение остаётся до ответа второй.
     test('tuic без пароля остаётся узлом и получает код', () {
-      final spec = parseTuic(
+      final spec = parseLinkAs<TuicSpec>(
           'tuic://11111111-2222-3333-4444-555555555555:@t.example.com:443#n');
       expect(spec, isNotNull);
       expect(_codes(spec!), contains('password_empty'));
@@ -150,7 +151,7 @@ void main() {
         'chacha20-ietf',
         'xchacha20',
       ]) {
-        final spec = parseShadowsocks(ssUri(m));
+        final spec = parseLinkAs<ShadowsocksSpec>(ssUri(m));
         expect(spec, isNotNull, reason: m);
         expect(spec!.method, m, reason: m);
         expect(_codes(spec), contains('ss_method_legacy'), reason: m);
@@ -158,12 +159,12 @@ void main() {
     });
 
     test('AEAD-методы кода не получают', () {
-      final spec = parseShadowsocks(ssUri('aes-256-gcm'));
+      final spec = parseLinkAs<ShadowsocksSpec>(ssUri('aes-256-gcm'));
       expect(_codes(spec!), isNot(contains('ss_method_legacy')));
     });
 
     test('метод вне 18 значений ядра по-прежнему роняет узел', () {
-      expect(parseShadowsocks(ssUri('made-up-cipher')), isNull);
+      expect(parseLinkAs<ShadowsocksSpec>(ssUri('made-up-cipher')), isNull);
     });
   });
 
@@ -184,7 +185,7 @@ void main() {
     // обязан писаться канон `xhttp`, а не алиас. Кейс корпуса —
     // `uri/vless/xhttp_type_splithttp_alias`.
     test('URI type=splithttp даёт транспорт xhttp', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&type=splithttp&path=%2Fv1#n');
       expect(spec!.transport, isA<XhttpTransport>());
     });
@@ -192,8 +193,8 @@ void main() {
     test('splithttp и xhttp дают одно тело и одну identity', () {
       const base =
           'vless://11111111-1111-1111-1111-111111111111@x.example.com:443?security=tls&path=%2Fx&host=h';
-      final alias = parseVless('$base&type=splithttp#n');
-      final canon = parseVless('$base&type=xhttp#n');
+      final alias = parseLinkAs<VlessSpec>('$base&type=splithttp#n');
+      final canon = parseLinkAs<VlessSpec>('$base&type=xhttp#n');
       expect(alias, isNotNull);
       expect(canon, isNotNull);
       final aliasBody = alias!.emit(TemplateVars.empty).map;
@@ -238,7 +239,7 @@ void main() {
 
   group('§24.6 — url_path', () {
     test('битый percent в пути снимается с type_invalid, узел живёт', () {
-      final spec = parseTrojan(
+      final spec = parseLinkAs<TrojanSpec>(
           'trojan://pass123@t.example.com:443?type=ws&path=%2Fx%25zz&security=tls#n');
       expect(spec, isNotNull);
       expect((spec!.transport as WsTransport).path, '');
@@ -246,7 +247,7 @@ void main() {
     });
 
     test('корректный percent-путь не трогается', () {
-      final spec = parseTrojan(
+      final spec = parseLinkAs<TrojanSpec>(
           'trojan://pass123@t.example.com:443?type=ws&path=%2Fx%2Fy&security=tls#n');
       expect((spec!.transport as WsTransport).path, '/x/y');
       expect(_codes(spec), isNot(contains('type_invalid')));
@@ -255,7 +256,7 @@ void main() {
 
   group('§24.6 — пустой reality.short_id не эмитится', () {
     test('ключа в теле нет', () {
-      final spec = parseVless(
+      final spec = parseLinkAs<VlessSpec>(
           'vless://11111111-1111-1111-1111-111111111111@r.example.com:443?security=reality'
           '&pbk=AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw&sni=cover.example#n');
       final tls = spec!.emit(TemplateVars.empty).map['tls'] as Map;

@@ -40,6 +40,17 @@ class UrlLauncher {
     }
   }
 
+  /// §567 — opens the system Location settings (the Location on/off
+  /// toggle). With it off Android reports `<unknown ssid>`.
+  static Future<bool> openLocationSettings() async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('openLocationSettings');
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// §372 — есть ли на устройстве настоящий файловый менеджер.
   ///
   /// false на Android TV: DocumentsUI там нет, а intent перехватывает
@@ -218,8 +229,10 @@ class UrlLauncher {
   /// §051 Phase 2 — read current Wi-Fi SSID/BSSID для editor'а.
   /// Возвращает один из:
   /// - `WifiInfoSuccess(ssid, bssid)` — Wi-Fi подключён, permissions есть.
-  /// - `WifiInfoError(reason)` — `permission_missing` / `no_wifi` /
-  ///   `unknown_ssid` / `runtime_error`.
+  /// - `WifiInfoError(reason, missing)` — `permission_missing` /
+  ///   `fine_location_missing` / `location_disabled` / `no_wifi` /
+  ///   `unknown_ssid` / `runtime_error`. `missing` — полные имена
+  ///   отсутствующих разрешений (§567), порядок = приоритет.
   /// `bssid` lower-case `xx:xx:xx:xx:xx:xx`.
   static Future<WifiInfoResult> getCurrentWifiInfo() async {
     try {
@@ -230,7 +243,15 @@ class UrlLauncher {
       }
       final error = raw['error'] as String?;
       if (error != null) {
-        return WifiInfoResult.error(error);
+        final missingRaw = raw['missing'] as String?;
+        final missing = missingRaw == null
+            ? const <String>[]
+            : missingRaw
+                .split(',')
+                .map((e) => e.trim())
+                .where((e) => e.isNotEmpty)
+                .toList(growable: false);
+        return WifiInfoResult.error(error, missing: missing);
       }
       final ssid = raw['ssid'] as String?;
       final bssid = raw['bssid'] as String?;
@@ -253,7 +274,10 @@ sealed class WifiInfoResult {
     required String bssid,
   }) = WifiInfoSuccess;
 
-  const factory WifiInfoResult.error(String reason) = WifiInfoError;
+  const factory WifiInfoResult.error(
+    String reason, {
+    List<String> missing,
+  }) = WifiInfoError;
 }
 
 class WifiInfoSuccess extends WifiInfoResult {
@@ -263,7 +287,13 @@ class WifiInfoSuccess extends WifiInfoResult {
 }
 
 class WifiInfoError extends WifiInfoResult {
-  const WifiInfoError(this.reason);
-  /// One of: `permission_missing`, `no_wifi`, `unknown_ssid`, `runtime_error`.
+  const WifiInfoError(this.reason, {this.missing = const []});
+  /// One of: `permission_missing`, `fine_location_missing`,
+  /// `location_disabled`, `no_wifi`, `unknown_ssid`, `runtime_error`.
   final String reason;
+
+  /// §567 — full Android names of missing permissions, priority order
+  /// (NEARBY_WIFI_DEVICES, ACCESS_FINE_LOCATION, ACCESS_BACKGROUND_LOCATION).
+  /// Empty for non-permission reasons.
+  final List<String> missing;
 }

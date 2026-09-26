@@ -24,8 +24,7 @@ import 'vm_profile.dart';
 ///
 /// Этапы воронки меряются по отдельности, вызовом тех же публичных функций,
 /// что зовёт `parseUri` → `parseUriViaPipeline` → `_runPipeline`:
-///   маршрут  — схема, `_wireguardSchemes()`/`pipelineSchemes()`,
-///              `registrySchemeType()` (копия логики, функции приватные);
+///   маршрут  — схема и `registrySchemeType()` (диспетчер реестра, §562);
 ///   маппер   — `mapViaEngine`;
 ///   санитайзер — `RegistrySanitizer.sanitize` на телах маппера;
 ///   модель   — `tagFromLabel` + `parseSingboxEntry`;
@@ -167,7 +166,7 @@ const _probes = [
   'registrySchemeType',
   'pipelineSchemes',
   'registryUriSchemes',
-  '_wireguardSchemes',
+  '_outOfEngineParser',
   'sectionFor',
   'typesFor',
   'runSection',
@@ -299,15 +298,6 @@ Map<String, dynamic> _singboxConfig(List<String> links) {
 
 String _scheme(String l) => l.trim().split('://').first.toLowerCase();
 
-/// Копия `_wireguardSchemes()` из `uri_parsers.dart`.
-Set<String> _wgSchemes() {
-  final out = <String>{'wireguard', 'wg', 'awg'};
-  for (final s in pipelineSchemes()) {
-    if (registrySchemeType(s) == 'wireguard') out.add(s);
-  }
-  return out;
-}
-
 Map<String, Duration> _stages(List<String> links) {
   final types = [
     for (final l in links)
@@ -320,11 +310,7 @@ Map<String, Duration> _stages(List<String> links) {
   });
   final route = _best(() {
     for (final l in links) {
-      final s = _scheme(l);
-      final wg = _wgSchemes();
-      if (pipelineSchemes().contains(s) || wg.contains(s)) {
-        registrySchemeType(s);
-      }
+      registrySchemeType(_scheme(l));
     }
   });
   final map = _best(() {

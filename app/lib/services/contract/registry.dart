@@ -20,11 +20,18 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
 /// Чтение файла реестра. Инъекция ради тестов: прод читает `rootBundle`,
 /// тест — файловую систему, и сервис остаётся свободен от биндинга.
 typedef AssetLoader = Future<String> Function(String path);
+
+/// §566 — перечень путей бандла (для `registry/protocols/`). Инъекция ради
+/// тестов: прод читает манифест ассетов (`AssetManifest`).
+typedef AssetLister = Future<List<String>> Function();
+
+/// Каталог протоколов внутри корня контракта.
+const _kProtocolsDir = 'registry/protocols/';
 
 /// Схемы-ссылки (`ref`), которые тело узла разворачивает по имени.
 const _kSharedRefs = <String, String>{
@@ -37,7 +44,7 @@ const _kSharedRefs = <String, String>{
 
 /// Общие файлы реестра БЕЗ цели `ref`: тело узла в них не спускается, их
 /// читают другие слои по имени файла ([ContractRegistry.rawShared]).
-const _kStandaloneShared = <String>['source_kinds.json'];
+const _kStandaloneShared = <String>['source_kinds.json', 'allowlists.json'];
 
 /// Описание поля тела — обёртка над картой реестра.
 ///
@@ -87,6 +94,10 @@ final class FieldSchema {
   }
 
   bool get inline => raw['inline'] == true;
+
+  /// §560 — поле пишет СБОРКА (`detour`), а не тело узла: разбор его не
+  /// переносит и не снимает.
+  bool get managed => raw['managed'] == true;
 
   bool get required => raw['required'] == true;
 
@@ -149,7 +160,7 @@ final class FieldSchema {
   Map<String, dynamic>? get minWhen =>
       (raw['min_when'] as Map?)?.cast<String, dynamic>();
 
-  /// §481 (контракт 1.1.12, CANON §6.1) — ВЫКЛЮЧАТЕЛЬ ВНУТРИ САМОГО ОБЪЕКТА:
+  /// §481 (контракт 1.1.12, PARSING_PRINCIPLES §6.1) — ВЫКЛЮЧАТЕЛЬ ВНУТРИ САМОГО ОБЪЕКТА:
   /// совпали все перечисленные ключи — объект снимается ЦЕЛИКОМ и ТИХО.
   ///
   /// Форма: `{"enabled": false}`. Нужен там, где выключатель секции лежит
@@ -219,6 +230,28 @@ final class FieldSchema {
 
   /// ОС, на которой поле работает; на прочих ключ снимается на сборке.
   String? get platform => raw['platform'] as String?;
+
+  /// Контракт 1.1.60 — тег сборки ядра, без которого поле ядру неизвестно.
+  /// Сам по себе описателен; действует только вместе с [onCoreUnsupported].
+  String? get buildTag => raw['build_tag'] as String?;
+
+  /// Контракт 1.1.60 — узловой гейт ядра поля: `{action: drop_node, code}`.
+  /// Требование того же уровня ([buildTag]/[minCore]) не выполнено → узел
+  /// снимается на сборке ([nodeCoreRefusal]). Без атрибута `min_core` поля
+  /// работает прежним полевым гейтом (снимается ключ).
+  CoreUnsupported? get onCoreUnsupported =>
+      CoreUnsupported.tryParse(raw['on_core_unsupported']);
+
+  /// Контракт 1.1.60 — требования и уровень ФОРМЫ-ДИАПАЗОНА `N-M` у
+  /// `awg_range`, когда они отличаются от числовой формы.
+  RangeForm? get rangeForm => RangeForm.tryParse(raw['range_form']);
+
+  /// Контракт 1.1.60 — уровень протокола, который даёт заданное поле
+  /// (`BodySchema.levels`), и суффикс подписи (`level_mark`). Только модель:
+  /// подпись уровня узла из них пока не строится.
+  String? get level => raw['level'] as String?;
+
+  String? get levelMark => raw['level_mark'] as String?;
 
   num? get min => raw['min'] as num?;
 
@@ -333,10 +366,28 @@ final class BodySchema {
     required this.fields,
     this.relations = const [],
     this.absentWhen,
+    this.exitCapableWhen,
+    this.buildTag,
+    this.minCore,
+    this.onCoreUnsupported,
+    this.levels = const [],
   });
 
   /// Тег ядра, по которому сверен список полей.
   final String core;
+
+  /// Контракт 1.1.60 — тег сборки и минимальная версия ядра для протокола
+  /// целиком. Описательны, пока у тела нет [onCoreUnsupported].
+  final String? buildTag;
+  final String? minCore;
+
+  /// Контракт 1.1.60 — узловой гейт тела: требование не выполнено → узел
+  /// снимается на сборке с этим кодом ([nodeCoreRefusal]).
+  final CoreUnsupported? onCoreUnsupported;
+
+  /// Контракт 1.1.60 — уровни протокола по возрастанию (`wireguard`: awg …
+  /// awg3.1). Только модель: подпись уровня узла из них пока не строится.
+  final List<String> levels;
 
   final List<String> order;
 
@@ -353,8 +404,60 @@ final class BodySchema {
 
   /// §481 (контракт 1.1.12) — `absent_when` секции: объявленный ОДИН раз у
   /// суб-схемы (`tls`), он при разрешении `ref` действует в каждом протоколе.
-  /// Смысл и порядок — [FieldSchema.absentWhen] и CANON §6.1.
+  /// Смысл и порядок — [FieldSchema.absentWhen] и PARSING_PRINCIPLES §6.1.
   final Map<String, dynamic>? absentWhen;
+
+  /// Контракт 1.1.63 — `exit_capable_when` тела протокола (грамматика
+  /// `condition`, без `source_kind`): при каком готовом теле узел годится
+  /// ВЫХОДОМ — кандидатом в пул Направления. `null` — годится всегда.
+  final Map<String, dynamic>? exitCapableWhen;
+
+}
+
+/// Контракт 1.1.60 — `on_core_unsupported`: что делать с узлом, когда
+/// требование к ядру (`build_tag`/`min_core` того же уровня) не выполнено.
+final class CoreUnsupported {
+  const CoreUnsupported({required this.action, required this.code});
+
+  /// Единственное значение схемы — `drop_node`.
+  final String action;
+  final String code;
+
+  bool get dropsNode => action == 'drop_node';
+
+  static CoreUnsupported? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    final action = raw['action'];
+    final code = raw['code'];
+    if (action is! String || code is! String) return null;
+    return CoreUnsupported(action: action, code: code);
+  }
+}
+
+/// Контракт 1.1.60 — `range_form` у `awg_range`: требования, уровень и
+/// узловой гейт формы-диапазона (`N-M`).
+final class RangeForm {
+  const RangeForm({
+    this.minCore,
+    this.buildTag,
+    this.level,
+    this.onCoreUnsupported,
+  });
+
+  final String? minCore;
+  final String? buildTag;
+  final String? level;
+  final CoreUnsupported? onCoreUnsupported;
+
+  static RangeForm? tryParse(Object? raw) {
+    if (raw is! Map) return null;
+    return RangeForm(
+      minCore: raw['min_core'] as String?,
+      buildTag: raw['build_tag'] as String?,
+      level: raw['level'] as String?,
+      onCoreUnsupported: CoreUnsupported.tryParse(raw['on_core_unsupported']),
+    );
+  }
 }
 
 /// Текст кода предупреждения из `registry/warnings.json`.
@@ -450,20 +553,53 @@ final class ContractRegistry {
   /// Версия контракта из `contract/VERSION` (например `1.1.0`).
   String get version => _version;
 
-  /// Загрузка из assets. [loader] — для тестов; по умолчанию `rootBundle`.
-  Future<void> load({AssetLoader? loader}) async {
+  /// Загрузка из assets. [loader] и [lister] — для тестов; по умолчанию
+  /// `rootBundle` и манифест ассетов.
+  ///
+  /// §566 — состав `registry/protocols/` берётся из МАНИФЕСТА бандла, а не
+  /// из списка в коде: протокол, приехавший бампом контракта, грузится без
+  /// правки Dart (`pubspec.yaml` кладёт каталог целиком).
+  Future<void> load({AssetLoader? loader, AssetLister? lister}) async {
     final read = loader ?? (String p) => rootBundle.loadString(p);
-    await _load((rel) => read('$_assetRoot/$rel'));
+    final list = lister ??
+        () async =>
+            (await AssetManifest.loadFromAssetBundle(rootBundle)).listAssets();
+    const prefix = '$_assetRoot/$_kProtocolsDir';
+    await _load(
+      (rel) => read('$_assetRoot/$rel'),
+      () async => _protocolFileNames(
+          (await list()).where((p) => p.startsWith(prefix)).map(
+                (p) => p.substring(prefix.length),
+              )),
+    );
   }
 
   /// Загрузка из каталога на диске — путь к КОРНЮ контракта (`contract`),
   /// где лежат `VERSION` и `registry/`. Для юнит-тестов: биндинг Flutter не
   /// нужен, читается та же копия, которую сверяет `check_contract_lock`.
+  /// Состав `registry/protocols/` — листинг каталога (§566).
   Future<void> loadFromDirectory(String dir) async {
-    await _load((rel) => File('$dir/$rel').readAsString());
+    await _load(
+      (rel) => File('$dir/$rel').readAsString(),
+      () async => _protocolFileNames(Directory('$dir/$_kProtocolsDir')
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.uri.pathSegments.last)),
+    );
   }
 
-  Future<void> _load(Future<String> Function(String rel) read) async {
+  /// Имена файлов протоколов без `.json`, по алфавиту: порядок загрузки не
+  /// должен зависеть от того, в каком порядке их отдал манифест или ФС.
+  static List<String> _protocolFileNames(Iterable<String> names) => names
+      .where((n) => n.endsWith('.json') && !n.contains('/'))
+      .map((n) => n.substring(0, n.length - '.json'.length))
+      .toList()
+    ..sort();
+
+  Future<void> _load(
+    Future<String> Function(String rel) read,
+    Future<List<String>> Function() listProtocols,
+  ) async {
     _version = (await read('VERSION')).trim();
 
     for (final entry in _kSharedRefs.entries) {
@@ -491,8 +627,10 @@ final class ContractRegistry {
       }
     }
 
-    for (final scheme in _kProtocolFiles) {
-      final data = jsonDecode(await read('registry/protocols/$scheme.json'))
+    // §566 — состав протоколов даёт каталог реестра (манифест бандла или
+    // листинг на диске), а не список в коде.
+    for (final scheme in await listProtocols()) {
+      final data = jsonDecode(await read('$_kProtocolsDir$scheme.json'))
           as Map<String, dynamic>;
       // Ключ — singbox_type записи, а не имя файла: санитайзер получает
       // `type` из тела узла, и для схем-алиасов (hy2 → hysteria2) имя файла
@@ -644,6 +782,18 @@ final class ContractRegistry {
   /// диалектам; [sharedSchema] отдаёт только схему ТЕЛА и про них не знает.
   Map<String, dynamic>? rawShared(String fileName) => _shared[fileName];
 
+  /// §571 — значения списка `allowlists.<name>.values` из
+  /// `registry/allowlists.json`; `null` — реестр не загружен или списка нет.
+  /// Списки — данные контракта (поля-условия правил, контракт 1.1.81):
+  /// читатель не держит имён полей в коде.
+  Set<String>? allowlistValues(String name) {
+    final lists = _shared['allowlists.json']?['allowlists'];
+    if (lists is! Map) return null;
+    final values = (lists[name] as Map?)?['values'];
+    if (values is! List) return null;
+    return values.whereType<String>().toSet();
+  }
+
   /// Разворот секции `body` — все ссылки разрешаются здесь, один раз при
   /// загрузке, и читатель схемы видит уже развёрнутые поля (§553). Три ветки,
   /// зеркало лаунчера (`core/config/registry/registry.go`, `resolveSection`):
@@ -707,6 +857,14 @@ final class ContractRegistry {
           if (e is Map) e.cast<String, dynamic>(),
       ],
       absentWhen: (body['absent_when'] as Map?)?.cast<String, dynamic>(),
+      exitCapableWhen:
+          (body['exit_capable_when'] as Map?)?.cast<String, dynamic>(),
+      buildTag: body['build_tag'] as String?,
+      minCore: body['min_core'] as String?,
+      onCoreUnsupported: CoreUnsupported.tryParse(body['on_core_unsupported']),
+      levels: [
+        for (final e in (body['levels'] as List?) ?? const []) '$e',
+      ],
     );
   }
 
@@ -878,16 +1036,19 @@ List<String> _stringList(Object? v) {
 /// `null` не возвращается никогда по той же причине — потолок у AWG есть
 /// всегда. Тип оставлен nullable ради вызывающего, который проверяет
 /// загруженность реестра сам.
-int? awgMtuCeilingByRegistry() {
+///
+/// §566 — [type] — тип тела узла (`entry.type`), по нему схема ищется в
+/// реестре; имени протокола здесь нет.
+int? awgMtuCeilingByRegistry(String type) {
   final ceiling =
-      ContractRegistry.I.schemaFor('wireguard')?.fields['mtu']?.maxWhen?['max'];
+      ContractRegistry.I.schemaFor(type)?.fields['mtu']?.maxWhen?['max'];
   return ceiling is num ? ceiling.toInt() : kAwgMtuFallback;
 }
 
 /// §473 — код о ЗАМЕНЕ `mtu` потолком, как его назвал реестр
 /// (`max_when.code`). Второй копии имени в Dart не заводится.
-String? awgMtuClampCodeByRegistry() => ContractRegistry.I
-    .schemaFor('wireguard')
+String? awgMtuClampCodeByRegistry(String type) => ContractRegistry.I
+    .schemaFor(type)
     ?.fields['mtu']
     ?.maxWhen?['code'] as String?;
 
@@ -900,27 +1061,3 @@ String? awgMtuClampCodeByRegistry() => ContractRegistry.I
 /// молчание безопасно: выдуманный код хуже его отсутствия, а выдуманный MTU
 /// здесь — единственный рабочий.
 const kAwgMtuFallback = 1280;
-
-/// Файлы `registry/protocols/` — перечислены поимённо: `rootBundle` каталог
-/// не листает (AssetManifest дал бы список, но ценой второго формата
-/// чтения), а состав меняется только вместе с бампом контракта, и тогда
-/// список правится осознанно. Расхождение ловит `registry_load_test`.
-const _kProtocolFiles = <String>[
-  'anytls',
-  'chain',
-  'group',
-  'http',
-  'hysteria',
-  'hysteria2',
-  'masque',
-  'naive',
-  'shadowsocks',
-  'socks',
-  'ssh',
-  'tailscale',
-  'trojan',
-  'tuic',
-  'vless',
-  'vmess',
-  'wireguard',
-];

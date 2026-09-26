@@ -6,6 +6,8 @@ import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 import '../parser/engine_test_setup.dart';
+import 'package:lxbox/models/node_spec.dart';
+import '../parser/parse_link_as.dart';
 
 void main() {
   // §480 — разбор исполняет секции реестра; без них конвейера нет вовсе
@@ -83,7 +85,7 @@ void main() {
     });
 
     test('WireGuard node → endpoints array, not outbounds', () async {
-      final wg = parseWireguardUri(
+      final wg = parseLinkAs<WireguardSpec>(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
@@ -228,7 +230,7 @@ void main() {
     // §535 — ключи переехали из route в корневой блок lx.wg (ядро SPEC 098):
     // старые имена не пишем, иначе ядро даёт WARN на каждый ключ.
     test('§535 idleSuspend="30s" → lx.wg.idle_suspend, route чист', () async {
-      final wg = parseWireguardUri(
+      final wg = parseLinkAs<WireguardSpec>(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
@@ -257,7 +259,7 @@ void main() {
     });
 
     test('§535 idleSuspend="" (default) → блока lx нет вовсе', () async {
-      final wg = parseWireguardUri(
+      final wg = parseLinkAs<WireguardSpec>(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
@@ -285,7 +287,7 @@ void main() {
     // §272 — reachable-окно (lx.wg.idle_suspend_reachable) эмитится только
     // вместе с базовым порогом: ядро отвергает reachable без idle_suspend.
     test('§272 reachable пишется только при включённом idleSuspend', () async {
-      final wg = parseWireguardUri(
+      final wg = parseLinkAs<WireguardSpec>(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
@@ -339,7 +341,7 @@ void main() {
     // build_max самостоятелен, но держим оба в одном месте.
     test('§536 lazy_build/build_max пишутся при одном лишь idleSuspend',
         () async {
-      final wg = parseWireguardUri(
+      final wg = parseLinkAs<WireguardSpec>(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(
@@ -370,7 +372,7 @@ void main() {
     // (ядро: без потолка); без порога сна блока lx (и ключа) нет.
     Future<BuildResult> build542(
         {required String idle, required int max, bool lazy = true}) {
-      final wg = parseWireguardUri(
+      final wg = parseLinkAs<WireguardSpec>(
         'wireguard://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=@wg.example.com:51820?publickey=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
       final list = UserServer(

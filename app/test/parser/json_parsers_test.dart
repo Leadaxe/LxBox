@@ -211,7 +211,10 @@ void main() {
         'sni': '4pda.to',
       }) as MasqueSpec?;
       expect(m, isNotNull);
-      expect(m!.vhttp, 'h3', reason: 'legacy network игнорируется — дефолт');
+      // Контракт 1.1.64 (корпус body/singbox/masque_tls_owner_rules, узел
+      // masque-no-vhttp-fragment): тело без `vhttp` остаётся без него —
+      // у ядра это `auto` (default реестра), а не прежний местный h3.
+      expect(m!.vhttp, '', reason: 'legacy network игнорируется — ключа нет');
       expect(m.sni, isEmpty, reason: 'плоский sni не переносится');
       expect(m.disableSni, isFalse);
     });
@@ -524,19 +527,18 @@ void main() {
         );
       }
 
-      /// Причина отбраковки, где бы она ни оказалась.
+      /// Причина отбраковки.
       ///
-      /// §404 P3 — носитель ищется в два шага: сперва первый ВЫЖИВШИЙ узел
-      /// элемента (как §321 P5 вешает warning'и о неподдержанных
-      /// протоколах), и только если в элементе не выжил никто — причина
-      /// уезжает в подписочный `dropped`. Проверять надо оба канала: важно
-      /// не «в какой список легло», а что потеря НЕ молчаливая.
+      /// §561 — единственный канал — подписочный `dropped`: выжившие узлы
+      /// чужую причину не несут (прежний носитель §404 P3 снят).
       Iterable<DialerProxyUnusableWarning> causes(
-              List<NodeSpec> nodes, List<NodeWarning> dropped) =>
-          [
-            ...dropped,
-            for (final n in nodes) ...n.warnings,
-          ].whereType<DialerProxyUnusableWarning>();
+          List<NodeSpec> nodes, List<NodeWarning> dropped) {
+        for (final n in nodes) {
+          expect(n.warnings.whereType<DialerProxyUnusableWarning>(), isEmpty,
+              reason: 'сосед чист: причина только в dropped');
+        }
+        return dropped.whereType<DialerProxyUnusableWarning>();
+      }
 
       void expectDropped(List<NodeSpec> nodes, List<NodeWarning> dropped,
           String target) {
@@ -594,8 +596,8 @@ void main() {
           dropped: dropped,
         );
         // Группа в элементе есть (балансировщик даёт узел автовыбора), но
-        // звеном служить не может — владелец выпадает. Причина при этом
-        // висит на выжившем соседе, а не в подписочном `dropped`.
+        // звеном служить не может — владелец выпадает. Причина — в
+        // подписочном `dropped`, выживший сосед чист (§561).
         expect(nodes.where((n) => n.server == 'main.example'), isEmpty);
         expect(causes(nodes, dropped), hasLength(1));
       });
@@ -636,9 +638,9 @@ void main() {
         expect(causes(nodes, dropped), isNotEmpty);
       });
 
-      test('носитель есть → warning висит на СОСЕДЕ, не в dropped', () {
-        // §321 P5-механика: причина обязана дойти до пользователя, а
-        // носителем служит первый выживший узел элемента.
+      test('сосед выжил → причина в dropped, сосед чист', () {
+        // §561 — отбраковка живёт только в `dropped[]` подписки: на рабочем
+        // соседе чужая ошибка человеку не нужна.
         final main = vless('proxy', 'main.example');
         (main['streamSettings'] as Map)['sockopt'] = {'dialerProxy': 'ghost'};
         final dropped = <NodeWarning>[];
@@ -651,10 +653,8 @@ void main() {
         );
         expect(nodes.map((n) => n.server), ['alive.example']);
         expect(nodes.single.warnings.whereType<DialerProxyUnusableWarning>(),
-            hasLength(1));
-        expect(dropped, isEmpty,
-            reason: 'носитель нашёлся — из подписочного списка причина ушла, '
-                'иначе пользователь увидел бы одно сообщение дважды');
+            isEmpty);
+        expect(dropped.whereType<DialerProxyUnusableWarning>(), hasLength(1));
       });
     });
 
@@ -914,14 +914,17 @@ void main() {
     test('§322: мусорный streamSettings строкой → пропуск узла, сосед жив', () {
       final broken = vless('proxy-bad', 'bad.example');
       broken['streamSettings'] = 'none';
+      final dropped = <NodeWarning>[];
       final nodes = parseXrayElement({
         'remarks': 'Mixed',
         'outbounds': [broken, vless('proxy-ok', 'ok.example')],
-      });
+      }, dropped: dropped);
       expect(nodes.map((n) => n.server), ['ok.example'],
           reason: 'битый outbound не роняет соседей по элементу');
-      expect(nodes.single.warnings, isNotEmpty,
-          reason: 'пропажа не молчаливая — P5-warning на выжившем');
+      // §561 — пропажа не молчаливая, но причина в `dropped[]`, не на соседе.
+      expect(nodes.single.warnings, isEmpty);
+      expect(dropped.whereType<RegistryWarning>().map((w) => w.ownerTag),
+          ['proxy-bad']);
     });
 
     test('main-приоритет: тег proxy идёт первым независимо от порядка', () {

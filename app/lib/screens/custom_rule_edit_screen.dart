@@ -13,9 +13,9 @@ import '../widgets/wifi_manual_add_dialog.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../widgets/wifi_saved_picker_sheet.dart';
 import 'app_picker_screen.dart';
-import 'app_settings_screen.dart';
 import 'custom_rule_edit/action_resolve_sheet.dart';
 import 'custom_rule_edit/edit_controller.dart';
+import 'custom_rule_edit/sections/wifi_section.dart' show WifiHint, wifiHintFromError;
 import 'custom_rule_edit/tabs/params_tab.dart';
 import 'custom_rule_edit/tabs/view_tab.dart';
 import '../services/l10n/locale_controller.dart';
@@ -63,8 +63,15 @@ class CustomRuleEditScreen extends StatefulWidget {
   State<CustomRuleEditScreen> createState() => _CustomRuleEditScreenState();
 }
 
-class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
+class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
+    with WidgetsBindingObserver {
   late final CustomRuleEditController _ctrl;
+
+  /// §567 — почему SSID сейчас не читается (null — всё в порядке или
+  /// причина без подсказки). Проверяется при открытии экрана и при
+  /// возврате в приложение (из системных настроек), не на rebuild.
+  WifiHint? _wifiHint;
+  List<String> _wifiMissing = const [];
 
   @override
   void initState() {
@@ -75,12 +82,32 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       existingNames: widget.existingNames,
       displayName: widget.displayName,
     );
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_refreshWifiHint());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ctrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refreshWifiHint());
+  }
+
+  Future<void> _refreshWifiHint() async {
+    final result = await ul.UrlLauncher.getCurrentWifiInfo();
+    if (!mounted) return;
+    final (hint, missing) = switch (result) {
+      ul.WifiInfoError(:final reason, :final missing) =>
+        (wifiHintFromError(reason, missing), missing),
+      _ => (null, const <String>[]),
+    };
+    _wifiMissing = missing;
+    if (hint != _wifiHint) setState(() => _wifiHint = hint);
   }
 
   // ─── Save / delete / back ────────────────────────────────────────────
@@ -237,15 +264,18 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       case ul.WifiInfoSuccess(:final ssid, :final bssid):
         _ctrl.addWifiEntry(WifiEntry(ssid, bssid));
         await SettingsStorage.addToWifiHistory(ssid, bssid);
-      case ul.WifiInfoError(:final reason):
-        if (reason == 'permission_missing') {
+      case ul.WifiInfoError(:final reason, :final missing):
+        if (reason == 'permission_missing' ||
+            reason == 'fine_location_missing') {
           await WifiPermissionDialog.show(
             context,
-            missing: const [
-              'android.permission.ACCESS_BACKGROUND_LOCATION',
-              'android.permission.NEARBY_WIFI_DEVICES',
-            ],
+            missing: missing.isNotEmpty ? missing : _defaultWifiMissing,
           );
+          if (mounted) unawaited(_refreshWifiHint());
+          return;
+        }
+        if (reason == 'location_disabled') {
+          _showLocationOffSnackBar();
           return;
         }
         if (!mounted) return;
@@ -254,12 +284,33 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             duration: const Duration(seconds: 3),
             content: Text(switch (reason) {
               'no_wifi' => getLocalText.s("Not connected to Wi-Fi."),
-              'unknown_ssid' => getLocalText.s("Cannot read Wi-Fi info — try toggling Wi-Fi off/on."),
+              'unknown_ssid' => getLocalText.s("Android did not report the network name. Check that Location permission is set to \"Precise\" and \"Allow all the time\"."),
               _ => getLocalText.s("Could not read current Wi-Fi (%s).", reason),
             }),
           ),
         );
     }
+  }
+
+  /// §567 — SecurityException без списка: показываем оба разрешения, как
+  /// до §567.
+  static const _defaultWifiMissing = [
+    'android.permission.ACCESS_BACKGROUND_LOCATION',
+    'android.permission.NEARBY_WIFI_DEVICES',
+  ];
+
+  void _showLocationOffSnackBar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(getLocalText.s(
+            "Location is turned off. Turn it on in system settings.")),
+        action: SnackBarAction(
+          label: getLocalText.s("Settings"),
+          onPressed: () => unawaited(ul.UrlLauncher.openLocationSettings()),
+        ),
+      ),
+    );
   }
 
   Future<void> _pickSavedWifi() async {
@@ -278,10 +329,24 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     await SettingsStorage.addToWifiHistory(result.ssid, result.bssid);
   }
 
-  Future<void> _openWifiPermissionsScreen() async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => const AppSettingsScreen(initialTab: 3),
-    ));
+  /// §567 — tap по подсказке секции Wi-Fi ведёт туда, где причина
+  /// чинится: геолокация — системный тумблер, разрешения — диалог с
+  /// кнопками «Allow Wi-Fi info» / «Open Settings».
+  Future<void> _onTapWifiHint() async {
+    switch (_wifiHint) {
+      case null:
+        return;
+      case WifiHint.locationOff:
+        await ul.UrlLauncher.openLocationSettings();
+      case WifiHint.preciseLocation ||
+            WifiHint.backgroundLocation ||
+            WifiHint.nearbyWifi:
+        await WifiPermissionDialog.show(context,
+            missing: _wifiMissing.isNotEmpty
+                ? _wifiMissing
+                : _defaultWifiMissing);
+    }
+    if (mounted) unawaited(_refreshWifiHint());
   }
 
   Future<void> _openAppPicker() async {
@@ -324,7 +389,8 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       onAddCurrentWifi: _addCurrentWifi,
       onPickSavedWifi: _pickSavedWifi,
       onManualAddWifi: _manualAddWifi,
-      onOpenWifiPermissions: _openWifiPermissionsScreen,
+      onOpenWifiPermissions: _onTapWifiHint,
+      wifiHint: _wifiHint,
       onShowCloudMenu: _showCloudMenu,
       onBoolVarFailed: _onBoolVarFailed,
       onOpenActionResolve: _openActionResolve,

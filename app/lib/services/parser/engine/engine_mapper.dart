@@ -56,17 +56,21 @@ UriMapping? mapViaEngine(String uri, String singboxType,
 /// записи хранения, поле Tag редактора). Место подсказки в цепочке метки
 /// объявляет секция (`label.source`), а не этот мост.
 ///
+/// [context] — значения от распаковщика контейнера, источники `context.*`
+/// секции (контракт 1.1.63: `container`, `profile` у Amnezia).
+///
 /// `null` — секции нет либо запись не построилась.
 UriMapping? mapIniViaEngine(
   String text,
   String singboxType, {
   String? nameHint,
   XrayDropVerdict? dropped,
+  Map<String, dynamic>? context,
 }) {
   final section = MapperSections.I.sectionFor('conf', singboxType);
   if (section == null) return null;
-  final res =
-      runSectionOnIni(section, text, nameHint: nameHint, dropped: dropped);
+  final res = runSectionOnIni(section, text,
+      nameHint: nameHint, dropped: dropped, context: context);
   if (res == null) return null;
   return UriMapping(
     body: res.body,
@@ -109,11 +113,23 @@ final class JsonMapping {
 ///
 /// `null` — ни одна секция не опознала элемент либо обязательная запись не
 /// нашла значения (тем же `null` отвечал рукописный диспетчер).
+///
+/// [document] — соседи элемента по документу (у Xray — массив `outbounds`),
+/// в которых запись с `deref` ищет цель своей ссылки (контракт 1.1.63).
 JsonMapping? mapJsonViaEngine(String kind, Map<String, dynamic> element,
-    {XrayDropVerdict? dropped}) {
+    {XrayDropVerdict? dropped, List<dynamic>? document}) {
   final section = MapperSections.I.matchJson(kind, element);
-  if (section == null) return null;
-  final res = runSectionOnJson(section, element, dropped: dropped);
+  if (section == null) {
+    // §560 — элемент не опознала НИ ОДНА секция: протокол не ведётся
+    // (PARSING_PRINCIPLES §4.1 `protocol_unsupported`). Служебные outbound'ы сюда не
+    // доходят — их отсеивает вызывающий до разбора.
+    if (dropped != null && dropped.reason == null) {
+      dropped.reason = const RegistryWarning(code: 'protocol_unsupported');
+    }
+    return null;
+  }
+  final res = runSectionOnJson(section, element,
+      dropped: dropped, document: document);
   if (res == null) return null;
   return JsonMapping(
     body: res.body,

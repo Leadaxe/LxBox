@@ -225,9 +225,16 @@ class MainActivity : FlutterActivity() {
                         // §051 Phase 2 — return current Wi-Fi SSID/BSSID для UI
                         // editor'а. Reuses `WifiManager.connectionInfo` (та же
                         // path что sing-box использует для match'а).
-                        // Returns Map: {ssid?, bssid?, error?}.
-                        // Errors: "permission_missing", "no_wifi", "unknown_ssid".
+                        // Returns Map: {ssid?, bssid?, error?, missing?}.
+                        // Errors: "permission_missing", "fine_location_missing",
+                        // "location_disabled", "no_wifi", "unknown_ssid",
+                        // "runtime_error". `missing` — полные имена разрешений
+                        // через запятую (§567).
                         result.success(getCurrentWifiInfoMap())
+                    }
+                    "openLocationSettings" -> {
+                        // §567 — системный экран геолокации (тумблер Location).
+                        result.success(openLocationSettings())
                     }
                     "setAutoRecordWifi" -> {
                         // §051 Phase 3 — start/stop WifiNetworkObserver
@@ -579,6 +586,15 @@ class MainActivity : FlutterActivity() {
         return false
     }
 
+    /// §567 — открыть системные настройки геолокации.
+    private fun openLocationSettings(): Boolean {
+        val intent = Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching { startActivity(intent); true }
+            .onFailure { Log.w(TAG, "openLocationSettings failed: ${it.message}") }
+            .getOrDefault(false)
+    }
+
     /// §051 Phase 2 — return current Wi-Fi info как Map для Flutter
     /// MethodChannel. Тонкая обёртка над `WifiInfoReader.read()` — same
     /// defensive логика что у sing-box callback и auto-record observer.
@@ -586,8 +602,19 @@ class MainActivity : FlutterActivity() {
         return when (val r = WifiInfoReader.read(this)) {
             is WifiInfoReader.Result.Success ->
                 mapOf("ssid" to r.ssid, "bssid" to r.bssid)
-            is WifiInfoReader.Result.PermissionMissing ->
-                mapOf("error" to "permission_missing")
+            is WifiInfoReader.Result.PermissionMissing -> {
+                // §567: код = первое отсутствующее по приоритету
+                // (NEARBY, FINE, BACKGROUND); FINE отдельным кодом, чтобы
+                // UI вёл на «Use precise location», а не в общий диалог.
+                val code = if (r.missing.firstOrNull() == WifiInfoReader.PERM_FINE) {
+                    "fine_location_missing"
+                } else {
+                    "permission_missing"
+                }
+                mapOf("error" to code, "missing" to r.missing.joinToString(","))
+            }
+            is WifiInfoReader.Result.LocationDisabled ->
+                mapOf("error" to "location_disabled")
             is WifiInfoReader.Result.NoWifi ->
                 mapOf("error" to "no_wifi")
             is WifiInfoReader.Result.UnknownSsid ->

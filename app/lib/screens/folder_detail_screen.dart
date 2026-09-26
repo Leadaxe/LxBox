@@ -1532,6 +1532,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         widget.entry.tagPrefix = val.trim();
         unawaited(widget.controller.persistSources());
       },
+      // Фича 565 фаза B — свёртка источника в группу (§74).
+      // §568 / задача 570 — занятые имена для редактора свёртки.
+      otherSources: [for (final e in widget.controller.entries) e.list],
+      onReplaceChanged: (r) async {
+        setState(() => widget.entry.replace = r);
+        await widget.controller.persistSources();
+      },
       // §393 A6 — каскад на regex-фильтры Направлений (см. подписку).
       onTagPrefixCommitted: (_) => unawaited(_commitTagPrefix()),
       onSetDetourMode: _setDetourMode,
@@ -1669,9 +1676,15 @@ class _MemberTile extends StatelessWidget {
         ? getLocalText.s("Tap to edit or delete")
         : hideProto
             ? null
-            : node.isAddressless
-                ? node.protocol.toUpperCase()
-                : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
+            : node is AutoSelectSpec && node.isManual
+                // §565 — род ручного выбора и выбранный член.
+                ? [
+                    node.protocol.toUpperCase(),
+                    if (node.manualDefault.isNotEmpty) node.manualDefault,
+                  ].join(' · ')
+                : node.isAddressless
+                    ? node.protocol.toUpperCase()
+                    : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';
 
     // §435 — маркер «член несёт секции» (правила/DNS узла, контракт ## 13):
     // видно, у кого связка, не открывая редактор.

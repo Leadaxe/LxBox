@@ -24,7 +24,7 @@ reference lives outside this repo and is vendored into `app/contract/` by
 - `contract/registry/protocols/<scheme>.json` — per-scheme query parameters,
   aliases, allowlists and degradation rules. Where this document and the
   registry disagree, the registry wins.
-- `contract/docs/CANON.md`, `IDENTITY.md` — how a parsed node is canonicalized
+- `contract/docs/PARSING_PRINCIPLES.md`, `IDENTITY.md` — how a parsed node is canonicalized
   and how its identity hash is computed. Both projects must agree, otherwise the
   same subscription yields different nodes on phone and desktop.
 - `contract/corpus/uri/` — conformance fixtures run by
@@ -833,9 +833,10 @@ Default port: **1080**.
 **The scheme carries the protocol version.** A SOCKS link has no query
 parameter for the version in any dialect, so the scheme itself is the
 discriminator — the way the `proxy-https://` suffix discriminates TLS for the
-HTTP proxy. One table serves both ends, the link mapper and the share-URI
-emitter (`socksSchemeForVersion`, `uri_utils.dart`): a node parsed from
-`socks4://` is emitted back as `socks4://`.
+HTTP proxy. Both ends read the same registry entry (`socks.json`): the link
+mapper's `scheme_sets` (scheme → `version`) and the emitter's `emit.form_from`
+(`version` → scheme), so a node parsed from `socks4://` is emitted back as
+`socks4://`. There is no copy of the table in Dart (§562).
 
 | Scheme | `version` in the body |
 |---|---|

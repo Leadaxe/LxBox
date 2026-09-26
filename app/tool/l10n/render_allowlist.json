@@ -4,6 +4,7 @@
     "lib/services/automation/",
     "lib/services/debug/",
     "lib/services/builder/build_config.dart",
+    "lib/services/builder/server_list_build.dart",
     "lib/controllers/home_controller.dart",
     "lib/controllers/home_controller/",
     "lib/controllers/subscription_controller.dart",

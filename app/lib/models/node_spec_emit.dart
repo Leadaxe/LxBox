@@ -429,6 +429,8 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
   final tls = <String, dynamic>{
     if (s.sni.isNotEmpty) 'server_name': s.sni,
     if (s.disableSni) 'disable_sni': true,
+    for (final e in s.tlsExtra.entries)
+      e.key: e.value is List ? List<Object>.from(e.value as List) : e.value,
   };
   final map = <String, dynamic>{
     'type': 'masque',
@@ -436,7 +438,8 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
     'server': s.server,
     'server_port': s.port,
     'profile': s.profile,
-    'vhttp': s.vhttp,
+    // §556 — пустой `vhttp` = ключа нет (ядро = auto), тело не дописывается.
+    if (s.vhttp.isNotEmpty) 'vhttp': s.vhttp,
     'private_key': s.privateKeyDer,
     'public_key': s.publicKeyDer,
     'ip': ?ip,

@@ -286,9 +286,34 @@ final class MapperSections {
     if (!_draftLoaded) _loadDraftsFromDiskSync();
     final raw = _rawSection(kind, singboxType);
     if (raw == null) return null;
-    final section =
-        MapperSection.fromJson(kind, singboxType, _sectionRefs(raw));
+    final section = MapperSection.fromJson(
+        kind, singboxType, _withIniDialect(singboxType, _sectionRefs(raw)));
     return section.include.isEmpty ? section : _withIncludes(section);
+  }
+
+  /// Форма `space: ini` у секции без своего `ini_dialect` (форма `conf_b64`
+  /// у ссылки) читает ini ДИАЛЕКТОМ ПРОТОКОЛА — тем, что объявила его
+  /// секция-`.conf`: у лаунчера правило диалекта (повтор `[Peer]` и код
+  /// `wgconf_extra_peer_dropped`) действует на всех входах `.conf`, включая
+  /// обёрнутые в ссылку. Имя секции-донора не пишется: берётся первая секция
+  /// протокола, которая диалект объявила.
+  Map<String, dynamic> _withIniDialect(
+      String singboxType, Map<String, dynamic> raw) {
+    if (raw[DraftNames.iniDialect] != null) return raw;
+    final forms = raw['forms'];
+    if (forms is! List ||
+        !forms.any((f) => f is Map && f['space'] == 'ini')) {
+      return raw;
+    }
+    final mappers = (ContractRegistry.I.rawProtocol(singboxType)?['mappers']
+            as Map?)
+        ?.cast<String, dynamic>();
+    if (mappers == null) return raw;
+    for (final m in mappers.values) {
+      final d = m is Map ? m[DraftNames.iniDialect] : null;
+      if (d is Map) return {...raw, DraftNames.iniDialect: d};
+    }
+    return raw;
   }
 
   /// Раскрыть `{"$ref": …}` у записей САМОЙ секции.

@@ -133,6 +133,77 @@ WireguardSpec? parseAmneziaVpnUri(String link, {XrayDropVerdict? dropped}) {
   return parseWireguardIni(ini, nameHint: label, dropped: dropped);
 }
 
+/// §570 / контракт 1.1.80 (§77 п.1) — строка `vpn://` ВНУТРИ списка ссылок
+/// даёт ТЕ ЖЕ узлы, что тело из одной этой ссылки: все WG/AWG-контейнеры
+/// профиля по порядку, origin каждого — самодостаточный `.conf` (`wg_ini`,
+/// его ставит [parseWireguardIni]).
+///
+/// Имя: у контейнера по умолчанию — имя профиля (`description` →
+/// `hostName` → имя контейнера), как у прежнего одиночного узла строки,
+/// чтобы тег и identity уже сохранённого узла не сменились; у прочих —
+/// `<имя профиля> <имя контейнера>` (так их называет лаунчер).
+///
+/// `null` — ссылка не распаковалась вовсе: вызывающий идёт [parseAmneziaVpnUri]
+/// и отбраковывает строку на её позиции.
+List<WireguardSpec>? parseAmneziaVpnUriAll(String link,
+    {List<XrayDropVerdict>? verdicts}) {
+  final t = link.trim();
+  if (!t.startsWith('vpn://')) return null;
+  final bareIni = _decodeBareIni(t);
+  if (bareIni != null) {
+    final v = XrayDropVerdict();
+    verdicts?.add(v);
+    final n = parseWireguardIni(bareIni, dropped: v);
+    return n == null ? const [] : [n];
+  }
+  final root = _decodeAmneziaRoot(t);
+  if (root == null) return null;
+  final containers = root['containers'];
+  if (containers is! List || containers.isEmpty) return null;
+
+  final entries = <({Map c, String ini})>[];
+  for (final c in containers) {
+    if (c is! Map) continue;
+    for (final proto in const ['awg', 'wireguard']) {
+      final ini = _extractIni(c[proto]);
+      if (ini != null) entries.add((c: c, ini: _substituteDns(ini, root)));
+    }
+  }
+  if (entries.isEmpty) return null;
+
+  final defaultContainer = root['defaultContainer'];
+  var chosen = entries.indexWhere((e) =>
+      defaultContainer is String && e.c['container'] == defaultContainer);
+  if (chosen < 0) chosen = 0;
+
+  final description = root['description'];
+  final hostName = root['hostName'];
+  final profile = (description is String && description.isNotEmpty)
+      ? description
+      : (hostName is String && hostName.isNotEmpty)
+          ? hostName
+          : null;
+
+  final out = <WireguardSpec>[];
+  for (var i = 0; i < entries.length; i++) {
+    final name = entries[i].c['container'];
+    final containerName = name is String && name.isNotEmpty ? name : null;
+    final String? label;
+    if (i == chosen) {
+      label = profile ?? containerName;
+    } else if (profile != null && containerName != null) {
+      label = '$profile $containerName';
+    } else {
+      label = profile ?? containerName;
+    }
+    final v = XrayDropVerdict();
+    verdicts?.add(v);
+    final n = parseWireguardIni(entries[i].ini, nameHint: label, dropped: v);
+    if (n != null) out.add(n);
+  }
+  return out;
+}
+
 /// §506 — payload `vpn://` как ГОЛЫЙ wg-quick/AWG `.conf` (без JSON-обёртки
 /// профиля Amnezia). Возвращает текст INI или `null`, если payload не INI.
 ///
@@ -259,14 +330,33 @@ String _withLastConfigMtu(String ini, Object? mtuRaw) {
 /// мешают и без подстановки (INI-парсер DNS игнорирует) — это fidelity
 /// сохраняемого источника узла (`rawSource`).
 String _substituteDns(String ini, Map<String, dynamic> root) {
-  var out = ini;
-  final dns1 = root['dns1'];
-  final dns2 = root['dns2'];
-  if (dns1 is String && dns1.isNotEmpty) {
-    out = out.replaceAll(r'$PRIMARY_DNS', dns1);
+  final values = <String, String>{
+    r'$PRIMARY_DNS': _profileString(root['dns1']),
+    r'$SECONDARY_DNS': _profileString(root['dns2']),
+  };
+  final out = <String>[];
+  for (final line in ini.split('\n')) {
+    final m = RegExp(r'^(\s*DNS\s*=\s*)(.*)$').firstMatch(line);
+    if (m == null) {
+      out.add(line);
+      continue;
+    }
+    final items = <String>[];
+    for (final raw in m.group(2)!.split(',')) {
+      var item = raw.trim();
+      if (item.isEmpty) continue;
+      if (item.startsWith(r'$')) {
+        // Контракт 1.1.72 (§68, substitute): плейсхолдер контейнера
+        // заменяется значением профиля; неразрешённый снимается.
+        item = values[item] ?? '';
+        if (item.isEmpty) continue;
+      }
+      items.add(item);
+    }
+    // Пустой итог удаляет строку DNS целиком.
+    if (items.isNotEmpty) out.add('${m.group(1)}${items.join(', ')}');
   }
-  if (dns2 is String && dns2.isNotEmpty) {
-    out = out.replaceAll(r'$SECONDARY_DNS', dns2);
-  }
-  return out;
+  return out.join('\n');
 }
+
+String _profileString(Object? v) => v is String ? v.trim() : '';
