@@ -209,12 +209,10 @@ const String kWarnSourceKindUnsupported = 'backup_source_kind_unsupported';
 
 /// Контракт 1.0.1 — провайдерская группа (`kind: auto`) приехала в форме,
 /// которую сторона не выражает, и ввезена упрощённой. Detail — тег группы,
-/// [LxBackupWarning.reason] — что не выразилось. У LxBox — `selector`: группа
-/// становится urltest, `default` отбрасывается ([kGroupDegradedSelector]).
+/// [LxBackupWarning.reason] — что не выразилось. §565 — `selector` LxBox
+/// исполняет, упрощения рода больше нет; код остаётся за членами старых
+/// autogroup-текстов, которые не нашлись.
 const String kWarnGroupDegraded = 'backup_group_degraded';
-
-/// Причина [kWarnGroupDegraded] у LxBox: selector читается urltest'ом.
-const String kGroupDegradedSelector = 'selector→urltest, default dropped';
 
 /// Переносимые имена переменных — зеркало `registry/vars.json` (portable=true).
 ///
@@ -3010,8 +3008,8 @@ LxServer? _server10(
 
 /// Член папки 1.0. `server` — узел; `unsupported` с исходником — у LxBox
 /// есть дом: нечитаемый член папки хранит текст и виден в списке (§234);
-/// `auto` — узел автовыбора кодеком хранения (§439 N2, `selector` читается
-/// urltest'ом с [kWarnGroupDegraded]); `chain` папка LxBox не держит —
+/// `auto` — узел автовыбора кодеком хранения (§439 N2, род `selector` —
+/// как записан, §565); `chain` папка LxBox не держит —
 /// [kWarnSourceKindUnsupported].
 LxServer? _folderMember10(
   Map<String, dynamic> node,
@@ -3031,13 +3029,6 @@ LxServer? _folderMember10(
         where: '${folder.name}: $tag',
       );
       final group = read.member.node! as AutoSelectSpec;
-      if (read.fromSelector) {
-        warnings.add(LxBackupWarning(
-          kWarnGroupDegraded,
-          group.tag,
-          reason: kGroupDegradedSelector,
-        ));
-      }
       return LxServer(
         autoGroup: group,
         name: group.tag,

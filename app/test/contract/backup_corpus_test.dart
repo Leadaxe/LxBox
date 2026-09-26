@@ -35,7 +35,16 @@ import '../parser/engine_test_setup.dart';
 /// Кейсы, которые сторона пока не проходит по известной причине: имя кейса →
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
 /// с работой, которая его закрывает.
-const Map<String, String> _pendingCases = {};
+const Map<String, String> _pendingCases = {
+  // §565 фаза A — LxBox исполняет род `selector` (group_type и default
+  // доживают), а override лаунчера `*.expected.lxbox.json` этих трёх кейсов
+  // ещё ждёт прежнего упрощения `backup_group_degraded` «selector→urltest,
+  // default dropped». Снимается, когда лаунчер уберёт эту строку из override.
+  'v10_dev_forms': '§565: override ждёт selector→urltest, LxBox род исполняет',
+  'v10_group_degraded':
+      '§565: override ждёт selector→urltest, LxBox род исполняет',
+  'v10_group_links': '§565: override ждёт selector→urltest, LxBox род исполняет',
+};
 
 
 void main() {
