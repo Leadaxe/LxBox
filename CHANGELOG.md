@@ -25,6 +25,15 @@
   rebuilt with it. The folder list shows the group kind and the chosen server;
   the node screen marks the chosen member.
 
+- **Replace a folder or subscription with a group ([§568](docs/spec/tasks/568-source-replace-fold.md)).**
+  Settings of a folder or a subscription have Replace with a group: Manual
+  (you pick the server), Auto (picked by latency) or Both (a manual group whose
+  first option and default is the auto one, `<name>-auto`). Directions then
+  offer that one group instead of every server of the source, and rules and
+  the default route can point at it. The setting travels in backups as
+  `replace` (contract 1.1.78). The old launcher form `fold`/`fold_tag` is not
+  read: import names it as an unknown field.
+
 ### Changed
 
 - **Internal: no protocol names left in link parsing code ([§566](docs/spec/tasks/566-scheme-literals-outside-dispatcher.md)).**
