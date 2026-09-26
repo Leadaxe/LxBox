@@ -44,75 +44,100 @@ import 'uri_mapper.dart';
 const _kParseTimeCore = '0.0.0';
 
 /// §512 — НАБОР СХЕМ ИЗ РЕЕСТРА: объединение `detect.scheme_in` всех секций
-/// `mappers.uri`, которые загружены (реестр + черновик-оверлеи).
+/// `mappers.uri`, которые загружены (реестр + черновик-оверлеи). Это ровно
+/// набор, который лаунчер принимает ссылкой (Go `IsDirectLink`).
 ///
-/// Источник истины у написания схемы один — секция протокола, и до §512
-/// диспетчер дублировал его литералами: контракт 1.1.48 добавил `amneziawg` в
-/// `scheme_in` секции wireguard, а ссылка всё равно падала в `default`, потому
-/// что литерального списка это не касалось. Ровно тем же дефектом раньше были
-/// `naive+quic`, `socks4` и `masque` — каждый чинился правкой копии, то есть по
-/// одной схеме за находку (история в [isDirectLink]).
-///
-/// Возвращается `null`, когда ни одной секции `uri` нет (реестр не загружен):
-/// тогда вызывающий берёт [kPipelineSchemes]. Пустой набор и «реестра нет» —
-/// разные вещи, и молчаливый пустой набор выключил бы разбор ссылок целиком.
+/// Возвращается `null`, когда ни одна секция `uri` схемы не объявила (реестр
+/// не загружен). Пустой набор и «реестра нет» — разные вещи.
 ///
 /// §551 — набор считается один раз на состав секций ([_SchemeRoute]) и
 /// отдаётся неизменяемым.
 Set<String>? registryUriSchemes() => _schemeRoute().uriSchemes;
 
-/// §551 — МАРШРУТ СХЕМ, посчитанный один раз на состав секций `uri`.
+/// §551 / §562 — ДИСПЕТЧЕР СХЕМ ССЫЛКИ, посчитанный один раз на состав
+/// секций `uri`.
 ///
-/// Профиль §550: набор схем реестра, рабочий набор и перевод «схема → тип»
-/// собирались заново на КАЖДОЙ ссылке обходом всех секций — 43 % цены
-/// `parseUri`. Состав от ссылки не зависит, только от загруженных секций.
+/// §562 — единственный источник правила «написание схемы → тип тела» —
+/// реестр. Карта строится при загрузке из двух полей протокола, у которого
+/// есть секция `mappers.uri`:
+///
+/// 1. `detect.scheme_in` секции — написания, которые секция читает;
+/// 2. `aliases` протокола — написания, которые реестр знает как имя того же
+///    протокола, даже если в `scheme_in` их нет (Go их ссылкой не принимает,
+///    а приложение принимало всегда — разрыв объявлен в `note` протокола).
+///
+/// Схема как ДИСКРИМИНАТОР (версия протокола, TLS, транспорт) здесь не
+/// решается: написания ведут в один тип тела, а поле, которое несёт
+/// написание, ставит `scheme_sets` секции на входе и `emit.form_from` на
+/// выходе. До §562 то же правило жило в Dart ещё трижды: литеральный набор
+/// схем, таблица «схема → тип» и `switch` у `parseUri`.
+///
+/// Реестра нет — карта пуста, и ни одна ссылка не разбирается: тот же
+/// принцип, что у движка (критерий 7 спеки 480, отсутствие секции — ошибка,
+/// а не тихий откат на копию правила).
 ///
 /// Ключ — ЭКЗЕМПЛЯР списка [MapperSections.typesFor]: загрузчик отдаёт один
 /// и тот же список, пока черновики и реестр не перезагрузили, а перезагрузка
-/// даёт новый — и маршрут пересчитывается без ручной инвалидации (тот же
-/// приём, что план интерпретатора по экземпляру секции).
+/// даёт новый — и маршрут пересчитывается без ручной инвалидации.
 final class _SchemeRoute {
   _SchemeRoute(this.types)
       : uriSchemes = _uriSchemesOf(types),
-        typeByScheme = _typeBySchemeOf(types);
+        typeByScheme = _typeBySchemeOf(types) {
+    pipeline = Set.unmodifiable(typeByScheme.keys);
+  }
 
   final List<String> types;
 
-  /// Набор реестра; `null` — секций `uri` нет или ни одна не объявила схему.
+  /// Набор `scheme_in`; `null` — секций `uri` нет или ни одна не объявила
+  /// схему.
   final Set<String>? uriSchemes;
 
-  /// Рабочий набор: реестр ОБЪЕДИНЁННЫЙ с [kPipelineSchemes].
-  late final Set<String> pipeline = uriSchemes == null
-      ? kPipelineSchemes
-      : Set.unmodifiable({...kPipelineSchemes, ...uriSchemes!});
+  /// Все написания, которые знает диспетчер ([typeByScheme]).
+  late final Set<String> pipeline;
 
-  /// Написание в нижнем регистре → тип ПЕРВОЙ (в порядке [types]) секции,
-  /// чей `scheme_in` его несёт: ровно порядок прежнего перебора.
+  /// Написание в нижнем регистре → тип тела. Сначала `scheme_in` всех секций
+  /// (в порядке [types], первая побеждает), затем `aliases` протоколов —
+  /// алиас не перекрывает написание, которое уже объявила секция.
   final Map<String, String> typeByScheme;
+
+  static Iterable<String> _schemeIn(String type) sync* {
+    final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
+    if (si is! List) return;
+    for (final s in si) {
+      if (s is String && s.isNotEmpty) yield s.toLowerCase();
+    }
+  }
+
+  static Iterable<String> _aliases(String type) sync* {
+    final a = ContractRegistry.I.rawProtocol(type)?['aliases'];
+    if (a is! List) return;
+    for (final s in a) {
+      if (s is String && s.isNotEmpty) yield s.toLowerCase();
+    }
+  }
 
   static Set<String>? _uriSchemesOf(List<String> types) {
     if (types.isEmpty) return null;
-    final out = <String>{};
-    for (final type in types) {
-      final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
-      if (si is! List) continue;
-      for (final s in si) {
-        if (s is String && s.isNotEmpty) out.add(s.toLowerCase());
-      }
-    }
+    final out = <String>{for (final type in types) ..._schemeIn(type)};
     return out.isEmpty ? null : Set.unmodifiable(out);
   }
 
   static Map<String, String> _typeBySchemeOf(List<String> types) {
     final out = <String, String>{};
     for (final type in types) {
-      final si = MapperSections.I.sectionFor('uri', type)?.detect?['scheme_in'];
-      if (si is! List) continue;
-      for (final v in si) {
-        if (v is String) out.putIfAbsent(v.toLowerCase(), () => type);
+      for (final s in _schemeIn(type)) {
+        out.putIfAbsent(s, () => type);
       }
     }
-    return out;
+    for (final type in types) {
+      // Алиасы читаются только у протокола с секцией `uri`: алиас протокола,
+      // который ссылкой не пишется (группа), ссылкой не становится.
+      if (MapperSections.I.sectionFor('uri', type) == null) continue;
+      for (final s in _aliases(type)) {
+        out.putIfAbsent(s, () => type);
+      }
+    }
+    return Map.unmodifiable(out);
   }
 }
 
@@ -127,142 +152,22 @@ _SchemeRoute _schemeRoute() {
 
 /// §551 — метка текущего маршрута схем: один и тот же объект, пока состав
 /// секций не менялся. Для кешей, производных от [pipelineSchemes] и
-/// [registrySchemeType] (набор написаний wireguard у `parseUri`).
+/// [registrySchemeType].
 Object schemeRouteToken() => _schemeRoute();
 
-/// Схемы конвейера: набор реестра ОБЪЕДИНЁННЫЙ с литеральным
-/// [kPipelineSchemes].
-///
-/// §512 — объединение, а не замена: `wg://` реестр в `scheme_in` НЕ объявляет
-/// намеренно (`wireguard.json` → note: «алиас wg:// знает только Dart, Go
-/// IsDirectLink его не принимает — разрыв»), а написание живое и снимать его
-/// эта задача не уполномочена. Реестр здесь ДОБАВЛЯЕТ написания, и новое имя
-/// работает без правки кода; убрать написание он сегодня не может — это
-/// решение владельца, а не следствие синка.
+/// Все написания схемы ссылки, которые знает диспетчер: `scheme_in` секций
+/// `mappers.uri` плюс `aliases` их протоколов (§562). Пустой набор — реестр
+/// не загружен.
 ///
 /// §551 — набор считается один раз на состав секций ([_SchemeRoute]) и
 /// отдаётся неизменяемым.
 Set<String> pipelineSchemes() => _schemeRoute().pipeline;
 
-/// Схемы, переехавшие на конвейер — ЗАПАСНОЙ набор на случай, когда реестр не
-/// загружен (см. [registryUriSchemes]); он же нормативен для стража покрытия
-/// mapper-правил (`test/parser/mapper_rules_coverage_test.dart`).
+/// §512 / §562 — написание схемы → ТИП ТЕЛА по реестру (см. [_SchemeRoute]);
+/// `null` — схему не объявляет ни одна секция и ни один протокол.
 ///
-/// §512 — литералы больше НЕ решают, какую ссылку примет диспетчер: их
-/// перекрывает набор реестра. Список остаётся полным, чтобы запасной путь не
-/// оказался уже основного, а страж `registry_uri_schemes_test.dart` стережёт,
-/// что реестр покрывает каждое написание из него.
-///
-/// §472 шаг 5 — `hy2` стоит в списке отдельной записью: это АЛИАС СХЕМЫ
-/// (`hysteria2.json` → `aliases`), и `parseUri` маршрутизирует по тексту
-/// схемы, а не по типу тела. Перевод алиаса в каноническое имя — работа
-/// маппера, он же кладёт в тело `type: hysteria2`.
-const kPipelineSchemes = <String>{
-  'trojan',
-  'vless',
-  'vmess',
-  'ss',
-  'hysteria2',
-  'hy2',
-  'tuic',
-  'anytls',
-  // §472 шаг 6 — у naive схема НЕСЁТ ТРАНСПОРТ: `naive+quic` это не алиас
-  // написания, а другое тело (`quic: true`). Обе записи ведут в свой маппер.
-  'naive+https',
-  'naive+quic',
-  // §472 шаг 6 — http(s) CONNECT-прокси (§222) и его плюс-алиасы (§268).
-  // Суффикс схемы это TLS-дискриминатор, поэтому каждая запись своя, как у
-  // naive: тело у `-http` и `-https` разное.
-  'proxy-http',
-  'proxy-https',
-  'proxy+http',
-  'proxy+https',
-  // §472 шаг 6 — socks; `socks5` алиас написания (`socks.json` → aliases).
-  //
-  // §475 — `socks4`/`socks4a` тоже алиасы схемы, но НЕ написания: схема здесь
-  // дискриминатор ВЕРСИИ (`version` 4 / 4a против 5), как суффикс
-  // `proxy-https://` — дискриминатор TLS. Тело у всех четырёх одно
-  // (`type: socks`), различается одно поле, и маппер у них общий.
-  'socks',
-  'socks5',
-  'socks4',
-  'socks4a',
-  // §472 шаг 6 — ssh.
-  'ssh',
-  // §472 шаг 7 — masque (§130). Алиасов схема не имеет.
-  'masque',
-  // §472 шаг 7 — wireguard и оба его алиаса (`wireguard.json` → `aliases`).
-  // `awg://` это АЛИАС НАПИСАНИЯ, а не другое тело: AWG-поля промоутятся в
-  // корень endpoint'а одинаково, откуда бы ссылка ни пришла.
-  //
-  // Маршрутизация сюда НЕ заводится: `parseUri` по-прежнему зовёт
-  // `parseWireguardUri`, потому что у схемы есть ВТОРАЯ ФОРМА
-  // (`awg://<base64 .conf>`, §450), которую надо распознать до конвейера —
-  // её payload не URI. Список нужен стражу покрытия mapper-правил.
-  'wireguard',
-  'wg',
-  'awg',
-};
-
-/// §480 W1 — схема ссылки → ТИП ТЕЛА для движка секций.
-///
-/// Движок не знает ни одного имени схемы (греп-страж
-/// `engine_no_scheme_names_test.dart`): секция адресуется типом тела, и
-/// перевод написания схемы в тип — работа диспетчера, у которого этот словарь
-/// и так есть ([_kMappers] ниже строится по нему же).
-const Map<String, String> _kSchemeToType = <String, String>{
-  'trojan': 'trojan',
-  // §480 W2 — самое широкое покрытие примитивов: REALITY отдельным блоком
-  // (`tls#uri_reality`), flow против packetEncoding по priority, encryption
-  // с регистрозначимым `value_map`.
-  'vless': 'vless',
-  // §480 W4 — socks. Все четыре написания ведут в ОДИН тип тела: версию
-  // протокола несёт схема, и переводит её `scheme_sets` секции, а не эта
-  // таблица (§475 socks_scheme_is_version).
-  'socks': 'socks',
-  'socks5': 'socks',
-  'socks4': 'socks',
-  'socks4a': 'socks',
-  'tuic': 'tuic',
-  'hysteria2': 'hysteria2',
-  'hy2': 'hysteria2',
-  'masque': 'masque',
-  'ssh': 'ssh',
-  'anytls': 'anytls',
-  // §472 шаг 4 — схема `ss`, тип тела `shadowsocks`: секция адресуется ТИПОМ.
-  'ss': 'shadowsocks',
-  // §268 — четыре написания схемы http-прокси; суффикс это TLS-дискриминатор,
-  // и различает их `scheme_sets` секции, а не эта таблица.
-  'proxy-http': 'http',
-  'proxy-https': 'http',
-  'proxy+http': 'http',
-  'proxy+https': 'http',
-  // §103 §9.B1 — у naive схема НЕСЁТ ТРАНСПОРТ; различает `scheme_sets`.
-  'naive+https': 'naive',
-  'naive+quic': 'naive',
-  // §480 W4 — wireguard/AWG. Все три написания ведут в один тип тела; `awg://`
-  // это алиас НАПИСАНИЯ, а не другое тело.
-  'wireguard': 'wireguard',
-  'wg': 'wireguard',
-  'awg': 'wireguard',
-  // §480 — vmess. Секция несёт ДВЕ ФОРМЫ одного входа: контейнер v2rayN
-  // (base64 поверх JSON, `space: json`) и legacy cleartext (base64 поверх
-  // ссылки, `reparse: url`). Диспетчеру они не видны: форму выбирает `detect`
-  // секции, а не эта таблица.
-  'vmess': 'vmess',
-};
-
-/// §512 — написание схемы → ТИП ТЕЛА по РЕЕСТРУ: секция, чей
-/// `detect.scheme_in` несёт это написание. `null` — ни одна секция его не
-/// объявляет.
-///
-/// Спрашивается раньше литеральной [_kSchemeToType]: новое написание в
-/// `scheme_in` (контракт 1.1.48 — `amneziawg`) обязано работать без правки
-/// кода, иначе реестр не источник истины, а копия. Литералы остаются
-/// запасным путём, когда реестра нет.
-///
-/// §551 — перевод берётся из карты маршрута ([_SchemeRoute.typeByScheme]),
-/// а не перебором секций на каждой ссылке.
+/// Регистр написания не значим. Алиас резолвится здесь, ДО выбора секции:
+/// секция адресуется типом тела, а не написанием.
 String? registrySchemeType(String scheme) =>
     _schemeRoute().typeByScheme[scheme.toLowerCase()];
 
@@ -278,7 +183,7 @@ const Map<String, UriMapper> _kMappers = <String, UriMapper>{};
 /// разбирается вовсе.
 ///
 /// Различать эти два «null» вызывающему не нужно: `parseUri` выбирает ветку
-/// ДО вызова, по имени схемы ([kPipelineSchemes]).
+/// ДО вызова, по типу тела ([registrySchemeType]).
 NodeSpec? parseUriViaPipeline(String uri, String scheme,
     {XrayDropVerdict? dropped}) {
   // §480 W1 — движок, если для типа тела есть ИСПОЛНЯЕМАЯ секция. Рукописный
@@ -286,9 +191,9 @@ NodeSpec? parseUriViaPipeline(String uri, String scheme,
   // схемы не остаётся (критерий 7 спеки — движок без реестра не работает
   // вовсе, и молчаливый откат на рукописный разбор скрыл бы отсутствие
   // секции).
-  // §512 — реестр спрашивается ПЕРВЫМ; литеральная таблица остаётся запасным
-  // путём для случая «реестра нет вовсе».
-  final singboxType = registrySchemeType(scheme) ?? _kSchemeToType[scheme];
+  // §562 — тип тела даёт ТОЛЬКО реестр: литеральной таблицы «схема → тип»
+  // больше нет, и реестра нет — разбора нет.
+  final singboxType = registrySchemeType(scheme);
   if (singboxType != null) {
     // §512 — код непрочитанного ставит ДВИЖОК (`runSection`): только он знает,
     // что именно не сошлось — форма или обязательное значение (CANON §4.1).
