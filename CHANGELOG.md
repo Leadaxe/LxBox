@@ -10,6 +10,11 @@
 
 ### Added
 
+- **Rules left without conditions are dropped ([§571](docs/spec/tasks/571-rule-conditions-allowlist.md)).**
+  A preset route or DNS rule that has no matching condition left after variable
+  substitution (only an `action`, or a logical rule with empty sub-rules) is left
+  out with `template_fragment_dropped` instead of matching all traffic. The list of
+  condition fields comes from the contract registry.
 - **Closing the parser and build tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave A).**
   A `vpn://` line inside a subscription list now gives every WireGuard/AmneziaWG
   container of the profile, not only the default one. An `sni` that is a label
