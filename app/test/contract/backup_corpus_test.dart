@@ -38,10 +38,14 @@ import '../parser/engine_test_setup.dart';
 const Map<String, String> _pendingCases = {
   // §565 фаза B — свёртка источника `replace {mode, tag, auto}` (контракт
   // 1.1.78 §74) в LxBox ещё не реализована; снимается волной фазы B.
-  'replace_roundtrip': '§565 фаза B: replace не реализован',
-  'legacy_fold_to_replace': '§565 фаза B: replace не реализован',
-  'v10_direction_include': '§565 фаза B: replace не реализован',
-  'v10_sources_union': '§565 фаза B: replace не реализован',
+  'replace_roundtrip': '§568: replace не реализован',
+  'v10_direction_include': '§568: replace не реализован',
+  'v10_sources_union': '§568: replace не реализован',
+  // 1.1.79 §76 — fold/fold_tag не читаются: неизвестный ключ с кодом,
+  // правила/route.final на группу свёртки — backup_unknown_outbound /
+  // backup_final_dropped. Делается той же волной §568.
+  'legacy_fold_dropped': '§568: коды на снятый fold',
+  'legacy_0x_fold_dropped': '§568: коды на снятый fold',
 };
 
 
