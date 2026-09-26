@@ -24,6 +24,17 @@ bool _isContainerLine(String line) {
   return formMatchesText(src.detect, line);
 }
 
+/// §570 / контракт 1.1.80 — строка-контейнер профиля внутри списка ссылок:
+/// все узлы контейнера ([parseAmneziaVpnUriAll]). `null` — строка не
+/// контейнер либо не распаковалась: её разбирает [parseUri] (одиночный путь
+/// и отбраковка на позиции строки).
+List<NodeSpec>? parseContainerLineAll(String line,
+    {List<XrayDropVerdict>? verdicts}) {
+  final t = line.trim();
+  if (t.length > maxAmneziaLinkLength || !_isContainerLine(t)) return null;
+  return parseAmneziaVpnUriAll(t, verdicts: verdicts);
+}
+
 /// §506 / §512 — код служебной строки провайдера по РЕЕСТРУ (контракт
 /// 1.1.48, `source_kinds.json` → `uri_lines.service_schemes`), либо `null` —
 /// строка служебной не является.

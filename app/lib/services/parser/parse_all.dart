@@ -218,6 +218,16 @@ List<NodeSpec> _decodeFailed(String reason, List<NodeWarning>? dropped) {
 List<NodeSpec> _parseUriLines(List<String> lines, List<NodeWarning>? dropped) {
   final nodes = <NodeSpec>[];
   for (final l in lines) {
+    // §570 / контракт 1.1.80 — строка-контейнер профиля даёт все контейнеры.
+    final verdicts = <XrayDropVerdict>[];
+    final all = parseContainerLineAll(l, verdicts: verdicts);
+    if (all != null) {
+      nodes.addAll(all);
+      for (final v in verdicts) {
+        if (v.reason != null) dropped?.add(v.reason!);
+      }
+      continue;
+    }
     final verdict = XrayDropVerdict();
     final n = parseUri(l, dropped: verdict);
     if (n != null) {
