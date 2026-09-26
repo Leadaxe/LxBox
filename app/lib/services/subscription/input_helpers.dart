@@ -80,11 +80,9 @@ String? _bodyTypeOfKind(String kind) {
 }
 
 bool isWireGuardConfig(String input) {
-  final kind = documentKindOf(input);
-  if (kind != null) return kind == 'wireguard_conf';
-  // Реестр не загружен — запасной признак тот же, что у реестра
-  // (`source_kinds.json`): секция `[Interface]`; `[Peer]` не требуется.
-  return input.trim().contains('[Interface]');
+  // Вид документа судит только реестр (`source_kinds.json`); без него ничего
+  // не опознаётся, как и ссылки (§562, §566).
+  return documentKindOf(input) == 'wireguard_conf';
 }
 
 /// §110 — ссылка-контейнер Amnezia (контейнерный экспорт Amnezia/awg2).

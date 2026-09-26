@@ -188,14 +188,6 @@ void main() {
       expect(uri.contains('X%20Bad'), false, reason: uri);
     });
 
-    test('isValidNaiveHeaderName charset', () {
-      expect(isValidNaiveHeaderName('X-Foo'), true);
-      expect(isValidNaiveHeaderName('X_Foo'), true);
-      expect(isValidNaiveHeaderName('Content-Type'), true);
-      expect(isValidNaiveHeaderName('X Foo'), false); // space
-      expect(isValidNaiveHeaderName('X:Foo'), false); // colon
-      expect(isValidNaiveHeaderName(''), false);
-    });
   });
 
   group('NaïveProxy round-trip', () {

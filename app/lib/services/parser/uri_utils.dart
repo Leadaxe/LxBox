@@ -24,17 +24,6 @@ const int kMaxDetourDepth = 8;
 /// десктоп её принимал (§103 §9.B12).
 const int maxAmneziaLinkLength = 524288;
 
-/// §084 M7 — charset валидного имени HTTP-заголовка из DuckSoft de-facto
-/// спеки naive URI: `! # $ % & ' * + - . 0-9 A-Z \ ^ _ ` a-z | ~`.
-/// Единый источник для parser (uri_parsers) и emit (node_spec_emit).
-final RegExp naiveHeaderNameRe =
-    RegExp(r"^[!#$%&'*+\-.0-9A-Z\\^_`a-z|~]+$");
-
-/// True если `name` — валидное имя naive HTTP-заголовка (непустое +
-/// matches [naiveHeaderNameRe]).
-bool isValidNaiveHeaderName(String name) =>
-    name.isNotEmpty && naiveHeaderNameRe.hasMatch(name);
-
 /// Безопасный base64-decode с пробой 4 вариантов (standard/url-safe ×
 /// padded/unpadded). Возвращает bytes или null. Порт v1 `_decodeBase64`.
 List<int>? decodeBase64Safe(String s) {
