@@ -226,13 +226,28 @@ SourceSpace? _selectForm(MapperSection section, String text) {
       ? const [MapperForm(id: 'url', space: 'url')]
       : section.forms;
   for (final form in forms) {
-    if (!formMatchesText(form.detect, text)) continue;
+    // Текстовый `detect` формы с оболочкой судится по ДВУМ текстам (unwrap →
+    // redetect, MAPPER_ENGINE §1): сырому пэйлоаду и раскрытому. Предикаты
+    // законно пишут про обе вещи: «тело — один base64-блоб без `@`» — про
+    // оболочку (на раскрытом тексте он ложен по построению), а `^[^#]*@` у
+    // формы `method:uuid@host` — про то, что под ней (на блобе `@` нет).
+    // Форма, чей предикат сошёлся хоть на одном из двух, — эта форма, как у
+    // лаунчера. `scheme_in` раскрытием не меняется (схема остаётся на месте),
+    // `json` судится ниже по разобранному объекту.
+    final rawHit = formMatchesText(form.detect, text);
+    if (!rawHit && form.decode.isEmpty) continue;
     // `forms[].decode` — оболочка источника: тело после схемы бывает целиком
     // base64 (перекодированные подписки). Декодер работает над ПЭЙЛОАДОМ, а
     // схему возвращает на место: написание схемы — источник (`scheme_sets`,
     // `label_fallback`), и потерять его нельзя.
     final decoded = _applyFormDecode(form, text);
     if (decoded == null) continue;
+    if (!rawHit) {
+      final revealed = _applyScopedDecodeToPayload(form, decoded);
+      if (revealed == null || !formMatchesText(form.detect, revealed)) {
+        continue;
+      }
+    }
     switch (form.space) {
       case 'url':
         final space = lexUri(decoded, formId: form.id);
