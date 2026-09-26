@@ -72,7 +72,7 @@ void main() {
             hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
             idleTimeout: '10m',
             stripEvasion: false,
-            strip: {kChainStripTlsUtls: true, kChainStripTlsFragment: false},
+            strip: {'tls.utls': true, 'tls.fragment': false},
             rewrite: {
               'vless': {'packet_encoding': 'xudp'},
             },
@@ -109,6 +109,59 @@ void main() {
       );
       expect(_byTag(r, 'off'), isNull);
       expect(r.emitWarnings, isEmpty);
+    });
+  });
+
+  // §57 (контракт 1.1.61) — `on_hop_required` каталога strip: REALITY-звено
+  // требует `tls.utls`, ключ снимается с патча цепочки, цепочка собирается,
+  // код реестра — предупреждением. Прежде форма запирала такую цепочку.
+  group('§57 — REALITY × strip tls.utls на звене', () {
+    test('цепочка собирается, tls.utls снят с патча, код в отчёте', () async {
+      final r = await _build(
+        nodeTags: ['DE'],
+        extraUris: [
+          'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
+              '?security=reality&sni=example.com&fp=chrome'
+              '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
+              '&sid=0123abcd#NL',
+        ],
+        chains: [
+          const SourceChain(
+            tag: 'via-nl',
+            hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
+            strip: {'tls.utls': true, 'tls.fragment': false},
+          ),
+        ],
+      );
+      final chain = _byTag(r, 'via-nl');
+      expect(chain, isNotNull, reason: 'цепочка обязана собраться');
+      expect(chain!['strip'], {'tls.fragment': false, 'tls.utls': false});
+      expect(
+          r.emitWarnings.where((w) =>
+              w.contains('[chain_strip_utls_on_reality]') && w.contains('NL')),
+          hasLength(1));
+    });
+
+    test('REALITY на позиции 0 не судится — патч как есть', () async {
+      final r = await _build(
+        nodeTags: ['DE'],
+        extraUris: [
+          'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
+              '?security=reality&sni=example.com&fp=chrome'
+              '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
+              '&sid=0123abcd#NL',
+        ],
+        chains: [
+          const SourceChain(
+            tag: 'from-nl',
+            hops: [NodeLink(tag: 'NL'), NodeLink(tag: 'DE')],
+            strip: {'tls.utls': true},
+          ),
+        ],
+      );
+      expect(_byTag(r, 'from-nl')!['strip'], {'tls.utls': true});
+      expect(r.emitWarnings.where((w) => w.contains('chain_strip_utls')),
+          isEmpty);
     });
   });
 
@@ -319,6 +372,7 @@ void main() {
 
 Future<BuildResult> _build({
   required List<String> nodeTags,
+  List<String> extraUris = const [],
   List<SourceChain> chains = const [],
   List<Direction> directions = const [
     Direction(tag: 'vpn-1', label: 'VPN ①')
@@ -326,7 +380,7 @@ Future<BuildResult> _build({
   String coreVersion = _newCore,
 }) =>
     buildConfig(
-      lists: [_source(nodeTags)],
+      lists: [_source(nodeTags, extraUris: extraUris)],
       template: _template(),
       settings: BuildSettings(
         directions: directions,
@@ -363,8 +417,13 @@ WizardTemplate _template() => WizardTemplate(
       speedTestOptions: const {},
     );
 
-UserServer _source(List<String> tags) {
+UserServer _source(List<String> tags, {List<String> extraUris = const []}) {
   final nodes = <NodeSpec>[];
+  for (final u in extraUris) {
+    final spec = parseUri(u);
+    expect(spec, isNotNull, reason: 'не разобралась ссылка "$u"');
+    nodes.add(spec!);
+  }
   for (var i = 0; i < tags.length; i++) {
     final spec = parseUri('vless://u$i@h$i.example:443'
         '?type=ws&security=tls#${Uri.encodeComponent(tags[i])}');

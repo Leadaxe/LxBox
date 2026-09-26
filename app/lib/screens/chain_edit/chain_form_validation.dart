@@ -1,8 +1,7 @@
 // §393 C6 — валидация формы цепочки (SPEC 110).
 //
 // ЭТО ЕДИНСТВЕННЫЙ РУБЕЖ (§393 L4). `sing-box check` НЕ ловит ошибки старта:
-// конфиг с `strip tls.utls` на reality-узле или с вложенной цепочкой на
-// позиции ≥1 проверку ПРОХОДИТ и падает только на `run`. Ядро при этом
+// конфиг с вложенной цепочкой на позиции ≥1 проверку ПРОХОДИТ и падает только на `run`. Ядро при этом
 // отвергает конфиг ЦЕЛИКОМ — пользователь остаётся без VPN, а не без одного
 // маршрута. Поэтому форма обязана не дать СОБРАТЬ такую цепочку, а не ловить
 // последствия в рантайме.
@@ -17,6 +16,8 @@ import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
 import '../../services/builder/node_link_pool.dart';
 import '../../services/builder/node_link_resolve.dart';
+import '../../services/contract/chain_strip.dart';
+import '../../services/contract/registry_warning.dart';
 import '../../services/l10n/locale_controller.dart';
 import 'chain_hop_candidate.dart';
 
@@ -71,8 +72,10 @@ enum ChainIssueCode {
   /// Позиция — цепочка, объявленная НИЖЕ по списку (ссылка вперёд).
   forwardChainReference,
 
-  /// Снят `tls.utls`, а среди звеньев есть reality-узел.
-  realityUtlsStripped,
+  /// Цепочка снимает ключ каталога strip, а звено этот путь требует
+  /// (`on_hop_required` реестра, §57): сборка снимет ключ с патча, цепочка
+  /// соберётся. Текст — код реестра (`chain_strip_utls_on_reality` и т.п.).
+  stripKeptForHop,
 
   /// Позиция 0 со своим detour: реальный путь ДЛИННЕЕ показанного.
   detourAtEntry,
@@ -164,20 +167,6 @@ class ChainFormState {
   final List<String> hops;
   final bool? stripEvasion;
   final Map<String, bool> strip;
-
-  /// Снимается ли отпечаток ClientHello при текущих галках.
-  ///
-  /// Три источника, в порядке убывания старшинства: точечная галка каталога,
-  /// общий `strip_evasion` (выключен → не снимается ничего), умолчание
-  /// каталога ядра. Ровно та же лестница, что у `transform.go` ядра, — иначе
-  /// форма предупреждала бы о конфликте, которого нет, или молчала о том,
-  /// который есть.
-  bool get stripsUtls {
-    final explicit = strip[kChainStripTlsUtls];
-    if (explicit != null) return explicit;
-    if (stripEvasion == false) return false;
-    return kChainStripDefault[kChainStripTlsUtls] ?? false;
-  }
 }
 
 /// §393 C6 — всё, что форма нашла в [state], в порядке показа.
@@ -289,23 +278,22 @@ List<ChainFormIssue> validateChainForm(
     ));
   }
 
-  // T4 — снятый отпечаток ClientHello на reality-узле. Проверяются позиции с
-  // индексом ≥1: strip применяется к ЗВЕНЬЯМ, первая позиция идёт в сеть как
-  // есть. Это ровно тот случай, который `check` пропускает, а `run` роняет.
-  if (state.stripsUtls) {
-    final bad = <String>[];
-    for (var i = 1; i < hops.length; i++) {
-      if (ctx.candidates[hops[i]]?.reality ?? false) bad.add(hops[i]);
-    }
-    if (bad.isNotEmpty) {
-      blocking.add(ChainFormIssue(
-        code: ChainIssueCode.realityUtlsStripped,
-        level: ChainIssueLevel.blocking,
-        message: getLocalText.s("ClientHello fingerprint is stripped, but these positions are reality nodes "
-        "that need it: %s. The core will not start — untick tls.utls.", _list(bad)),
-        hops: bad,
-      ));
-    }
+  // §57 — звено требует снимаемый путь (`on_hop_required`): решает движок
+  // реестра, форма только показывает. Не блокирует — сборка снимет ключ с
+  // патча и цепочку соберёт.
+  final unstrips = chainHopUnstrips(
+    stripEvasion: state.stripEvasion,
+    patch: state.strip,
+    hops: [for (final h in hops) (h, ctx.candidates[h]?.body)],
+  );
+  final lang = registryLangForTag(LocaleController.I.effectiveTag);
+  for (final u in unstrips) {
+    soft.add(ChainFormIssue(
+      code: ChainIssueCode.stripKeptForHop,
+      level: ChainIssueLevel.warning,
+      message: registryText(u.code, lang, params: {'target': u.target}),
+      hops: [u.target],
+    ));
   }
 
   // Имя: пустое или занятое — два outbound'а с одним тегом ядро не принимает.

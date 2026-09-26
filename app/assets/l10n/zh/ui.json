@@ -1038,15 +1038,6 @@
   "Client subnet": {
     "value": "客户端子网"
   },
-  "ClientHello fingerprint is stripped, but these positions are reality nodes that need it: %s. The core will not start — untick tls.utls.": {
-    "value": "ClientHello 指纹已去除，但以下位置是需要它的 reality 节点：%s。内核无法启动——请取消勾选 tls.utls。"
-  },
-  "ClientHello fingerprint — must not be stripped on reality nodes": {
-    "value": "ClientHello 指纹 —— 在 reality 节点上不可去除"
-  },
-  "ClientHello fragmentation": {
-    "value": "ClientHello 分片"
-  },
   "Clipboard is empty": {
     "value": "剪贴板为空"
   },
@@ -4774,9 +4765,6 @@
   "XHTTP mode was set to \"packet-up\": the link asks for header uplink data placement, which the core accepts only in that mode (the config would otherwise fail to load).": {
     "value": "XHTTP 模式已设为「packet-up」：链接要求把上行数据放在请求头中，而内核只在该模式下接受（否则配置无法加载）。"
   },
-  "XHTTP padding": {
-    "value": "XHTTP 填充"
-  },
   "Xray config": {
     "value": "Xray 配置"
   },
@@ -4944,9 +4932,6 @@
   },
   "matches only domains in the rule-set": {
     "value": "只匹配规则集中的域名"
-  },
-  "multiplex padding": {
-    "value": "多路复用填充"
   },
   "never": {
     "value": "从不"

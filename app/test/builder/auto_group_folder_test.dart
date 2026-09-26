@@ -178,11 +178,12 @@ void main() {
         auto,
       ]).build(ctx);
       expect(urltests(ctx).single['outbounds'], ['F: B']);
+      // Контракт 1.1.67 (§63) — запись отчёта сборки с кодом
+      // group_member_dropped {tag, member}, одна на выбывшего члена.
       expect(ctx.warnings, [
-        contains('member "gone" was dropped: it has no node "gone"'),
-        contains('member "A" was dropped: it is not a node of this container'),
+        'Group F: Grp: gone left the group [group_member_dropped]',
+        'Group F: Grp: A left the group [group_member_dropped]',
       ]);
-      expect(ctx.warnings.first, startsWith('Auto node "F: Grp"'));
     });
 
     test('явный состав без единого члена — группа не эмитится, с warning', () {
@@ -223,7 +224,8 @@ void main() {
       final ctx = _FakeCtx();
       off.build(ctx);
       expect(urltests(ctx).single['outbounds'], ['F: B']);
-      expect(ctx.warnings.single, contains('member "A" was dropped'));
+      expect(ctx.warnings.single,
+          'Group F: Grp: A left the group [group_member_dropped]');
     });
 
     test('пустой пул → группа НЕ эмитится (пустой urltest роняет ядро)', () {

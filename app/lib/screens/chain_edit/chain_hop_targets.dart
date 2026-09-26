@@ -112,9 +112,9 @@ List<ChainHopCandidate> collectChainHopTargets({
     nodes.add(ChainHopCandidate(
       tag: n.tag,
       kind: isGroup ? ChainHopKind.group : ChainHopKind.node,
-      // Reality живёт в собранном outbound'е (`tls.reality.enabled`), и
-      // `securityLabel` — уже вычисленный ответ на тот же вопрос.
-      reality: n.securityLabel != null && n.securityLabel!.startsWith('Reality'),
+      // Тело собранного outbound'а: по нему реестр решает, какие снимаемые
+      // пути звено требует (on_hop_required, §57).
+      body: isGroup ? null : n.raw,
       detour: (n.detour ?? '').isNotEmpty,
       outboundType: n.type,
       // transportLabel у masque — это и есть vhttp ('h3'/'h2'/'auto',

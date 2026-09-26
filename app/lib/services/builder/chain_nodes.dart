@@ -20,6 +20,8 @@
 
 import '../../models/node_link.dart';
 import '../../models/source_chain.dart';
+import '../contract/chain_strip.dart';
+import '../contract/registry_warning.dart';
 import 'core_chain_capability.dart';
 import 'node_link_resolve.dart';
 
@@ -47,15 +49,45 @@ class ChainDegradation {
   final String code;
 }
 
+/// §57 — ключ каталога strip, снятый с патча цепочки ради звена, которое
+/// этот путь требует (`on_hop_required` реестра). Цепочка собрана.
+class ChainNote {
+  const ChainNote({
+    required this.tag,
+    required this.label,
+    required this.code,
+    required this.params,
+    required this.line,
+  });
+
+  final String tag;
+  final String label;
+
+  /// Код реестра (`chain_strip_utls_on_reality` и т.п.).
+  final String code;
+  final Map<String, String> params;
+
+  /// Готовая EN-строка для `emitWarnings`: подпись цепочки, текст кода
+  /// реестра и сам код — по нему строку находят в логе.
+  final String line;
+}
+
 /// Результат разрешения цепочек в узлы.
 class ChainResolution {
-  const ChainResolution({required this.nodes, required this.degraded});
+  const ChainResolution({
+    required this.nodes,
+    required this.degraded,
+    this.notes = const [],
+  });
 
   /// Готовые outbound-объекты типа `chain`, в порядке списка цепочек.
   final List<Map<String, dynamic>> nodes;
 
   /// Цепочки, не доехавшие до конфига.
   final List<ChainDegradation> degraded;
+
+  /// Собранные цепочки с правкой патча по реестру (§57).
+  final List<ChainNote> notes;
 
   /// Теги эмитированных цепочек — они уходят в пул отбора Направлений
   /// наравне с узлами подписок.
@@ -75,6 +107,9 @@ class ChainResolution {
 /// и следующая цепочка может им воспользоваться. Без словаря (превью, тесты
 /// модели) корневая позиция разрешается по [knownTags], пара — нет.
 ///
+/// [hopBodies] — тела узлов конфига по финальному тегу: по ним реестр судит
+/// `on_hop_required` каталога strip (§57). Нет тела — звено не судится.
+///
 /// [coreVersion] — строка `Libbox.version()`. Гейт §393 C5 стоит ПЕРВЫМ:
 /// ядро без `with_lx_chain` отвергает конфиг ЦЕЛИКОМ на неизвестном типе
 /// outbound'а, то есть одна настроенная цепочка оставила бы пользователя
@@ -83,10 +118,12 @@ ChainResolution resolveChains(
   List<SourceChain> chains, {
   required Set<String> knownTags,
   NodeLinkTargets? targets,
+  Map<String, Map<String, dynamic>> hopBodies = const {},
   String coreVersion = '',
 }) {
   final nodes = <Map<String, dynamic>>[];
   final degraded = <ChainDegradation>[];
+  final notes = <ChainNote>[];
   // Конфиги без цепочек обязаны собираться ровно так же, как раньше, не
   // платя ни за один лишний проход.
   final live = [for (final c in chains) if (c.enabled) c];
@@ -186,12 +223,35 @@ ChainResolution resolveChains(
       continue;
     }
 
-    nodes.add(chainOutboundObject(c, hopTags));
+    // §57 — `on_hop_required`: звено требует снимаемый путь → ключ снимается
+    // с патча цепочки, цепочка собирается, код — предупреждением.
+    final unstrips = chainHopUnstrips(
+      stripEvasion: c.stripEvasion,
+      patch: c.strip,
+      hops: [for (final t in hopTags) (t, hopBodies[t])],
+    );
+    var emitted = c;
+    if (unstrips.isNotEmpty) {
+      emitted = c.copyWith(strip: applyChainUnstrips(c.strip, unstrips));
+      for (final u in unstrips) {
+        final params = {'target': u.target};
+        notes.add(ChainNote(
+          tag: c.tag,
+          label: c.displayLabel,
+          code: u.code,
+          params: params,
+          line: 'Hop chain "${c.displayLabel}": '
+              '${registryText(u.code, RegistryLang.en, params: params)} '
+              '[${u.code}]',
+        ));
+      }
+    }
+    nodes.add(chainOutboundObject(emitted, hopTags));
     knownTags.add(c.tag);
     targets?.addRootNames([c.tag]);
     chainTags.add(c.tag);
   }
-  return ChainResolution(nodes: nodes, degraded: degraded);
+  return ChainResolution(nodes: nodes, degraded: degraded, notes: notes);
 }
 
 // ── T9: цепочка через Направление (§393 C4, L6) ─────────────────────────────

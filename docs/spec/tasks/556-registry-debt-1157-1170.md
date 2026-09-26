@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Частично сделано (ветка `task-556`), остаток — в «Нерешённое» |
 | Дата старта | 2026-09-26 |
-| Дата завершения | 2026-09-26 (третий заход, §56) |
+| Дата завершения | 2026-09-26 (третий заход §56, четвёртый — UI §54/§57/§60/§63) |
 | Коммиты | 00de8b9e, e96e251d, 9235987a, 94c6eac5, 726f0406, f2c3dfca, e61dc45c (+ merge develop 4713576c, d2637807); второй заход: e013c3ba, 78eaa954, d3781509, e2e29a64, 00be38cd, 539148e6; третий заход (§56): ae72e927 |
 | Связанные spec'ы | §460 (реестр), §472 (конвейер разбора), §553 (разворот ссылок), §555 (язык шаблона — параллельная волна) |
 
@@ -162,19 +162,46 @@
 `mapper_sections_w4_test` 25/25, `heal_unknown_utls_fingerprints_test` 13/13,
 `reality_fingerprint_build_test` 8/8.
 
+## UI-волна (ветка `task-556-ui`, решения владельца 26.09.2026)
+
+Закрыто из «Нерешённого»:
+
+- **§54/§57 — форма цепочки на реестре.** Каталог `strip` (ключи, порядок,
+  умолчания, описания) — из `chain.json` (`services/contract/chain_strip.dart`);
+  `kChainStrip*` и их тест сняты. `on_hop_required {unstrip, code}` исполняет
+  общий движок: тело звена ≥ 1 без пути, прогнанное санитайзером, получает
+  путь обратно → ключ снимается с патча. Сборка (`resolveChains`, тела узлов
+  по тегу) собирает цепочку с `strip: {tls.utls: false}` и кладёт в отчёт
+  строку кода `chain_strip_utls_on_reality`; форма показывает находку
+  `stripKeptForHop` (warning, текст кода реестра), сохранение не запирает,
+  строка каталога — `kept`. `realityUtlsStripped` и флаг `reality` у
+  кандидата позиции сняты (кандидат несёт тело узла).
+- **§56/§60 — подпись уровня.** `protocolLevelByRegistry`: старший `level`
+  заданных полей и их `range_form` + суффиксы `level_mark`, без имён
+  протоколов; `_deriveAwgLevel` снят. Подпись — прежний слот рядом с
+  протоколом в строке узла, у схем без `levels` её нет.
+- **§63 — `group_member_dropped`.** Член Auto-группы, не разрешившийся на
+  сборке, — строка отчёта с заголовком кода и `[group_member_dropped]`, одна
+  на члена.
+
+Тесты (по файлу): `chain_form_validation_test`, `chain_edit_screen_smoke_test`,
+`chain_hop_targets_test`, `chain_emit_test` (+2: REALITY-звено — цепочка
+собрана, `tls.utls: false`, код в отчёте; позиция 0 не судится),
+`source_chain_test`, `record_codec_sources_test`, `chains_storage_test`,
+`chains_handler_test`, `config_node_test`, `node_row_level_label_test`
+(новый), `auto_group_folder_test`, `xray_auto_select_test` — зелёные.
+
 ## Нерешённое / follow-up
 
 Следствие бампа, не сделано:
 
-- **§56** гейт закрыт (третий заход, см. выше). Остаток: подпись уровня AWG
-  (`config_node.dart _deriveAwgLevel`) на `levels`/`level`/`level_mark`/
-  `range_form.level` не переведена — модель есть, это UI; снятие расширения
-  по тегу (кнопка «убрать AmneziaWG» со схлопыванием диапазона) — там же.
+- **§56** гейт закрыт (третий заход). Подпись уровня по `levels`/`level`/
+  `level_mark` — закрыта UI-волной (`protocol_level.dart`). Остаток: снятие
+  расширения по тегу (кнопка «убрать AmneziaWG» со схлопыванием диапазона).
   Ядро: стоит экспортировать теги сборки из libbox (например
-  `Libbox.buildTags()` из `debug.ReadBuildInfo`), тогда `kCoreBuildTags`
-  станет запасным значением, а не единственным источником.
-- **§54** форма цепочки из `strip.order`/`default`, подпись транспорта;
-  **§57** `on_hop_required` и `ChainIssueCode.stripUtlsOnReality` — UI.
+  `Libbox.buildTags()`), тогда `kCoreBuildTags` станет запасным значением.
+- **§54** форма цепочки из `chain.json` и **§57** `on_hop_required` —
+  закрыты UI-волной (`chain_strip.dart`).
 - **§59** распаковщик Amnezia по-прежнему вписывает MTU и DNS в текст INI:
   текст — `rawSource`, источник истины при повторном разборе, а контекст не
   хранится; записи `mtu_container`/`dns.substitute` исполняются, но на
@@ -184,8 +211,6 @@
   `dropped[]`, spec 480).
 - **§62** кейс `body/singbox/group_member_missing`: код на группе стоит,
   тело расходится — selector у нас узел-группа urltest (дельта рода группы).
-- **§63** `group_member_dropped` в отчёте сборки не ставится: отчёт пишет
-  свои строки о выбывшем члене, смена текста — UI, контракт не обязывает.
 - **§60** создание блока `tls{}` у masque в `applyTlsFragment` осталось
   структурной веткой по типу (у схемы нет признака «TLS без выключателя»).
 - Эталон PublicSubsCorpus (`expected.json`) — переснять отдельным

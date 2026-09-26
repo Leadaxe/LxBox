@@ -400,6 +400,7 @@ final class BodySchema {
   /// `condition`, без `source_kind`): при каком готовом теле узел годится
   /// ВЫХОДОМ — кандидатом в пул Направления. `null` — годится всегда.
   final Map<String, dynamic>? exitCapableWhen;
+
 }
 
 /// Контракт 1.1.60 — `on_core_unsupported`: что делать с узлом, когда

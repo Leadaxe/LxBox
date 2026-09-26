@@ -518,7 +518,7 @@ void main() {
               rawTags: sourceNodeRawTags(nodes),
               warn: warnings.add),
           ['L: A']);
-      expect(warnings, [contains('member "gone" was dropped')]);
+      expect(warnings, ['Group auto: gone left the group [group_member_dropped]']);
     });
 
     test('член чужого контейнера в группу не входит (§322 §2)', () {
@@ -540,7 +540,7 @@ void main() {
               rawTags: sourceNodeRawTags(nodes),
               warn: warnings.add),
           isEmpty);
-      expect(warnings, [contains('not a node of this container')]);
+      expect(warnings, [contains('[group_member_dropped]')]);
     });
   });
 

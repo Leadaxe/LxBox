@@ -4,6 +4,7 @@ import '../../models/server_list.dart';
 import '../../models/auto_select.dart';
 import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart' show RegistryWarning;
 import '../../models/singbox_entry.dart';
 import '../contract/body_sanitizer.dart' show exitCapableByRegistry;
 import '../node_hash.dart';
@@ -235,7 +236,8 @@ extension ServerListBuild on ServerList {
         resolvedTags,
         containerId: id,
         rawTags: rawTags,
-        warn: (line) => ctx.warn('Auto node "$shown": $line'),
+        groupTag: shown,
+        warn: ctx.warn,
       );
       // Пустой urltest роняет старт ядра (validator.dart) — достижимо, если
       // все члены выключены (§283) или подписка обновилась и пул опустел.
@@ -277,14 +279,18 @@ extension ServerListBuild on ServerList {
 /// (пустой `folderId` — свой контейнер, NODE_LINK §5.1 № 8). Сырой тег узла —
 /// [rawTags] (уникализированный в источнике, `sourceNodeRawTags`), без карты
 /// — `NodeSpec.tag` (член папки); у тёзок побеждает первый. Член, который не
-/// разрешился, отсекается строкой в [warn].
+/// разрешился, отсекается записью отчёта сборки в [warn] — код реестра
+/// `group_member_dropped {tag, member}` (контракт 1.1.67), одна на члена.
+/// [groupTag] — показанный тег группы (пусто — `spec.tag`).
 List<String> resolveAutoSelectMembers(
   AutoSelectSpec spec,
   Map<NodeSpec, String> resolved, {
   String containerId = '',
   Map<NodeSpec, String>? rawTags,
+  String groupTag = '',
   void Function(String line)? warn,
 }) {
+  final group = groupTag.isEmpty ? spec.tag : groupTag;
   final out = <String>[];
   switch (spec.membership) {
     case ExplicitMembers(:final members):
@@ -298,15 +304,13 @@ List<String> resolveAutoSelectMembers(
       for (final link in members) {
         if (!link.isRoot && link.folderId != containerId) {
           // Группа не выходит за свой контейнер (§322 §2).
-          warn?.call('member "${link.tag}" was dropped: it is not a node of '
-              'this container');
+          warn?.call(groupMemberDroppedLine(group, link.tag));
           continue;
         }
         final tag = byRaw[link.tag];
         if (tag == null) {
           // Выключен, удалён, исчез из подписки — один исход (NODE_LINK §5.1 № 3).
-          warn?.call('member "${link.tag}" was dropped: it has no node '
-              '"${link.tag}"');
+          warn?.call(groupMemberDroppedLine(group, link.tag));
           continue;
         }
         if (!out.contains(tag)) out.add(tag);
@@ -336,6 +340,21 @@ List<String> resolveAutoSelectMembers(
       }
   }
   return out;
+}
+
+/// Контракт 1.1.67 (§63) — код записи отчёта сборки о члене Auto-группы,
+/// не разрешившемся в узел.
+const kGroupMemberDroppedCode = 'group_member_dropped';
+
+/// Строка отчёта сборки `group_member_dropped`: заголовок кода реестра тем
+/// же рендером, что у кодов узла ([RegistryWarning.renderEn]), и сам код в
+/// скобках — по нему запись ищется в логе.
+String groupMemberDroppedLine(String group, String member) {
+  final w = RegistryWarning(
+    code: kGroupMemberDroppedCode,
+    params: {'tag': group, 'member': member},
+  );
+  return '${w.renderEn()} [$kGroupMemberDroppedCode]';
 }
 
 /// §239 — план detour-структуры папки. Считается один раз на build:

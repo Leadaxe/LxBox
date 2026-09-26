@@ -396,9 +396,10 @@ WHOLE config). A blocking finding → 400 carrying its machine code:
 tooFewHops (<2 positions) | emptyHop | duplicateHop | selfReference |
 nestedNotFirst (a nested chain is only legal at position 0) |
 forwardChainReference (referencing a chain declared below) |
-realityUtlsStripped | tagEmpty | tagTaken. Non-blocking findings (a
-position that is no longer among the targets, a first hop with its own detour)
-do NOT block the write — same line the form draws.
+tagEmpty | tagTaken. Non-blocking findings (a position that is no longer
+among the targets, a first hop with its own detour, a strip key kept because
+a hop needs it — stripKeptForHop) do NOT block the write — same line the
+form draws.
 
 === Folders CRUD (server folders) ===
 
@@ -756,7 +757,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/chains', 'description': 'List hop chains in storage order: tag, label, enabled + source_chain.schema.json canon. The list order is normative: a chain may reference only chains declared above it.'},
     {'method': 'GET', 'path': '/chains/{tag}', 'description': 'Single chain (404 if unknown)'},
     {'method': 'POST', 'path': '/chains', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"tag":"...","label":"..."} + any PATCH field', 'description': 'Create chain → 201. No tag → first free chain-N. Tag is checked against BOTH chains and directions; rejected → 409 with the machine reason: empty|reserved|duplicate|auto_twin. A body without hops creates an empty chain (same as the UI).'},
-    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client), each a node link {folder_id?, tag} (a string is read as {tag}). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only tls.fragment|multiplex.padding|xhttp.padding|tls.utls. rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|realityUtlsStripped|tagEmpty|tagTaken.'},
+    {'method': 'PATCH', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite}', 'description': 'Partial update. tag is immutable (400). hops = positions in PACKET order ([0] = first hop from the client), each a node link {folder_id?, tag} (a string is read as {tag}). strip_evasion is a tristate: omit = keep, null = core default, bool = explicit. strip replaces the map, keys only from the contract strip catalogue (tls.fragment|multiplex.padding|xhttp.padding|tls.utls at contract 1.1.70). rewrite = RFC 7396 merge-patch per outbound type, kept verbatim. Writes pass the same gate as the edit form; a blocking finding → 400 with its code: tooFewHops|emptyHop|duplicateHop|selfReference|nestedNotFirst|forwardChainReference|tagEmpty|tagTaken.'},
     {'method': 'DELETE', 'path': '/chains/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove chain. Positions of other chains pointing at it are NOT cleaned (the build degrades such a chain as a whole, "chain_hop_missing"); the response lists them in "dangling_refs".'},
     {'method': 'GET', 'path': '/chains/{tag}/probe', 'params': {'url': 'probe URL (default: global ping_options)', 'timeout_ms': 'per-layer budget (default: global ping_options)'}, 'description': 'Layer-by-layer probe: measures PREFIXES of the route (layer k = path from the client through position k) via the tag the core registers for it, "<chain>#<k>" — the same scheme as the launcher (config.ChainLayerTag). A hop price is the difference of neighbouring layers, never a measurement of its own. Needs a running VPN (409 otherwise): those tags exist only in the running core. Positions come from the BUILT config; 409 if the chain is not in it (disabled, degraded, never built). Sequential — worst case positions × timeout_ms. Response: layers[{pos, tag, probe_tag, cumulative_ms?, delta_ms?, error?, not_reached?}]; the first failing layer carries the core text and everything behind it is not_reached.'},
     // Folders CRUD (server folders)
