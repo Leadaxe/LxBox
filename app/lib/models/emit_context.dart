@@ -1,5 +1,6 @@
 import '../services/builder/node_link_resolve.dart';
 import '../services/builder/rule_set_registry.dart';
+import '../services/builder/source_replace_build.dart' show ReplacePlan;
 import 'node_spec.dart';
 import 'singbox_entry.dart';
 import 'template_vars.dart';
@@ -68,6 +69,11 @@ abstract class EmitContext {
   /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.
   void warn(String line) {}
+
+  /// Фича 565 фаза B (§74) — свёрнутый источник отдаёт узлы не в пул
+  /// Направлений, а плану свёртки; группы разворачивает сборка после
+  /// отбраковок узлов (`source_replace_build.dart`).
+  void addReplacePlan(ReplacePlan plan) {}
 
   /// §435 — строка версии ядра для текста предупреждения гейта.
   String get coreVersion => '';

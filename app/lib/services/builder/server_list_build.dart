@@ -1,3 +1,5 @@
+import 'package:collection/collection.dart' show mergeSort;
+
 import '../../config/consts.dart';
 import '../../models/emit_context.dart';
 import '../../models/server_list.dart';
@@ -13,6 +15,7 @@ import '../node_link_address.dart';
 import '../safe_regex.dart';
 import '../tag_resolver.dart';
 import 'node_link_resolve.dart';
+import 'source_replace_build.dart';
 import 'verbatim_body.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
@@ -73,6 +76,25 @@ extension ServerListBuild on ServerList {
     };
     final identities =
         disabledHashes == null ? null : sourceNodeIdentities(nodes);
+
+    // Фича 565 фаза B (§74) — свёрнутый источник отдаёт узлы не в пул
+    // Направлений, а плану свёртки; члены копятся с позицией узла в модели,
+    // чтобы провайдерские группы (второй проход) встали на своё место.
+    // Пустой `tag` групп не даёт (§74 п.1) — источник идёт в пул как обычно,
+    // и это называется.
+    final rep = replace;
+    if (rep != null && rep.tag.trim().isEmpty) {
+      ctx.warn('Replace group of "$name" has no name — the source was not '
+          'replaced, its nodes go to directions one by one.');
+    }
+    final fold = rep == null || rep.tag.trim().isEmpty ? null : rep;
+    final foldSelector = <(int, SingboxEntry)>[];
+    final foldAuto = <(int, SingboxEntry)>[];
+    void toSelector(int i, SingboxEntry e) => fold == null
+        ? ctx.addToSelectorTagList(e)
+        : foldSelector.add((i, e));
+    void toAuto(int i, SingboxEntry e) =>
+        fold == null ? ctx.addToAutoList(e) : foldAuto.add((i, e));
 
     // §322 — узлы автовыбора собираем ВТОРЫМ проходом: их `outbounds` — теги
     // членов, а те присваиваются `allocateTag` только в цикле ниже. Копим
@@ -207,15 +229,15 @@ extension ServerListBuild on ServerList {
       if (tailnetOnly) {
         // ничего: ни selector, ни auto
       } else if (!isMainAsDetour) {
-        ctx.addToSelectorTagList(main);
-        ctx.addToAutoList(main);
+        toSelector(i, main);
+        toAuto(i, main);
       } else {
-        if (detourPolicy.registerDetourServers) ctx.addToSelectorTagList(main);
-        if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(main);
+        if (detourPolicy.registerDetourServers) toSelector(i, main);
+        if (detourPolicy.registerDetourInAuto) toAuto(i, main);
       }
       for (final d in detours) {
-        if (detourPolicy.registerDetourServers) ctx.addToSelectorTagList(d);
-        if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(d);
+        if (detourPolicy.registerDetourServers) toSelector(i, d);
+        if (detourPolicy.registerDetourInAuto) toAuto(i, d);
       }
     }
 
@@ -229,7 +251,7 @@ extension ServerListBuild on ServerList {
             !autoSelects.any((a) => a.$1.membership is ExplicitMembers)
         ? null
         : sourceNodeRawTags(nodes);
-    for (final (spec, _) in autoSelects) {
+    for (final (spec, index) in autoSelects) {
       final shown = TagResolver.displayTag(tagPrefix, spec.tag);
       final members = resolveAutoSelectMembers(
         spec,
@@ -287,9 +309,27 @@ extension ServerListBuild on ServerList {
         }
       }
       ctx.addEntry(entry);
-      ctx.addToSelectorTagList(entry);
+      // Фича 565 фаза B (§74 п.3) — у свёртки провайдерская группа — член
+      // ручного селектора, не автовыбора.
+      toSelector(index, entry);
       // В ✨auto НЕ добавляем, и в urltest-двойник Направления группа тоже не
       // попадёт — билдер отсекает её по `type: urltest` (build_config).
+    }
+
+    if (fold != null) {
+      // Стабильная сортировка по позиции узла в модели: порядок членов —
+      // порядок источника (§74 п.3).
+      int byIndex((int, SingboxEntry) a, (int, SingboxEntry) b) =>
+          a.$1.compareTo(b.$1);
+      mergeSort(foldSelector, compare: byIndex);
+      mergeSort(foldAuto, compare: byIndex);
+      final plan = ReplacePlan(
+        replace: fold,
+        source: name.isNotEmpty ? name : fold.tag,
+      );
+      plan.selectorMembers.addAll([for (final (_, e) in foldSelector) e]);
+      plan.autoMembers.addAll([for (final (_, e) in foldAuto) e]);
+      ctx.addReplacePlan(plan);
     }
   }
 }

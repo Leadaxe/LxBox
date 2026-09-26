@@ -32,6 +32,7 @@ import 'post_steps.dart';
 import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
+import 'source_replace_build.dart';
 import 'validator.dart';
 
 /// Результат сборки — готовый JSON + валидация + warnings + generated-vars
@@ -360,12 +361,16 @@ Future<BuildResult> _buildConfig({
   for (final list in lists) {
     if (list is! UserServer) linkTargets.noteContainer(list.id, list.name);
   }
+  // Фича 565 фаза B (§74 п.5) — имена свёрток заняты: узел-тёзка получает
+  // суффикс штатным путём, как у тегов Направлений.
+  final replaceNames = sourceReplaceNames(lists);
   final ctx = _BuildCtx(
     tvars,
     ruleSets,
     passiveCheck: settings.passiveCheck, // §322
     reservedTags: [
       for (final c in directions) ...[c.tag, c.autoTag],
+      ...replaceNames,
     ],
     coreVersion: settings.coreVersion,
     linkTargets: linkTargets,
@@ -373,6 +378,14 @@ Future<BuildResult> _buildConfig({
   for (final list in lists) {
     list.build(ctx);
   }
+  // Фича 565 фаза B — имя свёртки, у которой на сборке есть члены, —
+  // корневая цель ссылок (detour `{tag}`). Свёртка без членов группы не даст,
+  // и ссылка на неё обязана не разрешиться (fail-closed), а не уйти напрямую.
+  linkTargets.addRootNames([
+    for (final p in ctx.replacePlans)
+      if (p.selectorMembers.isNotEmpty || p.autoMembers.isNotEmpty)
+        ...p.replace.names,
+  ]);
   // §439 — второй проход: detour-ссылки → финальные теги. Fail-closed:
   // носитель, чья ссылка не разрешилась (и каскадом — кто ходил через него,
   // кольцо — все участники), выпадает из конфига, а не уходит напрямую.
@@ -394,6 +407,21 @@ Future<BuildResult> _buildConfig({
     verbatim: ctx.verbatimEntries,
   );
   ctx.dropRegistryEntries(registryReport.dropped);
+
+  // Фича 565 фаза B (§74 п.2–4) — свёртки источников в группы: члены — узлы,
+  // пережившие отбраковки выше; группа без членов не пишется.
+  final replaceBuild = materializeReplaceGroups(
+    ctx.replacePlans,
+    alive: {
+      for (final e in ctx.outbounds) e.tag,
+      for (final e in ctx.endpoints) e.tag,
+    },
+    passiveCheck: settings.passiveCheck,
+    warn: ctx.warn,
+  );
+  // Выключенный источник плана не даёт: его имена тоже не написаны.
+  replaceBuild.dropped.addAll(
+      replaceNames.where((n) => !replaceBuild.emitted.contains(n)));
 
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
   // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`.
@@ -470,8 +498,11 @@ Future<BuildResult> _buildConfig({
   // подписок: порядок пула = порядок конфига, а цепочки эмитятся после всех
   // источников (корпус `chain_is_a_node_in_directions` нормирует именно
   // `[…узлы, hop-chain]`).
+  // Фича 565 фаза B (§74 п.5) — свёрнутый источник даёт пулу ОДНОГО
+  // кандидата (`tag`) вместо своих узлов.
   final selectorTags = <String>[
     ...ctx.selectorEntries.map((e) => e.tag),
+    ...replaceBuild.candidates,
     ...chainResolution.tags,
   ];
 
@@ -482,6 +513,8 @@ Future<BuildResult> _buildConfig({
   final nodeEntries = <Map<String, dynamic>>[
     for (final e in ctx.outbounds) e.map,
     for (final e in ctx.endpoints) e.map,
+    // Группы свёрток: двойник Направления их в состав не берёт.
+    ...replaceBuild.groups,
   ];
 
   final directionsWithoutNodes = <String>[]; // §274 — для SnackBar на Home
@@ -495,6 +528,8 @@ Future<BuildResult> _buildConfig({
     // §393 C4/T9 — карта позиций для «Направление не берёт цепочку, идущую
     // через него самого» (транзитивно).
     chainHops: chainHopsByTag(chainResolution.nodes),
+    // Фича 565 фаза B — имена свёрток — законные опции `include`.
+    includeTargets: replaceBuild.emitted,
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
@@ -504,6 +539,8 @@ Future<BuildResult> _buildConfig({
     // §393 C3 — цепочки ПЕРЕД группами Направлений: они узлы, а группы их
     // отбирают (порядок нормативен, корпус `chain_packet_order`).
     ...chainResolution.nodes,
+    // Фича 565 фаза B (§74 п.3) — группы свёрток после узлов, до Направлений.
+    ...replaceBuild.groups,
     ...presetOutbounds,
   ];
 
@@ -707,6 +744,7 @@ Future<BuildResult> _buildConfig({
       kBlockOutboundTag, // §201 — block системный outbound, валидная route_final-мишень
       for (final o in presetOutbounds)
         if (o['tag'] is String) o['tag'] as String,
+      ...replaceBuild.emitted, // фича 565 фаза B — корневые имена свёрток
     };
     var finalTag = settings.routeFinal;
     if (!validFinals.contains(finalTag)) {
@@ -715,6 +753,23 @@ Future<BuildResult> _buildConfig({
       finalTag = 'vpn-1';
     }
     route['final'] = finalTag;
+  }
+
+  // Фича 565 фаза B (§74 п.4) — правило на свёртку, чья группа не написана
+  // (ноль узлов): цель подменяется на `route.final`, если он жив, иначе
+  // правило снимается. Включённое правило с целью в никуда роняет конфиг.
+  if (replaceBuild.dropped.isNotEmpty) {
+    emitWarnings.addAll(retargetRulesOffDroppedReplaces(
+      route,
+      replaceBuild.dropped,
+      liveFinals: {
+        kDirectOutboundTag,
+        kBlockOutboundTag,
+        for (final o in presetOutbounds)
+          if (o['tag'] is String) o['tag'] as String,
+        ...replaceBuild.emitted,
+      },
+    ));
   }
 
   // Контракт 1.1.65 — поля, уступающие дописанному сборкой `detour`
@@ -992,6 +1047,12 @@ class _BuildCtx implements EmitContext {
   final selectorEntries = <SingboxEntry>[];
   final autoEntries = <SingboxEntry>[];
 
+  /// Фича 565 фаза B — планы свёрнутых источников в порядке источников.
+  final replacePlans = <ReplacePlan>[];
+
+  @override
+  void addReplacePlan(ReplacePlan plan) => replacePlans.add(plan);
+
   /// §435 — узел → финальный тег (после префикса и `allocateTag`).
   final emittedTagByNode = <NodeSpec, String>{};
 
@@ -1094,6 +1155,9 @@ List<Map<String, dynamic>> _buildDirectionGroups({
   // §393 C4 — «тег цепочки → её позиции». Пусто = цепочек нет, и весь блок
   // T9 схлопывается в no-op: конфиги без цепочек собираются как раньше.
   Map<String, List<String>> chainHops = const {},
+  // Фича 565 фаза B (§74 п.5) — эмитированные имена свёрток: опции `include`
+  // наравне с Направлениями выше по списку.
+  Set<String> includeTargets = const {},
 }) {
   // §125 — единственный слой фильтрации нод теперь per-direction regex
   // (node_filter). Глобальный excluded_nodes (§048) удалён.
@@ -1180,7 +1244,7 @@ List<Map<String, dynamic>> _buildDirectionGroups({
     // не лежит (кладём его в конце итерации).
     final includeTags = <String>[];
     for (final t in c.include) {
-      if (emittedAbove.contains(t)) {
+      if (emittedAbove.contains(t) || includeTargets.contains(t)) {
         if (!includeTags.contains(t)) includeTags.add(t);
         continue;
       }
@@ -1217,7 +1281,9 @@ List<Map<String, dynamic>> _buildDirectionGroups({
       if (c.includeDirect) kDirectOutboundTag,
       if (c.includeBlock) kBlockOutboundTag, // §274 — совместим с detour
       ...includeTags,
-      ...nodes,
+      // Кандидат-свёртка, уже взятая опцией `include`, второй раз не идёт.
+      for (final t in nodes)
+        if (!includeTags.contains(t)) t,
     ];
     // §201/§274 — пустой набор (regex не матчит / нет нод) → fallback на
     // [block, direct-out] с default=block для ВСЕХ Направлений (безопаснее
@@ -1317,46 +1383,16 @@ List<Map<String, dynamic>> _buildDirectionGroups({
 
     // urltest-двойник: ТОЛЬКО ноды Направления (без direct/auto). Не эмитим при
     // пустом наборе (urltest без нод недопустим).
+    // §272 passive_check, §208 round_robin (`mode` + `balancer{}` только у
+    // round_robin, пустой sticky_hash → sentinel ["none"]) — одна форма с
+    // автовыбором свёртки (`buildAutoGroup`).
     if (emitAuto) {
-      final a = c.auto!;
-      final urltest = <String, dynamic>{
-        'tag': c.autoTag,
-        'type': 'urltest',
-        'outbounds': autoNodes,
-        'url': a.url,
-        'interval': a.interval,
-        'tolerance': a.tolerance,
-        'idle_timeout': a.idleTimeout,
-        'interrupt_exist_connections': a.interruptExistConnections,
-      };
-      // §272 — passive health check (ядро SPEC 019): пока свежий успешный
-      // TCP-дайл подтверждает узел, периодические пробы пропускаются —
-      // активная группа не будит спящие узлы. Эмитим только при true
-      // (omitempty-семантика: отсутствие = false = апстрим-поведение).
-      if (passiveCheck) {
-        urltest['passive_check'] = true;
-      }
-      // §208 — round_robin: дописываем `mode` + `balancer{}` (ядро SPEC 019).
-      // least_test → НИЧЕГО не пишем (бит-в-бит апстрим, нулевой diff). `balancer`
-      // без round_robin роняет старт ядра, поэтому только под round_robin.
-      //
-      // sticky_hash (контракт ядра rc.15): пустой набор НЕ выключает липкость —
-      // ядро ре-маршалит конфиг (badjson) и схлопывает `[]`→nil, неотличимо от
-      // «поле опущено» → дефолт ["process","domain"]. Чтобы ВЫКЛЮЧИТЬ липкость,
-      // нужен sentinel ["none"]. Поэтому: пусто (юзер снял все чипы) → ["none"];
-      // непусто → компоненты.
-      if (a.mode == UrltestMode.roundRobin) {
-        urltest['mode'] = a.mode.wire;
-        final sticky = a.stickyHash.isEmpty
-            ? const ['none'] // sentinel: липкость выключена (чистая ротация)
-            : a.stickyHash.map((k) => k.wire).toList();
-        urltest['balancer'] = <String, dynamic>{
-          'pool': a.pool,
-          'pool_tolerance': a.poolTolerance,
-          'sticky_hash': sticky,
-        };
-      }
-      result.add(urltest);
+      result.add(buildAutoGroup(
+        tag: c.autoTag,
+        outbounds: autoNodes,
+        a: c.auto!,
+        passiveCheck: passiveCheck,
+      ));
     }
     // §393 A5 — ПОРЯДОК ЭМИССИИ нормативен (corpus/direction/README.md:
     // «сначала auto-группа, потом само Направление»), поэтому селектор
