@@ -116,11 +116,14 @@ identity-снимки (`before_480_identity_snapshot_test`, `vless_pipeline_inva
 
 ## Нерешённое / follow-up
 
-- Форма `conf_b64` секции wireguard (`space: ini`) объявлена реестром, но движок
+- **Закрыто задачей 570 (`711e09c0`):** движок исполняет форму `space: ini`
+  у ссылки; `_kOutOfEngineLinkForms`, `parseWireguardUri` и каталог
+  `uri_parsers/` сняты. Было: форма `conf_b64` секции wireguard (`space: ini`) объявлена реестром, но движок
   ссылок пространство `ini` не исполняет — её читает `parseWireguardUri`. Когда движок
   научится `ini`-форме ссылки, `_kOutOfEngineLinkForms` в `uri_parsers.dart` снимается.
 - `wg://` объявлен только в `aliases` (Go `IsDirectLink` его не принимает) — разрыв
-  прежний, решение владельца.
+  прежний, решение владельца. Задача 570: LxBox принимает по реестру
+  (`aliases`); разрыв с Go — строка для лаунчера в отчёте 570.
 - Вне диспетчера литералы схем остаются: `input_helpers.dart` (`isAmneziaVpnLink`
   запасной `vpn://`, `isSubscriptionUrl`), `_kProtocolFiles` в `registry.dart`,
   публичные обёртки `uri_parsers/<схема>_parser.dart` (передают написание в конвейер).

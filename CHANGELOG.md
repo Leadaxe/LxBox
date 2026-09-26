@@ -10,6 +10,17 @@
 
 ### Added
 
+- **Closing the parser and build tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave A).**
+  A `vpn://` line inside a subscription list now gives every WireGuard/AmneziaWG
+  container of the profile, not only the default one. An `sni` that is a label
+  gives way to `servername` before falling back to the server address. A replace
+  group whose name is taken by a direction is not built, the source goes
+  unfolded, and the build report says so; an empty replace group is reported
+  once. A node whose detour goes through a replace group that ended up empty is
+  left out instead of going direct. Template DNS servers see every template
+  variable. Empty subscription updates keep their skip reasons in the source
+  summary, and repeated reasons are shown once.
+
 - **Closing the selector, replace and template tails ([§570](docs/spec/tasks/570-close-open-tails.md), wave B).**
   Template variables with a list of values: a `text_list` with options is a
   multi-select of chips, `options_open` lets you type your own value next to
