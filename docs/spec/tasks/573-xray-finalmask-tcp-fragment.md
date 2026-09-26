@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Blocked — ждёт норму контракта (лаунчер) |
+| Статус | In progress — норма вышла, идёт часть B |
 | Дата старта | 2026-09-27 |
 | Дата завершения | — |
 | Коммиты | — |
-| Контракт | текущий 1.1.82 (`source_sha=99543beb`); норма ожидается следующей версией |
+| Контракт | 1.1.83, коммит лаунчера `2a373e8c`, `TASKS_LXBOX.md` §80 |
 | Связанные spec'ы | [§488](488-xray-dialer-proxy-freedom-fragment.md) (та же фрагментация через `dialerProxy` → freedom), [§572](572-notifications-group-by-code.md), features/321 xray-json-parsing, features/480 registry-driven-mapper |
 
 ## Проблема
@@ -162,6 +162,32 @@ Xray задаёт фрагментацию TLS ClientHello двумя форма
 | `xhttp_extra_mode_duplicate` | предупреждений нет |
 
 Расположение записей (общий файл или каждая xray-секция) — решение лаунчера.
+
+### Норма, как её принял лаунчер (контракт 1.1.83)
+
+Норма принята целиком. Отличия от запроса:
+
+| Пункт | Что изменилось |
+|---|---|
+| A1 | `dialerProxy` на служебный `freedom` (с `fragment` или без) хопом не считается, `finalmask` действует. Добавлен гейт по типу: у `hysteria` и `hysteria2` запись не работает. Версия ядра для REALITY записана в `impl` |
+| A2 | Отдельной записи нет. Общая норма движка: пустой объект или массив внутри контейнера листом не считается (`MAPPER_ENGINE` §8) |
+| A3 | Решено шире запроса: `mode`, `path`, `host` в `xhttpSettings.extra` и `splithttpSettings.extra` — чтение без записи. Xray всегда затирает эту тройку внешними значениями, поэтому кода нет и при совпадении, и при расхождении, и когда внешнего значения нет |
+| A4 | Шесть кейсов запроса и три сверх: `finalmask_tcp_fragment_freedom_dialer`, `xhttp_extra_mode_diverges`, `xhttp_extra_mode_only`. Изменены ожидания в `single_config_vless_reality_mlkem`, `xhttp_empty_extra_member_keeps_flat`, `xhttp_extra_beats_flat_field` |
+
+Формы реестра, которые обязан исполнять движок:
+
+1. Селектор элемента массива в пути — `имя[ключ=значение]`: первый
+   элемент-объект, у которого скаляр `ключ` равен значению без учёта регистра.
+   Работает в `source`, в ключах `when` и в raw-чтении. Для объявленности путь
+   раскрывается в числовые пути всех подходящих элементов; объявленность
+   статична и от `when` не зависит.
+2. Правило «пустой контейнер не лист».
+3. Слой `ref.*` из `deref` предыдущей записи: `fragment_via_finalmask_direct_dialer`
+   читает `ref.dialer`, который кладёт `fragment_via_dialer`. Порядок записей
+   значим.
+
+Записи `fragment_via_finalmask` и `fragment_via_finalmask_direct_dialer` лежат
+в `registry/dialer.json`, блок `xray`, после `fragment_via_dialer`.
 
 ### Часть B — LxBox
 
