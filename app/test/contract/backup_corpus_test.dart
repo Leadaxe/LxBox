@@ -36,14 +36,12 @@ import '../parser/engine_test_setup.dart';
 /// причина пропуска. Ожидание кейса не подгоняется — запись снимается вместе
 /// с работой, которая его закрывает.
 const Map<String, String> _pendingCases = {
-  // §565 фаза A — LxBox исполняет род `selector` (group_type и default
-  // доживают), а override лаунчера `*.expected.lxbox.json` этих трёх кейсов
-  // ещё ждёт прежнего упрощения `backup_group_degraded` «selector→urltest,
-  // default dropped». Снимается, когда лаунчер уберёт эту строку из override.
-  'v10_dev_forms': '§565: override ждёт selector→urltest, LxBox род исполняет',
-  'v10_group_degraded':
-      '§565: override ждёт selector→urltest, LxBox род исполняет',
-  'v10_group_links': '§565: override ждёт selector→urltest, LxBox род исполняет',
+  // §565 фаза B — свёртка источника `replace {mode, tag, auto}` (контракт
+  // 1.1.78 §74) в LxBox ещё не реализована; снимается волной фазы B.
+  'replace_roundtrip': '§565 фаза B: replace не реализован',
+  'legacy_fold_to_replace': '§565 фаза B: replace не реализован',
+  'v10_direction_include': '§565 фаза B: replace не реализован',
+  'v10_sources_union': '§565 фаза B: replace не реализован',
 };
 
 
@@ -549,8 +547,8 @@ void _checkDetours(_State state, Map<String, dynamic> expected) {
 /// Контракт 1.0.1 — `groups`: тег провайдерской группы (`kind: auto` в папке)
 /// → `members` по порядку и `default`. Карта ИСЧЕРПЫВАЮЩАЯ, как `detours`.
 /// Член без `folder_id` внутри папки — член этой папки (NODE_LINK §5.1 № 8);
-/// группа по правилу явного состава не несёт — `members: []`. `default` у
-/// urltest-группы LxBox нет: ожидание с ключом `default` расходится.
+/// группа по правилу явного состава не несёт — `members: []`. `default` —
+/// тег выбранного члена (§565), сверяется как ссылка на члена папки.
 void _checkGroups(_State state, Map<String, dynamic> expected) {
   final want = (expected['groups'] as Map?)?.cast<String, dynamic>();
   if (want == null) return;
@@ -572,6 +570,17 @@ void _checkGroups(_State state, Map<String, dynamic> expected) {
               RuleMembers() => const <String>[],
             },
   };
+  final gotDefault = <String, String?>{
+    for (final l in state.lists)
+      if (l is FolderServers)
+        for (final m in l.members)
+          if (m.node case final AutoSelectSpec g)
+            g.tag: g.manualDefault.isEmpty
+                ? null
+                : _resolveHop(NodeLink(folderId: l.id, tag: g.manualDefault),
+                        state.lists)
+                    .view,
+  };
   expect(got.keys.toSet(), want.keys.toSet(), reason: 'набор групп');
   for (final entry in want.entries) {
     final w = (entry.value as Map).cast<String, dynamic>();
@@ -583,8 +592,12 @@ void _checkGroups(_State state, Map<String, dynamic> expected) {
       ],
       reason: '${entry.key}: члены группы',
     );
-    expect(w.containsKey('default'), isFalse,
-        reason: '${entry.key}: default у urltest-группы LxBox не хранится');
+    // §565 фаза A — род `selector` исполняется: `default` хранится тегом
+    // члена ([AutoSelectSpec.manualDefault]) и обязан совпасть с ожиданием.
+    expect(gotDefault[entry.key], w.containsKey('default')
+        ? _wantLinkView((w['default'] as Map).cast<String, dynamic>())
+        : null,
+        reason: '${entry.key}: default группы');
   }
 }
 

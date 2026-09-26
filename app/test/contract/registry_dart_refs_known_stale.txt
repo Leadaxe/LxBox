@@ -4,3 +4,18 @@
 # или ссылку убрали из реестра) — тогда строку удалить.
 lib/screens/add_server_wizard/tailscale_bundle.dart
 app/lib/services/parser/uri_parsers/auto_group_parser.dart:11
+app/lib/services/parser/uri_parsers/masque_parser.dart:21
+lib/services/parser/uri_parsers/anytls_parser.dart:14-56
+lib/services/parser/uri_parsers/http_parser.dart:17-69
+lib/services/parser/uri_parsers/hysteria2_parser.dart:12-82
+lib/services/parser/uri_parsers/naive_parser.dart:13-95
+lib/services/parser/uri_parsers/shadowsocks_parser.dart:8-89
+lib/services/parser/uri_parsers/shadowsocks_parser.dart:91-104
+lib/services/parser/uri_parsers/socks_parser.dart:8-35
+lib/services/parser/uri_parsers/ssh_parser.dart:8-54
+lib/services/parser/uri_parsers/trojan_parser.dart:11-45
+lib/services/parser/uri_parsers/tuic_parser.dart:10-63
+lib/services/parser/uri_parsers/vless_parser.dart:11-76
+lib/services/parser/uri_parsers/vmess_parser.dart:13-37
+lib/services/parser/uri_parsers/vmess_parser.dart:39-95
+lib/services/parser/uri_parsers/vmess_parser.dart:97-126
