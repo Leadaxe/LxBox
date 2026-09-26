@@ -9,6 +9,7 @@ import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/builder/server_list_build.dart';
+import 'package:lxbox/services/contract/group_genus.dart';
 
 import '../parser/engine_test_setup.dart';
 
@@ -354,6 +355,84 @@ void main() {
         NodeLink(folderId: 'f1', tag: 'pa,ss%word'),
         NodeLink(folderId: 'f1', tag: 'Б'),
       ]);
+    });
+  });
+
+  group('§565 — род selector', () {
+    AutoSelectSpec manual({String def = 'B'}) => AutoSelectSpec(
+          id: 's',
+          tag: 'Pick',
+          label: 'Pick',
+          genus: GroupGenus.manual,
+          membership: const ExplicitMembers([
+            NodeLink(folderId: 'f1', tag: 'A'),
+            NodeLink(folderId: 'f1', tag: 'B'),
+          ]),
+          manualDefault: def,
+        );
+
+    Map<String, dynamic> selectorOf(_FakeCtx c) => c.entries
+        .map((e) => e.map)
+        .singleWhere((m) => m['tag'] == 'F: Pick');
+
+    test('тело ядра: type selector, состав и default итоговыми тегами', () {
+      final ctx = _FakeCtx(passiveCheck: true);
+      folder([
+        vless('u1', '1.1.1.1', 'A'),
+        vless('u2', '2.2.2.2', 'B'),
+        manual(),
+      ]).build(ctx);
+      final m = selectorOf(ctx);
+      expect(m['type'], GroupGenus.manual);
+      expect(m['outbounds'], ['F: A', 'F: B']);
+      expect(m['default'], 'F: B');
+      expect(m.containsKey('url'), isFalse);
+      expect(m.containsKey('passive_check'), isFalse,
+          reason: 'у ручного рода пробы нет, ядро отвергло бы поле');
+      expect(ctx.selectorTags, contains('F: Pick'));
+      expect(ctx.warnings, isEmpty);
+    });
+
+    test('выпавший default снят, ядро возьмёт первого; код один', () {
+      final ctx = _FakeCtx();
+      folder([
+        vless('u1', '1.1.1.1', 'A'),
+        manual(),
+      ]).build(ctx);
+      final m = selectorOf(ctx);
+      expect(m['outbounds'], ['F: A']);
+      expect(m.containsKey('default'), isFalse);
+      expect(ctx.warnings.where((w) => w.contains('group_member_dropped')),
+          hasLength(1));
+    });
+
+    test('default вне состава назван кодом', () {
+      final ctx = _FakeCtx();
+      folder([
+        vless('u1', '1.1.1.1', 'A'),
+        vless('u2', '2.2.2.2', 'B'),
+        manual(def: 'Z'),
+      ]).build(ctx);
+      expect(selectorOf(ctx).containsKey('default'), isFalse);
+      expect(ctx.warnings.single, contains('group_member_dropped'));
+    });
+
+    test('urltest из источника: тело разбора — объявленное, ядру — полное',
+        () {
+      final g = AutoSelectSpec(
+        id: 'u',
+        tag: 'U',
+        label: 'U',
+        params: const AutoSelectParams(url: 'http://x.example'),
+        sourceParamKeys: const {'url'},
+      );
+      final raw = g.emit(TemplateVars.empty).map;
+      expect(raw.keys, ['tag', 'type', 'outbounds', 'url']);
+      final core = g.coreEntry(g.emit(TemplateVars.empty)).map;
+      expect(core.keys.toList(), [
+        'tag', 'type', 'outbounds', ...const AutoSelectParams().toJson().keys,
+      ]);
+      expect(core['url'], 'http://x.example');
     });
   });
 }
