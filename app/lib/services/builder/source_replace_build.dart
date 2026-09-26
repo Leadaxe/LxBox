@@ -13,13 +13,97 @@
 ///   умолчанием `<tag>-auto`.
 ///
 /// Ноль живых узлов — группа не пишется (пустую ядро не принимает), и
-/// называется строкой отчёта сборки.
+/// называется кодом `replace_group_empty` в отчёте сборки (контракт 1.1.80).
+/// Тег, занятый другим объявленным именем, — `replace_tag_conflict`: свёртка
+/// не собирается, источник идёт несвёрнутым ([findReplaceTagConflicts]).
 library;
 
 import '../../models/direction.dart';
+import '../../models/node_warning.dart';
+import '../../models/server_list.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/source_replace.dart';
 import '../contract/group_genus.dart';
+
+/// §77 п.5 (контракт 1.1.80) — свёртка, чей тег (или двойник `<tag>-auto`)
+/// совпал с другим ОБЪЯВЛЕННЫМ именем: Направлением или его двойником
+/// (`direction`), свёрткой источника выше по списку (`replace`; первая по
+/// списку владеет именем) или тегом шаблона (`system`). Узел-тёзка
+/// конфликтом не считается — он получает суффикс.
+class ReplaceConflict {
+  const ReplaceConflict(this.listId, this.warning);
+
+  /// Источник, чья свёртка не собирается.
+  final String listId;
+
+  /// `replace_tag_conflict {tag, other}`.
+  final RegistryWarning warning;
+}
+
+/// Конфликты имён свёрток включённых источников [lists] в порядке списка.
+List<ReplaceConflict> findReplaceTagConflicts(
+  Iterable<ServerList> lists, {
+  required Set<String> directionNames,
+  required Set<String> systemNames,
+}) {
+  final out = <ReplaceConflict>[];
+  final claimed = <String>{};
+  for (final l in lists) {
+    if (!l.enabled) continue;
+    final r = l.replace;
+    if (r == null || r.tag.trim().isEmpty) continue;
+    String? other;
+    String? clash;
+    for (final n in r.names) {
+      final o = directionNames.contains(n)
+          ? 'direction'
+          : claimed.contains(n)
+              ? 'replace'
+              : systemNames.contains(n)
+                  ? 'system'
+                  : null;
+      if (o != null) {
+        other = o;
+        clash = n;
+        break;
+      }
+    }
+    if (other == null) {
+      claimed.addAll(r.names);
+      continue;
+    }
+    out.add(ReplaceConflict(
+      l.id,
+      RegistryWarning(
+        code: 'replace_tag_conflict',
+        params: {'tag': clash!, 'other': other},
+      ),
+    ));
+  }
+  return out;
+}
+
+/// `@имя` в строковом параметре автовыбора свёртки — ссылка на переменную
+/// шаблона, как у Направления: значение берётся из [resolveVar], без
+/// значения — умолчание [fallback] (корпус `fold_auto_inherits_template_vars`).
+DirectionAuto resolveAutoVars(
+  DirectionAuto a,
+  Object? Function(String name)? resolveVar,
+) {
+  if (resolveVar == null) return a;
+  const fallback = DirectionAuto();
+  String pick(String v, String def) {
+    if (!v.startsWith('@')) return v;
+    final r = resolveVar(v.substring(1))?.toString() ?? '';
+    return r.isEmpty ? def : r;
+  }
+
+  return a.copyWith(
+    url: pick(a.url, fallback.url),
+    interval: pick(a.interval, fallback.interval),
+    idleTimeout: pick(a.idleTimeout, fallback.idleTimeout),
+  );
+}
 
 /// Свёрнутый источник до развёртки: члены в порядке модели источника.
 class ReplacePlan {
@@ -92,13 +176,17 @@ Map<String, dynamic> buildAutoGroup({
 }
 
 /// Развёртка [plans] в группы. [alive] — теги узлов, переживших отбраковки
-/// сборки; выпавший член в состав не идёт. [warn] получает строку на каждую
-/// не написанную группу.
+/// сборки; выпавший член в состав не идёт. [code] получает
+/// `replace_group_empty` — один на свёртку, у которой не написано ни одной
+/// группы; [warn] — строку на двойник, выпавший при живом селекторе.
+/// [resolveVar] раскрывает `@имя` в параметрах автовыбора ([resolveAutoVars]).
 ReplaceBuild materializeReplaceGroups(
   List<ReplacePlan> plans, {
   required Set<String> alive,
   bool passiveCheck = false,
   void Function(String line)? warn,
+  void Function(RegistryWarning w)? code,
+  Object? Function(String name)? resolveVar,
 }) {
   final out = ReplaceBuild();
   for (final p in plans) {
@@ -121,12 +209,10 @@ ReplaceBuild materializeReplaceGroups(
         out.groups.add(buildAutoGroup(
           tag: autoTag,
           outbounds: autoMembers,
-          a: r.autoOrDefault,
+          a: resolveAutoVars(r.autoOrDefault, resolveVar),
           passiveCheck: passiveCheck,
         ));
         out.emitted.add(autoTag);
-      } else {
-        warn?.call(_skippedLine(r.autoTag, p.source));
       }
     }
     if (r.hasSelector) {
@@ -145,9 +231,20 @@ ReplaceBuild materializeReplaceGroups(
           'interrupt_exist_connections': true,
         });
         out.emitted.add(tag);
-      } else {
-        warn?.call(_skippedLine(tag, p.source));
       }
+    }
+    if (!r.names.any(out.emitted.contains)) {
+      // Контракт 1.1.80 — один код на свёртку (у `both` пустеют обе
+      // половины): группа в конфиг не идёт, правила и Направления на неё не
+      // сработают.
+      code?.call(RegistryWarning(
+        code: 'replace_group_empty',
+        params: {'tag': tag, 'mode': r.mode.name},
+      ));
+    } else if (r.hasAuto && autoTag == null) {
+      // Селектор `both` написан, а двойник — нет: у источника есть только
+      // члены селектора (провайдерские группы), а узлов автовыбора нет.
+      warn?.call(_twinSkippedLine(r.autoTag, p.source));
     }
     if (out.emitted.contains(tag)) out.candidates.add(tag);
     for (final n in r.names) {
@@ -157,13 +254,18 @@ ReplaceBuild materializeReplaceGroups(
   return out;
 }
 
-String _skippedLine(String tag, String source) =>
+String _twinSkippedLine(String tag, String source) =>
     'Replace group "$tag" of "$source" was skipped: the source has no '
-    'enabled nodes, and an empty group would stop the VPN core.';
+    'enabled nodes for auto selection, and an empty group would stop the VPN '
+    'core.';
 
 /// §74 п.4 — правила `route.rules` с целью из [dropped] (имя свёртки, чья
 /// группа не написана): цель → `route.final`, если он в [liveFinals], иначе
 /// правило снимается. Эталон — `cleanDanglingOutboundRefInRule` лаунчера.
+///
+/// Правило внутри логического тела (`type: logical`, вложенные `rules`)
+/// судится так же, рекурсивно: вложенное правило без живой цели снимается,
+/// логическое правило, оставшееся без вложенных, снимается само.
 /// Возвращает строки отчёта сборки, по одной на правило.
 List<String> retargetRulesOffDroppedReplaces(
   Map<String, dynamic> route,
@@ -175,24 +277,52 @@ List<String> retargetRulesOffDroppedReplaces(
   final fin = route['final'];
   final finalTag = fin is String && liveFinals.contains(fin) ? fin : null;
   final lines = <String>[];
+  route['rules'] =
+      _retargetList(rules, dropped, finalTag, lines, prefix: 'Route rule #');
+  return lines;
+}
+
+List<dynamic> _retargetList(
+  List<dynamic> rules,
+  Set<String> dropped,
+  String? finalTag,
+  List<String> lines, {
+  required String prefix,
+}) {
   final kept = <dynamic>[];
   for (var i = 0; i < rules.length; i++) {
     final r = rules[i];
-    final out = r is Map ? r['outbound'] : null;
+    if (r is! Map) {
+      kept.add(r);
+      continue;
+    }
+    final name = '$prefix$i';
+    final inner = r['rules'];
+    if (r['type'] == 'logical' && inner is List) {
+      final before = inner.length;
+      final left = _retargetList(inner, dropped, finalTag, lines,
+          prefix: '$name, nested rule #');
+      r['rules'] = left;
+      if (left.isEmpty && before > 0) {
+        lines.add('$name lost all its nested rules to replace groups that '
+            'were not built — the rule was removed.');
+        continue;
+      }
+    }
+    final out = r['outbound'];
     if (out is! String || !dropped.contains(out)) {
       kept.add(r);
       continue;
     }
     if (finalTag != null) {
-      (r as Map)['outbound'] = finalTag;
+      r['outbound'] = finalTag;
       kept.add(r);
-      lines.add('Route rule #$i went to replace group "$out", which was '
-          'not built — it now goes to the default route "$finalTag".');
+      lines.add('$name went to replace group "$out", which was not built — '
+          'it now goes to the default route "$finalTag".');
     } else {
-      lines.add('Route rule #$i went to replace group "$out", which was '
-          'not built — the rule was removed.');
+      lines.add('$name went to replace group "$out", which was not built — '
+          'the rule was removed.');
     }
   }
-  route['rules'] = kept;
-  return lines;
+  return kept;
 }

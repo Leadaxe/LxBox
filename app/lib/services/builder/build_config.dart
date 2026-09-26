@@ -71,6 +71,11 @@ class BuildResult {
   /// EN-строки стоят ПЕРВЫМИ в [emitWarnings]; сохранение они не блокируют.
   final List<TemplateWarning> templateWarnings;
 
+  /// Контракт 1.1.80 — коды реестра уровня сборки с параметрами
+  /// (`replace_tag_conflict`, `replace_group_empty`). Их EN-строки идут в
+  /// [emitWarnings]; список — для сверки кодов и поверхностей UI.
+  final List<RegistryWarning> buildCodes;
+
   const BuildResult({
     required this.configJson,
     required this.config,
@@ -81,6 +86,7 @@ class BuildResult {
     this.nodeByEmittedTag = const {},
     this.nodeBuildWarningsByEmittedTag = const {},
     this.templateWarnings = const [],
+    this.buildCodes = const [],
   });
 }
 
@@ -364,6 +370,18 @@ Future<BuildResult> _buildConfig({
   // Фича 565 фаза B (§74 п.5) — имена свёрток заняты: узел-тёзка получает
   // суффикс штатным путём, как у тегов Направлений.
   final replaceNames = sourceReplaceNames(lists);
+  // §77 п.5 (контракт 1.1.80) — тег свёртки, совпавший с Направлением (или
+  // его двойником), со свёрткой выше по списку или с тегом шаблона: свёртка
+  // не собирается, источник идёт несвёрнутым, код в отчёте сборки.
+  final replaceConflicts = findReplaceTagConflicts(
+    lists,
+    directionNames: {for (final c in directions) ...[c.tag, c.autoTag]},
+    systemNames: {
+      ...kReservedDirectionTags,
+      for (final raw in (config['outbounds'] as List<dynamic>? ?? const []))
+        if (raw is Map && raw['tag'] is String) raw['tag'] as String,
+    },
+  );
   final ctx = _BuildCtx(
     tvars,
     ruleSets,
@@ -374,6 +392,7 @@ Future<BuildResult> _buildConfig({
     ],
     coreVersion: settings.coreVersion,
     linkTargets: linkTargets,
+    blockedReplaces: {for (final c in replaceConflicts) c.listId},
   );
   for (final list in lists) {
     list.build(ctx);
@@ -410,6 +429,9 @@ Future<BuildResult> _buildConfig({
 
   // Фича 565 фаза B (§74 п.2–4) — свёртки источников в группы: члены — узлы,
   // пережившие отбраковки выше; группа без членов не пишется.
+  final buildCodes = <RegistryWarning>[
+    for (final c in replaceConflicts) c.warning,
+  ];
   final replaceBuild = materializeReplaceGroups(
     ctx.replacePlans,
     alive: {
@@ -418,10 +440,23 @@ Future<BuildResult> _buildConfig({
     },
     passiveCheck: settings.passiveCheck,
     warn: ctx.warn,
+    code: buildCodes.add,
+    // `@имя` в параметрах автовыбора — переменная шаблона, как у Направления.
+    resolveVar: resolve,
   );
   // Выключенный источник плана не даёт: его имена тоже не написаны.
-  replaceBuild.dropped.addAll(
-      replaceNames.where((n) => !replaceBuild.emitted.contains(n)));
+  // Свёртка в конфликте имён (§77 п.5) имя не занимает — оно владельца.
+  final conflictNames = {
+    for (final c in replaceConflicts) c.warning.params['tag'],
+  };
+  replaceBuild.dropped.addAll(replaceNames.where((n) =>
+      !replaceBuild.emitted.contains(n) && !conflictNames.contains(n)));
+
+  // §74 п.4 — detour на свёртку, опустевшую только ПОСЛЕ отбраковок (ссылка
+  // разрешилась корневым именем, а группа не написана): носитель выпадает
+  // (fail-closed), каскадом — кто ходил через него; напрямую он не идёт.
+  final foldDetourLines = _dropCarriersOfDroppedReplaces(
+      ctx, replaceBuild.dropped, linkTargets);
 
   // Warnings собираем отдельно прямым обходом (ctx их не знает).
   // §435 — кроме строк, которые `ServerList.build` отдал через `ctx.warn`.
@@ -431,6 +466,11 @@ Future<BuildResult> _buildConfig({
     ...ctx.warnings,
     ...detourReport.warnings,
     ...registryReport.warnings,
+    // Контракт 1.1.80 — коды свёрток (`replace_tag_conflict`,
+    // `replace_group_empty`) строкой по тексту реестра; сами коды — в
+    // [BuildResult.buildCodes].
+    for (final w in buildCodes) w.renderEn(),
+    ...foldDetourLines,
   ];
   for (final list in lists) {
     if (!list.enabled) continue;
@@ -916,6 +956,7 @@ Future<BuildResult> _buildConfig({
       ...emitWarnings,
     ],
     templateWarnings: templateItems,
+    buildCodes: buildCodes,
     generatedVars: generatedVars,
     directionsWithoutNodes: directionsWithoutNodes,
     nodeByEmittedTag: {
@@ -991,10 +1032,17 @@ class _BuildCtx implements EmitContext {
     Iterable<String> reservedTags = const [],
     String coreVersion = '',
     this.linkTargets,
+    Set<String> blockedReplaces = const {},
   })  : _passiveCheck = passiveCheck,
-        _coreVersion = coreVersion {
+        _coreVersion = coreVersion,
+        _blockedReplaces = blockedReplaces {
     _taken.addAll(reservedTags); // §351 — теги Направлений, эмитятся мимо аллокатора
   }
+
+  final Set<String> _blockedReplaces;
+
+  @override
+  bool isReplaceBlocked(String listId) => _blockedReplaces.contains(listId);
 
   @override
   final NodeLinkTargets? linkTargets;
@@ -1480,4 +1528,53 @@ String? _firstMatch(List<String> tags, RegExp re) {
 /// типизированный walk-движок.
 void _substituteVars(dynamic obj, VarResolver resolve) {
   walk(obj, resolve);
+}
+
+/// §74 п.4 — носители, чей `detour` (уже разрешённый в финальный тег)
+/// указывает на имя свёртки из [dropped]: группа не написана, и узел обязан
+/// выпасть, а не пойти напрямую (fail-closed). Каскад до неподвижной точки:
+/// кто ходил через выпавшего носителя, выпадает сам. Выпавшие теги
+/// помечаются в [targets] — позиции цепочек на них не разрешатся.
+/// Возвращает строки отчёта сборки, по одной на свёртку.
+List<String> _dropCarriersOfDroppedReplaces(
+  _BuildCtx ctx,
+  Set<String> dropped,
+  NodeLinkTargets targets,
+) {
+  if (dropped.isEmpty) return const [];
+  targets.markDropped(dropped);
+  final entries = <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints];
+  final gone = <String>{...dropped};
+  final carriersBy = <String, List<String>>{};
+  final removed = <SingboxEntry>[];
+  var changed = true;
+  while (changed) {
+    changed = false;
+    for (final e in entries) {
+      if (removed.contains(e)) continue;
+      final d = e.map['detour'];
+      if (d is! String || !gone.contains(d)) continue;
+      removed.add(e);
+      gone.add(e.tag);
+      // Корень причины — имя свёртки: каскад пишется под той же строкой.
+      final root = dropped.contains(d)
+          ? d
+          : carriersBy.entries
+                  .firstWhere((c) => c.value.contains(d),
+                      orElse: () => MapEntry(d, const []))
+                  .key;
+      carriersBy.putIfAbsent(root, () => []).add(e.tag);
+      changed = true;
+    }
+  }
+  if (removed.isEmpty) return const [];
+  ctx.dropRegistryEntries(removed);
+  targets.markDropped(removed.map((e) => e.tag));
+  return [
+    for (final c in carriersBy.entries)
+      '${c.value.length == 1 ? 'Node "${c.value.single}" was' : '${c.value.length} nodes (${c.value.take(5).map((t) => '"$t"').join(', ')}${c.value.length > 5 ? ', and ${c.value.length - 5} more' : ''}) were'} '
+          'skipped: the detour goes through replace group "${c.key}", which '
+          'was not built. A node whose detour does not resolve is not '
+          'emitted, so its traffic never goes direct.',
+  ];
 }

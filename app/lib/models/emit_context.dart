@@ -75,6 +75,11 @@ abstract class EmitContext {
   /// отбраковок узлов (`source_replace_build.dart`).
   void addReplacePlan(ReplacePlan plan) {}
 
+  /// §77 п.5 (контракт 1.1.80) — свёртка источника [listId] не собирается:
+  /// её тег занят другим объявленным именем (`replace_tag_conflict`), и
+  /// источник идёт несвёрнутым.
+  bool isReplaceBlocked(String listId) => false;
+
   /// §435 — строка версии ядра для текста предупреждения гейта.
   String get coreVersion => '';
 

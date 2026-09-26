@@ -87,7 +87,11 @@ extension ServerListBuild on ServerList {
       ctx.warn('Replace group of "$name" has no name — the source was not '
           'replaced, its nodes go to directions one by one.');
     }
-    final fold = rep == null || rep.tag.trim().isEmpty ? null : rep;
+    // §77 п.5 — тег свёртки занят другим объявленным именем: источник идёт
+    // несвёрнутым, код ставит сборка.
+    final fold = rep == null || rep.tag.trim().isEmpty || ctx.isReplaceBlocked(id)
+        ? null
+        : rep;
     final foldSelector = <(int, SingboxEntry)>[];
     final foldAuto = <(int, SingboxEntry)>[];
     void toSelector(int i, SingboxEntry e) => fold == null

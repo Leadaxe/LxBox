@@ -173,6 +173,9 @@ class _PoolCtx implements EmitContext {
   void addReplacePlan(ReplacePlan plan) {}
 
   @override
+  bool isReplaceBlocked(String listId) => false;
+
+  @override
   void noteEmitted(node, String finalTag) {}
 
   @override
