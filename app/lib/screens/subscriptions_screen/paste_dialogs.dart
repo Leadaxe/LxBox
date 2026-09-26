@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'clipboard_analysis.dart';
+import '../subscription_detail_screen/widgets/node_warnings_sheet.dart'
+    show showNodeWarningsSheet;
 import '../../services/l10n/locale_controller.dart';
 
 /// Dialog «Unknown format» — показывает обрезанный текст clipboard'а.
@@ -75,6 +77,30 @@ Future<bool?> showConfirmAddDialog(
               style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
+          // §561 / задача 570 — записи, которые не станут узлами: счётчик
+          // и та же шторка причин, что в сводке источника.
+          if (analysis.dropped.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            InkWell(
+              key: const ValueKey('paste-dropped-row'),
+              onTap: () => showNodeWarningsSheet(ctx, analysis.dropped),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_outlined,
+                      size: 18, color: Theme.of(context).colorScheme.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      getLocalText.plural("%d entries will be skipped",
+                          analysis.dropped.length),
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 18),
+                ],
+              ),
             ),
           ],
         ],

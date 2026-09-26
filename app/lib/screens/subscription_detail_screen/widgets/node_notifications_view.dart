@@ -207,6 +207,16 @@ class _NotificationTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodyMedium?.copyWith(color: color),
       ),
+      // §561 / задача 570 — отбраковка называет свою запись источника.
+      subtitle: warning.ownerTag.isEmpty
+          ? null
+          : Text(
+              getLocalText.s("Entry: %s", warning.ownerTag),
+              key: ValueKey('notification-owner-${warning.ownerTag}'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
       children: [
         if (path != null && path.isNotEmpty)
           Align(

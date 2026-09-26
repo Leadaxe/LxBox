@@ -5204,5 +5204,13 @@
   },
   "A direction already has this name.": {
     "value": "已有方向使用此名称。"
+  },
+  "Entry: %s": {
+    "value": "条目：%s"
+  },
+  "%d entries will be skipped": {
+    "value": {
+      "other": "将跳过 %d 个条目"
+    }
   }
 }

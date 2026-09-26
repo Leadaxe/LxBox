@@ -99,6 +99,12 @@ sealed class NodeWarning {
 
   WarningSeverity get severity;
 
+  /// §561 / задача 570 — тег (имя) записи источника, к которой относится
+  /// отбраковка (`dropped[]`); пусто — не отбраковка или запись без имени.
+  /// Заполняет разбор; шторка показывает его строкой под заголовком. Вне
+  /// [props]: говорит «с какой записью», а не «что случилось».
+  String get ownerTag => '';
+
   /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
   /// данным, НЕ по отрендеренной строке (§279: строка locale-зависима,
   /// равенство по ней ломало бы dedup при смене языка).
@@ -481,6 +487,7 @@ final class DialerProxyUnusableWarning extends NodeWarning {
 
   /// Тег отвергнутого outbound'а — `dropped[].ref` контракта. Пусто, если
   /// провайдер тега не дал: тогда опознать запись можно только по label.
+  @override
   final String ownerTag;
 
   const DialerProxyUnusableWarning(this.label, this.target,
@@ -763,6 +770,7 @@ final class RegistryWarning extends NodeWarning {
   /// идёт дедуп (§279). Тег же говорит не «что случилось», а «с какой
   /// записью», и включение его в идентичность развело бы на два сообщения
   /// один и тот же код об одном и том же поле у соседних узлов.
+  @override
   final String ownerTag;
 
   /// §500 — копия с `value: ***`, если путь — секретное поле реестра.
