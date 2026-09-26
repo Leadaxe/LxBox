@@ -1,6 +1,6 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.70",
+  "contract_version": "1.1.76",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 95,
@@ -116,7 +116,7 @@
       "nodes_total": 2865,
       "dropped": {
         "duplicate": 187,
-        "field_missing": 12
+        "form_unrecognized": 12
       },
       "warnings": {
         "ech_ignored": 3,
@@ -260,7 +260,7 @@
       "nodes_total": 277,
       "dropped": {
         "duplicate": 22,
-        "field_missing": 1
+        "form_unrecognized": 1
       },
       "warnings": {
         "reality_fp_not_chrome": 31,
@@ -407,7 +407,7 @@
       "nodes_total": 642,
       "dropped": {
         "duplicate": 467,
-        "field_missing": 7,
+        "form_unrecognized": 7,
         "scheme_unsupported": 14,
         "transport_header_unsupported": 1
       },
