@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -164,7 +165,12 @@ void main() {
       // Остаток — один узел, значит свой UserServer, а не файловая подписка.
       final rest = c.entries.firstWhere((e) => e != tsEntry);
       expect(rest.list, isA<UserServer>());
-      expect(rest.list.nodes.single.label, 'DE');
+      // §576 п.2 — в источнике голое тело узла, и дефолтный эмодзи ставится
+      // ему так же, как вставленному голому телу (у документа тег лежал не в
+      // корне, и эмодзи не доезжал).
+      expect(rest.list.nodes.single.label, '⚡ DE');
+      expect(sourceKindOf((rest.list as UserServer).rawBody),
+          'singbox_outbound');
     });
 
     test('endpoint + два прокси → UserServer (ts) + файловая подписка без ts '

@@ -3055,9 +3055,6 @@
   "Node info copied": {
     "value": "Данные узла скопированы"
   },
-  "Node saved. The rest of the document was not saved.": {
-    "value": "Узел сохранён. Остальное содержимое документа не сохранено."
-  },
   "Node — direct detour": {
     "value": "Узел — прямой detour"
   },
@@ -3203,6 +3200,9 @@
   },
   "Only single servers can be moved": {
     "value": "Переносить можно только одиночные серверы"
+  },
+  "Only the node is saved. The rest of the input is not kept.": {
+    "value": "Сохранён только узел. Остальное содержимое не сохранено."
   },
   "Open": {
     "value": "Открыть"
@@ -4509,6 +4509,9 @@
   },
   "The current workspace cannot be deleted": {
     "value": "Текущее рабочее пространство удалить нельзя"
+  },
+  "The document has no node to save.": {
+    "value": "В документе нет узла для сохранения."
   },
   "The device is removed from the tailnet when it goes offline": {
     "value": "Устройство удаляется из tailnet, когда уходит в офлайн"

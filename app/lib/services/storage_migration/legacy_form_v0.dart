@@ -21,6 +21,7 @@
 library;
 
 import '../../config/consts.dart' show kDirectOutboundTag;
+import '../../models/codec/source_record.dart' show bareNodeSourceOf;
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/import_rule.dart';
@@ -123,11 +124,12 @@ SubscriptionIdentityOverride _readIdentity(Map<String, dynamic> j) =>
 
 /// `UserServer.fromJson` 2.23.2: узлы перечитываются из `raw_body`.
 UserServer _readUserServer(Map<String, dynamic> j) {
-  final rawBody = (j['raw_body'] as String?) ?? '';
+  // §576 п.3 — документ и массив в источнике сводятся к телу узла.
+  final rawBody = bareNodeSourceOf((j['raw_body'] as String?) ?? '');
   final nodes = <NodeSpec>[];
   if (rawBody.isNotEmpty) {
     try {
-      nodes.addAll(parseAll(decode(rawBody)));
+      nodes.addAll(parseAll(decode(rawBody), own: true));
     } catch (_) {
       // Некорректный raw — узлов нет, запись остаётся.
     }
@@ -170,7 +172,8 @@ FolderServers _readFolder(Map<String, dynamic> j) => FolderServers(
 
 /// `FolderMember.fromJson` 2.23.2.
 FolderMember readLegacyFolderMember(Map<String, dynamic> j) => FolderMember(
-      raw: (j['raw'] as String?) ?? '',
+      // §576 п.3 — документ и массив в источнике сводятся к телу узла.
+      raw: bareNodeSourceOf((j['raw'] as String?) ?? ''),
       enabled: (j['enabled'] as bool?) ?? true,
       // 2.23.2 хранила финальный тег строкой: корневая ссылка, пару из неё
       // делает миграция (`migrate_storage.dart`, §439 п. 8).

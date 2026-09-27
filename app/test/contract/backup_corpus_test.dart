@@ -185,6 +185,12 @@ void main() {
 
         _checkDns(state, expected);
 
+        // §576 (контракт 1.1.87) — источник своего сервера и члена папки
+        // после импорта: голое тело узла. Документ и массив в источник не
+        // попадают. Сравнение по значению; `tag` несёт запись, он не
+        // сравнивается.
+        _checkOriginRaw(state, expected);
+
         // Фича 565 фаза B (§74) — свёртка `replace` в состоянии и в
         // повторном экспорте. `replace_tags` (дериватив legacy `fold`) не
         // сверяется: legacy-форма у LxBox не читается (решение владельца
@@ -776,4 +782,37 @@ Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
 
   compare('состояние', got);
   compare('повторный экспорт', exported);
+}
+
+/// §576 — `origin_raw`: «тег» (корневой сервер) или «имя папки/тег» (член)
+/// → JSON источника записи.
+void _checkOriginRaw(_State state, Map<String, dynamic> expected) {
+  final want = (expected['origin_raw'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  want.forEach((key, wantBody) {
+    final slash = key.indexOf('/');
+    String? raw;
+    if (slash < 0) {
+      for (final l in state.lists) {
+        if (l is UserServer &&
+            (l.name == key || (l.nodes.isNotEmpty && l.nodes.first.tag == key))) {
+          raw = l.rawBody;
+          break;
+        }
+      }
+    } else {
+      final folder = key.substring(0, slash);
+      final tag = key.substring(slash + 1);
+      for (final l in state.lists) {
+        if (l is! FolderServers || l.name != folder) continue;
+        for (final m in l.members) {
+          if (m.node?.tag == tag) raw = m.raw;
+        }
+      }
+    }
+    expect(raw, isNotNull, reason: 'origin_raw: нет записи $key');
+    final got = (jsonDecode(raw!) as Map).cast<String, dynamic>()
+      ..remove('tag');
+    expect(got, wantBody, reason: 'origin_raw $key: источник — тело узла');
+  });
 }

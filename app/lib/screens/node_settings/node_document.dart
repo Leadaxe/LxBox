@@ -2,18 +2,20 @@
 /// Чистая функция без Flutter: экран отдаёт ей текст и поле Tag, получает
 /// либо текст для контроллера, либо причину отказа.
 ///
-/// Принимаются два вида входа:
-/// - голое тело outbound'а/endpoint'а — объект с `type` на верхнем уровне
-///   (массив тел → первый элемент, как раньше);
-/// - документ `{ "endpoints"|"outbounds": [тело], … }`.
+/// §576 — в источник записи уходит ТОЛЬКО ТЕЛО УЗЛА (вид `singbox_outbound`,
+/// PARSING_PRINCIPLES §11). Документ и массив — формы ввода, не хранения:
+/// - голое тело (объект с `type`) — текст как набран, байт в байт;
+///   перекодируется только при смене тега;
+/// - документ (`outbounds`/`endpoints` в корне) — тело первого узла, не
+///   служебного (`direct`, `block`, `dns`) и не группы (`selector`,
+///   `urltest`); подходящего узла нет — отказ;
+/// - массив тел — первый элемент.
 ///
-/// §575 — из документа сохраняется только узел: `dns`, `route` и `sections`
-/// рядом с ним не сохраняются, отказа нет. Экран по флагу
-/// [NodeDocumentReady.droppedExtras] говорит пользователю, что остальное
-/// содержимое документа отброшено.
+/// Извлечённое тело пишется JSON с отступом в два пробела. Было во входе
+/// что-то кроме этого узла — [NodeDocumentReady.droppedExtras], экран
+/// говорит одно сообщение: узел сохранён, остальное нет.
 ///
-/// Тег из поля Tag подмешивается в ТЕЛО узла (первый не-служебный элемент
-/// `endpoints`/`outbounds`), а не в корень документа.
+/// Тег из поля Tag подмешивается в тело узла.
 library;
 
 import 'dart:convert';
@@ -35,14 +37,15 @@ final class NodeDocumentReady extends NodeDocumentPrep {
   const NodeDocumentReady(this.text,
       {required this.isDocument, this.droppedExtras = false});
 
-  /// Компактный JSON: тело узла или документ целиком.
+  /// §576 — голое тело узла: как набрано, либо извлечённое из документа или
+  /// массива (JSON с отступом в два пробела).
   final String text;
 
   /// true — вход был документом (`endpoints`/`outbounds` в корне).
   final bool isDocument;
 
-  /// §575 — документ нёс `dns`, `route` или `sections`: узел сохраняется,
-  /// остальное содержимое документа — нет.
+  /// §576 — во входе было что-то кроме сохранённого узла (прочие записи
+  /// документа или массива, `dns`, `route`, `sections`): оно не сохранено.
   final bool droppedExtras;
 }
 
@@ -52,9 +55,9 @@ final class NodeDocumentRejected extends NodeDocumentPrep {
   final String message;
 }
 
-/// Служебные и групповые типы sing-box — не тело узла, тег в них не
-/// подмешивается (зеркало приватных наборов парсера `singbox_config.dart`:
-/// `_kSingboxServiceTypes` + `_kSingboxGroupTypes`).
+/// Служебные и групповые типы sing-box — не тело узла (зеркало приватных
+/// наборов парсера `singbox_config.dart`: `_kSingboxServiceTypes` +
+/// `_kSingboxGroupTypes`).
 const Set<String> _kNonNodeTypes = {
   'direct',
   'block',
@@ -62,6 +65,9 @@ const Set<String> _kNonNodeTypes = {
   'selector',
   'urltest',
 };
+
+/// Ключи документа, где лежат узлы.
+const Set<String> _kNodeListKeys = {'outbounds', 'endpoints'};
 
 NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
   final Object? parsed;
@@ -72,25 +78,29 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
         getLocalText.s("Invalid JSON: %s", e.message));
   }
 
-  // Массив тел — первый элемент (прежнее поведение редактора).
-  Object? root = parsed;
-  if (root is List) {
-    if (root.isEmpty) {
-      return NodeDocumentRejected(getLocalText.s("Invalid JSON: empty array"));
-    }
-    root = root.first;
-  }
-  if (root is! Map) {
-    return NodeDocumentRejected(getLocalText.s(
-        "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
-  }
-  final map = root.cast<String, dynamic>();
   final newTag = tag.trim();
 
-  // Голое тело: `type` на верхнем уровне. Секции не трогает — контроллер
-  // получает тело без `sections`/`dns`/`route` и оставляет контейнер как есть.
-  // §455 — тег не менялся → текст уходит как набран (источник байт в байт),
-  // перекодируется только ради подмены тега.
+  if (parsed is List) {
+    if (parsed.isEmpty) {
+      return NodeDocumentRejected(getLocalText.s("Invalid JSON: empty array"));
+    }
+    final first = parsed.first;
+    if (first is! Map || first['type'] is! String) {
+      return NodeDocumentRejected(getLocalText.s(
+          "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
+    }
+    return NodeDocumentReady(
+      _bodyText(first.cast<String, dynamic>(), newTag),
+      isDocument: false,
+      droppedExtras: parsed.length > 1,
+    );
+  }
+  if (parsed is! Map) {
+    return NodeDocumentRejected(getLocalText.s(
+          "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
+  }
+  final map = parsed.cast<String, dynamic>();
+
   if (map['type'] is String) {
     if (newTag.isEmpty || map['tag'] == newTag) {
       return NodeDocumentReady(text, isDocument: false);
@@ -99,34 +109,37 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
     return NodeDocumentReady(jsonEncode(map), isDocument: false);
   }
 
+  if (map['endpoints'] is! List && map['outbounds'] is! List) {
+    return NodeDocumentRejected(getLocalText.s(
+          "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
+  }
+
+  // Порядок выбора прежний (§435): `endpoints`, затем `outbounds`.
   final endpoints = map['endpoints'];
   final outbounds = map['outbounds'];
-  final hasEndpoints = endpoints is List;
-  final hasOutbounds = outbounds is List;
-  if (!hasEndpoints && !hasOutbounds) {
-    return NodeDocumentRejected(getLocalText.s(
-        "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
+  final entries = <Object?>[
+    if (endpoints is List) ...endpoints,
+    if (outbounds is List) ...outbounds,
+  ];
+  final body = _firstNodeBody(entries);
+  if (body == null) {
+    return NodeDocumentRejected(
+        getLocalText.s("The document has no node to save."));
   }
+  final restNotKept = entries.length > 1 ||
+      map.keys.any((k) => !_kNodeListKeys.contains(k));
+  return NodeDocumentReady(
+    _bodyText(body, newTag),
+    isDocument: true,
+    droppedExtras: restNotKept,
+  );
+}
 
-  // §575 — `dns`/`route`/`sections` документа не сохраняются; отказа нет.
-  final dropped = map.containsKey('sections') ||
-      map.containsKey('dns') ||
-      map.containsKey('route');
-
-  // Тег — в первое тело узла (endpoints раньше outbounds: у документа с
-  // WireGuard/Tailscale узел лежит там, а в outbounds — direct/block).
-  if (newTag.isNotEmpty) {
-    final body = _firstNodeBody([
-      if (hasEndpoints) ...endpoints,
-      if (hasOutbounds) ...outbounds,
-    ]);
-    if (body != null && body['tag'] != newTag) {
-      body['tag'] = newTag;
-      return NodeDocumentReady(jsonEncode(map),
-          isDocument: true, droppedExtras: dropped);
-    }
-  }
-  return NodeDocumentReady(text, isDocument: true, droppedExtras: dropped);
+/// Извлечённое тело узла с тегом из поля Tag, JSON с отступом в два пробела.
+String _bodyText(Map<String, dynamic> body, String newTag) {
+  final out = Map<String, dynamic>.from(body);
+  if (newTag.isNotEmpty) out['tag'] = newTag;
+  return const JsonEncoder.withIndent('  ').convert(out);
 }
 
 /// §455 — полезная нагрузка для `Libbox.checkConfig()`: минимальный конфиг

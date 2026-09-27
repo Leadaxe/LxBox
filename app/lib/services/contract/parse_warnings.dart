@@ -34,6 +34,7 @@ import 'dart:convert';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/template_vars.dart';
+import '../parser/authored_scope.dart' show singboxBodySource;
 import '../parser/mappers/uri_pipeline.dart' show isPipelineParsed;
 import 'body_sanitizer.dart';
 import 'registry.dart';
@@ -151,9 +152,10 @@ bool annotateFromRawBody(NodeSpec node) {
     scheme: type,
     coreVersion: _kParseTimeCore,
     applyCoreGates: false,
-    // §473 — этот проход по построению идёт по телу в форме ядра: карта
-    // sing-box, которую написал автор узла. Это и есть вход `singbox`.
-    source: BodySource.singbox,
+    // §473/§576 п.5 — вход `singbox` только у авторского тела (свой сервер
+    // или член папки, вид источника `singbox_outbound`); та же карта из
+    // подписки — вход `other`.
+    source: singboxBodySource,
   );
   _mergeRegistryWarnings(node, res.warnings);
   // Вердикт уезжает наружу; тело узла и здесь не меняется (границы шага 1 в
@@ -181,9 +183,13 @@ bool annotateFromRawBody(NodeSpec node) {
 ///
 /// Xray-JSON сюда не попадает: у него `rawSource` — объект Xray, где тип
 /// записи зовётся `protocol` (см. [annotateFromRawBody], шаг 8 спеки 472).
+///
+/// §576 п.5 — вход `singbox` получает только авторское тело: узел своего
+/// сервера или члена папки с видом источника `singbox_outbound`
+/// (`authored_scope.dart`). Узел подписки — `other`.
 BodySource bodySourceOf(NodeSpec node) =>
     _rawSingboxBodyOf(node)?['type'] is String
-        ? BodySource.singbox
+        ? singboxBodySource
         : BodySource.other;
 
 /// Дословное тело JSON-узла как карта sing-box, либо `null`.

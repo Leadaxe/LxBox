@@ -10,6 +10,10 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/source_replace.dart';
 import 'package:lxbox/models/subscription_meta.dart';
+import 'package:lxbox/services/builder/verbatim_body.dart';
+import 'package:lxbox/services/node_hash.dart';
+import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/parse_all.dart';
 
 import '../parser/engine_test_setup.dart';
 
@@ -627,6 +631,104 @@ void main() {
       });
       expect((read.value! as FolderServers).replace, isNull);
       expect(read.unknownKeys, ['fold', 'fold_tag']);
+    });
+  });
+
+  // §576 п.3 — старые записи своего сервера и члена папки с документом или
+  // массивом в источнике при чтении получают голое тело узла записи. Тег,
+  // identity и тело для ядра не сдвигаются.
+  group('§576 — старый источник сводится к телу узла', () {
+    const trojan = {
+      'type': 'trojan',
+      'tag': 'tj',
+      'server': '198.51.100.7',
+      'server_port': 443,
+      'password': 'testpass576',
+      'extra_key': 1,
+    };
+    final forms = <String, String>{
+      'singbox_config': jsonEncode({
+        'outbounds': [
+          {'type': 'direct', 'tag': 'direct'},
+          trojan,
+          {'type': 'selector', 'tag': 'sel', 'outbounds': ['tj']},
+        ],
+        'route': {'final': 'sel'},
+      }),
+      'singbox_config_array': jsonEncode([
+        {
+          'outbounds': [trojan],
+        },
+      ]),
+      'singbox_outbound_array': jsonEncode([
+        trojan,
+        {...trojan, 'tag': 'tj2', 'server': '198.51.100.8'},
+      ]),
+    };
+
+    for (final e in forms.entries) {
+      test('${e.key}: сервер', () {
+        expect(sourceKindOf(e.value), e.key, reason: 'фикстура того вида');
+        final before = parseAll(decode(e.value)).firstWhere((n) => !n.isGroup);
+        final u = sourceFromRecord(_viaFile({
+          'kind': 'server',
+          'id': 'srv-${e.key}',
+          'origin': {'kind': 'json', 'raw': e.value},
+        })).value! as UserServer;
+        expect(sourceKindOf(u.rawBody), 'singbox_outbound');
+        final after = u.nodes.single;
+        expect(after.tag, before.tag);
+        expect(nodeDedupSignature(after), nodeDedupSignature(before),
+            reason: 'identity узла не сдвигается');
+        final body = verbatimBodyOf(u.rawBody, after)!;
+        expect(body, {...trojan}, reason: 'в ядро то же тело, что и раньше');
+        // Запись пишется в новом виде при сохранении состояния.
+        final rec = sourceToRecord(u);
+        expect(sourceKindOf((rec['origin'] as Map)['raw'] as String),
+            'singbox_outbound');
+      });
+
+      test('${e.key}: член папки', () {
+        final f = sourceFromRecord(_viaFile({
+          'kind': 'folder',
+          'id': 'f-${e.key}',
+          'nodes': [
+            {
+              'kind': 'server',
+              'origin': {'kind': 'json', 'raw': e.value},
+            },
+          ],
+        })).value! as FolderServers;
+        final m = f.members.single;
+        expect(sourceKindOf(m.raw), 'singbox_outbound');
+        expect(m.node!.tag, 'tj');
+        expect(verbatimBodyOf(m.raw, m.node!), {...trojan});
+      });
+    }
+
+    test('голое тело читается байт в байт', () {
+      const raw = '{ "type": "trojan", "tag": "tj",\n'
+          '  "server": "198.51.100.7", "server_port": 443,'
+          ' "password": "testpass576" }';
+      final u = sourceFromRecord(_viaFile({
+        'kind': 'server',
+        'id': 'srv-bare',
+        'origin': {'kind': 'json', 'raw': raw},
+      })).value! as UserServer;
+      expect(u.rawBody, raw);
+    });
+
+    test('тело без тега получает тег узла', () {
+      final raw = jsonEncode({
+        'outbounds': [
+          {...trojan}..remove('tag'),
+        ],
+      });
+      final before = parseAll(decode(raw)).single;
+      final bare = bareNodeSourceOf(raw);
+      expect(sourceKindOf(bare), 'singbox_outbound');
+      expect((jsonDecode(bare) as Map)['tag'], before.tag);
+      expect(parseAll(decode(bare)).single.tag, before.tag);
     });
   });
 }

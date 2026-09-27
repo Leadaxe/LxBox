@@ -2856,9 +2856,6 @@
   "Node info copied": {
     "value": "节点信息已复制"
   },
-  "Node saved. The rest of the document was not saved.": {
-    "value": "节点已保存。文档的其余内容未保存。"
-  },
   "Node — direct detour": {
     "value": "节点 —— 直连 detour"
   },
@@ -3004,6 +3001,9 @@
   },
   "Only single servers can be moved": {
     "value": "只能移动单个服务器"
+  },
+  "Only the node is saved. The rest of the input is not kept.": {
+    "value": "仅保存了节点。其余输入内容未保留。"
   },
   "Open": {
     "value": "打开"
@@ -4305,6 +4305,9 @@
   },
   "The current workspace cannot be deleted": {
     "value": "当前工作区无法删除"
+  },
+  "The document has no node to save.": {
+    "value": "文档中没有可保存的节点。"
   },
   "The device is removed from the tailnet when it goes offline": {
     "value": "设备离线后会从 tailnet 中移除"

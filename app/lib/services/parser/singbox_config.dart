@@ -22,6 +22,7 @@ import '../contract/body_sanitizer.dart';
 import '../contract/group_genus.dart';
 import '../contract/registry.dart';
 import '../node_identity.dart';
+import 'authored_scope.dart' show singboxBodySource;
 import 'json_parsers.dart';
 import 'uri_utils.dart';
 
@@ -609,8 +610,9 @@ int? _asInt(Object? v) => switch (v) {
 /// `forbidden_for`) судит реестр, как у ссылки (`mappers/uri_pipeline.dart`),
 /// и рукописных копий правил в эмиттере не нужно.
 ///
-/// Вход `singbox`: тело в форме ядра написал автор, и `max_when` с
-/// `except_sources` написанное им не подменяет (§473) — ровно как у прохода
+/// Вход `singbox` — только у авторского тела (§576 п.5: свой сервер или член
+/// папки, вид источника `singbox_outbound`): `max_when` с `except_sources`
+/// написанное автором не подменяет (§473). Тело подписки — вход `other`. Как у прохода
 /// по дословной карте (`annotateFromRawBody`) и гарда сборки. Коды здесь не
 /// собираются: их ставит тот проход, по той же карте и с тем же входом.
 ///
@@ -634,7 +636,8 @@ Map<String, dynamic> _sanitizedEntry(Map<String, dynamic> entry) {
     scheme: type,
     coreVersion: '0.0.0',
     applyCoreGates: false,
-    source: BodySource.singbox,
+    // §576 п.5 — `singbox` только у авторского тела; подписка — `other`.
+    source: singboxBodySource,
   );
   return res.body ?? entry;
 }

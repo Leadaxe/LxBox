@@ -230,6 +230,61 @@ bool sourceIsSingbox(String raw) {
   return decoded is JsonConfig && decoded.source.mapper == 'singbox';
 }
 
+/// §576 — источник записи — голое тело узла sing-box (вид ровно
+/// `singbox_outbound`). У своего сервера и члена папки такое тело авторское:
+/// уходит в ядро дословно (`verbatimBodyOf`) и получает вход `singbox`.
+bool isAuthoredNodeSource(String raw) =>
+    sourceKindOf(raw) == SourceKind.singboxOutbound;
+
+/// §576 п.3 — прежние виды источника своей записи и члена папки, которые
+/// сводятся к голому телу узла.
+const Set<String> kLegacyNodeSourceKinds = {
+  'singbox_config',
+  'singbox_config_array',
+  'singbox_outbound_array',
+};
+
+/// §576 — источник своего сервера и члена папки: только тело узла, вид
+/// `singbox_outbound` (PARSING_PRINCIPLES §11).
+///
+/// Условия: вид источника [raw] — один из [kLegacyNodeSourceKinds] (документ,
+/// массив документов, массив тел). Тогда источником становится тело ПЕРВОГО
+/// узла записи, не группы (`rawSource`, §454): ровно тот узел, что запись и
+/// раньше отдавала в конфиг. Пустой `tag` тела заполняется тегом узла, чтобы
+/// имя не сдвинулось. Тело пишется JSON с отступом в два пробела.
+///
+/// Иначе (голое тело, ссылка, INI, Xray, узлов нет) — [raw] без изменений.
+String bareNodeSourceOf(String raw) {
+  if (!kLegacyNodeSourceKinds.contains(sourceKindOf(raw))) return raw;
+  NodeSpec? node;
+  for (final n in _parseNodes(raw)) {
+    if (!n.isGroup) {
+      node = n;
+      break;
+    }
+  }
+  if (node == null) return raw;
+  return bareBodyTextOf(node) ?? raw;
+}
+
+/// §576 — текст голого тела узла [node] (его `rawSource`) с тегом узла, если
+/// своего тега у тела нет. `null` — `rawSource` не JSON-объект.
+String? bareBodyTextOf(NodeSpec node) {
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(node.rawSource);
+  } catch (_) {
+    return null;
+  }
+  if (decoded is! Map) return null;
+  final body = Map<String, dynamic>.from(decoded);
+  final tag = body['tag'];
+  if ((tag is! String || tag.trim().isEmpty) && node.tag.isNotEmpty) {
+    body['tag'] = node.tag;
+  }
+  return const JsonEncoder.withIndent('  ').convert(body);
+}
+
 String _firstNodeTag(List<NodeSpec> nodes, String raw) {
   final parsed = nodes.isNotEmpty ? nodes : _parseNodes(raw);
   return parsed.isEmpty ? '' : parsed.first.tag;
@@ -238,7 +293,7 @@ String _firstNodeTag(List<NodeSpec> nodes, String raw) {
 List<NodeSpec> _parseNodes(String raw, {String? nameHint}) {
   if (raw.trim().isEmpty) return const [];
   try {
-    return parseAll(decode(raw), nameHint: nameHint);
+    return parseAll(decode(raw), nameHint: nameHint, own: true);
   } catch (_) {
     return const [];
   }
@@ -390,7 +445,8 @@ UserServer _serverFromRecord(
 ) {
   final where = 'server "$id"';
   _collectUnknown(j, _serverKeys, '', unknown);
-  final raw = _rawOf(j, '', unknown);
+  // §576 п.3 — документ и массив в источнике сводятся к телу узла.
+  final raw = bareNodeSourceOf(_rawOf(j, '', unknown));
   final hint = _iniTagHint(j, raw);
   final nodes = _parseNodes(raw, nameHint: hint);
   if (hint == null) {
@@ -481,7 +537,8 @@ FolderMember? _memberFromRecord(
     return null;
   }
   _collectUnknown(j, _memberKeys, path, unknown);
-  final text = _rawOf(j, path, unknown);
+  // §576 п.3 — документ и массив в источнике сводятся к телу узла.
+  final text = bareNodeSourceOf(_rawOf(j, path, unknown));
   final hint = _iniTagHint(j, text);
   _noteSectionsDropped(j['sections'], where, notes);
   final member = FolderMember(

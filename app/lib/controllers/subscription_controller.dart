@@ -852,7 +852,7 @@ class SubscriptionController extends ChangeNotifier {
     final newRaw = withDefaultEmoji(us.rawBody, us.nodes.first);
     if (newRaw == us.rawBody) return us;
     try {
-      final newNodes = parseAll(decode(newRaw));
+      final newNodes = parseAll(decode(newRaw), own: true);
       return newNodes.isEmpty ? us : us.copyWith(rawBody: newRaw, nodes: newNodes);
     } catch (_) {
       return us;
@@ -1130,6 +1130,24 @@ class SubscriptionController extends ChangeNotifier {
       return _JsonAdd.added;
     }
 
+    // §576 п.2 — у своего сервера в источнике голое тело узла; документ и
+    // массив sing-box в источник не попадают.
+    var serverRaw = text;
+    var serverNodes = nodes;
+    if (decoded.source.kind == SourceKind.singboxOutbound) {
+      // Голое тело — байт в байт; разбор заново как авторского тела.
+      final own = parseAll(decoded, own: true);
+      if (own.isNotEmpty) serverNodes = own;
+    } else if (decoded.source.mapper == 'singbox') {
+      final bare = bareBodyTextOf(nodes.first);
+      if (bare != null) {
+        final reparsed = parseAll(decode(bare), own: true);
+        if (reparsed.isNotEmpty) {
+          serverRaw = bare;
+          serverNodes = reparsed;
+        }
+      }
+    }
     final jsonServer = _autoEmoji(UserServer(
       id: newUuidV4(),
       name: '',
@@ -1137,8 +1155,8 @@ class SubscriptionController extends ChangeNotifier {
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
-      rawBody: text,
-      nodes: nodes,
+      rawBody: serverRaw,
+      nodes: serverNodes,
     ));
     _entries.add(SubscriptionEntry(
         list: jsonServer, nodeCount: jsonServer.nodes.length));
@@ -1987,7 +2005,8 @@ class SubscriptionController extends ChangeNotifier {
     if (memberIndex < 0 || memberIndex >= folder.members.length) {
       return const ErrMsg(ErrKey.serverNotFound);
     }
-    final trimmed = newRaw.trim();
+    // §576 п.1 — источник члена папки: только тело узла.
+    final trimmed = bareNodeSourceOf(newRaw.trim());
     final hint = nameHint ?? folder.members[memberIndex].nameHint;
     final probe = FolderMember(raw: trimmed, nameHint: hint);
     if (probe.node == null) {
@@ -3320,10 +3339,13 @@ class SubscriptionController extends ChangeNotifier {
     final list = _entries[index].list;
     if (list is! UserServer) return;
 
+    // §576 п.1 — источник своего сервера: только тело узла. Документ и
+    // массив (форма ввода, а не хранения) сводятся к телу первого узла.
+    final sources = [for (final c in connections) bareNodeSourceOf(c)];
     final nodes = <NodeSpec>[];
-    for (final c in connections) {
+    for (final c in sources) {
       final decoded = decode(c);
-      nodes.addAll(parseAll(decoded, nameHint: nameHint));
+      nodes.addAll(parseAll(decoded, nameHint: nameHint, own: true));
     }
     final before = _lists();
     // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело ручного сервера:
@@ -3340,7 +3362,7 @@ class SubscriptionController extends ChangeNotifier {
       // §243 — displayName у UserServer name игнорирует (legacy v2.11.0 мог
       // записать туда имя файла); при пересохранении затираем совсем.
       name: '',
-      rawBody: connections.join('\n'),
+      rawBody: sources.join('\n'),
       nodes: nodes,
       enabled: dropVerdictByEdit ? true : null,
       warnings: dropVerdictByEdit ? dropVerdict(list.warnings) : null,

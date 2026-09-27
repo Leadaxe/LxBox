@@ -542,7 +542,8 @@ final class FolderMember {
     if (raw.trim().isEmpty) return null;
     try {
       final nodes =
-          parseAll(decode(raw), nameHint: nameHint.isEmpty ? null : nameHint);
+          parseAll(decode(raw),
+          nameHint: nameHint.isEmpty ? null : nameHint, own: true);
       return nodes.isEmpty ? null : nodes.first;
     } catch (_) {
       return null;

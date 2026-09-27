@@ -3,6 +3,7 @@ import '../../models/node_warning.dart';
 import '../contract/parse_warnings.dart';
 import '../contract/registry.dart';
 import '../node_hash.dart';
+import 'authored_scope.dart';
 import 'body_decoder.dart';
 import 'engine/document.dart';
 import 'ini_parser.dart';
@@ -54,11 +55,29 @@ import 'uri_parsers.dart';
 /// Поскольку разбор идёт заново при каждой загрузке узла из хранения (узел
 /// хранится текстом `rawSource`), предупреждения переживают перезагрузку по
 /// построению: их никто не сериализует, они каждый раз считаются заново.
+///
+/// §576 п.5 — [own]: текст — источник своего сервера или члена папки. Вход
+/// `singbox` (исключения реестра по входу) получает только такое тело с видом
+/// источника `singbox_outbound`; тело подписки — вход `other`
+/// (`authored_scope.dart`).
 List<NodeSpec> parseAll(
   DecodedBody decoded, {
   String? nameHint,
   List<NodeWarning>? dropped,
+  bool own = false,
 }) {
+  final authored = own &&
+      decoded is JsonConfig &&
+      decoded.source.kind == SourceKind.singboxOutbound;
+  return withAuthoredBody(
+      authored, () => _parseAllAnnotated(decoded, nameHint, dropped));
+}
+
+List<NodeSpec> _parseAllAnnotated(
+  DecodedBody decoded,
+  String? nameHint,
+  List<NodeWarning>? dropped,
+) {
   final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
 
   // §477 — проход по дословной карте выносит и ВЕРДИКТ О ЗАПИСИ, а не только

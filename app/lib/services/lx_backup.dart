@@ -4247,7 +4247,7 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
 List<NodeSpec> _nodesOf(String raw) {
   if (raw.trim().isEmpty) return const [];
   try {
-    return parseAll(decode(raw));
+    return parseAll(decode(raw), own: true);
   } catch (_) {
     return const [];
   }

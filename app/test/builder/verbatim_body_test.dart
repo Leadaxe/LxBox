@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/emit_context.dart';
 import 'package:lxbox/models/node_link.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/models/template_vars.dart';
@@ -159,6 +160,67 @@ void main() {
     test('Xray-объект → null (через модель)', () {
       final raw = xray('x');
       expect(verbatimBodyOf(raw, parseAll(decode(raw)).single), isNull);
+    });
+  });
+
+  // §576 п.4 — дословно только при всех четырёх условиях; по одному отказу
+  // на каждое.
+  group('§576 дословность: четыре условия', () {
+    test('1. контейнер: узел подписки идёт через модель', () {
+      final raw = jsonEncode(naive);
+      final sub = SubscriptionServers(
+        id: 'sub1',
+        name: 'S',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        url: 'https://example-1.com/sub',
+        nodes: parseAll(decode(raw)),
+      );
+      final m = built(sub);
+      expect(m['type'], 'naive');
+      expect(m.containsKey('unknown_to_model'), isFalse);
+    });
+
+    test('2. группа автовыбора → null', () {
+      final raw = jsonEncode({
+        'outbounds': [
+          naive,
+          {
+            'type': 'urltest',
+            'tag': 'auto',
+            'outbounds': ['naive-out'],
+          },
+        ],
+      });
+      final group = parseAll(decode(raw)).whereType<AutoSelectSpec>().single;
+      expect(verbatimBodyOf(jsonEncode(naive), group), isNull);
+    });
+
+    test('3. вид источника не singbox_outbound → null', () {
+      final node = parseAll(decode(jsonEncode(naive))).single;
+      for (final raw in [
+        jsonEncode({
+          'outbounds': [naive],
+        }),
+        jsonEncode([naive]),
+        jsonEncode([
+          {
+            'outbounds': [naive],
+          },
+        ]),
+      ]) {
+        expect(sourceKindOf(raw), isNot('singbox_outbound'));
+        expect(verbatimBodyOf(raw, node), isNull, reason: raw);
+      }
+      expect(verbatimBodyOf(jsonEncode(naive), node), isNotNull);
+    });
+
+    test('4. текст узла не JSON-объект → null', () {
+      final uriNode =
+          parseAll(decode('vless://u@h.example.com:443?security=none#t'))
+              .single;
+      expect(verbatimBodyOf(jsonEncode(naive), uriNode), isNull);
     });
   });
 

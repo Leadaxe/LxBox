@@ -362,7 +362,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     await _store(toStore,
         savedMessage: () => droppedExtras
             ? getLocalText.s(
-                "Node saved. The rest of the document was not saved.")
+                "Only the node is saved. The rest of the input is not kept.")
             : getLocalText.s("Saved"));
   }
 
