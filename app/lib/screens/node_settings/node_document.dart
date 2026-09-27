@@ -26,6 +26,7 @@ import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/parser/body_decoder.dart';
+import '../../services/parser/json_comments.dart';
 import '../../services/parser/parse_all.dart';
 
 sealed class NodeDocumentPrep {
@@ -35,7 +36,12 @@ sealed class NodeDocumentPrep {
 /// Текст готов к `updateConnectionAt` / `updateMemberAt`.
 final class NodeDocumentReady extends NodeDocumentPrep {
   const NodeDocumentReady(this.text,
-      {required this.isDocument, this.droppedExtras = false});
+      {required this.isDocument,
+      this.droppedExtras = false,
+      this.commentsRemoved = false});
+
+  /// §585 — во входе были комментарии `//` или `/* */`; в [text] их нет.
+  final bool commentsRemoved;
 
   /// §576 — голое тело узла: как набрано, либо извлечённое из документа или
   /// массива (JSON с отступом в два пробела).
@@ -70,6 +76,20 @@ const Set<String> _kNonNodeTypes = {
 const Set<String> _kNodeListKeys = {'outbounds', 'endpoints'};
 
 NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
+  // §585 — комментарии снимаются до разбора; в источник уходит текст без них.
+  final uncommented = uncommentedJson(text);
+  if (uncommented == null) return _prepare(text, tag);
+  final prep = _prepare(uncommented, tag);
+  return switch (prep) {
+    NodeDocumentReady r => NodeDocumentReady(r.text,
+        isDocument: r.isDocument,
+        droppedExtras: r.droppedExtras,
+        commentsRemoved: true),
+    NodeDocumentRejected() => prep,
+  };
+}
+
+NodeDocumentPrep _prepare(String text, String tag) {
   final Object? parsed;
   try {
     parsed = jsonDecode(text);
@@ -155,7 +175,8 @@ String _bodyText(Map<String, dynamic> body, String newTag) {
 String? checkPayloadFor(String text) {
   final List<NodeSpec> nodes;
   try {
-    nodes = parseAll(decode(text));
+    // §585 — разбор своего источника: узел незнакомого типа тоже проверяется.
+    nodes = parseAll(decode(text), own: true);
   } catch (_) {
     return null;
   }

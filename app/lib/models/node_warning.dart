@@ -599,6 +599,33 @@ final class DuplicateNodeWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
+/// §585 — узел своего источника с типом, которого приложение не знает
+/// (`openvpn-client` и прочие типы ядра вне модели). Узел принят, тело
+/// уходит в ядро как написано, приложение его не проверяет.
+///
+/// Кода контракта нет — код `unknown_node_type` НАШ, per-app
+/// (`kWarningCodes`), как у [DuplicateNodeWarning]: ближайший код реестра
+/// `protocol_unsupported` — уровня `error` и говорит «узел отброшен».
+final class UnknownNodeTypeWarning extends NodeWarning {
+  /// Значение поля `type` записи.
+  final String type;
+
+  const UnknownNodeTypeWarning(this.type);
+
+  @override
+  List<Object?> get props => [type];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("Unknown node type");
+
+  /// Текст карточки уведомления.
+  String detailWith(GetLocalText t) => t.s(
+      "The app does not know this node type and does not check it. The node goes to the core as written.");
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
 // §472 шаг 9 — `TuicCongestionInvalidWarning` снят: `congestion_control` вне
 // {cubic, new_reno, bbr} судит санитайзер по реестру (`tuic.json`, enum +
 // `on_invalid: drop`), код `tuic_congestion_invalid` приходит с путём и

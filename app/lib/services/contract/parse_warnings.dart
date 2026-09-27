@@ -61,6 +61,8 @@ void annotateWithRegistry(NodeSpec node) {
 
   // Группы (§322) тела узла не имеют — санитайзеру там нечего смотреть.
   if (node.isGroup) return;
+  // §585 — тип приложению незнаком: схемы нет, тело не проверяется.
+  if (node is UnknownTypeSpec) return;
 
   // §472 шаг 2 — узел, разобранный конвейером, санитайзер уже прошёл: по
   // СЫРОЙ карте ссылки, до всякой нормализации. Второй проход по `emit()`
@@ -134,6 +136,8 @@ bool annotateFromRawBody(NodeSpec node) {
   if (chained != null) annotateFromRawBody(chained);
 
   if (node.isGroup) return false;
+  // §585 — тип приложению незнаком: схемы нет, тело не проверяется.
+  if (node is UnknownTypeSpec) return false;
 
   // §472 шаг 8 — узел конвейера санитайзер уже прошёл, по карте, которую
   // построил маппер. Второй раз идти незачем, и та же отметка избавляет от

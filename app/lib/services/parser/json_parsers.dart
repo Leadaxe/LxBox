@@ -783,6 +783,28 @@ NodeSpec? _xrayBuildChain(
 /// фрагмента, а тег из него вычислен: ссылка без `#` даёт тег-фолбэк
 /// `trojan-host-443` при пустом имени, и подставить его в `label` значило бы
 /// вернуть выдуманное `#trojan-host-443` из `toUri()`.
+/// §585 — типы sing-box, которые знает модель приложения (ветки
+/// [parseSingboxEntry]). Прочие — «незнакомые»: из своего источника они
+/// принимаются как написаны (`UnknownTypeSpec`), из подписки отбрасываются.
+const Set<String> kAppSingboxNodeTypes = {
+  'vless',
+  'vmess',
+  'trojan',
+  'anytls',
+  'shadowsocks',
+  'hysteria2',
+  'naive',
+  'tuic',
+  'ssh',
+  'socks',
+  'http',
+  'wireguard',
+  'masque',
+  'tailscale',
+};
+
+bool isAppKnownSingboxType(String type) => kAppSingboxNodeTypes.contains(type);
+
 NodeSpec? parseSingboxEntry(
   Map<String, dynamic> entry, {
   String? rawSource,

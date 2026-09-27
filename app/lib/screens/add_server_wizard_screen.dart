@@ -328,9 +328,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     }
     await widget.onAdded();
     if (!mounted) return;
-    final msg = addedTag != null && addedTag.isNotEmpty
-        ? getLocalText.s("Added: %s", addedTag)
-        : getLocalText.s("Added");
+    // §585 — комментарии вставки убраны: одно сообщение вместо «Added».
+    final msg = widget.subController.lastCommentsRemoved
+        ? getLocalText.s("Comments were removed.")
+        : addedTag != null && addedTag.isNotEmpty
+            ? getLocalText.s("Added: %s", addedTag)
+            : getLocalText.s("Added");
     showSnack(msg);
     Navigator.of(context).pop();
   }

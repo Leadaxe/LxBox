@@ -69,8 +69,24 @@ List<NodeSpec> parseAll(
   final authored = own &&
       decoded is JsonConfig &&
       decoded.source.kind == SourceKind.singboxOutbound;
-  return withAuthoredBody(
-      authored, () => _parseAllAnnotated(decoded, nameHint, dropped));
+  return withOwnSource(
+      own,
+      () => withAuthoredBody(
+          authored, () => _parseAllAnnotated(decoded, nameHint, dropped)));
+}
+
+/// §585 — вставка sing-box JSON, которая не дала узлов обычным разбором,
+/// даёт ровно один узел незнакомого приложению типа разбором как свой
+/// источник. Тогда вставка становится своей записью с этим узлом; иначе
+/// `null` — отказ прежний. Общий гейт импорта (`addFromInput`) и превью
+/// буфера обмена.
+List<NodeSpec>? acceptsOwnUnknownType(DecodedBody decoded) {
+  if (decoded is! JsonConfig || decoded.source.mapper != 'singbox') {
+    return null;
+  }
+  final own = parseAll(decoded, own: true);
+  if (own.length != 1 || own.single is! UnknownTypeSpec) return null;
+  return own;
 }
 
 List<NodeSpec> _parseAllAnnotated(

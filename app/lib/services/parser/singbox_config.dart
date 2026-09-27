@@ -23,7 +23,8 @@ import '../contract/body_sanitizer.dart';
 import '../contract/group_genus.dart';
 import '../contract/registry.dart';
 import '../node_identity.dart';
-import 'authored_scope.dart' show parsingAuthoredBody, singboxBodySource;
+import 'authored_scope.dart'
+    show parsingAuthoredBody, parsingOwnSource, singboxBodySource;
 import 'json_parsers.dart';
 import 'uri_utils.dart';
 
@@ -282,13 +283,13 @@ List<NodeSpec> _parseOne(
     try {
       // §454 — источник узла = оригинальный outbound (до подмены тега лейблом).
       final compact = _prettyJson(ob);
+      final label = _entryLabel(tag: rawTag, index: i, tagUses: tagUses);
       final spec = parseSingboxEntry(
-        _sanitizedEntry(
-          _withLabel(ob, _entryLabel(tag: rawTag, index: i, tagUses: tagUses)),
-        ),
-        rawSource: compact,
-        sanitizedFrom: BodySource.singbox,
-      );
+            _sanitizedEntry(_withLabel(ob, label)),
+            rawSource: compact,
+            sanitizedFrom: BodySource.singbox,
+          ) ??
+          _ownUnknownTypeNode(ob, label: label, rawSource: compact);
       if (spec == null) {
         // §561 — тип, которого ядро не ведёт: причина в `dropped[]` с тегом
         // записи (D-088), параметр `scheme` — значение поля `type`.
@@ -352,6 +353,40 @@ List<NodeSpec> _parseOne(
   // §575 — из документа берутся только узлы: `dns`, `route` и `sections`
   // документа отбрасываются (секции узла упразднены, контракт 1.1.85).
   return result;
+}
+
+/// §585 — запись своего источника с типом, которого приложение не знает:
+/// узел с телом как написано и предупреждением [UnknownNodeTypeWarning].
+///
+/// `null` — правило не действует, запись отбрасывается прежним путём. Оно
+/// действует, когда выполнены все условия: (1) разбор своего источника
+/// ([parsingOwnSource]; тело подписки — нет); (2) `type` записи — строка,
+/// не пустая; (3) тип приложению незнаком ([isAppKnownSingboxType]):
+/// известный тип с негодной формой (нет `server`) по-прежнему отбрасывается.
+/// Служебные типы и группы сюда не доходят — их отсеивает `_parseOne` раньше.
+NodeSpec? _ownUnknownTypeNode(
+  Map<String, dynamic> ob, {
+  required String label,
+  required String rawSource,
+}) {
+  if (!parsingOwnSource) return null;
+  final type = ob['type'];
+  if (type is! String || type.trim().isEmpty) return null;
+  if (isAppKnownSingboxType(type)) return null;
+  final tag = label.isNotEmpty ? label : type;
+  final server = ob['server'];
+  final port = ob['server_port'];
+  return UnknownTypeSpec(
+    id: newUuidV4(),
+    tag: tag,
+    label: tag,
+    type: type,
+    body: ob,
+    server: server is String ? server : '',
+    port: port is num ? port.toInt() : 0,
+    rawSource: rawSource,
+    warnings: [UnknownNodeTypeWarning(type)],
+  );
 }
 
 /// §368 §3.3 — имя узла.

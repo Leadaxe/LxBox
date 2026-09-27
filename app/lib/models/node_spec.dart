@@ -1397,11 +1397,85 @@ final class TailscaleSpec extends NodeSpec {
 ///
 /// Группа цепочку не несёт (`AutoSelectSpec` без `chained`) — возвращаем как
 /// есть; вызывающий такую ссылку отсеивает раньше, с warning'ом (§4 P5).
+// ════════════════════════════════════════════════════════════════════════════
+// Незнакомый приложению тип (§585)
+// ════════════════════════════════════════════════════════════════════════════
+
+/// §585 — типы, которые ядро регистрирует как endpoint (`endpoint.Register`
+/// в `protocol/*/endpoint.go` ядра 1.14.2-lx.6). Нужен только узлу
+/// незнакомого приложению типа: у известных типов место в конфиге задаёт
+/// свой класс. Типа нет в перечне — узел пишется в `outbounds[]`.
+const Set<String> kCoreEndpointTypes = {
+  'wireguard',
+  'tailscale',
+  'openvpn-client',
+  'openconnect',
+};
+
+/// §585 — узел sing-box, чей `type` приложению незнаком (например
+/// `openvpn-client`). Появляется только из своего источника (свой сервер,
+/// член папки, редактор узла): тело авторское, в ядро уходит как написано,
+/// приложение его не проверяет. [body] — объект записи целиком.
+final class UnknownTypeSpec extends NodeSpec {
+  /// Значение поля `type` записи.
+  final String type;
+
+  /// Тело записи как написано (с `type`, без правок).
+  final Map<String, dynamic> body;
+
+  UnknownTypeSpec({
+    required super.id,
+    required super.tag,
+    required super.label,
+    required this.type,
+    required this.body,
+    super.server = '',
+    super.port = 0,
+    super.rawSource = '',
+    super.chained,
+    super.warnings,
+  });
+
+  @override
+  String get protocol => type;
+
+  @override
+  bool get isAddressless => server.isEmpty;
+
+  @override
+  SingboxEntry emitRaw(TemplateVars vars) {
+    final map = <String, dynamic>{
+      ...deepCopyJson(body) as Map<String, dynamic>,
+      'type': type,
+      'tag': tag,
+    }..remove('detour');
+    return kCoreEndpointTypes.contains(type) ? Endpoint(map) : Outbound(map);
+  }
+
+  @override
+  String toUri() => rawSource;
+
+  UnknownTypeSpec copyWith({String? tag, String? label, NodeSpec? chained}) =>
+      UnknownTypeSpec(
+        id: id,
+        tag: tag ?? this.tag,
+        label: label ?? this.label,
+        type: type,
+        body: body,
+        server: server,
+        port: port,
+        rawSource: rawSource,
+        chained: chained ?? this.chained,
+        warnings: warnings,
+      );
+}
+
 NodeSpec withChained(NodeSpec spec, NodeSpec chained) =>
     _withChainedTyped(spec, chained)..bodyDelta = spec.bodyDelta;
 
 NodeSpec _withChainedTyped(NodeSpec spec, NodeSpec chained) => switch (spec) {
       TailscaleSpec s => s.copyWith(chained: chained),
+      UnknownTypeSpec s => s.copyWith(chained: chained),
       VlessSpec s => VlessSpec(
           id: s.id,
           tag: s.tag,

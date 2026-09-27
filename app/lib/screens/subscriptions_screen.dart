@@ -575,6 +575,14 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     });
   }
 
+  /// §585 — комментарии вставленного JSON убраны из источника записи.
+  void _snackCommentsRemoved() {
+    if (!mounted || !widget.subController.lastCommentsRemoved) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(getLocalText.s("Comments were removed."))),
+    );
+  }
+
   Future<void> _add() async {
     final text = _inputController.text.trim();
     if (text.isEmpty) {
@@ -589,6 +597,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       _ignoreInputDismiss = true;
       _inputController.clear();
       _ignoreInputDismiss = false;
+      _snackCommentsRemoved();
       await _regenerateAndSave(entryBaseline: baseline);
     } else {
       _presentParseRejectSheetIfNeeded();
@@ -650,6 +659,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     await widget.subController.addFromInput(text);
     final addErr = widget.subController.lastError;
     if (addErr == null) {
+      _snackCommentsRemoved();
       await _regenerateAndSave(entryBaseline: baseline);
     } else if (mounted) {
       _presentParseRejectSheetIfNeeded();

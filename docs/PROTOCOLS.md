@@ -9,6 +9,7 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
 - [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`. `toUri()` is **not** implemented per variant: every variant delegates to `uriViaEngineRequired`, which writes the link through the section engine (the emit rules live in the registry). Tailscale is the one exception — `toUriTailscale`, because the node has no link form of its own
+- Types the app does not know (e.g. `openvpn-client`): accepted only from an own source (own server, folder member, node editor) as `UnknownTypeSpec` with an info warning «Unknown node type»; the body goes to the core as written, into `endpoints[]` for core endpoint types (`kCoreEndpointTypes`), else `outbounds[]`; in a subscription such an entry is still dropped (task 585)
 
 **Sanitisers and guards.** Every place where a value is dropped, normalised,
 defaulted or degraded so the core does not fail — the full registry with

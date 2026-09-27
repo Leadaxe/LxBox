@@ -340,6 +340,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     }
     final String toStore;
     var droppedExtras = false;
+    var commentsRemoved = false;
     if (text.startsWith('{') || text.startsWith('[')) {
       // §435 — голое тело или документ; тег из поля Tag уходит в тело узла.
       // §575 — `dns`/`route`/`sections` документа не сохраняются.
@@ -351,6 +352,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       final ready = prep as NodeDocumentReady;
       toStore = ready.text;
       droppedExtras = ready.droppedExtras;
+      commentsRemoved = ready.commentsRemoved;
       final payload = checkPayloadFor(toStore);
       if (payload != null) {
         final check = await BoxVpnClient.I.checkConfig(payload);
@@ -375,7 +377,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         savedMessage: () => droppedExtras
             ? getLocalText.s(
                 "Only the node is saved. The rest of the input is not kept.")
-            : getLocalText.s("Saved"));
+            : commentsRemoved
+                ? getLocalText.s("Comments were removed.")
+                : getLocalText.s("Saved"));
   }
 
   /// §581 — Save choice вкладки Network: `exit_node` = [value] (`null` —

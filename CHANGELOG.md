@@ -10,6 +10,14 @@
 
 ### Added
 
+- **Nodes of a type the app does not know ([task 585](docs/spec/tasks/585-unknown-node-type-accepted.md)).**
+  A sing-box node of a type the app has no model for (for example
+  `openvpn-client`) is accepted when added by hand (Add server, paste, file,
+  folder member, node editor). It goes to the core as written and gets one
+  info notice «Unknown node type»; subscriptions still drop such entries.
+  Pasted JSON with `//` and `/* */` comments is accepted too: the comments are
+  removed from the saved source, and the app says «Comments were removed.»
+
 - **Home: press back twice to exit ([task 583](docs/spec/tasks/583-home-back-press-twice-to-exit.md)).**
   On Home the first back press shows «Press back again to exit»; a second
   press within 2 seconds closes the app as before. An open side menu, dialog

@@ -276,6 +276,13 @@ class _NotificationTile extends StatelessWidget {
               style: _monospace,
             ),
           ),
+        // §585 — у рукописного класса без кода реестра свой текст.
+        if (warning case final UnknownNodeTypeWarning u)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(u.detailWith(getLocalText),
+                style: theme.textTheme.bodySmall),
+          ),
         ..._breakdown(context, code, subst, notApplied: !warning.applied),
       ],
     );

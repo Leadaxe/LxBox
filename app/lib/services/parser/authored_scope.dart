@@ -33,3 +33,21 @@ T withAuthoredBody<T>(bool on, T Function() body) {
     _authored = prev;
   }
 }
+
+/// §585 — идёт разбор СВОЕГО источника (`parseAll(own: true)`: свой сервер,
+/// член папки, редактор узла) любого вида, не только голого тела. Только в
+/// нём узел sing-box незнакомого приложению типа принимается
+/// (`UnknownTypeSpec`); в теле подписки такая запись по-прежнему отбрасывается.
+bool _own = false;
+
+bool get parsingOwnSource => _own;
+
+T withOwnSource<T>(bool on, T Function() body) {
+  final prev = _own;
+  _own = on;
+  try {
+    return body();
+  } finally {
+    _own = prev;
+  }
+}

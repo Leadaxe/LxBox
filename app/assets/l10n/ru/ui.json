@@ -5509,5 +5509,14 @@
   },
   "Keep DNS cache after restart": {
     "value": "Сохранять кэш DNS после перезапуска"
+  },
+  "Unknown node type": {
+    "value": "Незнакомый тип узла"
+  },
+  "The app does not know this node type and does not check it. The node goes to the core as written.": {
+    "value": "Приложение не знает этот тип узла и не проверяет его. Узел уходит в ядро как написан."
+  },
+  "Comments were removed.": {
+    "value": "Комментарии убраны."
   }
 }

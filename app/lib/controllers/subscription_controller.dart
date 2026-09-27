@@ -41,6 +41,7 @@ import '../services/builder/core_chain_capability.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
+import '../services/parser/json_comments.dart';
 import '../services/parser/parse_all.dart';
 import '../services/parser/tailscale_split.dart';
 import '../services/parser/uri_parsers.dart';
@@ -177,6 +178,12 @@ class SubscriptionController extends ChangeNotifier {
 
   /// §279 Phase 4 — хранимая ошибка = [UiMsg] (рендер в build). null = нет.
   UiMsg? get lastError => _lastError;
+
+  /// §585 — последняя вставка sing-box JSON шла с комментариями `//` или
+  /// `/* */`, и они убраны из источника записи. Экран говорит об этом одной
+  /// строкой («Comments were removed.»).
+  bool get lastCommentsRemoved => _lastCommentsRemoved;
+  bool _lastCommentsRemoved = false;
 
   /// §254 — структурный дубль [lastError]: fatal-issues последней генерации.
   /// UI различает по типу (DetourCycle → bottom sheet со списком виновников
@@ -896,6 +903,7 @@ class SubscriptionController extends ChangeNotifier {
 
     _busy = true;
     _lastError = null;
+    _lastCommentsRemoved = false;
     notifyListeners();
     // Input может быть URL подписки (с токеном), direct-link (vless://user@host),
     // JSON-outbound. Маскируем, если detect'им URL — иначе только kind.
@@ -1008,8 +1016,12 @@ class SubscriptionController extends ChangeNotifier {
             list: dlServer, nodeCount: dlServer.nodes.length));
         await _persist();
       } else {
-        switch (await _addJsonNodes(trimmed, origin: origin)) {
+        // §585 — комментарии `//` и `/* */` снимаются до разбора: в источник
+        // записи уходит текст без них.
+        final uncommented = uncommentedJson(trimmed);
+        switch (await _addJsonNodes(uncommented ?? trimmed, origin: origin)) {
           case _JsonAdd.added:
+            _lastCommentsRemoved = uncommented != null;
             await _persist();
           case _JsonAdd.empty:
             // Форму опознали, узлов не собралось — ошибку уже выставил
@@ -1061,7 +1073,10 @@ class SubscriptionController extends ChangeNotifier {
     if (decoded.source.mapper == null) return _JsonAdd.notJson;
 
     final dropped = <NodeWarning>[];
-    final nodes = parseAll(decoded, dropped: dropped);
+    var nodes = parseAll(decoded, dropped: dropped);
+    // §585 — узел незнакомого приложению типа принимается только своей
+    // записью: ровно один узел (свой сервер, а не файловая подписка).
+    if (nodes.isEmpty) nodes = acceptsOwnUnknownType(decoded) ?? nodes;
     if (nodes.isEmpty) {
       _setParseInputReject(ErrKey.noValidOutboundsInJson, text,
           dropped: dropped);
