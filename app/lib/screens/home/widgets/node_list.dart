@@ -286,7 +286,9 @@ class HomeNodeList extends StatelessWidget {
     final model = state.activeModel;
     final tags = state.networksNodes;
     void openDetails(String tag) => viewOutboundJson(context, tag, state,
-        subController: subController, homeController: controller);
+        subController: subController,
+        homeController: controller,
+        openNetwork: true);
     return Expanded(
       child: ListView.builder(
         key: const ValueKey('networks-list'),

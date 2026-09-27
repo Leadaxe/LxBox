@@ -41,10 +41,21 @@ API ядра апстримное, дельты нет. Приложение п�
 Вкладка Network видна, когда выполнены оба условия:
 
 1. тип узла `tailscale`;
-2. открыт экран узла: `node_settings_screen` (свой сервер, член папки) или
-   `node_inspect_screen` (узел подписки).
+2. открыт экран узла: `node_settings_screen` (свой сервер, член папки),
+   `node_inspect_screen` (узел подписки) или `outbound_view_screen` (экран
+   просмотра узла из строки NETWORKS главного экрана и пункта меню
+   «View details»).
 
 Место: перед вкладкой Diagnostics.
+
+На `outbound_view_screen` (решение владельца 28.09.2026):
+
+- блоки те же: Status, This device, Exit node, Devices, Ping;
+- Save choice видна, когда по тегу узла нашлась запись своего сервера или
+  члена папки, и сохраняет узел тем же путём, что на `node_settings_screen`;
+  у узла подписки и у узла без записи источника её нет;
+- начальная вкладка: из строки NETWORKS — Network, из «View details» —
+  прежняя (Overview или Dependents).
 
 ### 2. Что вкладка показывает без данных
 
@@ -249,6 +260,22 @@ API ядра апстримное, дельты нет. Приложение п�
   → `withExitNode` над источником и путь Save вкладки Source: тег, проверка
   ядром, запись) и `node_inspect_screen` (без Save choice); Network стоит
   перед Diagnostics, индекс Diagnostics сдвигается.
+- **Экран просмотра (28.09.2026):** `outbound_view_screen` показывает
+  Network у узла с типом `tailscale` в собранном конфиге. Запись источника по
+  тегу — `exitNodeTargetForTag` в `app/lib/screens/node_settings/
+  exit_node_store.dart`: `ownerOfTag` (префикс записи, суффикс дедупликации)
+  → свой сервер (`UserServer`, узел Tailscale с тем же тегом конфига) или
+  член папки (`FolderServers`, узел члена Tailscale); подписка и
+  ненайденный владелец → `null`, Save choice скрыта. Запись —
+  `storeExitNodeChoice`: `withExitNode` над источником (не JSON — тело
+  модели), `prepareNodeDocumentForSave` с прежним тегом, `CheckConfig`,
+  `updateMemberAt` / `updateConnectionAt` — JSON-ветка Save вкладки Source.
+  После записи вкладка берёт тело с новым `exit_node` (конфиг экрана —
+  снимок). `viewOutboundJson(openNetwork:)` — строка NETWORKS открывает
+  экран сразу на Network. Тест: `app/test/screens/
+  outbound_view_network_tab_test.dart` (место вкладки, её отсутствие у
+  другого типа, начальная вкладка, Save choice у своего сервера, у
+  подписки и без записи).
 - **Diagnostics:** `NodeDiagnosticsTab` у `TailscaleSpec` слушает состояние
   узла; без действующего выхода секция Check скрыта, вместо неё строка
   раздела 8. VPN выключен или данных нет — решает записанный `exit_node`.
