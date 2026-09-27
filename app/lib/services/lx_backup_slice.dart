@@ -120,6 +120,8 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.server, 'body', _c),
   BackupField(BackupRecord.server, 'detour', _c),
   BackupField(BackupRecord.server, 'sections', _c),
+  // §578 — поле записи узла (запрос в контракт): едет в файл как есть.
+  BackupField(BackupRecord.server, 'skip_presets', _c),
   BackupField(BackupRecord.server, 'detour_policy', _s, declared: true),
   BackupField(BackupRecord.server, 'tag_policy', _s, declared: true),
 
@@ -148,6 +150,7 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.folderNode, 'detour', _c),
   BackupField(BackupRecord.folderNode, 'reason', _c),
   BackupField(BackupRecord.folderNode, 'sections', _c),
+  BackupField(BackupRecord.folderNode, 'skip_presets', _c),
   // Член-группа `kind: auto` (§439 N2): состав и стратегия — `group`; поля
   // стороны LxBox `members_rule` и `pool_badge` лежат внутри `group`
   // (контракт 1.0.1) и едут вместе с ним.

@@ -671,6 +671,33 @@ const int kDefaultRuleNum = kUserRuleNumStart;
 /// `CustomRule(kind: preset)` хранит только ссылку `{presetId, varsValues}`,
 /// expansion + merge выполняется в `preset_expand.dart`.
 ///
+/// §578 — `for_each` пресета: тело пресета повторяется для каждого узла
+/// конфига с полем `type` тела, равным [nodeType], под именем [as]; [filter]
+/// — условие языка `#if` (null — истина).
+class PresetForEach {
+  const PresetForEach({
+    required this.nodeType,
+    required this.as,
+    this.filter,
+  });
+
+  final String nodeType;
+  final String as;
+  final Object? filter;
+
+  /// null — ключа нет или обязательные `node_type`/`as` пусты (такой
+  /// `for_each` отвергает загрузка шаблона).
+  static PresetForEach? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final type = raw['node_type'];
+    final as = raw['as'];
+    if (type is! String || type.isEmpty || as is! String || as.isEmpty) {
+      return null;
+    }
+    return PresetForEach(nodeType: type, as: as, filter: raw['filter']);
+  }
+}
+
 /// `presetId` обязательный (§067 убрал legacy mode без preset_id).
 class SelectableRule {
   SelectableRule({
@@ -686,10 +713,14 @@ class SelectableRule {
     this.vars = const [],
     dynamic dnsRule,
     this.dnsServers = const [],
+    this.forEach,
   })  : rules = _normalizeRules(rule),
         dnsRules = _normalizeRules(dnsRule);
 
   final String label;
+
+  /// §578 — повтор тела пресета по узлам конфига; null — пресет обычный.
+  final PresetForEach? forEach;
   final String description;
   final bool defaultEnabled;
 
@@ -828,6 +859,7 @@ class SelectableRule {
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           const [],
+      forEach: PresetForEach.fromJson(json['for_each']),
     );
   }
 }

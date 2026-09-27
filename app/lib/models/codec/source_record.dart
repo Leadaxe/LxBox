@@ -110,6 +110,8 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     if (u.rawBody.isNotEmpty) 'origin': _originToRecord(u.rawBody),
     ..._detourLinkToRecord(u.detourPolicy),
     if (u.sections != null) 'sections': u.sections!.toJson(),
+    // §578 — пишется только `true`; отсутствие = `false`.
+    if (u.skipPresets) 'skip_presets': true,
     // L — настройки LxBox.
     ..._detourPolicyToRecord(u.detourPolicy),
     if (u.tagPrefix.isNotEmpty) 'tag_policy': _tagPolicyToRecord(u.tagPrefix),
@@ -150,6 +152,8 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (m.detour.isNotEmpty) 'detour': nodeLinkToRecord(m.detour),
     if (node == null) 'reason': kMemberUnparsedReason,
     if (m.sections != null) 'sections': m.sections!.toJson(),
+    // §578 — пишется только `true`; отсутствие = `false`.
+    if (m.skipPresets) 'skip_presets': true,
   };
 }
 
@@ -264,7 +268,7 @@ const Set<String> _subscriptionKeys = {
 
 const Set<String> _serverKeys = {
   'kind', 'id', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour',
-  'sections',
+  'sections', 'skip_presets',
   'detour_policy', 'tag_policy',
 };
 
@@ -275,7 +279,7 @@ const Set<String> _folderKeys = {
 
 const Set<String> _memberKeys = {
   'kind', 'tag', 'enabled', 'warnings', 'origin', 'body', 'detour', 'reason',
-  'sections',
+  'sections', 'skip_presets',
 };
 
 const Set<String> _detourPolicyKeys = {
@@ -406,6 +410,7 @@ UserServer _serverFromRecord(
     detourPolicy: _detourPolicyFromRecord(j, unknown),
     rawBody: raw,
     sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
+    skipPresets: _bool(j['skip_presets'], false),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
     nodes: [...nodes],
   );
@@ -493,6 +498,7 @@ FolderMember? _memberFromRecord(
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     nameHint: hint ?? '',
     sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
+    skipPresets: _bool(j['skip_presets'], false),
   );
   if (hint == null) _checkTag(j, member.node?.tag, where, notes);
   return member;

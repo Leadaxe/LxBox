@@ -435,6 +435,10 @@ final class UserServer extends ServerList {
   /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
 
+  /// §578 — поле записи `skip_presets`: узел не обслуживается пресетами с
+  /// `for_each`, чей `filter` читает поле. Хранится только `true`.
+  final bool skipPresets;
+
   UserServer({
     required super.id,
     required super.name,
@@ -444,6 +448,7 @@ final class UserServer extends ServerList {
     this.origin = UserSource.manual,
     this.rawBody = '',
     this.warnings = const [],
+    this.skipPresets = false,
     NodeSections? sections,
     super.nodes,
   }) : sections = (sections == null || sections.isEmpty) ? null : sections;
@@ -460,6 +465,7 @@ final class UserServer extends ServerList {
     String? rawBody,
     List<StoredWarning>? warnings,
     List<NodeSpec>? nodes,
+    bool? skipPresets,
     NodeSections? sections,
     // §435 — `sections ?? this.sections` не позволяет обнулить: явный флаг
     // (паттерн `clearDns` у правил).
@@ -474,6 +480,7 @@ final class UserServer extends ServerList {
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
         warnings: warnings ?? this.warnings,
+        skipPresets: skipPresets ?? this.skipPresets,
         sections: clearSections ? null : (sections ?? this.sections),
         nodes: nodes ?? this.nodes,
       );
@@ -490,11 +497,12 @@ final class UserServer extends ServerList {
           detourPolicy == other.detourPolicy &&
           rawBody == other.rawBody &&
           _eq.equals(warnings, other.warnings) &&
+          skipPresets == other.skipPresets &&
           sections == other.sections);
 
   @override
-  int get hashCode => Object.hash(
-      id, enabled, tagPrefix, detourPolicy, rawBody, _eq.hash(warnings), sections);
+  int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy,
+      rawBody, _eq.hash(warnings), skipPresets, sections);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -523,6 +531,9 @@ final class FolderMember {
   /// §435 — секции узла-члена (контракт ## 13), как у `UserServer.sections`.
   final NodeSections? sections;
 
+  /// §578 — поле записи `skip_presets`, как у `UserServer.skipPresets`.
+  final bool skipPresets;
+
   /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
   /// нечитаемый, юзер может отредактировать/удалить).
   final NodeSpec? node;
@@ -533,6 +544,7 @@ final class FolderMember {
     this.warnings = const [],
     this.detour = NodeLink.none,
     this.nameHint = '',
+    this.skipPresets = false,
     NodeSections? sections,
     NodeSpec? node,
   })  : sections = (sections == null || sections.isEmpty) ? null : sections,
@@ -564,6 +576,7 @@ final class FolderMember {
     List<StoredWarning>? warnings,
     NodeLink? detour,
     String? nameHint,
+    bool? skipPresets,
     NodeSections? sections,
     bool clearSections = false,
   }) =>
@@ -573,6 +586,7 @@ final class FolderMember {
         warnings: warnings ?? this.warnings,
         detour: detour ?? this.detour,
         nameHint: nameHint ?? this.nameHint,
+        skipPresets: skipPresets ?? this.skipPresets,
         sections: clearSections ? null : (sections ?? this.sections),
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
@@ -589,6 +603,7 @@ final class FolderMember {
           _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
           nameHint == other.nameHint &&
+          skipPresets == other.skipPresets &&
           sections == other.sections &&
           _sameGroup(node, other.node));
 
@@ -598,7 +613,8 @@ final class FolderMember {
 
   @override
   int get hashCode =>
-      Object.hash(raw, enabled, _eq.hash(warnings), detour, nameHint, sections);
+      Object.hash(raw, enabled, _eq.hash(warnings), detour, nameHint,
+          skipPresets, sections);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,

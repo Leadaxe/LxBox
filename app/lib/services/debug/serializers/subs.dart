@@ -101,6 +101,8 @@ Map<String, Object?> serializeSubEntry(
     // §435 — секции одиночного узла (контракт ## 13), read-only, как
     // хранятся (с плейсхолдерами `@self`). У подписки/папки ключа нет.
     if (list is UserServer) 'sections': list.sections?.toJson(),
+    // §578 — поле записи «пропустить пресеты», read-only.
+    if (list is UserServer) 'skip_presets': list.skipPresets,
     // Фича 478 — `raw` одиночного узла под `reveal=true`. Раньше сырое тело
     // отдавал только член папки (`serializeFolderMember`), и проверить, что
     // именно лежит у одиночной записи, снаружи было нечем — при разборе
@@ -308,4 +310,5 @@ Map<String, Object?> serializeFolderMember(
       'broken': m.node == null,
       if (reveal) 'raw': m.raw,
       'sections': m.sections?.toJson(), // §435 — read-only
+      'skip_presets': m.skipPresets, // §578 — read-only
     };

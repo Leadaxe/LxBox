@@ -49,6 +49,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     _invalidateOutboundOptions(); // §219 — сброс кэша после load Направлений
 
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
+    // §578 — разовый шаг до чтения правил: поздний дефолтный пресет.
+    await SettingsStorage.seedLateDefaultPresets(template);
     _customRules.addAll(await SettingsStorage.getCustomRules());
 
     // Выставляем `_template` ДО `_refreshSrsCache` — он через `_presetFor`

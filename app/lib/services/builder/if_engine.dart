@@ -273,6 +273,8 @@ dynamic walk(dynamic node, VarResolver resolve) {
   }
 
   if (node is Map<String, dynamic>) {
+    // §578 — составная строка `{"#tpl": "…"}` на месте значения.
+    if (node.containsKey(tplKey)) return evalTpl(node, resolve);
     // Array-element mode обрабатывается в List-ветке (там виден single-key #if).
     // Здесь — map-spread: #if как ключ среди прочих.
     return _walkMap(node, resolve);
@@ -283,6 +285,36 @@ dynamic walk(dynamic node, VarResolver resolve) {
   }
 
   return node; // num/bool/null
+}
+
+/// §578 — ключ составной строки: `{"#tpl": "@{node}-dns"}`.
+const String tplKey = '#tpl';
+
+/// Вставка `@{имя}` / `@{имя.путь}` внутри строки `#tpl`.
+final RegExp _tplSlot = RegExp(r'@\{([^{}]+)\}');
+
+/// §578 — вычисляет `{"#tpl": "…"}`: каждая вставка `@{имя}` заменяется
+/// скалярным значением имени; `@имя` без скобок внутри строки — литерал.
+///
+/// Имя неизвестно, значение пустое или не скаляр → [Dropped] (ключ или
+/// элемент исчезает целиком). Объект с `#tpl` и другими ключами либо не
+/// строка под ключом — ошибка шаблона: на загрузке её бросает
+/// [validateIfConstructs], здесь — `template_unknown_directive` и [Dropped].
+dynamic evalTpl(Map<String, dynamic> node, VarResolver resolve) {
+  final pattern = node[tplKey];
+  if (node.length != 1 || pattern is! String) {
+    reportTemplateWarning(templateWarnUnknownDirective, {'key': tplKey});
+    return Dropped.instance;
+  }
+  var dropped = false;
+  final out = pattern.replaceAllMapped(_tplSlot, (m) {
+    if (dropped) return '';
+    final v = _resolveRef(m.group(1)!.trim(), resolve);
+    final text = (v is String || v is num || v is bool) ? _scalar(v) : '';
+    if (text.isEmpty) dropped = true;
+    return text;
+  });
+  return dropped ? Dropped.instance : out;
 }
 
 /// SPEC 107 — читает ключевое слово движка в КАНОНИЧЕСКОЙ помеченной форме
@@ -743,6 +775,16 @@ void validateIfConstructs(
   String path = 'config',
 }) {
   if (node is Map<String, dynamic>) {
+    // §578 — `#tpl`: единственный ключ объекта, значение — строка.
+    if (node.containsKey(tplKey)) {
+      if (node.length != 1) {
+        throw TemplateIfError('$path: `#tpl` не допускает других ключей');
+      }
+      if (node[tplKey] is! String) {
+        throw TemplateIfError('$path: `#tpl` ожидает строку');
+      }
+      return;
+    }
     for (final entry in node.entries) {
       final k = entry.key;
       if (isIfKey(k)) {

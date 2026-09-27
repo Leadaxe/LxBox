@@ -29,6 +29,7 @@ import 'if_engine.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
+import 'preset_expand.dart' show PresetNode;
 import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
@@ -628,6 +629,11 @@ Future<BuildResult> _buildConfig({
   // ничего не даёт. Инвариант: без узлов с секциями конфиг байт-в-байт прежний.
   final injected = _collectNodeSections(lists, ctx.emittedTagByNode);
 
+  // §578 — узлы для пресетов с `for_each`: состав окончателен (снятия
+  // detour-прохода, гейта реестра и ядра уже применены), теги финальные.
+  // Та же точка, что у секций узлов выше.
+  final presetNodes = _collectPresetNodes(lists, ctx);
+
   // §370 — нормализация порядка по оси `num`: seed обязательного пресета
   // (traffic-processing) + разметка неразмеченных + сортировка. Гарантирует,
   // что несортируемый пресет присутствует и стоит первым, независимо от
@@ -723,6 +729,7 @@ Future<BuildResult> _buildConfig({
     srsPaths: srsPaths,
     presetSrsPaths: presetSrsPaths,
     globalVars: vars, // §265 — ref-vars резолвятся из flat global vars
+    presetNodes: presetNodes, // §578
   );
   emitWarnings.addAll(unifiedApply.warnings);
 
@@ -1028,6 +1035,36 @@ _NodeSectionsInjection _collectNodeSections(
     }
   }
   return out;
+}
+
+/// §578 — узлы конфига для `for_each` в порядке конфига (`outbounds`, затем
+/// `endpoints`). Берутся только записи узлов из источников, у которых есть
+/// финальный тег в `emittedTagByNode`: выключенный, снятый гейтом реестра,
+/// ядра или detour-проходом узел туда не попадает. `skip_presets` — поле
+/// записи своего сервера или члена папки; у узла подписки записи нет.
+List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
+  final skip = <NodeSpec>{};
+  for (final list in lists) {
+    switch (list) {
+      case UserServer u:
+        if (u.skipPresets) skip.addAll(u.nodes);
+      case FolderServers f:
+        for (final m in f.members) {
+          final node = m.node;
+          if (m.skipPresets && node != null) skip.add(node);
+        }
+      case SubscriptionServers():
+        break;
+    }
+  }
+  final nodeByTag = <String, NodeSpec>{
+    for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
+  };
+  return [
+    for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
+      if (nodeByTag[e.tag] case final NodeSpec node)
+        PresetNode(tag: e.tag, body: e.map, skipPresets: skip.contains(node)),
+  ];
 }
 
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +

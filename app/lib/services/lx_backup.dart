@@ -386,6 +386,7 @@ class LxServer {
     this.id = '',
     this.sections,
     this.sectionsPresent = false,
+    this.skipPresets = false,
     this.detour,
     this.position = 0,
     this.autoGroup,
@@ -431,6 +432,10 @@ class LxServer {
   /// получает секции файла ЦЕЛИКОМ (включая пустые), только если поле было
   /// (BACKUP.md §9 п. 2); иначе свои остаются.
   final bool sectionsPresent;
+
+  /// §578 — поле записи `skip_presets` (пишется только `true`). Совпавший по
+  /// телу узел получает `true` из файла; отсутствие поля своё не сбрасывает.
+  final bool skipPresets;
 
   /// Имя записи: `node_tag` схемы, а не подпись. У канона имени, кроме тега,
   /// нет (SPEC 112), и `label` старого файла становится им только когда
@@ -2965,6 +2970,7 @@ LxServer? _server10(
     id: fileId,
     sections: node.sections,
     sectionsPresent: j.containsKey('sections'),
+    skipPresets: node.skipPresets,
   );
 }
 
@@ -3372,6 +3378,8 @@ const Set<String> _node10Keys = {
   'service',
   'reason',
   'sections',
+  // §578 — «пропустить пресеты» узла (запрос в контракт); пишется только true.
+  'skip_presets',
   // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
   // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
   // срезает санитизация §489.
@@ -4032,12 +4040,14 @@ BackupServerMerge mergeBackupServers(
             ?.copyWith(overrideDetour: local.detourPolicy.overrideDetour);
         final side = (flags != null && flags != local.detourPolicy) ||
             (srv.tagPrefix != null && srv.tagPrefix != local.tagPrefix);
-        if (srv.sectionsPresent || side) {
+        final skip = srv.skipPresets && !local.skipPresets; // §578
+        if (srv.sectionsPresent || side || skip) {
           merged[hit] = local.copyWith(
             sections: srv.sectionsPresent ? srv.sections : null,
             clearSections: srv.sectionsPresent && srv.sections == null,
             detourPolicy: flags,
             tagPrefix: srv.tagPrefix,
+            skipPresets: skip ? true : null,
           );
           applied++;
         }
@@ -4055,6 +4065,7 @@ BackupServerMerge mergeBackupServers(
         // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
         warnings: srv.warnings,
         sections: srv.sections,
+        skipPresets: srv.skipPresets, // §578
       ));
       pendingLinks.add((
         at: merged.length - 1,
@@ -4310,11 +4321,14 @@ int _mergeFolderMember(
       landings?[(folderAt, srv.name)] = here;
     }
     touched.add((list: folderAt, member: hit));
-    if (!srv.sectionsPresent) return 0;
+    // §578 — `skip_presets: true` из файла; отсутствие своё не сбрасывает.
+    final skip = srv.skipPresets && !folder.members[hit].skipPresets;
+    if (!srv.sectionsPresent && !skip) return 0;
     final members = folder.members.toList();
     members[hit] = members[hit].copyWith(
-      sections: srv.sections,
-      clearSections: srv.sections == null,
+      sections: srv.sectionsPresent ? srv.sections : null,
+      clearSections: srv.sectionsPresent && srv.sections == null,
+      skipPresets: skip ? true : null,
     );
     merged[folderAt] = folder.copyWith(members: members);
     return 1;
@@ -4326,6 +4340,7 @@ int _mergeFolderMember(
     warnings: srv.warnings,
     detour: detour,
     sections: srv.sections,
+    skipPresets: srv.skipPresets, // §578
   );
   final here = member.node?.tag ?? '';
   if (srv.name.isNotEmpty && here.isNotEmpty) {

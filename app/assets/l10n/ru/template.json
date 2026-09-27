@@ -625,5 +625,17 @@
   },
   "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange.": {
     "value": "Направлять напрямую и UDP 500/4500. Часть модемов получает адрес шлюза от сети оператора и не делает DNS-запрос — доменное правило их не поймает. На этих портах нет ничего кроме обмена ключами IPsec."
+  },
+  "Tailscale networks": {
+    "value": "Сети Tailscale"
+  },
+  "Route each tailnet through its Tailscale node and resolve its names with the node's own DNS.": {
+    "value": "Трафик каждой сети tailnet идёт через её узел Tailscale, имена разрешает DNS самого узла."
+  },
+  "Resolve tailnet names with the node's own DNS.": {
+    "value": "Разрешать имена tailnet через DNS самого узла."
+  },
+  "MagicDNS of the tailnet": {
+    "value": "MagicDNS сети tailnet"
   }
 }

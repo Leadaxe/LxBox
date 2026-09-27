@@ -1567,6 +1567,7 @@ class SubscriptionController extends ChangeNotifier {
         origin: UserSource.manual,
         rawBody: m.raw,
         sections: m.sections, // §435
+        skipPresets: m.skipPresets, // §578
         nodes: [if (m.node != null) m.node!],
       );
 
@@ -2351,7 +2352,8 @@ class SubscriptionController extends ChangeNotifier {
             FolderMember(
                 raw: server.rawBody,
                 enabled: server.enabled,
-                detour: personalDetour),
+                detour: personalDetour,
+                skipPresets: server.skipPresets), // §578
           ]
         : _bindAutoMembers([
             for (final n in server.nodes)
@@ -2360,6 +2362,8 @@ class SubscriptionController extends ChangeNotifier {
                   nameHint: memberNameHintFor(n),
                   enabled: server.enabled,
                   detour: personalDetour,
+                  // §578 — «пропустить пресеты» — поле записи, едет с узлами.
+                  skipPresets: server.skipPresets,
                   // §435 — секции одиночного едут с его (единственным) узлом.
                   sections: identical(n, server.nodes.first)
                       ? server.sections
@@ -2911,6 +2915,10 @@ class SubscriptionController extends ChangeNotifier {
     // §435 — корень `state_directory` узлов Tailscale: native filesDir
     // (кэш на процесс, как у §316; без канала — пусто, поле не пишется).
     final tailscaleStateRoot = await _tailscaleStateRoot();
+
+    // §578 — разовый шаг: поздний дефолтный пресет (`tailscale`) у
+    // пользователя с уже засеянными дефолтами.
+    await SettingsStorage.seedLateDefaultPresets();
 
     final settings = BuildSettings(
       userVars: await SettingsStorage.getAllVars(),

@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -5,7 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../config/consts.dart';
 import '../models/parser_config.dart';
 import 'app_log.dart';
-import 'builder/if_engine.dart' show TemplateIfError, validateIfConstructs;
+import 'builder/if_engine.dart' show TemplateIfError, validateCondNode, validateIfConstructs;
 import 'l10n/locale_controller.dart';
 import 'l10n/template_overlay.dart';
 
@@ -127,7 +128,21 @@ void validateTemplateConstructs(
     final r = rules[i];
     if (r is! Map<String, dynamic>) continue;
     final id = (r['preset_id'] as String?) ?? '$i';
-    final scope = _presetScope(r, globals);
+    var scope = _presetScope(r, globals);
+    // §578 — `for_each`: обязательные `node_type`/`as`, имена узла в области
+    // видимости тела и `filter`.
+    if (r.containsKey('for_each')) {
+      final fe = PresetForEach.fromJson(r['for_each']);
+      if (fe == null) {
+        throw TemplateIfError('selectable_rules[$id].for_each: '
+            '`node_type` и `as` обязательны (непустые строки)');
+      }
+      scope = _ForEachScope(scope, fe.as);
+      final filter = fe.filter;
+      if (filter != null) {
+        validateCondNode(filter, scope, 'selectable_rules[$id].for_each.filter');
+      }
+    }
     for (final key in const ['rule', 'rules', 'rule_set', 'dns_rules']) {
       if (!r.containsKey(key)) continue;
       validateIfConstructs(r[key], scope,
@@ -219,6 +234,42 @@ Map<String, WizardVar> _presetScope(
     scope[name] = WizardVar.fromJson(v);
   }
   return scope;
+}
+
+/// §578 — область видимости пресета с `for_each`: к объявленным именам
+/// добавляются имена узла — `@<as>` (тег, text), `@<as>.skip_presets` (bool),
+/// `@<as>.body.<путь>` (поле тела, text). Путь тела заранее не известен,
+/// поэтому имена узла вычисляются при обращении, а не перечисляются.
+class _ForEachScope extends MapBase<String, WizardVar> {
+  _ForEachScope(this._base, this._as);
+
+  final Map<String, WizardVar> _base;
+  final String _as;
+
+  @override
+  WizardVar? operator [](Object? key) {
+    final own = _base[key];
+    if (own != null || key is! String) return own;
+    if (key == _as || key.startsWith('$_as.body.')) {
+      return WizardVar(name: key, type: 'text', defaultValue: '');
+    }
+    if (key == '$_as.skip_presets') {
+      return WizardVar(name: key, type: 'bool', defaultValue: '');
+    }
+    return null;
+  }
+
+  @override
+  void operator []=(String key, WizardVar value) => _base[key] = value;
+
+  @override
+  void clear() => _base.clear();
+
+  @override
+  Iterable<String> get keys => _base.keys;
+
+  @override
+  WizardVar? remove(Object? key) => _base.remove(key);
 }
 
 /// `#on_change` (канон) / `on_change` (легаси): `{"#set": {"@target": <#if>}}`.
