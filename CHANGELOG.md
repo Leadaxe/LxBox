@@ -48,6 +48,8 @@
   `allowed_ips`, is now dropped when parsed, with the reason in the list of
   dropped nodes. A REALITY `short_id` longer than 16 characters is removed.
   A MASQUE body without keys is now read instead of being rejected as unsupported.
+  A hand-written REALITY block with an invalid `public_key` is removed whole, as on a
+  subscription body, with a single `reality_pbk_invalid` warning.
 - **A node written by hand goes to the core as written ([§577](docs/spec/tasks/577-authored-json-registry-reports-only.md)).**
   A sing-box JSON node saved as an own server or a folder member is no longer
   fixed by the app's rules: an extra key, an AmneziaWG `mtu` above 1280, a

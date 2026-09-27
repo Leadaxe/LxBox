@@ -251,9 +251,27 @@ void _patchFrom(
   final (found, v) = _lookup(edited, parts);
   if (found) {
     _setPath(body, parts, _deepCopy(v));
-  } else {
-    _deletePath(body, parts);
+    return;
   }
+  // §580 (контракт 1.1.97, как Go `nodeflow.patchFromClean`): пути нет в
+  // чистом теле, потому что снят его РОДИТЕЛЬ (`tls.reality.public_key` при
+  // снятом блоке `reality`) — в авторском теле снимается самый верхний снятый
+  // сегмент; снят элемент массива — массив переносится целиком.
+  for (var k = 1; k < parts.length; k++) {
+    final prefix = parts.sublist(0, k);
+    if (_lookup(edited, prefix).$1) continue;
+    if (_isIndex(prefix.last) && k > 1) {
+      final arr = parts.sublist(0, k - 1);
+      final (aFound, a) = _lookup(edited, arr);
+      if (aFound) {
+        _setPath(body, arr, _deepCopy(a));
+        return;
+      }
+    }
+    _deletePath(body, prefix);
+    return;
+  }
+  _deletePath(body, parts);
 }
 
 (bool, Object?) _lookup(Object? v, List<String> parts) {
