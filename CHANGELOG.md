@@ -34,6 +34,9 @@
 
 ### Changed
 
+- **Default emoji of a Tailscale node is 🕸️.** It was 🪢. New nodes get the new
+  emoji; tags of existing nodes do not change.
+
 - **A hand-written node the core would reject is dropped ([task 582](docs/spec/tasks/582-authored-body-go-dart-parity.md)).**
   A TUIC node whose `uuid` is not a UUID, or a WireGuard node with invalid peer
   `allowed_ips`, is now dropped when parsed, with the reason in the list of

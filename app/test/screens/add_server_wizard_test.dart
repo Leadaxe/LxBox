@@ -278,7 +278,7 @@ void main() {
 
       expect(c.lastError, isNull);
       final us = c.entries.single.list as UserServer;
-      expect(us.nodes.single.tag, '🪢 tailscale');
+      expect(us.nodes.single.tag, '🕸️ tailscale');
     });
 
     testWidgets('необязательные поля и тумблеры попадают в тело как есть',
