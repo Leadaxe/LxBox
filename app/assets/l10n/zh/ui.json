@@ -3239,6 +3239,9 @@
   "Preferences, ping options, auto-update, wifi history": {
     "value": "偏好设置、测速选项、自动更新、Wi-Fi 历史"
   },
+  "Press back again to exit": {
+    "value": "再按一次返回键退出"
+  },
   "Prefix": {
     "value": "前缀"
   },

@@ -3436,6 +3436,9 @@
   "Preferences, ping options, auto-update, wifi history": {
     "value": "Предпочтения, параметры пинга, автообновление, история Wi-Fi"
   },
+  "Press back again to exit": {
+    "value": "Нажмите «назад» ещё раз для выхода"
+  },
   "Prefix": {
     "value": "Префикс"
   },

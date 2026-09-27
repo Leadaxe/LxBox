@@ -10,6 +10,11 @@
 
 ### Added
 
+- **Home: press back twice to exit ([task 583](docs/spec/tasks/583-home-back-press-twice-to-exit.md)).**
+  On Home the first back press shows «Press back again to exit»; a second
+  press within 2 seconds closes the app as before. An open side menu, dialog
+  or sheet is closed by back as before. On Android 13+ the predictive back
+  gesture no longer plays the closing animation on the first press.
 - **Tailscale node: Network tab ([task 581](docs/spec/tasks/581-tailscale-network-tab.md)).**
   The screen of a Tailscale node gets a Network tab: node state, sign in and
   log out, this device, the network's devices with a ping, and the exit node
