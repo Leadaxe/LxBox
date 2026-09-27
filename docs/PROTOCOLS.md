@@ -1474,7 +1474,8 @@ the Add Server Wizard's Tailscale mode.
   `ui.num` 945) serves every Tailscale node in the config through `for_each` (see
   TEMPLATE.md): for each node a route rule `preferred_by: [<node>] → <node>`, a DNS server
   `{type: tailscale, tag: <node>-dns, endpoint: <node>}`, a DNS rule
-  `preferred_by: [<node>] → <node>-dns` and a non-terminal `resolve` through that server
+  `preferred_by: [<node>-dns] → <node>-dns` (in a DNS rule the core looks `preferred_by` up
+  among DNS servers, so it names the server, not the node) and a non-terminal `resolve` through that server
   right before the route rule. The DNS part follows the preset's `dns_enable` switch. The
   condition `preferred_by` asks the endpoint whether an address or a name is its own, and
   Tailscale answers from the live tailnet state (machine names, machine addresses, accepted

@@ -160,14 +160,21 @@ void main() {
         [('home-ts-dns', 'home-ts'), ('work-ts-dns', 'work-ts')]);
     expect(byPreferred(dnsRules(r)), [
       {
-        'preferred_by': ['home-ts'],
+        'preferred_by': ['home-ts-dns'],
         'server': 'home-ts-dns',
       },
       {
-        'preferred_by': ['work-ts'],
+        'preferred_by': ['work-ts-dns'],
         'server': 'work-ts-dns',
       },
     ]);
+    // Ядро ищет preferred_by DNS-правила среди DNS-серверов
+    // (rule_item_preferred_by_dns.go): тег узла там валит старт.
+    final serverTags = {for (final s in dnsServers(r)) s['tag']};
+    for (final x in byPreferred(dnsRules(r))) {
+      expect(x['preferred_by'], [x['server']]);
+      expect(serverTags, contains(x['server']));
+    }
   });
 
   test('skip_presets и выключенный узел не обслуживаются', () async {

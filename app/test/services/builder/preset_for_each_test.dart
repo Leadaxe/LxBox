@@ -66,7 +66,7 @@ void main() {
       ]);
       expect(f.dnsRules, [
         {
-          'preferred_by': ['home-ts'],
+          'preferred_by': ['home-ts-dns'],
           'server': 'home-ts-dns',
         },
       ]);
@@ -85,6 +85,11 @@ void main() {
           ['home-ts-dns', 'work-ts-dns']);
       expect([for (final r in f.dnsRules) r['server']],
           ['home-ts-dns', 'work-ts-dns']);
+      // В DNS-правиле preferred_by называет DNS-сервер, не узел.
+      expect([for (final r in f.dnsRules) r['preferred_by']], [
+        ['home-ts-dns'],
+        ['work-ts-dns'],
+      ]);
     });
 
     test('filter ложен (skip_presets) — узел не обслуживается', () {

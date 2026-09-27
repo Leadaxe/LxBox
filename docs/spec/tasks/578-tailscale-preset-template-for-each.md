@@ -131,7 +131,7 @@
   ],
   "dns_rules": [
     { "#if": { "#and": ["@dns_enable"], "#value": {
-        "preferred_by": ["@node"],
+        "preferred_by": [ { "#tpl": "@{node}-dns" } ],
         "server": { "#tpl": "@{node}-dns" } } } }
   ]
 }
@@ -146,7 +146,7 @@
 | `route.rules` | то же для `work-ts`, две записи |
 | `dns.servers` | `type: tailscale`, `tag: home-ts-dns`, `endpoint: home-ts` |
 | `dns.servers` | то же для `work-ts` |
-| `dns.rules` | `preferred_by: [home-ts]`, `server: home-ts-dns` |
+| `dns.rules` | `preferred_by: [home-ts-dns]`, `server: home-ts-dns` |
 | `dns.rules` | то же для `work-ts` |
 
 Поведение по переключателю DNS:
@@ -162,7 +162,8 @@
 отвечает по живому состоянию tailnet: имена машин, адреса машин, принятые
 подсети (`accept_routes`). Поддержка в ядре проверена по исходникам
 (`protocol/tailscale/endpoint.go`, `PreferredDomain` и `PreferredAddress`),
-поле есть в правилах маршрута и в DNS-правилах.
+поле есть в правилах маршрута и в DNS-правилах. Тег в этих правилах разный:
+см. «Исправление: DNS-правило называет сервер».
 
 Постоянные подсети `100.64.0.0/10`, `fd7a:115c:a1e0::/48` и суффикс `.ts.net`
 в пресете не используются. Это подтверждение решения лаунчера D-120.
@@ -230,6 +231,24 @@
 отображаемые поля из `X` и `Y`. Ключ перевода — сам английский текст, поэтому
 тег-`#tpl` адресации не мешает; в имени обхода такой сервер адресуется
 индексом элемента.
+
+### Исправление: DNS-правило называет сервер
+
+Первая версия пресета (контракт 1.1.86) писала в DNS-правило
+`"preferred_by": ["@node"]`, тег узла. Ядро разбирает `preferred_by` по-разному.
+В правиле маршрута тег ищется через менеджер outbound, который видит и
+endpoint'ы (`route/rule/rule_item_preferred_by.go` в `sing-box-lx`), и тег узла
+там верен. В DNS-правиле тег ищется через менеджер DNS-серверов
+(`route/rule/rule_item_preferred_by_dns.go`, функция `Start`), и на теге узла
+ядро отказывает `DNS server not found: <тег>`: с пресетом по умолчанию ядро не
+стартовало (подтверждено на эмуляторе).
+
+Исправление (контракт 1.1.90): в DNS-правиле `preferred_by` равен
+`{"#tpl": "@{node}-dns"}`, тому же серверу, что в `server`. `#tpl` внутри
+элемента массива движок раскрывает без доработок. Тесты сборки проверяют, что
+`preferred_by` DNS-правила равен его `server` и что сервер с этим тегом есть в
+`dns.servers` (`app/test/builder/tailscale_preset_build_test.dart`,
+`app/test/services/builder/preset_for_each_test.dart`).
 
 ## Сборка
 
