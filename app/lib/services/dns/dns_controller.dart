@@ -21,6 +21,7 @@ import '../../models/parser_config.dart';
 // Перенос в services/ — отдельный шаг, не расширяем scope D1.
 import '../../screens/dns_settings_screen/dns_server_resolver.dart';
 import '../../widgets/outbound_picker.dart' show OutboundOption;
+import '../builder/build_config.dart' show varIntInBounds;
 import '../builder/post_steps.dart';
 import '../builder/preset_expand.dart';
 import '../builder/rule_set_registry.dart';
@@ -48,6 +49,9 @@ class DnsSettingsSnapshot {
     required this.defaultResolver,
     required this.resolverReset,
     this.presetServedTagsByPresetId = const {},
+    this.cacheCapacity = '',
+    this.optimistic = true,
+    this.storeCache = true,
   });
 
   final List<DnsServerRef> servers;
@@ -72,6 +76,13 @@ class DnsSettingsSnapshot {
   /// §578 — пресет с `for_each` → теги узлов, которые он обслуживает
   /// (подпись строки пресета). Пресета без `for_each` здесь нет.
   final Map<String, List<String>> presetServedTagsByPresetId;
+
+  /// §580 — кэш DNS: `dns_cache_capacity` (строкой, как в storage),
+  /// `dns_optimistic`, `dns_store_cache`. Не задано или вне границ — значение
+  /// по умолчанию шаблона.
+  final String cacheCapacity;
+  final bool optimistic;
+  final bool storeCache;
 }
 
 class DnsController {
@@ -279,6 +290,20 @@ class DnsController {
       resolverReset = true;
     }
 
+    // §580 — кэш DNS. Переменные новые: у сохранённого состояния без них
+    // действует значение по умолчанию шаблона; сохранённое вне границ — тоже.
+    String varOrDefault(String name) {
+      final v = vars[name] ?? '';
+      return v.trim().isNotEmpty ? v.trim() : defaultOf(name);
+    }
+
+    bool boolVar(String name) =>
+        varOrDefault(name).toLowerCase() == 'true';
+    var cacheCapacity = varOrDefault('dns_cache_capacity');
+    if (!varIntInBounds('dns_cache_capacity', cacheCapacity)) {
+      cacheCapacity = defaultOf('dns_cache_capacity');
+    }
+
     return DnsSettingsSnapshot(
       servers: resolvedServers,
       templateByTag: templateByTag,
@@ -299,6 +324,9 @@ class DnsController {
       defaultResolver: defaultResolver,
       resolverReset: resolverReset,
       presetServedTagsByPresetId: presetServedTagsByPresetId,
+      cacheCapacity: cacheCapacity,
+      optimistic: boolVar('dns_optimistic'),
+      storeCache: boolVar('dns_store_cache'),
     );
   }
 
@@ -313,6 +341,9 @@ class DnsController {
     required String strategy,
     required String dnsFinal,
     required String defaultResolver,
+    String? cacheCapacity,
+    bool? optimistic,
+    bool? storeCache,
   }) async {
     await SettingsStorage.saveDnsServers(servers, flush: false);
     final cleaned = cleanDnsRulesForPersist(
@@ -326,5 +357,19 @@ class DnsController {
     await SettingsStorage.setVar(
         'dns_default_domain_resolver', defaultResolver,
         flush: false);
+    // §580 — кэш DNS; значение вне границ экран не передаёт.
+    if (cacheCapacity != null &&
+        varIntInBounds('dns_cache_capacity', cacheCapacity)) {
+      await SettingsStorage.setVar('dns_cache_capacity', cacheCapacity,
+          flush: false);
+    }
+    if (optimistic != null) {
+      await SettingsStorage.setVar('dns_optimistic', '$optimistic',
+          flush: false);
+    }
+    if (storeCache != null) {
+      await SettingsStorage.setVar('dns_store_cache', '$storeCache',
+          flush: false);
+    }
   }
 }

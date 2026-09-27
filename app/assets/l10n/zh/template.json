@@ -637,5 +637,23 @@
  },
  "MagicDNS of the tailnet": {
   "value": "tailnet 的 MagicDNS"
+ },
+ "DNS cache size": {
+  "value": "DNS 缓存大小"
+ },
+ "Number of cached answers (1024..65535).": {
+  "value": "缓存的应答条数（1024..65535）。"
+ },
+ "Serve stale answers": {
+  "value": "返回过期应答"
+ },
+ "Answer from cache at once and refresh in the background.": {
+  "value": "立即用缓存应答，并在后台刷新。"
+ },
+ "Keep DNS cache after restart": {
+  "value": "重启后保留 DNS 缓存"
+ },
+ "Store the DNS cache in cache.db so it survives a restart.": {
+  "value": "将 DNS 缓存存入 cache.db，重启后仍然保留。"
  }
 }

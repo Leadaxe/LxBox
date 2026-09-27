@@ -117,8 +117,11 @@ class SettingsStorage {
   /// из этих var через `setVar` → авто-dirty.
   static const _configVarKeys = <String>{
     'auto_detect_interface',
+    'dns_cache_capacity',
     'dns_default_domain_resolver',
     'dns_final',
+    'dns_optimistic',
+    'dns_store_cache',
     'dns_strategy',
     'log_level',
     'resolve_strategy',

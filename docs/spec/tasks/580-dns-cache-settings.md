@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Spec |
+| Статус | Done |
 | Дата старта | 2026-09-27 |
-| Дата завершения | — |
-| Коммиты | — |
-| Контракт | Требует запроса: три переменные шаблона и их значения по умолчанию одинаковы в обеих системах |
+| Дата завершения | 2026-09-28 |
+| Коммиты | 60512905 (синк 1.1.97), a29d20d6 (reality на авторском теле), см. «Реализация» |
+| Контракт | 1.1.93–1.1.97: `TEMPLATE_LANG.md` §6.8, `registry/vars.json` (три переменные, `portable: true`) |
 | Связанные spec'ы | [features/014](../features/014%20dns%20settings/spec.md), [features/117](../features/117%20dns-rework/spec.md) (настройки DNS) |
 
 ## Проблема
@@ -146,6 +146,50 @@
 | `docs/TEMPLATE.md` | три переменные |
 | `docs/spec/features/117 dns-rework/spec.md` | три настройки |
 | `CHANGELOG.md` | запись в Unreleased |
+
+## Опись (до реализации)
+
+- **Переменные DNS.** `dns_strategy`, `dns_final`, `dns_default_domain_resolver`
+  объявлены в секции `dns` шаблона (`app/assets/wizard_template.json`,
+  `wizard_ui: edit|fix`) и хранятся плоскими строками в `vars` хранилища
+  (`SettingsStorage.setVar`); запись любой из них помечает конфиг грязным
+  (`_configVarKeys`); сборка берёт `userVars[name] ?? default_value`
+  (`build_config.dart`).
+- **Экран DNS.** `dns_settings_screen.dart` строит список сам; чтение и
+  запись вынесены в `DnsController.load()/stage()`
+  (`lib/services/dns/dns_controller.dart`), запись идёт через
+  `LazyPersistMixin` (`markDirty` → `stageChanges`, на диск при уходе).
+- **Clear DNS cache.** `BoxVpnClient().clearDnsCache()` → нативный
+  `BoxVpnService.clearDnsCache`: при работающем VPN — broadcast, ядро
+  перезапускается с удалённым `cache.db`; при выключенном — просто удаление
+  файла. Удаляется файл целиком, поэтому записи `store_dns` уходят вместе с
+  FakeIP; дополнять очистку не нужно.
+- **Рост `cache.db`.** Запись DNS в bbolt — ключ (вопрос, ~30–60 байт) и
+  упакованный ответ (обычно 100–300 байт); при 4000 записях это порядка
+  0,5–1,5 МБ, при 65535 — до ~20 МБ.
+
+## Реализация
+
+- Шаблон: три переменные в секции `dns` (`wizard_ui: fix`, заголовки и
+  подсказки с переводами ru/zh), поля `dns.cache_capacity`, `dns.optimistic`,
+  `experimental.cache_file.store_dns`.
+- Границы: `kVarIntBounds` / `varIntInBounds` в `build_config.dart`;
+  сохранённое вне границ сборка заменяет значением по умолчанию шаблона;
+  `DnsController.load()` отдаёт экрану то же, `stage()` вне границ не пишет.
+- Экран DNS: поле DNS cache size (ошибка «Range 1024..65535», вне границ не
+  сохраняется), переключатели Serve stale answers и Keep DNS cache after
+  restart над Clear DNS cache; изменение — `markDirty`. Кнопка очистки не
+  менялась.
+- Три имени добавлены в `_configVarKeys` (пересборка) и `kLxPortableVars`
+  (бэкап).
+- Контракт 1.1.97: на авторском теле путь правки, чей родитель снят в чистом
+  теле, снимает родителя (`_patchFrom` в `body_edit.dart`, как Go
+  `patchFromClean`); кейс `authored/hard_reality_pbk_invalid_removed` проходит.
+- Тесты: `test/builder/dns_cache_vars_build_test.dart`,
+  `test/services/dns_controller_test.dart` (группа §580),
+  `test/screens/dns_cache_settings_test.dart`; эталоны
+  `test/fixtures/storage/golden/*_v0.config.json` — только три новых поля.
+- `checkConfig` ядром локально не прогонялся (проверка на CI/устройстве).
 
 ## Нерешённое / follow-up
 

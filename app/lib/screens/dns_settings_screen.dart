@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/custom_rule.dart';
 import '../models/dns_ref.dart';
+import '../services/builder/build_config.dart' show varIntInBounds;
 import '../services/builder/post_steps.dart';
 import '../services/dns/dns_controller.dart';
 import '../services/dns/tailscale_endpoint_options.dart';
@@ -129,6 +131,36 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   String _dnsFinal = '';
   String _defaultResolver = '';
 
+  // §580 — кэш DNS (`dns_cache_capacity`, `dns_optimistic`, `dns_store_cache`).
+  String _cacheCapacity = '';
+  bool _optimistic = true;
+  bool _storeCache = true;
+  String _cacheCapacityError = '';
+  final TextEditingController _cacheCapacityCtl = TextEditingController();
+
+  @override
+  void dispose() {
+    _cacheCapacityCtl.dispose();
+    super.dispose();
+  }
+
+  /// §580 — ввод размера кэша: вне границ не сохраняется, поле показывает
+  /// ошибку с границами.
+  void _applyCacheCapacity(String raw) {
+    final v = raw.trim();
+    if (!varIntInBounds('dns_cache_capacity', v)) {
+      setState(() => _cacheCapacityError =
+          getLocalText.s("Range 1024..65535"));
+      return;
+    }
+    setState(() {
+      _cacheCapacityError = '';
+      if (v == _cacheCapacity) return;
+      _cacheCapacity = v;
+      _markDirty();
+    });
+  }
+
   // §279 — _load() стартует из onLocaleTemplateFetch (TemplateAwareState):
   // первый вызов — до первого build; смена локали — повторный _load()
   // (безопасно: буферы экрана staged в SettingsStorage-кэш на каждую мутацию
@@ -176,6 +208,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _strategy = s.strategy;
       _dnsFinal = s.dnsFinal;
       _defaultResolver = s.defaultResolver;
+      _cacheCapacity = s.cacheCapacity;
+      _optimistic = s.optimistic;
+      _storeCache = s.storeCache;
+      _cacheCapacityError = '';
+      _cacheCapacityCtl.text = s.cacheCapacity;
       _loading = false;
     });
     // §121: исчезнувший resolver-tag сброшен → persist (config dirty).
@@ -196,6 +233,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       strategy: _strategy,
       dnsFinal: _dnsFinal,
       defaultResolver: _defaultResolver,
+      cacheCapacity: _cacheCapacity,
+      optimistic: _optimistic,
+      storeCache: _storeCache,
     );
   }
 
@@ -723,9 +763,50 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
               }),
             ),
 
+          // §580 — кэш DNS ядра: размер, устаревшие ответы, хранение в
+          // cache.db. Изменение помечает конфиг к пересборке.
+          const Divider(height: 32),
+          TextField(
+            key: const ValueKey('dns_cache_capacity'),
+            controller: _cacheCapacityCtl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: getLocalText.s("DNS cache size"),
+              helperText: getLocalText.s("Number of cached answers."),
+              errorText:
+                  _cacheCapacityError.isEmpty ? null : _cacheCapacityError,
+              isDense: true,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: _applyCacheCapacity,
+          ),
+          SwitchListTile(
+            key: const ValueKey('dns_optimistic'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText.s("Serve stale answers")),
+            subtitle: Text(getLocalText.s(
+                "Answer from cache at once and refresh in the background.")),
+            value: _optimistic,
+            onChanged: (v) => setState(() {
+              _optimistic = v;
+              _markDirty();
+            }),
+          ),
+          SwitchListTile(
+            key: const ValueKey('dns_store_cache'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText.s("Keep DNS cache after restart")),
+            value: _storeCache,
+            onChanged: (v) => setState(() {
+              _storeCache = v;
+              _markDirty();
+            }),
+          ),
+
           // §263 — сброс DNS-кэша ядра (cache.db). Внизу экрана, отдельным
           // блоком: это разовое действие, не настройка конфига (не в rebuild).
-          const Divider(height: 32),
+          // §580: удаляется файл целиком — с ним и записи DNS (`store_dns`).
           ListTile(
             leading: Icon(Icons.cleaning_services_outlined,
                 color: Theme.of(context).colorScheme.error),

@@ -637,5 +637,23 @@
   },
   "MagicDNS of the tailnet": {
     "value": "MagicDNS сети tailnet"
+  },
+  "DNS cache size": {
+    "value": "Размер кэша DNS"
+  },
+  "Number of cached answers (1024..65535).": {
+    "value": "Число ответов в кэше (1024..65535)."
+  },
+  "Serve stale answers": {
+    "value": "Отдавать устаревшие ответы"
+  },
+  "Answer from cache at once and refresh in the background.": {
+    "value": "Сразу отвечать из кэша и обновлять запись в фоне."
+  },
+  "Keep DNS cache after restart": {
+    "value": "Сохранять кэш DNS после перезапуска"
+  },
+  "Store the DNS cache in cache.db so it survives a restart.": {
+    "value": "Хранить кэш DNS в cache.db, чтобы он переживал перезапуск."
   }
 }

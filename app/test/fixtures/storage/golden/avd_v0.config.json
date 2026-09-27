@@ -157,7 +157,9 @@
       }
     ],
     "final": "dns_shield",
-    "strategy": "ipv4_only"
+    "strategy": "ipv4_only",
+    "cache_capacity": 4000,
+    "optimistic": true
   },
   "inbounds": [
     {
@@ -545,7 +547,8 @@
     "cache_file": {
       "enabled": true,
       "path": "cache.db",
-      "store_fakeip": true
+      "store_fakeip": true,
+      "store_dns": true
     }
   },
   "services": [

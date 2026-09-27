@@ -199,7 +199,9 @@
       }
     ],
     "final": "my-doh",
-    "strategy": "prefer_ipv4"
+    "strategy": "prefer_ipv4",
+    "cache_capacity": 4000,
+    "optimistic": true
   },
   "inbounds": [
     {
@@ -969,7 +971,8 @@
     "cache_file": {
       "enabled": true,
       "path": "cache.db",
-      "store_fakeip": true
+      "store_fakeip": true,
+      "store_dns": true
     }
   },
   "services": [

@@ -238,6 +238,22 @@ Future<BuildResult> buildConfig({
 String _renderTemplateWarning(TemplateWarning w) =>
     'Template: ${RegistryWarning(code: w.code, params: w.params).renderEn()}';
 
+/// §580 — границы int-переменных шаблона, у которых они есть
+/// (TEMPLATE_LANG §6.8). Экран не сохраняет значение вне границ, сборка его
+/// не подставляет.
+const Map<String, (int, int)> kVarIntBounds = {
+  'dns_cache_capacity': (1024, 65535),
+};
+
+/// Значение [raw] переменной [name] — целое в её границах (переменная без
+/// границ — всегда да).
+bool varIntInBounds(String name, String raw) {
+  final b = kVarIntBounds[name];
+  if (b == null) return true;
+  final n = int.tryParse(raw.trim());
+  return n != null && n >= b.$1 && n <= b.$2;
+}
+
 Future<BuildResult> _buildConfig({
   required List<ServerList> lists,
   required BuildSettings settings,
@@ -264,6 +280,14 @@ Future<BuildResult> _buildConfig({
             ? v.defaultValue
             : raw;
     byName[v.name] = v;
+  }
+  // §580 (TEMPLATE_LANG §6.8) — сохранённое вне границ (правка файла руками,
+  // импорт) в конфиг не уходит: действует значение по умолчанию шаблона.
+  for (final e in kVarIntBounds.entries) {
+    final v = byName[e.key];
+    final raw = vars[e.key];
+    if (v == null || raw == null) continue;
+    if (!varIntInBounds(e.key, raw)) vars[e.key] = v.defaultValue;
   }
   // Также пропускаем user-override'ы, которые могут прийти вне template.vars
   // (например, clash_api/secret, сохранённые раньше).

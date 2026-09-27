@@ -195,4 +195,55 @@ void main() {
           isNot(contains('home-ts-dns')));
     });
   });
+
+  // §580 — кэш DNS: три переменные новые, у сохранённого состояния их нет.
+  group('§580 кэш DNS', () {
+    test('сохранённое состояние без переменных — значения по умолчанию',
+        () async {
+      await SettingsStorage.setVar('dns_strategy', 'prefer_ipv4');
+      await SettingsStorage.setVar('dns_final', 'cloudflare_udp');
+      final snap = await DnsController.load();
+      expect(snap.cacheCapacity, '4000');
+      expect(snap.optimistic, isTrue);
+      expect(snap.storeCache, isTrue);
+    });
+
+    test('сохранённое вне границ — значение по умолчанию', () async {
+      await SettingsStorage.setVar('dns_cache_capacity', '100');
+      final snap = await DnsController.load();
+      expect(snap.cacheCapacity, '4000');
+    });
+
+    Future<void> stageCache(String capacity, bool opt, bool store) =>
+        DnsController.stage(
+          servers: const [],
+          rules: const [],
+          templateRulesByName: const {},
+          presetRulesByPresetId: const {},
+          strategy: 'ipv4_only',
+          dnsFinal: 'dns_shield',
+          defaultResolver: 'dns_shield',
+          cacheCapacity: capacity,
+          optimistic: opt,
+          storeCache: store,
+        );
+
+    test('stage() пишет три переменные и помечает конфиг', () async {
+      SettingsStorage.configDirty = false;
+      await stageCache('8192', false, false);
+      expect(await SettingsStorage.getVar('dns_cache_capacity', ''), '8192');
+      expect(await SettingsStorage.getVar('dns_optimistic', ''), 'false');
+      expect(await SettingsStorage.getVar('dns_store_cache', ''), 'false');
+      expect(SettingsStorage.configDirty, isTrue);
+      final snap = await DnsController.load();
+      expect(snap.cacheCapacity, '8192');
+      expect(snap.optimistic, isFalse);
+      expect(snap.storeCache, isFalse);
+    });
+
+    test('stage() не сохраняет размер вне границ', () async {
+      await stageCache('70000', true, true);
+      expect(await SettingsStorage.getVar('dns_cache_capacity', ''), '');
+    });
+  });
 }

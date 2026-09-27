@@ -105,11 +105,13 @@ wizard_template.json
 │   ├─ log                         object{2 keys}
 │   │   ├─ level                   "@log_level"
 │   │   └─ timestamp               bool
-│   ├─ dns                         object{4 keys}       an empty shell, filled in by the builder
+│   ├─ dns                         object{6 keys}       an empty shell, filled in by the builder
 │   │   ├─ servers[]               list          [] — filled in from the storage dns.servers plus selectable_rules
 │   │   ├─ rules[]                 list          [] — the same
 │   │   ├─ final                   "@dns_final"
-│   │   └─ strategy                "@dns_strategy"
+│   │   ├─ strategy                "@dns_strategy"
+│   │   ├─ cache_capacity          "@dns_cache_capacity"   §580 — entries, 1024..65535
+│   │   └─ optimistic              "@dns_optimistic"       §580 — serve stale answers
 │   ├─ inbounds[]                  list[1]       tun definition
 │   │   └─ <SingboxTunInbound>     object
 │   │       ├─ type                "tun"
@@ -137,7 +139,8 @@ wizard_template.json
 │   │   ├─ final                   tag           default selector ("vpn-1")
 │   │   └─ auto_detect_interface   "@auto_detect_interface"
 │   └─ experimental                object{1 keys}
-│       └─ cache_file              object          {enabled:true, path:"cache.db"}
+│       └─ cache_file              object          {enabled:true, path:"cache.db", store_fakeip:true,
+│                                                   store_dns:"@dns_store_cache"}  §580
 │                                                  (clash_api was REMOVED in §122 — the block in a custom template
 │                                                   kills the core's startup: "clash api is not included in this build")
 │
@@ -588,6 +591,24 @@ top-level rule_set form is our convention.
 The full normative specification is `contract/docs/TEMPLATE_LANG.md`; both apps
 are verified against the shared corpus `contract/corpus/template/`.
 
+### DNS cache variables (§580)
+
+Three vars of the `dns` section, shown on the DNS screen next to Clear DNS
+cache (`wizard_ui: fix`); the norm is `TEMPLATE_LANG.md` §6.8, the names and
+defaults are the same in the launcher.
+
+| Var | Type | Default | Allowed | Config field |
+|---|---|---|---|---|
+| `dns_cache_capacity` | `int` | `4000` | 1024..65535 | `dns.cache_capacity` |
+| `dns_optimistic` | `bool` | `true` | | `dns.optimistic` |
+| `dns_store_cache` | `bool` | `true` | | `experimental.cache_file.store_dns` |
+
+The DNS screen does not save a size outside the bounds; a stored value outside
+them (a hand-edited file, an import) is not substituted, the default applies
+(`kVarIntBounds` in `build_config.dart`). State without these vars gets the
+defaults. `optimistic` is only a bool: the object form of the core is not used,
+the stale-answer lifetime is the core's.
+
 ### `on_change` — a var's declarative side effect (§232 / §266)
 
 Toggling a var can set derived vars. The syntax reuses the existing `#if` (value/else),
@@ -721,7 +742,9 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
     "servers":  [],                              // empty; filled in from the storage dns.servers plus selectable_rules[].dns_servers
     "rules":    [],                              // empty; filled in from the storage dns.rules plus selectable_rules[].dns_rules
     "final":    "@dns_final",
-    "strategy": "@dns_strategy"
+    "strategy": "@dns_strategy",
+    "cache_capacity": "@dns_cache_capacity",      // §580
+    "optimistic":     "@dns_optimistic"           // §580
   },
   "inbounds": [
     {"type": "tun", "tag": "tun-in", "interface_name": "...", "address": "...", "mtu": ..., "auto_route": ..., "strict_route": ..., "stack": "..."}
@@ -752,7 +775,7 @@ The base of the final sing-box config. It carries `@var` placeholders; the subst
     // the libbox CommandClient, not an HTTP Clash API. The core is built WITHOUT
     // with_clash_api: an experimental.clash_api block in a custom template is a FATAL
     // startup failure ("clash api is not included in this build"). Do not add it.
-    "cache_file": {"enabled": true, "path": "..."}
+    "cache_file": {"enabled": true, "path": "...", "store_fakeip": true, "store_dns": "@dns_store_cache"}
   }
 }
 ```

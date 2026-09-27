@@ -5282,5 +5282,20 @@
   },
   "This node has no exit. Check devices on the Network tab.": {
     "value": "此节点没有出口。请在“网络”标签页检查设备。"
+  },
+  "DNS cache size": {
+    "value": "DNS 缓存大小"
+  },
+  "Number of cached answers.": {
+    "value": "缓存的应答条数。"
+  },
+  "Serve stale answers": {
+    "value": "返回过期应答"
+  },
+  "Answer from cache at once and refresh in the background.": {
+    "value": "立即用缓存应答，并在后台刷新。"
+  },
+  "Keep DNS cache after restart": {
+    "value": "重启后保留 DNS 缓存"
   }
 }

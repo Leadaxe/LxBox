@@ -16,6 +16,16 @@
   list. Picking an exit node switches it on the fly without touching the
   node; Save choice writes it into the node. Diagnostics no longer offers the
   external-URL check on a node without an exit.
+
+- **DNS cache settings ([task 580](docs/spec/tasks/580-dns-cache-settings.md)).**
+  The DNS screen gets three settings next to Clear DNS cache: `DNS cache size`
+  (entries, 1024..65535, default 4000), `Serve stale answers` (answer from cache
+  at once and refresh in the background, on by default) and `Keep DNS cache
+  after restart` (the cache is stored in `cache.db`, on by default). The config
+  gets `dns.cache_capacity`, `dns.optimistic` and
+  `experimental.cache_file.store_dns`. Existing installs get the defaults; the
+  three settings travel in backups. Contract 1.1.97.
+
 - **NETWORKS on Home ([task 579](docs/spec/tasks/579-networks-pseudo-direction.md)).**
   A Tailscale node without an exit node is in no Direction, so Home did not show it.
   While the VPN is on, such nodes are now listed under `NETWORKS`, the last entry of

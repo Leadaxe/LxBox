@@ -703,6 +703,30 @@
           "wizard_ui": "fix",
           "title": "DNS final",
           "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule.\n\n  • dns_shield — default; races 6 encrypted providers, answers from whichever replies first\n  • google_doh, cloudflare_dot — encrypted, single provider\n  • cloudflare_udp, google_udp — fast plain UDP\n\nlocal_dns_resolver (system DNS) is safe here."
+        },
+        {
+          "name": "dns_cache_capacity",
+          "type": "int",
+          "default_value": "4000",
+          "wizard_ui": "fix",
+          "title": "DNS cache size",
+          "tooltip": "Number of cached answers (1024..65535)."
+        },
+        {
+          "name": "dns_optimistic",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "fix",
+          "title": "Serve stale answers",
+          "tooltip": "Answer from cache at once and refresh in the background."
+        },
+        {
+          "name": "dns_store_cache",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "fix",
+          "title": "Keep DNS cache after restart",
+          "tooltip": "Store the DNS cache in cache.db so it survives a restart."
         }
       ]
     },
@@ -969,7 +993,9 @@
       "servers": [],
       "rules": [],
       "final": "@dns_final",
-      "strategy": "@dns_strategy"
+      "strategy": "@dns_strategy",
+      "cache_capacity": "@dns_cache_capacity",
+      "optimistic": "@dns_optimistic"
     },
     "inbounds": [
       {
@@ -1075,7 +1101,8 @@
       "cache_file": {
         "enabled": true,
         "path": "cache.db",
-        "store_fakeip": true
+        "store_fakeip": true,
+        "store_dns": "@dns_store_cache"
       }
     },
     "services": [

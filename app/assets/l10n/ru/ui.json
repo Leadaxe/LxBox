@@ -5491,5 +5491,20 @@
   },
   "This node has no exit. Check devices on the Network tab.": {
     "value": "У этого узла нет выхода. Проверяйте устройства на вкладке «Сеть»."
+  },
+  "DNS cache size": {
+    "value": "Размер кэша DNS"
+  },
+  "Number of cached answers.": {
+    "value": "Число ответов в кэше."
+  },
+  "Serve stale answers": {
+    "value": "Отдавать устаревшие ответы"
+  },
+  "Answer from cache at once and refresh in the background.": {
+    "value": "Сразу отвечать из кэша и обновлять запись в фоне."
+  },
+  "Keep DNS cache after restart": {
+    "value": "Сохранять кэш DNS после перезапуска"
   }
 }
