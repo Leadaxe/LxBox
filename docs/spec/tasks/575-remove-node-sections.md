@@ -5,7 +5,7 @@
 | Статус | Реализовано (фазы 1–3) |
 | Дата старта | 2026-09-27 |
 | Дата завершения | 2026-09-27 |
-| Коммиты | фаза 1 `e71a7a69`, фаза 2 `7dbe4306`, фаза 3 — этот коммит |
+| Коммиты | фаза 1 `e71a7a69`, фаза 2 `7dbe4306`, фаза 3 `eec659fa` |
 | Контракт | Требует запроса в контракт: отмена нормы `NODE_SECTIONS.md` §1 (носители), §6 (связка Tailscale), E1 |
 | Связанные spec'ы | [§578](578-tailscale-preset-template-for-each.md) (пресет Tailscale, выходит в одном релизе), [§576](576-node-source-is-bare-body.md), [§435](435-node-sections-tailscale.md) (отменена этой задачей), [§437](437-tailscale-bundle-import.md), [§438](438-lx-backup-1-0-read-write.md), [§445](445-tailscale-state-dir-lifecycle.md) (остаётся), [§449](449-tailscale-default-hostname.md) (остаётся) |
 
