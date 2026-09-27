@@ -9,6 +9,8 @@ import '../services/tailscale_network.dart';
 import '../services/url_launcher.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
+import 'app_bottom_sheet.dart';
+import 'safe_bottom.dart';
 
 /// Задача 581 — вызовы ядра вкладки Network. Отдельно от [CcChannel], чтобы
 /// тесты подставляли свои.
@@ -188,7 +190,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
       rows.addAll(devices);
     }
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 24).withSafeBottom(context),
       itemCount: children.length + rows.length,
       itemBuilder: (ctx, i) {
         if (i < children.length) return children[i];
@@ -468,31 +470,29 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
   }
 
   Future<void> _deviceMenu(CcTailscalePeer p) async {
-    final action = await showModalBottomSheet<String>(
+    final action = await showAppBottomSheet<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.copy),
+            title: Text(getLocalText.s("Copy name")),
+            onTap: () => Navigator.pop(ctx, 'name'),
+          ),
+          if (p.firstIp.isNotEmpty)
             ListTile(
-              leading: const Icon(Icons.copy),
-              title: Text(getLocalText.s("Copy name")),
-              onTap: () => Navigator.pop(ctx, 'name'),
+              leading: const Icon(Icons.copy_all),
+              title: Text(getLocalText.s("Copy address")),
+              onTap: () => Navigator.pop(ctx, 'address'),
             ),
-            if (p.firstIp.isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.copy_all),
-                title: Text(getLocalText.s("Copy address")),
-                onTap: () => Navigator.pop(ctx, 'address'),
-              ),
-            if (p.firstIp.isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.network_ping),
-                title: Text(getLocalText.s("Ping")),
-                onTap: () => Navigator.pop(ctx, 'ping'),
-              ),
-          ],
-        ),
+          if (p.firstIp.isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.network_ping),
+              title: Text(getLocalText.s("Ping")),
+              onTap: () => Navigator.pop(ctx, 'ping'),
+            ),
+        ],
       ),
     );
     if (!mounted) return;
@@ -502,7 +502,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab> {
       case 'address':
         await _copy(p.firstIp);
       case 'ping':
-        await showModalBottomSheet<void>(
+        await showAppBottomSheet<void>(
           context: context,
           builder: (_) => TailscalePingSheet(
             tag: widget.liveTag,
