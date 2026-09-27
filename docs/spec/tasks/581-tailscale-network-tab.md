@@ -5,7 +5,7 @@
 | Статус | Implemented (проверка на устройстве: DEVICE-PENDING) |
 | Дата старта | 2026-09-27 |
 | Дата завершения | — |
-| Коммиты | — |
+| Коммиты | 8a0d7f12 |
 | Контракт | Не затрагивается: форма конфига и реестр не меняются |
 | Связанные spec'ы | [§579](579-networks-pseudo-direction.md) (мост состояния узла), [§578](578-tailscale-preset-template-for-each.md), [features/392](../features/392%20node-diagnostics/spec.md) (вкладка Diagnostics) |
 
