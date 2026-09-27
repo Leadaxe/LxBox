@@ -5,7 +5,7 @@
 | Статус | Implemented (проверка на устройстве: DEVICE-PENDING) |
 | Дата старта | 2026-09-27 |
 | Дата завершения | — |
-| Коммиты | см. «Реализация» |
+| Коммиты | 298b3000 |
 | Контракт | Не затрагивается: конфиг не меняется |
 | Связанные spec'ы | [§578](578-tailscale-preset-template-for-each.md) (пресет Tailscale), [§435](435-node-sections-tailscale.md) (узел без выхода не идёт в пул Направлений), [features/392](../features/392%20node-diagnostics/spec.md) |
 
