@@ -1470,6 +1470,21 @@ the Add Server Wizard's Tailscale mode.
   a candidate like any other node.
 - **Probe:** not tested (no address; a probe config would have to join the tailnet) — “—” instead
   of a delay.
+- **Companion records (preset, §578):** the template preset `tailscale` (on by default,
+  `ui.num` 945) serves every Tailscale node in the config through `for_each` (see
+  TEMPLATE.md): for each node a route rule `preferred_by: [<node>] → <node>`, a DNS server
+  `{type: tailscale, tag: <node>-dns, endpoint: <node>}`, a DNS rule
+  `preferred_by: [<node>] → <node>-dns` and a non-terminal `resolve` through that server
+  right before the route rule. The DNS part follows the preset's `dns_enable` switch. The
+  condition `preferred_by` asks the endpoint whether an address or a name is its own, and
+  Tailscale answers from the live tailnet state (machine names, machine addresses, accepted
+  subnets with `accept_routes`), so the preset carries no fixed subnets and no `.ts.net`
+  suffix (launcher decision D-120). It matches only once the tailnet is up; until then the
+  traffic follows the other rules. Two nodes in one tailnet claim the same machines, and the
+  first by config order wins. A subscription node is served too. A server or a folder
+  member opts out with the record field `skip_presets` (the **Skip presets** switch on the
+  node screen, STORAGE.md). The DNS server tag stays `<node>-dns`, so user references to it
+  keep working. The preset replaces the node sections below, which §575 removes.
 - **Companion records (sections):** a Tailscale node carries a DNS server
   `{type: tailscale, endpoint: @self}`, a DNS rule for `.ts.net` and a route rule matching
   `.ts.net` **or** the tailnet subnets (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) → `@self`, with a

@@ -3817,6 +3817,15 @@
   "Sections cleared": {
     "value": "区块已清除"
   },
+  "Skip presets": {
+    "value": "跳过预设"
+  },
+  "Presets will not add routing or DNS rules for this node.": {
+    "value": "预设不会为此节点添加路由或 DNS 规则。"
+  },
+  "No matching nodes": {
+    "value": "没有匹配的节点"
+  },
   "Select a %s file": {
     "value": "选择 %s 文件"
   },

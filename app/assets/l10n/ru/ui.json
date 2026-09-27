@@ -4035,6 +4035,15 @@
   "Sections cleared": {
     "value": "Секции очищены"
   },
+  "Skip presets": {
+    "value": "Пропускать пресеты"
+  },
+  "Presets will not add routing or DNS rules for this node.": {
+    "value": "Пресеты не будут добавлять правила маршрутизации и DNS для этого узла."
+  },
+  "No matching nodes": {
+    "value": "Нет подходящих узлов"
+  },
   "Select a %s file": {
     "value": "Выберите файл %s"
   },

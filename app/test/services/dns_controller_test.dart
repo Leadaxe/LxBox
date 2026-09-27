@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/services/builder/preset_expand.dart' show PresetNode;
 import 'package:lxbox/services/dns/dns_controller.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -144,6 +146,53 @@ void main() {
       expect(snap.resolverReset, isTrue);
       expect(snap.dnsFinal, defaults['dns_final']);
       expect(snap.defaultResolver, defaults['dns_default_domain_resolver']);
+    });
+  });
+
+  // §578 — серверы пресета с `for_each` видны на экране DNS как серверы
+  // остальных пресетов; запись хранения без `preset_id` (тег `<узел>-dns`
+  // без пространства), владелец — из пометки `_preset_id` тела.
+  group('§578 пресет с for_each', () {
+    Future<void> seedTailscalePreset() async {
+      await SettingsStorage.saveCustomRules([
+        CustomRulePreset(
+            name: 'Tailscale networks', presetId: 'tailscale', orderNum: 945),
+      ]);
+    }
+
+    test('серверы по узлам, хранение без preset_id, владелец из тела',
+        () async {
+      await seedTailscalePreset();
+      final snap = await DnsController.load(presetNodes: const [
+        PresetNode(tag: 'home-ts', body: {'type': 'tailscale'}),
+        PresetNode(tag: 'vless-a', body: {'type': 'vless'}),
+        PresetNode(tag: 'work-ts', body: {'type': 'tailscale'}),
+      ]);
+
+      expect(snap.presetServedTagsByPresetId['tailscale'],
+          ['home-ts', 'work-ts']);
+      expect(snap.presetServersByTag.keys,
+          containsAll(['home-ts-dns', 'work-ts-dns']));
+      expect(snap.presetServersByTag['home-ts-dns']!['_preset_id'],
+          'tailscale');
+      final stored = (await SettingsStorage.getDnsServers())
+          .whereType<DnsServerPreset>()
+          .where((s) => s.tag.endsWith('-ts-dns'))
+          .toList();
+      expect([for (final s in stored) s.tag], ['home-ts-dns', 'work-ts-dns']);
+      // Тег не достроен до `tailscale:<тег>`.
+      expect(stored.every((s) => !s.tag.startsWith('tailscale:')), isTrue);
+    });
+
+    test('узел с skip_presets не обслуживается, узлов нет — пусто', () async {
+      await seedTailscalePreset();
+      final snap = await DnsController.load(presetNodes: const [
+        PresetNode(
+            tag: 'home-ts', body: {'type': 'tailscale'}, skipPresets: true),
+      ]);
+      expect(snap.presetServedTagsByPresetId['tailscale'], isEmpty);
+      expect(snap.presetServersByTag.keys.where((t) => t.endsWith('-dns')),
+          isNot(contains('home-ts-dns')));
     });
   });
 }

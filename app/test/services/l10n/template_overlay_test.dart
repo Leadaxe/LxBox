@@ -208,6 +208,72 @@ void main() {
     });
   });
 
+  // §578 — dns_servers[] тела пресета: плоский сервер, условная обёртка
+  // `#if/#value/#else`, тег-`#tpl` (пресет с `for_each`).
+  group('preset dns_servers', () {
+    Map<String, dynamic> presetWith(List<dynamic> servers) => {
+          'selectable_rules': [
+            {
+              'preset_id': 'p',
+              'ui': {'label': 'P'},
+              'dns_servers': servers,
+            },
+          ],
+        };
+
+    Map<String, dynamic> serversOf(Map<String, dynamic> t, int i) =>
+        (((t['selectable_rules'] as List).first as Map)['dns_servers']
+            as List)[i] as Map<String, dynamic>;
+
+    test('flat server: extracted and localized as before', () {
+      final t = presetWith([
+        {'type': 'udp', 'tag': 'flat', 'description': 'Flat server'},
+      ]);
+      expect(TemplateOverlay.extract(t), containsPair('Flat server', 'Flat server'));
+      TemplateOverlay.apply(t, {'Flat server': 'Плоский'});
+      expect(serversOf(t, 0)['description'], 'Плоский');
+    });
+
+    test('server inside #if: #value and #else branches', () {
+      final t = presetWith([
+        {
+          '#if': {
+            '#and': ['@dns_enable'],
+            '#value': {'tag': 'a', 'description': 'On branch'},
+            '#else': {'tag': 'b', 'description': 'Off branch'},
+          },
+        },
+      ]);
+      final m = TemplateOverlay.extract(t);
+      expect(m.keys, containsAll(['On branch', 'Off branch']));
+      TemplateOverlay.apply(t, {'On branch': 'Вкл', 'Off branch': 'Выкл'});
+      final cond = serversOf(t, 0)['#if'] as Map;
+      expect((cond['#value'] as Map)['description'], 'Вкл');
+      expect((cond['#else'] as Map)['description'], 'Выкл');
+      expect(cond['#and'], ['@dns_enable']); // условие не тронуто
+    });
+
+    test('server with #tpl tag: localized, tag object untouched', () {
+      final t = presetWith([
+        {
+          '#if': {
+            '#and': ['@dns_enable'],
+            '#value': {
+              'type': 'tailscale',
+              'tag': {'#tpl': '@{node}-dns'},
+              'description': 'MagicDNS of the tailnet',
+            },
+          },
+        },
+      ]);
+      expect(TemplateOverlay.extract(t).keys, contains('MagicDNS of the tailnet'));
+      TemplateOverlay.apply(t, {'MagicDNS of the tailnet': 'MagicDNS сети'});
+      final body = (serversOf(t, 0)['#if'] as Map)['#value'] as Map;
+      expect(body['description'], 'MagicDNS сети');
+      expect(body['tag'], {'#tpl': '@{node}-dns'});
+    });
+  });
+
   group('parseLocaleFile', () {
     test('accepts {value} object entries and flat strings', () {
       final m = TemplateOverlay.parseLocaleFile({

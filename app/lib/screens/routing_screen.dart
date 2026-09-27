@@ -14,12 +14,14 @@ import '../models/direction.dart';
 import '../models/custom_rule.dart';
 import '../models/dns_ref.dart';
 import '../models/parser_config.dart';
+import '../services/builder/preset_expand.dart' show PresetNode;
 import '../services/builder/rule_order.dart';
 import '../services/direction_mutations.dart';
 import '../services/error_format.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
 import '../services/l10n/template_aware_state.dart';
+import '../services/preset_nodes_view.dart';
 import '../services/preset_on_change.dart';
 import '../services/rule_display_names.dart';
 import '../services/rule_set_downloader.dart';
@@ -170,8 +172,22 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   void _onSubControllerChanged() {
     if (!mounted || _loading) return;
-    if (_refreshNodeRules()) setState(() {});
+    final nodeRulesChanged = _refreshNodeRules();
+    // §578 — строка пресета с `for_each` показывает обслуживаемые узлы:
+    // правка источника (включение, `skip_presets`) её меняет.
+    if (nodeRulesChanged ||
+        forEachNodeTypes(_template?.selectableRules ?? const []).isNotEmpty) {
+      setState(() {});
+    }
   }
+
+  /// §578 — узлы источников для пресетов с `for_each` (строка пресета и
+  /// превью редактора), см. [presetNodesForView].
+  List<PresetNode> _presetViewNodes() => presetNodesForView(
+        [for (final e in widget.subController.entries) e.list],
+        nodeTypes: forEachNodeTypes(_template?.selectableRules ?? const []),
+        lastEmittedTagMap: widget.subController.lastEmittedTagMap,
+      );
 
   /// §435 — перечитать `_nodeRules` из источников контроллера. Список
   /// заменяется всегда (ссылки на записи владельцев обновляются после
@@ -1134,7 +1150,13 @@ class _RoutingScreenState extends State<RoutingScreen>
     final preset = rule.kind == CustomRuleKind.preset
         ? _presetFor(rule.presetId)
         : null;
-    final subtitle = _ruleSubtitle(rule, preset);
+    // §578 — у пресета с `for_each` подпись — обслуживаемые узлы.
+    final servedTags = rule is CustomRulePreset && preset != null
+        ? presetServedTags(rule, preset, _presetViewNodes())
+        : null;
+    final subtitle = servedTags != null
+        ? presetServedNodesLabel(servedTags)
+        : _ruleSubtitle(rule, preset);
     final pickerValue = rule.kind == CustomRuleKind.preset
         ? _presetOut(rule, preset)
         : rule.outbound;
@@ -1375,6 +1397,10 @@ class _RoutingScreenState extends State<RoutingScreen>
       preset: current.kind == CustomRuleKind.preset
           ? _presetFor(current.presetId)
           : null,
+      // §578 — превью пресета с `for_each` раскрывается по узлам.
+      presetNodes: current.kind == CustomRuleKind.preset
+          ? _presetViewNodes()
+          : const [],
       // §279 — display-имя для read-only Name-поля preset-ветки редактора
       // (live-label + порядковый суффикс копии).
       displayName: current.kind == CustomRuleKind.preset

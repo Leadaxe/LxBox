@@ -358,6 +358,17 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 `sections` (секции узла как хранятся, с плейсхолдерами `@self`; `null` — нет);
 read-only, PATCH его не принимает.
 
+§578 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поле записи
+`skip_presets` (bool): `true` — узел не обслуживают пресеты с `for_each`
+(пресет `tailscale`). Read-only, PATCH его не принимает; меняется переключателем
+Skip presets на экране узла.
+
+```bash
+# узлы с отметкой «пропустить пресеты»
+curl -s -H "$HDR" "$BASE/subs" \
+  | jq '.[] | select(.kind=="UserServer") | {id, skip_presets}'
+```
+
 **§524 — `GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
 же, что видит пользователь на экране Servers: подписки, серверы, папки **и
 цепочки** одним массивом. До §524 ответ нёс только контейнеры, а цепочки жили в
@@ -965,7 +976,7 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §435: `sections` члена в GET read-only, PATCH не принимает |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §435: `sections` члена в GET read-only, PATCH не принимает; §578: `skip_presets` тоже read-only |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |

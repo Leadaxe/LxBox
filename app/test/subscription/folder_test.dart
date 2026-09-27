@@ -412,6 +412,35 @@ void main() {
       expect(back.detourPolicy.overrideDetour, const NodeLink(tag: 'Jump2'));
     });
 
+    test('§578 setSkipPresets: одиночный и член папки, персист и пометка',
+        () async {
+      final c = await makeController();
+      await c.addFromInput(uriA);
+      c.configDirty = false;
+      expect(await c.setSkipPresets(0, null, true), isNull);
+      expect((c.entries.single.list as UserServer).skipPresets, isTrue);
+      expect(c.configDirty, isTrue);
+      expect(
+          ((await SettingsStorage.getServerLists()).single as UserServer)
+              .skipPresets,
+          isTrue);
+
+      await c.addFolder('F');
+      await c.moveServerToFolder(0, 1);
+      c.configDirty = false;
+      expect(await c.setSkipPresets(0, 0, false), isNull);
+      var folder = c.entries.single.list as FolderServers;
+      expect(folder.members.single.skipPresets, isFalse);
+      expect(c.configDirty, isTrue);
+      expect(await c.setSkipPresets(0, 0, true), isNull);
+      final saved =
+          (await SettingsStorage.getServerLists()).single as FolderServers;
+      expect(saved.members.single.skipPresets, isTrue);
+      // Член вне диапазона и папка как одиночный — ошибка, без записи.
+      expect(await c.setSkipPresets(0, 5, true), isNotNull);
+      expect(await c.setSkipPresets(0, null, true), isNotNull);
+    });
+
     test('§239 setMemberDetour: self и цикл отклоняются, интра хранится парой',
         () async {
       final c = await makeController();

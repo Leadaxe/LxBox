@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
+import '../services/builder/preset_expand.dart' show PresetNode;
 import '../services/settings_storage.dart';
 import '../services/ui_helpers.dart';
 import '../services/url_launcher.dart' as ul;
@@ -42,9 +43,14 @@ class CustomRuleEditScreen extends StatefulWidget {
     required this.existingNames,
     this.preset,
     this.displayName,
+    this.presetNodes = const [],
   });
 
   final CustomRule initial;
+
+  /// §578 — узлы для превью пресета с `for_each` (View-таб), тот же отбор,
+  /// что у строки пресета на экране маршрутов.
+  final List<PresetNode> presetNodes;
   final List<OutboundOption> outboundOptions;
   final Set<String> existingNames;
 
@@ -81,6 +87,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
       preset: widget.preset,
       existingNames: widget.existingNames,
       displayName: widget.displayName,
+      presetNodes: widget.presetNodes,
     );
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshWifiHint());
@@ -506,6 +513,7 @@ Future<CustomRuleEditResult?> openCustomRuleEditor(
   required Set<String> existingNames,
   SelectableRule? preset,
   String? displayName,
+  List<PresetNode> presetNodes = const [],
 }) async {
   final result = await Navigator.push<_CustomRuleEditResult>(
     context,
@@ -516,6 +524,7 @@ Future<CustomRuleEditResult?> openCustomRuleEditor(
         existingNames: existingNames,
         preset: preset,
         displayName: displayName,
+        presetNodes: presetNodes,
       ),
     ),
   );

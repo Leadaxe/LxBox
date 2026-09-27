@@ -8,7 +8,9 @@ import '../controllers/subscription_controller.dart';
 import '../models/codec/source_record.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/error_format.dart';
+import '../services/preset_nodes_view.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import '../models/direction.dart';
 import '../models/node_link.dart';
 import '../models/node_sections.dart';
@@ -99,6 +101,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// Разбор + хранимый вердикт (`core_rejected` и др.) для секции
   /// Notifications во вкладке Diagnostics.
   List<NodeWarning> _notifications = const [];
+
+  /// §578 — переключатель `Skip presets` виден: в шаблоне есть пресет с
+  /// `for_each` под тип этого узла (см. [skipPresetsToggleVisible]).
+  bool _skipPresetsVisible = false;
 
   @override
   void initState() {
@@ -203,6 +209,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // §248 — Направления для подписи «⚙ <label>» сохранённого Направления detour
     // (_pickDetour перечитывает свежий список перед показом пикера).
     _directions = await SettingsStorage.getDirections();
+
+    // §578 — видимость `Skip presets`: пресеты с `for_each` из шаблона.
+    try {
+      final template = await TemplateLoader.load();
+      _skipPresetsVisible = skipPresetsToggleVisible(
+        list: widget.entry.list,
+        isMember: member != null,
+        nodeType: node.protocol,
+        presets: template.selectableRules,
+      );
+    } catch (_) {
+      _skipPresetsVisible = false; // шаблон не загрузился — без переключателя
+    }
 
     // §239 — кандидаты живут в общем пикере (showDetourTargetPicker):
     // «свободные» одиночки + члены СВОЕЙ папки (для member-режима).
@@ -589,9 +608,48 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         ], // §322 — конец гейта detour-блока
         const SizedBox(height: 16),
+        ..._buildSkipPresetsBlock(theme),
         ..._buildSectionsBlock(theme),
       ],
     );
+  }
+
+  /// §578 — поле записи `skip_presets`, как хранит контейнер (одиночный —
+  /// `UserServer`, член — `FolderMember`). Читается при каждом build.
+  bool get _skipPresets {
+    final member = _member;
+    if (member != null) return member.skipPresets;
+    final list = widget.entry.list;
+    return list is UserServer && list.skipPresets;
+  }
+
+  /// §578 — переключатель `Skip presets`: узел не обслуживается пресетами с
+  /// `for_each`. Отдельный блок, не часть блока Sections.
+  List<Widget> _buildSkipPresetsBlock(ThemeData theme) {
+    if (!_skipPresetsVisible) return const [];
+    return [
+      SwitchListTile(
+        key: const ValueKey('node-skip-presets'),
+        secondary: const Icon(Icons.rule_folder_outlined, size: 20),
+        title: Text(getLocalText.s("Skip presets")),
+        subtitle: Text(getLocalText
+            .s("Presets will not add routing or DNS rules for this node.")),
+        value: _skipPresets,
+        onChanged: (v) => unawaited(_setSkipPresets(v)),
+      ),
+      const SizedBox(height: 16),
+    ];
+  }
+
+  Future<void> _setSkipPresets(bool value) async {
+    final err = await widget.subController
+        .setSkipPresets(widget.index, widget.memberIndex, value);
+    if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(err.render())));
+    }
+    setState(() {});
   }
 
   /// §435 — блок «Sections» (NODE_SECTIONS.md §7): счётчик записей,

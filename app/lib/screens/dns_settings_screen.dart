@@ -11,6 +11,7 @@ import '../services/dns/dns_controller.dart';
 import '../services/dns/node_dns_records.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
+import '../services/preset_nodes_view.dart';
 import '../services/preset_on_change.dart';
 import '../services/ui_helpers.dart';
 import '../services/settings_storage.dart';
@@ -89,6 +90,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// PresetId → label map для UI render'а title'а у `kind: preset` строк.
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
   Map<String, String> _presetLabelByPresetId = {};
+
+  /// §578 — пресет с `for_each` → обслуживаемые узлы (подпись строки).
+  Map<String, List<String>> _presetServedTagsByPresetId = {};
 
   /// §117: Направления для `type: outbound` vars DNS-серверов — Direct + активные
   /// Направления (решение №2). Активность = как в `_buildPresetGroups`:
@@ -179,7 +183,16 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   Future<void> _load() async {
     // §300 — вся read+derive-логика вынесена в DnsController.load() (тело
     // verbatim + типизация краёв §294). Экран только присваивает snapshot.
-    final s = await DnsController.load();
+    // §578 — узлы для пресетов с `for_each`: тот же отбор, что у строки
+    // пресета на экране маршрутов.
+    final template = await TemplateLoader.load();
+    final s = await DnsController.load(
+      presetNodes: presetNodesForView(
+        [for (final e in widget.subController.entries) e.list],
+        nodeTypes: forEachNodeTypes(template.selectableRules),
+        lastEmittedTagMap: widget.subController.lastEmittedTagMap,
+      ),
+    );
     if (!mounted) return;
     setState(() {
       _servers = s.servers;
@@ -189,6 +202,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _templateRulesByName = s.templateRulesByName;
       _presetRulesByPresetId = s.presetRulesByPresetId;
       _presetLabelByPresetId = s.presetLabelByPresetId;
+      _presetServedTagsByPresetId = s.presetServedTagsByPresetId;
       _presetDnsEnable = s.presetDnsEnable;
       _outboundOptions = s.outboundOptions;
       _customRules = s.customRules;
@@ -450,6 +464,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           onToggle: dnsEnable == null
               ? null
               : (v) => _togglePresetDnsEnable(cr.presetId, v),
+          // §578 — пресет с `for_each`: какие узлы он обслуживает.
+          note: switch (_presetServedTagsByPresetId[cr.presetId]) {
+            final List<String> tags => presetServedNodesLabel(tags),
+            null => null,
+          },
         ));
       } else {
         // §257: объединённый блок DNS-аспектов правила — заголовок = имя,

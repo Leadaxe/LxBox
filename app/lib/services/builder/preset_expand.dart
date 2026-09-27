@@ -199,27 +199,14 @@ PresetFragments expandPreset(
   if (resolvedVars.error != null) {
     return PresetFragments(warnings: [resolvedVars.error!]);
   }
-  final varsMap = resolvedVars.vars;
-  final parts = <PresetFragments>[];
-  for (final node in nodes) {
-    if (node.body['type'] != forEach.nodeType) continue;
-    final nodeVars = presetNodeResolver(forEach.as, node);
-    final filter = forEach.filter;
-    if (filter != null &&
-        !evalCond(deepCloneJson(filter), (name) {
-          final v = nodeVars(name);
-          if (v != null) return v;
-          if (!varsMap.containsKey(name)) return null;
-          return varsMap[name] ?? Dropped.instance;
-        })) {
-      continue;
-    }
-    parts.add(_expandPresetBody(rule, preset,
-        srsPaths: srsPaths,
-        globalVars: globalVars,
-        nodeVars: nodeVars,
-        namespace: false));
-  }
+  final parts = <PresetFragments>[
+    for (final node in _forEachMatches(forEach, nodes, resolvedVars.vars))
+      _expandPresetBody(rule, preset,
+          srsPaths: srsPaths,
+          globalVars: globalVars,
+          nodeVars: presetNodeResolver(forEach.as, node),
+          namespace: false),
+  ];
   return PresetFragments(
     dnsServers: [for (final p in parts) ...p.dnsServers],
     dnsRules: [for (final p in parts) ...p.dnsRules],
@@ -228,6 +215,46 @@ PresetFragments expandPreset(
     // Одна и та же строка от каждого повтора — одна запись.
     warnings: {for (final p in parts) ...p.warnings}.toList(),
   );
+}
+
+/// §578 — узлы, которые обслуживает пресет с `for_each`: `type` тела равен
+/// `node_type`, `filter` истинен. Порядок — порядок [nodes]. Пресет без
+/// `for_each` или с ошибкой переменных — пусто. Та же выборка, что у
+/// [expandPreset]: экраны маршрутов и DNS показывают по ней, какие узлы
+/// обслуживает пресет.
+List<PresetNode> presetForEachNodes(
+  CustomRulePreset rule,
+  SelectableRule preset,
+  List<PresetNode> nodes, {
+  Map<String, String> globalVars = const {},
+}) {
+  final forEach = preset.forEach;
+  if (forEach == null) return const [];
+  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  if (resolvedVars.error != null) return const [];
+  return _forEachMatches(forEach, nodes, resolvedVars.vars).toList();
+}
+
+Iterable<PresetNode> _forEachMatches(
+  PresetForEach forEach,
+  List<PresetNode> nodes,
+  Map<String, dynamic> varsMap,
+) sync* {
+  for (final node in nodes) {
+    if (node.body['type'] != forEach.nodeType) continue;
+    final filter = forEach.filter;
+    if (filter != null) {
+      final nodeVars = presetNodeResolver(forEach.as, node);
+      final ok = evalCond(deepCloneJson(filter), (name) {
+        final v = nodeVars(name);
+        if (v != null) return v;
+        if (!varsMap.containsKey(name)) return null;
+        return varsMap[name] ?? Dropped.instance;
+      });
+      if (!ok) continue;
+    }
+    yield node;
+  }
 }
 
 /// §578 — узел конфига для `for_each`: финальный тег, тело записи в конфиге

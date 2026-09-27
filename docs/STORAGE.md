@@ -106,6 +106,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
 ├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
+├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
 ├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
 ├─ node_sort_mode                string        §100 — the chosen node sort mode ('' means the template default)
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
@@ -207,6 +208,7 @@ Android SharedPreferences:
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
   "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
+  "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
   "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
@@ -626,6 +628,7 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
                                               // anything else → uri. The node is re-parsed from raw on load.
   "detour":        { "tag": "vpn-2" },        // personal detour, a NodeLink; absent = none
   "sections":      { … },                     // §435 — optional, see “Node sections” below
+  "skip_presets":  true,                      // §578 — optional, only `true` is written; see below
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
                                               // server's root address: changing it rewrites the
@@ -654,6 +657,17 @@ imported backup is ignored and the node is re-parsed from `origin.raw`
 (BACKUP §9 p.2). No flag: the kind is derived from the text, so replacing the
 source with a JSON object (the editor's "Edit JSON" button) is what switches
 the mode, and pasting a link back switches it off.
+
+**`skip_presets` (§578).** A record field of a server and of a folder member:
+the node is not served by presets with `for_each` whose `filter` reads the
+field (the shipped `tailscale` preset does). Only `true` is written; a missing
+field means the node is served. The field travels in a backup: on import a node
+matched by its body takes `true` from the file, and a missing field does not
+reset the local value (only `true` is stored, so absence cannot be told from
+`false`). A subscription node has no record and is always served. The UI is the
+**Skip presets** switch on the node screen, shown when the template has a
+`for_each` preset for the node's type; the Debug API returns the field in the
+node record.
 
 #### Node sections (§435, contract ## 13)
 
@@ -718,7 +732,8 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
   "nodes": [                                    // the order here is the order in the UI
     { "kind": "server", "tag": "Alpha", "enabled": true,
       "origin": { "kind": "uri", "raw": "vless://…#Alpha" },
-      "detour": { "folder_id": "<this folder id>", "tag": "Jump" } },  // §237 — personal detour
+      "detour": { "folder_id": "<this folder id>", "tag": "Jump" },    // §237 — personal detour
+      "skip_presets": true },                                          // §578 — as on a server
     { "kind": "server", "tag": "Beta", "enabled": false,
       "origin": { "kind": "wg_ini", "raw": "[Interface]\n…" },
       "warnings": [ { "code": "core_rejected",
@@ -1087,7 +1102,7 @@ the model's own words (`inline`, `rule`, `presetId`, `varValues`) and a dead `ru
 ```
 
 - `template` — a reference to a server from the template ([§117]: a `{vars, server}` wrapper, with the tag in `server.tag`). The user can override `enabled` and `description` and choose var values (`vars`: the `outbound` direction, the IP profile, the domain resolver — see TEMPLATE.md); the body is resolved from the template by substituting the `@var`s (`resolveTemplateDnsServerBody`).
-- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
+- `preset` — a server declared by a template preset. The identity is `ref` = `<preset_id>:<tag inside the preset>`, split on the first `:`; a server of a `for_each` preset (§578) is the exception: its tag is not namespaced (`<node tag>-dns`), so `ref` is the bare tag and no preset id is stored — the DNS screen takes the owner from the expanded preset body; that string is also the server's config tag (the builder namespaces preset tags, `namespacePresetTags`) and the model's `tag`, so `ref` and tag are one string. Auto-discovery fills the preset id when the server is added; a `ref` without `:` (the preset was not found) is the tag, and orphan cleanup follows. A repeated namespace written by early 2.23.3 builds (`ru-direct:ru-direct:dns_ru`) is read as `ru-direct:dns_ru` and never written.
 - `user` — a user-defined server (the model's `inline`). `body` is required.
 
 The tag lives **only** at the record level; the builder synthesizes `body.tag` back when assembling the config. **Render order in the UI:** `template` → `preset` → `user`.
@@ -1655,6 +1670,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
 | `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
+| `late_presets_seeded` | `List<String>` | §578 — the ids from `kLateDefaultPresetIds` (today `tailscale`) for which the one-time step `SettingsStorage.seedLateDefaultPresets` has run. The step adds a preset the template declares `default: true` to an install that already had its defaults seeded (`presets_migrated`), enabled and with the template's `num`, then records the id here: a preset the user deleted does not come back. A fresh install marks every late id as done in its first seed. The step runs before the build reads the rules and on the Routing screen. |
 | `interrupt_connections_on_switch` | `bool` | §143 — tear down the switched group's active connections when the node changes (default `false`, NOT config-significant). See `getInterruptOnSwitch` / `setInterruptOnSwitch`. |
 | `node_sort_mode` | `String` | §100 — the chosen node sort mode. `''` means the template default. CRUD: `getNodeSort` / `setNodeSort` (written as a pair with `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |

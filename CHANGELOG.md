@@ -6,6 +6,28 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Tailscale preset ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  The new routing preset `Tailscale networks`, on by default, serves every
+  Tailscale node in the config, subscription nodes included: tailnet names go
+  to the node's own DNS, and addresses and names the node claims as its own
+  (`preferred_by`) go through the node. Existing installs get the preset once;
+  deleting it keeps it deleted. The preset row on the Routing and DNS screens
+  lists the nodes it serves.
+- **Skip presets on a node ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  A server or a folder member can opt out of presets that serve nodes one by
+  one: the `Skip presets` switch on the node screen, stored as `skip_presets`
+  in the record and in backups. The switch shows up only when the template has
+  such a preset for the node's type.
+- **Template language: `for_each`, `@node`, `#tpl` ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  A preset can repeat its rules and DNS servers for every matching node, read
+  the node's tag, record and body, and build strings such as `<node>-dns`.
+
+---
+
 ## [2.25.7] — 2026-09-27
 
 ### Added

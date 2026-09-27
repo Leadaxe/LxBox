@@ -2889,6 +2889,34 @@ class SubscriptionController extends ChangeNotifier {
     return null;
   }
 
+  /// §578 — поле записи `skip_presets` своего сервера ([memberIndex] null)
+  /// или члена папки. Хранится только `true`; правка помечает конфиг
+  /// грязным через [_persist], как соседние правки записи.
+  Future<UiMsg?> setSkipPresets(int index, int? memberIndex, bool value) async {
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.serverNotFound);
+    }
+    final entry = _entries[index];
+    final list = entry.list;
+    if (memberIndex == null) {
+      if (list is! UserServer) return const ErrMsg(ErrKey.serverNotFound);
+      if (list.skipPresets == value) return null;
+      entry._replaceList(list.copyWith(skipPresets: value));
+    } else {
+      if (list is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
+      if (memberIndex < 0 || memberIndex >= list.members.length) {
+        return const ErrMsg(ErrKey.serverNotFound);
+      }
+      final members = [...list.members];
+      if (members[memberIndex].skipPresets == value) return null;
+      members[memberIndex] = members[memberIndex].copyWith(skipPresets: value);
+      entry._replaceList(list.copyWith(members: members));
+    }
+    await _persist();
+    notifyListeners();
+    return null;
+  }
+
   Future<String> _generate() async {
     AppLog.I.info('Generating config...');
     _progressMessage = const SubStatusBuildingConfig();

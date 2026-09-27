@@ -827,6 +827,7 @@ the base sniff/hijack-dns/resolve rules.
 | `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+| `tailscale` (§578) | true | — | 945 | ✓ (dns_enable) | — | ✓ per node: `[resolve → <node>-dns #if @dns_enable, preferred_by → @node]` | ✓ per node (`preferred_by` → `<node>-dns`, #if @dns_enable) | ✓ per node (type `tailscale`, `endpoint: @node`, #if @dns_enable) |
 
 **`traffic-processing` (§264/§370)** is a locked, unsortable preset and the FIRST in `selectable_rules`. It carries the base route rules `sniff`, `hijack-dns` and `resolve`, which before §264 lived directly in `config.route.rules` (now empty). `num:0` plus `isSortable:false` guarantee its rules come first.
 
@@ -948,6 +949,69 @@ The array form supports an **array-element `#if`** (the §246 mechanism): an `#i
 The vars declared in a preset are **visible only while the preset is enabled**. The UI renders them on the Routing screen.
 
 The universal `outbound` override (spec [§033], Expansion §5): when `varsValues['outbound']` holds a non-empty value, it replaces the rule's outbound.
+
+### `for_each` — one body per node (§578)
+
+A preset with `for_each` repeats its body (`rules`, `dns_servers`, `dns_rules`)
+for every config node that matches. The shipped example is the `tailscale`
+preset.
+
+```jsonc
+"for_each": {
+  "node_type": "tailscale",                    // required: the `type` field of the node body
+  "as": "node",                                // required: the name the node goes by in the body
+  "filter": { "#not": "@node.skip_presets" }   // optional: a condition in the `#if` language
+}
+```
+
+A node is served when all of these hold: its body `type` equals `node_type`,
+the node is enabled, it made it into the config (not dropped by the registry
+gate, the core gate or a degradation), and `filter` is true. The container
+does not matter: a user server, a folder member and a subscription node are all
+served. Repeats follow the order of the nodes in the config; no nodes means the
+preset emits nothing. A preset without `for_each` works as before.
+
+**Node access** (`node` here is the `as` name):
+
+| Reference | Value |
+|---|---|
+| `@node` | the node's final tag in the config |
+| `@node.<field>` | a field of the node's storage record; the closed list today is `skip_presets` |
+| `@node.body.<path>` | a field of the node body, a dot path |
+
+A missing field yields the empty value: false in a condition, and the key or
+element is dropped from the body, as with an optional var. A subscription node
+has no record, so `@node.skip_presets` is always false for it.
+
+**`#tpl`** builds a string from pieces: `{"#tpl": "@{node}-dns"}`. It is allowed
+in a value position (an object field, an array element, inside `#value`), not
+in keys and not in a var's `default_value`. `@{name}` and `@{name.path}` insert
+a value any number of times; a bare `@name` inside the string is a literal. An
+unknown name or an empty value drops the whole value. An object carrying `#tpl`
+next to other keys is a template error.
+
+**Tags.** The tags of a `for_each` preset are not namespaced
+(`<preset_id>:<tag>`, §103 C7): the node tag already makes them unique, so the
+DNS server of `tailscale` is `<node tag>-dns`. Its storage record keeps `ref`
+equal to the tag and carries no `preset_id` (otherwise `DnsServerPreset` would
+rebuild the tag as `tailscale:<tag>-dns`). The DNS screen learns the owner from
+the expanded body instead.
+
+**Screens.** The routing and DNS screens and the rule editor's View tab expand
+the preset over the nodes of the sources (`presetNodesForView`): the tag is the
+final tag of the last build when the node was in it, otherwise the display tag.
+The preset row lists the served tags, comma separated, or says there are no
+matching nodes. The probe does not expand presets at all.
+
+**The `tailscale` preset.** For every Tailscale node: a `resolve` rule and a
+DNS rule pointing at the node's own DNS server `<node>-dns` (`type: tailscale`,
+`endpoint: @node`), and a route rule `preferred_by: [@node] → @node`. The DNS
+part follows the `dns_enable` var. `preferred_by` asks the node whether an
+address or name is its own; Tailscale answers from the live tailnet state, so
+the preset carries no fixed subnets. A node opts out with the record field
+`skip_presets` (the **Skip presets** switch on the node screen, see
+[STORAGE.md](STORAGE.md)). Existing installs get the preset once through
+`SettingsStorage.seedLateDefaultPresets` (the `late_presets_seeded` key).
 
 ---
 
@@ -1144,7 +1208,10 @@ and swaps in the translation keyed by that text.
 
 **The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/features/279%20localization/spec.md)):
 the applier visits the display fields of sections, of global and rule-local vars, of magic nodes,
-of directions, of DNS servers and of the ping and speed presets. Not visited (the applier's
+of directions, of DNS servers and of the ping and speed presets. An element of a preset's
+`dns_servers[]` wrapped in `#if` is unwrapped: the display fields come from `#value` and, when
+present, `#else` (§578); a `#tpl` tag does not break the walk, since the overlay is keyed by the
+English text rather than by the tag. Not visited (the applier's
 whitelist): everything under `config` and `parser_config`, plus `name`, `tag`, `value`,
 `default_value`, `preset_id`, bare-string enum options and `dns_options.rules[].name` (a latent
 identity key) — so those strings never reach an overlay.

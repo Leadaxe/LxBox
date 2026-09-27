@@ -51,6 +51,7 @@ class DnsSettingsSnapshot {
     this.nodeServers = const [],
     this.nodeRules = const [],
     this.tailscaleEndpoints = const [],
+    this.presetServedTagsByPresetId = const {},
   });
 
   final List<DnsServerRef> servers;
@@ -82,6 +83,10 @@ class DnsSettingsSnapshot {
   /// display-теги узлов Tailscale. В опции членов групп и резолверов
   /// узловые серверы на этой волне не входят.
   final List<TailscaleEndpointOption> tailscaleEndpoints;
+
+  /// §578 — пресет с `for_each` → теги узлов, которые он обслуживает
+  /// (подпись строки пресета). Пресета без `for_each` здесь нет.
+  final Map<String, List<String>> presetServedTagsByPresetId;
 }
 
 class DnsController {
@@ -92,7 +97,12 @@ class DnsController {
   /// строит превью-mirror'ы и считает §121 resolver-autoreset. Чистый
   /// read+derive. Возвращает [DnsSettingsSnapshot].
   ///
-  static Future<DnsSettingsSnapshot> load() async {
+  /// §578 — [presetNodes]: узлы источников для пресетов с `for_each`
+  /// (`presetNodesForView`); без них такой пресет не даёт ни серверов, ни
+  /// правил, и сохранённые ссылки на его серверы ушли бы как сироты.
+  static Future<DnsSettingsSnapshot> load({
+    List<PresetNode> presetNodes = const [],
+  }) async {
     final template = await TemplateLoader.load();
     final vars = await SettingsStorage.getAllVars();
 
@@ -135,6 +145,14 @@ class DnsController {
     // §439 — тег сервера → `preset_id` пресета, внёсшего его первым (как
     // дедуп серверов сборки).
     final presetIdByServerTag = <String, String>{};
+    // §578 — `preset_id` для записи хранения: только серверы в пространстве
+    // пресета (`<preset_id>:<тег>`), как у сборки (`custom_rules.dart`). Тег
+    // сервера пресета с `for_each` (`<тег узла>-dns`) пространства не имеет:
+    // с `preset_id` модель `DnsServerPreset` достроила бы его до
+    // `tailscale:<тег>-dns`. Владелец такого сервера на экране — из пометок
+    // `_preset_id`/`_preset_label` тела (карта выше), не из хранения.
+    final storedPresetIdByTag = <String, String>{};
+    final presetServedTagsByPresetId = <String, List<String>>{};
     final activeRules = await SettingsStorage.getCustomRules();
     final allPresets = template.selectableRules;
     final activePresetIdsWithDnsRule = <String>{};
@@ -157,7 +175,12 @@ class DnsController {
       if (match.vars.any((v) => v.name == 'dns_enable')) {
         presetDnsEnable[cr.presetId] = presetDnsEnableVar(cr, match);
       }
-      final fragments = expandPreset(cr, match);
+      final fragments = expandPreset(cr, match, nodes: presetNodes);
+      if (match.forEach != null) {
+        presetServedTagsByPresetId[cr.presetId] = [
+          for (final n in presetForEachNodes(cr, match, presetNodes)) n.tag,
+        ];
+      }
       if (match.dnsRules.isNotEmpty) {
         presetRulesByPresetId[cr.presetId] = fragments.dnsRules;
       }
@@ -166,6 +189,9 @@ class DnsController {
         final tag = s['tag'];
         if (tag is String && tag.isNotEmpty) {
           presetIdByServerTag.putIfAbsent(tag, () => cr.presetId);
+          if (tag.startsWith('${cr.presetId}:')) {
+            storedPresetIdByTag.putIfAbsent(tag, () => cr.presetId);
+          }
         }
         final annotated = Map<String, dynamic>.from(s)
           ..['_preset_label'] = match.label;
@@ -193,7 +219,7 @@ class DnsController {
     final resolvedServers = await resolveDnsServersList(
       templateServers: templateServersRaw,
       presetServersByTag: presetServersByTag,
-      presetIdByTag: presetIdByServerTag,
+      presetIdByTag: storedPresetIdByTag,
     );
 
     // §117: реальные тела DNS-mirror'ов (rule-источники) для превью.
@@ -294,6 +320,7 @@ class DnsController {
       nodeServers: nodeDns.servers,
       nodeRules: nodeDns.rules,
       tailscaleEndpoints: nodeDns.tailscaleEndpoints,
+      presetServedTagsByPresetId: presetServedTagsByPresetId,
     );
   }
 
