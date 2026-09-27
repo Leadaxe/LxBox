@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/home_state.dart';
+import 'package:lxbox/screens/home/widgets/nodes_header.dart';
 import 'package:lxbox/services/networks_direction.dart';
 import 'package:lxbox/vpn/cc_channel.dart';
 import 'package:lxbox/widgets/node_row.dart';
@@ -108,6 +109,36 @@ void main() {
 
     test('значение пункта не совпадает с тегом направления NETWORKS', () {
       expect(kNetworksDirectionValue, isNot(kNetworksLabel));
+    });
+  });
+
+  group('заголовок списка при NETWORKS', () {
+    final raw = config(endpoints: [tsLan]);
+    final nodes = List.generate(21, (i) => 'n$i');
+
+    test('счётчик — узлы NETWORKS, кнопок сортировки и фильтров нет', () {
+      final s = HomeState(
+        tunnel: TunnelStatus.connected,
+        configRaw: raw,
+        groups: const ['vpn-1'],
+        selectedGroup: 'vpn-1',
+        nodes: nodes,
+        networksOpen: true,
+      );
+      expect(NodesHeader.listCount(s), 1);
+      expect(NodesHeader.showsListTools(s), isFalse);
+    });
+
+    test('настоящее направление — его узлы и кнопки', () {
+      final s = HomeState(
+        tunnel: TunnelStatus.connected,
+        configRaw: raw,
+        groups: const ['vpn-1'],
+        selectedGroup: 'vpn-1',
+        nodes: nodes,
+      );
+      expect(NodesHeader.listCount(s), 21);
+      expect(NodesHeader.showsListTools(s), isTrue);
     });
   });
 

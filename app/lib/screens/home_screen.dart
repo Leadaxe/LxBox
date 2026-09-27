@@ -857,7 +857,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 ),
                 // §095 Filter mode — при открытой фильтр-панели прячем
                 // стат-полосу + Nodes-хедер, освобождая зону под ноды.
-                if (state.tunnelUp && !_filter.panelExpanded)
+                if (state.tunnelUp &&
+                    (!_filter.panelExpanded || state.showingNetworks))
                   TrafficBar(
                     state: state,
                     controller: _controller,
@@ -870,7 +871,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                           _subController.progressMessage!.render()),
                 // §095 — NODES-строка только когда подключено И фильтр закрыт.
                 // STOP-режим: нод нет → фильтровать нечего → строку прячем.
-                if (state.tunnelUp && !_filter.panelExpanded) ...[
+                // Задача 579: у NETWORKS панели фильтров нет — заголовок
+                // виден и при открытой панели.
+                if (state.tunnelUp &&
+                    (!_filter.panelExpanded || state.showingNetworks)) ...[
                   const SizedBox(height: 12),
                   NodesHeader(
                     controller: _controller,
