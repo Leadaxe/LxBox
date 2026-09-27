@@ -5,7 +5,7 @@
 | Статус | Implemented |
 | Дата старта | 2026-09-28 |
 | Дата завершения | 2026-09-28 |
-| Коммиты | см. «Реализация» |
+| Коммиты | fcebe0c4 |
 | Контракт | Не затрагивается (код предупреждения свой, per-app) |
 | Связанные spec'ы | tasks/576, tasks/577, features/455 (дословное тело) |
 
@@ -125,6 +125,8 @@ C.TypeOpenVPNClient, …)`); так же `openconnect`, `wireguard`, `tailscale`
 — 0/0; `flutter analyze` чистый.
 
 ## Реализация
+
+Коммит fcebe0c4.
 
 - `models/node_spec.dart` — `UnknownTypeSpec`, `kCoreEndpointTypes`.
 - `models/node_warning.dart` — `UnknownNodeTypeWarning`;
