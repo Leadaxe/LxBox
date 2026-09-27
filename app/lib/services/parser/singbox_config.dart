@@ -355,24 +355,29 @@ List<NodeSpec> _parseOne(
   return result;
 }
 
-/// §585 — запись своего источника с типом, которого приложение не знает:
-/// узел с телом как написано и предупреждением [UnknownNodeTypeWarning].
+/// §585/§586 — запись с типом без своей модели в приложении: узел с телом
+/// как написано; у типа вне реестра — предупреждение [UnknownNodeTypeWarning].
 ///
 /// `null` — правило не действует, запись отбрасывается прежним путём. Оно
-/// действует, когда выполнены все условия: (1) разбор своего источника
-/// ([parsingOwnSource]; тело подписки — нет); (2) `type` записи — строка,
-/// не пустая; (3) тип приложению незнаком ([isAppKnownSingboxType]):
-/// известный тип с негодной формой (нет `server`) по-прежнему отбрасывается.
+/// действует, когда выполнены все условия: (1) `type` записи — строка, не
+/// пустая; (2) у типа нет своей модели ([isAppKnownSingboxType]): тип с
+/// моделью и негодной формой (нет `server`) по-прежнему отбрасывается;
+/// (3) разбор своего источника ([parsingOwnSource]) — ЛИБО тип известен
+/// реестру без описания полей ([ContractRegistry.isUncheckedType], §586:
+/// тогда и тело подписки, и без предупреждения).
 /// Служебные типы и группы сюда не доходят — их отсеивает `_parseOne` раньше.
 NodeSpec? _ownUnknownTypeNode(
   Map<String, dynamic> ob, {
   required String label,
   required String rawSource,
 }) {
-  if (!parsingOwnSource) return null;
   final type = ob['type'];
   if (type is! String || type.trim().isEmpty) return null;
   if (isAppKnownSingboxType(type)) return null;
+  // §586 — тип известен реестру без описания полей (`openvpn-client`):
+  // принимается из любого источника, без предупреждения.
+  final known = ContractRegistry.I.isUncheckedType(type);
+  if (!known && !parsingOwnSource) return null;
   final tag = label.isNotEmpty ? label : type;
   final server = ob['server'];
   final port = ob['server_port'];
@@ -385,7 +390,7 @@ NodeSpec? _ownUnknownTypeNode(
     server: server is String ? server : '',
     port: port is num ? port.toInt() : 0,
     rawSource: rawSource,
-    warnings: [UnknownNodeTypeWarning(type)],
+    warnings: known ? [] : [UnknownNodeTypeWarning(type)],
   );
 }
 

@@ -342,7 +342,11 @@ final class RegistrySanitizer {
     Set<String> kinds = const {},
   }) {
     final schema = ContractRegistry.I.schemaFor(scheme);
-    if (schema == null) return SanitizeResult(body, const []);
+    // Контракт 1.1.99 — у схемы с `fields_unchecked` правил нет: тело как
+    // написано, без кодов.
+    if (schema == null || schema.fieldsUnchecked) {
+      return SanitizeResult(body, const []);
+    }
 
     final ctx = _Ctx(
       scheme: scheme,

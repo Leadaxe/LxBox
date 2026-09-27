@@ -784,8 +784,9 @@ NodeSpec? _xrayBuildChain(
 /// `trojan-host-443` при пустом имени, и подставить его в `label` значило бы
 /// вернуть выдуманное `#trojan-host-443` из `toUri()`.
 /// §585 — типы sing-box, которые знает модель приложения (ветки
-/// [parseSingboxEntry]). Прочие — «незнакомые»: из своего источника они
-/// принимаются как написаны (`UnknownTypeSpec`), из подписки отбрасываются.
+/// [parseSingboxEntry]). Прочие идут в `UnknownTypeSpec`: тип реестра без
+/// описания полей (`openvpn-client`, §586) — из любого источника; тип вне
+/// реестра — только из своего источника, из подписки отбрасывается.
 const Set<String> kAppSingboxNodeTypes = {
   'vless',
   'vmess',

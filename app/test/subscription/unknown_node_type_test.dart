@@ -24,8 +24,10 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../parser/engine_test_setup.dart';
 
-/// §585 — узел sing-box незнакомого приложению типа (`openvpn-client`)
-/// принимается своей записью; тело уходит в ядро как написано.
+/// §585 — узел sing-box незнакомого приложению типа принимается своей
+/// записью; тело уходит в ядро как написано. С §586 `openvpn-client` —
+/// тип реестра (`endpoint_types_from_registry_test.dart`), поэтому здесь
+/// незнакомый тип выдуманный: `future-proto`.
 class _FakePathProvider extends PathProviderPlatform
     with MockPlatformInterfaceMixin {
   final String tempRoot;
@@ -94,7 +96,7 @@ void main() {
   // Учётка и адрес — заглушки, не данные владельца.
   const body = '''
 {
-  "type": "openvpn-client",
+  "type": "future-proto",
   "tag": "ovpn-out",
   "server": "vpn.example.org",
   "server_port": 443,
@@ -107,7 +109,7 @@ void main() {
 
   const commented = '''
 {
-  "type": "openvpn-client",
+  "type": "future-proto",
   "tag": "ovpn-out",
   "server": "vpn.example.org", // United States Central
   /* block comment */
@@ -131,7 +133,7 @@ void main() {
     expect(sourceKindOf(list.rawBody), 'singbox_outbound');
     final node = list.nodes.single;
     expect(node, isA<UnknownTypeSpec>());
-    expect(node.protocol, 'openvpn-client');
+    expect(node.protocol, 'future-proto');
     expect(node.warnings.whereType<UnknownNodeTypeWarning>(), hasLength(1));
     expect(node.warnings.whereType<UnknownNodeTypeWarning>().single.severity,
         WarningSeverity.info);
@@ -140,14 +142,14 @@ void main() {
     expect(node.tag, endsWith('ovpn-out'));
   });
 
-  test('в конфиге тело дословное, место — endpoints', () async {
+  test('в конфиге тело дословное, тип вне реестра — outbounds', () async {
     final c = SubscriptionController();
     await c.addFromInput(body);
     final list = c.entries.single.list as UserServer;
     final ctx = _Ctx();
     list.build(ctx);
     final entry = ctx.entries.last;
-    expect(entry, isA<Endpoint>());
+    expect(entry, isA<Outbound>());
     final map = entry.map;
     final expected = Map<String, dynamic>.from(jsonDecode(body) as Map)
       ..remove('detour')
@@ -158,7 +160,7 @@ void main() {
     expect(map.containsKey('detour'), isFalse);
   });
 
-  test('незнакомый тип вне перечня endpoint-типов ядра — outbounds', () {
+  test('незнакомый тип с вложенным объектом — outbounds', () {
     const raw = '{"type": "future-proto", "tag": "f", "server": "h.example",'
         ' "server_port": 1, "x": {"y": 1}}';
     final s = UserServer(
@@ -181,7 +183,7 @@ void main() {
     final nodes = parseAll(decode(body), own: true);
     final probe = buildProbeConfig(nodes);
     expect(probe.brokenByIndex, isEmpty);
-    expect(probe.configJson, contains('openvpn-client'));
+    expect(probe.configJson, contains('future-proto'));
   });
 
   test('тело без type по-прежнему отклоняется', () async {
@@ -243,7 +245,7 @@ void main() {
     expect(dropped, isNotEmpty);
     // Документ подписки из двух узлов: незнакомый отброшен, известный жив.
     const doc = '{"outbounds": ['
-        '{"type": "openvpn-client", "tag": "o", "server": "a.example",'
+        '{"type": "future-proto", "tag": "o", "server": "a.example",'
         ' "server_port": 1},'
         '{"type": "trojan", "tag": "t", "server": "b.example",'
         ' "server_port": 443, "password": "p"}]}';

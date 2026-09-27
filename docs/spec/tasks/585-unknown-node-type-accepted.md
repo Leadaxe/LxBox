@@ -143,6 +143,17 @@ C.TypeOpenVPNClient, …)`); так же `openconnect`, `wireguard`, `tailscale`
   `node_notifications_view.dart` (текст карточки).
 - l10n: три строки в `ru`/`zh`.
 
+### Изменено задачей 586 (контракт 1.1.99)
+
+- `kCoreEndpointTypes` убран: раздел конфига узла `UnknownTypeSpec` берётся
+  из `kind` записи реестра (`ContractRegistry.isEndpointType`); тип вне
+  реестра пишется в `outbounds[]`. Риск «новый endpoint-тип ядра до правки
+  перечня» перешёл в реестр контракта.
+- `openvpn-client` стал типом реестра (`fields_unchecked`): принимается из
+  любого источника без предупреждения. Незнакомый тип в тестах этой задачи —
+  выдуманный `future-proto`. Подробно —
+  [586](586-endpoint-types-from-registry.md).
+
 ## Нерешённое / follow-up
 
 - Предупреждение без кода реестра: у лаунчера аналога нет; если лаунчер

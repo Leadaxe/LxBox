@@ -1,4 +1,5 @@
 import '../services/contract/group_genus.dart';
+import '../services/contract/registry.dart';
 import 'auto_select.dart';
 import 'body_delta.dart';
 import 'emit_context.dart';
@@ -1401,20 +1402,12 @@ final class TailscaleSpec extends NodeSpec {
 // Незнакомый приложению тип (§585)
 // ════════════════════════════════════════════════════════════════════════════
 
-/// §585 — типы, которые ядро регистрирует как endpoint (`endpoint.Register`
-/// в `protocol/*/endpoint.go` ядра 1.14.2-lx.6). Нужен только узлу
-/// незнакомого приложению типа: у известных типов место в конфиге задаёт
-/// свой класс. Типа нет в перечне — узел пишется в `outbounds[]`.
-const Set<String> kCoreEndpointTypes = {
-  'wireguard',
-  'tailscale',
-  'openvpn-client',
-  'openconnect',
-};
-
-/// §585 — узел sing-box, чей `type` приложению незнаком (например
-/// `openvpn-client`). Появляется только из своего источника (свой сервер,
-/// член папки, редактор узла): тело авторское, в ядро уходит как написано,
+/// §585/§586 — узел sing-box, у чьего `type` нет своей модели в приложении.
+/// Два случая: тип известен реестру без описания полей (`openvpn-client`,
+/// `body.fields_unchecked`, §586) — узел приходит из любого источника, в том
+/// числе из подписки, без предупреждений; тип вне реестра (§585) — только из
+/// своего источника (свой сервер, член папки, редактор узла), с
+/// предупреждением. В обоих случаях тело в ядро уходит как написано,
 /// приложение его не проверяет. [body] — объект записи целиком.
 final class UnknownTypeSpec extends NodeSpec {
   /// Значение поля `type` записи.
@@ -1449,7 +1442,11 @@ final class UnknownTypeSpec extends NodeSpec {
       'type': type,
       'tag': tag,
     }..remove('detour');
-    return kCoreEndpointTypes.contains(type) ? Endpoint(map) : Outbound(map);
+    // §586 — место в конфиге задаёт `kind` записи реестра; тип вне реестра
+    // пишется в `outbounds[]`.
+    return ContractRegistry.I.isEndpointType(type)
+        ? Endpoint(map)
+        : Outbound(map);
   }
 
   @override

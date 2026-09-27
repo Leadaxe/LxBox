@@ -10,9 +10,17 @@
 
 ### Added
 
+- **OpenVPN endpoints as sing-box JSON ([task 586](docs/spec/tasks/586-endpoint-types-from-registry.md)).**
+  A node of type `openvpn-client` is now a known type: it is accepted as your
+  own record, inside a document with other nodes and from a subscription,
+  without the «Unknown node type» notice. The body goes to the core as
+  written into `endpoints[]`; the app does not check its fields. There is no
+  form and no `.ovpn` import. Which types are endpoints now comes from the
+  contract registry (1.1.99), not from a list in the app.
+
 - **Nodes of a type the app does not know ([task 585](docs/spec/tasks/585-unknown-node-type-accepted.md)).**
-  A sing-box node of a type the app has no model for (for example
-  `openvpn-client`) is accepted when added by hand (Add server, paste, file,
+  A sing-box node of a type the app has no model and the registry has no
+  record for is accepted when added by hand (Add server, paste, file,
   folder member, node editor). It goes to the core as written and gets one
   info notice «Unknown node type»; subscriptions still drop such entries.
   Pasted JSON with `//` and `/* */` comments is accepted too: the comments are
