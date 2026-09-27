@@ -5,7 +5,7 @@
 | Статус | Done |
 | Дата старта | 2026-09-27 |
 | Дата завершения | 2026-09-28 |
-| Коммиты | 60512905 (синк 1.1.97), a29d20d6 (reality на авторском теле), см. «Реализация» |
+| Коммиты | ff8de832 (синк 1.1.97), 928b7521 (reality на авторском теле), c31e5f0b (кэш DNS) |
 | Контракт | 1.1.93–1.1.97: `TEMPLATE_LANG.md` §6.8, `registry/vars.json` (три переменные, `portable: true`) |
 | Связанные spec'ы | [features/014](../features/014%20dns%20settings/spec.md), [features/117](../features/117%20dns-rework/spec.md) (настройки DNS) |
 
