@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../screens/home/special_node_display.dart';
 import '../screens/subscription_detail_screen/widgets/node_warning_row.dart';
 import 'node_view_item.dart';
+import '../services/networks_direction.dart';
 import '../services/l10n/locale_controller.dart';
 // §535 — CcEndpointState: имена состояний endpoint'а приходят из ядра.
 import '../vpn/cc_channel.dart' show CcEndpointState;
@@ -70,7 +71,38 @@ class NodeRow extends StatelessWidget {
   /// показано как ориентир, но получено чужим тестом (ping-URL и таймаут
   /// резолвятся per-group, §040). Значок текстовый и однознаковый намеренно —
   /// бейдж узкий и моноширинный, иконка сломала бы выравнивание колонки.
+  /// Задача 579 — строка NETWORKS: узел не выбирается и не замеряется.
+  bool get _isTailnet => item.tailnetState != null;
+
+  /// Задача 579 — подпись состояния узла NETWORKS на месте задержки.
+  String get _tailnetLabel {
+    final st = item.tailnetState;
+    if (st == null) return '';
+    switch (st.kind) {
+      case TailnetStateKind.none:
+        return '';
+      case TailnetStateKind.starting:
+        return getLocalText.s("starting");
+      case TailnetStateKind.running:
+        return getLocalText.s("running");
+      case TailnetStateKind.signInNeeded:
+        return getLocalText.s("sign-in needed");
+      case TailnetStateKind.stopped:
+        return getLocalText.s("stopped");
+      case TailnetStateKind.other:
+        return st.text; // l10n-exempt: core state text as is
+    }
+  }
+
+  Color _tailnetColor(ColorScheme cs) {
+    final st = item.tailnetState;
+    if (st?.kind == TailnetStateKind.running) return Colors.green;
+    if (st != null && st.isWarning) return Colors.orange;
+    return cs.onSurfaceVariant;
+  }
+
   String get _delayLabel {
+    if (_isTailnet) return _tailnetLabel;
     // §557 — выключенный узел (SPEC 106) отвергает дайлы: провал замера тут
     // не сбой узла. Вместо пинга, таймаута и PING… — нейтральный прочерк,
     // слева подпись «off».
@@ -242,7 +274,9 @@ class NodeRow extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
-              color: _delayColor(context) ?? cs.onSurfaceVariant,
+              color: _isTailnet
+                  ? _tailnetColor(cs)
+                  : _delayColor(context) ?? cs.onSurfaceVariant,
             ),
           );
 
@@ -338,6 +372,8 @@ class NodeRow extends StatelessWidget {
       context: context,
       position: position,
       items: [
+        // Задача 579 — у строки NETWORKS нет замера и выбора узла.
+        if (!_isTailnet)
         PopupMenuItem<String>(
           value: 'ping',
           enabled: canPing,
@@ -352,6 +388,7 @@ class NodeRow extends StatelessWidget {
             title: Text(getLocalText.s("Ping")),
           ),
         ),
+        if (!_isTailnet)
         PopupMenuItem<String>(
           value: 'activate',
           enabled: canActivate,
@@ -550,6 +587,8 @@ class NodeRow extends StatelessWidget {
                   ],
                 ),
               ),
+              // Задача 579 — строка NETWORKS: кнопки выбора узла нет.
+              if (!_isTailnet)
               IconButton(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,

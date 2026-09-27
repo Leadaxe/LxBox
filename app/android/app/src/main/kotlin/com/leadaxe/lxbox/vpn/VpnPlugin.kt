@@ -40,6 +40,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_GROUPS_CHANNEL = "lxbox/cc/groups"
         private const val CC_CONNECTIONS_CHANNEL = "lxbox/cc/connections"
         private const val CC_DNS_CHANNEL = "lxbox/cc/dns" // §180
+        private const val CC_TAILSCALE_CHANNEL = "lxbox/cc/tailscale" // §579
         private const val VPN_REQUEST_CODE = 24
 
         // §207 — allowlist имён pprof-профилей (до `?`). Пропускаем наружу
@@ -121,6 +122,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private lateinit var ccGroupsEventChannel: EventChannel
     private lateinit var ccConnectionsEventChannel: EventChannel
     private lateinit var ccDnsEventChannel: EventChannel // §180
+    private lateinit var ccTailscaleEventChannel: EventChannel // §579
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -238,6 +240,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccDnsQueriesSink = sink }
             override fun onCancel(args: Any?) { BoxVpnService.ccDnsQueriesSink = null }
         })
+        // §579 — состояние узлов Tailscale (псевдо-направление NETWORKS).
+        ccTailscaleEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_CHANNEL)
+        ccTailscaleEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscaleSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccTailscaleSink = null }
+        })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
@@ -263,6 +271,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         ccGroupsEventChannel.setStreamHandler(null)
         ccConnectionsEventChannel.setStreamHandler(null)
         ccDnsEventChannel.setStreamHandler(null) // §180
+        ccTailscaleEventChannel.setStreamHandler(null) // §579
         statusSink = null
         BoxVpnService.coreLogSink = null
         BoxVpnService.ccStatusSink = null
@@ -270,6 +279,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         BoxVpnService.ccGroupsSink = null
         BoxVpnService.ccConnectionsSink = null
         BoxVpnService.ccDnsQueriesSink = null // §180
+        BoxVpnService.ccTailscaleSink = null // §579
         // §047 — обнуляем bridge-ссылки (engine detached).
         bridgeChannel = null
         appContext = null
@@ -753,6 +763,18 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             // §175 — отмена масс-пинга: disconnect pingClient → ядро рвёт per-call
             // ctx in-flight тестов (не дожидаясь TCPTimeout), другие стримы целы.
+            // §579 — подписка SubscribeTailscaleStatus. Старт стрима — gRPC,
+            // поэтому на Dispatchers.IO; ответ сразу (данные придут стримом).
+            "ccStartTailscaleStatus" -> {
+                val cc = BoxService.commandClient
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscaleStatus() }
+                result.success(cc != null)
+            }
+            "ccStopTailscaleStatus" -> {
+                val cc = BoxService.commandClient
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscaleStatus() }
+                result.success(true)
+            }
             "ccCancelPing" -> {
                 BoxService.commandClient?.cancelPing(); result.success(true)
             }

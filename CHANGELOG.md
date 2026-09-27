@@ -10,6 +10,12 @@
 
 ### Added
 
+- **NETWORKS on Home ([task 579](docs/spec/tasks/579-networks-pseudo-direction.md)).**
+  A Tailscale node without an exit node is in no Direction, so Home did not show it.
+  While the VPN is on, such nodes are now listed under `NETWORKS`, the last entry of
+  the Direction list. A tap opens the node screen; instead of a delay the row shows the
+  node state from the core: `running`, `sign-in needed`, `stopped` or `starting`.
+  The config does not change.
 - **Tailscale preset ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
   The new routing preset `Tailscale networks`, on by default, serves every
   Tailscale node in the config, subscription nodes included: tailnet names go

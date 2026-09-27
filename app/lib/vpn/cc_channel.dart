@@ -39,6 +39,9 @@ class CcChannel {
   static const EventChannel _dnsChannel = EventChannel(
     PlatformChannels.ccDns,
   ); // §180
+  static const EventChannel _tailscaleChannel = EventChannel(
+    PlatformChannels.ccTailscale,
+  ); // §579
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -97,6 +100,18 @@ class CcChannel {
   /// §180 — DNS-журнал из ядра (SPEC 018): батч `CcDnsQuery` на резолв(ы).
   /// Структурная замена текстового парсинга core-лога. Потребитель — профайлер.
   Stream<List<CcDnsQuery>> get dnsQueries => _dnsQueriesStream;
+
+  // §579 — состояние узлов Tailscale: снапшот списком на каждое обновление.
+  late final Stream<List<CcTailscaleStatus>> _tailscaleStream =
+      _sharedStream<List<CcTailscaleStatus>>(
+        _tailscaleChannel,
+        CcTailscaleStatus.listFrom,
+      );
+
+  /// §579 — поток ядра `SubscribeTailscaleStatus`: записи endpoint'ов
+  /// Tailscale (тег, `BackendState`, `StateText`). Подписку в ядре держат
+  /// [startTailscaleStatus]/[stopTailscaleStatus]; слушать до старта.
+  Stream<List<CcTailscaleStatus>> get tailscaleStatus => _tailscaleStream;
 
   /// §122 — shared-стрим с КЭШЕМ последнего снапшота.
   ///
@@ -200,6 +215,10 @@ class CcChannel {
   /// per-call ctx in-flight URLTest'ов (не дожидаясь TCPTimeout), не задевая
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
   Future<void> cancelPing() => _invoke('ccCancelPing');
+
+  /// §579 — поднять / снять подписку ядра на состояние узлов Tailscale.
+  Future<void> startTailscaleStatus() => _invoke('ccStartTailscaleStatus');
+  Future<void> stopTailscaleStatus() => _invoke('ccStopTailscaleStatus');
 
   // §164 — энергомодель CC-клиентов.
   /// FAST (0.1с) — Stats открыт (плавность); NORMAL (0.5с) — главный экран.
@@ -443,6 +462,36 @@ class CcChannel {
 }
 
 // ═══════════════════════════ Models ═══════════════════════════
+
+/// §579 — запись `TailscaleEndpointStatus` ядра: тег endpoint'а,
+/// `BackendState` (`Running`, `NeedsLogin`, `Stopped`, …) и `StateText`.
+class CcTailscaleStatus {
+  const CcTailscaleStatus({
+    required this.tag,
+    required this.backendState,
+    required this.stateText,
+  });
+
+  final String tag;
+  final String backendState;
+  final String stateText;
+
+  factory CcTailscaleStatus.fromMap(Map<String, dynamic> m) =>
+      CcTailscaleStatus(
+        tag: '${m['tag'] ?? ''}',
+        backendState: '${m['backend_state'] ?? ''}',
+        stateText: '${m['state_text'] ?? ''}',
+      );
+
+  /// Сообщение канала — список map'ов; всё прочее и записи без тега
+  /// отбрасываются.
+  static List<CcTailscaleStatus> listFrom(Object? e) => [
+        for (final m in CcChannel._asList(e))
+          if (m is Map)
+            CcTailscaleStatus.fromMap(CcChannel._asMap(m)),
+      ].where((s) => s.tag.isNotEmpty).toList();
+}
+
 
 /// §3.1 — статус от `writeStatus`. `uplink`/`downlink` — байтовая дельта за
 /// интервал (B/s при interval=1s); `*Total` — накопленный объём.

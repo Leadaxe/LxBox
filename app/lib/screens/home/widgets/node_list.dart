@@ -9,6 +9,7 @@ import '../../../models/node_warning.dart';
 import '../../../services/direction_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
+import '../../../services/networks_direction.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
@@ -130,6 +131,9 @@ class HomeNodeList extends StatelessWidget {
         ),
       );
     }
+    // Задача 579 — псевдо-направление NETWORKS: свой список без фильтра,
+    // сортировки и перетаскивания.
+    if (state.showingNetworks) return _buildNetworksList(context);
     if (state.nodes.isEmpty) {
       // Empty state: residual-ветка гайда — туннель up при пустом конфиге
       // (§116 аномалия); остальные пустые состояния — пассивный текст.
@@ -269,6 +273,74 @@ class HomeNodeList extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Задача 579 — узлы NETWORKS в порядке конфига. Нажатие открывает экран
+  /// узла (как «View details»), выбора узла и замера задержки нет; на месте
+  /// задержки — состояние узла из потока ядра.
+  Widget _buildNetworksList(BuildContext context) {
+    final dividerColor =
+        Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
+    final model = state.activeModel;
+    final tags = state.networksNodes;
+    void openDetails(String tag) => viewOutboundJson(context, tag, state,
+        subController: subController, homeController: controller);
+    return Expanded(
+      child: ListView.builder(
+        key: const ValueKey('networks-list'),
+        padding: const EdgeInsets.only(bottom: 56).withSafeBottom(context),
+        itemCount: tags.length,
+        itemBuilder: (ctx, i) {
+          final tag = tags[i];
+          final node = model[tag];
+          final protoType = model.protocolOf(tag);
+          return KeyedSubtree(
+            key: rowKeyFor(tag),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: dividerColor, width: 1),
+                ),
+              ),
+              child: NodeRow(
+                item: NodeViewItem(
+                  tag: tag,
+                  active: false,
+                  highlighted: false,
+                  delay: null,
+                  pingBusy: false,
+                  tunnelUp: state.tunnelUp,
+                  busy: state.busy,
+                  urltestNow: null,
+                  hasDetour: node?.detour != null,
+                  outboundType: node?.type,
+                  notificationWarnings: const <NodeWarning>[],
+                  protocolLabel: protoType == null
+                      ? null
+                      : [
+                          protoLabel(protoType),
+                          ?node?.transportLabel,
+                          ?node?.securityLabel,
+                        ].join('·'),
+                  tailnetState: tailnetRowState(
+                    tunnelUp: state.tunnelUp,
+                    tag: tag,
+                    byTag: state.tailscaleStatus,
+                  ),
+                ),
+                onHighlight: () => openDetails(tag),
+                // Выбора узла нет: пункт и кнопка скрыты в NodeRow.
+                onActivate: () {},
+                onPing: () {},
+                onCopyUri: () =>
+                    unawaited(copyNodeUri(context, tag, subController)),
+                onViewJson: () => openDetails(tag),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

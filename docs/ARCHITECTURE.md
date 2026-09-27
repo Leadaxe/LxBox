@@ -1784,7 +1784,7 @@ The core emits changes and the UI subscribes. The old flow of three pollers is g
 
 ### The native clients (`BoxCommandClient.kt`)
 
-Four independent `CommandClient`s decouple the update rates and the lifecycles.
+Five independent `CommandClient`s decouple the update rates and the lifecycles.
 
 | Client | Commands | Lifecycle |
 |---|---|---|
@@ -1792,6 +1792,7 @@ Four independent `CommandClient`s decouple the update rates and the lifecycles.
 | `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | Raised by `connectScreen`, paused in the background |
 | `profilerClient` | `CommandConnections` + `subscribeDNSQueries` (SPEC 018, §180) | Raised for recording and kept alive in the background |
 | `pingClient` | A bare `PingHandler` with no subscriptions — unary RPC only | §175/§209 — lifecycle-independent |
+| `tailscaleClient` | A bare client plus `subscribeTailscaleStatus` (task 579) | Raised by `ccStartTailscaleStatus` while the VPN is on and the config has a NETWORKS node; closed by `ccStopTailscaleStatus` and `shutdownAll` |
 
 A subscription in the gomobile facade is `CommandClientOptions.addCommand(int)` plus the `CommandClientHandler` callbacks.
 
@@ -1806,6 +1807,7 @@ Push streams over the `lxbox/cc/*` EventChannel (`status` · `outbounds` · `gro
 | `groups` | a push `Stream<List<CcGroup>>` | the selector and urltest groups plus selected/active |
 | `connections` | a push `Stream<List<CcConnection>>` | the active TCP/UDP connections plus bytes and packageName/processPath |
 | `dnsQueries` | a push `Stream<List<CcDnsQuery>>` | §180 (SPEC 018) — the DNS queries from the core (domain, rcode, latency) |
+| `tailscaleStatus` | a push `Stream<List<CcTailscaleStatus>>` (`lxbox/cc/tailscale`) | task 579 — per Tailscale endpoint: tag, `BackendState`, `StateText`; a full snapshot per core update. `startTailscaleStatus()` / `stopTailscaleStatus()` hold the core subscription |
 | `getGroups()` | a unary pull returning `List<CcGroup>?` | a deterministic snapshot of the groups |
 | `getRules()` | a unary pull returning `List<CcRule>` | a snapshot of the route and DNS rules (for diagnostics) |
 | `getPool(tag)` | a unary pull returning `List<CcPoolSlot>?` | §208/§209 — a snapshot of a round_robin group's pool |
@@ -1820,6 +1822,27 @@ The lifecycle signals (`connectScreen`/`disconnectScreen`, `connectProfiler`/`di
 ### Wiring
 
 On a `connected` event `HomeController` subscribes to the `status` and `groups` streams.
+
+### The NETWORKS pseudo-direction (task 579)
+
+Home's Direction list ends with `NETWORKS` when the VPN is on and the config the core runs
+(`HomeState.activeModel`) has at least one node that meets all of:
+
+1. its record is in `endpoints[]`;
+2. its type is `tailscale`;
+3. the registry does not count it as an exit (`exitCapableByRegistry` false: no `exit_node`).
+
+Such a node is in no `selector` or `urltest` group. NETWORKS is a view only: it is not written
+to the config or to storage, the dropdown value is a sentinel (`kNetworksDirectionValue`),
+not a tag, so a user Direction tagged `NETWORKS` does not clash, and `selectedGroup` (the
+real exit) does not change when NETWORKS is picked (`HomeState.networksOpen`). Automation
+and the Debug API switch Directions by tag and never reach it. The list shows NETWORKS
+instead of the Direction's nodes when it is picked, or when there are no real Directions;
+once the nodes are gone the selected real Direction shows again. The rows have no delay test
+and no selection; a tap opens `outbound_view_screen` (View details); the delay slot shows the
+node state from `CcChannel.tailscaleStatus`. `HomeController._syncTailnetStatus` holds the
+core subscription while the VPN is on and a NETWORKS node exists, and re-subscribes when the
+node set or the core's config snapshot changes. Code: `services/networks_direction.dart`.
 
 ### Gotchas
 

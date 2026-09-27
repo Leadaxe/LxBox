@@ -1465,9 +1465,16 @@ the Add Server Wizard's Tailscale mode.
   `tailscale_core_unsupported` warning line; the rest of the config builds. The node stays in
   storage — it survives a core update and a backup from a desktop.
 - **Directions:** a node without a non-empty `exit_node` is **not** a Direction candidate (it
-  does not reach the internet) and therefore is not listed on Home (Home lists the selector's
-  members); it lives in Servers, the detour picker and chain positions. With `exit_node` it is
-  a candidate like any other node.
+  does not reach the internet), so no selector lists it; it lives in Servers, the detour picker
+  and chain positions. With `exit_node` it is a candidate like any other node.
+- **Home, NETWORKS (task 579):** a node in `endpoints[]` of the built config, type `tailscale`,
+  that the registry does not count as an exit (`exit_capable_when` false) is listed on Home
+  under the pseudo-direction `NETWORKS`, the last entry of the Direction list, while the
+  VPN is on. NETWORKS is not in the config or in storage. Its rows have no delay test and no
+  node selection: a tap opens the node screen (View details), and the delay slot shows the
+  node state from the core stream `SubscribeTailscaleStatus` (`BackendState`: `Running` →
+  `running`, `NeedsLogin` → `sign-in needed`, `Stopped` → `stopped`, no record yet →
+  `starting`, anything else → the core's `StateText`).
 - **Probe:** not tested (no address; a probe config would have to join the tailnet) — “—” instead
   of a delay.
 - **Companion records (preset, §578):** the template preset `tailscale` (on by default,

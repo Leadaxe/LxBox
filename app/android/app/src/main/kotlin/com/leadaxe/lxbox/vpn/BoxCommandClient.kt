@@ -20,6 +20,9 @@ import io.nekohasekai.libbox.PoolSlotIterator
 import io.nekohasekai.libbox.RuleIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
+import io.nekohasekai.libbox.TailscaleStatusHandler
+import io.nekohasekai.libbox.TailscaleStatusSubscription
+import io.nekohasekai.libbox.TailscaleStatusUpdate
 import io.nekohasekai.libbox.URLTestOutboundResult
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -270,6 +273,7 @@ class BoxCommandClient {
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")
         disconnectClient(pingClient, "shutdownAll") // §175
+        stopTailscaleStatus() // §579
         screenAccumulator.set(null)
         profilerAccumulator.set(null)
     }
@@ -336,6 +340,63 @@ class BoxCommandClient {
     private fun scheduleReconnect(delayMs: Long, action: () -> Unit) {
         val capped = delayMs.coerceAtMost(RECONNECT_BACKOFF_MAX_MS)
         mainHandler.postDelayed({ runCatching { action() } }, capped)
+    }
+
+    // ═══════════════════════ §579 Tailscale status ═══════════════════════
+    // Подписка `SubscribeTailscaleStatus` на ОТДЕЛЬНОМ клиенте без команд:
+    // `cancelPing` рвёт pingClient, `pauseStatus`/`pauseScreen` — свои клиенты;
+    // подписку они не задевают. Держит её Dart: поднимает, пока VPN включён и в
+    // конфиге есть узел Tailscale без exit_node (псевдо-направление NETWORKS).
+    // Ядро шлёт полный список endpoint'ов на каждое обновление → coalesce.
+
+    private val tailscaleClient = AtomicReference<CommandClient?>(null)
+    private val tailscaleSub = AtomicReference<TailscaleStatusSubscription?>(null)
+    private val tailscaleGen = AtomicInteger(0)
+
+    /// Поднять (или переподнять) подписку. Старт стрима — gRPC, звать с
+    /// `Dispatchers.IO`. Ошибка наружу не бросается: пишется в лог, Dart
+    /// остаётся без записей (строка узла показывает `starting`).
+    fun startTailscaleStatus() {
+        stopTailscaleStatus()
+        val gen = tailscaleGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            tailscaleClient.getAndSet(client)?.runCatching { disconnect() }
+            val sub = client.subscribeTailscaleStatus(TailscaleHandler(gen))
+            tailscaleSub.getAndSet(sub)?.runCatching { close() }
+        }.onFailure { Log.w(TAG, "startTailscaleStatus failed (gen=$gen): ${it.message}") }
+    }
+
+    fun stopTailscaleStatus() {
+        tailscaleGen.incrementAndGet()
+        tailscaleSub.getAndSet(null)?.runCatching { close() }
+            ?.onFailure { Log.w(TAG, "tailscale sub close failed: ${it.message}") }
+        disconnectClient(tailscaleClient, "stopTailscaleStatus")
+    }
+
+    /// Колбэки приходят из Go-потока: ни одного исключения наружу (JNI abort).
+    private inner class TailscaleHandler(private val gen: Int) : TailscaleStatusHandler {
+        override fun onStatusUpdate(update: TailscaleStatusUpdate?) {
+            runCatching {
+                if (gen != tailscaleGen.get() || update == null) return@runCatching
+                val out = ArrayList<Map<String, Any>>()
+                val iter = update.endpoints() ?: return@runCatching
+                while (iter.hasNext()) {
+                    val e = iter.next() ?: continue
+                    out.add(mapOf(
+                        "tag" to (e.endpointTag ?: ""),
+                        "backend_state" to (e.backendState ?: ""),
+                        "state_text" to (e.stateText ?: ""),
+                    ))
+                }
+                tailscaleEmitter.offer(out)
+            }.onFailure { Log.w(TAG, "tailscale onStatusUpdate failed: ${it.message}") }
+        }
+
+        override fun onError(message: String?) {
+            runCatching { Log.w(TAG, "tailscale status stream error (gen=$gen): $message") }
+        }
     }
 
     // ═══════════════════════ Imperative (unary) ═══════════════════════
@@ -1125,6 +1186,8 @@ class BoxCommandClient {
     private val connectionsEmitter = SnapshotEmitter { BoxVpnService.ccConnectionsSink }
     // §180 — DNS: событийный (НЕ coalesce), батч-доставка.
     private val dnsQueriesEmitter = EventEmitter { BoxVpnService.ccDnsQueriesSink }
+    // §579 — состояние узлов Tailscale: снапшот, coalesce.
+    private val tailscaleEmitter = SnapshotEmitter { BoxVpnService.ccTailscaleSink }
 
     /// Дросселированный эмиттер: queue + drop-newest + single Runnable + main-Handler + batch.
     /// Для status/outbounds/groups/connections эмитим ПОСЛЕДНИЙ снапшот (coalesce —

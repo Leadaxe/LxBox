@@ -216,6 +216,10 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// §180 — DNS-журнал из ядра (SPEC 018). Батч-доставка списком CcDnsQuery.
         @Volatile
         var ccDnsQueriesSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §579 — состояние узлов Tailscale (`SubscribeTailscaleStatus`): снапшот
+        /// списком `{tag, backend_state, state_text}` на каждое обновление ядра.
+        @Volatile
+        var ccTailscaleSink: io.flutter.plugin.common.EventChannel.EventSink? = null
 
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")

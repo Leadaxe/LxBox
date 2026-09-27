@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Spec |
+| Статус | Implemented (проверка на устройстве: DEVICE-PENDING) |
 | Дата старта | 2026-09-27 |
 | Дата завершения | — |
-| Коммиты | — |
+| Коммиты | см. «Реализация» |
 | Контракт | Не затрагивается: конфиг не меняется |
 | Связанные spec'ы | [§578](578-tailscale-preset-template-for-each.md) (пресет Tailscale), [§435](435-node-sections-tailscale.md) (узел без выхода не идёт в пул Направлений), [features/392](../features/392%20node-diagnostics/spec.md) |
 
@@ -111,6 +111,70 @@ NETWORKS. Правила работы с биндингом: память про
 2. Функция отбора узлов NETWORKS из конфига: чистая, с тестом.
 3. Встраивание в перечень направлений и список узлов.
 4. Строки интерфейса на английском, переводы по `docs/l10n.md`.
+
+## Опись (исполнитель, 27.09.2026)
+
+- **Перечень направлений.** `HomeState.groups` — теги `selector`-групп из
+  снапшота ядра (`HomeController._applyGroups` ← `CcChannel.groups`,
+  `selectorGroupTags` без `GLOBAL`); подписи — `groupLabels` из хранилища.
+  Выпадающий список — `screens/home/widgets/home_controls.dart`, значение
+  пункта = тег группы (записи различались бы по названию, отсюда заглушка ниже).
+- **Состав узлов.** `HomeController.applyGroup` → `HomeState.nodes` = члены
+  выбранной группы; порядок и фильтр — `node_list_presenter.dart`.
+- **Строка узла и меню.** `screens/home/widgets/node_list.dart`
+  (`_buildNodeCell` → `widgets/node_row.dart` + `node_view_item.dart`);
+  тап = подсветка, кнопка ▶ и пункт «Use this node» = `switchNode`; «View
+  details» = `viewOutboundJson` (`node_actions.dart`) → `outbound_view_screen`.
+- **Обёртка `SubscribeTailscaleStatus`.** В Kotlin и Dart её не было. В AAR
+  (`v1.14.2-lx.4`, javap) есть: `CommandClient.subscribeTailscaleStatus(
+  TailscaleStatusHandler): TailscaleStatusSubscription`, колбэки
+  `onStatusUpdate(TailscaleStatusUpdate)` / `onError(String)`,
+  `TailscaleStatusUpdate.endpoints()` → итератор `TailscaleEndpointStatus`
+  (`getEndpointTag`, `getBackendState`, `getStateText`, …),
+  `TailscaleStatusSubscription.close()`. В Go подписка неблокирующая
+  (горутина `subscribeStatus`), каждое обновление — полный список endpoint'ов.
+
+## Реализация
+
+- **Отбор:** `app/lib/services/networks_direction.dart` —
+  `networksNodeTags(ParsedConfig)` (условия 1–3, `exitCapableByRegistry`,
+  кеш на экземпляр модели), `tailnetRowState` (таблица раздела 3).
+  Модель — `HomeState.activeModel` (конфиг ядра, иначе последний собранный).
+- **Псевдо-направление — только вид.** `HomeState.networksOpen` +
+  `showingNetworks` (VPN включён, узлы есть, выбран NETWORKS либо настоящих
+  направлений нет). `selectedGroup` не меняется, поэтому выход трафика,
+  шторка, автоматизация и Debug API NETWORKS не видят. Значение пункта —
+  `kNetworksDirectionValue` (`\u0001networks`), не тег: направление
+  пользователя с тегом `NETWORKS` не совпадает. Узлы пропали — снова виден
+  выбранный настоящий список (edge case «при перезапуске»).
+- **Экран:** пункт `NETWORKS` последним в выпадающем списке
+  (`home_controls.dart`), общий замер («speed») при NETWORKS выключен.
+  Список — `_buildNetworksList` в `node_list.dart`: без фильтра, сортировки и
+  перетаскивания; тап и «View details» открывают `outbound_view_screen`.
+  `NodeRow` при `tailnetState != null`: нет кнопки ▶, нет пунктов Ping и
+  Use this node; на месте задержки — состояние (`running` зелёным,
+  `sign-in needed`/`stopped` оранжевым). Переводы ru/zh добавлены.
+- **Мост состояния:** `BoxCommandClient.startTailscaleStatus` /
+  `stopTailscaleStatus` — отдельный клиент без команд + подписка, колбэки в
+  `runCatching`, снапшот `{tag, backend_state, state_text}` через
+  `SnapshotEmitter` в `BoxVpnService.ccTailscaleSink`; EventChannel
+  `lxbox/cc/tailscale`, методы `ccStartTailscaleStatus` /
+  `ccStopTailscaleStatus` (на `Dispatchers.IO`); `shutdownAll` закрывает
+  подписку. Dart: `CcChannel.tailscaleStatus` (общий поток с кешем, один
+  приёмник), `HomeController._syncTailnetStatus` в `_emit`: слушатель до
+  старта, подписка живёт при VPN включён и узле NETWORKS, переподнимается при
+  смене состава или снапшота конфига ядра.
+- **Тесты:** `app/test/services/networks_direction_test.dart` — отбор (с
+  `exit_node`, без, WireGuard, `outbounds[]`, пустой итог), показ, каждая
+  строка таблицы раздела 3, разбор сообщения канала, строка (нажатие не
+  выбирает узел, в меню нет Ping и Use this node).
+- **Не покрыто тестом:** выпадающий список целиком (виджет-тест
+  `HomeControls` тянет контроллеры); Kotlin-часть без устройства не
+  проверяется.
+- **DEVICE-PENDING:** на эмуляторе с узлом Tailscale без `exit_node` —
+  пункт NETWORKS последним, строка с состоянием `running`/`sign-in needed`,
+  тап открывает экран узла с вкладкой Diagnostics; после reload ядра
+  состояние обновляется; конфиг байт в байт прежний.
 
 ## Риски и edge cases
 

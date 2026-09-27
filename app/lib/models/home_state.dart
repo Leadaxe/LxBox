@@ -9,6 +9,7 @@ import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
 import 'ui_msg.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/networks_direction.dart';
 
 export 'config_node.dart';
 export 'dependency_graph.dart';
@@ -90,6 +91,8 @@ class HomeState {
     this.configLoadError = false,
     this.lastStartError = '',
     this.lastStartErrorAt,
+    this.networksOpen = false,
+    this.tailscaleStatus = const <String, CcTailscaleStatus>{},
   })  : configModel = configModel ?? ParsedConfig.parse(configRaw),
         runningModel = runningModel ??
             (runningConfigRaw != null
@@ -282,6 +285,28 @@ class HomeState {
   final DateTime? lastStartErrorAt;
 
   bool get tunnelUp => tunnel.isUp;
+
+  /// Задача 579 — пользователь выбрал псевдо-направление NETWORKS в перечне
+  /// направлений. Только вид: [selectedGroup] (настоящее направление, выход
+  /// трафика) не меняется. Показ — см. [showingNetworks].
+  final bool networksOpen;
+
+  /// Задача 579 — записи потока ядра `SubscribeTailscaleStatus` по тегу
+  /// endpoint'а. Пусто, пока VPN выключен или подписки нет.
+  final Map<String, CcTailscaleStatus> tailscaleStatus;
+
+  /// Задача 579 — узлы NETWORKS из конфига, по которому работает ядро
+  /// ([activeModel]; при выключенном VPN — последний собранный).
+  List<String> get networksNodes => networksNodeTags(activeModel);
+
+  /// Задача 579 — список узлов показывает NETWORKS вместо узлов направления:
+  /// VPN включён, узлы есть, и выбран NETWORKS либо настоящих направлений нет.
+  /// Узлы пропали (узел удалён или стал выходом) — снова видно выбранное
+  /// настоящее направление.
+  bool get showingNetworks =>
+      tunnelUp &&
+      (networksOpen || groups.isEmpty) &&
+      networksNodes.isNotEmpty;
 
   // ─────────────── §122 — типизированный доступ к ccGroups ───────────────
   // Чистые методы на нативных CommandClient-моделях (заменили статические
@@ -502,6 +527,8 @@ class HomeState {
     bool? configLoadError,
     String? lastStartError,
     Object? lastStartErrorAt = _unset,
+    bool? networksOpen,
+    Map<String, CcTailscaleStatus>? tailscaleStatus,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -566,6 +593,8 @@ class HomeState {
       lastStartErrorAt: identical(lastStartErrorAt, _unset)
           ? this.lastStartErrorAt
           : lastStartErrorAt as DateTime?,
+      networksOpen: networksOpen ?? this.networksOpen,
+      tailscaleStatus: tailscaleStatus ?? this.tailscaleStatus,
     );
   }
 }

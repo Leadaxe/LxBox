@@ -56,6 +56,13 @@ class HomeController extends ChangeNotifier
   StreamSubscription<CcStatus>? _ccStatusSub;
   StreamSubscription<List<CcGroup>>? _ccGroupsSub;
 
+  /// Задача 579 — подписка на состояние узлов Tailscale (NETWORKS). Dart-слушатель
+  /// ставится один раз при первой надобности; подписку ядра держит
+  /// [_syncTailnetStatus]. [_tailnetKey] — состав узлов и снапшот конфига ядра,
+  /// под которые она поднята; `null` — подписки нет.
+  StreamSubscription<List<CcTailscaleStatus>>? _tailnetSub;
+  String? _tailnetKey;
+
   /// §193 — resyncForReopen (§185 cold-start) делаем ОДИН раз за жизнь движка.
   /// На реконнектах refcount валиден (тот же движок) → resync только рвал бы
   /// connections-доставку (single-shot, без pull). false на свежем движке.
@@ -316,6 +323,8 @@ class HomeController extends ChangeNotifier
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
     _groupsPullTimer?.cancel();
+    _tailnetSub?.cancel();
+    if (_tailnetKey != null) unawaited(_cc.stopTailscaleStatus());
     super.dispose();
   }
 
@@ -333,6 +342,48 @@ class HomeController extends ChangeNotifier
     if (_disposed) return;
     _state = next;
     notifyListeners();
+    _syncTailnetStatus();
+  }
+
+  /// Задача 579 — подписка ядра `SubscribeTailscaleStatus` живёт, пока VPN
+  /// включён и в конфиге есть узел NETWORKS. Смена состава узлов или снапшота
+  /// конфига ядра (перезагрузка) переподнимает её: после reload ядра прежний
+  /// стрим может закончиться молча.
+  void _syncTailnetStatus() {
+    final s = _state;
+    final nodes = s.tunnelUp ? s.networksNodes : const <String>[];
+    final key = nodes.isEmpty
+        ? null
+        : '${nodes.join('\n')}|${s.runningConfigRaw?.hashCode}';
+    if (key == _tailnetKey) return;
+    final wasActive = _tailnetKey != null;
+    _tailnetKey = key;
+    if (key == null) {
+      unawaited(_cc.stopTailscaleStatus());
+      if (s.tailscaleStatus.isNotEmpty) {
+        _emit(s.copyWith(tailscaleStatus: const <String, CcTailscaleStatus>{}));
+      }
+      return;
+    }
+    // §122 — Dart-слушатель ДО старта подписки: иначе первый снапшот ядра
+    // придёт при пустом native sink и потеряется.
+    _tailnetSub ??= _cc.tailscaleStatus.listen((list) {
+      if (_tailnetKey == null) return;
+      _emit(_state.copyWith(tailscaleStatus: {for (final e in list) e.tag: e}));
+    }, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc tailscale stream error: $e');
+    });
+    if (wasActive) {
+      _addDebug(DebugSource.app, 'Tailscale status: resubscribe');
+    }
+    unawaited(_cc.startTailscaleStatus());
+  }
+
+  /// Задача 579 — показать псевдо-направление NETWORKS. Выбранное настоящее
+  /// направление и выход трафика не меняются.
+  void openNetworks() {
+    if (_state.networksOpen) return;
+    _emit(_state.copyWith(networksOpen: true));
   }
 
   @override
@@ -1794,9 +1845,11 @@ class HomeController extends ChangeNotifier
   void setSelectedGroup(String? group) {
     final prevGroup = _state.selectedGroup;
     // §070: bump cache gen — group switch = новый pool, sort заново.
+    // Задача 579 — выбор настоящего направления уводит с NETWORKS.
     _emit(_state.copyWith(
       selectedGroup: group,
       pingBatchGen: _state.pingBatchGen + 1,
+      networksOpen: false,
     ));
     // §047 — outgoing state event (gated, default OFF). Эмитим только на
     // реальную смену группы (не повторный select той же).

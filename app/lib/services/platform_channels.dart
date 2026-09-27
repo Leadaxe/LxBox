@@ -46,4 +46,6 @@ class PlatformChannels {
   static const ccGroups = 'lxbox/cc/groups';
   static const ccConnections = 'lxbox/cc/connections';
   static const ccDns = 'lxbox/cc/dns'; // §180 — DNS-журнал из ядра (SPEC 018)
+  /// §579 — состояние узлов Tailscale (`SubscribeTailscaleStatus`).
+  static const ccTailscale = 'lxbox/cc/tailscale';
 }
