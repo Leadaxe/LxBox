@@ -58,6 +58,7 @@ Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `
 - Per-subscription update interval (1–168 h), `profile-update-interval` header honored; optional "update disabled subscriptions too" (§337)
 - Subscription row subtitle: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`; title fallback from `Content-Disposition` (RFC 5987)
 - **Get WARP** — one-tap Cloudflare WARP (WireGuard or MASQUE), see below
+- **Tailscale** — the phone joins your tailnet as a node, see below
 </details>
 
 <details>
@@ -74,6 +75,18 @@ Tap **Get WARP** on the servers screen → a tunnel to Cloudflare is registered 
 - **WARP+** (optional): paste a license key under *Advanced* to bind WARP+ (Argo Smart Routing). Empty = free WARP.
 - **Idempotent**: re-tapping reuses the cached account instead of registering a new device; *Re-register* forces a fresh one.
 - See [spec 025](docs/spec/features/025%20warp%20integration/spec.md)
+</details>
+
+<details>
+<summary><strong>Tailscale</strong> — the phone as a node of your tailnet</summary>
+
+**Add server → Tailscale** builds a `tailscale` endpoint: auth key, hostname, control URL. The node runs inside the core, the Tailscale app is not needed.
+
+- **Preset «Tailscale networks»**, on by default, serves every Tailscale node in the config: tailnet addresses go through the node, tailnet names are resolved by the node's own MagicDNS. A node is excluded by its **Skip presets** switch.
+- **Exit node**: a node with `exit_node` set is an ordinary exit and appears in Directions and auto-select. A node without it gives access to the tailnet only.
+- **NETWORKS** on Home lists the nodes without an exit and shows their state: `running`, `sign-in needed`, `stopped`.
+- **Network tab** of the node: state, sign in and log out, this device, devices of the tailnet, exit node choice, ping of a device with the path (direct or relay).
+- See tasks [578](docs/spec/tasks/578-tailscale-preset-template-for-each.md), [579](docs/spec/tasks/579-networks-pseudo-direction.md), [581](docs/spec/tasks/581-tailscale-network-tab.md)
 </details>
 
 <details>
@@ -313,6 +326,7 @@ View and edit the raw sing-box JSON config. The editor is line-based (§333): on
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **AWG 1.x/2.0 obfuscation** (jc/jmin/jmax, s1–s4, h1–h4 incl. **`N-M` ranges**, i1–i5), auto-MTU 1280 |
 | **MASQUE** (Cloudflare WARP) | `masque://` | QUIC / HTTP-3 (RFC 9484 CONNECT-IP), HTTP/2 fallback, ECDSA P-256 pinning |
+| **Tailscale** | sing-box JSON, wizard | WireGuard mesh, MagicDNS, exit node, DERP relays |
 
 **XHTTP** is a native transport (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one) with the full client-side param set: session/seq/uplink placements (path/query/header/cookie), keys, upload method, X-Padding obfs mode (`repeat-x`/`tokenish`) and packet-up tuning — read both from flat query params and from the `extra` (URL-encoded JSON) parameter. Works with TLS and Reality, incompatible with XTLS-Vision (protocol limitation).
 

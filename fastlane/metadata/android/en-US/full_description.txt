@@ -30,6 +30,8 @@ VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, 
 
 Cloudflare WARP in one tap: registration right in the app, the private key is generated on your device and never leaves it — Cloudflare receives only the public half. WireGuard or MASQUE, optional AmneziaWG obfuscation.
 
+Tailscale: the phone joins your tailnet as a node. Devices answer by name through MagicDNS, routes to the tailnet are set up by one preset, and any device of the network can serve as an exit node.
+
 Import any familiar format: subscriptions and links, Base64, Xray arrays, WireGuard URI/INI, Amnezia vpn://, sing-box JSON configs, local files, plain text.
 
 SUBSCRIPTIONS WITHOUT MANUAL WORK

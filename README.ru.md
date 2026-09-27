@@ -58,6 +58,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - Per-subscription интервал обновления (1–168 ч), заголовок `profile-update-interval` уважается; опция «обновлять и выключенные подписки» (§337)
 - Subtitle строки подписки: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`; имя из `Content-Disposition` (RFC 5987)
 - **Get WARP** — Cloudflare WARP в один тап (WireGuard или MASQUE), см. ниже
+- **Tailscale** — телефон входит в вашу сеть tailnet как узел, см. ниже
 </details>
 
 <details>
@@ -74,6 +75,18 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - **WARP+** (опционально): license key под *Advanced* привязывает WARP+ (Argo Smart Routing). Пусто = бесплатный WARP.
 - **Идемпотентность**: повторный тап переиспользует закешированный аккаунт; *Re-register* создаёт новый.
 - См. [спека 025](docs/spec/features/025%20warp%20integration/spec.md)
+</details>
+
+<details>
+<summary><strong>Tailscale</strong> — телефон как узел вашей сети tailnet</summary>
+
+**Add server → Tailscale** собирает endpoint `tailscale`: auth key, hostname, control URL. Узел работает внутри ядра, приложение Tailscale не нужно.
+
+- **Пресет «Tailscale networks»**, включён по умолчанию, обслуживает каждый узел Tailscale в конфиге: адреса сети идут через узел, имена сети разрешает MagicDNS самого узла. Узел исключается переключателем **Skip presets**.
+- **Exit node**: узел с заданным `exit_node` это обычный выход, он виден в Направлениях и в автовыборе. Узел без него даёт доступ только в сеть.
+- **NETWORKS** на главном экране показывает узлы без выхода и их состояние: `running`, `sign-in needed`, `stopped`.
+- **Вкладка Network** узла: состояние, вход и выход из аккаунта, свой узел, устройства сети, выбор exit node, пинг устройства с путём (напрямую или через ретранслятор).
+- См. задачи [578](docs/spec/tasks/578-tailscale-preset-template-for-each.md), [579](docs/spec/tasks/579-networks-pseudo-direction.md), [581](docs/spec/tasks/581-tailscale-network-tab.md)
 </details>
 
 <details>
@@ -313,6 +326,7 @@ Auto-группа Направления умеет не только выбир
 | SOCKS       | `socks://` / `socks5://`           | TCP, auth                                      |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **обфускация AWG 1.x/2.0** (jc/jmin/jmax, s1–s4, h1–h4 вкл. **диапазоны `N-M`**, i1–i5), авто-MTU 1280 |
 | **MASQUE** (Cloudflare WARP) | `masque://` | QUIC / HTTP-3 (RFC 9484 CONNECT-IP), fallback HTTP/2, pinning ECDSA P-256 |
+| **Tailscale** | sing-box JSON, визард | WireGuard mesh, MagicDNS, exit node, ретрансляторы DERP |
 
 **XHTTP** — нативный транспорт (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one) с полным клиентским набором полей: placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, X-Padding obfs-режим (`repeat-x`/`tokenish`) и packet-up-tuning — читаются из плоских query-параметров и из `extra` (URL-encoded JSON). Работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).
 

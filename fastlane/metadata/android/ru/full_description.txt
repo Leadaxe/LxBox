@@ -28,7 +28,9 @@ L×Box работает на sing-box-lx — нашем форке sing-box, к�
 
 VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, AmneziaWG 2.0, MASQUE поверх QUIC/HTTP-3.
 
-Cloudflare WARP — в один тап: регистрация прямо в приложении, приватный ключ генерируется на устройстве и не покидает его — Cloudflare получает только публичную часть. WireGuard или MASQUE, опционально обфускация AmneziaWG.
+Cloudflare WARP в один тап: приватный ключ создаётся на устройстве и не покидает его. WireGuard или MASQUE, опционально обфускация AmneziaWG.
+
+Tailscale: телефон входит в вашу сеть как узел. Устройства доступны по именам, выход через exit node.
 
 Импорт любого привычного формата: подписки и ссылки, Base64, Xray-массивы, WireGuard URI/INI, Amnezia vpn://, JSON-конфиги sing-box, локальные файлы, обычный текст.
 
