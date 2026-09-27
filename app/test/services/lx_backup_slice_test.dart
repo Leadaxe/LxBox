@@ -7,7 +7,6 @@ import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_link.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
@@ -278,22 +277,11 @@ void main() {
         FolderMember(
           raw: _memberUri,
           detour: NodeLink(tag: 'Tokyo'),
-          sections: NodeSections.fromJson({
-            'rules': [
-              {
-                'kind': 'inline',
-                'name': 'n',
-                'enabled': true,
-                'body': {'outbound': '@self'},
-              },
-            ],
-          }),
         ),
         FolderMember(raw: 'not a node'),
       ]);
       final server = (s.lists[1] as UserServer).copyWith(
         detourPolicy: _flags.copyWith(overrideDetour: NodeLink(tag: 'EU de-1')),
-        sections: folder.members.first.sections,
       );
       Set<String> table(BackupRecord kind) => {
             for (final f in kBackupFields)
@@ -349,36 +337,6 @@ void main() {
       ]) {
         covered(BackupRecord.dnsRule, dnsRuleToRecord(r));
       }
-    });
-
-    test('§575 секции узла: в файл не едут, потерей не называются', () async {
-      overrideBackupFieldsForTesting(_settingsUndeclared());
-      final sections = NodeSections.fromJson({
-        'dns': {
-          'servers': [
-            {
-              'kind': 'user',
-              'tag': '@{self}-dns',
-              'enabled': true,
-              'body': {'type': 'udp', 'server': '100.100.100.100'},
-              'description': 'tailnet',
-            },
-          ],
-        },
-      })!;
-      final out = await _export([
-        UserServer(
-          id: 'srv-1',
-          name: '',
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: DetourPolicy.defaults,
-          rawBody: _uri,
-          sections: sections,
-        ),
-      ]);
-      expect(_lines(out.warnings), isEmpty);
-      expect(_source(out.json, 'server'), isNot(contains('sections')));
     });
 
     test('DNS: description и vars сервера едут, srs-правило не пишется и '

@@ -9,7 +9,6 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -109,37 +108,6 @@ LxBackupFile _import(_State s, String raw) {
   s.routeFinal = file.routeFinal ?? s.routeFinal;
   return file;
 }
-
-/// §575 — секции, оставленные в записи прошлой версией: экспорт их не пишет.
-NodeSections _sections(String name) => NodeSections.fromJson({
-      'rules': [
-        {
-          'kind': 'inline',
-          'name': name,
-          'enabled': true,
-          'num': 945,
-          'body': {'ip_cidr': ['100.64.0.0/10'], 'outbound': '@self'},
-        },
-      ],
-      'dns': {
-        'servers': [
-          {
-            'kind': 'user',
-            'tag': '@{self}-dns',
-            'enabled': true,
-            'body': {'type': 'udp', 'server': '100.100.100.100', 'detour': '@self'},
-          },
-        ],
-        'rules': [
-          {
-            'kind': 'user',
-            'name': '',
-            'enabled': true,
-            'body': {'domain_suffix': ['.ts.net'], 'server': '@{self}-dns'},
-          },
-        ],
-      },
-    })!;
 
 String _compact(Map<String, dynamic> j) => jsonEncode(j);
 
@@ -438,32 +406,6 @@ void main() {
       String stable(String raw) =>
           jsonEncode((jsonDecode(raw) as Map)..remove('exported_at'));
       expect(stable((await _export(target)).json), stable(out.json));
-    });
-
-    test('§575 экспорт не пишет секции ни у сервера, ни у члена папки', () async {
-      final state = _source();
-      state.lists = [
-        for (final l in state.lists)
-          switch (l) {
-            UserServer() => l.copyWith(sections: _sections('@{self} network')),
-            FolderServers() => l.copyWith(members: [
-                for (final m in l.members)
-                  m.copyWith(sections: _sections('@{self} member net')),
-              ]),
-            _ => l,
-          },
-      ];
-      expect(state.lists.whereType<UserServer>().first.sections, isNotNull);
-      final out = await _export(state);
-      expect(out.json, isNot(contains('"sections"')));
-      expect(out.json, isNot(contains('@self')));
-      expect(out.warnings.map((w) => w.detail).join('\n'),
-          isNot(contains('sections')),
-          reason: 'снятие молчаливое: секции упразднены, не потеря');
-      final plain = await _export(_source());
-      String stable(String raw) =>
-          jsonEncode((jsonDecode(raw) as Map)..remove('exported_at'));
-      expect(stable(out.json), stable(plain.json));
     });
 
     test('импорт собственного экспорта в совпадающее состояние ничего не добавляет', () async {

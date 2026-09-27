@@ -184,7 +184,6 @@ void main() {
         }
 
         _checkDns(state, expected);
-        _checkNoSections(state);
 
         // Фича 565 фаза B (§74) — свёртка `replace` в состоянии и в
         // повторном экспорте. `replace_tags` (дериватив legacy `fold`) не
@@ -715,21 +714,6 @@ void _checkDns(
   }
 }
 
-/// §575 (TASKS_LXBOX §82) — ожидание секций не сверяется: их нет. Импорт
-/// снимает поле у записи любого вида, и после слияния секций нет ни у
-/// одного узла.
-void _checkNoSections(_State state) {
-  for (final l in state.lists) {
-    if (l is UserServer) {
-      expect(l.sections, isNull, reason: '${l.name}: секции сняты');
-    }
-    if (l is FolderServers) {
-      for (final m in l.members) {
-        expect(m.sections, isNull, reason: '${l.name}: секции члена сняты');
-      }
-    }
-  }
-}
 
 /// Канон цепочки (`schema/source_chain.schema.json`) из мобильной модели —
 /// ровно поля маршрута, без идентичности записи (`tag`/`label`/`enabled`),

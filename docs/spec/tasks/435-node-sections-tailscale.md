@@ -1,6 +1,14 @@
 # 435 — Секции узла и Tailscale (контракт ## 13, NODE_SECTIONS.md, ONE_NAMESPACE.md §2)
 
-Статус: **implemented, DEVICE-VERIFIED на AVD** (14.09.2026: ядро lx.36 — путь гейта; ядро lx.38 — живой endpoint tailscale) — волна 2 программы контракта 1.0 (после ## 12, [§434](../../tasks/434-srs-rule-multiple-rule-sets.md)). Выпущено в **v2.23.2** (14.09.2026, ядро `v1.14.0-lx.38`).
+Статус: **Отменено, заменено §575 и §578** (27.09.2026). Секции узла как
+механизм упразднены [§575](575-remove-node-sections.md): поле `sections` у
+сервера и члена папки, канонический разбор/сборка удалены. Связку Tailscale
+(маршрут, DNS-сервер, DNS-правило) теперь даёт пресет шаблона
+[§578](578-tailscale-preset-template-for-each.md). Файл — историческая
+запись перенесённой из `features/` фичи; ниже текст на момент реализации
+14.09.2026, актуальному коду не соответствует.
+
+Было: **implemented, DEVICE-VERIFIED на AVD** (14.09.2026: ядро lx.36 — путь гейта; ядро lx.38 — живой endpoint tailscale) — волна 2 программы контракта 1.0 (после ## 12, [§434](434-srs-rule-multiple-rule-sets.md)). Выпущено в **v2.23.2** (14.09.2026, ядро `v1.14.0-lx.38`).
 Норма — `app/contract/docs/NODE_SECTIONS.md` (семантика) и
 `app/contract/docs/ONE_NAMESPACE.md` §2 (форма записей). Решения владельца
 14.09.2026: секции в состоянии сразу в целевой форме `body`; в бэкап до
@@ -50,7 +58,7 @@
 | `server_lists[].type=user` | `sections` (необязателен; пустой не пишется) | `UserServer.toJson` |
 | `server_lists[].type=folder` → `members[]` | `sections` (то же) | `FolderMember.toJson` |
 
-> **С 2.23.3 ([§439](../439%20storage-contract-1-0/spec.md))** `sections` лежат в
+> **С 2.23.3 ([§439](../features/439%20storage-contract-1-0/spec.md))** `sections` лежат в
 > записях `sources[]` `kind: server` и `nodes[]` папки, пишет их кодек
 > `lib/models/codec/source_record.dart`. Кодек записей из §2 стал корневым:
 > теми же записями хранятся `rules[]` и `dns{}` (`toJson`/`fromJson` моделей
@@ -477,7 +485,7 @@ NODE_SECTIONS.md §6, обе стороны реализуют волной 3):
 стабильного id нет — уточнить при реализации. До 2.24.0 включительно каталоги
 живут до очистки данных приложения.
 
-**Итог ([§445](../../tasks/445-tailscale-state-dir-lifecycle.md)).** Норма
+**Итог ([§445](445-tailscale-state-dir-lifecycle.md)).** Норма
 1–4 выполнена, п. 2 — без переименования на диске:
 
 - ключ узла: одиночный сервер — `id` источника, член папки и узел подписки —

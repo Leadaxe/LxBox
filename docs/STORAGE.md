@@ -40,15 +40,14 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ id, tag, enabled
 │       ├─ origin                object        {kind: uri|wg_ini|json, raw} — the original text, re-parsed on load
 │       ├─ detour                NodeLink?     personal detour of the server
-│       ├─ sections              object?       §435 — node sections
 │       ├─ detour_policy         object?       LxBox: flags, only when not default
 │       ├─ tag_policy            object?       LxBox: {prefix}, only when set
 │       │                        — folder (FolderServers, §234) —
 │       ├─ id, name, enabled, tag_policy?, detour?
 │       ├─ detour_policy?, ping_url?, ping_timeout_ms?, created_at    LxBox
 │       ├─ nodes[]               list          members in UI order:
-│       │   ├─ kind: server      {tag, enabled, origin, detour?, sections?}
-│       │   ├─ kind: unsupported {enabled, origin, reason, detour?, sections?} — text that does not parse
+│       │   ├─ kind: server      {tag, enabled, origin, detour?}
+│       │   ├─ kind: unsupported {enabled, origin, reason, detour?} — text that does not parse
 │       │   └─ kind: auto        {tag, enabled, group{group_type, members[]?, strategy, members_rule?, pool_badge?}}
 │       │                        — chain (SourceChain, §393 C) —
 │       ├─ tag, enabled
@@ -627,7 +626,6 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
                                               // the text: a JSON object → json, a WG INI → wg_ini,
                                               // anything else → uri. The node is re-parsed from raw on load.
   "detour":        { "tag": "vpn-2" },        // personal detour, a NodeLink; absent = none
-  "sections":      { … },                     // §435 — optional, see “Node sections” below
   "skip_presets":  true,                      // §578 — optional, only `true` is written; see below
   "detour_policy": { … },                     // LxBox, only when a flag is not default
   "tag_policy":    { "prefix": "Home " }      // LxBox, only when set. The prefix is part of the
@@ -669,48 +667,17 @@ reset the local value (only `true` is stored, so absence cannot be told from
 `for_each` preset for the node's type; the Debug API returns the field in the
 node record.
 
-#### Node sections (§435, contract ## 13)
+#### Node sections — removed (§575)
 
-A free node (a `kind: server` record or a folder member) may carry the config fragment it
-needs — route rules and DNS records — in `sections`. The record form is the contract's
-form (ONE_NAMESPACE.md §2): **record = app metadata + `body` = the sing-box object
-as is**, the same records as the root `rules[]` and `dns{}`. The `@self` / `@{self}`
-placeholders stay in storage verbatim; the final node tag is substituted at build time
-and when displayed.
-
-```jsonc
-"sections": {
-  "rules": [                                   // only kind inline | srs
-    { "kind": "inline", "id": "<uuid>", "name": "@{self} network", "enabled": true, "num": 945,
-      "body": { "domain_suffix": [".ts.net"],
-                "ip_cidr": ["100.64.0.0/10", "fd7a:115c:a1e0::/48"], "outbound": "@self" },
-      "resolve": { "only": false, "serverTag": "@{self}-dns" } }
-  ],
-  "dns": {
-    "servers": [                               // only kind user (tag in metadata, body without tag)
-      { "kind": "user", "tag": "@{self}-dns", "enabled": true,
-        "body": { "type": "tailscale", "endpoint": "@self" } }
-    ],
-    "rules": [                                 // only kind user
-      { "kind": "user", "name": "", "enabled": true,
-        "body": { "domain_suffix": [".ts.net"], "server": "@{self}-dns" } }
-    ]
-  }
-}
-```
-
-`resolve` (§437) is app metadata, not part of `body`: at build time it emits a
-non-terminal `action: resolve` rule with the node's own DNS server right before the route
-rule, so a name resolved to a FakeIP address still reaches the node and a UDP flow gets an
-address before routing.
-
-Empty sections are not written. A foreign `kind` inside a section is dropped on read
-(the rest of the records survive). `lib/models/node_sections.dart` holds the model. The
-LX Backup (contract 1.0, `lx_backup: 2`, [§438]) carries them as `sources[].sections` of
-the node, in this same form. On import, records the section may not hold are dropped
-with `backup_section_record_dropped`, and a node matched by body takes the file's
-`sections` wholesale when the field is present. A legacy 0.12 file's `servers[].sections`
-is ignored silently.
+A free node no longer carries a config fragment of its own: the `sections` key
+(route rules and DNS records a node used to hold, contract ## 13, [§435])
+is gone from the model. A stored record with a non-empty `sections` key is
+still read without error — the key is dropped and one line goes to the app
+log (`node sections dropped: <tag>`) — and the key is not written back on the
+next save. The Tailscale bundle (route rule, DNS server, DNS rule) that used
+to travel with the node now comes from the `tailscale` template preset
+(§578), not from storage. LX Backup import drops a non-empty `sections` field
+the same way, with `backup_section_record_dropped` (§575, contract 1.1.85).
 
 ### `kind: "folder"` — `FolderServers` (§234)
 
@@ -745,8 +712,7 @@ detour. A subscription cannot be put into a folder, and there is no nesting.
       "origin": { "kind": "uri", "raw": "foo://…" },
       "reason": "the member text does not parse into a node" },         // visible in the UI, editable
     { "kind": "server", "tag": "ts", "enabled": true,
-      "origin": { "kind": "json", "raw": "{\"type\":\"tailscale\",…}" },
-      "sections": { … } },                                               // §435 — node sections
+      "origin": { "kind": "json", "raw": "{\"type\":\"tailscale\",…}" } },
     { "kind": "auto", "tag": "Auto", "enabled": true,                    // §322 — autoselect node
       "group": {
         "group_type": "urltest",
@@ -1812,5 +1778,5 @@ The scrubber only handles the `vars` and `sources` keys; everything else (`meta.
 [§439]: ./spec/features/439%20storage-contract-1-0/spec.md
 [§370]: ./spec/tasks/370-rule-order-num-axis.md
 [§434]: ./spec/tasks/434-srs-rule-multiple-rule-sets.md
-[§435]: ./spec/features/435%20node-sections-tailscale/spec.md
+[§435]: ./spec/tasks/435-node-sections-tailscale.md
 [§445]: ./spec/tasks/445-tailscale-state-dir-lifecycle.md

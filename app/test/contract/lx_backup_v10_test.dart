@@ -6,7 +6,6 @@ import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/record_codec.dart';
 import 'package:lxbox/models/server_list.dart';
@@ -370,16 +369,15 @@ void main() {
       final out = _apply(const [], file);
       final solos = out.lists.whereType<UserServer>().toList();
       expect(solos.map((u) => u.name), ['ts', 'bare']);
-      expect(solos.every((u) => u.sections == null), isTrue);
       final folder = out.lists.whereType<FolderServers>().single;
       expect(folder.members, hasLength(1));
-      expect(folder.members.single.sections, isNull);
 
-      // Совпавший по телу узел: файл с секциями его не меняет.
+      // Совпавший по телу узел: файл с секциями его не меняет (поля у модели
+      // нет — секции снимаются на чтении записи).
       final again = _apply(out.lists, parseLxBackup(_file({
         'sources': [_server('ts', 'example-1.com', sections: sections('file'))],
       })));
-      expect(again.lists.whereType<UserServer>().first.sections, isNull);
+      expect(again.lists.whereType<UserServer>().first.name, 'ts');
     });
 
     test('секции у подписки — not_allowed; член папки chain — kind_unsupported, auto — группа; unsupported с исходником — член', () {
@@ -595,7 +593,6 @@ void main() {
       expect(root.detourPolicy.overrideDetour,
           NodeLink(folderId: sub.id, tag: 'NL-1'),
           reason: 'ссылка на узел подписки — пара с сырым тегом (NODE_LINK §2.2)');
-      expect(root.sections, isNull, reason: '§575 — секции файла сняты');
       final folder = state.lists[1] as FolderServers;
       expect(folder.tagPrefix, '[F]');
       expect(folder.members.first.raw, 'ss://Y2hhY2hh@de.example:8388#DE-1',
@@ -651,22 +648,5 @@ void main() {
       expect(canonicalNodeBody('vless://u@h:443#N'), 'vless://u@h:443');
     });
 
-    test('секции узла: rule_set — rule_set, незнакомый ключ — unknown_key, чужой kind — kind', () {
-      final drops = <NodeSectionDrop>[];
-      NodeSections.fromJson({
-        'rules': [
-          {'kind': 'preset', 'ref': 'x'},
-          {'kind': 'inline', 'name': 'r', 'body': {'rule_set': ['a']}},
-          {'kind': 'inline', 'name': 'p', 'body': {'process_name': ['a']}},
-        ],
-        'dns': {
-          'servers': [
-            {'kind': 'template', 'tag': 't'},
-          ],
-        },
-      }, drops: drops);
-      expect([for (final d in drops) '${d.kind}:${d.reason}'],
-          ['preset:kind', 'inline:rule_set', 'inline:unknown_key', 'template:kind']);
-    });
   });
 }

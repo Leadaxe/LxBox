@@ -7,7 +7,7 @@
 | Дата завершения | — |
 | Коммиты | — |
 | Контракт | Требует запроса: три возможности языка шаблона, пресет, поле записи `skip_presets`, подтверждение D-120 |
-| Связанные spec'ы | [§575](575-remove-node-sections.md) (выходит в одном релизе), [features/435](../features/435%20node-sections-tailscale/spec.md), [§437](437-tailscale-bundle-import.md), [features/120](../features/120%20template-engine-typed-vars-and-if/spec.md) (движок `#if`) |
+| Связанные spec'ы | [§575](575-remove-node-sections.md) (выходит в одном релизе), [§435](435-node-sections-tailscale.md), [§437](437-tailscale-bundle-import.md), [features/120](../features/120%20template-engine-typed-vars-and-if/spec.md) (движок `#if`) |
 
 ## Проблема
 

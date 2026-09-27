@@ -20,7 +20,6 @@ import '../../services/parser/body_decoder.dart';
 import '../../services/parser/parse_all.dart';
 import '../import_rule.dart';
 import '../node_link.dart';
-import '../node_sections.dart';
 import '../node_spec.dart';
 import '../record_codec.dart' show RecordRead;
 import '../core_reject_verdict.dart';
@@ -109,7 +108,6 @@ Map<String, dynamic> _serverToRecord(UserServer u) {
     if (u.warnings.isNotEmpty) 'warnings': storedWarningsToJson(u.warnings),
     if (u.rawBody.isNotEmpty) 'origin': _originToRecord(u.rawBody),
     ..._detourLinkToRecord(u.detourPolicy),
-    if (u.sections != null) 'sections': u.sections!.toJson(),
     // §578 — пишется только `true`; отсутствие = `false`.
     if (u.skipPresets) 'skip_presets': true,
     // L — настройки LxBox.
@@ -151,7 +149,6 @@ Map<String, dynamic> _memberToRecord(FolderMember m, String folderId) {
     if (m.raw.isNotEmpty) 'origin': _originToRecord(m.raw),
     if (m.detour.isNotEmpty) 'detour': nodeLinkToRecord(m.detour),
     if (node == null) 'reason': kMemberUnparsedReason,
-    if (m.sections != null) 'sections': m.sections!.toJson(),
     // §578 — пишется только `true`; отсутствие = `false`.
     if (m.skipPresets) 'skip_presets': true,
   };
@@ -294,9 +291,9 @@ const Set<String> _identityKeys = {
 /// Запись `sources[]` → источник LxBox. Запись цепочки читает
 /// `chainFromRecord`; здесь она, как и запись без `id`, — отброс с причиной.
 ///
-/// [sectionDrops] получает отбраковки секций узлов структурно (вид и причина
-/// по норме B3, `NodeSections.fromJson`): импорт бэкапа называет их кодом с
-/// `reason`, хранению хватает строк в [notes].
+/// §575 — ключ `sections` у своего сервера и у члена папки читается только
+/// затем, чтобы отметить находку в [notes] (`node sections dropped: <tag>`):
+/// в модель значение не попадает.
 ///
 /// Ссылки на узлы читаются как лежат (строка — корневой ссылкой): подъём
 /// `{tag}` до пары (S1) и финального тега группы до сырого (S3) делают входы
@@ -306,7 +303,6 @@ const Set<String> _identityKeys = {
 RecordRead<ServerList> sourceFromRecord(
   Map<String, dynamic> j, {
   List<String>? notes,
-  List<NodeSectionDrop>? sectionDrops,
 }) {
   final kind = j['kind'];
   if (kind is! String || kind.isEmpty) {
@@ -324,8 +320,8 @@ RecordRead<ServerList> sourceFromRecord(
   final unknown = <String>[];
   final ServerList list = switch (kind) {
     kSourceKindSubscription => _subscriptionFromRecord(j, id, notes, unknown),
-    kSourceKindServer => _serverFromRecord(j, id, notes, unknown, sectionDrops),
-    _ => _folderFromRecord(j, id, notes, unknown, sectionDrops),
+    kSourceKindServer => _serverFromRecord(j, id, notes, unknown),
+    _ => _folderFromRecord(j, id, notes, unknown),
   };
   return RecordRead.ok(list, unknownKeys: unknown..sort());
 }
@@ -391,7 +387,6 @@ UserServer _serverFromRecord(
   String id,
   List<String>? notes,
   List<String> unknown,
-  List<NodeSectionDrop>? sectionDrops,
 ) {
   final where = 'server "$id"';
   _collectUnknown(j, _serverKeys, '', unknown);
@@ -401,6 +396,7 @@ UserServer _serverFromRecord(
   if (hint == null) {
     _checkTag(j, nodes.isEmpty ? null : nodes.first.tag, where, notes);
   }
+  _noteSectionsDropped(j['sections'], where, notes);
   return UserServer(
     id: id,
     name: '',
@@ -409,7 +405,6 @@ UserServer _serverFromRecord(
     tagPrefix: _prefixFromRecord(j['tag_policy'], unknown),
     detourPolicy: _detourPolicyFromRecord(j, unknown),
     rawBody: raw,
-    sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
     skipPresets: _bool(j['skip_presets'], false),
     // Список растущий: контроллер дописывает узлы на месте (как fromJson).
     nodes: [...nodes],
@@ -421,7 +416,6 @@ FolderServers _folderFromRecord(
   String id,
   List<String>? notes,
   List<String> unknown,
-  List<NodeSectionDrop>? sectionDrops,
 ) {
   final where = 'folder "$id"';
   _collectUnknown(j, _folderKeys, '', unknown);
@@ -429,8 +423,7 @@ FolderServers _folderFromRecord(
   final rawNodes = j['nodes'];
   if (rawNodes is List) {
     for (var i = 0; i < rawNodes.length; i++) {
-      final m = _memberFromRecord(
-          rawNodes[i], id, where, i, notes, unknown, sectionDrops);
+      final m = _memberFromRecord(rawNodes[i], id, where, i, notes, unknown);
       if (m != null) members.add(m);
     }
   }
@@ -463,7 +456,6 @@ FolderMember? _memberFromRecord(
   int index,
   List<String>? notes,
   List<String> unknown,
-  List<NodeSectionDrop>? sectionDrops,
 ) {
   final where = '$folderWhere: nodes[$index]';
   final path = 'nodes[$index].';
@@ -491,13 +483,13 @@ FolderMember? _memberFromRecord(
   _collectUnknown(j, _memberKeys, path, unknown);
   final text = _rawOf(j, path, unknown);
   final hint = _iniTagHint(j, text);
+  _noteSectionsDropped(j['sections'], where, notes);
   final member = FolderMember(
     raw: text,
     enabled: _bool(j['enabled'], true),
     warnings: storedWarningsFromJson(j['warnings']),
     detour: nodeLinkFromRecord(j['detour']) ?? NodeLink.none,
     nameHint: hint ?? '',
-    sections: _sectionsFromRecord(j['sections'], where, notes, sectionDrops),
     skipPresets: _bool(j['skip_presets'], false),
   );
   if (hint == null) _checkTag(j, member.node?.tag, where, notes);
@@ -629,18 +621,11 @@ List<ImportRule> _importRulesFromRecord(
   return out;
 }
 
-NodeSections? _sectionsFromRecord(
-  Object? raw,
-  String where,
-  List<String>? notes,
-  List<NodeSectionDrop>? drops,
-) {
-  final dropped = <String>[];
-  final sections = NodeSections.fromJson(raw, dropped: dropped, drops: drops);
-  for (final d in dropped) {
-    notes?.add('$where: sections $d');
-  }
-  return sections;
+/// §575 — ключ `sections` не читается в модель; непустая запись отмечается
+/// строкой в [notes] (`node sections dropped: <tag>`).
+void _noteSectionsDropped(Object? raw, String where, List<String>? notes) {
+  if (raw is! Map || raw.isEmpty) return;
+  notes?.add('node sections dropped: $where');
 }
 
 // ─── помощники ──────────────────────────────────────────────────────────────

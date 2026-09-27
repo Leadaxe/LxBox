@@ -26,6 +26,15 @@
   A preset can repeat its rules and DNS servers for every matching node, read
   the node's tag, record and body, and build strings such as `<node>-dns`.
 
+### Removed
+
+- **Node sections ([§575](docs/spec/tasks/575-remove-node-sections.md)).**
+  A node no longer carries route rules or DNS records of its own. The
+  Tailscale bundle a node used to carry is now served by the `Tailscale
+  networks` preset instead ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).
+  A stored record or a backup with a leftover `sections` field is read
+  without error and the field is dropped.
+
 ---
 
 ## [2.25.7] — 2026-09-27

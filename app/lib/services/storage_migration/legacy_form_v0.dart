@@ -10,8 +10,10 @@
 ///
 /// Модели строятся конструкторами. Подчинённые объекты, форма которых в 1.0
 /// не менялась и которые читает кодек записей (`SubscriptionMeta`,
-/// `ImportRule`, `NodeSections`, `RuleDns`, `RuleResolve`), читаются своими
-/// `fromJson`.
+/// `ImportRule`, `RuleDns`, `RuleResolve`), читаются своими `fromJson`.
+///
+/// §575 — ключ `sections` (если был в старой форме) не читается: секций у
+/// узлов больше нет.
 ///
 /// Старые имена полей живут только здесь и только на чтении. Зовут модуль
 /// миграция хранения (`migrate_storage.dart`) и входы старой формы: файл правил
@@ -23,7 +25,6 @@ import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/import_rule.dart';
 import '../../models/node_link.dart';
-import '../../models/node_sections.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
@@ -143,7 +144,6 @@ UserServer _readUserServer(Map<String, dynamic> j) {
       orElse: () => UserSource.manual,
     ),
     rawBody: rawBody,
-    sections: NodeSections.fromJson(j['sections']),
     nodes: nodes,
   );
 }
@@ -175,7 +175,6 @@ FolderMember readLegacyFolderMember(Map<String, dynamic> j) => FolderMember(
       // 2.23.2 хранила финальный тег строкой: корневая ссылка, пару из неё
       // делает миграция (`migrate_storage.dart`, §439 п. 8).
       detour: NodeLink(tag: (j['detour'] as String?) ?? ''),
-      sections: NodeSections.fromJson(j['sections']),
     );
 
 /// `DetourPolicy.fromJson` 2.23.2.

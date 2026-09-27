@@ -6,7 +6,6 @@ import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_link.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/source_replace.dart';
@@ -49,22 +48,6 @@ SourceChain _chainRoundTrip(SourceChain c) {
   expect(read.unknownKeys, isEmpty);
   return read.value!;
 }
-
-NodeSections _sections() => NodeSections.fromJson({
-      'rules': [
-        {
-          'kind': 'inline',
-          'id': 'r1',
-          'name': '@{self} network',
-          'enabled': true,
-          'num': 945,
-          'body': {
-            'ip_cidr': ['100.64.0.0/10'],
-            'outbound': '@self',
-          },
-        },
-      ],
-    })!;
 
 SubscriptionServers _richSubscription() => SubscriptionServers(
       id: 'sub-1',
@@ -166,7 +149,7 @@ void main() {
       expect(_sourceRoundTrip(s), s);
     });
 
-    test('сервер с sections, detour и флагами политики', () {
+    test('сервер с detour и флагами политики', () {
       final u = UserServer(
         id: 'srv-1',
         name: '',
@@ -177,12 +160,36 @@ void main() {
           useDetourServers: false,
         ),
         rawBody: _jsonOutbound,
-        sections: _sections(),
       );
       final back = _sourceRoundTrip(u) as UserServer;
       expect(back, u);
-      expect(back.sections!.toJson(), u.sections!.toJson());
       expect(back.nodes.single.tag, 'ts');
+    });
+
+    test('запись с ключом sections читается, узел без секций, запись '
+        'ключа не пишет', () {
+      final read = sourceFromRecord(_viaFile({
+        'kind': 'server',
+        'id': 'srv-legacy',
+        'origin': {'raw': _jsonOutbound},
+        'sections': {
+          'rules': [
+            {
+              'kind': 'inline',
+              'name': '@{self} network',
+              'enabled': true,
+              'body': {
+                'ip_cidr': ['100.64.0.0/10'],
+                'outbound': '@self',
+              },
+            },
+          ],
+        },
+      }));
+      expect(read.dropped, isNull);
+      final u = read.value! as UserServer;
+      expect(u.nodes.single.tag, 'ts');
+      expect(sourceToRecord(u).containsKey('sections'), isFalse);
     });
 
     test('сервер из нескольких узлов остаётся одной записью', () {
@@ -203,7 +210,7 @@ void main() {
       expect(back.nodes.map((n) => n.tag), ['Alpha', 'Beta']);
     });
 
-    test('папка: unsupported-член, личный detour, секции члена, префикс с '
+    test('папка: unsupported-член, личный detour, префикс с '
         'пробелом, ping, created_at', () {
       final f = FolderServers(
         id: 'fold-1',
@@ -220,7 +227,7 @@ void main() {
           FolderMember(raw: _uriAlpha, detour: NodeLink(tag: 'Beta')),
           FolderMember(raw: _uriBeta, enabled: false),
           FolderMember(raw: 'foo://not-a-node'),
-          FolderMember(raw: _jsonOutbound, sections: _sections()),
+          FolderMember(raw: _jsonOutbound),
           // §456 — тег INI-члена живёт в записи и возвращается nameHint'ом.
           FolderMember(raw: _wgIni, nameHint: 'WireGuard'),
         ],

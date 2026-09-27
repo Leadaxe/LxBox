@@ -2,12 +2,12 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Spec. Реализация запущена |
+| Статус | Реализовано (фазы 1–3) |
 | Дата старта | 2026-09-27 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-09-27 |
+| Коммиты | фаза 1 `e71a7a69`, фаза 2 `7dbe4306`, фаза 3 — этот коммит |
 | Контракт | Требует запроса в контракт: отмена нормы `NODE_SECTIONS.md` §1 (носители), §6 (связка Tailscale), E1 |
-| Связанные spec'ы | [§578](578-tailscale-preset-template-for-each.md) (пресет Tailscale, выходит в одном релизе), [§576](576-node-source-is-bare-body.md), [features/435](../features/435%20node-sections-tailscale/spec.md) (отменяется в части секций), [§437](437-tailscale-bundle-import.md), [§438](438-lx-backup-1-0-read-write.md), [§445](445-tailscale-state-dir-lifecycle.md) (остаётся), [§449](449-tailscale-default-hostname.md) (остаётся) |
+| Связанные spec'ы | [§578](578-tailscale-preset-template-for-each.md) (пресет Tailscale, выходит в одном релизе), [§576](576-node-source-is-bare-body.md), [§435](435-node-sections-tailscale.md) (отменена этой задачей), [§437](437-tailscale-bundle-import.md), [§438](438-lx-backup-1-0-read-write.md), [§445](445-tailscale-state-dir-lifecycle.md) (остаётся), [§449](449-tailscale-default-hostname.md) (остаётся) |
 
 ## Проблема
 
@@ -256,6 +256,63 @@ Tailscale из подписки получает связку от пресет�
 `tailscale_bundle_test.dart`, кодек секций в `lx_backup_v10_test.dart`),
 документация.
 
+### Реализация: фаза 3 (модель, кодек хранения, миграция, tailscale_bundle, тесты, доки)
+
+Сделано:
+
+- `app/lib/models/node_sections.dart` удалён целиком (`NodeSections`,
+  `kNodeRuleDefaultNum`, `kSectionDrop*`, плейсхолдеры `@self`/`@{self}`,
+  `substituteSelfPlaceholder`); `kSectionDropReasonNotAllowed`, которую держит
+  импорт бэкапа, была уже определена в `lx_backup.dart` независимо —
+  переносить было нечего;
+- поле `sections` снято у `UserServer` и `FolderMember`
+  (`app/lib/models/server_list.dart`), вместе с `copyWith`/`clearSections`,
+  участием в `==`/`hashCode`; `retargetSectionsDnsDetours` и её приватный
+  `heal()` удалены (вызывающих не было);
+- кодек хранения (`app/lib/models/codec/source_record.dart`): запись ключа
+  `sections` не пишет; при чтении ключ у сервера и у члена папки не подмешивается
+  в модель, непустая запись — одна строка в `notes`
+  (`node sections dropped: <where>`), которую вызывающий (`sources_rules.dart`)
+  проводит через `AppLog` как обычную заметку хранения; параметр
+  `sectionDrops`/`NodeSectionDrop` убран из `sourceFromRecord` (не был нужен
+  снаружи: `lx_backup.dart` снимает `sections` до вызова кодека своей
+  `_dropForeignSections`);
+- `legacy_form_v0.dart`: `NodeSections.fromJson(j['sections'])` в
+  `_readUserServer`/`readLegacyFolderMember` убрано, старая форма секции не
+  поднимает;
+- `tailscale_bundle.dart`: `canonicalTailscaleSections`,
+  `canonicalTailscaleSectionsJson`, константы тега DNS-сервера узла и имени
+  правила маршрута удалены; `hostname` по умолчанию (§449) остался;
+- тесты: `node_sections_test.dart`,
+  `test/screens/routing_screen/node_rule_rows_test.dart`,
+  `test/parser/singbox_sections_test.dart`,
+  `test/parser/tailscale_sections_test.dart`,
+  `test/contract/lx_backup_sections_test.dart` удалены; секционная часть
+  `record_codec_sources_test.dart` заменена тестом чтения записи с ключом
+  `sections` (узел без секций, повторная запись без ключа);
+  `tailscale_bundle_test.dart` оставляет только hostname-тесты; последний
+  тест кодека секций в `lx_backup_v10_test.dart` удалён, там же и в
+  `lx_backup_roundtrip_test.dart`/`lx_backup_slice_test.dart` убраны
+  обращения к полю `sections` модели (поля больше нет — сборка record-конструкторов
+  через `sections:` не компилируется); та же чистка — в
+  `singbox_config_import_test.dart`, `add_server_wizard_test.dart`,
+  `backup_corpus_test.dart` (`_checkNoSections` снята); `node_sections_build_test.dart`
+  не тронут — он и был написан под фазу 3 (кладёт `sections` сырым ключом
+  записи, проверяет отсутствие в сборке);
+- доки: `STORAGE.md` (схема записи, форма записи сервера/члена, раздел «Node
+  sections» переписан как «removed»), `ARCHITECTURE.md` (файловый список,
+  таблица демоций), `PROTOCOLS.md` §9.7 (компаньон-записи и импорт целого
+  конфига описаны через пресет, не через секции), `docs/spec/features/README.md`
+  (строка §435 снята), фича 435 перенесена в
+  `docs/spec/tasks/435-node-sections-tailscale.md` с пометкой отмены и
+  поправленными ссылками, `CHANGELOG.md` (Unreleased → Removed).
+
+Критерии приёмки (раздел «Верификация»): `grep -rn "@self" app/lib` пуст;
+`grep -rn "100.64.0.0/10" app/lib app/assets/wizard_template.json` пуст (кроме
+исторического упоминания в doc-комментарии `add_server_wizard_screen.dart`,
+которое переписано); `grep -rn "NodeSections\|node_sections.dart" app/lib
+app/test` пуст; `flutter analyze` чист.
+
 ## Порядок выпуска
 
 Эта задача и [§578](578-tailscale-preset-template-for-each.md) выходят в одном релизе. Порознь нельзя:
@@ -325,7 +382,7 @@ Tailscale из подписки получает связку от пресет�
 | `docs/api/debug-api-reference.md` | убрать поле `sections` из ответа |
 | `docs/ARCHITECTURE.md` | убрать инъекцию секций из описания сборки |
 | `docs/PROTOCOLS.md` | Tailscale: связка приходит из пресета |
-| `docs/spec/features/435 node-sections-tailscale/` | перенести в `docs/spec/tasks/` как историческую, с пометкой «отменена §575» |
+| `docs/spec/features/435 node-sections-tailscale/` | перенесена в `docs/spec/tasks/435-node-sections-tailscale.md` как отменённая (фаза 3) |
 | `CHANGELOG.md` | запись в Unreleased |
 
 ## Нерешённое / follow-up

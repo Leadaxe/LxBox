@@ -1447,7 +1447,7 @@ would not start.
 
 ## 9.7 Tailscale (endpoint)
 
-§435 / contract ## 13 (`contract/docs/NODE_SECTIONS.md` §6, registry `protocols/tailscale.json`).
+§435 (historical, node sections removed by §575) / §578 (registry `protocols/tailscale.json`).
 A sing-box ≥ 1.12 **endpoint** (`type: tailscale`): tsnet runs in user space and joins the
 tailnet by `auth_key`; the node has **no address** (`server`/`server_port` are empty) and
 **no URI form** — it arrives only from sing-box JSON (`outbounds[]` or `endpoints[]`) or from
@@ -1484,27 +1484,13 @@ the Add Server Wizard's Tailscale mode.
   first by config order wins. A subscription node is served too. A server or a folder
   member opts out with the record field `skip_presets` (the **Skip presets** switch on the
   node screen, STORAGE.md). The DNS server tag stays `<node>-dns`, so user references to it
-  keep working. The preset replaces the node sections below, which §575 removes.
-- **Companion records (sections):** a Tailscale node carries a DNS server
-  `{type: tailscale, endpoint: @self}`, a DNS rule for `.ts.net` and a route rule matching
-  `.ts.net` **or** the tailnet subnets (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) → `@self`, with a
-  non-terminal `resolve` through that DNS server emitted right before it — see STORAGE.md
-  “Node sections”. The domain match and the `resolve` are what make the node reachable under
-  FakeIP (a name without an address never matches `ip_cidr`) and over UDP (the core drops a
-  flow to an endpoint that has no address yet). A node created without records — a bare body,
-  or a config that never references its tag — gets this bundle by default; Clear sections
-  removes it. The DNS server type accepts at most one server per endpoint; a dangling
-  `endpoint` drops the server and the rules on it at build.
-- **Whole config as source:** a sing-box config with exactly one payload node yields the node
-  **with** its sections: DNS servers whose `detour`/`endpoint` is the node's tag, DNS rules on
-  those servers, route rules whose `outbound` is the node's tag (rule names — `body.name` or
-  `@{self} rule N`). In a **multi-node** config (an endpoint next to proxies) the same records
-  are extracted for each `tailscale` node by the explicit reference to its tag, and those nodes
-  become servers of their own — sections live on free nodes only, so inside a subscription the
-  tailnet route would be lost. The remaining nodes take the usual path (one → a server, several
-  → a file subscription) from the text with the `tailscale` entries removed.
-- **Inside a subscription:** a `tailscale` node from a URL subscription gets no sections — the
-  log says so; “add it as a server” is the fix.
+  keep working. The preset replaces the node's own bundle, which §575 removed: a node no
+  longer carries route rules or DNS records of its own (see STORAGE.md “Node sections —
+  removed”), and import no longer extracts any such bundle from a config — a config with a
+  `tailscale` endpoint imports the node only, whatever route/DNS blocks sit next to it in the
+  file are dropped like any other config's `route`/`dns` (§10 below).
+- **Inside a subscription:** a `tailscale` node from a URL subscription gets the same preset
+  bundle as any other node — no per-node exception any more.
 
 ## 10. JSON Outbound
 

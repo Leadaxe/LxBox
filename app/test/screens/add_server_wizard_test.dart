@@ -206,7 +206,7 @@ void main() {
     /// Поля формы по порядку: Tag, Auth key, Control URL, Hostname, Exit node.
     Finder field(int i) => find.byType(TextFormField).at(i);
 
-    testWidgets('Tag + Auth key → TailscaleSpec, JSON-rawBody, три записи секций',
+    testWidgets('Tag + Auth key → TailscaleSpec, JSON-rawBody',
         (tester) async {
       final c = await openTailscale(tester);
       await tester.enterText(field(0), '🪢 My tailnet');
@@ -236,9 +236,6 @@ void main() {
 
       expect(us.rawBody, contains('"type":"tailscale"'));
       expect(us.rawBody, contains('"auth_key":"tskey-auth-secret"'));
-
-      // §575 — секций узел не получает: связку даёт пресет `tailscale`.
-      expect(us.sections, isNull);
     });
 
     testWidgets('§449 Hostname с дефолтом LxBox, стирание возвращает пустое тело',
@@ -271,7 +268,6 @@ void main() {
       expect(node, isA<TailscaleSpec>());
       expect(node.tag, '🪢 Keep');
       expect((node as TailscaleSpec).body['auth_key'], 'tskey-auth-x');
-      expect(reloaded.sections, isNull);
     });
 
     testWidgets('пустой Tag → «tailscale» с эмодзи по умолчанию 🪢',

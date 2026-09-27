@@ -164,12 +164,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     }
   }
 
-  /// §435 — узел Tailscale: `TailscaleSpec` с телом из полей формы и
-  /// `UserServer` с канонической связкой (маршрут `100.64.0.0/10` → узел,
-  /// DNS-сервер `@{self}-dns`, правило `.ts.net`). `rawBody` = `toUri()` —
-  /// компактный JSON endpoint'а с `tag`: `UserServer.fromJson` ре-парсит его
-  /// как `singboxOutbound`, tag переживает рестарт. Без `exit_node` узел не
-  /// кандидат Направлений (это делает сборка), но связка работает.
+  /// §435 — узел Tailscale: `TailscaleSpec` с телом из полей формы и голый
+  /// `UserServer`. Маршрут и DNS даёт пресет шаблона `tailscale` (§578), не
+  /// узел. `rawBody` = `toUri()` — компактный JSON endpoint'а с `tag`:
+  /// `UserServer.fromJson` ре-парсит его как `singboxOutbound`, tag
+  /// переживает рестарт. Без `exit_node` узел не кандидат Направлений (это
+  /// делает сборка).
   Future<void> _submitTailscale() async {
     if (!(_tsFormKey.currentState?.validate() ?? false)) return;
     final tagInput = _tsTag.text.trim();
