@@ -283,6 +283,14 @@ TASKS_LXBOX §88). На авторском теле они теперь прим
 `reality.short_id` длиннее 16 не снимается; sing-box JSON hysteria v1 и masque
 без ключей не читается (`protocol_unsupported`).
 
+Разобраны задачей [582](582-authored-body-go-dart-parity.md) (контракт
+1.1.94–1.1.96): узел с негодным `tuic.uuid` или `peers[].allowed_ips` снимается
+при разборе (`parse_warnings.dart`, `body_sanitizer.dart` `_sanitizeArray`);
+`short_id` длиннее 16 снимается (`_checkConstraints`: границы длины строки и
+при `format`); masque без ключей читается (`json_parsers.dart`); hysteria v1 —
+расширение лаунчера (`extension: desktop`), раннер кейс пропускает. Кейс
+`reality.public_key` остаётся снятым: правка нужна у Go.
+
 ## Нерешённое / follow-up
 
 - Контракт: `drop_node` без `core_rejects` при прозе «ядро отвергает конфиг»

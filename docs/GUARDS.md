@@ -132,6 +132,12 @@ into the body directly. A rule that is not applied still gives its code, with
 | global TLS settings (`tls_transforms.dart`: fragment, mixed-case SNI) | applied | applied — user settings, not registry rules |
 | graph links (`detour`, `domain_resolver` to a dropped DNS server, tags) | fixed | fixed — build-managed, not the node body |
 
+Parsing an authored body (§582): when the edit point leaves no body (a hard
+rule removed a required field, e.g. `tuic.uuid` not a UUID), the node is dropped
+at parse time with that code, as in Go. A subscription body is dropped at parse
+time only by an explicit `drop_node`. A required field of an array item object
+(`peers[].allowed_ips`) that fails drops the node, not the item.
+
 The node card shows a code with `applied: false` with a common "What happened"
 line (the node is written by hand, the app changed nothing); the registry's own
 text claims the field was changed and is not shown. The build report line gets

@@ -982,7 +982,27 @@ final class _Ctx {
     if (items == null) return _Value.keep(value);
     final out = <Object?>[];
     for (var i = 0; i < value.length; i++) {
-      final res = _sanitizeValue(value[i], items, '$path[$i]');
+      // §582 — элемент-объект со своей схемой (`wireguard.peers[]`): не
+      // хватило его `required`-поля (отсутствует или снято как негодное —
+      // `peers[0].allowed_ips`) — снимается УЗЕЛ, а не элемент, как у Go
+      // (`nodeflow.arrayField` → отметка доходит до корня). Ядро отвергает
+      // такой пир фаталом на весь конфиг, а узел без пира — тоже.
+      final item = value[i];
+      final itemFields = items.fields;
+      if (item is Map && itemFields != null) {
+        dropObject = false;
+        final cleaned = sanitizeObject(item.cast<String, dynamic>(),
+            items.order ?? const [], itemFields, '$path[$i]');
+        if (dropNode) return const _Value.drop();
+        if (dropObject) {
+          dropObject = false;
+          dropNode = true;
+          return const _Value.drop();
+        }
+        out.add(cleaned);
+        continue;
+      }
+      final res = _sanitizeValue(item, items, '$path[$i]');
       if (dropNode) return const _Value.drop();
       if (res.keep) out.add(res.value);
     }
@@ -1721,10 +1741,12 @@ final class _Ctx {
         final even = v.length.isEven;
         if ((parity == 'even') != even) return v;
       }
-      // `min`/`max` у строки — границы ДЛИНЫ.
+      // `min`/`max` у строки — границы ДЛИНЫ, и при `format` тоже (§582, как
+      // Go `constraintsOK`): `tls.reality.short_id` — hex не длиннее 16, и
+      // 18 hex-символов ядро отвергает («invalid short_id»).
       final min = f.min;
       final max = f.max;
-      if (format == null && f.type == 'string') {
+      if (f.type == 'string') {
         if (min != null && v.length < min) return v;
         if (max != null && v.length > max) return v;
       }

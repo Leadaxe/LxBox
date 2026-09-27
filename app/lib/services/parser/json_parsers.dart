@@ -1252,14 +1252,16 @@ NodeSpec? _parseSingboxEntryTyped(
       if (server.isEmpty || port == 0) return null;
       final priv = entry['private_key']?.toString() ?? '';
       final pub = entry['public_key']?.toString() ?? '';
-      if (priv.isEmpty || pub.isEmpty) return null;
+      // §582 — ключи и адреса у тела не обязательны: профиль не `cloudflare`
+      // (свой сервер по `uri`) их не требует, а негодное тело снимает реестр
+      // (`field_missing`, `type_invalid`), как у Go. Прежде такое тело
+      // уходило кодом `protocol_unsupported`.
       final ip = entry['ip']?.toString() ?? '';
       final ipv6 = entry['ipv6']?.toString() ?? '';
       final addrs = <String>[
         if (ip.isNotEmpty) ensureCidr(ip),
         if (ipv6.isNotEmpty) ensureCidr(ipv6),
       ];
-      if (addrs.isEmpty) return null;
       // §393/контракт 0.8.0 (D-078) — только схема ядра (`vhttp` + вложенный
       // `tls{}`). Плоские legacy-ключи (`network`/`sni`/`skip_cert_verify`)
       // НЕ переносятся — «не принимаем» (директива оператора 25.08). Читать

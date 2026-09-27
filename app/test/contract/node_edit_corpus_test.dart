@@ -149,6 +149,14 @@ void main() {
         final expected = jsonDecode(File('$base.expected.json')
             .readAsStringSync()) as Map<String, dynamic>;
         expect((expected['meta'] as Map?)?['container'], 'own');
+        // §582 (контракт 1.1.96) — кейс схемы, которой у LxBox нет по
+        // контракту (`meta.extension: desktop` — hysteria v1), пропускается,
+        // как в раннере корпуса body.
+        final ext = (expected['meta'] as Map?)?['extension'];
+        if (ext is String && ext.isNotEmpty && ext != 'lxbox') {
+          markTestSkipped('meta.extension=$ext — схемы у LxBox нет');
+          return;
+        }
         expect(isAuthoredNodeSource(text), isTrue,
             reason: 'кейс раздела — голое тело sing-box');
 

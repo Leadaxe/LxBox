@@ -34,6 +34,11 @@
 
 ### Changed
 
+- **A hand-written node the core would reject is dropped ([task 582](docs/spec/tasks/582-authored-body-go-dart-parity.md)).**
+  A TUIC node whose `uuid` is not a UUID, or a WireGuard node with invalid peer
+  `allowed_ips`, is now dropped when parsed, with the reason in the list of
+  dropped nodes. A REALITY `short_id` longer than 16 characters is removed.
+  A MASQUE body without keys is now read instead of being rejected as unsupported.
 - **A node written by hand goes to the core as written ([§577](docs/spec/tasks/577-authored-json-registry-reports-only.md)).**
   A sing-box JSON node saved as an own server or a folder member is no longer
   fixed by the app's rules: an extra key, an AmneziaWG `mtu` above 1280, a
