@@ -5,7 +5,7 @@
 | Статус | Implemented |
 | Дата старта | 2026-09-28 |
 | Дата завершения | 2026-09-28 |
-| Коммиты | b14d57cf (синк контракта 1.1.99), см. «Реализация» |
+| Коммиты | b14d57cf (синк контракта 1.1.99), 707d118d |
 | Контракт | 1.1.99 (лаунчер 6d53d58a, SPEC 149 лаунчера) |
 | Связанные spec'ы | tasks/585 (незнакомый тип), tasks/576, tasks/577 |
 
@@ -108,6 +108,8 @@ A9). Перечни расходятся без предупреждения: н
   `test/contract/registry_invariant_test.dart` — зелёные.
 
 ## Реализация
+
+Коммиты b14d57cf (синк), 707d118d.
 
 - `services/contract/registry.dart` — `BodySchema.fieldsUnchecked`,
   `ContractRegistry.isEndpointType`, `isUncheckedType`.

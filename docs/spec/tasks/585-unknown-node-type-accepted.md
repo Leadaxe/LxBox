@@ -126,7 +126,7 @@ C.TypeOpenVPNClient, …)`); так же `openconnect`, `wireguard`, `tailscale`
 
 ## Реализация
 
-Коммит fcebe0c4.
+Коммит fcebe0c4; изменения задачи 586 — 707d118d.
 
 - `models/node_spec.dart` — `UnknownTypeSpec`, `kCoreEndpointTypes`.
 - `models/node_warning.dart` — `UnknownNodeTypeWarning`;
