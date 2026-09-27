@@ -2,7 +2,7 @@ L×Box is a high-performance proxy client with no compromises.
 
 You choose the servers. You set the rules. You control the traffic. L×Box does exactly what you told it to.
 
-12+ protocols, advanced routing, full DNS control, detour chains, per-app split tunneling and built-in diagnostics. No account, no ads, no analytics. No server network of our own.
+12+ protocols, your Tailscale network, advanced routing, full DNS control, detour chains, per-app split tunneling and built-in diagnostics. No account, no ads, no analytics.
 
 THE CORE IS OURS
 
@@ -22,17 +22,22 @@ And it is tuned for real life on a phone:
 • idle tunnel sleep — less memory, less battery;
 • observability — DNS, connections and chains visible from the app.
 
-The core stays in sync with upstream; changes are verified on real devices.
-
 12+ PROTOCOLS
 
-VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, AmneziaWG 2.0, MASQUE over QUIC/HTTP-3.
+VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, Tailscale, AmneziaWG 3.0, MASQUE over QUIC/HTTP-3.
 
-Cloudflare WARP in one tap: registration right in the app, the private key is generated on your device and never leaves it — Cloudflare receives only the public half. WireGuard or MASQUE, optional AmneziaWG obfuscation.
-
-Tailscale: the phone joins your tailnet as a node. Devices answer by name through MagicDNS, routes to the tailnet are set up by one preset, and any device of the network can serve as an exit node.
+Cloudflare WARP in one tap: the private key is generated on your device and never leaves it — Cloudflare receives only the public half. WireGuard or MASQUE, optional AmneziaWG obfuscation.
 
 Import any familiar format: subscriptions and links, Base64, Xray arrays, WireGuard URI/INI, Amnezia vpn://, sing-box JSON configs, local files, plain text.
+
+TAILSCALE WITHOUT A SECOND APP
+
+Android runs one VPN at a time, so a Tailscale app and a proxy client cannot run together. In L×Box the Tailscale node runs inside the core: the phone joins your tailnet, and the rest of the traffic follows your rules.
+
+• devices answer by name through MagicDNS;
+• exit to the internet through an exit node of your tailnet;
+• sign-in, device list and ping with the path in the app;
+• your own control server is supported.
 
 SUBSCRIPTIONS WITHOUT MANUAL WORK
 
