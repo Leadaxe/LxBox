@@ -55,6 +55,14 @@
 
 ### Changed
 
+- **Core `v1.14.2-lx.6`.** An XHTTP node without an `xmux` section (or with
+  an empty one) now keeps at most three connections to the server and shares
+  them between streams; before, every stream opened a new TLS connection,
+  dozens to hundreds of parallel connections to one IP on a phone, the
+  pattern reported to be cut on mobile networks in Russia (sing-box-lx#32,
+  follows the Xray-core default). An `xmux` section with at least one field
+  set is taken as written, as before. The core's `sing-box schema` command
+  works again (sing-box-lx#30); the app does not use it.
 - **Default emoji of a Tailscale node is 🕸️.** It was 🪢. New nodes get the new
   emoji; tags of existing nodes do not change.
 
