@@ -101,7 +101,13 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
 /// `detour_with_tls_fragment`) у любого узлового флага, откуда бы он ни
 /// пришёл. Порядок в сборке: после проставления `detour` (цепочки,
 /// `override_detour`) и ДО [applyTlsFragment].
-List<RegistryWarning> applyDetourYields(Map<String, dynamic> config) {
+///
+/// §577 — [authored] (identity-множество карт тел): авторскому телу уступка
+/// идёт через точку правки, мягкая (`tls.fragment`) не применяется.
+List<RegistryWarning> applyDetourYields(
+  Map<String, dynamic> config, {
+  Set<Map<String, dynamic>> authored = const {},
+}) {
   final out = <RegistryWarning>[];
   for (final key in const ['outbounds', 'endpoints']) {
     final list = config[key];
@@ -109,7 +115,7 @@ List<RegistryWarning> applyDetourYields(Map<String, dynamic> config) {
     for (final e in list) {
       if (e is! Map<String, dynamic>) continue;
       if (!e.containsKey('detour')) continue;
-      out.addAll(yieldToBuildDetour(e));
+      out.addAll(yieldToBuildDetour(e, authored: authored.contains(e)));
     }
   }
   return out;

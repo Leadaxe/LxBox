@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Spec. Реализация после §576 |
+| Статус | Done |
 | Дата старта | 2026-09-27 |
-| Дата завершения | — |
-| Коммиты | — |
-| Контракт | Требует запроса: правило про авторское тело, машинный признак отказа ядра, признак «не применено» у предупреждения |
+| Дата завершения | 2026-09-27 |
+| Коммиты | см. «Реализация» |
+| Контракт | 1.1.87–1.1.89: авторское тело, `core_rejects`, `applied`, корпус `authored/` (TASKS_LXBOX §84–§86) |
 | Связанные spec'ы | [§576](576-node-source-is-bare-body.md) (условие авторского тела), [features/460](../features/460%20contract-registry-bundle/spec.md), [§574](574-tls-fragment-yields-to-detour.md), [§473](473-contract-115-awg-mtu-by-registry.md) (исключение по входу для MTU), [features/478](../features/478%20core-rejected-node-auto-disable/spec.md) |
 
 ## Проблема
@@ -52,8 +52,41 @@
 Сегодня набор дословных записей (`verbatimEntries`) виден только гейту
 реестра и влияет только на правила с `except_sources`.
 
-Первый шаг исполнителя: опись всех шагов сборки и пробы, меняющих тело узла.
-Опись вносится в эту спеку.
+### Опись шагов сборки и пробы, меняющих тело узла
+
+| Шаг | Где | Что меняет | Решение §577 |
+|---|---|---|---|
+| подстановка дословного тела | `server_list_build.dart` → `verbatimBodyOf` | снимает `detour`, пустой `tag` = тег модели | не правило реестра: `tag`/`detour` пишет сборка; ставит `authored` |
+| гард реестра | `registry_gate.dart` | санитайзер: снятие, замена, дефолты, снятие узла | через точку правки |
+| узловой гейт ядра | `registry_gate.dart` → `nodeCoreRefusal` | снимает узел | жёсткое |
+| страховка `type` | `registry_gate.dart` | снимает запись без `type` | жёсткое |
+| уступка detour | `detour_yields.dart` из `tls_transforms.dart` (`applyDetourYields`) и `probe_config.dart` | снимает `listen_port`, `tls.fragment`, `fragment_fallback_delay` | через точку правки |
+| глобальные настройки TLS | `post_steps/tls_transforms.dart` (`applyTlsFragment`, `applyMixedCaseSni`) | дописывает фрагментацию, регистр SNI | не меняется (раздел 5) |
+| страховка uTLS | `post_steps/heal_unknown_utls_fingerprints.dart` | отпечаток, снятие uTLS/REALITY на QUIC | через точку правки (`utls_fp_unknown`, `tls_not_applicable_quic`) |
+| страховка REALITY | `post_steps/heal_invalid_reality.dart` | снимает блок REALITY, обнуляет `short_id` | через точку правки (`reality_pbk_invalid`, `reality_short_id_invalid`) |
+| граф-санитайзер | `post_steps/sanitize_outbound_graph.dart` | висячий `detour`, члены групп | не тело узла: `detour` пишет сборка |
+| DNS-ссылки узла | `post_steps/heal_detour_dropped_dns.dart` | `domain_resolver` на выпавший DNS-сервер | ссылка графа на сервер шаблона, не правило реестра |
+| префикс тегов | `post_steps/heal_preset_tag_prefix.dart` | `tag` | не тело узла |
+| проба: гард реестра | `probe/probe_config.dart` | как гард сборки | тело пробы — `emit()` модели, авторским не бывает |
+| проба: `insecure_concurrency` | `probe/probe_config.dart` | снимает у naive | только проба, не правило реестра |
+
+### Замер до правок
+
+Санитайзер (вход `singbox`, без гейтов ядра) по кейсам `corpus/body/singbox/`
+и `corpus/authored/` (контракт 1.1.89): 84 тела узлов, из них 51 санитайзер
+меняет (8 снимает целиком). Коды у изменённых тел:
+
+| Код | Число |
+|---|---|
+| `unknown_key` | 10 |
+| `tls_field_unsupported_naive` | 9 |
+| `masque_tls_field_ignored` | 6 |
+| `tls_alpn_item_invalid`, `field_requires`, `tls_not_applicable_quic` | по 3 |
+| `flow_deprecated`, `vless_encryption_invalid`, `wg_key_invalid`, `tailscale_default_route_advertised`, `tls_fragment_system_engine`, `reality_pbk_invalid`, `masque_tls_fragment_h3` | по 2 |
+| `awg_headers_overlap`, `awg3_header_key_invalid`, `packet_encoding_unknown`, `reality_short_id_invalid`, `type_invalid`, `awg_header_invalid`, `awg3_padding_too_short`, `obfs_object_flattened`, `reality_fp_random_pinned`, `hysteria2_server_ports_item_invalid`, `field_conflict`, `reality_key_share_invalid`, `xhttp_param_reset`, `obfs_password_missing`, `ssh_user_default`, `fields_order_invalid`, `xhttp_mode_forced_packet_up`, `reality_utls_enabled`, `port_invalid` | по 1 |
+
+Корпус — это тела с нарушениями нарочно; сохранённые состояния стенда не
+замерялись.
 
 ## Решение
 
@@ -83,21 +116,19 @@
 2. `drop_node` по ядру (`build_tag`, `min_core`): узел снимается;
 3. правило или связь реестра с признаком отказа ядра: правка применяется.
 
-Третий пункт требует машинного признака в реестре. До его появления в
-контракте жёсткими считаются правила, у которых в поле `impl` реестра записан
-отказ старта. Исполнитель составляет их перечень и вносит в спеку. Известные:
-
-- `tls.fragment` и `tls.record_fragment` вместе с системным TLS-движком;
-- поля TLS, запрещённые у `naive`.
+Третий пункт решает машинное поле `core_rejects` реестра (контракт 1.1.87,
+перечень помеченных правил — TASKS_LXBOX §84 п.3; `vless.flow` — 1.1.88).
+Перечень по прозе `impl` не составляется. Тихий `default_when` с
+`core_rejects` (`hysteria.up_mbps`) пишется и в авторское тело.
 
 ### 4. Уступка detour на авторском теле
 
 `tls.fragment` при назначенном `detour` не снимается, узел получает
 предупреждение с признаком «не применено».
 
-`listen_port` WireGuard при назначенном `detour`: исполнитель проверяет по
-исходникам ядра, отказывает ли оно конфигу. Отказывает, значит правило
-жёсткое.
+`listen_port` WireGuard при назначенном `detour`: ядро отказывает конфигу
+(sing-box-lx `protocol/wireguard/endpoint.go`, NewEndpoint), правило жёсткое
+(`core_rejects` у связи, контракт 1.1.87).
 
 ### 5. Глобальные настройки TLS
 
@@ -183,7 +214,51 @@ Debug API отдаёт признак `applied` в составе предупр
 | `docs/api/debug-api-reference.md` | поле `applied` |
 | `CHANGELOG.md` | запись в Unreleased |
 
+## Реализация
+
+- Точка правки: `app/lib/services/contract/body_edit.dart` —
+  `ruleCoreRejects` (признак `core_rejects` у правила поля, связи поля и связи
+  тела; код из `forbidden_codes` мягкий), `decideBodyEdit`,
+  `applyRegistryEdits` (обычное тело — итог целиком на месте; авторское —
+  только пути жёстких кодов и `hardPaths`), `settleSanitized` (итог
+  санитайзера; снятие узла у авторского тела только по жёсткому коду),
+  `editBodyPath` (страховки сборки). Реестр не загружен — правило жёсткое,
+  поведение прежнее.
+- Санитайзер: `SanitizeResult.hardPaths` (тихий `default_when` с
+  `core_rejects`), `dropFrom` (код снятия узла; код ставится до флага),
+  `partial`.
+- Раздел 1: `SingboxEntry.authored` ставит `ServerListBuild` там, где
+  `verbatimBodyOf` подставил тело; `verbatimEntries`/`noteVerbatim` удалены.
+  Шаги конфига получают identity-множество тел авторских записей.
+- Раздел 2: гард реестра, уступка detour, страховки uTLS и REALITY пишут в
+  тело только через точку правки; тест по исходникам
+  `test/builder/body_edit_point_test.dart`.
+- Раздел 6: `annotateFromRawBody` и `_sanitizedEntry` идут через
+  `settleSanitized` при `parsingAuthoredBody`.
+- Раздел 7: `NodeWarning.applied` (у `RegistryWarning` поле, в `props` только
+  `false`); карточка узла при `applied: false` показывает общую строку «The
+  node is written by hand, so the app changed nothing in it.» (ru, zh);
+  Debug API — `applied` у каждой записи.
+- Раздел 8: строка отчёта сборки — пометка `(not applied)` (гард и уступка
+  detour).
+- Корпус: раннер `corpus/authored/` в `node_edit_corpus_test.dart` (6 кейсов,
+  строго, с `applied`); `node_edit` сверяет `applied`; `warningRecordOf` пишет
+  `applied: false`.
+- Изменённые ожидания (`registry_gate_test.dart`): дефолт `mtu: 1280`
+  AmneziaWG авторскому телу больше не дописывается; узел с негодным
+  `vless.encryption` на авторском теле не снимается (у правила нет
+  `core_rejects`) — прежнее снятие проверяется на обычном теле.
+- Бэкап: записи предупреждений узла в файл не пишутся (пересчитываются при
+  импорте), `applied` там не нужен.
+
 ## Нерешённое / follow-up
+
+- Контракт: `drop_node` без `core_rejects` при прозе «ядро отвергает конфиг»
+  (`vless.encryption`, метод shadowsocks) и `tls.reality.public_key` /
+  `short_id` («invalid public_key на весь конфиг») на авторском теле мягкие.
+  Нужен запрос лаунчеру: пометить `core_rejects`, если отказ старта верен.
+- Проба собирает тело из `emit()` модели, а не дословное тело: авторский
+  узел проба проверяет в форме модели.
 
 - Явное значение TLS в теле узла сильнее глобальной настройки. Отдельная
   задача, ждёт решения владельца.

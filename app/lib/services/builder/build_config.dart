@@ -421,9 +421,6 @@ Future<BuildResult> _buildConfig({
     [...ctx.outbounds, ...ctx.endpoints],
     coreVersion: settings.coreVersion,
     coreBuildTags: settings.coreBuildTags,
-    // §473 — записи с дословным JSON-телом (§455) идут в ядро как написаны:
-    // правило условного потолка (`max_when`) им значение не подменяет.
-    verbatim: ctx.verbatimEntries,
   );
   ctx.dropRegistryEntries(registryReport.dropped);
 
@@ -813,8 +810,16 @@ Future<BuildResult> _buildConfig({
   // (`listen_port` WireGuard), снимаются кодом связи реестра. Контракт 1.1.84
   // — туда же `tls.fragment` (`detour_with_tls_fragment`). Код ложится и в
   // предупреждения узла по его config-тегу — рядом с кодами гарда реестра.
-  for (final w in applyDetourYields(config)) {
-    emitWarnings.add(w.renderEn());
+  // §577 — тела авторских записей (identity: карты тел и есть элементы
+  // `outbounds[]`/`endpoints[]` конфига).
+  final authoredBodies = Set<Map<String, dynamic>>.identity()
+    ..addAll([
+      for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
+        if (e.authored) e.map,
+    ]);
+  for (final w in applyDetourYields(config, authored: authoredBodies)) {
+    emitWarnings
+        .add(w.applied ? w.renderEn() : '${w.renderEn()} (not applied)');
     if (w.ownerTag.isNotEmpty) {
       registryReport.warningsByEmittedTag
           .putIfAbsent(w.ownerTag, () => [])
@@ -912,7 +917,8 @@ Future<BuildResult> _buildConfig({
   // («unknown uTLS fingerprint») — конфиг не встаёт целиком. Парсер уже
   // канонизирует на входе (xray-псевдонимы hellochrome_* → chrome, мусор →
   // chrome); этот post-step — страховка для путей мимо парсера.
-  final healedFingerprints = healUnknownUtlsFingerprints(config);
+  final healedFingerprints = healUnknownUtlsFingerprints(config,
+      authored: authoredBodies);
   for (final h in healedFingerprints) {
     emitWarnings.add(
         'Fingerprint replaced: outbound "${h.owner}" had unknown uTLS '
@@ -924,7 +930,7 @@ Future<BuildResult> _buildConfig({
   // (§169/§343), этот post-step — страховка для путей мимо парсера (raw
   // JSON, §302 import rules, vars). Битое значение отбрасывается, нода
   // деградирует — VPN стартует.
-  final healedReality = healInvalidReality(config);
+  final healedReality = healInvalidReality(config, authored: authoredBodies);
   for (final h in healedReality) {
     emitWarnings.add(h.field == 'short_id'
         ? 'REALITY short_id cleared: outbound "${h.owner}" had invalid '
@@ -1085,13 +1091,6 @@ class _BuildCtx implements EmitContext {
   /// Фича 478 — финальный тег хопа цепочки → владелец узла (main outbound).
   final emittedTagAliases = <String, NodeSpec>{};
 
-  /// §473 — записи с дословным JSON-телом (§455): их вход — `singbox`.
-  ///
-  /// Identity-множество (`identityHashCode`), а не по равенству: тело
-  /// переписывается на месте и ключом карты быть не может, а две записи с
-  /// одинаковым телом — всё равно разные записи.
-  final verbatimEntries = <SingboxEntry>{};
-
   /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
   final warnings = <String>[];
 
@@ -1115,11 +1114,6 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmittedAlias(String finalTag, NodeSpec owner) {
     emittedTagAliases[finalTag] = owner;
-  }
-
-  @override
-  void noteVerbatim(SingboxEntry entry) {
-    verbatimEntries.add(entry);
   }
 
   @override

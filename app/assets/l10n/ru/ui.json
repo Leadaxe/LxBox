@@ -5365,5 +5365,8 @@
       "many": "%d записей будут пропущены",
       "other": "%d записи будут пропущены"
     }
+  },
+  "The node is written by hand, so the app changed nothing in it.": {
+    "value": "Узел написан вручную, поэтому приложение ничего в нём не изменило."
   }
 }

@@ -34,8 +34,10 @@ import 'dart:convert';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/template_vars.dart';
-import '../parser/authored_scope.dart' show singboxBodySource;
+import '../parser/authored_scope.dart'
+    show parsingAuthoredBody, singboxBodySource;
 import '../parser/mappers/uri_pipeline.dart' show isPipelineParsed;
+import 'body_edit.dart' show settleSanitized;
 import 'body_sanitizer.dart';
 import 'registry.dart';
 import 'warning_codes.dart';
@@ -145,17 +147,24 @@ bool annotateFromRawBody(NodeSpec node) {
   final type = raw['type'];
   if (type is! String) return false;
 
-  final res = RegistrySanitizer.sanitize(
-    // Копия: санитайзер переписывает карту, а `rawSource` узла — текст
-    // провайдера, и трогать его нельзя.
-    Map<String, dynamic>.from(raw),
-    scheme: type,
-    coreVersion: _kParseTimeCore,
-    applyCoreGates: false,
-    // §473/§576 п.5 — вход `singbox` только у авторского тела (свой сервер
-    // или член папки, вид источника `singbox_outbound`); та же карта из
-    // подписки — вход `other`.
-    source: singboxBodySource,
+  // §577 п.6 — у авторского тела коды идут через точку правки: мягкие с
+  // `applied: false`, снятие узла только жёстким правилом.
+  final res = settleSanitized(
+    type,
+    raw,
+    RegistrySanitizer.sanitize(
+      // Копия: санитайзер переписывает карту, а `rawSource` узла — текст
+      // провайдера, и трогать его нельзя.
+      (jsonDecode(jsonEncode(raw)) as Map).cast<String, dynamic>(),
+      scheme: type,
+      coreVersion: _kParseTimeCore,
+      applyCoreGates: false,
+      // §473/§576 п.5 — вход `singbox` только у авторского тела (свой сервер
+      // или член папки, вид источника `singbox_outbound`); та же карта из
+      // подписки — вход `other`.
+      source: singboxBodySource,
+    ),
+    authored: parsingAuthoredBody,
   );
   _mergeRegistryWarnings(node, res.warnings);
   // Вердикт уезжает наружу; тело узла и здесь не меняется (границы шага 1 в

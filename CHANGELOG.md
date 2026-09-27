@@ -28,6 +28,14 @@
 
 ### Changed
 
+- **A node written by hand goes to the core as written ([§577](docs/spec/tasks/577-authored-json-registry-reports-only.md)).**
+  A sing-box JSON node saved as an own server or a folder member is no longer
+  fixed by the app's rules: an extra key, an AmneziaWG `mtu` above 1280, a
+  `tls.fragment` next to a detour stay as written. The node card still lists
+  each rule, says the app changed nothing, and gives the cause and what to do.
+  Rules the core cannot start with (an unsupported `flow`, an invalid port,
+  TLS fields `naive` does not take) are still applied. The build report marks
+  such lines `not applied`; the Debug API gives `applied` on each warning.
 - **A node's source keeps the node only ([§576](docs/spec/tasks/576-node-source-is-bare-body.md)).**
   Saving a sing-box document or an array in the node editor keeps the first
   node (not a service outbound and not a group) or the first element, and says

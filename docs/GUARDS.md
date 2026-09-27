@@ -33,6 +33,7 @@ config down.
 
 - [Principles](#principles)
 - [Where guards live](#where-guards-live)
+- [On an authored body (§577)](#on-an-authored-body-577)
 - [The guard over the guards — no field falls out of the round trip (§476)](#the-guard-over-the-guards--no-field-falls-out-of-the-round-trip-476)
 - [The last echelon — the core's own verdict (feature 478)](#the-last-echelon--the-cores-own-verdict-feature-478)
 - [How a user finds out](#how-a-user-finds-out)
@@ -100,6 +101,41 @@ object before emitting.
 | 2 — JSON branches | `app/lib/services/parser/singbox_config.dart`, `json_parsers.dart` | Imported sing-box and Xray configs |
 | 3 — node emission | `app/lib/models/transport_spec.dart`, `tls_spec.dart`, `node_spec_emit.dart`, `node_spec.dart` | The node → outbound JSON step, common to all sources |
 | 4 — config assembly | `app/lib/services/builder/**`, incl. `post_steps/**` and `validator.dart` | The whole file: graph, groups, rules, DNS |
+
+## On an authored body (§577)
+
+A body is **authored** when all four conditions of §576 hold: the container is
+the user's own server or a folder member, the node is not an auto-select
+group, the source kind is exactly `singbox_outbound`, and the text parses as a
+JSON object. A subscription node is never authored. The build entry carries it
+as `SingboxEntry.authored`; parsing sees it as `parsingAuthoredBody`.
+
+On an authored body the registry reports and does not edit (owner's decision
+27.09.2026, contract 1.1.87, PARSING_PRINCIPLES §10). Every edit of a node body
+by a registry rule goes through one point, `contract/body_edit.dart`
+(`applyRegistryEdits`, `settleSanitized`, `editBodyPath`); a source test
+(`test/builder/body_edit_point_test.dart`) keeps the build steps from writing
+into the body directly. A rule that is not applied still gives its code, with
+`applied: false`.
+
+| Guard | Normal body | Authored body |
+|---|---|---|
+| no string `type` → entry dropped (`registry_gate.dart`) | dropped | dropped (hard) |
+| node core gate, `drop_node` by `build_tag` / `min_core` | dropped | dropped (hard) |
+| registry rule or relation with `core_rejects: true` (`tls_field_unsupported_naive`, `tls_fragment_system_engine`, `flow_deprecated`, `port_invalid`, `awg_header_invalid`, `awg_headers_overlap`, `detour_with_listen_port`, …) | applied | applied (hard) |
+| silent `default_when` with `core_rejects` (`hysteria.up_mbps`) | written | written (hard) |
+| every other registry rule: `unknown_key`, `type_invalid` without the flag, `max_when` clamps, silent `default_when` (`mtu: 1280` of AmneziaWG), `drop_node` without the flag (`vless_encryption_invalid`, `ss_method_invalid`) | applied | body unchanged, code with `applied: false` |
+| detour yield of `tls.fragment` (`detour_with_tls_fragment`) | removed | kept, `applied: false` |
+| build heal of the uTLS fingerprint (`utls_fp_unknown`, `core_rejects`) | replaced | replaced (hard) |
+| build heal of uTLS / REALITY on QUIC (`tls_not_applicable_quic`) | removed | kept (the gate reports it) |
+| build heal of a broken REALITY block (`reality_pbk_invalid`, `reality_short_id_invalid`, no `core_rejects` in contract 1.1.89) | fixed | kept (the gate reports it) |
+| global TLS settings (`tls_transforms.dart`: fragment, mixed-case SNI) | applied | applied — user settings, not registry rules |
+| graph links (`detour`, `domain_resolver` to a dropped DNS server, tags) | fixed | fixed — build-managed, not the node body |
+
+The node card shows a code with `applied: false` with a common "What happened"
+line (the node is written by hand, the app changed nothing); the registry's own
+text claims the field was changed and is not shown. The build report line gets
+`(not applied)`; the Debug API carries `applied` on every warning.
 
 ## The guard over the guards — no field falls out of the round trip (§476)
 

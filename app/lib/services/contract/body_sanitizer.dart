@@ -96,7 +96,14 @@ enum BodySource {
 
 /// Результат санитайзинга одной записи.
 final class SanitizeResult {
-  const SanitizeResult(this.body, this.warnings, {this.explicitDropNode = false});
+  const SanitizeResult(
+    this.body,
+    this.warnings, {
+    this.explicitDropNode = false,
+    this.hardPaths = const [],
+    this.dropFrom = -1,
+    this.partial,
+  });
 
   /// Очищенное тело; `null` — запись снята целиком (`drop_node`).
   final Map<String, dynamic>? body;
@@ -120,6 +127,20 @@ final class SanitizeResult {
   ///   пропала бы строка, в которой человек читал причину), и §477 его не
   ///   принимал.
   final bool explicitDropNode;
+
+  /// §577 (контракт 1.1.87) — пути, которые правило с `core_rejects`
+  /// записало МОЛЧА (`default_when` без кода: `hysteria.up_mbps`). Кода у
+  /// правки нет, но авторское тело обязано её получить (`body_edit.dart`).
+  final List<String> hardPaths;
+
+  /// §577 — индекс в [warnings], с которого идут коды, снявшие узел
+  /// (`body == null`); `-1` — узел не снят. По ним точка правки решает,
+  /// жёсткое ли снятие у авторского тела.
+  final int dropFrom;
+
+  /// §577 — очищенная часть тела снятого узла (`body == null`): из неё
+  /// авторское тело берёт жёсткие правки, когда снятие мягкое.
+  final Map<String, dynamic>? partial;
 }
 
 /// Ключи, которые санитайзер не трогает.
@@ -349,9 +370,12 @@ final class RegistrySanitizer {
     if (!ctx.dropNode) ctx.applyRepairs(out);
     if (ctx.dropNode) {
       return SanitizeResult(null, ctx.warnings,
-          explicitDropNode: ctx.explicitDropNode);
+          explicitDropNode: ctx.explicitDropNode,
+          hardPaths: ctx.hardPaths,
+          dropFrom: ctx.dropFrom < 0 ? 0 : ctx.dropFrom,
+          partial: out);
     }
-    return SanitizeResult(out, ctx.warnings);
+    return SanitizeResult(out, ctx.warnings, hardPaths: ctx.hardPaths);
   }
 
   /// Значение для `value` предупреждения: у `secret`-полей — `***`, длинное
@@ -439,7 +463,23 @@ final class _Ctx {
   final Map<String, dynamic> root;
 
   final warnings = <RegistryWarning>[];
-  bool dropNode = false;
+
+  bool _dropNode = false;
+
+  /// §577 — индекс кода, снявшего узел: каждое место снятия ставит код
+  /// прямо перед флагом.
+  int dropFrom = -1;
+
+  bool get dropNode => _dropNode;
+  set dropNode(bool v) {
+    if (v && !_dropNode) {
+      dropFrom = warnings.isEmpty ? 0 : warnings.length - 1;
+    }
+    _dropNode = v;
+  }
+
+  /// §577 — пути тихих правок правил с `core_rejects` ([SanitizeResult.hardPaths]).
+  final hardPaths = <String>[];
 
   /// §477 — запись сняло ЯВНОЕ правило `on_invalid: { action: drop_node }`,
   /// а не отсутствие обязательного поля. См. [SanitizeResult.explicitDropNode].
@@ -662,7 +702,11 @@ final class _Ctx {
             _conditionHolds(dw['when'], src)) {
           kept[key] = dw['value'];
           final code = dw['code'] as String?;
-          if (code != null) warn(code, path: _join(prefix, key));
+          if (code != null) {
+            warn(code, path: _join(prefix, key));
+          } else if (dw['core_rejects'] == true) {
+            hardPaths.add(_join(prefix, key));
+          }
           continue;
         }
         // `required` без поля — запись уходит целиком (24.1.7): ядро такую
@@ -1406,11 +1450,12 @@ final class _Ctx {
     final paths = ((rel['paths'] as List?) ?? const []).map((e) => '$e');
     final path = paths.isEmpty ? null : paths.first;
     if (!_cooccurrenceSeen.add('$code $path')) return;
+    // §577 — код до флага: [dropFrom] указывает на код снятия.
+    warn(code, path: path);
     if (rel['action'] == 'drop_node') {
       dropNode = true;
       explicitDropNode = true;
     }
-    warn(code, path: path);
   }
 
   /// Уже поставленные коды `cooccurrence`: `<код> <путь>`.
@@ -1747,13 +1792,14 @@ final class _Ctx {
         explainedDrops.add(path);
         return const _Value.drop();
       case 'drop_node':
-        dropNode = true;
-        explicitDropNode = true;
+        // §577 — код до флага: [dropFrom] указывает на код снятия.
         warn(code,
             path: path,
             value: value,
             secret: secret || f.secret,
             params: {'field': path});
+        dropNode = true;
+        explicitDropNode = true;
         return const _Value.drop();
       default:
         warn(code, path: path, value: value, secret: secret || f.secret);

@@ -105,6 +105,11 @@ sealed class NodeWarning {
   /// [props]: говорит «с какой записью», а не «что случилось».
   String get ownerTag => '';
 
+  /// §577 — правка по правилу реестра применена к телу узла. `false` — тело
+  /// авторское, правило мягкое, и приложение тело НЕ меняло (реестр только
+  /// сообщает, PARSING_PRINCIPLES §10). Уровень от признака не зависит.
+  bool get applied => true;
+
   /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
   /// данным, НЕ по отрендеренной строке (§279: строка locale-зависима,
   /// равенство по ней ломало бы dedup при смене языка).
@@ -722,6 +727,7 @@ final class RegistryWarning extends NodeWarning {
     this.value,
     this.params = const {},
     this.ownerTag = '',
+    this.applied = true,
   });
 
   /// Код из `registry/warnings.json` — он же код конформанса (PARSING_PRINCIPLES §6).
@@ -749,6 +755,23 @@ final class RegistryWarning extends NodeWarning {
   @override
   final String ownerTag;
 
+  /// §577 — см. [NodeWarning.applied]. В идентичность ([props]) входит
+  /// только `false`: применённая запись равна прежней записи без признака.
+  @override
+  final bool applied;
+
+  /// §577 — та же запись с признаком «не применено».
+  RegistryWarning notApplied() => applied
+      ? RegistryWarning(
+          code: code,
+          path: path,
+          value: value,
+          params: params,
+          ownerTag: ownerTag,
+          applied: false,
+        )
+      : this;
+
   /// §500 — копия с `value: ***`, если путь — секретное поле реестра.
   RegistryWarning withSecretValueMasked() {
     final masked = maskRegistrySecretValue(path, value);
@@ -759,12 +782,18 @@ final class RegistryWarning extends NodeWarning {
       value: masked,
       params: params,
       ownerTag: ownerTag,
+      applied: applied,
     );
   }
 
   @override
-  List<Object?> get props =>
-      [code, path, value, ...params.entries.map((e) => '${e.key}=${e.value}')];
+  List<Object?> get props => [
+        code,
+        path,
+        value,
+        ...params.entries.map((e) => '${e.key}=${e.value}'),
+        if (!applied) 'applied=false',
+      ];
 
   /// Строка узла — `title_<lang>` реестра. Язык: `ru` при русском UI, иначе
   /// `en` (`zh` падает в `en`, пока лаунчер не добавит третий набор).

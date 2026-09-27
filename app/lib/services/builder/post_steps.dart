@@ -9,6 +9,7 @@ import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart';
 import '../../models/source_chain.dart' show kChainOutboundType;
 import '../../models/node_warning.dart' show RegistryWarning;
+import '../contract/body_edit.dart' show editBodyPath;
 import '../contract/body_sanitizer.dart' show fieldAllowedOn;
 import '../core_duration.dart';
 import '../json_clone.dart';

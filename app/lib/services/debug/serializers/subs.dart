@@ -155,6 +155,9 @@ Map<String, Object?> serializeNodeWarning(NodeWarning w) {
     'path': reg?.path,
     'value': reg?.value,
     if (reg != null && reg.params.isNotEmpty) 'params': {...reg.params},
+    // §577 — правка по правилу реестра применена к телу; `false` — тело
+    // авторское, правило мягкое, тело не изменено.
+    'applied': w.applied,
     // Заголовок есть только у кодов реестра — у классов приложения его нет,
     // и выдумывать его из текста нельзя.
     //

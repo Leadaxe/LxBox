@@ -144,10 +144,9 @@ extension ServerListBuild on ServerList {
         main.map
           ..clear()
           ..addAll(verbatim);
-        // §473 — вход этой записи `singbox`: тело написал автор узла в форме
-        // ядра. Гард реестра на сборке прочтёт метку и не подменит ему
-        // значение, которому реестр ставит условный потолок (`max_when`).
-        ctx.noteVerbatim(main);
+        // §577 — тело авторское: шаги сборки правят его только жёсткими
+        // правилами реестра, мягкие дают код с `applied: false`.
+        main.authored = true;
       }
 
       // Allocate tags (детуры первыми — чтобы main мог сослаться на tag).

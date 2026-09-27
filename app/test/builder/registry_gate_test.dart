@@ -9,6 +9,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/singbox_entry.dart';
 import 'package:lxbox/services/builder/registry_gate.dart';
 
@@ -94,8 +95,11 @@ void main() {
     // одном узле подписки уронила бы старт ВСЕГО конфига (#147). Разбор
     // отбраковывает такой узел раньше (`parseAll`), но гард — последний, кто
     // видит тело перед ядром, и полагаться на один эшелон нельзя.
-    test('§477 — дословный JSON-узел с негодным encryption не едет в ядро',
-        () {
+    // §577 — ожидание изменено: у авторского тела `drop_node` без
+    // `core_rejects` в реестре (контракт 1.1.89: у `vless.encryption` признака
+    // нет) мягкий — тело идёт как написано, код с `applied: false`. Прежнее
+    // снятие проверяется ниже на обычном теле.
+    test('§477 — узел с негодным encryption не едет в ядро', () {
       final entry = Outbound(<String, dynamic>{
         'type': 'vless',
         'tag': 'verbatim-enc-broken',
@@ -105,8 +109,7 @@ void main() {
         // Три части вместо четырёх — ровно случай #147.
         'encryption': 'mlkem768x25519plus.native.0rtt',
       });
-      final report = applyRegistryGate([entry],
-          coreVersion: _core, verbatim: {entry});
+      final report = applyRegistryGate([entry], coreVersion: _core);
       expect(report.dropped, [entry],
           reason: 'запись обязана быть снята целиком, а не лишена поля');
       // Текст реестра, с путём и СЫРЫМ значением.
@@ -130,8 +133,8 @@ void main() {
         'encryption': enc,
       };
       final entry = Outbound(Map<String, dynamic>.from(body));
-      final report = applyRegistryGate([entry],
-          coreVersion: _core, verbatim: {entry});
+      entry.authored = true;
+      final report = applyRegistryGate([entry], coreVersion: _core);
       expect(report.dropped, isEmpty);
       expect(report.warnings, isEmpty);
       expect(entry.map, body, reason: '§455 — тело едет дословно');
@@ -177,8 +180,8 @@ void main() {
 
     test('§455 — дословному JSON-телу гард MTU НЕ подменяет, только info', () {
       final entry = awgEndpoint(1420);
-      final report = applyRegistryGate([entry],
-          coreVersion: _core, verbatim: {entry});
+      entry.authored = true;
+      final report = applyRegistryGate([entry], coreVersion: _core);
 
       // Главное: тело в ядро уходит как написано. Подмени гард значение —
       // настройка человека исчезла бы на сборке, а §455 обещает обратное.
@@ -239,15 +242,116 @@ void main() {
       expect(report.warnings.single, contains('awg-jc0: '));
     });
 
-    test('MTU не задан — дефолт 1280 дописывается и на дословном теле', () {
-      // Исключение по входу — про ЗАМЕНУ написанного, а не про подстановку
-      // недостающего: кода тут нет, а поле появляется (кейс корпуса
-      // `body/singbox/endpoints_awg_mtu_default`).
+    // §577 — ожидание изменено: прежде дефолт 1280 дописывался и дословному
+    // телу. Тихий `default_when` без `core_rejects` — мягкое правило, и
+    // авторское тело уходит в ядро как написано (критерий 1 спеки 577).
+    // Обычному телу дефолт дописывается по-прежнему.
+    test('MTU не задан — дефолт 1280 у обычного тела, авторское как есть', () {
+      final plain = awgEndpoint(null);
+      expect(applyRegistryGate([plain], coreVersion: _core).warnings, isEmpty);
+      expect(plain.map['mtu'], 1280);
+
       final entry = awgEndpoint(null);
-      final report = applyRegistryGate([entry],
-          coreVersion: _core, verbatim: {entry});
-      expect(entry.map['mtu'], 1280);
+      entry.authored = true;
+      final report = applyRegistryGate([entry], coreVersion: _core);
+      expect(entry.map.containsKey('mtu'), isFalse);
       expect(report.warnings, isEmpty);
+    });
+
+    group('§577 — авторское тело: реестр сообщает, не правит', () {
+      Outbound trojan() => Outbound(<String, dynamic>{
+            'type': 'trojan',
+            'tag': 'own-trojan',
+            'server': 'example-1.com',
+            'server_port': 443,
+            'password': 'p',
+            'foo': 'bar',
+            'tls': {'enabled': true, 'server_name': 'example-1.com', 'bar': 1},
+          });
+
+      test('мягкое нарушение: тело без изменений, код с applied: false', () {
+        final entry = trojan()..authored = true;
+        final before = Map<String, dynamic>.from(entry.map)
+          ..['tls'] = Map<String, dynamic>.from(entry.map['tls'] as Map);
+        final report = applyRegistryGate([entry], coreVersion: _core);
+        expect(entry.map, before);
+        expect(report.dropped, isEmpty);
+        final ws = report.warningsByEmittedTag['own-trojan']!
+            .cast<RegistryWarning>();
+        expect(ws.map((w) => (w.code, w.path, w.applied)).toSet(), {
+          ('unknown_key', 'tls.bar', false),
+          ('unknown_key', 'foo', false),
+        });
+        expect(report.warnings, everyElement(endsWith('(not applied)')));
+      });
+
+      test('то же тело обычным: ключи сняты, applied: true', () {
+        final entry = trojan();
+        final report = applyRegistryGate([entry], coreVersion: _core);
+        expect(entry.map.containsKey('foo'), isFalse);
+        expect((entry.map['tls'] as Map).containsKey('bar'), isFalse);
+        final ws = report.warningsByEmittedTag['own-trojan']!;
+        expect(ws.every((w) => w.applied), isTrue);
+        expect(report.warnings, everyElement(isNot(contains('not applied'))));
+      });
+
+      test('жёсткое нарушение правится: flow вне набора ядра снят', () {
+        final entry = Outbound(<String, dynamic>{
+          'type': 'vless',
+          'tag': 'own-vless',
+          'server': 'example-5.com',
+          'server_port': 443,
+          'uuid': '00000000-0000-4000-8000-000000000582',
+          'flow': 'xtls-rprx-direct',
+          'foo': 1,
+        })
+          ..authored = true;
+        final report = applyRegistryGate([entry], coreVersion: _core);
+        expect(entry.map.containsKey('flow'), isFalse);
+        expect(entry.map['foo'], 1, reason: 'мягкое рядом не применяется');
+        final ws = report.warningsByEmittedTag['own-vless']!
+            .cast<RegistryWarning>();
+        expect(ws.firstWhere((w) => w.code == 'flow_deprecated').applied,
+            isTrue);
+        expect(ws.firstWhere((w) => w.code == 'unknown_key').applied, isFalse);
+      });
+
+      test('жёсткое снятие узла: негодный порт снимает запись', () {
+        final entry = Outbound(<String, dynamic>{
+          'type': 'trojan',
+          'tag': 'own-bad-port',
+          'server': 'example.com',
+          'server_port': 70000,
+          'password': 'p',
+        })
+          ..authored = true;
+        final report = applyRegistryGate([entry], coreVersion: _core);
+        expect(report.dropped, [entry]);
+      });
+
+      test('drop_node без core_rejects мягкий: негодный encryption остаётся',
+          () {
+        final entry = Outbound(<String, dynamic>{
+          'type': 'vless',
+          'tag': 'own-enc',
+          'server': 'example.com',
+          'server_port': 443,
+          'uuid': '11111111-1111-1111-1111-111111111111',
+          'encryption': 'mlkem768x25519plus.native.0rtt',
+        })
+          ..authored = true;
+        final report = applyRegistryGate([entry], coreVersion: _core);
+        expect(report.dropped, isEmpty);
+        expect(entry.map['encryption'], 'mlkem768x25519plus.native.0rtt');
+        expect(report.warnings.single, endsWith('(not applied)'));
+      });
+
+      test('запись без type снимается и у авторского тела', () {
+        final entry = Outbound(<String, dynamic>{'tag': 'no-type'})
+          ..authored = true;
+        final report = applyRegistryGate([entry], coreVersion: _core);
+        expect(report.dropped, [entry]);
+      });
     });
 
     test('реестр не загружен — гард no-op', () {

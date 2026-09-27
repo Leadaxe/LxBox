@@ -22,8 +22,15 @@ part of '../post_steps.dart';
 ///
 /// Возвращает список замен мусора (`owner → исходное значение`). Пустой =
 /// всё чисто (тихие канонизации псевдонимов в список не попадают).
+///
+/// §577 — правка идёт через точку правки ([editBodyPath]): у авторского
+/// тела ([authored], identity-множество карт) применяется только жёсткое
+/// правило (`utls_fp_unknown` — `core_rejects`); снятие uTLS/REALITY на
+/// QUIC (`tls_not_applicable_quic`) мягкое — тело не меняется.
 List<({String owner, String original})> healUnknownUtlsFingerprints(
-    Map<String, dynamic> config) {
+  Map<String, dynamic> config, {
+  Set<Map<String, dynamic>> authored = const {},
+}) {
   final healed = <({String owner, String original})>[];
   final outbounds = (config['outbounds'] as List<dynamic>? ?? const [])
       .whereType<Map<String, dynamic>>();
@@ -34,9 +41,16 @@ List<({String owner, String original})> healUnknownUtlsFingerprints(
     // (SPECS/027). Здесь именно СНИМАЕМ оба блока (эмиттер их не пишет, но
     // vars/будущие пути могут); НЕ восстанавливаем utls как для TCP+reality
     // ниже — иначе воскресили бы мёртвую QUIC-ноду.
+    final own = authored.contains(o);
     if (o['type'] == 'hysteria2' || o['type'] == 'tuic') {
-      tls.remove('utls');
-      tls.remove('reality');
+      for (final k in const ['utls', 'reality']) {
+        if (!tls.containsKey(k)) continue;
+        editBodyPath(o,
+            authored: own,
+            code: 'tls_not_applicable_quic',
+            path: 'tls.$k',
+            remove: true);
+      }
       continue;
     }
     final utls = tls['utls'];
@@ -45,13 +59,14 @@ List<({String owner, String original})> healUnknownUtlsFingerprints(
     if (fp is String && fp.isNotEmpty) {
       final n = normalizeUtlsFingerprintValue(fp);
       if (n.value != fp) {
-        if (n.value.isEmpty) {
-          utls.remove('fingerprint');
-        } else {
-          utls['fingerprint'] = n.value;
-          if (n.junk) {
-            healed.add((owner: o['tag'] as String? ?? '', original: fp));
-          }
+        final done = editBodyPath(o,
+            authored: own,
+            code: 'utls_fp_unknown',
+            path: 'tls.utls.fingerprint',
+            value: n.value,
+            remove: n.value.isEmpty);
+        if (done && n.value.isNotEmpty && n.junk) {
+          healed.add((owner: o['tag'] as String? ?? '', original: fp));
         }
       }
     }

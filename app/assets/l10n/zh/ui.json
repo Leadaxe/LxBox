@@ -5156,5 +5156,8 @@
     "value": {
       "other": "将跳过 %d 个条目"
     }
+  },
+  "The node is written by hand, so the app changed nothing in it.": {
+    "value": "该节点为手动编写，应用未对其做任何更改。"
   }
 }

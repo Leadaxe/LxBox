@@ -18,11 +18,12 @@ import '../../models/node_link.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../node_hash.dart';
+import '../contract/body_edit.dart' show settleSanitized;
 import '../contract/body_sanitizer.dart';
 import '../contract/group_genus.dart';
 import '../contract/registry.dart';
 import '../node_identity.dart';
-import 'authored_scope.dart' show singboxBodySource;
+import 'authored_scope.dart' show parsingAuthoredBody, singboxBodySource;
 import 'json_parsers.dart';
 import 'uri_utils.dart';
 
@@ -631,13 +632,20 @@ Map<String, dynamic> _sanitizedEntry(Map<String, dynamic> entry) {
   } catch (_) {
     return entry;
   }
-  final res = RegistrySanitizer.sanitize(
-    copy,
-    scheme: type,
-    coreVersion: '0.0.0',
-    applyCoreGates: false,
-    // §576 п.5 — `singbox` только у авторского тела; подписка — `other`.
-    source: singboxBodySource,
+  // §577 — модель авторского узла строится по его телу как написано, с
+  // правками только жёстких правил (та же точка правки, что у сборки).
+  final res = settleSanitized(
+    type,
+    entry,
+    RegistrySanitizer.sanitize(
+      copy,
+      scheme: type,
+      coreVersion: '0.0.0',
+      applyCoreGates: false,
+      // §576 п.5 — `singbox` только у авторского тела; подписка — `other`.
+      source: singboxBodySource,
+    ),
+    authored: parsingAuthoredBody,
   );
   return res.body ?? entry;
 }

@@ -353,6 +353,19 @@ void main() {
       expect(j['title_en'], isA<String>());
       expect(j['text_en'], isA<String>());
       expect(j['text_en'] as String, isNotEmpty);
+      expect(j['applied'], isTrue);
+    });
+
+    // §577 — признак «не применено» у кода авторского тела.
+    test('applied: false у неприменённого правила', () {
+      final j = serializeNodeWarning(const RegistryWarning(
+        code: 'unknown_key',
+        path: 'foo',
+        value: 'bar',
+        applied: false,
+      ));
+      expect(j['applied'], isFalse);
+      expect(j['code'], 'unknown_key');
     });
 
     // Д-2 (эмулятор 19.09.2026) — заголовок зовёт `{path}`, а сериализатор

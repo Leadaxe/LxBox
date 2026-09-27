@@ -4,6 +4,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/screens/node_settings/node_document.dart';
+import 'package:lxbox/models/node_warning.dart';
+import 'package:lxbox/services/contract/body_edit.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart';
+import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
@@ -24,11 +28,13 @@ import 'corpus_warnings.dart';
 // ту же функцию, что у экрана. Узел подписки: экран источник подписки не
 // пишет (источник подписки — ответ провайдера), источник не меняется.
 //
-// `applied` у предупреждения — §577 (авторское тело: реестр сообщает, не
-// правит), здесь не сверяется; `code` и `path` сверяются.
+// §577 — у предупреждения сверяются `code`, `path` и `applied` (отсутствие
+// = `true`).
 //
-// Раздел `corpus/authored/` (контракт 1.1.87) — материал §577: зарегистрирован
-// ниже как отложенный с причиной, не реализован.
+// Раздел `corpus/authored/` (контракт 1.1.87–1.1.88): `<case>.body` — голое
+// тело, сохранённое как свой сервер; ожидание — результат разбора с
+// `meta.container: own`. Сверка СТРОГАЯ: тело (через ту же точку правки,
+// что у сборки, `settleSanitized`), `warnings[]` с `applied`, `dropped[]`.
 void main() {
   if (corpusSuiteUnavailable('test/contract/node_edit_corpus_test.dart')) {
     return;
@@ -104,7 +110,10 @@ void main() {
           final got = warningListOf(node.warnings, scheme);
           for (final w in wantW) {
             expect(
-              got.any((g) => g['code'] == w['code'] && g['path'] == w['path']),
+              got.any((g) =>
+                  g['code'] == w['code'] &&
+                  g['path'] == w['path'] &&
+                  (g['applied'] ?? true) == (w['applied'] ?? true)),
               isTrue,
               reason: 'нет ${w['code']}@${w['path']}; есть: $got',
             );
@@ -114,8 +123,86 @@ void main() {
     }
   });
 
+  final authoredRoot = Directory('$kVendorRoot/corpus/authored');
+  final authoredCases = authoredRoot.existsSync()
+      ? (authoredRoot
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.body'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path)))
+      : <File>[];
+
   group('contract corpus: authored', () {
-    test('раздел authored/', () {},
-        skip: 'отложено до §577: авторское тело (applied, core_rejects)');
+    test('раздел не пуст', () {
+      expect(authoredCases, isNotEmpty, reason: 'нет кейсов в ${authoredRoot.path}');
+    });
+
+    for (final file in authoredCases) {
+      final base = file.path.substring(0, file.path.length - '.body'.length);
+      final name = base.substring(authoredRoot.path.length + 1);
+      test(name, () {
+        final text = file
+            .readAsLinesSync()
+            .skipWhile((l) => l.trimLeft().startsWith('#'))
+            .join('\n');
+        final expected = jsonDecode(File('$base.expected.json')
+            .readAsStringSync()) as Map<String, dynamic>;
+        expect((expected['meta'] as Map?)?['container'], 'own');
+        expect(isAuthoredNodeSource(text), isTrue,
+            reason: 'кейс раздела — голое тело sing-box');
+
+        final dropped = <NodeWarning>[];
+        final nodes = parseAll(decode(text), own: true, dropped: dropped);
+
+        final gotDropped = [
+          for (final w in dropped)
+            '${w is RegistryWarning ? w.ownerTag : ''}|${warningCodeOf(w)}',
+        ]..sort();
+        final wantDropped = [
+          for (final d in (expected['dropped'] as List?) ?? const [])
+            '${(d as Map)['ref']}|${d['code']}',
+        ]..sort();
+        expect(gotDropped, wantDropped, reason: 'dropped[]');
+
+        final wantNodes =
+            ((expected['nodes'] as List?) ?? const []).cast<Map<String, dynamic>>();
+        expect(nodes.length, wantNodes.length, reason: 'состав узлов');
+        for (var i = 0; i < wantNodes.length; i++) {
+          final want = wantNodes[i];
+          final node = nodes[i];
+          final scheme = '${want['scheme']}';
+          expect(node.tag, want['label'], reason: 'label');
+
+          final raw = (jsonDecode(text) as Map).cast<String, dynamic>();
+          final type = raw['type'] as String;
+          final res = settleSanitized(
+            type,
+            raw,
+            RegistrySanitizer.sanitize(
+              (jsonDecode(text) as Map).cast<String, dynamic>(),
+              scheme: type,
+              coreVersion: '0.0.0',
+              applyCoreGates: false,
+              source: BodySource.singbox,
+            ),
+            authored: true,
+          );
+          final entry = Map<String, dynamic>.from(res.body!)
+            ..remove('tag')
+            ..remove('detour');
+          expect(canonEncode(entry), canonEncode(want['entry']),
+              reason: 'тело узла');
+
+          final gotW = warningListOf(node.warnings, scheme);
+          final wantW = [
+            for (final w in (want['warnings'] as List?) ?? const [])
+              (w as Map).cast<String, dynamic>(),
+          ];
+          expect(canonEncode(gotW), canonEncode(wantW),
+              reason: 'warnings[] (строго, с applied)');
+        }
+      });
+    }
   });
 }

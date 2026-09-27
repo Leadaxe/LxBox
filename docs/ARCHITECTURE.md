@@ -337,6 +337,16 @@ sing-box body ──► (already a sing-box map: the step-1 pass judges it verba
 - **Sanitizer** (`contract/body_sanitizer.dart`) is the single judge of values.
   Core gates (`min_core`, `platform`) are off at parse time: they depend on the
   running core, the node does not.
+- **Edit point** (`contract/body_edit.dart`, §577) is the single place a
+  registry rule edits a node body. A build entry carries `authored`
+  (`SingboxEntry.authored`, set by `ServerListBuild` where `verbatimBodyOf`
+  put the body; the four conditions of §576), parsing reads the same property
+  as `parsingAuthoredBody`. On an authored body only hard rules edit (no
+  string `type`, the node core gate, a registry rule or relation with
+  `core_rejects`); every other rule leaves the body as written and gives its
+  code with `applied: false`. The registry gate, the detour yields and the
+  uTLS / REALITY heals go through it; global TLS settings do not (they are the
+  user's settings, not registry rules).
 - **`parseSingboxEntry`** is the only "map → model" route. It is fed the
   **clean** map, so the model is a typed view of what will reach the core.
   It is also, by construction, **the list of body keys LxBox can read** — it
@@ -807,7 +817,9 @@ builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   registry_gate.dart         #   §460 applyRegistryGate — the registry sanitiser over every node entry after
                              #   list.build(ctx) and before the post-steps; warnings → emitWarnings with the
-                             #   registry text, drop_node removes the entry. Registry not loaded → no-op
+                             #   registry text, drop_node removes the entry. Registry not loaded → no-op.
+                             #   §577: an authored entry is edited only by hard rules (contract/body_edit.dart);
+                             #   a soft code keeps the body and reports `(not applied)`
   server_list_build.dart     #   the per-subscription emit: the detour policy, tag allocation, selector/auto registration
   verbatim_body.dart         #   §455/§576 verbatimBodyOf — a node goes to the core VERBATIM (its rawSource, detour
                              #   stripped, an empty tag filled with the model tag) when all four hold: (1) the
