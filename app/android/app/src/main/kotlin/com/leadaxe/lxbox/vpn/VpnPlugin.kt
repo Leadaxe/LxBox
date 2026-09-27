@@ -41,6 +41,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_CONNECTIONS_CHANNEL = "lxbox/cc/connections"
         private const val CC_DNS_CHANNEL = "lxbox/cc/dns" // §180
         private const val CC_TAILSCALE_CHANNEL = "lxbox/cc/tailscale" // §579
+        private const val CC_TAILSCALE_PING_CHANNEL = "lxbox/cc/tailscale_ping" // §581
         private const val VPN_REQUEST_CODE = 24
 
         // §207 — allowlist имён pprof-профилей (до `?`). Пропускаем наружу
@@ -123,6 +124,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private lateinit var ccConnectionsEventChannel: EventChannel
     private lateinit var ccDnsEventChannel: EventChannel // §180
     private lateinit var ccTailscaleEventChannel: EventChannel // §579
+    private lateinit var ccTailscalePingEventChannel: EventChannel // §581
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -246,6 +248,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscaleSink = sink }
             override fun onCancel(args: Any?) { BoxVpnService.ccTailscaleSink = null }
         })
+        // §581 — ответы проверки устройства Tailscale.
+        ccTailscalePingEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_PING_CHANNEL)
+        ccTailscalePingEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscalePingSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccTailscalePingSink = null }
+        })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
@@ -272,6 +280,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         ccConnectionsEventChannel.setStreamHandler(null)
         ccDnsEventChannel.setStreamHandler(null) // §180
         ccTailscaleEventChannel.setStreamHandler(null) // §579
+        ccTailscalePingEventChannel.setStreamHandler(null) // §581
         statusSink = null
         BoxVpnService.coreLogSink = null
         BoxVpnService.ccStatusSink = null
@@ -773,6 +782,41 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccStopTailscaleStatus" -> {
                 val cc = BoxService.commandClient
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscaleStatus() }
+                result.success(true)
+            }
+            // §581 — exit node на ходу и выход из аккаунта: блокирующий gRPC
+            // на Dispatchers.IO; ответ — null (успех) или текст ошибки ядра.
+            "ccSetTailscaleExitNode" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val id = call.argument<String>("stable_id") ?: ""
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.setTailscaleExitNode(tag, id) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccTailscaleLogout" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) {
+                        cc?.tailscaleLogout(tag) ?: "no command client"
+                    }
+                    result.success(err)
+                }
+            }
+            "ccStartTailscalePing" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                val ip = call.argument<String>("peer_ip") ?: ""
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscalePing(tag, ip) }
+                result.success(cc != null)
+            }
+            "ccStopTailscalePing" -> {
+                val cc = BoxService.commandClient
+                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
                 result.success(true)
             }
             "ccCancelPing" -> {

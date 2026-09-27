@@ -220,6 +220,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// списком `{tag, backend_state, state_text}` на каждое обновление ядра.
         @Volatile
         var ccTailscaleSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
+        @Volatile
+        var ccTailscalePingSink: io.flutter.plugin.common.EventChannel.EventSink? = null
 
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")

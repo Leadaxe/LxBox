@@ -10,6 +10,12 @@
 
 ### Added
 
+- **Tailscale node: Network tab ([task 581](docs/spec/tasks/581-tailscale-network-tab.md)).**
+  The screen of a Tailscale node gets a Network tab: node state, sign in and
+  log out, this device, the network's devices with a ping, and the exit node
+  list. Picking an exit node switches it on the fly without touching the
+  node; Save choice writes it into the node. Diagnostics no longer offers the
+  external-URL check on a node without an exit.
 - **NETWORKS on Home ([task 579](docs/spec/tasks/579-networks-pseudo-direction.md)).**
   A Tailscale node without an exit node is in no Direction, so Home did not show it.
   While the VPN is on, such nodes are now listed under `NETWORKS`, the last entry of

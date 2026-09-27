@@ -1,4 +1,5 @@
 import '../../../models/home_state.dart';
+import '../../tailscale_network.dart';
 
 /// [HomeState] → JSON-map для `GET /state`. Ключи в snake_case,
 /// timestamps в ISO-8601 UTC. Чувствительных полей нет —
@@ -33,6 +34,12 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     // `GetOutbounds` на heartbeat-тике. Пусто = состояний нет (туннель down,
     // ядро не отдало, либо endpoint'ов в конфиге нет).
     'endpoint_states': s.endpointStates,
+    // §581 раздел 9 — узлы Tailscale: только состояние и число устройств;
+    // имён, адресов, имени сети и ссылки входа здесь нет.
+    'tailscale': {
+      for (final e in s.tailscaleStatus.entries)
+        e.key: tailscaleDebugSummary(e.value),
+    },
     'traffic': {
       'up_total': s.traffic.uploadTotal,
       'down_total': s.traffic.downloadTotal,

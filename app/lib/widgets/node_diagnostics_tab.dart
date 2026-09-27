@@ -5,11 +5,15 @@ import 'package:flutter/services.dart';
 
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
+import '../models/tunnel_status.dart';
 import '../screens/subscription_detail_screen/widgets/node_notifications_view.dart';
 import '../services/diagnostics/diagnostic_check.dart';
 import '../services/diagnostics/node_diagnostics_runner.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/tailscale_network.dart';
+import '../vpn/box_vpn_client.dart';
+import '../vpn/cc_channel.dart';
 import 'banner_palette.dart';
 import 'safe_bottom.dart';
 
@@ -45,7 +49,16 @@ class NodeDiagnosticsTab extends StatefulWidget {
     this.header,
     this.warnings = const [],
     this.scrollToNotifications = false,
+    this.tailscaleStatusSource,
+    this.vpnUp,
   });
+
+  /// Тесты (§581): поток состояния Tailscale вместо [CcChannel] и VPN
+  /// включён / выключен без обращения к сервису.
+  @visibleForTesting
+  final Stream<List<CcTailscaleStatus>>? tailscaleStatusSource;
+  @visibleForTesting
+  final bool? vpnUp;
 
   final NodeSpec? node;
   final String liveTag;
@@ -76,9 +89,58 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
 
   final _notificationsSectionKey = GlobalKey();
 
+  // §581 раздел 8 — у узла Tailscale без действующего exit node проверка
+  // запросом к внешнему адресу скрыта.
+  bool _vpnUp = false;
+  CcTailscaleStatus? _tsStatus;
+  StreamSubscription<List<CcTailscaleStatus>>? _tsSub;
+  StreamSubscription<TunnelStatusEvent>? _vpnSub;
+  bool _tsAcquired = false;
+
+  bool get _externalCheckHidden {
+    final node = widget.node;
+    if (node is! TailscaleSpec) return false;
+    return !tailscaleHasExit(
+        vpnUp: _vpnUp, status: _tsStatus, body: node.body);
+  }
+
+  void _watchTailscale() {
+    final forced = widget.vpnUp;
+    if (forced != null) {
+      _vpnUp = forced;
+    } else {
+      unawaited(BoxVpnClient.I.getVpnStatus().then((s) {
+        if (mounted) setState(() => _vpnUp = s.isUp);
+      }));
+      _vpnSub = BoxVpnClient.I.onStatusChanged.listen((e) {
+        if (mounted) setState(() => _vpnUp = e.status.isUp);
+      });
+    }
+    void onList(List<CcTailscaleStatus> list) {
+      final next = list.where((s) => s.tag == widget.liveTag).firstOrNull;
+      // Перерисовка только при смене наличия выхода.
+      if ((next?.exitNode == null) == (_tsStatus?.exitNode == null) &&
+          (next == null) == (_tsStatus == null)) {
+        _tsStatus = next;
+        return;
+      }
+      if (mounted) setState(() => _tsStatus = next);
+    }
+
+    final source = widget.tailscaleStatusSource;
+    if (source != null) {
+      _tsSub = source.listen(onList);
+    } else {
+      _tsSub = CcChannel.instance.tailscaleStatus.listen(onList);
+      _tsAcquired = true;
+      unawaited(CcChannel.instance.acquireTailscaleStatus());
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    if (widget.node is TailscaleSpec) _watchTailscale();
     if (widget.scrollToNotifications && widget.warnings.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToNotificationsSection();
@@ -102,6 +164,9 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
     // §286 — уход с экрана во время прогона: результат уже не нужен, а
     // probe-сессия не должна пережить экран.
     _runner?.cancel();
+    unawaited(_tsSub?.cancel());
+    unawaited(_vpnSub?.cancel());
+    if (_tsAcquired) unawaited(CcChannel.instance.releaseTailscaleStatus());
     super.dispose();
   }
 
@@ -157,6 +222,13 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
           widget.header!,
           const SizedBox(height: 24),
         ],
+        if (_externalCheckHidden)
+          Text(
+            getLocalText.s(
+                "This node has no exit. Check devices on the Network tab."),
+            key: const ValueKey('tailscale-no-exit'),
+          ),
+        if (!_externalCheckHidden) ...[
         _sectionHeader(
           getLocalText.s("Check"),
           theme,
@@ -310,6 +382,7 @@ class _NodeDiagnosticsTabState extends State<NodeDiagnosticsTab> {
                 ),
               ),
           ],
+        ],
         ],
         if (warnings.isNotEmpty) ...[
           const SizedBox(height: 24),

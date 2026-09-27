@@ -21,6 +21,8 @@ import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
+import '../widgets/tailscale_network_tab.dart';
+import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
@@ -61,7 +63,9 @@ class NodeSettingsScreen extends StatefulWidget {
   /// §498/§501 — начальная вкладка (страховка открывает Diagnostics = 3).
   final int initialTab;
 
-  /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics.
+  /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics. У узла
+  /// Tailscale перед Diagnostics стоит Network (§581) — экран сдвигает индекс
+  /// сам.
   static const diagnosticsTabIndex = 3;
 
   @override
@@ -105,17 +109,25 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// `for_each` под тип этого узла (см. [skipPresetsToggleVisible]).
   bool _skipPresetsVisible = false;
 
+  /// §581 — узел Tailscale: есть вкладка Network.
+  bool _isTailscale = false;
+
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController();
     _jsonCtrl = TextEditingController();
     _sourceCtrl = TextEditingController();
-    _tabs = TabController(
-      length: 4,
-      vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 3),
-    );
+    // §581 — у узла Tailscale вкладка Network перед Diagnostics.
+    final first = _member?.node ??
+        (widget.entry.list.nodes.isEmpty ? null : widget.entry.list.nodes.first);
+    _isTailscale = first is TailscaleSpec;
+    final count = _isTailscale ? 5 : 4;
+    var initial = widget.initialTab.clamp(0, 3);
+    if (_isTailscale && initial == NodeSettingsScreen.diagnosticsTabIndex) {
+      initial = 4;
+    }
+    _tabs = TabController(length: count, vsync: this, initialIndex: initial);
     unawaited(_load());
   }
 
@@ -366,6 +378,23 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             : getLocalText.s("Saved"));
   }
 
+  /// §581 — Save choice вкладки Network: `exit_node` = [value] (`null` —
+  /// поле убирается) в теле узла, дальше тем же путём, что Save вкладки
+  /// Source (тег из поля Tag, проверка ядром, запись, пересборка).
+  Future<void> _saveExitNode(String? value) async {
+    final raw = _containerRaw.trim();
+    final base = raw.startsWith('{') ? raw : _jsonCtrl.text;
+    final String text;
+    try {
+      text = withExitNode(base, value);
+    } on FormatException catch (e) {
+      _snack(getLocalText.s("Invalid JSON: %s", e.message));
+      return;
+    }
+    _sourceCtrl.text = text;
+    await _saveSource();
+  }
+
   /// Записать [raw] источником узла (одиночный — `updateConnectionAt`, член
   /// папки — `updateMemberAt`) и перечитать экран.
   Future<void> _store(String raw,
@@ -461,6 +490,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               Tab(text: getLocalText.s("Source")),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
+              if (_isTailscale) Tab(text: getLocalText.s("Network")),
               NodeDiagnosticsTabLabel(warnings: _notifications),
             ],
           ),
@@ -473,6 +503,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                   _buildSettingsTab(theme),
                   _buildSourceTab(theme),
                   _buildJsonTab(theme),
+                  if (_isTailscale)
+                    TailscaleNetworkTab(
+                      liveTag: TagResolver.displayTag(
+                          widget.entry.list.tagPrefix, _originalTag),
+                      body: _node is TailscaleSpec
+                          ? (_node as TailscaleSpec).body
+                          : const {},
+                      onSaveExitNode: _saveExitNode,
+                    ),
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(
                     node: _node,

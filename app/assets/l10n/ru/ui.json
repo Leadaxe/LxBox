@@ -5380,5 +5380,116 @@
   },
   "stopped": {
     "value": "остановлен"
+  },
+  "Start VPN to see the network.": {
+    "value": "Запустите VPN, чтобы увидеть сеть."
+  },
+  "The node is not in the running config.": {
+    "value": "Узла нет в работающем конфиге."
+  },
+  "Devices": {
+    "value": "Устройства"
+  },
+  "No devices": {
+    "value": "Устройств нет"
+  },
+  "Status": {
+    "value": "Состояние"
+  },
+  "signed in with a key": {
+    "value": "вход по ключу"
+  },
+  "Sign in": {
+    "value": "Войти"
+  },
+  "Log out": {
+    "value": "Выйти"
+  },
+  "Log out?": {
+    "value": "Выйти?"
+  },
+  "The node leaves the network. The node has a sign-in key, so it signs in again on the next start.": {
+    "value": "Узел выйдет из сети. В узле записан ключ входа, поэтому при следующем запуске он войдёт снова."
+  },
+  "The node leaves the network. To join again, sign in from this tab.": {
+    "value": "Узел выйдет из сети. Чтобы вернуться, войдите с этой вкладки."
+  },
+  "Failed: %s": {
+    "value": "Не удалось: %s"
+  },
+  "This device": {
+    "value": "Это устройство"
+  },
+  "MagicDNS name": {
+    "value": "Имя MagicDNS"
+  },
+  "Address": {
+    "value": "Адрес"
+  },
+  "Key expiry": {
+    "value": "Срок ключа"
+  },
+  "Exit node": {
+    "value": "Exit node"
+  },
+  "None": {
+    "value": "Нет"
+  },
+  "offline": {
+    "value": "не в сети"
+  },
+  "Save choice": {
+    "value": "Записать выбор"
+  },
+  "online": {
+    "value": "в сети"
+  },
+  "last seen %s": {
+    "value": "был в сети %s"
+  },
+  "key expired": {
+    "value": "ключ истёк"
+  },
+  "shared": {
+    "value": "общий"
+  },
+  "exit node": {
+    "value": "exit node"
+  },
+  "Copy name": {
+    "value": "Копировать имя"
+  },
+  "Copy address": {
+    "value": "Копировать адрес"
+  },
+  "No reply: %s": {
+    "value": "Нет ответа: %s"
+  },
+  "%s ms, direct": {
+    "value": "%s мс, напрямую"
+  },
+  "%s ms, direct, %s": {
+    "value": "%s мс, напрямую, %s"
+  },
+  "%s ms, relay": {
+    "value": "%s мс, через ретранслятор"
+  },
+  "%s ms, relay %s": {
+    "value": "%s мс, через ретранслятор %s"
+  },
+  "Network": {
+    "value": "Сеть"
+  },
+  "Not saved. Traffic is not routed through this node until you save the choice.": {
+    "value": "Не записано. Трафик не направляется в этот узел, пока выбор не записан."
+  },
+  "Not saved. The node stays in the lists, but has no exit until you save the choice.": {
+    "value": "Не записано. Узел остаётся в списках, но без выхода, пока выбор не записан."
+  },
+  "Not saved. The choice is lost after restart.": {
+    "value": "Не записано. После перезапуска выбор пропадёт."
+  },
+  "This node has no exit. Check devices on the Network tab.": {
+    "value": "У этого узла нет выхода. Проверяйте устройства на вкладке «Сеть»."
   }
 }

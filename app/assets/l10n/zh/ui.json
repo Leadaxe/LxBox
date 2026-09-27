@@ -5171,5 +5171,116 @@
   },
   "stopped": {
     "value": "已停止"
+  },
+  "Start VPN to see the network.": {
+    "value": "启动 VPN 以查看网络。"
+  },
+  "The node is not in the running config.": {
+    "value": "该节点不在运行中的配置里。"
+  },
+  "Devices": {
+    "value": "设备"
+  },
+  "No devices": {
+    "value": "没有设备"
+  },
+  "Status": {
+    "value": "状态"
+  },
+  "signed in with a key": {
+    "value": "已用密钥登录"
+  },
+  "Sign in": {
+    "value": "登录"
+  },
+  "Log out": {
+    "value": "退出登录"
+  },
+  "Log out?": {
+    "value": "退出登录？"
+  },
+  "The node leaves the network. The node has a sign-in key, so it signs in again on the next start.": {
+    "value": "节点将退出网络。节点中写有登录密钥，下次启动时会再次登录。"
+  },
+  "The node leaves the network. To join again, sign in from this tab.": {
+    "value": "节点将退出网络。要重新加入，请在此标签页登录。"
+  },
+  "Failed: %s": {
+    "value": "失败：%s"
+  },
+  "This device": {
+    "value": "本设备"
+  },
+  "MagicDNS name": {
+    "value": "MagicDNS 名称"
+  },
+  "Address": {
+    "value": "地址"
+  },
+  "Key expiry": {
+    "value": "密钥到期"
+  },
+  "Exit node": {
+    "value": "出口节点"
+  },
+  "None": {
+    "value": "无"
+  },
+  "offline": {
+    "value": "离线"
+  },
+  "Save choice": {
+    "value": "保存选择"
+  },
+  "online": {
+    "value": "在线"
+  },
+  "last seen %s": {
+    "value": "最后在线 %s"
+  },
+  "key expired": {
+    "value": "密钥已过期"
+  },
+  "shared": {
+    "value": "共享"
+  },
+  "exit node": {
+    "value": "出口节点"
+  },
+  "Copy name": {
+    "value": "复制名称"
+  },
+  "Copy address": {
+    "value": "复制地址"
+  },
+  "No reply: %s": {
+    "value": "无响应：%s"
+  },
+  "%s ms, direct": {
+    "value": "%s 毫秒，直连"
+  },
+  "%s ms, direct, %s": {
+    "value": "%s 毫秒，直连，%s"
+  },
+  "%s ms, relay": {
+    "value": "%s 毫秒，中继"
+  },
+  "%s ms, relay %s": {
+    "value": "%s 毫秒，中继 %s"
+  },
+  "Network": {
+    "value": "网络"
+  },
+  "Not saved. Traffic is not routed through this node until you save the choice.": {
+    "value": "未保存。保存选择之前，流量不会经过此节点。"
+  },
+  "Not saved. The node stays in the lists, but has no exit until you save the choice.": {
+    "value": "未保存。节点仍在列表中，但在保存选择之前没有出口。"
+  },
+  "Not saved. The choice is lost after restart.": {
+    "value": "未保存。重启后选择会丢失。"
+  },
+  "This node has no exit. Check devices on the Network tab.": {
+    "value": "此节点没有出口。请在“网络”标签页检查设备。"
   }
 }

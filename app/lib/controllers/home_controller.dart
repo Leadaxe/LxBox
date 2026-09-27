@@ -324,7 +324,7 @@ class HomeController extends ChangeNotifier
     _ccGroupsSub?.cancel();
     _groupsPullTimer?.cancel();
     _tailnetSub?.cancel();
-    if (_tailnetKey != null) unawaited(_cc.stopTailscaleStatus());
+    if (_tailnetKey != null) unawaited(_cc.releaseTailscaleStatus());
     super.dispose();
   }
 
@@ -359,7 +359,8 @@ class HomeController extends ChangeNotifier
     final wasActive = _tailnetKey != null;
     _tailnetKey = key;
     if (key == null) {
-      unawaited(_cc.stopTailscaleStatus());
+      // §581 — подписку держат и вкладки Network: снимается по счётчику.
+      unawaited(_cc.releaseTailscaleStatus());
       if (s.tailscaleStatus.isNotEmpty) {
         _emit(s.copyWith(tailscaleStatus: const <String, CcTailscaleStatus>{}));
       }
@@ -369,14 +370,25 @@ class HomeController extends ChangeNotifier
     // придёт при пустом native sink и потеряется.
     _tailnetSub ??= _cc.tailscaleStatus.listen((list) {
       if (_tailnetKey == null) return;
+      // §581 — поток несёт и устройства сети; главному экрану нужны состояние
+      // узла и число устройств (Debug API), перерисовка — только при их смене.
+      final prev = _state.tailscaleStatus;
+      final same = prev.length == list.length &&
+          list.every((e) =>
+              prev[e.tag]?.backendState == e.backendState &&
+              prev[e.tag]?.stateText == e.stateText &&
+              prev[e.tag]?.peers.length == e.peers.length);
+      if (same) return;
       _emit(_state.copyWith(tailscaleStatus: {for (final e in list) e.tag: e}));
     }, onError: (Object e) {
       _addDebug(DebugSource.app, 'cc tailscale stream error: $e');
     });
     if (wasActive) {
       _addDebug(DebugSource.app, 'Tailscale status: resubscribe');
+      unawaited(_cc.restartTailscaleStatus());
+    } else {
+      unawaited(_cc.acquireTailscaleStatus());
     }
-    unawaited(_cc.startTailscaleStatus());
   }
 
   /// Задача 579 — показать псевдо-направление NETWORKS. Выбранное настоящее

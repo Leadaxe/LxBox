@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Spec. Реализация после §579 |
+| Статус | Implemented (проверка на устройстве: DEVICE-PENDING) |
 | Дата старта | 2026-09-27 |
 | Дата завершения | — |
 | Коммиты | — |
@@ -110,6 +110,29 @@ API ядра апстримное, дельты нет. Приложение п�
 2. каким значением задаётся `exit_node` в конфиге: имя, адрес или `StableID`;
    в тело узла пишется то, что ядро принимает в конфиге.
 
+Ответы (исходники `sing-box-lx` `protocol/tailscale/endpoint.go`, tailscale
+`v1.102.1-sing-box-1.14-mod.5`, 27.09.2026):
+
+1. **Выбор на ходу переживает перезапуск.** `SetTailscaleExitNode` пишет
+   `ExitNodeID` в prefs tailscaled; prefs хранятся в каталоге состояния узла
+   (`tsnet.Server.Dir`, файл состояния). При старте `editPrefs` выставляет
+   только `ExitNodeIPSet` с пустым адресом, `ExitNodeIDSet` не трогает, поэтому
+   сохранённый `ExitNodeID` остаётся, и узел снова выходит через выбранное на
+   ходу устройство. Когда в конфиге `exit_node` задан, при переходе в `Running`
+   `applyExitNode` ставит его адрес, и значение конфига побеждает. Исключение —
+   `ephemeral: true`: состояние не переживает перезапуск, выбор теряется.
+   Следствие для текстов: «The choice is lost after restart» точен для случая
+   «записан один, выбран другой»; в случае «в узле нет, выбран на ходу» выход
+   на деле сохраняется, но узел остаётся вне списков выбора до Save choice —
+   текст первой строки это и говорит.
+2. **`exit_node` — адрес или имя устройства, не `StableID`**
+   (`Prefs.SetExitNodeIP` → `exitNodeIPOfArg`): адрес Tailscale, либо базовое
+   имя, либо MagicDNS-имя с точкой в конце или без (без учёта регистра). Имя
+   разрешается только при непустом списке устройств, при старте — ошибка
+   `cannot resolve exit node by hostname while Tailscale is starting up`
+   (ядро повторяет попытку на изменениях списка). Save choice пишет адрес
+   Tailscale устройства (IPv4 первым), при его отсутствии — MagicDNS-имя.
+
 ### 6. Блок Devices
 
 Устройства сети без своего узла.
@@ -167,6 +190,78 @@ API ядра апстримное, дельты нет. Приложение п�
 3. Вкладка Network: блоки 3, 4, 6.
 4. Блок Exit node и запись в тело узла.
 5. Проверка устройства и правка вкладки Diagnostics.
+
+## Опись (исполнитель, 27.09.2026)
+
+- **Мост §579 готов:** отдельный `CommandClient` с подпиской
+  `subscribeTailscaleStatus`, снапшот через `SnapshotEmitter` в EventChannel
+  `lxbox/cc/tailscale`, `CcChannel.tailscaleStatus` (общий поток с кэшем),
+  `HomeController._syncTailnetStatus` держит подписку при VPN включён и узле
+  NETWORKS. Снапшот нёс только `tag`, `backend_state`, `state_text`.
+- **Не хватало:** полного состояния (`AuthURL`, `NetworkName`,
+  `MagicDNSSuffix`, `KeyAuth`, `Self`, `ExitNode`, `UserGroups` → `Peers`);
+  удержания подписки несколькими потребителями (вкладка открыта у узла с
+  `exit_node`, которого нет в NETWORKS); трёх вызовов.
+- **Биндинг (`javap` по `classes.jar` `v1.14.2-lx.4`):**
+  `CommandClient.subscribeTailscaleStatus(TailscaleStatusHandler)` →
+  `TailscaleStatusSubscription.close()`; `setTailscaleExitNode(String, String)`;
+  `tailscaleLogout(String)`; `startTailscalePing(String, String,
+  TailscalePingHandler)` → `TailscalePingSession.close()`.
+  `TailscaleEndpointStatus`: `getEndpointTag/getBackendState/getStateText/
+  getAuthURL/getNetworkName/getMagicDNSSuffix/getSelf/getExitNode/getKeyAuth`,
+  итератор `userGroups()`. `TailscaleUserGroup`: `getUserID/getLoginName/
+  getDisplayName/getProfilePicURL`, итератор `peers()`. `TailscalePeer`:
+  `getStableID/getHostName/getDNSName/getOS/getOnline/getExitNode/
+  getExitNodeOption/getShareeNode/getExpired/getActive/getKeyExpiry/
+  getLastSeen/getRxBytes/getTxBytes`, итераторы `tailscaleIPs()`,
+  `sshHostKeys()`. `TailscalePingResult`: `getLatencyMs` (double, мс),
+  `getIsDirect/getEndpoint/getPeerRelay/getDERPRegionID/getDERPRegionCode/
+  getError`. Времена `KeyExpiry`/`LastSeen` — Unix-секунды (`Time.Unix()` в
+  `protocol/tailscale/status.go`), 0 — нет значения. Свой узел в `UserGroups`
+  не входит.
+
+## Реализация
+
+- **Мост (Kotlin):** `BoxCommandClient` — снапшот расширен до полного
+  состояния (`tailscalePeerMap`), `setTailscaleExitNode` / `tailscaleLogout`
+  (через `ensurePingClient`, ответ `null` или текст ошибки ядра),
+  `startTailscalePing` / `stopTailscalePing` на своём клиенте, ответы — в новый
+  EventChannel `lxbox/cc/tailscale_ping` (`ccTailscalePingSink`);
+  `shutdownAll` закрывает и проверку. `VpnPlugin`: методы
+  `ccSetTailscaleExitNode`, `ccTailscaleLogout` (на `Dispatchers.IO`),
+  `ccStartTailscalePing`, `ccStopTailscalePing`. Имена и адреса в лог не
+  пишутся.
+- **Мост (Dart):** `CcTailscaleStatus` с полным состоянием, `CcTailscalePeer`,
+  `CcTailscaleUserGroup`, `CcTailscalePingResult` в `cc_channel.dart`;
+  подписка ядра по счётчику (`acquireTailscaleStatus` /
+  `releaseTailscaleStatus` / `restartTailscaleStatus`), главный экран и
+  вкладки держат её вместе. `HomeController` перерисовывает главный экран
+  только при смене состояния узла или числа устройств.
+- **Логика:** `app/lib/services/tailscale_network.dart` — строка таблицы
+  раздела 5 (`exitNodeMismatch`, сравнение по адресу и именам как у ядра),
+  тексты, значение для записи (`exitNodeConfigValue`), правка тела
+  (`withExitNode`), порядок устройств, признак выхода для Diagnostics
+  (`tailscaleHasExit`), сводка для Debug API.
+- **Вкладка:** `app/lib/widgets/tailscale_network_tab.dart` —
+  `TailscaleNetworkTab` (Status, This device, Exit node, Devices; список
+  ленивый, перерисовка не чаще раза в секунду) и `TailscalePingSheet` (до
+  пяти ответов или закрытия). Подключена в `node_settings_screen` (Save choice
+  → `withExitNode` над источником и путь Save вкладки Source: тег, проверка
+  ядром, запись) и `node_inspect_screen` (без Save choice); Network стоит
+  перед Diagnostics, индекс Diagnostics сдвигается.
+- **Diagnostics:** `NodeDiagnosticsTab` у `TailscaleSpec` слушает состояние
+  узла; без действующего выхода секция Check скрыта, вместо неё строка
+  раздела 8. VPN выключен или данных нет — решает записанный `exit_node`.
+- **Debug API:** `GET /state` → `tailscale: {тег: {backend_state, devices}}`.
+- **Тесты:** `app/test/services/tailscale_network_test.dart` (разбор сообщения,
+  четыре строки и три текста раздела 5, запись поля, порядок, Diagnostics по
+  данным, Debug API без имён и адресов), `app/test/widgets/
+  tailscale_network_tab_test.dart` (состояния без данных, знак и Save choice,
+  узел подписки, выбор на ходу без записи, отметки и порядок устройств, оба
+  условия раздела 8 на виджете).
+- **DEVICE-PENDING:** эмулятор с настоящей сетью: состояние, список
+  устройств, смена exit node на ходу, Save choice и пересборка, проверка
+  устройства, Log out.
 
 ## Риски и edge cases
 

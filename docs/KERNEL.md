@@ -16,6 +16,15 @@ groups, the DNS stream and more).
 Control goes through the **libbox CommandClient** (§122; the Clash HTTP server
 was removed).
 
+Tailscale calls in use (tasks 579 and 581; upstream API, no fork delta; names from
+`javap` over `classes.jar` of `v1.14.2-lx.4`): `subscribeTailscaleStatus(TailscaleStatusHandler)`
+→ `TailscaleStatusSubscription` (own client, one sink `lxbox/cc/tailscale`),
+`setTailscaleExitNode(tag, stableID)`, `tailscaleLogout(tag)`,
+`startTailscalePing(tag, peerIP, TailscalePingHandler)` → `TailscalePingSession`
+(own client, sink `lxbox/cc/tailscale_ping`). `TailscalePeer.getKeyExpiry()` and
+`getLastSeen()` are Unix seconds; `TailscalePingResult.getLatencyMs()` is a double in
+milliseconds. `startTailscaleSSHSession` is not used.
+
 ## Where the AAR comes from
 
 | | |

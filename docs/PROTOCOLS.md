@@ -1475,6 +1475,29 @@ the Add Server Wizard's Tailscale mode.
   node state from the core stream `SubscribeTailscaleStatus` (`BackendState`: `Running` →
   `running`, `NeedsLogin` → `sign-in needed`, `Stopped` → `stopped`, no record yet →
   `starting`, anything else → the core's `StateText`).
+- **Network tab (task 581):** the node screens `node_settings_screen` and
+  `node_inspect_screen` of a `tailscale` node have a Network tab before Diagnostics. It
+  shows the node state, the network name, Sign in (`AuthURL`) and Log out
+  (`TailscaleLogout`), this device (name, MagicDNS name, addresses, key expiry), the exit
+  node list and the network's devices (online first, then by name; grouped by owner when
+  there are several owners; tap → Copy name, Copy address, Ping via `StartTailscalePing`).
+  VPN off → a hint; no record for the tag → “not in the running config”.
+- **Exit node (task 581):** picking a list entry calls `SetTailscaleExitNode(tag, StableID)`
+  and switches the exit on the fly; the node body does not change. When the saved
+  `exit_node` and the active exit differ, the block shows a warning sign and Save choice
+  (hidden on a subscription node). Save choice writes the active exit's Tailscale address
+  (IPv4 first) into `exit_node` of the node source (None removes the field) and saves the
+  node the way Save on the Source tab does. The core accepts in `exit_node` an address or
+  a device name (base name or MagicDNS name), not a `StableID`; an address also resolves at
+  start, before the peer list arrives. A choice made on the fly lives in the node's state
+  directory (`ExitNodeID` in the tailscaled prefs) and survives a restart while the config
+  has no `exit_node`; with `exit_node` in the config the config value wins at start.
+- **Diagnostics (task 581):** a Tailscale node with no active exit hides the external-URL
+  check and says so; with an active exit the check is as for any node (VPN off: the saved
+  `exit_node` decides).
+- **Privacy (task 581):** device names, addresses, the network name, owner names and the
+  sign-in link are not written to the app log, the support dump or the Debug API; `GET
+  /state` carries only `tailscale: {tag: {backend_state, devices}}`.
 - **Probe:** not tested (no address; a probe config would have to join the tailnet) — “—” instead
   of a delay.
 - **Companion records (preset, §578):** the template preset `tailscale` (on by default,
