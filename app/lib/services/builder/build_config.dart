@@ -4,7 +4,6 @@ import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_sections.dart';
 import '../../models/node_spec.dart' show NodeSpec;
 import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
@@ -621,17 +620,8 @@ Future<BuildResult> _buildConfig({
     ];
   }
 
-  // §435 / контракт ## 13 — секции узлов (NODE_SECTIONS.md §3): записи
-  // свободных узлов, эмитированных выше, после подстановки `@self` → финальный
-  // тег дописываются к общим спискам. Правила — на ту же ось `num`, что и
-  // корень с якорями пресетов (без `num` → 945); DNS — в конец. Выключенный,
-  // снятый гейтом или не разобранный узел в `emittedTagByNode` отсутствует и
-  // ничего не даёт. Инвариант: без узлов с секциями конфиг байт-в-байт прежний.
-  final injected = _collectNodeSections(lists, ctx.emittedTagByNode);
-
   // §578 — узлы для пресетов с `for_each`: состав окончателен (снятия
   // detour-прохода, гейта реестра и ядра уже применены), теги финальные.
-  // Та же точка, что у секций узлов выше.
   final presetNodes = _collectPresetNodes(lists, ctx);
 
   // §370 — нормализация порядка по оси `num`: seed обязательного пресета
@@ -641,7 +631,7 @@ Future<BuildResult> _buildConfig({
   // первым). Одноразово здесь → все нижеследующие проходы видят нормализованный
   // список.
   final customRules = normalizeRuleOrder(
-    [...settings.customRules, ...injected.rules],
+    [...settings.customRules],
     template.selectableRules,
     template,
   );
@@ -852,8 +842,6 @@ Future<BuildResult> _buildConfig({
     dnsSrsCachedPaths: dnsSrsCachedPaths,
     dnsMirrors: unifiedApply.dnsMirrors,
     warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
-    nodeServers: injected.dnsServers, // §435 — DNS-записи узлов в конец
-    nodeRules: injected.dnsRules,
     resolverDefaults: resolverDefaults, // §441 — Н10
     globalVars: vars, // §555/§570 — тела шаблонных серверов видят весь шаблон
   );
@@ -980,61 +968,6 @@ Future<BuildResult> _buildConfig({
     },
     nodeBuildWarningsByEmittedTag: registryReport.warningsByEmittedTag,
   );
-}
-
-/// §435 — секции узлов после подстановки `@self`, готовые к инъекции:
-/// правила — на общую ось; DNS — тела с `tag` (серверы) и тела правил.
-class _NodeSectionsInjection {
-  final rules = <CustomRule>[];
-  final dnsServers = <Map<String, dynamic>>[];
-  final dnsRules = <Map<String, dynamic>>[];
-}
-
-/// §435 — обход свободных узлов с секциями (`UserServer.sections`,
-/// `FolderMember.sections`; NODE_SECTIONS.md §1: у подписок и цепочек поля
-/// нет). Узел без финального тега в [emittedTagByNode] пропускается —
-/// выключен, снят гейтом ядра или не разобран. Записи с `enabled: false`
-/// отсеиваются здесь же (§3 п. 3–4).
-_NodeSectionsInjection _collectNodeSections(
-  List<ServerList> lists,
-  Map<NodeSpec, String> emittedTagByNode,
-) {
-  final out = _NodeSectionsInjection();
-  void add(NodeSections? sections, NodeSpec? node) {
-    if (sections == null || sections.isEmpty || node == null) return;
-    final tag = emittedTagByNode[node];
-    if (tag == null || tag.isEmpty) return;
-    final s = sections.substituteSelf(tag);
-    for (final r in s.rules) {
-      if (!r.enabled) continue;
-      r.orderNum ??= kNodeRuleDefaultNum;
-      out.rules.add(r);
-    }
-    for (final srv in s.dnsServers) {
-      if (!srv.enabled) continue;
-      out.dnsServers.add(<String, dynamic>{...srv.body, 'tag': srv.tag});
-    }
-    for (final r in s.dnsRules) {
-      if (!r.enabled) continue;
-      out.dnsRules.add(Map<String, dynamic>.of(r.rule));
-    }
-  }
-
-  for (final list in lists) {
-    if (!list.enabled) continue;
-    switch (list) {
-      case UserServer u:
-        add(u.sections, u.nodes.isEmpty ? null : u.nodes.first);
-      case FolderServers f:
-        for (final m in f.members) {
-          if (!m.enabled) continue;
-          add(m.sections, m.node);
-        }
-      case SubscriptionServers():
-        break;
-    }
-  }
-  return out;
 }
 
 /// §578 — узлы конфига для `for_each` в порядке конфига (`outbounds`, затем

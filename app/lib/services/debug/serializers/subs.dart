@@ -98,9 +98,6 @@ Map<String, Object?> serializeSubEntry(
     // §346 — настройки, живущие только у SubscriptionServers. У UserServer /
     // FolderServers полей нет (их никто не фетчит) — ключи не кладём вовсе,
     // чтобы `null` не читался как «Default identity» у записи, где режима нет.
-    // §435 — секции одиночного узла (контракт ## 13), read-only, как
-    // хранятся (с плейсхолдерами `@self`). У подписки/папки ключа нет.
-    if (list is UserServer) 'sections': list.sections?.toJson(),
     // §578 — поле записи «пропустить пресеты», read-only.
     if (list is UserServer) 'skip_presets': list.skipPresets,
     // Фича 478 — `raw` одиночного узла под `reveal=true`. Раньше сырое тело
@@ -309,6 +306,5 @@ Map<String, Object?> serializeFolderMember(
       'protocol': m.node?.protocol,
       'broken': m.node == null,
       if (reveal) 'raw': m.raw,
-      'sections': m.sections?.toJson(), // §435 — read-only
       'skip_presets': m.skipPresets, // §578 — read-only
     };

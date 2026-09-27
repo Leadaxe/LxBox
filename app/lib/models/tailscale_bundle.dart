@@ -10,7 +10,6 @@
 library;
 
 import 'node_sections.dart';
-import 'node_spec.dart';
 
 /// Подсеть CGNAT, которую Tailscale раздаёт узлам tailnet.
 const String kTailnetCidr = '100.64.0.0/10';
@@ -130,10 +129,3 @@ Map<String, dynamic> canonicalTailscaleSectionsJson() => {
 NodeSections canonicalTailscaleSections() =>
     NodeSections.fromJson(canonicalTailscaleSectionsJson()) ??
     (throw StateError('canonical Tailscale sections did not parse'));
-
-/// §437 — секции нового свободного узла: извлечённые парсером, иначе для
-/// узла Tailscale каноническая связка (голое тело, конфиг без ссылок на тег).
-/// Пользователь снимает её через Clear sections.
-NodeSections? sectionsForNewNode(NodeSpec n) =>
-    n.importedSections ??
-    (n is TailscaleSpec ? canonicalTailscaleSections() : null);

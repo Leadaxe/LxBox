@@ -219,6 +219,43 @@ Tailscale из подписки получает связку от пресет�
 (`sectionsForNewNode` в мастере и контроллере), модель, кодек хранения,
 `tailscale_bundle.dart`, документация. Что пишется в источник записи — §576.
 
+### Реализация: фаза 2 (сборка, разбор, резервные копии, Debug API)
+
+Контракт 1.1.85 (лаунчер `c68703e0`, TASKS_LXBOX §82). Сделано:
+
+- разбор: из документа и целого конфига берутся только узлы;
+  `NodeSpec.importedSections`, `extractNodeSections`,
+  `SectionsRecordDroppedWarning`, `SectionsConflictWarning` и их строки в
+  словарях `ru`/`zh` удалены;
+- подписка: строки журнала про секции узла и Tailscale из подписки удалены;
+- контроллер и мастер: новому узлу секции не назначаются
+  (`sectionsForNewNode` удалена), при сборке и разборке папки `sections` не
+  переносится; `syncSectionsDnsDetourRefsHealed` удалена, лечение detour
+  DNS-серверов при удалении/выключении Направления идёт только по корневому
+  списку (`settings_storage/directions.dart`);
+- сборка: `_collectNodeSections`, `_NodeSectionsInjection`, параметры
+  `nodeServers`/`nodeRules` в `dns_servers.dart`/`dns_rules.dart` и
+  подстановка `@self` удалены; `_collectPresetNodes` (§578) не тронут;
+- резервные копии: экспорт `sections` не пишет и потерей не называет (строка
+  таблицы среза — `runtime`); импорт снимает непустое поле у записи любого
+  вида, включая свой сервер и члена папки, с
+  `backup_section_record_dropped`, `reason: not_allowed`, пустое — молча;
+  слияние секций и обход ключей внутри `sections` удалены;
+  `renumberBackupAxis` берёт только корневые правила;
+- Debug API: `sections` ушло из ответа у сервера и члена папки, текст справки
+  про секции узла удалён;
+- раннер корпуса бэкапа ожидание `sections` не сверяет, проверяет отсутствие
+  секций после импорта; раннер корпуса разбора `sections` не сверял и раньше.
+
+Оставлено фазе 3: `NodeSections` и `node_sections.dart` (в том числе
+`kNodeRuleDefaultNum`, `kSectionDrop*`), поле `sections` у `UserServer`/
+`FolderMember`, кодек хранения и строка журнала §1, `legacy_form_v0.dart`,
+`retargetSectionsDnsDetours`/`heal` в `server_list.dart` (больше не
+вызываются), `canonicalTailscaleSections*` в `tailscale_bundle.dart`, тесты
+модели (`node_sections_test.dart`, секционная часть `record_codec_*`,
+`tailscale_bundle_test.dart`, кодек секций в `lx_backup_v10_test.dart`),
+документация.
+
 ## Порядок выпуска
 
 Эта задача и [§578](578-tailscale-preset-template-for-each.md) выходят в одном релизе. Порознь нельзя:

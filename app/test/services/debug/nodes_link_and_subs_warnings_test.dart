@@ -245,7 +245,7 @@ void main() {
             node('n2', 'proxy', const [
               RegistryWarning(code: 'awg_header_invalid', path: 'h1', value: 'abc'),
             ]),
-            node('n3', 'proxy', const [SectionsConflictWarning()]),
+            node('n3', 'proxy', const [DuplicateNodeWarning()]),
           ],
         ),
       );
@@ -265,7 +265,7 @@ void main() {
       expect(at('proxy-2').single['code'], 'awg_header_invalid');
       // Класс приложения: кода нет, текст есть.
       expect(at('proxy-3').single['code'], isNull);
-      expect(at('proxy-3').single['text_en'], contains('sections'));
+      expect(at('proxy-3').single['text_en'], contains('Duplicate'));
     });
 
     test('nodes_count == warnings.length при тёзках (вход с 2 тёзками)', () {
@@ -283,7 +283,7 @@ void main() {
             node('d2', 'Tokyo', const [
               RegistryWarning(code: 'awg_header_invalid', path: 'h2', value: 'x'),
             ]),
-            node('d3', 'Tokyo', const [SectionsConflictWarning()]),
+            node('d3', 'Tokyo', const [DuplicateNodeWarning()]),
             node('d4', 'Amsterdam', const []),
           ],
         ),
@@ -371,14 +371,14 @@ void main() {
     });
 
     test('класс приложения: кода нет, text_en есть', () {
-      final j = serializeNodeWarning(const SectionsConflictWarning());
+      final j = serializeNodeWarning(const DuplicateNodeWarning());
       expect(j['code'], isNull);
       expect(j['path'], isNull);
       expect(j['value'], isNull);
       expect(j['title_en'], isNull);
       // Пиненный английский самого класса — ответ не зависит от локали.
-      expect(j['text_en'], contains('sections'));
-      expect(j['severity'], 'warning');
+      expect(j['text_en'], contains('Duplicate'));
+      expect(j['severity'], 'info');
     });
   });
 }

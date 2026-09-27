@@ -9,7 +9,6 @@ import 'package:lxbox/models/codec/source_record.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/direction_mutations.dart';
 import 'package:lxbox/services/record_vars.dart';
@@ -184,39 +183,14 @@ void main() {
   });
 
   // §441 (SPEC 129 §6, D-114) — detour DNS-сервера — одиночная цель по имени:
-  // при удалении и выключении Направления `body.detour` user-сервера,
-  // корневого и в секциях узлов, переводится на vpn-1, как цель правила.
+  // при удалении и выключении Направления `body.detour` корневого
+  // user-сервера переводится на vpn-1, как цель правила. §575 — секций узлов
+  // больше нет, лечится только корневой список.
   group('§441 — detour DNS-серверов на Направление', () {
     DnsServerInline dns(String tag, String detour) => DnsServerInline(
           enabled: true,
           tag: tag,
           body: {'type': 'udp', 'server': '10.0.0.53', 'detour': detour},
-        );
-
-    NodeSections sectionsWith(String detour) =>
-        NodeSections(dnsServers: [dns('@{self}-dns', detour)]);
-
-    UserServer soloWithSections(String detour) => UserServer(
-          id: 'u1',
-          name: 'Solo',
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: const DetourPolicy(),
-          origin: UserSource.paste,
-          rawBody: memberRaw('solo-node'),
-          sections: sectionsWith(detour),
-        );
-
-    FolderServers folderWithSections() => FolderServers(
-          id: 'f1',
-          name: 'F',
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: const DetourPolicy(),
-          members: [
-            FolderMember(raw: memberRaw('node-a'), sections: sectionsWith('vpn-2-auto')),
-            FolderMember(raw: memberRaw('node-b'), sections: sectionsWith('@self')),
-          ],
         );
 
     String detourOf(DnsServerInline s) => s.body['detour'] as String;
@@ -229,43 +203,23 @@ void main() {
           const Direction(tag: 'vpn-2', label: 'Relay').toJson(),
         ],
         'storage_version': 1,
-        'sources': [
-          sourceToRecord(soloWithSections('vpn-2')),
-          sourceToRecord(folderWithSections()),
-        ],
       }));
       SettingsStorage.resetCacheForTesting();
       await SettingsStorage.saveDnsServers([dns('my-dns', 'vpn-2'), dns('other', 'vpn-9')]);
     }
 
-    test('удаление: корневой и секционные detour → vpn-1, счётчик, зеркало контроллера',
-        () async {
+    test('удаление: корневой detour → vpn-1, счётчик', () async {
       await seed();
       final c = SubscriptionController();
       await c.init();
 
       final healed = await DirectionMutations.delete('vpn-2', c);
 
-      expect(healed.dnsServers, 3, reason: 'корневой my-dns + solo + член node-a');
+      expect(healed.dnsServers, 1);
       expect(DirectionMutations.healMessageParts(healed),
-          contains('3 DNS server(s) switched to vpn-1'));
+          contains('1 DNS server(s) switched to vpn-1'));
       final root = (await SettingsStorage.getDnsServers()).cast<DnsServerInline>();
       expect(root.map(detourOf), ['vpn-1', 'vpn-9']);
-
-      final lists = await SettingsStorage.getServerLists();
-      expect(detourOf((lists[0] as UserServer).sections!.dnsServers.single), 'vpn-1');
-      final members = (lists[1] as FolderServers).members;
-      expect(detourOf(members[0].sections!.dnsServers.single), 'vpn-1');
-      expect(detourOf(members[1].sections!.dnsServers.single), '@self');
-
-      // Зеркало: `_entries` вылечены так же, и `_persist` не воскрешает ссылку.
-      final solo = c.entries.first.list as UserServer;
-      expect(detourOf(solo.sections!.dnsServers.single), 'vpn-1');
-      await c.toggleAt(0);
-      SettingsStorage.resetCacheForTesting();
-      final saved = (await SettingsStorage.getServerLists()).first as UserServer;
-      expect(saved.enabled, isFalse);
-      expect(detourOf(saved.sections!.dnsServers.single), 'vpn-1');
     });
 
     test('выключение лечит так же; снятие detour-флага — нет', () async {
@@ -281,27 +235,13 @@ void main() {
 
       final disabled = await SettingsStorage.updateDirection(
           vpn2.copyWith(isDetour: false, enabled: false));
-      expect(disabled.dnsServers, 3);
+      expect(disabled.dnsServers, 1);
       final root = (await SettingsStorage.getDnsServers()).cast<DnsServerInline>();
       expect(detourOf(root.first), 'vpn-1');
     });
 
     test('переименование: detour → новый тег, -auto → новый -auto (pure-ядро)', () {
       final retarget = directionRefRetarget('vpn-2', 'vpn-7', rename: true);
-
-      final solo = retargetSectionsDnsDetours(soloWithSections('vpn-2'), retarget);
-      expect(solo.count, 1);
-      expect(detourOf((solo.healed as UserServer).sections!.dnsServers.single), 'vpn-7');
-
-      final folder = retargetSectionsDnsDetours(folderWithSections(), retarget);
-      expect(folder.count, 1);
-      final members = (folder.healed as FolderServers).members;
-      expect(detourOf(members[0].sections!.dnsServers.single), 'vpn-7-auto');
-      expect(detourOf(members[1].sections!.dnsServers.single), '@self');
-
-      final none = retargetSectionsDnsDetours(soloWithSections('vpn-9'), retarget);
-      expect(none.healed, isNull);
-      expect(none.count, 0);
 
       final root = dns('my-dns', 'vpn-2-auto');
       expect(

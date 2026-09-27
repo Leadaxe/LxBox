@@ -351,8 +351,7 @@ void main() {
       }
     });
 
-    test('секции узла и члены папки: необъявленная потеря — путём у носителя',
-        () async {
+    test('§575 секции узла: в файл не едут, потерей не называются', () async {
       overrideBackupFieldsForTesting(_settingsUndeclared());
       final sections = NodeSections.fromJson({
         'dns': {
@@ -378,12 +377,8 @@ void main() {
           sections: sections,
         ),
       ]);
-      expect(_lines(out.warnings), [
-        '$kWarnLocalOnlyDropped Tokyo: '
-            'sections.dns.servers[@{self}-dns].description',
-      ]);
-      final dns = (_source(out.json, 'server')['sections'] as Map)['dns'] as Map;
-      expect((dns['servers'] as List).single, isNot(contains('description')));
+      expect(_lines(out.warnings), isEmpty);
+      expect(_source(out.json, 'server'), isNot(contains('sections')));
     });
 
     test('DNS: description и vars сервера едут, srs-правило не пишется и '

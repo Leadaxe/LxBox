@@ -237,13 +237,8 @@ void main() {
       expect(us.rawBody, contains('"type":"tailscale"'));
       expect(us.rawBody, contains('"auth_key":"tskey-auth-secret"'));
 
-      final s = us.sections;
-      expect(s, isNotNull);
-      expect(s!.recordCount, 3);
-      expect(s.rules.single.name, '@{self} network');
-      expect(s.rules.single.orderNum, 945);
-      expect(s.dnsServers.single.tag, '@{self}-dns');
-      expect(s.dnsRules.single.rule['server'], '@{self}-dns');
+      // §575 — секций узел не получает: связку даёт пресет `tailscale`.
+      expect(us.sections, isNull);
     });
 
     testWidgets('§449 Hostname с дефолтом LxBox, стирание возвращает пустое тело',
@@ -262,7 +257,7 @@ void main() {
       expect((node as TailscaleSpec).body.containsKey('hostname'), isFalse);
     });
 
-    testWidgets('round-trip записи sources[]: узел и секции целы',
+    testWidgets('round-trip записи sources[]: узел цел',
         (tester) async {
       final c = await openTailscale(tester);
       await tester.enterText(field(0), '🪢 Keep');
@@ -276,8 +271,7 @@ void main() {
       expect(node, isA<TailscaleSpec>());
       expect(node.tag, '🪢 Keep');
       expect((node as TailscaleSpec).body['auth_key'], 'tskey-auth-x');
-      expect(reloaded.sections?.recordCount, 3);
-      expect(reloaded.sections!.toJson(), us.sections!.toJson());
+      expect(reloaded.sections, isNull);
     });
 
     testWidgets('пустой Tag → «tailscale» с эмодзи по умолчанию 🪢',
@@ -289,7 +283,6 @@ void main() {
       expect(c.lastError, isNull);
       final us = c.entries.single.list as UserServer;
       expect(us.nodes.single.tag, '🪢 tailscale');
-      expect(us.sections?.recordCount, 3);
     });
 
     testWidgets('необязательные поля и тумблеры попадают в тело как есть',

@@ -48,7 +48,7 @@ Map<String, dynamic> _server(String tag, String host, {Object? sections}) => {
   );
   return (
     lists: servers.lists,
-    rules: renumberBackupAxis(file.rules, servers.lists, servers.touched),
+    rules: renumberBackupAxis(file.rules),
   );
 }
 
@@ -344,29 +344,42 @@ void main() {
           ],
         };
 
-    test('совпавший по телу узел: поле есть — замещает, нет — свои остаются, пустое — снимает', () {
-      final first = _apply(const [], parseLxBackup(_file({
-        'sources': [_server('ts', 'example-1.com', sections: sections('mine'))],
-      })));
-      expect((first.lists.single as UserServer).sections!.rules.single.name, 'mine');
-      expect((first.lists.single as UserServer).sections!.rules.single.outbound, '@self',
-          reason: 'B5: без outbound и action — @self');
+    // §575 (контракт 1.1.85) — секции узла упразднены: импорт снимает поле
+    // у записи любого вида, непустое — с предупреждением.
+    test('у сервера и члена папки: поле снято с not_allowed, узел на месте; пустое — молча', () {
+      final file = parseLxBackup(_file({
+        'sources': [
+          _server('ts', 'example-1.com', sections: sections('mine')),
+          _server('bare', 'example-2.com', sections: <String, dynamic>{}),
+          {
+            'kind': 'folder',
+            'id': 'F',
+            'name': 'F',
+            'nodes': [
+              _server('member', 'example-3.com', sections: sections('m')),
+            ],
+          },
+        ],
+      }));
+      final dropped =
+          file.warnings.where((w) => w.code == kWarnSectionRecordDropped).toList();
+      expect([for (final w in dropped) '${w.kind}:${w.reason}:${w.detail}'], [
+        'server:not_allowed:ts: sections',
+        'server:not_allowed:member: sections',
+      ]);
+      final out = _apply(const [], file);
+      final solos = out.lists.whereType<UserServer>().toList();
+      expect(solos.map((u) => u.name), ['ts', 'bare']);
+      expect(solos.every((u) => u.sections == null), isTrue);
+      final folder = out.lists.whereType<FolderServers>().single;
+      expect(folder.members, hasLength(1));
+      expect(folder.members.single.sections, isNull);
 
-      final replaced = _apply(first.lists, parseLxBackup(_file({
-        'sources': [_server('renamed', 'example-1.com', sections: sections('file'))],
+      // Совпавший по телу узел: файл с секциями его не меняет.
+      final again = _apply(out.lists, parseLxBackup(_file({
+        'sources': [_server('ts', 'example-1.com', sections: sections('file'))],
       })));
-      expect(replaced.lists, hasLength(1), reason: 'тот же узел по телу');
-      expect((replaced.lists.single as UserServer).sections!.rules.single.name, 'file');
-
-      final kept = _apply(replaced.lists, parseLxBackup(_file({
-        'sources': [_server('ts', 'example-1.com')],
-      })));
-      expect((kept.lists.single as UserServer).sections!.rules.single.name, 'file');
-
-      final cleared = _apply(kept.lists, parseLxBackup(_file({
-        'sources': [_server('ts', 'example-1.com', sections: <String, dynamic>{})],
-      })));
-      expect((cleared.lists.single as UserServer).sections, isNull);
+      expect(again.lists.whereType<UserServer>().first.sections, isNull);
     });
 
     test('секции у подписки — not_allowed; член папки chain — kind_unsupported, auto — группа; unsupported с исходником — член', () {
@@ -389,7 +402,7 @@ void main() {
         ],
       }));
       final dropped = file.warnings.where((w) => w.code == kWarnSectionRecordDropped).single;
-      expect(dropped.reason, kSectionDropNotAllowed);
+      expect(dropped.reason, kSectionDropReasonNotAllowed);
       expect(dropped.kind, 'subscription');
       final kinds = file.warnings
           .where((w) => w.code == kWarnSourceKindUnsupported)
@@ -407,16 +420,11 @@ void main() {
     });
   });
 
-  group('§438 ось правил: корневые и узловые вместе', () {
+  group('§438 ось правил', () {
     test('номера файла держатся, неразмеченные корневые — в хвост оси', () {
       final file = parseLxBackup(_file({
         'sources': [
-          _server('ts', 'example-1.com', sections: {
-            'rules': [
-              {'kind': 'inline', 'name': 'node', 'enabled': true,
-               'body': {'ip_cidr': ['100.64.0.0/10']}},
-            ],
-          }),
+          _server('ts', 'example-1.com'),
         ],
         'rules': [
           {'kind': 'inline', 'name': 'late', 'enabled': true, 'num': 1100,
@@ -430,9 +438,6 @@ void main() {
       final out = _apply(const [], file);
       expect([for (final r in out.rules) '${r.name}=${r.orderNum}'],
           ['head=0', 'late=1100', 'unmarked=1101']);
-      final node = (out.lists.single as UserServer).sections!.rules.single;
-      expect(node.orderNum, isNull,
-          reason: 'без num узловое остаётся без номера — сборка ставит его на 945');
     });
 
     test('номера файла держатся, порядок сохраняется, равные остаются равными', () {
@@ -452,7 +457,7 @@ void main() {
           {'kind': 'preset', 'name': 'private', 'ref': 'private-ip', 'num': 950},
         ],
       }));
-      final rules = renumberBackupAxis(file.rules, const [], const []);
+      final rules = renumberBackupAxis(file.rules);
       expect([for (final r in rules) '${r.name}=${r.orderNum}'], [
         'tp=0',
         'private=950',
@@ -574,6 +579,8 @@ void main() {
       expect([for (final w in file.warnings) '${w.code} ${w.detail}'], [
         '$kWarnUnknownField sources[#2].fold',
         '$kWarnUnknownField sources[#2].fold_tag',
+        // §575 — секции узла упразднены, поле снято.
+        '$kWarnSectionRecordDropped 🇯🇵 Tokyo: sections',
         '$kWarnDnsEntrySkipped dns.servers: russian:yandex_udp',
         '$kWarnDnsEntrySkipped dns.rules: russian',
       ]);
@@ -588,7 +595,7 @@ void main() {
       expect(root.detourPolicy.overrideDetour,
           NodeLink(folderId: sub.id, tag: 'NL-1'),
           reason: 'ссылка на узел подписки — пара с сырым тегом (NODE_LINK §2.2)');
-      expect(root.sections!.dnsServers.single.tag, '@{self}-dns');
+      expect(root.sections, isNull, reason: '§575 — секции файла сняты');
       final folder = state.lists[1] as FolderServers;
       expect(folder.tagPrefix, '[F]');
       expect(folder.members.first.raw, 'ss://Y2hhY2hh@de.example:8388#DE-1',

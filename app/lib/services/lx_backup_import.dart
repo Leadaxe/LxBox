@@ -293,7 +293,7 @@ LxImportPlan planLxBackupImport(String raw, LxImportReceiver receiver) {
 
   // §438 — ось порядка одним проходом по корневым правилам и правилам узлов,
   // пришедших или узнанных этим импортом (BACKUP.md §9 п. 7).
-  var rules = renumberBackupAxis(file.rules, srvMerge.lists, srvMerge.touched);
+  var rules = renumberBackupAxis(file.rules);
   // D-117 — несортируемый пресет встаёт на номер шаблона приёмника, откуда бы
   // номер ни приехал.
   if (pinRequiredRuleNums(rules, receiver.selectableRules)) {

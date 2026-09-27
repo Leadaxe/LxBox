@@ -15,7 +15,6 @@ import '../models/codec/source_record.dart';
 import '../models/server_list.dart';
 import '../models/source_replace.dart';
 import '../models/source_entry.dart';
-import '../models/tailscale_bundle.dart';
 import '../models/ui_msg.dart';
 import '../models/subscription_meta.dart';
 import '../models/tunnel_status.dart';
@@ -27,7 +26,6 @@ import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
-import '../services/record_vars.dart';
 import '../services/relative_time.dart';
 import '../services/node_emoji.dart';
 import '../services/node_hash.dart';
@@ -1088,7 +1086,6 @@ class SubscriptionController extends ChangeNotifier {
           detourPolicy: DetourPolicy.defaults,
           origin: origin,
           rawBody: n.toUri(),
-          sections: sectionsForNewNode(n),
           nodes: [n],
         ));
         _entries.add(SubscriptionEntry(list: srv, nodeCount: 1));
@@ -1141,10 +1138,6 @@ class SubscriptionController extends ChangeNotifier {
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
       rawBody: text,
-      // §435 — связка из целого конфига с одним узлом / документа с
-      // `sections` (NODE_SECTIONS.md §6): хозяин секций — контейнер. §437 —
-      // узел Tailscale без извлечённых записей получает каноническую связку.
-      sections: sectionsForNewNode(nodes.first),
       nodes: nodes,
     ));
     _entries.add(SubscriptionEntry(
@@ -1206,7 +1199,6 @@ class SubscriptionController extends ChangeNotifier {
       detourPolicy: DetourPolicy.defaults,
       origin: origin,
       rawBody: text,
-      sections: sectionsForNewNode(nodes.first),
       nodes: nodes,
     ));
     _entries.add(SubscriptionEntry(list: srv, nodeCount: srv.nodes.length));
@@ -1565,7 +1557,6 @@ class SubscriptionController extends ChangeNotifier {
         // Узел тот же объект: реестр ссылок узнаёт в нём бывшего члена.
         origin: UserSource.manual,
         rawBody: m.raw,
-        sections: m.sections, // §435
         skipPresets: m.skipPresets, // §578
         nodes: [if (m.node != null) m.node!],
       );
@@ -1797,13 +1788,7 @@ class SubscriptionController extends ChangeNotifier {
         }
         raw = rawWithName(raw, candidate);
       }
-      // §435 — секции из целого конфига / документа с `sections` едут в
-      // члена папки вместе с телом; §437 — узел Tailscale без них получает
-      // каноническую связку.
-      added.add(FolderMember(
-          raw: raw,
-          nameHint: memberNameHintFor(n),
-          sections: sectionsForNewNode(n)));
+      added.add(FolderMember(raw: raw, nameHint: memberNameHintFor(n)));
     }
     added.setAll(0, _bindAutoMembers(added, nodes, folder.id));
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
@@ -1846,8 +1831,7 @@ class SubscriptionController extends ChangeNotifier {
           result.nodes
               .map((n) => FolderMember(
                   raw: n.rawSource,
-                  nameHint: memberNameHintFor(n),
-                  sections: sectionsForNewNode(n)))
+                  nameHint: memberNameHintFor(n)))
               .toList(),
           result.nodes,
           cur.id);
@@ -2360,11 +2344,7 @@ class SubscriptionController extends ChangeNotifier {
                   enabled: server.enabled,
                   detour: personalDetour,
                   // §578 — «пропустить пресеты» — поле записи, едет с узлами.
-                  skipPresets: server.skipPresets,
-                  // §435 — секции одиночного едут с его (единственным) узлом.
-                  sections: identical(n, server.nodes.first)
-                      ? server.sections
-                      : null),
+                  skipPresets: server.skipPresets),
           ], server.nodes, folder.id);
     folderEntry._replaceList(
         folder.copyWith(members: [...folder.members, ...added]));
@@ -3497,23 +3477,6 @@ class SubscriptionController extends ChangeNotifier {
     var changed = false;
     for (final e in _entries) {
       final r = clearDetourDirectionRefs(e.list, tag);
-      if (r.healed != null) {
-        e._replaceList(r.healed!);
-        changed = true;
-      }
-    }
-    if (changed) notifyListeners();
-  }
-
-  /// §441 — ресинк `_entries` после storage-heal `body.detour` DNS-серверов
-  /// секций узлов на выключенное или удалённое Направление [tag] (→ vpn-1),
-  /// по той же причине, что [syncDetourDirectionRefsCleared]. Ядро общее —
-  /// [retargetSectionsDnsDetours].
-  void syncSectionsDnsDetourRefsHealed(String tag) {
-    final retarget = directionRefRetarget(tag, 'vpn-1');
-    var changed = false;
-    for (final e in _entries) {
-      final r = retargetSectionsDnsDetours(e.list, retarget);
       if (r.healed != null) {
         e._replaceList(r.healed!);
         changed = true;

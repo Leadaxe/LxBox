@@ -3,7 +3,6 @@ import 'auto_select.dart';
 import 'body_delta.dart';
 import 'emit_context.dart';
 import 'node_entries.dart';
-import 'node_sections.dart';
 import 'node_spec_emit.dart' as e;
 import 'node_warning.dart';
 import 'singbox_entry.dart';
@@ -94,13 +93,6 @@ sealed class NodeSpec {
   /// Непустой ⇔ [patchedJson] != null; на нём значок «modified» и диалог
   /// «View replacements» в списке нод.
   List<String> ruleTrail = const [];
-
-  /// §435 — связка узла, извлечённая парсером из целого sing-box-конфига с
-  /// одним узлом (NODE_SECTIONS.md §6) или прочитанная из документа с
-  /// `sections`. Mutable и не сериализуется, как `sourceExtended`: хозяин
-  /// секций — контейнер (`UserServer.sections` / `FolderMember.sections`),
-  /// контроллер переносит её туда при добавлении узла и только тогда.
-  NodeSections? importedSections;
 
   /// §435 — узел без адреса: группа §322 или Tailscale (tsnet сам входит в
   /// tailnet). Инвариант `isAddressless ⇔ server.isEmpty && port == 0`.

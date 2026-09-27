@@ -110,6 +110,7 @@ LxBackupFile _import(_State s, String raw) {
   return file;
 }
 
+/// §575 — секции, оставленные в записи прошлой версией: экспорт их не пишет.
 NodeSections _sections(String name) => NodeSections.fromJson({
       'rules': [
         {
@@ -173,7 +174,6 @@ _State _source() {
         origin: UserSource.manual,
         rawBody:
             'vless://11111111-1111-1111-1111-111111111111@example-3.com:443?type=tcp&security=tls&sni=example-3.com#root-jp',
-        sections: _sections('@{self} network'),
       ),
       UserServer(
         id: 'srv-2',
@@ -206,7 +206,6 @@ _State _source() {
               'server_port': 443,
               'uuid': '11111111-1111-1111-1111-111111111111',
             }),
-            sections: _sections('@{self} member net'),
           ),
           FolderMember(
             raw: 'trojan://secret@example-5.com:443#nl-1',
@@ -439,6 +438,32 @@ void main() {
       String stable(String raw) =>
           jsonEncode((jsonDecode(raw) as Map)..remove('exported_at'));
       expect(stable((await _export(target)).json), stable(out.json));
+    });
+
+    test('§575 экспорт не пишет секции ни у сервера, ни у члена папки', () async {
+      final state = _source();
+      state.lists = [
+        for (final l in state.lists)
+          switch (l) {
+            UserServer() => l.copyWith(sections: _sections('@{self} network')),
+            FolderServers() => l.copyWith(members: [
+                for (final m in l.members)
+                  m.copyWith(sections: _sections('@{self} member net')),
+              ]),
+            _ => l,
+          },
+      ];
+      expect(state.lists.whereType<UserServer>().first.sections, isNotNull);
+      final out = await _export(state);
+      expect(out.json, isNot(contains('"sections"')));
+      expect(out.json, isNot(contains('@self')));
+      expect(out.warnings.map((w) => w.detail).join('\n'),
+          isNot(contains('sections')),
+          reason: 'снятие молчаливое: секции упразднены, не потеря');
+      final plain = await _export(_source());
+      String stable(String raw) =>
+          jsonEncode((jsonDecode(raw) as Map)..remove('exported_at'));
+      expect(stable(out.json), stable(plain.json));
     });
 
     test('импорт собственного экспорта в совпадающее состояние ничего не добавляет', () async {

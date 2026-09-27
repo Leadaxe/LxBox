@@ -33,8 +33,9 @@ final TemplateVars _emptyVars = TemplateVars.empty;
 ///     `UserServer`, через `subController.addUserServer(...)`.
 ///   - URI / JSON tabs → text идёт в `subController.addFromInput(...)`
 ///     (тот же путь что у tap-«+»).
-///   - Tailscale tab (§435) → `TailscaleSpec` + `UserServer` с канонической
-///     связкой секций (`tailscale_bundle.dart`), через `addUserServer`.
+///   - Tailscale tab (§435) → `TailscaleSpec` + `UserServer`, через
+///     `addUserServer`. Связку tailnet (маршрут, MagicDNS) даёт пресет
+///     шаблона `tailscale` (§578), не узел (§575).
 ///
 /// После successful add → callback [onAdded] (regenerate config + save +
 /// snackbar в parent screen).
@@ -200,7 +201,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
       origin: UserSource.manual,
       rawBody: spec.toUri(),
       nodes: [spec],
-      sections: canonicalTailscaleSections(),
     );
     await widget.subController.addUserServer(us);
     await _afterAdd(addedTag: tag);

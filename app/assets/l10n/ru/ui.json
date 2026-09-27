@@ -3058,9 +3058,6 @@
   "Node saved. The rest of the document was not saved.": {
     "value": "Узел сохранён. Остальное содержимое документа не сохранено."
   },
-  "Node section record dropped: %s": {
-    "value": "Запись секции узла отброшена: %s"
-  },
   "Node — direct detour": {
     "value": "Узел — прямой detour"
   },
@@ -4515,9 +4512,6 @@
   },
   "The device is removed from the tailnet when it goes offline": {
     "value": "Устройство удаляется из tailnet, когда уходит в офлайн"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
-    "value": "Документ несёт и «sections», и «dns»/«route»: взяты «sections», остальное проигнорировано."
   },
   "The first position (%s) dials through its own detour — the real path is longer than shown: one more hop precedes it that is not in this list.": {
     "value": "Первая позиция (%s) ходит через свой detour — реальный путь длиннее показанного: перед ней есть ещё один хоп, которого нет в списке."

@@ -197,10 +197,6 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   Set<String>? knownOutboundTags,
   Set<String> ruleReferencedTags = const {},
   List<String>? warningsOut,
-  // §435 — серверы узлов (тела с `tag`, после подстановки `@self`): в конец
-  // списка ПОСЛЕ корневых refs и ДО фильтра членов групп (иначе сервер узла
-  // вылетел бы из группы как `unknown`). Дубль тега — первый побеждает.
-  List<Map<String, dynamic>> nodeServers = const [],
   // §435 — эмитированные endpoint'ы `tailscale`: цели поля `endpoint`
   // DNS-сервера того же типа. `null` = проверку не делать (вызовы UI).
   Set<String>? tailscaleEndpointTags,
@@ -272,22 +268,6 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     if (dropForDetour(body, tag)) continue;
     out.add(body);
   }
-  // §435 — серверы узлов: после корневых, дубль тега — первый побеждает с
-  // warning'ом (NODE_SECTIONS.md §3 п. 5).
-  for (final s in nodeServers) {
-    final tag = s['tag']?.toString() ?? '';
-    if (tag.isEmpty) continue;
-    if (seen.contains(tag)) {
-      warningsOut?.add(
-          'Node DNS server "$tag" dropped: the tag is already taken by another server.');
-      continue;
-    }
-    final body = Map<String, dynamic>.of(s);
-    body['tag'] = tag;
-    seen.add(tag);
-    if (dropForDetour(body, tag)) continue;
-    out.add(body);
-  }
   if (tailscaleEndpointTags != null) {
     _sanitizeTailscaleDnsServers(out, tailscaleEndpointTags, warningsOut);
   }
@@ -296,9 +276,6 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     allRefTags: {
       for (final e in resolved)
         if (e.tag.isNotEmpty) e.tag,
-      for (final s in nodeServers)
-        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-          s['tag'] as String,
     },
     detourDropped: detourDropped,
     detourDroppedOut: detourDroppedOut,
