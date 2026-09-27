@@ -252,16 +252,24 @@ void main() {
   });
 
   group('загрузка шаблона', () {
-    test('for_each без as — ошибка шаблона', () {
+    test('for_each без as — снимается только этот пресет (§83)', () {
       final json = shippedTemplate();
-      (json['selectable_rules'] as List).add({
+      final rules = json['selectable_rules'] as List;
+      final before = rules.length;
+      rules.add({
         'preset_id': 'bad',
         'for_each': {'node_type': 'tailscale'},
         'ui': {'label': 'bad'},
       });
-      expect(
-          () => validateTemplateConstructs(json, WizardTemplate.fromJson(json)),
-          throwsA(isA<TemplateIfError>()));
+      final dropped =
+          validateTemplateConstructs(json, WizardTemplate.fromJson(json));
+      expect(dropped, ['bad']);
+      // Запись вырезана из raw — перечень пресетов вернулся к исходному
+      // размеру, остальной шаблон (в т.ч. боевой tailscale) не пострадал.
+      expect(rules.length, before);
+      expect(rules.any((r) => r['preset_id'] == 'bad'), isFalse);
+      expect(WizardTemplate.fromJson(json).selectableRules
+          .any((r) => r.presetId == 'tailscale'), isTrue);
     });
 
     test('filter с необъявленным полем записи — ошибка шаблона', () {

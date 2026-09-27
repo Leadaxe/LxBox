@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-27 |
 | Дата завершения | — |
 | Коммиты | — |
-| Контракт | Требует запроса: три возможности языка шаблона, пресет, поле записи `skip_presets`, подтверждение D-120 |
+| Контракт | 1.1.86 (995a0e3b) — три возможности языка шаблона, пресет `tailscale`, поле записи `skip_presets`, D-120 подтверждён |
 | Связанные spec'ы | [§575](575-remove-node-sections.md) (выходит в одном релизе), [§435](435-node-sections-tailscale.md), [§437](437-tailscale-bundle-import.md), [features/120](../features/120%20template-engine-typed-vars-and-if/spec.md) (движок `#if`) |
 
 ## Проблема
@@ -347,6 +347,55 @@ tailnet разрешается, адрес машины отвечает, пер
 | `docs/api/debug-api-reference.md` | поле `skip_presets` |
 | `docs/l10n.md` | нет |
 | `CHANGELOG.md` | запись в Unreleased |
+
+## Реализация: синк 1.1.86
+
+Пункт §83 `TASKS_LXBOX.md` («За LxBox после синка — сверить»), контракт
+синхронизирован на коммит лаунчера `995a0e3b` (версия 1.1.86).
+
+1. **Корпус `corpus/template/for_each/`.** Новый раннер
+   `app/test/contract/template_for_each_corpus_test.dart` — формат кейса
+   `<case>.preset.json` + `.vars.json` + `.expected.json` (иной, чем у
+   тройки `subst`/`tpl`/…), см. `corpus/template/README.md`. Раздел
+   `corpus/template/tpl/` (включая новые кейсы `extra_key_is_error` и
+   `undeclared_name_drops`) уже покрывается существующим раннером тройки
+   `template_contract_test.dart` — правки не потребовались, оба кейса
+   прошли без изменений движка. `tpl/extra_key_is_error` добавлен в список
+   `_mustRejectOnLoad` в `template_load_reject_test.dart` (load: reject по
+   README).
+2. **`tpl/extra_key_is_error` / `tpl/undeclared_name_drops`.** Вердикты
+   совпадают с контрактом: `#tpl` с лишним ключом отвергается на load
+   (`validateIfConstructs`), необъявленное имя во вставке `#tpl` — рантайм
+   терпит (значение снимается, `template_var_undeclared`), load не
+   нормирован (`either`).
+3. **`for_each/missing_as_rejected`.** Поведение LxBox изменено:
+   `validateTemplateConstructs` (`app/lib/services/template_loader.dart`)
+   больше не бросает на весь шаблон при `for_each` без `node_type`/`as` —
+   такая запись вырезается из `raw['selectable_rules']`, уходит
+   предупреждение в `AppLog` (`app` warning), а `TemplateLoader._loadFor`
+   пересобирает `WizardTemplate` из отфильтрованного JSON, так что
+   остальные пресеты (включая боевой `tailscale`) загружаются как обычно.
+   Функция теперь возвращает `List<String>` снятых `preset_id`. Тест
+   `preset_for_each_test.dart` → «for_each без as — снимается только этот
+   пресет (§83)» обновлён под новое поведение (было: ожидание throw на весь
+   шаблон).
+4. **`for_each/filter_body_field`.** Уже реализовано и покрыто —
+   `presetNodeResolver`/`_forEachMatches` возвращают `Dropped` для
+   отсутствующего поля тела, что делает `#notEmpty` ложным; отдельный тест
+   `preset_for_each_test.dart` → «filter по полю тела…» и кейс корпуса в
+   новом раннере проходят без правок кода.
+5. **`skip_presets` в бэкапе.** Кодек (`source_record.dart`) уже пишет поле
+   только при `true`; merge по совпадению тела
+   (`lx_backup.dart::mergeBackupServers`/`_mergeFolderMember`) уже не
+   сбрасывает `true`, если у входящей записи флаг ложный/отсутствует
+   (`skip = srv.skipPresets && !local.skipPresets`). Проверки на этот
+   сценарий не было — добавлены два теста в
+   `app/test/contract/lx_backup_test.dart` (одиночный узел и член папки).
+6. **Текст пресета `tailscale`.** Сверено побайтово: `for_each`, `rules`,
+   `dns_servers`, `dns_rules` в `app/assets/wizard_template.json` совпадают
+   с телом из `TEMPLATE_LANG.md` §6.7 символ в символ (разница только в
+   оболочке — `default_value` вместо `default`, что и предписано §6.7).
+   Расхождений не найдено, правка не потребовалась.
 
 ## Нерешённое / follow-up
 
