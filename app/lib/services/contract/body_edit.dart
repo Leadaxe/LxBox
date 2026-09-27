@@ -43,7 +43,7 @@ bool ruleCoreRejects(String scheme, String code, String? path) {
     if (paths.contains(path)) return true;
   }
   if (path == null || path.isEmpty) return false;
-  for (final f in _fieldsAt(schema.fields, path.split('.'))) {
+  for (final f in _fieldsAt(schema.fields, _pathParts(path))) {
     if (_fieldRuleCoreRejects(f, code)) return true;
   }
   return false;
@@ -200,6 +200,11 @@ Iterable<FieldSchema> _fieldsAt(
 
 bool _isIndex(String s) => s.isNotEmpty && int.tryParse(s) != null;
 
+/// Сегменты пути предупреждения: индекс элемента пишется в скобках
+/// (`peers[0].port`, `server_ports[1]`) и становится отдельным сегментом.
+List<String> _pathParts(String path) =>
+    path.replaceAll('[', '.').replaceAll(']', '').split('.');
+
 /// Жёсткое ли правило поля [f] с кодом [code]. Код правила со своим
 /// объектом решает признак этого объекта; код из `forbidden_codes` —
 /// мягкий; прочее (тип, values, format, required, forbidden_for) — признак
@@ -237,7 +242,12 @@ bool _fieldRuleCoreRejects(FieldSchema f, String code) {
 
 void _patchFrom(
     Map<String, dynamic> body, Map<String, dynamic> edited, String path) {
-  final parts = path.split('.');
+  var parts = _pathParts(path);
+  // Правка элемента массива (`server_ports[0]`: элемент снят) переносится
+  // массивом целиком — после снятия индексы остальных элементов сдвинуты.
+  while (parts.length > 1 && _isIndex(parts.last)) {
+    parts = parts.sublist(0, parts.length - 1);
+  }
   final (found, v) = _lookup(edited, parts);
   if (found) {
     _setPath(body, parts, _deepCopy(v));

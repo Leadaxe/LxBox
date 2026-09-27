@@ -95,10 +95,8 @@ void main() {
     // одном узле подписки уронила бы старт ВСЕГО конфига (#147). Разбор
     // отбраковывает такой узел раньше (`parseAll`), но гард — последний, кто
     // видит тело перед ядром, и полагаться на один эшелон нельзя.
-    // §577 — ожидание изменено: у авторского тела `drop_node` без
-    // `core_rejects` в реестре (контракт 1.1.89: у `vless.encryption` признака
-    // нет) мягкий — тело идёт как написано, код с `applied: false`. Прежнее
-    // снятие проверяется ниже на обычном теле.
+    // §577: с контракта 1.1.91 у `vless.encryption` есть `core_rejects`, и
+    // узел снимается и у авторского тела (тест в группе авторских тел ниже).
     test('§477 — узел с негодным encryption не едет в ядро', () {
       final entry = Outbound(<String, dynamic>{
         'type': 'vless',
@@ -329,8 +327,10 @@ void main() {
         expect(report.dropped, [entry]);
       });
 
-      test('drop_node без core_rejects мягкий: негодный encryption остаётся',
-          () {
+      // Контракт 1.1.91: у `vless.encryption` появился `core_rejects`
+      // (ядро: protocol/vless/outbound.go NewOutbound → parseClientEncryption),
+      // правило жёсткое и на авторском теле.
+      test('негодный encryption снимает и авторский узел (core_rejects)', () {
         final entry = Outbound(<String, dynamic>{
           'type': 'vless',
           'tag': 'own-enc',
@@ -341,9 +341,8 @@ void main() {
         })
           ..authored = true;
         final report = applyRegistryGate([entry], coreVersion: _core);
-        expect(report.dropped, isEmpty);
-        expect(entry.map['encryption'], 'mlkem768x25519plus.native.0rtt');
-        expect(report.warnings.single, endsWith('(not applied)'));
+        expect(report.dropped, [entry]);
+        expect(report.warnings.single, isNot(endsWith('(not applied)')));
       });
 
       test('запись без type снимается и у авторского тела', () {

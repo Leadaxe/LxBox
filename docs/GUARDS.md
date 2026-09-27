@@ -122,13 +122,13 @@ into the body directly. A rule that is not applied still gives its code, with
 |---|---|---|
 | no string `type` → entry dropped (`registry_gate.dart`) | dropped | dropped (hard) |
 | node core gate, `drop_node` by `build_tag` / `min_core` | dropped | dropped (hard) |
-| registry rule or relation with `core_rejects: true` (`tls_field_unsupported_naive`, `tls_fragment_system_engine`, `flow_deprecated`, `port_invalid`, `awg_header_invalid`, `awg_headers_overlap`, `detour_with_listen_port`, …) | applied | applied (hard) |
+| registry rule or relation with `core_rejects: true` (`tls_field_unsupported_naive`, `tls_fragment_system_engine`, `flow_deprecated`, `port_invalid`, `awg_header_invalid`, `awg_headers_overlap`, `detour_with_listen_port`; since contract 1.1.91 also `vless_encryption_invalid`, `ss_method_invalid`, `wg_key_invalid`, `awg3_header_key_invalid`, REALITY and xhttp placement codes, …) | applied | applied (hard) |
 | silent `default_when` with `core_rejects` (`hysteria.up_mbps`) | written | written (hard) |
-| every other registry rule: `unknown_key`, `type_invalid` without the flag, `max_when` clamps, silent `default_when` (`mtu: 1280` of AmneziaWG), `drop_node` without the flag (`vless_encryption_invalid`, `ss_method_invalid`) | applied | body unchanged, code with `applied: false` |
+| every other registry rule: `unknown_key`, `type_invalid` without the flag, `max_when` clamps, silent `default_when` (`mtu: 1280` of AmneziaWG), `drop_node` without the flag (`field_missing` of `server`) | applied | body unchanged, code with `applied: false` |
 | detour yield of `tls.fragment` (`detour_with_tls_fragment`) | removed | kept, `applied: false` |
 | build heal of the uTLS fingerprint (`utls_fp_unknown`, `core_rejects`) | replaced | replaced (hard) |
 | build heal of uTLS / REALITY on QUIC (`tls_not_applicable_quic`) | removed | kept (the gate reports it) |
-| build heal of a broken REALITY block (`reality_pbk_invalid`, `reality_short_id_invalid`, no `core_rejects` in contract 1.1.89) | fixed | kept (the gate reports it) |
+| build heal of a broken REALITY block (`reality_pbk_invalid`, `reality_short_id_invalid`, `core_rejects` since contract 1.1.91) | fixed | fixed (hard) |
 | global TLS settings (`tls_transforms.dart`: fragment, mixed-case SNI) | applied | applied — user settings, not registry rules |
 | graph links (`detour`, `domain_resolver` to a dropped DNS server, tags) | fixed | fixed — build-managed, not the node body |
 

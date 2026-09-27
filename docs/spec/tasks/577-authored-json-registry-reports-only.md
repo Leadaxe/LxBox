@@ -251,6 +251,38 @@ Debug API отдаёт признак `applied` в составе предупр
 - Бэкап: записи предупреждений узла в файл не пишутся (пересчитываются при
   импорте), `applied` там не нужен.
 
+### Жёсткие правила контракта 1.1.91–1.1.92
+
+Контракт 1.1.91 поставил `core_rejects` ещё 29 правилам: ядро отвергает их
+нарушение при разборе конфига или создании узла (сверка по sing-box-lx —
+TASKS_LXBOX §88). На авторском теле они теперь применяются:
+
+- `vless.encryption` (`vless_encryption_invalid`, drop_node);
+- `shadowsocks.method` (`ss_method_invalid`, drop_node);
+- WireGuard: `private_key`, `peers[].public_key`, `peers[].pre_shared_key`
+  (`wg_key_invalid`), `peers[].port` (`port_invalid`), `peers[].allowed_ips`,
+  `header_protection_key` (`awg3_header_key_invalid`), `id`/`ip`/`ib`
+  (`awg3_field_invalid`);
+- REALITY: `public_key`, `short_id`, `key_share`;
+- xhttp: `session_placement`, `seq_placement`, `x_padding_placement`,
+  `x_padding_method` (`xhttp_param_reset`);
+- `tuic.uuid`, `naive.quic_congestion_control`, `masque.profile`,
+  `masque.private_key`, `masque.public_key`, `hysteria.obfs`,
+  `server_ports` у hysteria и hysteria2, `tailscale.advertise_routes`.
+
+Мягкими остались `server` и `peers[].address` (ядро принимает негодный адрес
+как домен), `on_core_unsupported` и пароль shadowsocks 2022 (в реестре нет
+правила). Точка правки `body_edit.dart` читает путь с индексом в скобках
+(`peers[0].port`, `server_ports[0]`), правка элемента переносится массивом
+целиком (контракт 1.1.92, то же в Go).
+
+Расхождения движков, найденные корпусом 1.1.91 и оставленные открытыми
+(кейсы сняты из корпуса в 1.1.92, TASKS_LXBOX §89): авторский узел с
+негодным `tuic.uuid` или `peers[].allowed_ips` не снимается; мусорный
+`reality.public_key` снимает объект `reality` с `field_missing`;
+`reality.short_id` длиннее 16 не снимается; sing-box JSON hysteria v1 и masque
+без ключей не читается (`protocol_unsupported`).
+
 ## Нерешённое / follow-up
 
 - Контракт: `drop_node` без `core_rejects` при прозе «ядро отвергает конфиг»
