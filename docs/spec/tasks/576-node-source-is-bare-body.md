@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Spec. Реализация запущена |
+| Статус | Реализовано |
 | Дата старта | 2026-09-27 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-09-27 |
+| Коммиты | 9cd13e58 (синк контракта 1.1.89), 0eac1b63 (код и тесты), см. «Реализация» |
 | Контракт | Требует запроса: уточнение нормы об источнике узла и о дословном теле |
 | Связанные spec'ы | [§575](575-remove-node-sections.md) (секции упразднены, выходит раньше), [§577](577-authored-json-registry-reports-only.md) (опирается на эту задачу), [§455](455-node-editor-source-json-tabs.md) (вкладки Source и JSON, дословное тело), [§456](456-wg-ini-as-source-tag-in-record.md) |
 
@@ -161,6 +161,33 @@
 | `docs/ARCHITECTURE.md` | условие дословности |
 | `docs/GUARDS.md` | вход узла для исключений реестра |
 | `CHANGELOG.md` | запись в Unreleased |
+
+## Реализация
+
+- Синк контракта 1.1.89 (`870a4224`): 9cd13e58.
+- Код и тесты: 0eac1b63.
+- Раздел 1: `prepareNodeDocumentForSave` (`node_document.dart`) отдаёт только
+  тело узла; документ без узла отклоняется («The document has no node to
+  save.»); сообщение об остатке «Only the node is saved. The rest of the input
+  is not kept.». `updateConnectionAt` и `updateMemberAt` дополнительно сводят
+  текст через `bareNodeSourceOf`. Порядок выбора узла документа прежний:
+  `endpoints`, затем `outbounds`.
+- Раздел 2: `_addJsonNodes` для одного узла пишет голое тело (sing-box
+  документ и массив); члены папки и раньше получали `rawSource` узла. Узел из
+  документа теперь получает дефолтный эмодзи, как вставленное голое тело
+  (`singbox_config_import_test` обновлён).
+- Раздел 3: `bareNodeSourceOf` / `bareBodyTextOf` (`codec/source_record.dart`)
+  на чтении записи сервера и члена папки и в чтении формы v0; пустой `tag`
+  тела заполняется тегом узла.
+- Раздел 4: `verbatimBodyOf` требует `isAuthoredNodeSource` (вид ровно
+  `singbox_outbound`).
+- Раздел 5: `parseAll(own: true)` у своих записей; признак авторского тела
+  живёт на время разбора (`parser/authored_scope.dart`) и задаёт вход
+  `_sanitizedEntry`, `annotateFromRawBody` и `bodySourceOf`. Узел подписки —
+  `other`: корпус `body/singbox/endpoints_awg_mtu_high` проходит.
+- Корпус: раннер `test/contract/node_edit_corpus_test.dart` (7 кейсов, `applied`
+  не сверяется — §577); раздел `authored/` отложен до §577 пропуском с
+  причиной; `origin_raw` в `backup_corpus_test.dart`.
 
 ## Нерешённое / follow-up
 

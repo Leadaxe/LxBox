@@ -26,6 +26,17 @@
   A preset can repeat its rules and DNS servers for every matching node, read
   the node's tag, record and body, and build strings such as `<node>-dns`.
 
+### Changed
+
+- **A node's source keeps the node only ([§576](docs/spec/tasks/576-node-source-is-bare-body.md)).**
+  Saving a sing-box document or an array in the node editor keeps the first
+  node (not a service outbound and not a group) or the first element, and says
+  once that the rest of the input is not kept. A document with no such node is
+  refused. Records saved earlier with a document or an array are read as the
+  node's body; the config stays the same. The same sing-box JSON inside a
+  subscription no longer keeps an AmneziaWG `mtu` above 1280: the exemption is
+  for bodies written by hand as an own server or a folder member.
+
 ### Removed
 
 - **Node sections ([§575](docs/spec/tasks/575-remove-node-sections.md)).**

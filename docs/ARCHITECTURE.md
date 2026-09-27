@@ -809,6 +809,12 @@ builder/                     # NodeSpec + template → sing-box config
                              #   list.build(ctx) and before the post-steps; warnings → emitWarnings with the
                              #   registry text, drop_node removes the entry. Registry not loaded → no-op
   server_list_build.dart     #   the per-subscription emit: the detour policy, tag allocation, selector/auto registration
+  verbatim_body.dart         #   §455/§576 verbatimBodyOf — a node goes to the core VERBATIM (its rawSource, detour
+                             #   stripped, an empty tag filled with the model tag) when all four hold: (1) the
+                             #   container is an own server or a folder member; (2) the node is not an auto-select
+                             #   group; (3) the record's source kind is exactly `singbox_outbound`; (4) the node's
+                             #   text parses as a JSON object. Everything else, subscriptions included, goes
+                             #   through the model
   if_engine.dart             #   the §120 typed template engine: var substitution plus the #if construct
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
                              #   §265: the globalVars parameter — ref-vars {"ref":…} take their value from the global scope

@@ -645,7 +645,8 @@ applied on read (the node is parsed with it as its name). Records made before
 such; there is no migration, since the original file was never stored for them.
 
 **`origin.kind: json` is a build mode (§455).** A server (or folder member)
-whose source is a JSON object goes into the config **verbatim**: the source
+whose source is a bare sing-box body (source kind `singbox_outbound`, §576)
+goes into the config **verbatim**: the source
 object itself, not the model's re-emission — the same rule the launcher applies
 to a manual object. The model still parses it for the form, the list, the
 identity and the warnings, but its gates do not run; the gate is the core
@@ -655,6 +656,19 @@ imported backup is ignored and the node is re-parsed from `origin.raw`
 (BACKUP §9 p.2). No flag: the kind is derived from the text, so replacing the
 source with a JSON object (the editor's "Edit JSON" button) is what switches
 the mode, and pasting a link back switches it off.
+
+**The source of an own server and a folder member is the node only (§576).**
+The allowed source kinds of such a record are `singbox_outbound` (a bare body),
+`uri_lines` (a link), `wireguard_conf` (INI) and `amnezia_link`. A sing-box
+document or array is an input form, not a storage form: the node editor keeps
+the first node that is neither a service outbound (`direct`, `block`, `dns`)
+nor a group (`selector`, `urltest`), or the first element of an array; the
+import of an own node keeps that node's body. A record written earlier with
+`singbox_config`, `singbox_config_array` or `singbox_outbound_array` gets the
+body of its node on read (`bareNodeSourceOf`, `codec/source_record.dart`) and
+is written in the new form on the next save; the storage form version does not
+change. The node's body, tag and identity stay as they were. Only a bare body
+goes to the core verbatim (the §455 build mode above).
 
 **`skip_presets` (§578).** A record field of a server and of a folder member:
 the node is not served by presets with `for_each` whose `filter` reads the

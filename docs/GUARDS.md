@@ -242,8 +242,11 @@ mapper differs per input only in how it *reads* the source; what it produces is
 one sing-box map, and the judge after it is the same. The sanitiser is told the
 input (`BodySource`), and every mapper-built map counts as `other`, never
 `singbox`: the one rule that asks (`except_sources` on the AWG `mtu` ceiling,
-§473) exempts a body **written in the core's own form** by the person or the
-subscription, not one this app assembled.
+§473) exempts a body **written in the core's own form** by the person, not one
+this app assembled. Since §576 the `singbox` input belongs only to an authored
+body: an own server or a folder member whose source kind is `singbox_outbound`
+(`parseAll(own: true)`, `authored_scope.dart`). A subscription node with the
+same sing-box JSON is `other`, at parse time and at build time alike.
 
 | Rule, as §§1.2–1.5 describe it | Registry field that judges it now | Code |
 |---|---|---|
@@ -351,7 +354,7 @@ The remaining nine schemes still run every rule below.
 | `packetEncoding` outside `{xudp, packetaddr}` | field dropped | `PacketEncodingUnknownWarning` | `uri_utils.dart:253-266` | unknown value **panics** the core in `format.ToString` — a native `libbox.so` crash, not a failed connection | SPEC 103 |
 | `packetEncoding` upper-case | lower-cased | silent | `uri_utils.dart:258` | core accepts lowercase only | — |
 | AWG `mtu` above 1280 (link / `.conf` / Amnezia export) | clamped to the registry ceiling (1280) | `awg_mtu_clamped` (warning), carrying the original value | *moved to the registry, §1.0* — `wireguard.body.fields.mtu.max_when`, executed by `body_sanitizer.dart` `_applyMaxWhen`. The hand-written trio `awgClampMtu` / `awgMtuByRegistry` / `awgMtuWarnings` is **gone** | too high is a silent failure: handshake succeeds, data does not flow. Two cases the sanitiser cannot reach are covered by the pipeline itself (`mappers/uri_pipeline.dart`): a node that **asked** for AmneziaWG but kept no valid AWG field (§463 — `when.any_set` judges keys in the body, and none are left), and a **registry that failed to load** (`kAwgMtuFallback`) | §473 (contract 1.1.5), §472 step 7, was §097 |
-| AWG `mtu` above 1280 **from a sing-box body** | **kept as written** | `awg_mtu_high` (info) | `body_sanitizer.dart` `_applyMaxWhen` (`except_sources: [singbox]`) | the body is in the core's own form, written by the user or the subscription; rewriting it silently is not ours to do (owner's decision 18.09.2026). Input parity is broken here deliberately — the only such place in the contract | §473 |
+| AWG `mtu` above 1280 **from a sing-box body** | **kept as written** | `awg_mtu_high` (info) | `body_sanitizer.dart` `_applyMaxWhen` (`except_sources: [singbox]`) | the body is in the core's own form, written by the user (an own server or a folder member with a bare body, §576); rewriting it silently is not ours to do (owner's decision 18.09.2026). Input parity is broken here deliberately — the only such place in the contract | §473 |
 | AWG `mtu` absent | default 1280, on every input including sing-box bodies | silent — a default is not a replacement | `body_sanitizer.dart` (`default_when.when.any_set`) | AmneziaWG's own recommended client MTU and the IPv6 minimum | §473, §472 step 7, was §097 |
 | Bare IP without CIDR in `address` / `allowed_ips` | `/32` or `/128` appended | silent | `uri_utils.dart:288-292` | breaks endpoint load: `netip.ParsePrefix(...): no '/'` | §106 |
 | Raw `/` inside a base64 key in userInfo | percent-encoded to `%2F`, userInfo only | silent | `uri_utils.dart:298-309` | `Uri.tryParse` would read it as the start of the path and lose the userInfo | §106 |
