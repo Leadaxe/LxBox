@@ -9,7 +9,6 @@ import '../models/auto_select.dart';
 import '../models/core_reject_verdict.dart';
 import '../models/import_rule.dart';
 import '../models/node_link.dart';
-import '../models/node_sections.dart';
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/codec/source_record.dart';
@@ -2012,14 +2011,12 @@ class SubscriptionController extends ChangeNotifier {
     }
     final before = _lists();
     final members = [...folder.members];
-    // §435 — голое тело секции не трогает; документ с `sections` или с
-    // `dns`/`route` (извлечение) замещает их целиком (NODE_SECTIONS.md §7).
-    final imported = probe.node!.importedSections;
+    // §575 — секции из документа в запись не пишутся; прежние секции
+    // записи остаются как были.
     final previous = members[memberIndex].node;
     members[memberIndex] = members[memberIndex].copyWith(
       raw: trimmed,
       nameHint: hint,
-      sections: imported,
     );
     var current = members[memberIndex].node;
     // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело в редакторе: вердикт
@@ -2852,43 +2849,6 @@ class SubscriptionController extends ChangeNotifier {
     return '';
   }
 
-  /// §435 — секции одиночного узла (контракт ## 13): экран Routing пишет
-  /// `enabled`/`num` записи, редактор узла — весь набор или очистку.
-  /// `null` = снять поле.
-  Future<void> setUserServerSections(int index, NodeSections? sections) async {
-    if (index < 0 || index >= _entries.length) return;
-    final list = _entries[index].list;
-    if (list is! UserServer) return;
-    _entries[index]._replaceList(sections == null || sections.isEmpty
-        ? list.copyWith(clearSections: true)
-        : list.copyWith(sections: sections));
-    await _persist();
-    notifyListeners();
-  }
-
-  /// §435 — секции члена папки, симметрично [setUserServerSections].
-  Future<UiMsg?> setMemberSections(
-      int index, int memberIndex, NodeSections? sections) async {
-    if (index < 0 || index >= _entries.length) {
-      return const ErrMsg(ErrKey.folderNotFound);
-    }
-    final entry = _entries[index];
-    final folder = entry.list;
-    if (folder is! FolderServers) return const ErrMsg(ErrKey.notAFolder);
-    if (memberIndex < 0 || memberIndex >= folder.members.length) {
-      return const ErrMsg(ErrKey.serverNotFound);
-    }
-    final members = [...folder.members];
-    members[memberIndex] = sections == null || sections.isEmpty
-        ? members[memberIndex].copyWith(clearSections: true)
-        : members[memberIndex].copyWith(sections: sections);
-    entry._replaceList(folder.copyWith(members: members));
-    entry.nodeCount = entry.list.nodes.length;
-    await _persist();
-    notifyListeners();
-    return null;
-  }
-
   /// §578 — поле записи `skip_presets` своего сервера ([memberIndex] null)
   /// или члена папки. Хранится только `true`; правка помечает конфиг
   /// грязным через [_persist], как соседние правки записи.
@@ -3404,9 +3364,8 @@ class SubscriptionController extends ChangeNotifier {
       nodes: nodes,
       enabled: dropVerdictByEdit ? true : null,
       warnings: dropVerdictByEdit ? dropVerdict(list.warnings) : null,
-      // §435 — голое тело секции не трогает; документ с `sections` или с
-      // `dns`/`route` замещает их целиком (NODE_SECTIONS.md §7).
-      sections: nodes.isEmpty ? null : nodes.first.importedSections,
+      // §575 — секции из документа в запись не пишутся; прежние секции
+      // записи остаются как были.
     );
     _entries[index]._replaceList(next);
     _entries[index].nodeCount = nodes.length;

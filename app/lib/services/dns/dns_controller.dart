@@ -26,7 +26,6 @@ import '../builder/preset_expand.dart';
 import '../builder/rule_set_registry.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
-import 'node_dns_records.dart';
 
 /// §300 — типизированный снимок всего, что нужно экрану DNS-настроек. Заменяет
 /// разрозненные `setState`-присвоения `_load()`: одно значение, поля 1:1 с
@@ -48,9 +47,6 @@ class DnsSettingsSnapshot {
     required this.dnsFinal,
     required this.defaultResolver,
     required this.resolverReset,
-    this.nodeServers = const [],
-    this.nodeRules = const [],
-    this.tailscaleEndpoints = const [],
     this.presetServedTagsByPresetId = const {},
   });
 
@@ -72,17 +68,6 @@ class DnsSettingsSnapshot {
   /// §121 — исчезнувший resolver-tag сброшен на дефолт → экран должен
   /// `markDirty()` (persist битого ref не должен дожить до билда).
   final bool resolverReset;
-
-  /// §435 — DNS-серверы/правила узлов (секции, спека §9.2) после
-  /// подстановки `@self`: read-only строки внизу списков. Производные, как
-  /// preset-серверы: в [servers]/[rules] не входят и не персистятся.
-  final List<NodeDnsServerRecord> nodeServers;
-  final List<NodeDnsRuleRecord> nodeRules;
-
-  /// §435 — опции `endpoint` для формы DNS-сервера `tailscale` (спека §9.4):
-  /// display-теги узлов Tailscale. В опции членов групп и резолверов
-  /// узловые серверы на этой волне не входят.
-  final List<TailscaleEndpointOption> tailscaleEndpoints;
 
   /// §578 — пресет с `for_each` → теги узлов, которые он обслуживает
   /// (подпись строки пресета). Пресета без `for_each` здесь нет.
@@ -294,10 +279,6 @@ class DnsController {
       resolverReset = true;
     }
 
-    // §435 — DNS-записи узлов (секции) и узлы Tailscale для пикера endpoint:
-    // производные из списков источников, в `_servers`/`_rules` не кладутся.
-    final nodeDns = collectNodeDnsRecords(await SettingsStorage.getServerLists());
-
     return DnsSettingsSnapshot(
       servers: resolvedServers,
       templateByTag: templateByTag,
@@ -317,18 +298,9 @@ class DnsController {
       dnsFinal: dnsFinal,
       defaultResolver: defaultResolver,
       resolverReset: resolverReset,
-      nodeServers: nodeDns.servers,
-      nodeRules: nodeDns.rules,
-      tailscaleEndpoints: nodeDns.tailscaleEndpoints,
       presetServedTagsByPresetId: presetServedTagsByPresetId,
     );
   }
-
-  /// §435 — перечитать только узловые записи (экран слушает
-  /// `SubscriptionController`: правка узла при открытом DNS-экране обновляет
-  /// read-only строки и опции endpoint без полного [load]).
-  static Future<NodeDnsRecords> loadNodeRecords() async =>
-      collectNodeDnsRecords(await SettingsStorage.getServerLists());
 
   /// §300 D3 — staged-запись DNS-секции (servers/rules/dns-vars). custom_rules
   /// НЕ входит — это §295 (device-required). Всегда `flush: false` — дисковый

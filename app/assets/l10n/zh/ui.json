@@ -60,16 +60,6 @@
       "other": "%d 个链式"
     }
   },
-  "%d DNS rules": {
-    "value": {
-      "other": "%d 条 DNS 规则"
-    }
-  },
-  "%d DNS servers": {
-    "value": {
-      "other": "%d 个 DNS 服务器"
-    }
-  },
   "%d elements": {
     "value": {
       "other": "%d 个元素"
@@ -258,11 +248,6 @@
   "%d proto": {
     "value": {
       "other": "%d 个协议"
-    }
-  },
-  "%d rules": {
-    "value": {
-      "other": "%d 条规则"
     }
   },
   "%d seconds": {
@@ -1038,12 +1023,6 @@
   },
   "Clear cached files": {
     "value": "删除缓存文件"
-  },
-  "Clear sections": {
-    "value": "清除区块"
-  },
-  "Clear sections?": {
-    "value": "清除区块？"
   },
   "Client subnet": {
     "value": "客户端子网"
@@ -2003,9 +1982,6 @@
   "From %s %s": {
     "value": "来自 %s %s"
   },
-  "From nodes · read-only, edited in the node": {
-    "value": "来自节点 · 只读，需在节点中编辑"
-  },
   "From routing rules · ordered as in Routing": {
     "value": "来自路由规则 · 顺序同「路由」"
   },
@@ -2086,9 +2062,6 @@
   },
   "Haptic feedback": {
     "value": "震动反馈"
-  },
-  "Has node sections": {
-    "value": "带有节点区块"
   },
   "Headers copied": {
     "value": "请求头已复制"
@@ -2847,9 +2820,6 @@
   "No valid outbounds in JSON": {
     "value": "JSON 中没有有效的 outbound"
   },
-  "Node": {
-    "value": "节点"
-  },
   "down": {
     "value": "down"
   },
@@ -2885,6 +2855,9 @@
   },
   "Node info copied": {
     "value": "节点信息已复制"
+  },
+  "Node saved. The rest of the document was not saved.": {
+    "value": "节点已保存。文档的其余内容未保存。"
   },
   "Node section record dropped: %s": {
     "value": "已丢弃节点区块记录：%s"
@@ -3127,9 +3100,6 @@
   },
   "Paste a proxy URL": {
     "value": "粘贴代理链接"
-  },
-  "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
-    "value": "要为节点附加规则，请在 JSON 标签页粘贴含 dns/route 的 sing-box 配置，或含「sections」的文档。"
   },
   "Paste a sing-box outbound JSON": {
     "value": "粘贴 sing-box 出站 JSON"
@@ -3701,9 +3671,6 @@
   "Rules": {
     "value": "规则"
   },
-  "Rules and DNS records this node carries": {
-    "value": "该节点自带的规则与 DNS 记录"
-  },
   "Rules changed. Refresh the subscription to apply them.": {
     "value": "规则已更改。刷新订阅即可应用。"
   },
@@ -3791,11 +3758,6 @@
   "Saved to Downloads: %s (%d bytes)": {
     "value": "已保存到「下载」：%s（%d 字节）"
   },
-  "Saved · %d section records dropped": {
-    "value": {
-      "other": "已保存 · 丢弃了 %d 条区块记录"
-    }
-  },
   "Saved. Force-stop & reopen app to apply.": {
     "value": "已保存。需强制停止并重新打开应用才会生效。"
   },
@@ -3810,12 +3772,6 @@
   },
   "Search domain / IP / app": {
     "value": "搜索域名 / IP / 应用"
-  },
-  "Sections": {
-    "value": "区块"
-  },
-  "Sections cleared": {
-    "value": "区块已清除"
   },
   "Skip presets": {
     "value": "跳过预设"
@@ -3989,9 +3945,6 @@
   "Shown as the server title in the Servers list. If empty, \"%s\" is used.": {
     "value": "作为「服务器」列表中服务器的标题显示。留空则使用「%s」。"
   },
-  "Shown in Routing and DNS with the node's tag": {
-    "value": "在「路由」与 DNS 中以该节点的标签显示"
-  },
   "Single object or array of outbounds. WireGuard routes to endpoints[] automatically.": {
     "value": "单个对象或出站数组。WireGuard 会自动路由到 endpoints[]。"
   },
@@ -4108,9 +4061,6 @@
   },
   "Stopping…": {
     "value": "正在停止…"
-  },
-  "Stored JSON": {
-    "value": "存储中的 JSON"
   },
   "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
     "value": "仅保存在本机。关闭后已有记录仍会保留——可在「Pick saved」中逐个移除（长按标签 → Remove）。"
@@ -4362,9 +4312,6 @@
   "The device is removed from the tailnet when it goes offline": {
     "value": "设备离线后会从 tailnet 中移除"
   },
-  "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
-    "value": "文档同时含有「sections」和「dns」/「route」——请只保留其中一种"
-  },
   "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
     "value": "文档同时含有「sections」和「dns」/「route」：已采用「sections」，其余忽略。"
   },
@@ -4376,9 +4323,6 @@
   },
   "The node's original text. Save writes it as is.": {
     "value": "节点的原始文本。保存时原样写入。"
-  },
-  "The node's rules and DNS records will be removed. The node itself stays.": {
-    "value": "该节点的规则与 DNS 记录将被删除。节点本身保留。"
   },
   "The servers it selects from stay in the folder.": {
     "value": "它挑选的服务器仍留在文件夹里。"
@@ -4925,9 +4869,6 @@
   "first matching node becomes default": {
     "value": "第一个匹配的节点成为默认节点"
   },
-  "from node %s": {
-    "value": "来自节点 %s"
-  },
   "group": {
     "value": "分组"
   },
@@ -4975,9 +4916,6 @@
   },
   "node": {
     "value": "节点"
-  },
-  "node is disabled": {
-    "value": "节点已停用"
   },
   "not found": {
     "value": "未找到"

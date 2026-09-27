@@ -1,20 +1,19 @@
-/// §435 — подготовка текста JSON-вкладки редактора узла к сохранению
-/// (NODE_SECTIONS.md §7). Чистая функция без Flutter: экран отдаёт ей текст
-/// и поле Tag, получает либо текст для контроллера, либо причину отказа.
+/// §435 — подготовка текста JSON-вкладки редактора узла к сохранению.
+/// Чистая функция без Flutter: экран отдаёт ей текст и поле Tag, получает
+/// либо текст для контроллера, либо причину отказа.
 ///
-/// Принимаются три вида входа:
+/// Принимаются два вида входа:
 /// - голое тело outbound'а/endpoint'а — объект с `type` на верхнем уровне
 ///   (массив тел → первый элемент, как раньше);
-/// - документ `{ "endpoints"|"outbounds": [тело], "sections": {…} }`;
-/// - sing-box-документ `{ "endpoints"|"outbounds": [ровно один узел],
-///   "dns": {…}, "route": {…} }` — связку из него извлекает парсер.
+/// - документ `{ "endpoints"|"outbounds": [тело], … }`.
+///
+/// §575 — из документа сохраняется только узел: `dns`, `route` и `sections`
+/// рядом с ним не сохраняются, отказа нет. Экран по флагу
+/// [NodeDocumentReady.droppedExtras] говорит пользователю, что остальное
+/// содержимое документа отброшено.
 ///
 /// Тег из поля Tag подмешивается в ТЕЛО узла (первый не-служебный элемент
-/// `endpoints`/`outbounds`), а не в корень документа; документ уходит
-/// контроллеру целиком — он парсит и переносит секции сам. Оба вида секций
-/// (`sections` и `dns`/`route`) в одном документе — отказ: парсер подписок в
-/// такой ситуации берёт `sections` и вешает warning, редактор же обязан
-/// заставить выбрать один вид.
+/// `endpoints`/`outbounds`), а не в корень документа.
 library;
 
 import 'dart:convert';
@@ -33,14 +32,18 @@ sealed class NodeDocumentPrep {
 
 /// Текст готов к `updateConnectionAt` / `updateMemberAt`.
 final class NodeDocumentReady extends NodeDocumentPrep {
-  const NodeDocumentReady(this.text, {required this.isDocument});
+  const NodeDocumentReady(this.text,
+      {required this.isDocument, this.droppedExtras = false});
 
   /// Компактный JSON: тело узла или документ целиком.
   final String text;
 
-  /// true — вход был документом (`endpoints`/`outbounds` в корне): после
-  /// сохранения секции узла замещаются тем, что контроллер извлёк.
+  /// true — вход был документом (`endpoints`/`outbounds` в корне).
   final bool isDocument;
+
+  /// §575 — документ нёс `dns`, `route` или `sections`: узел сохраняется,
+  /// остальное содержимое документа — нет.
+  final bool droppedExtras;
 }
 
 /// Сохранение отказано; [message] — готовая строка для снекбара.
@@ -105,12 +108,10 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
         "JSON must be an outbound object with \"type\" or a document with \"endpoints\"/\"outbounds\""));
   }
 
-  final hasSections = map['sections'] is Map;
-  final hasDnsRoute = map['dns'] is Map || map['route'] is Map;
-  if (hasSections && hasDnsRoute) {
-    return NodeDocumentRejected(getLocalText.s(
-        "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them"));
-  }
+  // §575 — `dns`/`route`/`sections` документа не сохраняются; отказа нет.
+  final dropped = map.containsKey('sections') ||
+      map.containsKey('dns') ||
+      map.containsKey('route');
 
   // Тег — в первое тело узла (endpoints раньше outbounds: у документа с
   // WireGuard/Tailscale узел лежит там, а в outbounds — direct/block).
@@ -121,10 +122,11 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
     ]);
     if (body != null && body['tag'] != newTag) {
       body['tag'] = newTag;
-      return NodeDocumentReady(jsonEncode(map), isDocument: true);
+      return NodeDocumentReady(jsonEncode(map),
+          isDocument: true, droppedExtras: dropped);
     }
   }
-  return NodeDocumentReady(text, isDocument: true);
+  return NodeDocumentReady(text, isDocument: true, droppedExtras: dropped);
 }
 
 /// §455 — полезная нагрузка для `Libbox.checkConfig()`: минимальный конфиг

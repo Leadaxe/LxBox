@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
-import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../routing_screen_helpers.dart';
@@ -24,9 +23,6 @@ class CustomRuleTile extends StatelessWidget {
     this.touchesDns = false,
     this.locked = false,
     this.sortable = true,
-    this.canDelete = true,
-    this.originLabel,
-    this.dimmed = false,
     required this.statusButton,
     required this.onTap,
     required this.onLongPressStart,
@@ -68,21 +64,6 @@ class CustomRuleTile extends StatelessWidget {
   /// «нельзя двигать». У traffic-processing false оба, но флага два.
   final bool sortable;
 
-  /// §435 — можно ли удалить строку long-press меню. False у правила узла:
-  /// удаление и правка — только через узел (NODE_SECTIONS.md §7). Явный
-  /// флаг, а не перегрузка [locked]: locked ещё и гасит свич, а тумблер
-  /// узловой строки живой.
-  final bool canDelete;
-
-  /// §435 — пометка происхождения («from node <тег>») у правила узла;
-  /// null — корневое правило, строки нет.
-  final String? originLabel;
-
-  /// §435 — приглушить строку: узел или его источник выключен, в конфиг
-  /// правило не попадает. Тумблер остаётся живым — пользователь видит, куда
-  /// правило встанет, когда узел включат (паритет с лаунчером).
-  final bool dimmed;
-
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
   ///
   /// §366 — время последнего обновления в тайле намеренно НЕ показывается:
@@ -99,14 +80,13 @@ class CustomRuleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final active = rule.enabled && !dimmed;
+    final active = rule.enabled;
     final subtitleColor = active ? cs.primary : cs.onSurfaceVariant;
 
     final content = GestureDetector(
       onTap: onTap,
       // §264 — locked: контекст-меню (delete/reorder) недоступно.
-      // §435 — узловая строка (canDelete: false) меню не имеет.
-      onLongPressStart: locked || !canDelete
+      onLongPressStart: locked
           ? null
           : (d) => onLongPressStart(d.globalPosition),
       behavior: HitTestBehavior.opaque,
@@ -179,34 +159,6 @@ class CustomRuleTile extends StatelessWidget {
                 ],
               ),
             ),
-            // §435 — происхождение правила узла + подсказка, если узел
-            // выключен. Отдельная строка под подзаголовком, не чип: тег
-            // бывает длинным (префикс папки + имя).
-            if (originLabel != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 64, right: 8, bottom: 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.subdirectory_arrow_right,
-                        size: 12, color: cs.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(originLabel!,
-                          style: TextStyle(
-                              fontSize: 12, color: cs.onSurfaceVariant),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    if (dimmed) ...[
-                      const SizedBox(width: 6),
-                      Text(getLocalText.s("node is disabled"),
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                              color: cs.onSurfaceVariant)),
-                    ],
-                  ],
-                ),
-              ),
           ],
         ),
       ),
@@ -226,9 +178,7 @@ class CustomRuleTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // §435 — приглушение целиком (свич, имя, подзаголовок);
-                // Opacity не гасит hit-test, тумблер остаётся живым.
-                dimmed ? Opacity(opacity: 0.55, child: content) : content,
+                content,
                 const Divider(height: 1),
               ],
             ),

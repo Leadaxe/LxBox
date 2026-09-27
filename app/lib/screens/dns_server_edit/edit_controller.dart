@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show WizardVar;
-import '../../services/dns/node_dns_records.dart' show TailscaleEndpointOption;
+import '../../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpointOption;
 import '../../services/record_vars.dart';
 import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';

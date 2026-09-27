@@ -186,6 +186,39 @@ Tailscale из подписки получает связку от пресет�
 Жизненный цикл каталога состояния Tailscale из `NODE_SECTIONS.md` остаётся
 нормой и переносится в документ о протоколе.
 
+### Реализация: фаза 1 (интерфейс)
+
+Сделано:
+
+- экран узла: блок Sections, кнопка и диалог Clear sections, сводка
+  счётчиков удалены; переключатель Skip presets остался;
+- экран папки: отметка Has node sections удалена;
+- экран маршрутов: `routing_screen/node_rule_rows.dart` удалён, список таба
+  Rules снова строится только из корневых правил; у `CustomRuleTile` сняты
+  параметры строки узла (`canDelete`, `originLabel`, `dimmed`);
+- экран DNS: плитки серверов и правил узла удалены
+  (`widgets/node_dns_tiles.dart`), поля и перечитывание по слушателю
+  контроллера тоже;
+- выбор узла Tailscale в редакторе DNS-сервера: `node_dns_records.dart`
+  переименован в `services/dns/tailscale_endpoint_options.dart`, опции
+  собирает `collectTailscaleEndpointOptions` через `presetNodesForView`
+  (включённые узлы `tailscale` своих записей, папок и подписок; тег последней
+  сборки или отображаемый); `DnsSettingsSnapshot` поля узловых записей
+  потерял;
+- контроллер: `setUserServerSections`/`setMemberSections` удалены;
+  `updateConnectionAt`/`updateMemberAt` больше не пишут `importedSections` в
+  запись, прежние секции записи остаются до фазы 3;
+- редактор документа: отказ «и `sections`, и `dns`/`route`» снят; документ с
+  любым из этих ключей даёт узел и одно сообщение «Node saved. The rest of
+  the document was not saved.»;
+- строки интерфейса удалённых элементов убраны из словарей `ru`/`zh`.
+
+Оставлено фазам 2 и 3: разбор (`importedSections`, `extractNodeSections`,
+предупреждения секций, в том числе строка предупреждения на экране узла),
+вливание в сборку, резервные копии, Debug API, `sources.dart`, импорт
+(`sectionsForNewNode` в мастере и контроллере), модель, кодек хранения,
+`tailscale_bundle.dart`, документация. Что пишется в источник записи — §576.
+
 ## Порядок выпуска
 
 Эта задача и [§578](578-tailscale-preset-template-for-each.md) выходят в одном релизе. Порознь нельзя:

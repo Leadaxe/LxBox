@@ -3,9 +3,10 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/screens/node_settings/node_document.dart';
 
-/// §435 — подготовка текста JSON-вкладки редактора узла: три вида входа,
-/// тег из поля Tag подмешивается в тело узла (не в корень документа), оба
-/// вида секций в одном документе — отказ.
+/// §435 — подготовка текста JSON-вкладки редактора узла: голое тело или
+/// документ, тег из поля Tag подмешивается в тело узла (не в корень
+/// документа). §575 — `dns`/`route`/`sections` документа не сохраняются,
+/// отказа по конфликту видов нет: флаг `droppedExtras` для сообщения.
 void main() {
   Map<String, dynamic> ready(NodeDocumentPrep p) {
     expect(p, isA<NodeDocumentReady>());
@@ -19,6 +20,7 @@ void main() {
           'new-tag');
       final m = ready(p);
       expect((p as NodeDocumentReady).isDocument, isFalse);
+      expect(p.droppedExtras, isFalse);
       expect(m['tag'], 'new-tag');
       expect(m['type'], 'socks');
       expect(m['server'], 'h');
@@ -58,6 +60,7 @@ void main() {
       final p = prepareNodeDocumentForSave(doc, '🪢 home');
       final m = ready(p);
       expect((p as NodeDocumentReady).isDocument, isTrue);
+      expect(p.droppedExtras, isTrue);
       expect(m.containsKey('tag'), isFalse, reason: 'тег не в корне');
       final body = (m['endpoints'] as List).single as Map;
       expect(body['tag'], '🪢 home');
@@ -97,32 +100,45 @@ void main() {
       expect(((m['outbounds'] as List).single as Map)['tag'], 'o');
     });
 
+    test('dns/route → droppedExtras', () {
+      final p = prepareNodeDocumentForSave(doc, 'renamed') as NodeDocumentReady;
+      expect(p.droppedExtras, isTrue);
+    });
+
     test('группы не считаются телом узла', () {
       const grp = '{"outbounds":[{"type":"selector","tag":"sel",'
           '"outbounds":["s"]},{"type":"socks","tag":"s","server":"h",'
           '"server_port":1}]}';
-      final m = ready(prepareNodeDocumentForSave(grp, 'x'));
+      final p = prepareNodeDocumentForSave(grp, 'x');
+      expect((p as NodeDocumentReady).droppedExtras, isFalse,
+          reason: 'документ без dns/route/sections');
+      final m = ready(p);
       final obs = m['outbounds'] as List;
       expect((obs[0] as Map)['tag'], 'sel');
       expect((obs[1] as Map)['tag'], 'x');
     });
   });
 
-  group('отказы', () {
-    test('sections и dns/route в одном документе', () {
+  group('§575 sections и dns/route в одном документе', () {
+    test('принимается, узел получает тег, droppedExtras', () {
       const doc = '{"endpoints":[{"type":"tailscale","tag":"ts"}],'
           '"sections":{"rules":[]},"route":{"rules":[]}}';
       final p = prepareNodeDocumentForSave(doc, 't');
-      expect(p, isA<NodeDocumentRejected>());
-      expect((p as NodeDocumentRejected).message, contains('sections'));
+      final m = ready(p);
+      expect((p as NodeDocumentReady).droppedExtras, isTrue);
+      expect(((m['endpoints'] as List).single as Map)['tag'], 't');
     });
 
-    test('sections и dns без route — тоже отказ', () {
+    test('sections и dns без route — тоже принимается', () {
       const doc = '{"outbounds":[{"type":"socks","tag":"s","server":"h",'
           '"server_port":1}],"sections":{},"dns":{"servers":[]}}';
-      expect(prepareNodeDocumentForSave(doc, 't'),
-          isA<NodeDocumentRejected>());
+      final p = prepareNodeDocumentForSave(doc, 't');
+      expect(p, isA<NodeDocumentReady>());
+      expect((p as NodeDocumentReady).droppedExtras, isTrue);
     });
+  });
+
+  group('отказы', () {
 
     test('битый JSON', () {
       final p = prepareNodeDocumentForSave('{"type": ', 't');
