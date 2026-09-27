@@ -5,7 +5,7 @@
 | Статус | Done |
 | Дата старта | 2026-09-27 |
 | Дата завершения | 2026-09-27 |
-| Коммиты | см. «Реализация» |
+| Коммиты | b49e5677 (код, тесты, документы) |
 | Контракт | 1.1.87–1.1.89: авторское тело, `core_rejects`, `applied`, корпус `authored/` (TASKS_LXBOX §84–§86) |
 | Связанные spec'ы | [§576](576-node-source-is-bare-body.md) (условие авторского тела), [features/460](../features/460%20contract-registry-bundle/spec.md), [§574](574-tls-fragment-yields-to-detour.md), [§473](473-contract-115-awg-mtu-by-registry.md) (исключение по входу для MTU), [features/478](../features/478%20core-rejected-node-auto-disable/spec.md) |
 
