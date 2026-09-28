@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+---
+
+## [2.25.8] — 2026-09-28
+
 ### Added
 
 - **OpenVPN endpoints as sing-box JSON ([task 586](docs/spec/tasks/586-endpoint-types-from-registry.md)).**
@@ -105,6 +109,7 @@
   node's body; the config stays the same. The same sing-box JSON inside a
   subscription no longer keeps an AmneziaWG `mtu` above 1280: the exemption is
   for bodies written by hand as an own server or a folder member.
+- **Internal.** Contract synced to 1.1.99.
 
 ### Removed
 
