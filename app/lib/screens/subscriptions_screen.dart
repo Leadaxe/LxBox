@@ -23,7 +23,6 @@ import 'subscriptions_screen/clipboard_analysis.dart';
 import 'subscriptions_screen/entry_context_menu.dart';
 import 'subscriptions_screen/folder_picker.dart';
 import 'subscriptions_screen/paste_dialogs.dart';
-import 'subscriptions_screen/public_test_servers.dart';
 import '../models/source_chain.dart';
 import '../models/source_entry.dart';
 import 'chain_edit/chain_edit_flow.dart';
@@ -911,7 +910,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     // overflow menu — explicit affordance).
                     if (v == 'wizard') _openAddServerWizard();
                     if (v == 'warp') _openWarpWizard();
-                    if (v == 'public') unawaited(_pickPublicTestServer());
                     if (v == 'paste') unawaited(_pasteFromClipboard());
                     if (v == 'qr') unawaited(_scanQrCode());
                     if (v == 'file') unawaited(_importFromFile());
@@ -933,7 +931,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     PopupMenuItem(value: 'folder', child: Text(getLocalText.s("New folder…"))),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'warp', child: Text(getLocalText.s("Get WARP"))),
-                    PopupMenuItem(value: 'public', child: Text(getLocalText.s("Get Public Test Servers"))),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'paste', child: Text(getLocalText.s("Paste from clipboard"))),
                     // §375 — на устройстве без камеры (Android TV) пункта нет:
@@ -1057,13 +1054,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
-  Future<void> _pickPublicTestServer() async {
-    await pickPublicTestServer(
-      context,
-      onSelectSource: (source) => _inputController.text = source,
-    );
-  }
-
   /// §524 — строки общего списка: ОДИН [_sources], без сшивки трёх источников.
   /// Взаимный порядок цепочек внутри него держит инвариант «позиция ссылается
   /// только на цепочку ВЫШЕ».
@@ -1100,10 +1090,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   Widget _buildList(SubscriptionController ctrl) {
     if (_rows(ctrl).isEmpty) {
-      return SubscriptionsEmptyState(
-        busy: ctrl.busy,
-        onPickPublicTestServer: () => unawaited(_pickPublicTestServer()),
-      );
+      return const SubscriptionsEmptyState();
     }
     final rows = _rows(ctrl);
     return ReorderableListView.builder(

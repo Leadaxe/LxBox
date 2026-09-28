@@ -70,8 +70,8 @@ characters). Fastlane is read from the build commit, not from the branch.
 | Changelog | `changelogs/<versionCode>.txt` |
 
 The changelog file name must equal the recipe's `versionCode`. Screenshots must
-not show the Servers screen (personal subscriptions); use servers from
-`public-servers-manifest.json`.
+not show the Servers screen with personal subscriptions; use a test
+subscription with masked addresses.
 
 ## Recipe
 
@@ -223,7 +223,6 @@ The first-run prompt "Check for updates?" sets `auto_check_updates`
 | GitHub Releases API, fallback `docs/latest.json` | launch, ≤ once per 24 h | yes (§379) |
 | `app/assets/support.json`, message feed (bundled copy in the APK) | home screen with the tunnel up, once per process | yes (§422); without consent: last cached copy, else the bundled one |
 | `app/assets/donate.json` (bundled copy) | About → Support, on tap | no, user action |
-| `public-servers-manifest.json` | that screen, on open | no, user action |
 
 With "Skip" the app makes no request to `raw.githubusercontent.com` on its own.
 

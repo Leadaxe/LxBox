@@ -2003,9 +2003,6 @@
   "Generation failed — no WARP account.": {
     "value": "生成失败——没有 WARP 账号。"
   },
-  "Get Public Test Servers": {
-    "value": "获取公共测试服务器"
-  },
   "Get WARP": {
     "value": "获取 WARP"
   },
@@ -2445,9 +2442,6 @@
   "Link: the tag goes into its fragment on save.": {
     "value": "链接：保存时标签会写入其片段。"
   },
-  "List %d": {
-    "value": "列表 %d"
-  },
   "Live path in packet order. Tap a hop to open its source.": {
     "value": "按数据包顺序显示的实时路径。点击某一跳可打开其来源。"
   },
@@ -2774,9 +2768,6 @@
   },
   "No positions yet — add at least two.": {
     "value": "还没有位置——请至少添加两个。"
-  },
-  "No provider yet?": {
-    "value": "还没有服务商？"
   },
   "No rule data": {
     "value": "没有规则数据"
@@ -4256,9 +4247,6 @@
   "Test download/upload speed": {
     "value": "测试下载/上传速度"
   },
-  "Test servers list unavailable": {
-    "value": "测试服务器列表不可用"
-  },
   "Test ≤": {
     "value": "测试 ≤"
   },
@@ -4444,9 +4432,6 @@
   "Tries HTTP/3 first, falls back to HTTP/2 where QUIC/UDP is blocked — best for hop chains.": {
     "value": "优先尝试 HTTP/3，QUIC/UDP 被封锁时回退 HTTP/2——最适合多跳链路。"
   },
-  "Try a public test server — free, limited, good for first-time check:": {
-    "value": "试试公共测试服务器——免费、有额度限制，适合初次验证："
-  },
   "Tunnel apps": {
     "value": "隧道应用"
   },
@@ -4631,9 +4616,6 @@
   },
   "View details": {
     "value": "查看详情"
-  },
-  "View on GitHub": {
-    "value": "在 GitHub 上查看"
   },
   "View pool": {
     "value": "查看连接池"

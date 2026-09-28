@@ -2201,9 +2201,6 @@
   "Generation failed — no WARP account.": {
     "value": "Генерация не удалась — нет WARP-аккаунта."
   },
-  "Get Public Test Servers": {
-    "value": "Получить публичные тестовые серверы"
-  },
   "Get WARP": {
     "value": "Получить WARP"
   },
@@ -2648,9 +2645,6 @@
   "Link: the tag goes into its fragment on save.": {
     "value": "Ссылка: тег при сохранении попадает в её фрагмент."
   },
-  "List %d": {
-    "value": "Список %d"
-  },
   "Live path in packet order. Tap a hop to open its source.": {
     "value": "Живой путь в порядке следования пакета. Нажмите на хоп, чтобы открыть его источник."
   },
@@ -2973,9 +2967,6 @@
   },
   "No positions yet — add at least two.": {
     "value": "Позиций пока нет — добавьте хотя бы две."
-  },
-  "No provider yet?": {
-    "value": "Провайдера пока нет?"
   },
   "No rule data": {
     "value": "Данных по правилам нет"
@@ -4457,9 +4448,6 @@
   "Test download/upload speed": {
     "value": "Проверка скорости загрузки и отдачи"
   },
-  "Test servers list unavailable": {
-    "value": "Список тестовых серверов недоступен"
-  },
   "Test ≤": {
     "value": "Тест ≤"
   },
@@ -4648,9 +4636,6 @@
   "Tries HTTP/3 first, falls back to HTTP/2 where QUIC/UDP is blocked — best for hop chains.": {
     "value": "Сначала HTTP/3, при недоступности QUIC/UDP — откат на HTTP/2. Лучший выбор для цепочек хопов."
   },
-  "Try a public test server — free, limited, good for first-time check:": {
-    "value": "Попробуйте публичный тестовый сервер — бесплатный, с ограничениями, подойдёт для первой проверки:"
-  },
   "Tunnel apps": {
     "value": "Приложения туннеля"
   },
@@ -4835,9 +4820,6 @@
   },
   "View details": {
     "value": "Подробности"
-  },
-  "View on GitHub": {
-    "value": "Открыть на GitHub"
   },
   "View pool": {
     "value": "Показать пул"

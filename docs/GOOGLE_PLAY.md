@@ -72,7 +72,7 @@ just as much; they simply preferred not to be listed.
    `fastlane/metadata/android/<locale>/changelogs/<versionCode>.txt`, ≤ 500
    characters — the same files F-Droid reads.
 4. Screenshots must not show the Servers screen with personal subscriptions;
-   use servers from `public-servers-manifest.json`.
+   use a test subscription with masked addresses.
 
 ## CI upload
 
