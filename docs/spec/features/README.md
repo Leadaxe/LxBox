@@ -43,7 +43,7 @@
 | [010-VPN_SERVICE](010-VPN_SERVICE/FEATURE.md) | Туннель: запуск/остановка, режимы VPN/Proxy, автозапуск, watchdog, фоновый сон, idle-suspend, реакция на смену сети | 012 042 119 124 128 | ✅ 2026-09-28 |
 | [011-SPLIT_TUNNELING](011-SPLIT_TUNNELING/FEATURE.md) | Какие приложения идут через туннель, а какие мимо | 046 | — |
 | [012-LIVE_STATE](012-LIVE_STATE/FEATURE.md) | Живое состояние ядра: статус, соединения, статистика, трафик по приложениям | 016 044 122 123 | ✅ 2026-09-28 |
-| [013-DIAGNOSTICS](013-DIAGNOSTICS/FEATURE.md) | Диагностика: журнал приложения, журнал ядра, отчёт о сбое, Debug API, живые события | 023 031 038 043 | — |
+| [013-DIAGNOSTICS](013-DIAGNOSTICS/FEATURE.md) | Диагностика: журнал приложения, журнал ядра, отчёт о сбое, Debug API, живые события | 023 031 038 043 | ✅ 2026-09-28 |
 | [014-AUTOMATION](014-AUTOMATION/FEATURE.md) | Управление извне: быстрое подключение, публичный Intent API, интеграция с автоматизаторами | 032 047 | — |
 | [015-WARP](015-WARP/FEATURE.md) | Cloudflare WARP: регистрация в один тап, MASQUE-транспорт | 025 130 | — |
 | [016-DPI_HARDENING](016-DPI_HARDENING/FEATURE.md) | Обход DPI: фрагментация TLS, обфускация SNI, ECH, параметры XHTTP | 020 028 045 127 | — |
