@@ -6,7 +6,7 @@
 | Дата | 2026-04-20 (ревью) · 2026-04-21 (закрытие) |
 | Объект ревью | [001](./001-reconnect-sink-leak.md), [002](./002-blocking-stopvpn-intent-reset.md), [003](./003-revoke-ux.md), [004](./004-lifecycle-resume-resync.md), [005](./005-optimization-pass.md), [006](./006-per-node-detour-toggles.md) |
 | Коммит-закрытие | `e0e7213` fix(review): address peer review follow-ups for tasks 001-006 |
-| Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md), [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md), [`018 detour server management`](../features/018%20detour%20server%20management/spec.md) |
+| Связанные spec'ы | [`003 home screen`](../tasks/003F-home-screen/spec.md), [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md), [`018 detour server management`](../tasks/018F-detour-server-management/spec.md) |
 
 ## Резюме закрытия (2026-04-21)
 
@@ -64,7 +64,7 @@
 - Dart: `_stopInternal` / `_startInternal`, `reconnect` без `firstWhere`/`timeout` — согласовано с целью убрать гонку с guard в `onStartCommand`.
 - При повторном `stopAwait` предыдущий completer отменяется — первый caller может получить `false`; в 002 это осознанно описано.
 
-**Документация (хвост в отчёте 002):** в [002](./002-blocking-stopvpn-intent-reset.md) в «Нерешённое» было «обновить spec 012 с описанием `stopAwait`». В репозитории это уже сделано: раздел про blocking `stopVPN` / `stopAwait` есть в [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md); поток reconnect/stop описан и в [`ARCHITECTURE.md`](../../ARCHITECTURE.md). Сам файл task-002 при желании можно пометить как выполненный follow-up по докам, чтобы журнал не расходился с кодом/spec.
+**Документация (хвост в отчёте 002):** в [002](./002-blocking-stopvpn-intent-reset.md) в «Нерешённое» было «обновить spec 012 с описанием `stopAwait`». В репозитории это уже сделано: раздел про blocking `stopVPN` / `stopAwait` есть в [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md); поток reconnect/stop описан и в [`ARCHITECTURE.md`](../../ARCHITECTURE.md). Сам файл task-002 при желании можно пометить как выполненный follow-up по докам, чтобы журнал не расходился с кодом/spec.
 
 ---
 

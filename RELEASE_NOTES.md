@@ -153,7 +153,7 @@ DNS появились настройки кэша. Ядро `v1.14.2-lx.8`, к�
   ([§568](docs/spec/tasks/568-source-replace-fold.md)).
 - A `selector` group from a subscription or a backup stays manual and keeps
   its chosen server
-  ([§565](docs/spec/features/565%20selector-group-genus/spec.md)).
+  ([§565](docs/spec/tasks/565F-selector-group-genus/spec.md)).
 - Wi-Fi rules read the network name the way Android 12+ expects and say why
   the name cannot be read (approximate location, Location off)
   ([§567](docs/spec/tasks/567-wifi-ssid-read-preflight-and-diagnostics.md),
@@ -305,7 +305,7 @@ Full lists: [v2.25.6](docs/releases/v2.25.6.md),
 - Папку или подписку можно заменить группой: Manual, Auto или Both
   ([§568](docs/spec/tasks/568-source-replace-fold.md)).
 - Группа `selector` из подписки или бэкапа остаётся ручной и помнит выбранный
-  сервер ([§565](docs/spec/features/565%20selector-group-genus/spec.md)).
+  сервер ([§565](docs/spec/tasks/565F-selector-group-genus/spec.md)).
 - Правила по Wi-Fi читают имя сети так, как ждёт Android 12+, и объясняют,
   почему имя не прочитать (приблизительная геолокация, выключенная Location)
   ([§567](docs/spec/tasks/567-wifi-ssid-read-preflight-and-diagnostics.md),

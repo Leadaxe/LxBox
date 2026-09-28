@@ -7,7 +7,7 @@
 | Статус | Deprecated (§122 — Clash API dropped) |
 | Дата | 2026-04-20 |
 | Версия sing-box | 1.12.12 (libbox, JitPack) |
-| Источник | live-разведка через [`031 debug api`](../spec/features/031%20debug%20api/spec.md) + чтение [`sing-box/experimental/clashapi`](https://github.com/SagerNet/sing-box/tree/v1.12.12/experimental/clashapi) |
+| Источник | live-разведка через [`031 debug api`](../spec/tasks/031F-debug-api/spec.md) + чтение [`sing-box/experimental/clashapi`](https://github.com/SagerNet/sing-box/tree/v1.12.12/experimental/clashapi) |
 
 Документация сфокусирована на **реальном поведении** sing-box'овского clash-api (а не на upstream Clash.Meta — см. секцию [Differences from upstream](#differences-from-upstream-clashmeta)). Все ответы и curl-команды взяты с боевого устройства (OnePlus CPH2411, Android 15, VPN connected, 150+ nodes подписок).
 

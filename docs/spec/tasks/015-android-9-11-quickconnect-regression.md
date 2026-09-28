@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`032 quick connect`](../features/032%20quick%20connect/spec.md) |
+| Связанные spec'ы | [`032 quick connect`](../tasks/032F-quick-connect/spec.md) |
 
 ## Проблема
 

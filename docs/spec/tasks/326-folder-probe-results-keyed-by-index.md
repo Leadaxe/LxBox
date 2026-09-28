@@ -4,7 +4,7 @@
 |---|---|
 | Статус | ✅ Реализовано (device-pending) |
 | Дата | 2026-07-31 |
-| Связанные | [`234 folders`](../features/234%20folders/spec.md), [`236 folder probe`](236-folder-probe-ui-rework.md), [`283 node disable`](283-subscription-node-disable.md), [`284 WARP endpoint scanner`](284-warp-endpoint-scanner.md), [`296 probe controller`](296-probe-controller.md), [`325 per-channel ping`](325-mass-ping-wipes-other-channels.md) |
+| Связанные | [`234 folders`](234F-server-folders/spec.md), [`236 folder probe`](236-folder-probe-ui-rework.md), [`283 node disable`](283-subscription-node-disable.md), [`284 WARP endpoint scanner`](284-warp-endpoint-scanner.md), [`296 probe controller`](296-probe-controller.md), [`325 per-channel ping`](325-mass-ping-wipes-other-channels.md) |
 
 ## Проблема
 

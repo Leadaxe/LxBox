@@ -54,5 +54,5 @@ latency/name/default; не-дублирование если активная = 
 
 - [§070 node-sort-pin](../features/...) — тоглы pinDirect/pinAuto.
 - [§071 manual-reorder](../features/...) — pinnedCount → non-draggable секция.
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) —
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) —
   пин по типу из конфига (auto-двойники vpn-N-auto).

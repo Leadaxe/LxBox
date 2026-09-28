@@ -82,7 +82,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - **SCAN WARP** (§284) — кнопка **Make experiment** в визарде создаёт папку-эксперимент: генерирует пул WARP-вариантов (WireGuard / AWG / MASQUE h2/h3) по диапазонам адресов Cloudflare и прогоняет пингом; мёртвые узлы выключаются сами. Поиск рабочего эндпоинта на конкретной сети без ручного перебора.
 - **WARP+** (опционально): license key под *Advanced* привязывает WARP+ (Argo Smart Routing). Пусто = бесплатный WARP.
 - **Идемпотентность**: повторный тап переиспользует закешированный аккаунт; *Re-register* создаёт новый.
-- См. [спека 025](docs/spec/features/025%20warp%20integration/spec.md)
+- См. [спека 025](docs/spec/tasks/025F-warp-integration/spec.md)
 </details>
 
 <details>
@@ -106,7 +106,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - **Гейты**: `minRetryInterval=15min` (переживает рестарт через `lastUpdateAttempt`), `maxFailsPerSession=5`, `10s ± 2s` между подписками, dedup-флаги от параллельных прогонов и двойных кликов
 - Crash-safe init sweep: зависший `inProgress` на диске сбрасывается в `failed`
 - Пересборка конфига **никогда** не ходит в сеть — только локальная сборка из загруженных узлов
-- См. [спека 027](docs/spec/features/027%20subscription%20auto%20update/spec.md)
+- См. [спека 027](docs/spec/tasks/027F-subscription-auto-update/spec.md)
 </details>
 
 <details>
@@ -148,7 +148,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - **SRS только локально** — без авто-обновлений, ручное скачивание через ☁, правило заблокировано, пока нет кэша
 - Drag-reorder, long-press → Delete с подтверждением, dirty-aware save («Discard changes?»), вкладка View с готовым sing-box-фрагментом
 - Fallback для несматченного трафика (`route.final`)
-- См. [спека 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [спека 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
+- См. [спека 030](docs/spec/tasks/030F-custom-routing-rules/spec.md), [спека 011](docs/spec/tasks/011F-local-ruleset-cache/spec.md)
 </details>
 
 <details>
@@ -230,7 +230,7 @@ Auto-группа Направления умеет не только выбир
 - **TLS Record Fragment** — разбивает handshake на несколько TLS-записей
 - **Mixed-case SNI** — рандомизирует регистр `server_name` (`WwW.gOoGle.CoM`); обходит наивный exact-match DPI региональных провайдеров (по RFC 6066 поле case-insensitive, поведение сервера не меняется). Против фильтрации класса GFW неэффективен
 - Все приёмы применяются только к первому хопу (внутренние хопы идут внутри туннеля, локальный DPI их не видит)
-- См. [спека 020](docs/spec/features/020%20security%20and%20dpi%20bypass/spec.md), [спека 028](docs/spec/features/028%20antidpi%20sni%20obfuscation/spec.md)
+- См. [спека 020](docs/spec/tasks/020F-security-and-dpi-bypass/spec.md), [спека 028](docs/spec/tasks/028F-antidpi-sni-obfuscation/spec.md)
 </details>
 
 <details>

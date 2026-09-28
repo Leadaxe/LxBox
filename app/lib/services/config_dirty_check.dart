@@ -12,7 +12,7 @@ import '../vpn/box_vpn_client.dart';
 /// `configDirty` после kill mid-session.
 ///
 /// `configDirty` сам **не persisted** — derive'ится из file mtime
-/// comparison. См. spec docs/spec/features/076 settings-and-config-lifecycle.
+/// comparison. См. spec docs/spec/tasks/076F-settings-and-config-lifecycle.
 ///
 /// File paths — ДВА разных каталога (§414):
 ///   - lxbox_settings.json: `getApplicationDocumentsDirectory()` (path_provider);

@@ -5,7 +5,7 @@
 | Status | Implemented (device-smoke pending) |
 | Started | 2026-06-15 |
 | Trigger | WARP to Cloudflare is plain WireGuard; DPI (RU/Iran) matches the WG handshake signature and throttles it. We need AmneziaWG obfuscation on top of WARP: junk fields that "fly off" (ignored by the server) but break the signature for DPI. |
-| Related | [§025 warp integration](../features/025%20warp%20integration/spec.md) (base WARP); [§097](097-awg2-obfuscation.md)/[§112](112-awg2-ranged-headers.md) (AWG 2.0 in the project); [§110](110-amnezia-vpn-link.md) (Amnezia vpn://); [§127](127-pseudo-name-domain-generator.md) (pseudo name/domain generator) |
+| Related | [§025 warp integration](../tasks/025F-warp-integration/spec.md) (base WARP); [§097](097-awg2-obfuscation.md)/[§112](112-awg2-ranged-headers.md) (AWG 2.0 in the project); [§110](110-amnezia-vpn-link.md) (Amnezia vpn://); [§127](127-pseudo-name-domain-generator.md) (pseudo name/domain generator) |
 | Files touched | `services/warp/warp_account.dart`, `warp_client.dart`, `screens/warp_wizard_screen.dart`, new junk generator; `Awg` model/emit/parser — **do NOT touch** (ready) |
 
 ## Summary

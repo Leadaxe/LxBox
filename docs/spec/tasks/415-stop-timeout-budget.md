@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-03 |
 | Дата завершения | 2026-09-03 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [features/012 native vpn service](../features/012%20native%20vpn%20service/spec.md), [tasks/129](129-vpnservice-force-stop-on-stuck-core.md), [tasks/140](140-force-stop-port-race-and-connecting-timeout.md), [tasks/287](287-stop-latency-mass-ping-wg-teardown.md) |
+| Связанные spec'ы | [tasks/012F-native-vpn-service](../tasks/012F-native-vpn-service/spec.md), [tasks/129](129-vpnservice-force-stop-on-stuck-core.md), [tasks/140](140-force-stop-port-race-and-connecting-timeout.md), [tasks/287](287-stop-latency-mass-ping-wg-teardown.md) |
 
 ## Проблема
 

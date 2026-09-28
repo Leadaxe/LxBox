@@ -82,7 +82,7 @@ Tap **Get WARP** on the servers screen → a tunnel to Cloudflare is registered 
 - **SCAN WARP** (§284) — the **Make experiment** button in the wizard creates an experiment folder: it generates a pool of WARP variants (WireGuard / AWG / MASQUE h2/h3) across Cloudflare address ranges and pings them; dead nodes disable themselves. Finds a working endpoint on your specific network without manual trial and error.
 - **WARP+** (optional): paste a license key under *Advanced* to bind WARP+ (Argo Smart Routing). Empty = free WARP.
 - **Idempotent**: re-tapping reuses the cached account instead of registering a new device; *Re-register* forces a fresh one.
-- See [spec 025](docs/spec/features/025%20warp%20integration/spec.md)
+- See [spec 025](docs/spec/tasks/025F-warp-integration/spec.md)
 </details>
 
 <details>
@@ -106,7 +106,7 @@ Subscriptions refresh in the background without spamming providers. Every reques
 - **Gates**: `minRetryInterval=15min` (persists via `lastUpdateAttempt`), `maxFailsPerSession=5`, `10s ± 2s` between subscriptions, dedup flags against concurrent runs and double-clicks
 - Crash-safe init sweep: a stuck `inProgress` on disk resets to `failed`
 - Rebuilding the config **never** triggers HTTP — only local assembly from already-loaded nodes
-- See [spec 027](docs/spec/features/027%20subscription%20auto%20update/spec.md)
+- See [spec 027](docs/spec/tasks/027F-subscription-auto-update/spec.md)
 </details>
 
 <details>
@@ -148,7 +148,7 @@ Block ads, route Russian domains directly, send BitTorrent through a chosen dire
 - **SRS is local-only** — no auto-update, manual download via the ☁ icon, the rule stays disabled until it is cached
 - Drag-reorder, long-press → Delete with confirmation, dirty-aware save ("Discard changes?"), a View tab with the exact sing-box fragment
 - Default traffic fallback (`route.final`)
-- See [spec 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [spec 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
+- See [spec 030](docs/spec/tasks/030F-custom-routing-rules/spec.md), [spec 011](docs/spec/tasks/011F-local-ruleset-cache/spec.md)
 </details>
 
 <details>
@@ -230,7 +230,7 @@ Three orthogonal tricks — combinable on the same outbound.
 - **TLS Record Fragment** — splits the handshake into multiple TLS records
 - **Mixed-case SNI** — randomises `server_name` case (`WwW.gOoGle.CoM`); bypasses naive exact-match DPI used by regional providers (per RFC 6066 the field is case-insensitive, so server behaviour doesn't change). Ineffective against GFW-class filtering
 - All tricks apply to the first hop only (inner hops are inside the tunnel, local DPI can't see them)
-- See [spec 020](docs/spec/features/020%20security%20and%20dpi%20bypass/spec.md), [spec 028](docs/spec/features/028%20antidpi%20sni%20obfuscation/spec.md)
+- See [spec 020](docs/spec/tasks/020F-security-and-dpi-bypass/spec.md), [spec 028](docs/spec/tasks/028F-antidpi-sni-obfuscation/spec.md)
 </details>
 
 <details>

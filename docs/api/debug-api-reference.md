@@ -4,10 +4,10 @@
 |------|----------|
 | Статус | Reference |
 | Дата | 2026-07-04 |
-| Версия API | совместим со [`spec 031`](../spec/features/031%20debug%20api/spec.md) |
+| Версия API | совместим со [`spec 031`](../spec/tasks/031F-debug-api/spec.md) |
 | Парный doc | [`clash-api-reference.md`](clash-api-reference.md) — **deprecated**: `/clash/*` proxy выпилен в §122 (Clash API dropped, переход на CommandClient) |
 
-Compact curl-ready reference для **Debug API** — HTTP-сервера L×Box на `127.0.0.1:9269`, который пробрасывается через `adb forward`. Полные объяснения полей/middleware/архитектуры — в [spec 031](../spec/features/031%20debug%20api/spec.md); здесь — «что послать чтобы получить нужное».
+Compact curl-ready reference для **Debug API** — HTTP-сервера L×Box на `127.0.0.1:9269`, который пробрасывается через `adb forward`. Полные объяснения полей/middleware/архитектуры — в [spec 031](../spec/tasks/031F-debug-api/spec.md); здесь — «что послать чтобы получить нужное».
 
 ## Setup (one-time)
 
@@ -1456,7 +1456,7 @@ curl -s -H "$HDR" "$BASE/files/oom?name=<snapshot>&file=heap.pb" > /tmp/heap.pb
 
 ## Backup — `/backup/*`
 
-Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup%20restore%20ui/spec.md)). Wire-format — single, без `version` поля в конверте; форму блока `storage` задаёт его `storage_version` (§439). Legacy `{vars, server_lists}` на корне конверта не поддерживается. Это внутренний бэкап LxBox, не LX Backup 1.0 для лаунчера.
+Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/tasks/040F-backup-restore-ui/spec.md)). Wire-format — single, без `version` поля в конверте; форму блока `storage` задаёт его `storage_version` (§439). Legacy `{vars, server_lists}` на корне конверта не поддерживается. Это внутренний бэкап LxBox, не LX Backup 1.0 для лаунчера.
 
 | Endpoint | Что отдаёт / принимает |
 |---|---|

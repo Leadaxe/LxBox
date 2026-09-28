@@ -4,7 +4,7 @@
 |---|---|
 | Статус | Реализовано |
 | Дата | 2026-08-02 |
-| Связанные | [`322 balancer-node`](../features/322%20balancer-node/spec.md), [`236 folder-server-testing`](../features/236%20folder-server-testing), §296 (общий probe над ServerList), [`283 node-disable`](283-subscription-node-disable.md), [`334 onLaunchAfterCrash`](334-on-launch-after-crash-cache-reset.md) |
+| Связанные | [`322 balancer-node`](../tasks/322F-balancer-node/spec.md), [`236 folder-server-testing`](../tasks/236F-folder-server-testing), §296 (общий probe над ServerList), [`283 node-disable`](283-subscription-node-disable.md), [`334 onLaunchAfterCrash`](334-on-launch-after-crash-cache-reset.md) |
 | Жалобы | 4PDA [#1406](../../forum/posts/01406.md), [#1407](../../forum/posts/01407.md) |
 
 ## Проблема

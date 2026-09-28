@@ -4,7 +4,7 @@
 
 Автообновление подписок (`AutoUpdater`, [`auto_updater.dart`](../../../app/lib/services/subscription/auto_updater.dart)) вызывает `maybeUpdateAll` по 5 триггерам: `appStart` / `vpnConnected` / `periodic` / `vpnStopped` / `manual`. Триггера на **возврат приложения из фона** (`AppLifecycleState.resumed`) нет.
 
-`periodic` — это `Timer.periodic(1h)` **внутри процесса приложения**. Пока процесс жив, он тикает. Но когда VPN выключен и приложение просто свёрнуто, Android со временем замораживает/выгружает процесс — таймер засыпает вместе с ним. Нативного фонового механизма (WorkManager/JobScheduler) нет и он **сознательно вне скопа** ([§027 spec](../features/027%20subscription%20auto%20update/spec.md), строки 31 и 271) — постоянный резидентный процесс ради обновления подписок бьёт по батарее.
+`periodic` — это `Timer.periodic(1h)` **внутри процесса приложения**. Пока процесс жив, он тикает. Но когда VPN выключен и приложение просто свёрнуто, Android со временем замораживает/выгружает процесс — таймер засыпает вместе с ним. Нативного фонового механизма (WorkManager/JobScheduler) нет и он **сознательно вне скопа** ([§027 spec](../tasks/027F-subscription-auto-update/spec.md), строки 31 и 271) — постоянный резидентный процесс ради обновления подписок бьёт по батарее.
 
 ## Проблема
 
@@ -49,4 +49,4 @@ VPN-**transition** callback'ов (connected/stopped приходят как со
 
 ## Docs to update
 
-- [`docs/spec/features/027 subscription auto update/spec.md`](../features/027%20subscription%20auto%20update/spec.md) — добавить `resumed` в список триггеров (5 → 6); уточнить, что resume-refresh ≠ background-fetch (последний остаётся вне скопа).
+- [`docs/spec/tasks/027F-subscription-auto-update/spec.md`](../tasks/027F-subscription-auto-update/spec.md) — добавить `resumed` в список триггеров (5 → 6); уточнить, что resume-refresh ≠ background-fetch (последний остаётся вне скопа).

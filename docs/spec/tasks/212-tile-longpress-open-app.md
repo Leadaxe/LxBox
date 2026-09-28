@@ -57,5 +57,5 @@ long-press-intent просто поднимет существующий/нов�
 ## Связанные
 
 - §032 — Quick Connect tile.
-- [Feature 126 first-run wizard](../features/126%20first-run-wizard/spec.md) —
+- [Feature 126 first-run wizard](../tasks/126F-first-run-wizard/spec.md) —
   add-tile промпт (откуда плитка появляется в шторке).

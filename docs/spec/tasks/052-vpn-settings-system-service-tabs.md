@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | **Implemented** — Phase 1 + Phase 2 done; smoke-test pending |
 | Дата | 2026-05-10 |
-| Связанные spec'ы | [`046 tunnel apps split-tunneling`](../features/046%20tunnel%20apps%20split-tunneling/spec.md) — **остаётся в Routing**, не переезжает; [`049 sing-box wrapper deep audit`](./049-singbox-wrapper-deep-audit/spec.md) F15 — Allow VPN bypass toggle |
+| Связанные spec'ы | [`046 tunnel apps split-tunneling`](../tasks/046F-tunnel-apps-split-tunneling/spec.md) — **остаётся в Routing**, не переезжает; [`049 sing-box wrapper deep audit`](./049-singbox-wrapper-deep-audit/spec.md) F15 — Allow VPN bypass toggle |
 | Затронутые файлы | `app/lib/screens/settings_screen.dart`, `app/lib/screens/app_settings_screen.dart` (Background tab → cleanup), `app/lib/screens/routing_screen.dart` (без изменений), `app/lib/screens/tun_apps_tab.dart` (без изменений) |
 
 ## Решения от юзера (записаны чтобы не забывать)
@@ -176,7 +176,7 @@ Cons: muscle memory у current users; нужны UX-cues при первом ope
 
 > **UPD**: позже в System tab добавлены «Suspend idle tunnels» (§215) и
 > «Memory limit» (§271) — состав секции Optimization см.
-> `docs/spec/features/128 idle-suspend/spec.md` (раздел UX).
+> `docs/spec/tasks/128F-idle-suspend/spec.md` (раздел UX).
 
 Что **не** переехало:
 - `Auto-start on boot` — остался в App Settings → General (autostart app, не Builder API).

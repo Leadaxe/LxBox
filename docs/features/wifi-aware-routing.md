@@ -117,6 +117,6 @@ curl -X DELETE -H "$HDR" "$BASE/wifi_history/all"
 
 - [§051 spec](../spec/tasks/051-custom-rule-wifi-conditions.md) — модель + builder + Phase 3 implementation notes.
 - [§050 findings](../spec/tasks/050-libbox-debug-build/findings.md) — почему `readWIFIState` раньше падал refnum 42 и как починили (real cause = unhandled `SecurityException` через JNI).
-- [§030 custom routing](../spec/features/030%20custom%20routing%20rules/spec.md) — родительская модель `CustomRule` которую расширили wifi-полями.
+- [§030 custom routing](../spec/tasks/030F-custom-routing-rules/spec.md) — родительская модель `CustomRule` которую расширили wifi-полями.
 - [STORAGE.md → wifi_history](../STORAGE.md#wifi_history--051-phase-3) — schema хранилища.
 - [Debug API → Wi-Fi history](../api/debug-api-reference.md#wi-fi-history--wifi_history) — endpoint reference.

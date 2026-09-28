@@ -87,7 +87,7 @@ TUN без `include_package` → туннелится всё → «работа�
 | `home_screen.dart` | Поле `_autoRebuild` (`:52`), чтения var (`:320-321`, `:555-556`); `_onReturnToHome` упрощается до прямого `_rebuildAndClearDirty()` |
 | `settings_storage/io.dart` `_save()` | Cleanup stale-ключа по образцу `node_overrides`: `(_cache?['vars'] as Map?)?.remove('auto_rebuild')` |
 | `test/services/debug/serializers_test.dart` | Sample-ключ `auto_rebuild` (`:38,45`) → живой var (например `auto_update_subs`) |
-| `docs/spec/features/022 app settings/spec.md` | Описание тумблера + строка в таблице ключей — пометить удалённым (§107) |
+| `docs/spec/tasks/022F-app-settings/spec.md` | Описание тумблера + строка в таблице ключей — пометить удалённым (§107) |
 | `docs/spec/features/076 .../spec.md` | Пометки [§107]: неверный race-анализ, листинг `_onReturnToHome`, bullet про `auto_rebuild`, acceptance-пункт; addendum-секция |
 
 ## Почему staging закрывает гонку

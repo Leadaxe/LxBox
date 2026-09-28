@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-20 |
 | Дата завершения | 2026-04-20 |
 | Коммиты | `d94f604` feat(node): per-server detour registration toggles · follow-up persistSources (см. ниже) |
-| Связанные spec'ы | [`018 detour server management`](../features/018%20detour%20server%20management/spec.md), [`003 home screen`](../features/003%20home%20screen/spec.md) |
+| Связанные spec'ы | [`018 detour server management`](../tasks/018F-detour-server-management/spec.md), [`003 home screen`](../tasks/003F-home-screen/spec.md) |
 
 ## Проблема
 

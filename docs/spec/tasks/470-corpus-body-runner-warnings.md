@@ -80,7 +80,7 @@ URI-раннер корпуса (`test/contract/contract_test.dart`) сверя�
 когда следующие волны проложат путь от `rawSource` к `NodeSpec.warnings`.
 
 > **СХЛОПНУТА** шагом 1 фичи
-> [472](../features/472%20unified-parse-pipeline/spec.md) (18.09.2026,
+> [472](../tasks/472F-unified-parse-pipeline/spec.md) (18.09.2026,
 > `e00b09b9`): путь от `rawSource` к `NodeSpec.warnings` проложен, санитайзер
 > идёт по дословной карте в самом разборе, и раннер читает один источник —
 > `node.warnings`. `_allWarningsOf` и `_rawBodyOf` из

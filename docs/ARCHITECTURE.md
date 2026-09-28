@@ -2,7 +2,7 @@
 
 This document describes the structure of the L×Box Flutter application, the boundaries of responsibility, the data flows and the native side.
 
-The current parser and builder version is **v2** (spec 026, phase 5 completed in v1.3.0). Details are in [spec/features/026 parser v2](./spec/features/026%20parser%20v2/spec.md).
+The current parser and builder version is **v2** (spec 026, phase 5 completed in v1.3.0). Details are in [spec/tasks/026F-parser-v2](./spec/tasks/026F-parser-v2/spec.md).
 
 ---
 
@@ -128,7 +128,7 @@ the thresholds, the ping and the pure decisions, plus the `probeNodesOf` adapter
 snapshot plus `stage()` over the DNS section, leaving the screen thin), and
 `VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode` carries the password-gen,
 auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
-The full invariant plus the strangler plan is in `docs/spec/features/291 layered-architecture-facades/`.
+The full invariant plus the strangler plan is in `docs/spec/tasks/291F-layered-architecture-facades/`.
 
 **The event brokers (push, bottom-up):** §122 moved the UI's control channel onto the
 libbox **CommandClient** (a server-stream push instead of Timer polling). The push channels:
@@ -1326,7 +1326,7 @@ Sensitive fields are filtered on `GET /state/storage` by the denylist scrubber i
 ### 6.5. Traffic profiler (§044 / §048)
 
 `TrafficProfiler` is a singleton ChangeNotifier holding a system-wide
-rolling buffer of events. Everything is in memory; persistence is deliberately absent. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md).
+rolling buffer of events. Everything is in memory; persistence is deliberately absent. Spec: [`docs/spec/tasks/044F-per-app-traffic-profiler/spec.md`](./spec/tasks/044F-per-app-traffic-profiler/spec.md).
 
 ```
               ┌────────────────────────────────────────┐
@@ -1865,8 +1865,8 @@ one is under the CI gates as soon as its files exist.
 Switching at runtime needs no app restart, including the native surfaces on a
 live VPN service. Since §285 the UI strings are localized through **natural keys**
 (the English call-site text IS the key; ARB and gen_l10n are gone). The full
-architecture is in [the §279 spec](spec/features/279%20localization/spec.md) plus
-[the getLocalText review](spec/features/279%20localization/getlocaltext.md);
+architecture is in [the §279 spec](spec/tasks/279F-localization/spec.md) plus
+[the getLocalText review](spec/tasks/279F-localization/getlocaltext.md);
 translator-guide — [`l10n.md`](l10n.md).
 
 | Component | Role |
@@ -2041,7 +2041,7 @@ A full round trip would require a sing-box JSON → state parser covering everyt
 
 ## Feature Specs
 
-They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN name/spec.md` folder.
+Legacy feature specs (written before the Spec Kit) now live in [`docs/spec/tasks/`](./spec/tasks/) as `NNNF-name/spec.md` folders (index: [`F-INDEX.md`](./spec/tasks/F-INDEX.md)). The black-box feature descriptions are being rewritten from scratch in [`docs/spec/features/`](./spec/features/) (`NNN-NAME/FEATURE.md`).
 
 | # | Feature |
 |---|---------|

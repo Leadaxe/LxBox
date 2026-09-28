@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-03 |
 | Дата завершения | 2026-09-03 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [features/076 settings-and-config-lifecycle](../features/076%20settings-and-config-lifecycle/spec.md), [tasks/113](113-false-config-changed-banner.md), [tasks/316](316-kernel-crash-reports-access.md), [features/012 native vpn service](../features/012%20native%20vpn%20service/spec.md) |
+| Связанные spec'ы | [tasks/076F-settings-and-config-lifecycle](../tasks/076F-settings-and-config-lifecycle/spec.md), [tasks/113](113-false-config-changed-banner.md), [tasks/316](316-kernel-crash-reports-access.md), [tasks/012F-native-vpn-service](../tasks/012F-native-vpn-service/spec.md) |
 
 ## Проблема
 

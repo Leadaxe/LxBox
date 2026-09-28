@@ -5,7 +5,7 @@
 | Status | Done, DEVICE-VERIFIED (AVD LxBox_test, API 34, 08.09.2026): карточка рисуется, канал GitHub помечен, тап по Google Play без клиента Play ушёл в https-фолбэк (Chrome → play.google.com) |
 | Started | 2026-09-08 |
 | Trigger | Запрос владельца 08.09.2026: «сделай возможность перехода на Google Play или другой источник не только когда обновления, а всегда» |
-| Related | [§390](390-install-source-aware-update-notice.md) (канал установки, `InstallSource`, адреса сторов), [§036](../features/036%20update%20check/spec.md) (чекер обновлений и About-блок), [§221](221-backup-export-allowlist-asymmetry.md) (бэкап — единственный путь переезда между каналами), [§395](395-update-check-consent.md) (согласие на чек) |
+| Related | [§390](390-install-source-aware-update-notice.md) (канал установки, `InstallSource`, адреса сторов), [§036](../tasks/036F-update-check/spec.md) (чекер обновлений и About-блок), [§221](221-backup-export-allowlist-asymmetry.md) (бэкап — единственный путь переезда между каналами), [§395](395-update-check-consent.md) (согласие на чек) |
 
 ## Проблема
 

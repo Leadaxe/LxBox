@@ -5,7 +5,7 @@
 | Статус | **Released в v2.25.1** (20.09.2026) |
 | Дата | 2026-09-20 |
 | Повод | На Servers список общий, а цепочка не встаёт между сервером и подпиской |
-| Связанные | [§393](../features/393%20directions/spec.md), [§439](../features/439%20storage-contract-1-0/spec.md), [§098](098-reorder-subscriptions-and-unify-dns.md) |
+| Связанные | [§393](../tasks/393F-directions/spec.md), [§439](../tasks/439F-storage-contract-1-0/spec.md), [§098](098-reorder-subscriptions-and-unify-dns.md) |
 
 ## Docs to update
 

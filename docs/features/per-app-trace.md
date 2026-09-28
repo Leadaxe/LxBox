@@ -20,7 +20,7 @@
 | | |
 |---|---|
 | Где живёт | `Statistics → App` (3-я вкладка, per-app trace) и `Statistics → Profiler` (4-я вкладка, system-wide). Обе используют общий движок `TraceExplorer`. |
-| Spec | [`docs/spec/features/044 per-app traffic profiler/spec.md`](../spec/features/044%20per-app%20traffic%20profiler/spec.md) + [`docs/spec/tasks/048-perapp-trace-attribution-gaps.md`](../spec/tasks/048-perapp-trace-attribution-gaps.md) |
+| Spec | [`docs/spec/tasks/044F-per-app-traffic-profiler/spec.md`](../spec/tasks/044F-per-app-traffic-profiler/spec.md) + [`docs/spec/tasks/048-perapp-trace-attribution-gaps.md`](../spec/tasks/048-perapp-trace-attribution-gaps.md) |
 | Реализация в | v1.7.0 (базовая фича); §048 inclusive observer + Profiler-вкладка; §160 единый `TraceExplorer` (Live / Aggregated); §180 структурный DNS-стрим из ядра. Текущее поведение — v2.5.0. |
 | State | In-memory only (на kill app'а / force-stop sessions стираются) |
 | Battery cost | Низкий в normal mode; средний при включённом verbose toggle |

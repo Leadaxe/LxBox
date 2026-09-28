@@ -1229,7 +1229,7 @@ and swaps in the translation keyed by that text.
   key (a `template_check` failure) and the new English key is missing (a warning; a failure
   under strict). The workflow is identical to a UI string: rename the key and revisit the translation.
 
-**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/tasks/279F-localization/spec.md)):
 the applier visits the display fields of sections, of global and rule-local vars, of magic nodes,
 of directions, of DNS servers and of the ping and speed presets. An element of a preset's
 `dns_servers[]` wrapped in `#if` is unwrapped: the display fields come from `#value` and, when
@@ -1300,12 +1300,12 @@ on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either p
 
 - [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the directions)
 - [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
-- [§026 parser v2](./spec/features/026%20parser%20v2/spec.md) — `parser_config.version`
-- [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` and expansion
-- [§030 custom routing rules](./spec/features/030%20custom%20routing%20rules/spec.md) — `selectable_rules[*].rule` shape, order matters
+- [§026 parser v2](./spec/tasks/026F-parser-v2/spec.md) — `parser_config.version`
+- [§033 preset bundles](./spec/tasks/033F-preset-bundles/spec.md) — `selectable_rules[]` and expansion
+- [§030 custom routing rules](./spec/tasks/030F-custom-routing-rules/spec.md) — `selectable_rules[*].rule` shape, order matters
 - [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (formerly feature §041)
 - [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) plus [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` and the template-versus-storage relationship
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
-- [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
-- [§022 app settings](./spec/features/022%20app%20settings/spec.md) — the Wizard UI and `sections[]`
-- [§279 localization](./spec/features/279%20localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)
+- [§015 speed test](./spec/tasks/015F-speed-test/spec.md) — `speed_test_options`
+- [§022 app settings](./spec/tasks/022F-app-settings/spec.md) — the Wizard UI and `sections[]`
+- [§279 localization](./spec/tasks/279F-localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)

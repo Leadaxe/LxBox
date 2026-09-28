@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | **Done** (2026-05-09) — `Inclusive observer with confidence` концепт реализован, Live system-wide tab развёрнут, defensive parsing + time-based GC + secondary packages работают, regression tests зелёные (535 tests pass) |
 | Дата | 2026-05-09 |
-| Связанные spec'ы | [`044 per-app traffic profiler`](../features/044%20per-app%20traffic%20profiler/spec.md) — фича которая дисплеит эти data; [`047 tun TCP deterioration`](./047-tun-tcp-deterioration-diagnosis.md) — sibling task с другой проблемой (race condition) |
+| Связанные spec'ы | [`044 per-app traffic profiler`](../tasks/044F-per-app-traffic-profiler/spec.md) — фича которая дисплеит эти data; [`047 tun TCP deterioration`](./047-tun-tcp-deterioration-diagnosis.md) — sibling task с другой проблемой (race condition) |
 | Затронутые файлы | `app/lib/services/traffic_profiler.dart`, `app/lib/services/debug/handlers/profiler.dart`, `app/lib/screens/per_app_trace_tab.dart`, `app/lib/screens/stats_screen.dart`, `app/lib/screens/live_events_tab.dart` (new), `app/test/services/traffic_profiler_test.dart`, `docs/features/per-app-trace.md` |
 
 ## Проблема

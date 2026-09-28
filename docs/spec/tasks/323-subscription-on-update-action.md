@@ -4,7 +4,7 @@
 |---|---|
 | Статус | ✅ Реализовано (DEVICE-PENDING — на устройстве не проверялось) |
 | Дата | 2026-07-31 |
-| Связанные | [`030 vpn reload button`](030-vpn-reload-button.md), [`031 reset network api`](031-reset-network-api.md), [`116 banner mechanism`](116-banner-mechanism-and-config-banner-fix.md), [`features/129 file-subscription`](../features/129%20file-subscription/spec.md) |
+| Связанные | [`030 vpn reload button`](030-vpn-reload-button.md), [`031 reset network api`](031-reset-network-api.md), [`116 banner mechanism`](116-banner-mechanism-and-config-banner-fix.md), [`tasks/129F-file-subscription`](../tasks/129F-file-subscription/spec.md) |
 
 ## Проблема
 

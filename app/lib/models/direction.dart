@@ -10,7 +10,7 @@
 // создании; после создания не меняется. immutable tag ⇒ ссылки (route_final /
 // ping_options / custom-rule outbound / detour) стабильны by design.
 //
-// Спека: docs/spec/features/125 configurable-directions/spec.md.
+// Спека: docs/spec/tasks/125F-configurable-channels/spec.md.
 
 import '../config/consts.dart'
     show kDetourTagPrefix, kDirectOutboundTag, kBlockOutboundTag;

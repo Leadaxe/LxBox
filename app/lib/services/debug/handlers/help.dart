@@ -51,7 +51,7 @@ Binds to 127.0.0.1, default port 9269. Auth: `Authorization: Bearer <token>`
 
 Access from host: `adb forward tcp:9269 tcp:9269`, then curl 127.0.0.1:9269.
 
-Spec: docs/spec/features/031 debug api/spec.md
+Spec: docs/spec/tasks/031F-debug-api/spec.md
 
 === Health ===
 
@@ -659,7 +659,7 @@ curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,
 const Map<String, dynamic> _capabilityJson = {
   'server': 'lxbox-debug',
   'docs': {
-    'spec': 'docs/spec/features/031 debug api/spec.md',
+    'spec': 'docs/spec/tasks/031F-debug-api/spec.md',
   },
   'auth': {
     'header': 'Authorization: Bearer <token>',

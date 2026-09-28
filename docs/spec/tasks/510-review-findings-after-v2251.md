@@ -5,12 +5,12 @@
 | **Статус** | **Released в v2.25.2** (24.09.2026). Готово: H1, M2, M3, L1, L2, M1, m2, m3 починены; m1 — реестр лаунчера (сторож со skip) |
 | **Дата** | 2026-09-24 |
 | **Источник** | независимое ревью `develop` после v2.25.1: блоки «страховка 478 / сборка / Debug API» (H1, M2, M3, L1, L2) и «движок разбора» (M1, m1–m3) |
-| **Связанные** | фича [478](../features/478%20core-rejected-node-auto-disable/spec.md), задачи [494](494-debug-api-debts.md), [503](503-core-reject-list-disabled-node-navigation.md), §208 (`/pool`), фича 480 (движок) |
+| **Связанные** | фича [478](../tasks/478F-core-rejected-node-auto-disable/spec.md), задачи [494](494-debug-api-debts.md), [503](503-core-reject-list-disabled-node-navigation.md), §208 (`/pool`), фича 480 (движок) |
 
 ## Docs to update
 
 - эта задача — таблица находок
-- [478](../features/478%20core-rejected-node-auto-disable/spec.md) — «Как
+- [478](../tasks/478F-core-rejected-node-auto-disable/spec.md) — «Как
   сделано → Автомат» (H1), «Связка и контроллер» (M2)
 - [503](503-core-reject-list-disabled-node-navigation.md) — ключ члена
   папки и поиск по причине (M3)

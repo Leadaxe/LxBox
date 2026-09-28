@@ -6,7 +6,7 @@
 | **Дата** | 2026-09-24 |
 | **Источник** | встречные задачи лаунчера `contract/TASKS_LXBOX.md` §46 (1.1.50), §47 (1.1.51), §48 (1.1.52); дельты D133-49…D133-59 плюс закрытая D133-C9 |
 | **Зеркало контракта** | **1.1.49 → 1.1.52** (`app/contract.lock`: `source_sha=8a915861`, sha256 `f38e8ef8b8525caa52b2b1d42349133516afce0977983f9757bec12206fa4511`) |
-| **Связанные** | [§512](512-registry-schemes-and-contract-sync.md) (предыдущий синк), [§510](510-list-item-granularity.md), [§493](493-contract-sync-11146.md), фичи [472](../features/472%20unified-parse-pipeline/spec.md), [480](../features/480%20registry-driven-mapper/spec.md) |
+| **Связанные** | [§512](512-registry-schemes-and-contract-sync.md) (предыдущий синк), [§510](510-list-item-granularity.md), [§493](493-contract-sync-11146.md), фичи [472](../tasks/472F-unified-parse-pipeline/spec.md), [480](../tasks/480F-registry-driven-mapper/spec.md) |
 | **Ядро** | пин `v1.14.1-lx.8` (не менялся) |
 
 ## Проблема

@@ -5,7 +5,7 @@
 | Статус | **Code-complete + девайс-смок ✅ (OnePlus CPH2411, Android 15, vc=2542, 2026-06-14).** self-инъекция в `BoxService.kt` (helper `buildOverrideOptions`). Все 3 проверки пройдены на устройстве (см. «Девайс-смок»). autoRedirect-проброс — отложен (root-фича, отдельно). Репро на Samsung-репортёрах НЕ проводилось (нет устройства), но механика подтверждена на нашем. |
 | Дата старта | 2026-06-14 |
 | Триггер | Форум: на двух Samsung (Android 10/11) «Allow-list — всё те же проблемы». Юзер: на части устройств (Android 12/13) ручное добавление `com.leadaxe.lxbox` в allow-list **чинит** туннель. Связь с upstream [SagerNet/sing-box#3715](https://github.com/SagerNet/sing-box/issues/3715) (fix в `1.13.0-rc.7`) и [#3387](https://github.com/SagerNet/sing-box/issues/3387). |
-| Связанные | [§046](../features/046%20tunnel%20apps%20split-tunneling/spec.md) (tunnel apps), [§069](069-current-session-allow-bypass.md) (allowBypass snapshot), [§075](075-tun-apps-restart-regen-config.md), [§048](048-perapp-trace-attribution-gaps.md), [§049](049-singbox-wrapper-deep-audit/spec.md) (wrapper audit), [§119/§120](119-default-network-not-vpn.md) (defaultNetwork) |
+| Связанные | [§046](../tasks/046F-tunnel-apps-split-tunneling/spec.md) (tunnel apps), [§069](069-current-session-allow-bypass.md) (allowBypass snapshot), [§075](075-tun-apps-restart-regen-config.md), [§048](048-perapp-trace-attribution-gaps.md), [§049](049-singbox-wrapper-deep-audit/spec.md) (wrapper audit), [§119/§120](119-default-network-not-vpn.md) (defaultNetwork) |
 
 > **Назначение документа:** зафиксировать всё, что прочитано и подтверждено по коду в этой сессии, чтобы НЕ перечитывать заново. Все факты ниже — с `file:line`. Где факт не из кода (Android-семантика, эталон без локального клона) — помечено.
 

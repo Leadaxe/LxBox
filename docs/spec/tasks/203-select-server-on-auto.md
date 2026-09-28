@@ -1,6 +1,6 @@
 # §203 — «Select server» в меню auto-ноды + фикс позиции пинга
 
-> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../features/125%20configurable-channels/spec.md) /
+> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../tasks/125F-configurable-channels/spec.md) /
 > [§199](../../../CHANGELOG.md). Ветка `feat/select-server-203`.
 
 ## Контекст / два изменения
@@ -60,4 +60,4 @@ device-проверкой + полным прогоном (analyze clean, 1362 �
 ## Связанные
 
 - [§199] (CHANGELOG) — приоритет сервера в auto (его регресс чинит часть A).
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) — auto-двойник канала, urltestNow.
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) — auto-двойник канала, urltestNow.

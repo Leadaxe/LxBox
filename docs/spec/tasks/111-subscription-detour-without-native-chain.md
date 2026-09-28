@@ -6,7 +6,7 @@
 | Дата старта | 2026-06-10 |
 | Дата завершения | 2026-06-10 |
 | Коммиты | `9573f57` feat(§111): detour для подписок без родных detour-серверов |
-| Связанные spec'ы | [`018 detour server management`](../features/018%20detour%20server%20management/spec.md), [`026 parser v2`](../features/026%20parser%20v2/spec.md) §1.3/§3.4, [`073 append vs replace`](./073-detour-append-vs-replace.md), [`080`](./080-display-form-override-detour.md), [`096`](./096-register-toggles-in-append-mode.md) |
+| Связанные spec'ы | [`018 detour server management`](../tasks/018F-detour-server-management/spec.md), [`026 parser v2`](../tasks/026F-parser-v2/spec.md) §1.3/§3.4, [`073 append vs replace`](./073-detour-append-vs-replace.md), [`080`](./080-display-form-override-detour.md), [`096`](./096-register-toggles-in-append-mode.md) |
 
 ## Проблема
 

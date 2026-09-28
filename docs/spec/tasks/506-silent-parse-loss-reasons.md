@@ -6,7 +6,7 @@
 | **Дата** | 2026-09-24 |
 | **Алиас** | **§506-silent-loss** — номер занят [`506-change-review.md`](506-change-review.md) (§506-review, отчёт о составе v2.25.0). Номер не перенумеровывается по правилу [README](README.md#известные-коллизии-номеров): пара разводится суффиксом |
 | **Источник** | диагностика конвейера разбора на четырёх пользовательских входах (отчёт `lxbox_parse_probe.md`, 23.09.2026): два входа из четырёх терялись ЦЕЛИКОМ и без единого слова |
-| **Связанные** | [§500](500-direct-link-reject-reason.md) (причина отбраковки одиночного ввода), [§484](484-required-field-drop-reason.md) (`field_missing` в `dropped[]`), фичи [472](../features/472%20unified-parse-pipeline/spec.md), [480](../features/480%20registry-driven-mapper/spec.md) |
+| **Связанные** | [§500](500-direct-link-reject-reason.md) (причина отбраковки одиночного ввода), [§484](484-required-field-drop-reason.md) (`field_missing` в `dropped[]`), фичи [472](../tasks/472F-unified-parse-pipeline/spec.md), [480](../tasks/480F-registry-driven-mapper/spec.md) |
 | **Ядро** | пин `v1.14.1-lx.8` (не менялся) |
 
 ## Проблема

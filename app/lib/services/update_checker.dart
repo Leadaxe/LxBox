@@ -14,7 +14,7 @@ import 'settings_storage.dart';
 /// a SnackBar / About-section. No in-app APK install — opens release page in
 /// browser, user downloads APK manually (standard sideload flow).
 ///
-/// Spec: docs/spec/features/036 update check/spec.md
+/// Spec: docs/spec/tasks/036F-update-check/spec.md
 class UpdateChecker {
   UpdateChecker._();
   static final UpdateChecker I = UpdateChecker._();

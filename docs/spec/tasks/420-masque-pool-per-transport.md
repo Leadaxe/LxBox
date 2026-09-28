@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-05 |
 | Дата завершения | 2026-09-05 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [tasks/418](418-warp-api-host-failover.md) (замеры), [tasks/305](305-masque-endpoint-h2-pool-and-override.md), [tasks/386](386-warp-endpoint-preset-combobox.md), [tasks/284](284-warp-endpoint-scanner.md), [features/130](../features/130%20masque-warp-transport/spec.md) |
+| Связанные spec'ы | [tasks/418](418-warp-api-host-failover.md) (замеры), [tasks/305](305-masque-endpoint-h2-pool-and-override.md), [tasks/386](386-warp-endpoint-preset-combobox.md), [tasks/284](284-warp-endpoint-scanner.md), [features/130](../tasks/130F-masque-warp-transport/spec.md) |
 
 ## Повод
 

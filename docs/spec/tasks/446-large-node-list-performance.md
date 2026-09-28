@@ -5,7 +5,7 @@
 | Статус | **Волны 1–3 в develop** (`26e05fe8`, `f3ebbb9d`, `70494178`). Волна 4 ждёт решения владельца (трогает структуру главного экрана), волна 5 не начата. Device-verify на большом списке НЕ проводился |
 | Дата | 2026-09-15 |
 | Повод | [#135](https://github.com/Leadaxe/LxBox/issues/135) — «Клиент лагает при большом количестве серверов (502)» |
-| Связанные | [§071](071-manual-node-reorder.md) (manual-порядок, `ReorderableListView`), [§322](../features/322%20balancer-node/spec.md) (значки пула), [§333](333-large-text-virtualization.md) (виртуализация больших текстов) |
+| Связанные | [§071](071-manual-node-reorder.md) (manual-порядок, `ReorderableListView`), [§322](../tasks/322F-balancer-node/spec.md) (значки пула), [§333](333-large-text-virtualization.md) (виртуализация больших текстов) |
 
 ## Проблема
 

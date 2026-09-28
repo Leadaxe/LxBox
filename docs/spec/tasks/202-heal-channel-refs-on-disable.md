@@ -1,6 +1,6 @@
 # §202 — лечить dangling channel-refs в storage при выключении канала
 
-> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../features/125%20configurable-channels/spec.md) F4.5.
+> **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Расширение [§125](../tasks/125F-configurable-channels/spec.md) F4.5.
 > Ветка `feat/configurable-channels-125`. Покрыто тестами
 > (`test/migration/channel_heal_refs_test.dart`).
 
@@ -69,6 +69,6 @@ channels_migration_test):
 
 ## Связанные
 
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) F4.5 — деградация dangling в билдере (образец heal-логики).
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) F4.5 — деградация dangling в билдере (образец heal-логики).
 - [§172](172-heal-dangling-detour.md) — healDanglingDetours (detour остаётся за билдером).
 - [§201](201-block-outbound-for-channels.md) — block-outbound (та же серия каналов).

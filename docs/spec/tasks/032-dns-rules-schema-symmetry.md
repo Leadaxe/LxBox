@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | ✅ Реализовано (позже, §043/§294) — DNS rules на `kind`+`presetId` (dns_ref.dart), legacy type/title сняты. Шапка «Draft» устарела. |
 | Дата | 2026-05-02 |
-| Связанные spec'ы | [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`030 custom routing rules`](../features/030%20custom%20routing%20rules/spec.md) |
+| Связанные spec'ы | [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md), [`033 preset bundles`](../tasks/033F-preset-bundles/spec.md), [`030 custom routing rules`](../tasks/030F-custom-routing-rules/spec.md) |
 
 ## Цель
 

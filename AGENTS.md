@@ -30,8 +30,10 @@
   по явной команде оператора (force-push, `main`, теги, `gh pr create`).
 - **Структура спек и соглашения** (фичи / задачи / процессы, нумерация, карта
   обновления документации) — `docs/spec/README.md`.
-- **Фича** («что это и как работает», `NNN name/spec.md` + `plan.md` + `tasks.md`)
-  — `docs/spec/features/README.md`.
+- **Фича** (чёрный ящик: зачем существует, что обещает пользователю, границы;
+  без кода и платформы, `NNN-NAME/FEATURE.md` + `FUNCTIONS/*.md`) — `docs/spec/features/README.md`.
+  Старые спеки фич (до перехода на Spec Kit) — задачи с индексом `F`:
+  `docs/spec/tasks/NNNF-name/spec.md`, индекс — `docs/spec/tasks/F-INDEX.md`.
 - **Задача** (один рабочий цикл: проблема → диагностика → решение → проверка,
   `NNN-title.md`, шаблон и критерии) — `docs/spec/tasks/README.md`.
 - **Повторяющиеся регламенты** — `docs/spec/processes/`.

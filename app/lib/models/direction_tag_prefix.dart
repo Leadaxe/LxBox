@@ -24,7 +24,7 @@
 // ни одна из них не несёт кванторa (`RU:?` — `:` опционален, переписывать
 // нельзя).
 //
-// Спека: docs/spec/features/393 directions/tasks.md (A6).
+// Спека: docs/spec/tasks/393F-directions/tasks.md (A6).
 
 import '../services/safe_regex.dart';
 import 'direction.dart';

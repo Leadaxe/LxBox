@@ -6,7 +6,7 @@
 | **Дата** | 2026-09-24 |
 | **Источник** | отчёт [§506](506-silent-parse-loss-reasons.md) («откуда диспетчер берёт список схем») + встречные задачи лаунчера `contract/TASKS_LXBOX.md` §43 (1.1.47), §44 (1.1.48), §45 (1.1.49) |
 | **Зеркало контракта** | **1.1.46 → 1.1.49** (`app/contract.lock`: `source_sha=dfd01725`, sha256 `a174c6c7…`) |
-| **Связанные** | [§506](506-silent-parse-loss-reasons.md) (причины вместо молчания), [§484](484-required-field-drop-reason.md), [§508](508-xhttp-sessionid-aliases.md), фичи [472](../features/472%20unified-parse-pipeline/spec.md), [480](../features/480%20registry-driven-mapper/spec.md) |
+| **Связанные** | [§506](506-silent-parse-loss-reasons.md) (причины вместо молчания), [§484](484-required-field-drop-reason.md), [§508](508-xhttp-sessionid-aliases.md), фичи [472](../tasks/472F-unified-parse-pipeline/spec.md), [480](../tasks/480F-registry-driven-mapper/spec.md) |
 | **Ядро** | пин `v1.14.1-lx.8` (не менялся) |
 
 ## Проблема

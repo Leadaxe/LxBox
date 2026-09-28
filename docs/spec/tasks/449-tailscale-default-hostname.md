@@ -7,7 +7,7 @@
 | Коммиты | `docs(449)` 0a0889cf — таска; `feat(449)` 83cf4a7e — нормализация и дефолт в мастере; `test(449)` 079d7dcb |
 | Норма | [§435](435-node-sections-tailscale.md) §6 (форма мастера Tailscale) |
 | Решение владельца | «ну дефолт должен быть — LxBox и имя устройства» |
-| Связанные | §435 (узел Tailscale, форма мастера), [§445](445-tailscale-state-dir-lifecycle.md) (каталог состояния — личность устройства), [§310](../features/310%20xray-multinode-hwid/spec.md) (`SubscriptionIdentity.deviceModel`) |
+| Связанные | §435 (узел Tailscale, форма мастера), [§445](445-tailscale-state-dir-lifecycle.md) (каталог состояния — личность устройства), [§310](310-xray-multinode-hwid.md) (`SubscriptionIdentity.deviceModel`) |
 
 ## Проблема
 

@@ -5,7 +5,7 @@
 | Status | Implemented |
 | Started | 2026-06-16 |
 | Trigger | Запрос юзера: переименовать WARP-узлы в осмысленный шаблон с эмодзи в теге; разные иконки plain vs AWG-обфускация (облако ☁️ vs гроза ⛈️); убрать авто-удаление старых WARP при перерегистрации (юзер сам решает, нужны ли дубли — может регать несколько конфигов с разными endpoint/SNI). |
-| Related | [§025 warp integration](../features/025%20warp%20integration/spec.md) (тег WARP/WARP+); [§126](126-warp-amneziawg-obfuscation.md) / [§136](136-warp-quic-i1-generator.md) (AWG-обфускация); [node_emoji.dart](../../../app/lib/services/node_emoji.dart) (эмодзи по тегу) |
+| Related | [§025 warp integration](../tasks/025F-warp-integration/spec.md) (тег WARP/WARP+); [§126](126-warp-amneziawg-obfuscation.md) / [§136](136-warp-quic-i1-generator.md) (AWG-обфускация); [node_emoji.dart](../../../app/lib/services/node_emoji.dart) (эмодзи по тегу) |
 | Files touched | `services/warp/warp_account.dart` (tag), `controllers/subscription_controller.dart` (тег + убрать removeWhere + коллизии), `services/node_emoji.dart` (backward-compat матч) |
 
 ## Шаблон тега (с эмодзи ВНУТРИ тега)

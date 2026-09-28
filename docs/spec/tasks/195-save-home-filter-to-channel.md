@@ -1,6 +1,6 @@
 # §195 — Сохранить regex-фильтр с главной в активный канал
 
-> **СТАТУС: РЕАЛИЗОВАНО (27.06.2026).** Расширение [§125](../features/125%20configurable-channels/spec.md).
+> **СТАТУС: РЕАЛИЗОВАНО (27.06.2026).** Расширение [§125](../tasks/125F-configurable-channels/spec.md).
 > Ветка `feat/configurable-channels-125`.
 
 ## Контекст
@@ -111,7 +111,7 @@ configDirty + home-return observer; здесь же мы на главной →
 
 ## Связанные
 
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) —
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) —
   `node_filter`/`default_filter`, `updateChannel`, активный канал = selectedGroup.
-- [§048 home-node-filters](../features/048%20home-node-filters/spec.md) —
+- [§048 home-node-filters](../tasks/048F-home-node-filters/spec.md) —
   глобальная песочница; эта таска даёт мост песочница→канал.

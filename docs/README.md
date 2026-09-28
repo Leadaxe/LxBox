@@ -74,7 +74,7 @@ hand”. Both describe the same operations from opposite sides.
 
 | Kind | Where |
 |---|---|
-| **Features** (large concepts, sections of the app) | [spec/features/](spec/features/) — folders named `NNN name/spec.md` |
+| **Features** (black-box: purpose, promises, boundaries; no code) | [spec/features/](spec/features/) — folders named `NNN-NAME/FEATURE.md` (+ `FUNCTIONS/`). Legacy feature specs: [spec/tasks/F-INDEX.md](spec/tasks/F-INDEX.md) |
 | **Tasks** (small changes, bug fixes, cleanups) | [spec/tasks/](spec/tasks/) — `NNN-name.md` |
 | **Processes** (night work and the like) | [spec/processes/](spec/processes/) |
 | **Conventions** for writing specs | [spec/README.md](spec/README.md) |

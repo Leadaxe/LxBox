@@ -6,7 +6,7 @@
 |------|----------|
 | Статус | Superseded by §043 |
 | Дата | 2026-05-07 |
-| Связанные spec'ы | [`014 dns settings`](../features/014%20dns%20settings/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`039 empty template DNS rules`](./039-empty-template-dns-rules.md) |
+| Связанные spec'ы | [`014 dns settings`](../tasks/014F-dns-settings/spec.md), [`033 preset bundles`](../tasks/033F-preset-bundles/spec.md), [`039 empty template DNS rules`](./039-empty-template-dns-rules.md) |
 | Затронутые файлы | `app/lib/screens/dns_settings_screen.dart`, `app/lib/services/builder/build_config.dart` (опционально, см. ниже), тесты |
 
 ## Цель

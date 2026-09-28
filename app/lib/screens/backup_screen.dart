@@ -30,8 +30,7 @@ import '../services/url_launcher.dart';
 import '../widgets/safe_bottom.dart';
 
 
-/// Backup & restore UI — спека [§040](../../docs/spec/features/040 backup
-/// restore ui/spec.md).
+/// Backup & restore UI — спека [§040F](../../../docs/spec/tasks/040F-backup-restore-ui/spec.md).
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
 

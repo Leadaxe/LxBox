@@ -5,7 +5,7 @@
 | Status | Done, DEVICE-VERIFIED (AVD LxBox_test, API 34, 09.09.2026): `kill -9` при Started → sticky-рестарта нет (гонка ниже), сторож поднял туннель за 3м00с (интервал 2 мин); ручной Stop → `vpn_desired=false`, alarm снят, 6 мин без воскрешения. Шторм-предохранитель — по коду |
 | Started | 2026-09-08 |
 | Trigger | [Issue #115](https://github.com/Leadaxe/LxBox/issues/115) (Alex01d, 08.09.2026): после OOM-kill / чистилки / иногда после ночного ребута Always-on не восстанавливает туннель, пока юзер не откроет приложение; Husi и NekoBox в той же ситуации переживают |
-| Related | [§427](427-foreign-vpn-active-network-api30.md) (первый баг из того же issue), [§185](185-cold-start-cc-resync.md) (swipe-kill на OEM), [§361](361-late-started-status-after-service-destroy.md) (рассинхрон статуса при смерти сервиса), [§012](../features/012%20native%20vpn%20service/spec.md) (архитектура сервиса), [§291](../features/291%20layered-architecture-facades/spec.md) (почему `:vpn`-процесс — не сейчас) |
+| Related | [§427](427-foreign-vpn-active-network-api30.md) (первый баг из того же issue), [§185](185-cold-start-cc-resync.md) (swipe-kill на OEM), [§361](361-late-started-status-after-service-destroy.md) (рассинхрон статуса при смерти сервиса), [§012](../tasks/012F-native-vpn-service/spec.md) (архитектура сервиса), [§291](../tasks/291F-layered-architecture-facades/spec.md) (почему `:vpn`-процесс — не сейчас) |
 
 ## Проблема
 
