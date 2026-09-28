@@ -8,7 +8,15 @@ import '../../../widgets/safe_bottom.dart';
 /// делать. ListView+AlwaysScrollable чтобы pull-to-refresh (T3-2)
 /// продолжал работать на пустом экране.
 class SubscriptionsEmptyState extends StatelessWidget {
-  const SubscriptionsEmptyState({super.key});
+  const SubscriptionsEmptyState({
+    super.key,
+    required this.busy,
+    this.onPickPublicTestServer,
+  });
+
+  final bool busy;
+  /// null — блок «No provider yet?» не показывается (§587).
+  final VoidCallback? onPickPublicTestServer;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +47,23 @@ class SubscriptionsEmptyState extends StatelessWidget {
                 Text(getLocalText.s("2. Paste it into the field above, or tap ⋮ → «Paste from clipboard», «Scan QR code».")),
                 const SizedBox(height: 8),
                 Text(getLocalText.s("3. Hit «+». L×Box will fetch, parse and configure — and you can connect from the Home tab.")),
+                if (onPickPublicTestServer != null) ...[
+                const SizedBox(height: 18),
+                Text(
+                  getLocalText.s("No provider yet?"),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(getLocalText.s("Try a public test server — free, limited, good for first-time check:")),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: busy
+                      ? null
+                      : onPickPublicTestServer,
+                  icon: const Icon(Icons.flash_on),
+                  label: Text(getLocalText.s("Get Public Test Servers")),
+                ),
+                ],
               ],
             ),
           ),

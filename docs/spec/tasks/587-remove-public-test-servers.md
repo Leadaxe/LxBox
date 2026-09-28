@@ -1,4 +1,4 @@
-# 587 — Убрать «Get Public Test Servers»
+# 587 — Выключить «Get Public Test Servers»
 
 | Поле | Значение |
 |------|----------|
@@ -19,19 +19,20 @@
 
 ## Решение владельца (28.09.2026)
 
-«Давай выключим этот пункт про бесплатные сервера». Убирается целиком, во всех
-сборках (Play, F-Droid, GitHub).
+«Давай выключим этот пункт про бесплатные сервера», затем «спрячь за
+константу». Код не удаляется, экран выключен во всех сборках (Play, F-Droid,
+GitHub).
 
 ## Что сделано
 
-- Удалены `app/lib/services/community_servers_loader.dart` и
-  `app/lib/screens/subscriptions_screen/public_test_servers.dart`.
-- Из overflow-меню экрана Servers убран пункт «Get Public Test Servers».
-- С пустого экрана убран блок «No provider yet?» с кнопкой; параметры
-  `busy` и `onPickPublicTestServer` у `SubscriptionsEmptyState` больше не нужны.
-- Из `ru`/`zh` словарей удалены ключи, которые использовал только этот
-  экран: «Get Public Test Servers», «Test servers list unavailable»,
-  «No provider yet?», «Try a public test server…», «List %d», «View on GitHub».
+- `CommunityServersLoader.enabled = false`
+  (`app/lib/services/community_servers_loader.dart`). При `false`:
+  - в overflow-меню экрана Servers нет пункта «Get Public Test Servers»;
+  - на пустом экране нет блока «No provider yet?» с кнопкой
+    (`SubscriptionsEmptyState.onPickPublicTestServer == null`);
+  - манифест не запрашивается.
+- Код экрана, загрузчик и переводы остаются; включение — `true` плюс
+  возврат манифеста в `main`.
 - Удалён `public-servers-manifest.json`. Уже установленные версии читают его
   из `main`. Когда файл пропадёт из `main` (со следующим релизом или отдельным
   коммитом по команде владельца), старые версии получат 404 и покажут
@@ -42,6 +43,5 @@
 
 ## Проверка
 
-- `grep -rn "PublicTestServer\|community_servers\|public-servers-manifest" app/lib`
-  ничего не находит.
-- CI: `flutter analyze`, `ui_check --strict` (нет осиротевших ключей).
+- При `enabled = false` пункта меню и блока на пустом экране нет.
+- CI: `flutter analyze`, `ui_check --strict`.
