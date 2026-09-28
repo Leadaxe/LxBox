@@ -75,7 +75,15 @@
 
 ### Changed
 
-- **Core `v1.14.2-lx.6`.** An XHTTP node without an `xmux` section (or with
+- **Core `v1.14.2-lx.8`.** Synced with sing-box `stable`: idle connections of
+  nodes and DNS servers nothing refers to any more are closed; WireGuard,
+  AmneziaWG and MASQUE inside another tunnel really allow fragmentation of the
+  outer UDP datagram on Android (the kernel kept DF and dropped oversized
+  datagrams); Hysteria, Hysteria2 and TUIC no longer allow it by default.
+  MASQUE no longer hangs without an error: `vhttp: auto` goes back to h3 when
+  the remembered h2 stops working, closing an h2 tunnel does not wait for a
+  stalled write, and an h3 endpoint that never answers no longer holds the
+  dial. From lx.6: an XHTTP node without an `xmux` section (or with
   an empty one) now keeps at most three connections to the server and shares
   them between streams; before, every stream opened a new TLS connection,
   dozens to hundreds of parallel connections to one IP on a phone, the

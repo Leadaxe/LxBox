@@ -7,7 +7,7 @@ Tailscale node gets a Network tab with devices and exit node switching on the
 fly. Home lists Tailscale nodes without an exit under `NETWORKS`. A node
 written by hand as sing-box JSON goes to the core as written; nodes of a type
 the app does not know and `openvpn-client` endpoints are accepted. The DNS
-screen gets cache settings. Core `v1.14.2-lx.6`, protocol contract 1.1.99.
+screen gets cache settings. Core `v1.14.2-lx.8`, protocol contract 1.1.99.
 
 Google Play last shipped v2.25.5: the section «Since v2.25.5» at the end of
 each language lists what v2.25.6 and v2.25.7 brought.
@@ -19,7 +19,7 @@ Tailscale появилась вкладка Network с устройствами 
 Главный экран показывает узлы Tailscale без выхода в `NETWORKS`. Узел,
 записанный вручную как sing-box JSON, уходит в ядро как написан; узлы
 незнакомого приложению типа и endpoint `openvpn-client` принимаются. На экране
-DNS появились настройки кэша. Ядро `v1.14.2-lx.6`, контракт протоколов 1.1.99.
+DNS появились настройки кэша. Ядро `v1.14.2-lx.8`, контракт протоколов 1.1.99.
 
 В Google Play последней была v2.25.5: раздел «С v2.25.5» в конце каждого языка
 перечисляет, что принесли v2.25.6 и v2.25.7.
@@ -96,7 +96,17 @@ DNS появились настройки кэша. Ядро `v1.14.2-lx.6`, к�
 
 ## 🔄 Changed
 
-- **Core `v1.14.2-lx.6`.** An XHTTP node without an `xmux` section (or with an
+- **Core `v1.14.2-lx.8`.** Synced with sing-box `stable`. Idle connections of
+  nodes and DNS servers nothing refers to any more are closed, also when the
+  device pauses. WireGuard, AmneziaWG and MASQUE inside another tunnel really
+  allow fragmentation of the outer UDP datagram on Android; before, oversized
+  datagrams were dropped. Hysteria, Hysteria2 and TUIC no longer allow it by
+  default, QUIC finds the path MTU itself.
+- **MASQUE no longer hangs without an error.** `vhttp: auto` goes back to h3
+  when the remembered h2 stops working (before, only a restart helped);
+  closing an h2 tunnel does not wait minutes for a stalled write; an h3
+  endpoint that never answers no longer holds every dial of the node.
+- **XHTTP without `xmux`.** An XHTTP node without an `xmux` section (or with an
   empty one) keeps at most three connections to the server and shares them
   between streams. Before, every stream opened its own TLS connection: dozens
   to hundreds of parallel connections to one IP, a pattern reported to be cut
@@ -240,7 +250,18 @@ Full lists: [v2.25.6](docs/releases/v2.25.6.md),
 
 ## 🔄 Изменено
 
-- **Ядро `v1.14.2-lx.6`.** Узел XHTTP без секции `xmux` (или с пустой)
+- **Ядро `v1.14.2-lx.8`.** Синхронизировано со `stable` sing-box.
+  Простаивающие соединения узлов и DNS-серверов, на которые больше ничто не
+  ссылается, закрываются, в том числе когда устройство засыпает. WireGuard,
+  AmneziaWG и MASQUE внутри другого туннеля действительно разрешают
+  фрагментацию внешней UDP-датаграммы на Android; раньше слишком большие
+  датаграммы терялись. Hysteria, Hysteria2 и TUIC по умолчанию её больше не
+  разрешают, QUIC сам находит MTU пути.
+- **MASQUE больше не зависает без ошибки.** `vhttp: auto` возвращается к h3,
+  когда запомненный h2 перестал работать (раньше помогал только рестарт);
+  закрытие h2-туннеля не ждёт минутами зависшую запись; h3-эндпоинт, который
+  не отвечает, больше не держит все dial узла.
+- **XHTTP без `xmux`.** Узел XHTTP без секции `xmux` (или с пустой)
   держит не больше трёх соединений с сервером и делит их между потоками.
   Раньше каждый поток открывал своё TLS-соединение: десятки и сотни
   параллельных соединений на один IP, и такой рисунок, по сообщениям, режут в
