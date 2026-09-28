@@ -45,7 +45,7 @@
 | [012-LIVE_STATE](012-LIVE_STATE/FEATURE.md) | Живое состояние ядра: статус, соединения, статистика, трафик по приложениям | 016 044 122 123 | ✅ 2026-09-28 |
 | [013-DIAGNOSTICS](013-DIAGNOSTICS/FEATURE.md) | Диагностика: журнал приложения, журнал ядра, отчёт о сбое, Debug API, живые события | 023 031 038 043 | ✅ 2026-09-28 |
 | [014-AUTOMATION](014-AUTOMATION/FEATURE.md) | Управление извне: быстрое подключение, публичный Intent API, интеграция с автоматизаторами | 032 047 | ✅ 2026-09-28 |
-| [015-WARP](015-WARP/FEATURE.md) | Cloudflare WARP: регистрация в один тап, MASQUE-транспорт | 025 130 | — |
+| [015-WARP](015-WARP/FEATURE.md) | Cloudflare WARP: регистрация в один тап, MASQUE-транспорт | 025 130 | ✅ 2026-09-28 |
 | [016-DPI_HARDENING](016-DPI_HARDENING/FEATURE.md) | Обход DPI: фрагментация TLS, обфускация SNI, ECH, параметры XHTTP | 020 028 045 127 | — |
 | [017-BACKUP_AND_STORAGE](017-BACKUP_AND_STORAGE/FEATURE.md) | Резервная копия и восстановление, контракт хранения, миграции | 040 439 | — |
 | [018-WORKSPACES](018-WORKSPACES/FEATURE.md) | Именованные наборы настроек | 417 | — |
