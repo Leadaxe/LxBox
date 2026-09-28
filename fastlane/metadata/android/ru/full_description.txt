@@ -8,7 +8,7 @@ L×Box — высокопроизводительный прокси-клиен�
 
 L×Box работает на sing-box-lx — нашем форке sing-box, который развивается вместе с приложением. Сверх стандартного sing-box ядро умеет:
 
-• AmneziaWG 2.0 — обфусцированный WireGuard;
+• AmneziaWG 3.1 — обфусцированный WireGuard;
 • XHTTP — транспорт Xray, включая stream-one;
 • VLESS + ML-KEM-768 — постквантовая защита;
 • MASQUE — Cloudflare WARP как полноценный узел и звено цепочки.
@@ -24,9 +24,9 @@ L×Box работает на sing-box-lx — нашем форке sing-box, к�
 
 12+ ПРОТОКОЛОВ
 
-VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, Tailscale, AmneziaWG 3.0, MASQUE поверх QUIC/HTTP-3.
+VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, Tailscale, AmneziaWG 3.1, MASQUE поверх QUIC/HTTP-3.
 
-Cloudflare WARP в один тап: приватный ключ создаётся на устройстве и не покидает его. WireGuard или MASQUE, опционально обфускация AmneziaWG.
+Cloudflare WARP в один тап: простая регистрация из приложения, приватный ключ создаётся на устройстве и не покидает его. WireGuard или MASQUE, опционально обфускация AmneziaWG.
 
 Импорт любого привычного формата: подписки и ссылки, Base64, Xray-массивы, WireGuard URI/INI, Amnezia vpn://, JSON-конфиги sing-box, локальные файлы, обычный текст.
 
@@ -37,7 +37,7 @@ Android держит один VPN, поэтому приложение Tailscale
 • устройства доступны по именам через MagicDNS;
 • выход в интернет через exit node вашей сети;
 • вход, список устройств и пинг с путём — в приложении;
-• поддерживается свой control-сервер.
+• свой control-сервер.
 
 ПОДПИСКИ БЕЗ РУЧНОЙ РАБОТЫ
 
@@ -63,7 +63,7 @@ DNS — ПОД ВАШИМ КОНТРОЛЕМ
 
 АВТОМАТИЗАЦИЯ
 
-Интеграция со средствами автоматизации (например, Tasker или MacroDroid): запуск, остановка, смена узла, состояние подключения. Сценарии: дома, в дороге, при смене Wi-Fi.
+Работает с Tasker, MacroDroid и другими средствами автоматизации: запуск, остановка, смена узла, состояние подключения.
 
 НИКУДА НЕ ПЕРЕДАЁМ ВАШИ ДАННЫЕ
 
