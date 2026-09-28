@@ -17,6 +17,14 @@ Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-
 
 ---
 
+## Purpose and terms of use
+
+**L×Box is a professional tool for network security, routing and network health checks.**
+
+Use of L×Box is allowed only in strict compliance with the laws of the country where the tool is used. Any use that violates those laws is prohibited. Full responsibility for compliance with the law lies with the user.
+
+---
+
 ## Screenshots
 
 <p align="center">
