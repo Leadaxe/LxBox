@@ -122,6 +122,13 @@ DNS появились настройки кэша. Ядро `v1.14.2-lx.8`, к�
 - **Default emoji of a Tailscale node is 🕸️** (was 🪢). Existing node tags do
   not change.
 
+## 🗑 Removed
+
+- **Get Public Test Servers.** The Servers screen no longer offers
+  ready-made public server lists: the menu item and the «No provider yet?»
+  block on the empty screen are gone. Add your own servers or a provider's
+  subscription ([task 587](docs/spec/tasks/587-remove-public-test-servers.md)).
+
 ## 🩹 Fixes
 
 - Bottom sheet and padding rules in the new screens; waiting for MASQUE
@@ -275,6 +282,13 @@ Full lists: [v2.25.6](docs/releases/v2.25.6.md),
   ([задача 582](docs/spec/tasks/582-authored-body-go-dart-parity.md)).
 - **Знак узла Tailscale по умолчанию 🕸️** (был 🪢). Теги существующих узлов не
   меняются.
+
+## 🗑 Удалено
+
+- **Get Public Test Servers.** Экран Servers больше не предлагает готовые
+  публичные подборки серверов: пункт меню и блок «No provider yet?» на пустом
+  экране убраны. Добавляйте свои серверы или подписку провайдера
+  ([задача 587](docs/spec/tasks/587-remove-public-test-servers.md)).
 
 ## 🩹 Исправления
 

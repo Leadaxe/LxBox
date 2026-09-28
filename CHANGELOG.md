@@ -121,6 +121,12 @@
 
 ### Removed
 
+- **Get Public Test Servers ([task 587](docs/spec/tasks/587-remove-public-test-servers.md)).**
+  The Servers screen no longer offers ready-made public server lists: the
+  overflow menu item and the «No provider yet?» block on the empty screen are
+  gone, and the list manifest is not requested. The app is a client for your
+  own servers and subscriptions.
+
 - **Node sections ([§575](docs/spec/tasks/575-remove-node-sections.md)).**
   A node no longer carries route rules or DNS records of its own. The
   Tailscale bundle a node used to carry is now served by the `Tailscale
