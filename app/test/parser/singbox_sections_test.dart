@@ -88,10 +88,14 @@ void main() {
         bad.add('$type: body_source=${s.bodySource}, ожидался singbox');
       }
       // `keep`, а не `drop`: чужой ключ может быть расширением форка.
-      if (s.unknownKeyAction != 'keep') {
-        bad.add('$type: unknown_key.action=${s.unknownKeyAction}');
+      // Тип с `body.fields_unchecked` (контракт 1.1.99, openvpn-client)
+      // полей не описывает и unknown_key не несёт по решению владельца.
+      if (!ContractRegistry.I.isUncheckedType(type)) {
+        if (s.unknownKeyAction != 'keep') {
+          bad.add('$type: unknown_key.action=${s.unknownKeyAction}');
+        }
+        if (s.unknownKeyCode == null) bad.add('$type: нет unknown_key.code');
       }
-      if (s.unknownKeyCode == null) bad.add('$type: нет unknown_key.code');
       final defaults =
           s.forms.where((f) => f.detect?['default'] == true).length;
       if (defaults != 1) {
