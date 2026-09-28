@@ -11,11 +11,12 @@ class SubscriptionsEmptyState extends StatelessWidget {
   const SubscriptionsEmptyState({
     super.key,
     required this.busy,
-    required this.onPickPublicTestServer,
+    this.onPickPublicTestServer,
   });
 
   final bool busy;
-  final VoidCallback onPickPublicTestServer;
+  /// null — блок «No provider yet?» не показывается (§587).
+  final VoidCallback? onPickPublicTestServer;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +47,7 @@ class SubscriptionsEmptyState extends StatelessWidget {
                 Text(getLocalText.s("2. Paste it into the field above, or tap ⋮ → «Paste from clipboard», «Scan QR code».")),
                 const SizedBox(height: 8),
                 Text(getLocalText.s("3. Hit «+». L×Box will fetch, parse and configure — and you can connect from the Home tab.")),
+                if (onPickPublicTestServer != null) ...[
                 const SizedBox(height: 18),
                 Text(
                   getLocalText.s("No provider yet?"),
@@ -61,6 +63,7 @@ class SubscriptionsEmptyState extends StatelessWidget {
                   icon: const Icon(Icons.flash_on),
                   label: Text(getLocalText.s("Get Public Test Servers")),
                 ),
+                ],
               ],
             ),
           ),

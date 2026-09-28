@@ -389,6 +389,79 @@ Future<bool> _hasDefaultsSeeded() async {
 Future<void> _markDefaultsSeeded() async {
   final data = await _load();
   data['presets_migrated'] = true;
+  // §578 — первый seed уже взял все дефолтные пресеты шаблона, поздние тоже.
+  data[_kLatePresetsSeededKey] = kLateDefaultPresetIds.toList()..sort();
   SettingsStorage._cache = data;
   await _save();
+}
+
+/// §578 — пресеты с `default: true`, добавленные в шаблон, когда у
+/// пользователей уже было сохранённое состояние. Первый seed дефолтов
+/// ([_markDefaultsSeeded]) идёт один раз на установку, и новый дефолтный
+/// пресет до такого пользователя сам не доходит. Список только растёт.
+const Set<String> kLateDefaultPresetIds = {'tailscale'};
+
+/// §578 — ключ хранения: id из [kLateDefaultPresetIds], для которых разовый
+/// шаг уже прошёл.
+const String _kLatePresetsSeededKey = 'late_presets_seeded';
+
+/// §578 — разовый шаг при чтении состояния: пресет из [kLateDefaultPresetIds]
+/// добавляется в правила включённым с `num` шаблона, если дефолты уже были
+/// засеяны (`presets_migrated`), пресета в правилах нет и шаблон объявляет его
+/// `default: true`. id отмечается в [_kLatePresetsSeededKey] и больше не
+/// добавляется: удалённый пользователем пресет не возвращается.
+///
+/// Свежая установка (дефолты ещё не засеяны) не трогается: первый seed
+/// возьмёт пресет вместе с остальными дефолтами.
+Future<bool> _seedLateDefaultPresets(WizardTemplate? template) async {
+  final data = await _load();
+  if (data['presets_migrated'] != true) return false;
+  final done = <String>{
+    ...(data[_kLatePresetsSeededKey] as List? ?? const []).whereType<String>(),
+  };
+  final pending = kLateDefaultPresetIds.difference(done);
+  if (pending.isEmpty) return false;
+
+  final WizardTemplate tpl;
+  try {
+    tpl = template ?? await TemplateLoader.load();
+  } catch (e) {
+    AppLog.I.warning('SettingsStorage: late presets not seeded, '
+        'template unavailable: $e');
+    return false;
+  }
+  final rules = _customRulesOf(data);
+  final present = {
+    for (final cr in rules)
+      if (cr is CustomRulePreset) cr.presetId,
+  };
+  var added = false;
+  for (final id in pending.toList()..sort()) {
+    if (present.contains(id)) continue;
+    SelectableRule? spec;
+    for (final p in tpl.selectableRules) {
+      if (p.presetId == id) {
+        spec = p;
+        break;
+      }
+    }
+    if (spec == null || !spec.defaultEnabled) continue;
+    final seeded = selectableRuleToCustom(spec, tpl);
+    rules.add(CustomRulePreset(
+      name: seeded.name,
+      presetId: seeded.presetId,
+      varsValues: seeded.varsValues,
+      orderNum: spec.num,
+    ));
+    added = true;
+    AppLog.I.info('SettingsStorage: default preset "$id" added once');
+  }
+  data[_kLatePresetsSeededKey] = ({...done, ...pending}.toList()..sort());
+  SettingsStorage._cache = data;
+  if (added) {
+    await _saveCustomRules(rules);
+  } else {
+    await _save();
+  }
+  return added;
 }

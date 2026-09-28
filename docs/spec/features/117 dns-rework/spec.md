@@ -235,6 +235,16 @@ Done: тап→полноэкранный редактор; Params/JSON по kin
 
 ---
 
+## Кэш DNS на экране DNS ([задача 580](../../tasks/580-dns-cache-settings.md))
+
+Над кнопкой Clear DNS cache три настройки: DNS cache size (число записей,
+1024..65535, по умолчанию 4000; ввод вне границ не сохраняется), Serve stale
+answers (`dns.optimistic`, по умолчанию вкл.), Keep DNS cache after restart
+(`experimental.cache_file.store_dns`, по умолчанию вкл.). Переменные шаблона
+`dns_cache_capacity`, `dns_optimistic`, `dns_store_cache`; изменение
+помечает конфиг к пересборке. Clear DNS cache удаляет `cache.db` целиком,
+вместе с сохранёнными записями DNS.
+
 ## Жизненный цикл DNS-сервера (баг + правило)
 
 **Существующий баг (до §117):** пресет регистрирует DNS-сервер (напр.

@@ -440,8 +440,9 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
     'profile': s.profile,
     // §556 — пустой `vhttp` = ключа нет (ядро = auto), тело не дописывается.
     if (s.vhttp.isNotEmpty) 'vhttp': s.vhttp,
-    'private_key': s.privateKeyDer,
-    'public_key': s.publicKeyDer,
+    // §582 — пустой ключ = ключа нет (тело своего сервера без ключей).
+    if (s.privateKeyDer.isNotEmpty) 'private_key': s.privateKeyDer,
+    if (s.publicKeyDer.isNotEmpty) 'public_key': s.publicKeyDer,
     'ip': ?ip,
     'ipv6': ?ipv6,
     if (tls.isNotEmpty) 'tls': tls,

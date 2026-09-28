@@ -269,7 +269,7 @@ void main() {
         [
           'dns.servers[#2].vars',
           'dns.servers[my-doh].vars',
-          'sources[home-ts].sections.dns.servers[ts-dns].vars',
+          // §575 — секции узла снимаются целиком, вглубь обход не идёт.
         ],
       );
       final servers = f.dns!.servers;

@@ -137,7 +137,7 @@ class DnsMirrorTile extends StatelessWidget {
     };
     final preview = formatRulesPreview(previewBodies, kind: sourceKind);
     final subtitle = (note != null && note!.isNotEmpty)
-        ? '$preview · $note'
+        ? (preview.isEmpty ? note! : '$preview · $note')
         : preview;
     return Card(
       child: ListTile(

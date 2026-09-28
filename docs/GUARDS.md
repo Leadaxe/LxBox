@@ -33,6 +33,7 @@ config down.
 
 - [Principles](#principles)
 - [Where guards live](#where-guards-live)
+- [On an authored body (§577)](#on-an-authored-body-577)
 - [The guard over the guards — no field falls out of the round trip (§476)](#the-guard-over-the-guards--no-field-falls-out-of-the-round-trip-476)
 - [The last echelon — the core's own verdict (feature 478)](#the-last-echelon--the-cores-own-verdict-feature-478)
 - [How a user finds out](#how-a-user-finds-out)
@@ -100,6 +101,47 @@ object before emitting.
 | 2 — JSON branches | `app/lib/services/parser/singbox_config.dart`, `json_parsers.dart` | Imported sing-box and Xray configs |
 | 3 — node emission | `app/lib/models/transport_spec.dart`, `tls_spec.dart`, `node_spec_emit.dart`, `node_spec.dart` | The node → outbound JSON step, common to all sources |
 | 4 — config assembly | `app/lib/services/builder/**`, incl. `post_steps/**` and `validator.dart` | The whole file: graph, groups, rules, DNS |
+
+## On an authored body (§577)
+
+A body is **authored** when all four conditions of §576 hold: the container is
+the user's own server or a folder member, the node is not an auto-select
+group, the source kind is exactly `singbox_outbound`, and the text parses as a
+JSON object. A subscription node is never authored. The build entry carries it
+as `SingboxEntry.authored`; parsing sees it as `parsingAuthoredBody`.
+
+On an authored body the registry reports and does not edit (owner's decision
+27.09.2026, contract 1.1.87, PARSING_PRINCIPLES §10). Every edit of a node body
+by a registry rule goes through one point, `contract/body_edit.dart`
+(`applyRegistryEdits`, `settleSanitized`, `editBodyPath`); a source test
+(`test/builder/body_edit_point_test.dart`) keeps the build steps from writing
+into the body directly. A rule that is not applied still gives its code, with
+`applied: false`.
+
+| Guard | Normal body | Authored body |
+|---|---|---|
+| no string `type` → entry dropped (`registry_gate.dart`) | dropped | dropped (hard) |
+| node core gate, `drop_node` by `build_tag` / `min_core` | dropped | dropped (hard) |
+| registry rule or relation with `core_rejects: true` (`tls_field_unsupported_naive`, `tls_fragment_system_engine`, `flow_deprecated`, `port_invalid`, `awg_header_invalid`, `awg_headers_overlap`, `detour_with_listen_port`; since contract 1.1.91 also `vless_encryption_invalid`, `ss_method_invalid`, `wg_key_invalid`, `awg3_header_key_invalid`, REALITY and xhttp placement codes, …) | applied | applied (hard) |
+| silent `default_when` with `core_rejects` (`hysteria.up_mbps`) | written | written (hard) |
+| every other registry rule: `unknown_key`, `type_invalid` without the flag, `max_when` clamps, silent `default_when` (`mtu: 1280` of AmneziaWG), `drop_node` without the flag (`field_missing` of `server`) | applied | body unchanged, code with `applied: false` |
+| detour yield of `tls.fragment` (`detour_with_tls_fragment`) | removed | kept, `applied: false` |
+| build heal of the uTLS fingerprint (`utls_fp_unknown`, `core_rejects`) | replaced | replaced (hard) |
+| build heal of uTLS / REALITY on QUIC (`tls_not_applicable_quic`) | removed | kept (the gate reports it) |
+| build heal of a broken REALITY block (`reality_pbk_invalid`, `reality_short_id_invalid`, `core_rejects` since contract 1.1.91) | fixed | fixed (hard) |
+| global TLS settings (`tls_transforms.dart`: fragment, mixed-case SNI) | applied | applied — user settings, not registry rules |
+| graph links (`detour`, `domain_resolver` to a dropped DNS server, tags) | fixed | fixed — build-managed, not the node body |
+
+Parsing an authored body (§582): when the edit point leaves no body (a hard
+rule removed a required field, e.g. `tuic.uuid` not a UUID), the node is dropped
+at parse time with that code, as in Go. A subscription body is dropped at parse
+time only by an explicit `drop_node`. A required field of an array item object
+(`peers[].allowed_ips`) that fails drops the node, not the item.
+
+The node card shows a code with `applied: false` with a common "What happened"
+line (the node is written by hand, the app changed nothing); the registry's own
+text claims the field was changed and is not shown. The build report line gets
+`(not applied)`; the Debug API carries `applied` on every warning.
 
 ## The guard over the guards — no field falls out of the round trip (§476)
 
@@ -242,8 +284,11 @@ mapper differs per input only in how it *reads* the source; what it produces is
 one sing-box map, and the judge after it is the same. The sanitiser is told the
 input (`BodySource`), and every mapper-built map counts as `other`, never
 `singbox`: the one rule that asks (`except_sources` on the AWG `mtu` ceiling,
-§473) exempts a body **written in the core's own form** by the person or the
-subscription, not one this app assembled.
+§473) exempts a body **written in the core's own form** by the person, not one
+this app assembled. Since §576 the `singbox` input belongs only to an authored
+body: an own server or a folder member whose source kind is `singbox_outbound`
+(`parseAll(own: true)`, `authored_scope.dart`). A subscription node with the
+same sing-box JSON is `other`, at parse time and at build time alike.
 
 | Rule, as §§1.2–1.5 describe it | Registry field that judges it now | Code |
 |---|---|---|
@@ -351,7 +396,7 @@ The remaining nine schemes still run every rule below.
 | `packetEncoding` outside `{xudp, packetaddr}` | field dropped | `PacketEncodingUnknownWarning` | `uri_utils.dart:253-266` | unknown value **panics** the core in `format.ToString` — a native `libbox.so` crash, not a failed connection | SPEC 103 |
 | `packetEncoding` upper-case | lower-cased | silent | `uri_utils.dart:258` | core accepts lowercase only | — |
 | AWG `mtu` above 1280 (link / `.conf` / Amnezia export) | clamped to the registry ceiling (1280) | `awg_mtu_clamped` (warning), carrying the original value | *moved to the registry, §1.0* — `wireguard.body.fields.mtu.max_when`, executed by `body_sanitizer.dart` `_applyMaxWhen`. The hand-written trio `awgClampMtu` / `awgMtuByRegistry` / `awgMtuWarnings` is **gone** | too high is a silent failure: handshake succeeds, data does not flow. Two cases the sanitiser cannot reach are covered by the pipeline itself (`mappers/uri_pipeline.dart`): a node that **asked** for AmneziaWG but kept no valid AWG field (§463 — `when.any_set` judges keys in the body, and none are left), and a **registry that failed to load** (`kAwgMtuFallback`) | §473 (contract 1.1.5), §472 step 7, was §097 |
-| AWG `mtu` above 1280 **from a sing-box body** | **kept as written** | `awg_mtu_high` (info) | `body_sanitizer.dart` `_applyMaxWhen` (`except_sources: [singbox]`) | the body is in the core's own form, written by the user or the subscription; rewriting it silently is not ours to do (owner's decision 18.09.2026). Input parity is broken here deliberately — the only such place in the contract | §473 |
+| AWG `mtu` above 1280 **from a sing-box body** | **kept as written** | `awg_mtu_high` (info) | `body_sanitizer.dart` `_applyMaxWhen` (`except_sources: [singbox]`) | the body is in the core's own form, written by the user (an own server or a folder member with a bare body, §576); rewriting it silently is not ours to do (owner's decision 18.09.2026). Input parity is broken here deliberately — the only such place in the contract | §473 |
 | AWG `mtu` absent | default 1280, on every input including sing-box bodies | silent — a default is not a replacement | `body_sanitizer.dart` (`default_when.when.any_set`) | AmneziaWG's own recommended client MTU and the IPv6 minimum | §473, §472 step 7, was §097 |
 | Bare IP without CIDR in `address` / `allowed_ips` | `/32` or `/128` appended | silent | `uri_utils.dart:288-292` | breaks endpoint load: `netip.ParsePrefix(...): no '/'` | §106 |
 | Raw `/` inside a base64 key in userInfo | percent-encoded to `%2F`, userInfo only | silent | `uri_utils.dart:298-309` | `Uri.tryParse` would read it as the start of the path and lose the userInfo | §106 |
@@ -505,6 +550,8 @@ rows below are the guards that do something more than reject or default.
 | Tag is the target of someone's `detour` | withdrawn from candidates, travels as the owner's hop | silent | `singbox_config.dart:155-162, 178` | — | §368 §4 P1 |
 | Tag takes part in a detour **cycle** | edge cut, target **returned** to candidates | owner gets the warning below | `singbox_config.dart:146-162, 313-344` | otherwise the node would land in `detourTargets` and vanish from the list entirely — the silent loss §3.5 exists to prevent | §368 §4 P3 |
 | Duplicate tag | first wins; indexed fallback `tag N` for the name | silent | `singbox_config.dart:141-144, 185-189` | the file is written by the provider, and repeats between elements are normal | §368 §3.3 |
+| Registry type with `body.fields_unchecked` (`openvpn-client`), **any source** (own record, mixed document, subscription) | node **accepted** as `UnknownTypeSpec`; body as written: `RegistrySanitizer.sanitize` returns it unchanged with no codes, registry passes skip it; config section from the record `kind` (`ContractRegistry.isEndpointType`) — `endpoints[]` | silent; on a core without `with_openvpn` — `openvpn_core_unsupported` at build (node gate) | `singbox_config.dart:_ownUnknownTypeNode`, `body_sanitizer.dart:RegistrySanitizer.sanitize`, `node_spec.dart:UnknownTypeSpec.emitRaw` | owner decision 28.09.2026: known type, no field rules, no value checks | §586, contract 1.1.99 |
+| Type **outside the registry**, **own source** (own server, folder member, node editor: `parseAll(own: true)`); `type` a non-empty string, not a service type or group | node **accepted** as `UnknownTypeSpec`, body goes to the core as written (`verbatimBodyOf`), registry passes skip it; `outbounds[]` (the type is not in the registry, so it has no `kind`) | `UnknownNodeTypeWarning` (info, per-app code `unknown_node_type`) | `singbox_config.dart` `_ownUnknownTypeNode` | owner's norm §576/§577: an authored node is reported on, not forbidden; an unknown type is not a hard case. A known type with a broken form (no `server`) is still dropped | task 585 |
 | Converter returned `null` (unsupported type) | node skipped, type accumulated | `UnsupportedProtocolWarning` on the config's first node | `singbox_config.dart:205-209` | a config that produced no node at all is lost silently — compensated by the "skipped" counter in the import dialog | §368 §3.5 |
 | Detour depth ≥ 8 (`kMaxDetourDepth`) | chain truncated, node lives | `DetourChainTooDeepWarning(8)` | `singbox_config.dart:366-370` | real configs are 2–3 hops; the limit guards against recursion driven by provider data | §368 §4 P2 |
 | `detour` closes a cycle | edge broken, node connects directly | `DetourCycleBrokenWarning` | `singbox_config.dart:374-377` | broken rather than fatal (unlike §254) because the cycle arrived in someone else's file — the user did not create it | §368 §4 P3 |

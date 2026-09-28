@@ -9,7 +9,6 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/codec/source_replace_record.dart';
@@ -185,7 +184,12 @@ void main() {
         }
 
         _checkDns(state, expected);
-        _checkSections(state, expected);
+
+        // §576 (контракт 1.1.87) — источник своего сервера и члена папки
+        // после импорта: голое тело узла. Документ и массив в источник не
+        // попадают. Сравнение по значению; `tag` несёт запись, он не
+        // сравнивается.
+        _checkOriginRaw(state, expected);
 
         // Фича 565 фаза B (§74) — свёртка `replace` в состоянии и в
         // повторном экспорте. `replace_tags` (дериватив legacy `fold`) не
@@ -271,21 +275,10 @@ class _State {
     }
     return file;
   }
-
-  /// Носители секций: корневые узлы (по имени записи) и члены папок (по тегу
-  /// узла) — у члена папки свой путь слияния.
-  Map<String, NodeSections> get sections => {
-        for (final l in lists)
-          if (l is UserServer && l.sections != null) l.name: l.sections!,
-        for (final l in lists)
-          if (l is FolderServers)
-            for (final m in l.members)
-              if (m.sections != null && m.node != null) m.node!.tag: m.sections!,
-      };
 }
 
 /// §438 — причины у кодов, где причина нормирована перечнем
-/// (`backup_section_record_dropped`: `kind` | `rule_set` | `not_allowed`).
+/// (`backup_section_record_dropped`: с контракта 1.1.85 только `not_allowed`).
 /// Множество кодов их не различает, и сторона, отбросившая запись «не по той
 /// причине», показала бы пользователю неверное объяснение потери.
 void _checkWarningReasons(LxBackupFile file, Map<String, dynamic> expected) {
@@ -305,10 +298,8 @@ void _checkWarningReasons(LxBackupFile file, Map<String, dynamic> expected) {
   }
 }
 
-/// ОСЬ ПОРЯДКА целиком: корневые правила и правила, которые узлы носят с
-/// собой (NODE_SECTIONS.md §5). Проверять её половинами нельзя: узловое
-/// правило встаёт МЕЖДУ корневыми по относительному порядку номеров, и
-/// список одних корневых этого не покажет.
+/// ОСЬ ПОРЯДКА корневых правил. §575 — правил узла больше нет (контракт
+/// 1.1.85, секции упразднены).
 void _checkRules(_State state, Map<String, dynamic> expected) {
   final wantRules =
       ((expected['rules'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -316,11 +307,6 @@ void _checkRules(_State state, Map<String, dynamic> expected) {
   var seq = 0;
   for (final r in state.rules) {
     indexed.add((r.orderNum ?? 1 << 30, seq++, r));
-  }
-  for (final s in state.sections.values) {
-    for (final r in s.rules) {
-      indexed.add((r.orderNum ?? kNodeRuleDefaultNum, seq++, r));
-    }
   }
   indexed.sort((a, b) {
     final byNum = a.$1.compareTo(b.$1);
@@ -734,31 +720,6 @@ void _checkDns(
   }
 }
 
-/// §438 — секции узлов после импорта, по тегу носителя (корневой узел и член
-/// папки). Узел с секциями, которых нет в ожиданиях, — тоже расхождение.
-void _checkSections(_State state, Map<String, dynamic> expected) {
-  final want = (expected['sections'] as Map?)?.cast<String, dynamic>();
-  if (want == null) return;
-  final have = state.sections;
-  expect(have.keys.toSet(), want.keys.toSet(), reason: 'носители секций');
-  for (final entry in want.entries) {
-    final got = have[entry.key]!;
-    final w = (entry.value as Map).cast<String, dynamic>();
-    final wantRules = ((w['rules'] as List?) ?? const []).cast<Map<String, dynamic>>();
-    expect([for (final r in got.rules) '${r.name}:${r.enabled}'],
-        [for (final r in wantRules) '${r['name']}:${r['enabled']}'],
-        reason: '${entry.key}: правила связки');
-    final wantServers = (w['dns_servers'] as List?)?.cast<String>();
-    if (wantServers != null) {
-      expect([for (final s in got.dnsServers) s.tag], wantServers,
-          reason: '${entry.key}: DNS-серверы связки');
-    }
-    if (w['dns_rules'] is num) {
-      expect(got.dnsRules, hasLength((w['dns_rules'] as num).toInt()),
-          reason: '${entry.key}: число DNS-правил связки');
-    }
-  }
-}
 
 /// Канон цепочки (`schema/source_chain.schema.json`) из мобильной модели —
 /// ровно поля маршрута, без идентичности записи (`tag`/`label`/`enabled`),
@@ -821,4 +782,37 @@ Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
 
   compare('состояние', got);
   compare('повторный экспорт', exported);
+}
+
+/// §576 — `origin_raw`: «тег» (корневой сервер) или «имя папки/тег» (член)
+/// → JSON источника записи.
+void _checkOriginRaw(_State state, Map<String, dynamic> expected) {
+  final want = (expected['origin_raw'] as Map?)?.cast<String, dynamic>();
+  if (want == null) return;
+  want.forEach((key, wantBody) {
+    final slash = key.indexOf('/');
+    String? raw;
+    if (slash < 0) {
+      for (final l in state.lists) {
+        if (l is UserServer &&
+            (l.name == key || (l.nodes.isNotEmpty && l.nodes.first.tag == key))) {
+          raw = l.rawBody;
+          break;
+        }
+      }
+    } else {
+      final folder = key.substring(0, slash);
+      final tag = key.substring(slash + 1);
+      for (final l in state.lists) {
+        if (l is! FolderServers || l.name != folder) continue;
+        for (final m in l.members) {
+          if (m.node?.tag == tag) raw = m.raw;
+        }
+      }
+    }
+    expect(raw, isNotNull, reason: 'origin_raw: нет записи $key');
+    final got = (jsonDecode(raw!) as Map).cast<String, dynamic>()
+      ..remove('tag');
+    expect(got, wantBody, reason: 'origin_raw $key: источник — тело узла');
+  });
 }

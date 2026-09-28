@@ -46,7 +46,7 @@ String defaultEmojiFor(NodeSpec node) {
   }
   if (node is WireguardSpec) return '🏠';
   // §435 — Tailscale: узел tailnet, «узел сети».
-  if (node is TailscaleSpec) return '🪢';
+  if (node is TailscaleSpec) return '🕸️';
   // §130 — MASQUE-транспорт: маска 🎭. WARP-MASQUE-узлы из визарда ставят свой
   // тег 🔥🎭 (🔥 = WARP-брендинг) и сюда не доходят (withDefaultEmoji). Эта
   // ветка — для generic masque-нод из JSON/URI с тегом без эмодзи.

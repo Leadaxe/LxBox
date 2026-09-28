@@ -105,6 +105,11 @@ sealed class NodeWarning {
   /// [props]: говорит «с какой записью», а не «что случилось».
   String get ownerTag => '';
 
+  /// §577 — правка по правилу реестра применена к телу узла. `false` — тело
+  /// авторское, правило мягкое, и приложение тело НЕ меняло (реестр только
+  /// сообщает, PARSING_PRINCIPLES §10). Уровень от признака не зависит.
+  bool get applied => true;
+
   /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
   /// данным, НЕ по отрендеренной строке (§279: строка locale-зависима,
   /// равенство по ней ломало бы dedup при смене языка).
@@ -565,40 +570,6 @@ final class GroupMemberMissingWarning extends NodeWarning {
 // `extra-headers` пропускается, остальные живут, код ставится ОДИН раз на
 // узел. Собственный `headers` у http/https-прокси под код не попадает.
 
-/// §435 — запись секции узла отброшена при разборе документа
-/// (`{ endpoints: [тело], sections: {…} }`): чужой `kind` или битая форма.
-/// Остальные записи живут (NODE_SECTIONS.md §1). Кода контракта нет — UI.
-final class SectionsRecordDroppedWarning extends NodeWarning {
-  /// Путь и причина: `rules[1]: kind "preset" is not allowed in node sections`.
-  final String detail;
-
-  const SectionsRecordDroppedWarning(this.detail);
-
-  @override
-  List<Object?> get props => [detail];
-
-  @override
-  String messageWith(GetLocalText t) =>
-      t.s("Node section record dropped: %s", detail);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
-/// §435 — документ узла несёт и `sections`, и `dns`/`route` (NODE_SECTIONS.md
-/// §7: оба вида в одном документе — ошибка). Парсер подписки берёт `sections`,
-/// редактор узла такой документ не сохраняет. Кода контракта нет — UI.
-final class SectionsConflictWarning extends NodeWarning {
-  const SectionsConflictWarning();
-
-  @override
-  String messageWith(GetLocalText t) => t.s(
-      "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.");
-
-  @override
-  WarningSeverity get severity => WarningSeverity.warning;
-}
-
 /// §538 — запись подписки повторяет узел, который в этой же подписке уже
 /// разобран (тот же [nodeDedupSignature]: содержимое узла без `tag`/`detour`
 /// плюс путь дозвона). Живой случай — подписка присылает один AWG-узел дважды,
@@ -623,6 +594,33 @@ final class DuplicateNodeWarning extends NodeWarning {
   String messageWith(GetLocalText t) => winner.isEmpty
       ? t.s("Duplicate entry: the same node is already in this subscription.")
       : t.s("Duplicate of %s", winner);
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
+/// §585 — узел своего источника с типом, которого приложение не знает
+/// (`openvpn-client` и прочие типы ядра вне модели). Узел принят, тело
+/// уходит в ядро как написано, приложение его не проверяет.
+///
+/// Кода контракта нет — код `unknown_node_type` НАШ, per-app
+/// (`kWarningCodes`), как у [DuplicateNodeWarning]: ближайший код реестра
+/// `protocol_unsupported` — уровня `error` и говорит «узел отброшен».
+final class UnknownNodeTypeWarning extends NodeWarning {
+  /// Значение поля `type` записи.
+  final String type;
+
+  const UnknownNodeTypeWarning(this.type);
+
+  @override
+  List<Object?> get props => [type];
+
+  @override
+  String messageWith(GetLocalText t) => t.s("Unknown node type");
+
+  /// Текст карточки уведомления.
+  String detailWith(GetLocalText t) => t.s(
+      "The app does not know this node type and does not check it. The node goes to the core as written.");
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -756,6 +754,7 @@ final class RegistryWarning extends NodeWarning {
     this.value,
     this.params = const {},
     this.ownerTag = '',
+    this.applied = true,
   });
 
   /// Код из `registry/warnings.json` — он же код конформанса (PARSING_PRINCIPLES §6).
@@ -783,6 +782,23 @@ final class RegistryWarning extends NodeWarning {
   @override
   final String ownerTag;
 
+  /// §577 — см. [NodeWarning.applied]. В идентичность ([props]) входит
+  /// только `false`: применённая запись равна прежней записи без признака.
+  @override
+  final bool applied;
+
+  /// §577 — та же запись с признаком «не применено».
+  RegistryWarning notApplied() => applied
+      ? RegistryWarning(
+          code: code,
+          path: path,
+          value: value,
+          params: params,
+          ownerTag: ownerTag,
+          applied: false,
+        )
+      : this;
+
   /// §500 — копия с `value: ***`, если путь — секретное поле реестра.
   RegistryWarning withSecretValueMasked() {
     final masked = maskRegistrySecretValue(path, value);
@@ -793,12 +809,18 @@ final class RegistryWarning extends NodeWarning {
       value: masked,
       params: params,
       ownerTag: ownerTag,
+      applied: applied,
     );
   }
 
   @override
-  List<Object?> get props =>
-      [code, path, value, ...params.entries.map((e) => '${e.key}=${e.value}')];
+  List<Object?> get props => [
+        code,
+        path,
+        value,
+        ...params.entries.map((e) => '${e.key}=${e.value}'),
+        if (!applied) 'applied=false',
+      ];
 
   /// Строка узла — `title_<lang>` реестра. Язык: `ru` при русском UI, иначе
   /// `en` (`zh` падает в `en`, пока лаунчер не добавит третий набор).

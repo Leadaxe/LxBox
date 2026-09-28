@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -5,7 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../config/consts.dart';
 import '../models/parser_config.dart';
 import 'app_log.dart';
-import 'builder/if_engine.dart' show TemplateIfError, validateIfConstructs;
+import 'builder/if_engine.dart' show TemplateIfError, validateCondNode, validateIfConstructs;
 import 'l10n/locale_controller.dart';
 import 'l10n/template_overlay.dart';
 
@@ -64,12 +65,23 @@ class TemplateLoader {
       }
     }
 
-    final template = WizardTemplate.fromJson(json);
+    var template = WizardTemplate.fromJson(json);
 
     // §120 / SPEC 393-D4: валидация условных конструкций против объявленных
     // var-нод. Кривая конструкция в bundled-шаблоне = баг разработчика →
     // бросаем на load (не молча битый конфиг).
-    validateTemplateConstructs(json, template);
+    //
+    // §578/§83 — исключение: `for_each` без `node_type`/`as` снимает ТОЛЬКО
+    // свой пресет (лог + пресет пропадает из перечня), а не весь шаблон —
+    // `validateTemplateConstructs` вырезает такие записи из `json` на месте
+    // и возвращает их `preset_id`. Остальные ошибки конструкций шаблона по
+    // прежнему бросают на весь load.
+    final dropped = validateTemplateConstructs(json, template);
+    if (dropped.isNotEmpty) {
+      // `json` уже отфильтрован — пересобираем `template`, чтобы
+      // `selectableRules` не содержал снятые записи.
+      template = WizardTemplate.fromJson(json);
+    }
 
     // §267: инвариант зеркал magic_nodes ↔ consts.dart. Тот же принцип, что
     // validateIfConstructs — расхождение в bundled-шаблоне = баг разработчика,
@@ -99,7 +111,16 @@ class TemplateLoader {
 ///
 /// [raw] — декодированный (и уже оверлеенный) JSON шаблона; [template] — он же
 /// разобранный, источник глобальных объявлений.
-void validateTemplateConstructs(
+///
+/// §578/§83 — `for_each` без обязательных `node_type`/`as` не валит весь
+/// шаблон: запись пресета удаляется из `raw['selectable_rules']` (мутация на
+/// месте), в лог уходит предупреждение, а load продолжается — остальные
+/// пресеты и глобальные конструкции проверяются как обычно. Возвращает
+/// `preset_id` (или индекс, если id нет) снятых так пресетов — пустой список,
+/// если снимать было нечего. Прочие ошибки конструкций шаблона (`#if`/`#tpl`/
+/// `#enable` вне `for_each`, `filter` на необъявленное имя и т.п.)
+/// по-прежнему бросают [TemplateIfError] на весь load.
+List<String> validateTemplateConstructs(
   Map<String, dynamic> raw,
   WizardTemplate template,
 ) {
@@ -123,11 +144,34 @@ void validateTemplateConstructs(
   _validateDnsServerPlaceholders(raw);
 
   final rules = raw['selectable_rules'] as List? ?? const [];
+  final dropped = <String>[];
+  final toRemove = <Map<String, dynamic>>[];
   for (var i = 0; i < rules.length; i++) {
     final r = rules[i];
     if (r is! Map<String, dynamic>) continue;
     final id = (r['preset_id'] as String?) ?? '$i';
-    final scope = _presetScope(r, globals);
+    var scope = _presetScope(r, globals);
+    // §578 — `for_each`: обязательные `node_type`/`as`, имена узла в области
+    // видимости тела и `filter`.
+    if (r.containsKey('for_each')) {
+      final fe = PresetForEach.fromJson(r['for_each']);
+      if (fe == null) {
+        // §83 — снимаем ТОЛЬКО этот пресет: `node_type`/`as` пустые или
+        // отсутствуют делают тело нераскрываемым (некого писать в `@<as>`),
+        // но это не повод отвергать остальной (валидный) шаблон целиком.
+        AppLog.I.warning(
+            'template: selectable_rules[$id].for_each missing required '
+            '`node_type`/`as` — preset dropped, rest of the template loads');
+        dropped.add(id);
+        toRemove.add(r);
+        continue;
+      }
+      scope = _ForEachScope(scope, fe.as);
+      final filter = fe.filter;
+      if (filter != null) {
+        validateCondNode(filter, scope, 'selectable_rules[$id].for_each.filter');
+      }
+    }
     for (final key in const ['rule', 'rules', 'rule_set', 'dns_rules']) {
       if (!r.containsKey(key)) continue;
       validateIfConstructs(r[key], scope,
@@ -139,6 +183,10 @@ void validateTemplateConstructs(
           v, scope, 'selectable_rules[$id].vars[${v['name'] ?? v['ref']}]');
     }
   }
+  for (final r in toRemove) {
+    rules.remove(r);
+  }
+  return dropped;
 }
 
 /// §443 (SPEC 129 Н11, D-118) — `@name` в теле шаблонного DNS-сервера
@@ -219,6 +267,42 @@ Map<String, WizardVar> _presetScope(
     scope[name] = WizardVar.fromJson(v);
   }
   return scope;
+}
+
+/// §578 — область видимости пресета с `for_each`: к объявленным именам
+/// добавляются имена узла — `@<as>` (тег, text), `@<as>.skip_presets` (bool),
+/// `@<as>.body.<путь>` (поле тела, text). Путь тела заранее не известен,
+/// поэтому имена узла вычисляются при обращении, а не перечисляются.
+class _ForEachScope extends MapBase<String, WizardVar> {
+  _ForEachScope(this._base, this._as);
+
+  final Map<String, WizardVar> _base;
+  final String _as;
+
+  @override
+  WizardVar? operator [](Object? key) {
+    final own = _base[key];
+    if (own != null || key is! String) return own;
+    if (key == _as || key.startsWith('$_as.body.')) {
+      return WizardVar(name: key, type: 'text', defaultValue: '');
+    }
+    if (key == '$_as.skip_presets') {
+      return WizardVar(name: key, type: 'bool', defaultValue: '');
+    }
+    return null;
+  }
+
+  @override
+  void operator []=(String key, WizardVar value) => _base[key] = value;
+
+  @override
+  void clear() => _base.clear();
+
+  @override
+  Iterable<String> get keys => _base.keys;
+
+  @override
+  WizardVar? remove(Object? key) => _base.remove(key);
 }
 
 /// `#on_change` (канон) / `on_change` (легаси): `{"#set": {"@target": <#if>}}`.

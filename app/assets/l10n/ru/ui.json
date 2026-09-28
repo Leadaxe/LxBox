@@ -75,22 +75,6 @@
       "other": "%d в цепочке"
     }
   },
-  "%d DNS rules": {
-    "value": {
-      "one": "%d DNS-правило",
-      "few": "%d DNS-правила",
-      "many": "%d DNS-правил",
-      "other": "%d DNS-правил"
-    }
-  },
-  "%d DNS servers": {
-    "value": {
-      "one": "%d DNS-сервер",
-      "few": "%d DNS-сервера",
-      "many": "%d DNS-серверов",
-      "other": "%d DNS-серверов"
-    }
-  },
   "%d elements": {
     "value": {
       "one": "%d элемент",
@@ -384,14 +368,6 @@
       "few": "%d протокола",
       "many": "%d протоколов",
       "other": "%d протокола"
-    }
-  },
-  "%d rules": {
-    "value": {
-      "one": "%d правило",
-      "few": "%d правила",
-      "many": "%d правил",
-      "other": "%d правил"
     }
   },
   "%d seconds": {
@@ -1216,12 +1192,6 @@
   },
   "Clear cached files": {
     "value": "Удалить кэшированные файлы"
-  },
-  "Clear sections": {
-    "value": "Очистить секции"
-  },
-  "Clear sections?": {
-    "value": "Очистить секции?"
   },
   "Client subnet": {
     "value": "Подсеть клиента"
@@ -2210,9 +2180,6 @@
   "From %s %s": {
     "value": "Из %s %s"
   },
-  "From nodes · read-only, edited in the node": {
-    "value": "Из узлов · только чтение, правятся в узле"
-  },
   "From routing rules · ordered as in Routing": {
     "value": "Из правил маршрутизации · порядок как в «Маршрутизации»"
   },
@@ -2291,9 +2258,6 @@
   },
   "Haptic feedback": {
     "value": "Виброотклик"
-  },
-  "Has node sections": {
-    "value": "Есть секции узла"
   },
   "Headers copied": {
     "value": "Заголовки скопированы"
@@ -3055,9 +3019,6 @@
   "No valid outbounds in JSON": {
     "value": "В JSON нет валидных outbound-объектов"
   },
-  "Node": {
-    "value": "Узел"
-  },
   "down": {
     "value": "down"
   },
@@ -3093,9 +3054,6 @@
   },
   "Node info copied": {
     "value": "Данные узла скопированы"
-  },
-  "Node section record dropped: %s": {
-    "value": "Запись секции узла отброшена: %s"
   },
   "Node — direct detour": {
     "value": "Узел — прямой detour"
@@ -3243,6 +3201,9 @@
   "Only single servers can be moved": {
     "value": "Переносить можно только одиночные серверы"
   },
+  "Only the node is saved. The rest of the input is not kept.": {
+    "value": "Сохранён только узел. Остальное содержимое не сохранено."
+  },
   "Open": {
     "value": "Открыть"
   },
@@ -3333,9 +3294,6 @@
   },
   "Paste a proxy URL": {
     "value": "Вставьте proxy-ссылку"
-  },
-  "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
-    "value": "Чтобы приложить правила узла, вставьте на вкладке JSON конфиг sing-box с dns/route или документ с «sections»."
   },
   "Paste a sing-box outbound JSON": {
     "value": "Вставьте JSON исходящего канала sing-box"
@@ -3477,6 +3435,9 @@
   },
   "Preferences, ping options, auto-update, wifi history": {
     "value": "Предпочтения, параметры пинга, автообновление, история Wi-Fi"
+  },
+  "Press back again to exit": {
+    "value": "Нажмите «назад» ещё раз для выхода"
   },
   "Prefix": {
     "value": "Префикс"
@@ -3916,9 +3877,6 @@
   "Rules": {
     "value": "Правила"
   },
-  "Rules and DNS records this node carries": {
-    "value": "Правила и DNS-записи, которые узел носит с собой"
-  },
   "Rules changed. Refresh the subscription to apply them.": {
     "value": "Правила изменены. Обновите подписку, чтобы применить их."
   },
@@ -4006,14 +3964,6 @@
   "Saved to Downloads: %s (%d bytes)": {
     "value": "Сохранено в «Загрузки»: %s (%d байт)"
   },
-  "Saved · %d section records dropped": {
-    "value": {
-      "one": "Сохранено · %d запись секций отброшена",
-      "few": "Сохранено · %d записи секций отброшены",
-      "many": "Сохранено · %d записей секций отброшено",
-      "other": "Сохранено · %d записей секций отброшено"
-    }
-  },
   "Saved. Force-stop & reopen app to apply.": {
     "value": "Сохранено. Полностью закройте и снова откройте приложение, чтобы применить."
   },
@@ -4029,11 +3979,14 @@
   "Search domain / IP / app": {
     "value": "Поиск: домен / IP / приложение"
   },
-  "Sections": {
-    "value": "Секции"
+  "Skip presets": {
+    "value": "Пропускать пресеты"
   },
-  "Sections cleared": {
-    "value": "Секции очищены"
+  "Presets will not add routing or DNS rules for this node.": {
+    "value": "Пресеты не будут добавлять правила маршрутизации и DNS для этого узла."
+  },
+  "No matching nodes": {
+    "value": "Нет подходящих узлов"
   },
   "Select a %s file": {
     "value": "Выберите файл %s"
@@ -4195,9 +4148,6 @@
   "Shown as the server title in the Servers list. If empty, \"%s\" is used.": {
     "value": "Показывается как заголовок сервера в списке «Серверы». Если пусто, используется «%s»."
   },
-  "Shown in Routing and DNS with the node's tag": {
-    "value": "Показываются в Routing и DNS с тегом узла"
-  },
   "Single object or array of outbounds. WireGuard routes to endpoints[] automatically.": {
     "value": "Один объект или массив исходящих каналов. WireGuard автоматически направляется в endpoints[]."
   },
@@ -4312,9 +4262,6 @@
   },
   "Stopping…": {
     "value": "Остановка…"
-  },
-  "Stored JSON": {
-    "value": "JSON как хранится"
   },
   "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
     "value": "Хранится только на устройстве. При выключении записи не удаляются — убирайте их по одной в «Pick saved» (долгое нажатие на чип → Remove)."
@@ -4566,14 +4513,11 @@
   "The current workspace cannot be deleted": {
     "value": "Текущее рабочее пространство удалить нельзя"
   },
+  "The document has no node to save.": {
+    "value": "В документе нет узла для сохранения."
+  },
   "The device is removed from the tailnet when it goes offline": {
     "value": "Устройство удаляется из tailnet, когда уходит в офлайн"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
-    "value": "Документ несёт и «sections», и «dns»/«route» — оставьте что-то одно"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
-    "value": "Документ несёт и «sections», и «dns»/«route»: взяты «sections», остальное проигнорировано."
   },
   "The first position (%s) dials through its own detour — the real path is longer than shown: one more hop precedes it that is not in this list.": {
     "value": "Первая позиция (%s) ходит через свой detour — реальный путь длиннее показанного: перед ней есть ещё один хоп, которого нет в списке."
@@ -4583,9 +4527,6 @@
   },
   "The node's original text. Save writes it as is.": {
     "value": "Исходный текст узла. Save записывает его как есть."
-  },
-  "The node's rules and DNS records will be removed. The node itself stays.": {
-    "value": "Правила и DNS-записи узла будут удалены. Сам узел останется."
   },
   "The servers it selects from stay in the folder.": {
     "value": "Серверы, из которых он выбирает, останутся в папке."
@@ -5130,9 +5071,6 @@
   "first matching node becomes default": {
     "value": "первый совпавший узел станет узлом по умолчанию"
   },
-  "from node %s": {
-    "value": "из узла %s"
-  },
   "group": {
     "value": "группа"
   },
@@ -5180,9 +5118,6 @@
   },
   "node": {
     "value": "узел"
-  },
-  "node is disabled": {
-    "value": "узел выключен"
   },
   "not found": {
     "value": "не найдено"
@@ -5433,5 +5368,155 @@
       "many": "%d записей будут пропущены",
       "other": "%d записи будут пропущены"
     }
+  },
+  "The node is written by hand, so the app changed nothing in it.": {
+    "value": "Узел написан вручную, поэтому приложение ничего в нём не изменило."
+  },
+  "starting": {
+    "value": "запуск"
+  },
+  "running": {
+    "value": "работает"
+  },
+  "sign-in needed": {
+    "value": "нужен вход"
+  },
+  "stopped": {
+    "value": "остановлен"
+  },
+  "Start VPN to see the network.": {
+    "value": "Запустите VPN, чтобы увидеть сеть."
+  },
+  "The node is not in the running config.": {
+    "value": "Узла нет в работающем конфиге."
+  },
+  "Devices": {
+    "value": "Устройства"
+  },
+  "No devices": {
+    "value": "Устройств нет"
+  },
+  "Status": {
+    "value": "Состояние"
+  },
+  "signed in with a key": {
+    "value": "вход по ключу"
+  },
+  "Sign in": {
+    "value": "Войти"
+  },
+  "Log out": {
+    "value": "Выйти"
+  },
+  "Log out?": {
+    "value": "Выйти?"
+  },
+  "The node leaves the network. The node has a sign-in key, so it signs in again on the next start.": {
+    "value": "Узел выйдет из сети. В узле записан ключ входа, поэтому при следующем запуске он войдёт снова."
+  },
+  "The node leaves the network. To join again, sign in from this tab.": {
+    "value": "Узел выйдет из сети. Чтобы вернуться, войдите с этой вкладки."
+  },
+  "Failed: %s": {
+    "value": "Не удалось: %s"
+  },
+  "This device": {
+    "value": "Это устройство"
+  },
+  "MagicDNS name": {
+    "value": "Имя MagicDNS"
+  },
+  "Address": {
+    "value": "Адрес"
+  },
+  "Key expiry": {
+    "value": "Срок ключа"
+  },
+  "Exit node": {
+    "value": "Exit node"
+  },
+  "None": {
+    "value": "Нет"
+  },
+  "offline": {
+    "value": "не в сети"
+  },
+  "Save choice": {
+    "value": "Записать выбор"
+  },
+  "online": {
+    "value": "в сети"
+  },
+  "last seen %s": {
+    "value": "был в сети %s"
+  },
+  "key expired": {
+    "value": "ключ истёк"
+  },
+  "shared": {
+    "value": "общий"
+  },
+  "exit node": {
+    "value": "exit node"
+  },
+  "Copy name": {
+    "value": "Копировать имя"
+  },
+  "Copy address": {
+    "value": "Копировать адрес"
+  },
+  "No reply: %s": {
+    "value": "Нет ответа: %s"
+  },
+  "%s ms, direct": {
+    "value": "%s мс, напрямую"
+  },
+  "%s ms, direct, %s": {
+    "value": "%s мс, напрямую, %s"
+  },
+  "%s ms, relay": {
+    "value": "%s мс, через ретранслятор"
+  },
+  "%s ms, relay %s": {
+    "value": "%s мс, через ретранслятор %s"
+  },
+  "Network": {
+    "value": "Сеть"
+  },
+  "Not saved. Traffic is not routed through this node until you save the choice.": {
+    "value": "Не записано. Трафик не направляется в этот узел, пока выбор не записан."
+  },
+  "Not saved. The node stays in the lists, but has no exit until you save the choice.": {
+    "value": "Не записано. Узел остаётся в списках, но без выхода, пока выбор не записан."
+  },
+  "Not saved. The choice is lost after restart.": {
+    "value": "Не записано. После перезапуска выбор пропадёт."
+  },
+  "This node has no exit. Check devices on the Network tab.": {
+    "value": "У этого узла нет выхода. Проверяйте устройства на вкладке «Сеть»."
+  },
+  "DNS cache size": {
+    "value": "Размер кэша DNS"
+  },
+  "Number of cached answers.": {
+    "value": "Число ответов в кэше."
+  },
+  "Serve stale answers": {
+    "value": "Отдавать устаревшие ответы"
+  },
+  "Answer from cache at once and refresh in the background.": {
+    "value": "Сразу отвечать из кэша и обновлять запись в фоне."
+  },
+  "Keep DNS cache after restart": {
+    "value": "Сохранять кэш DNS после перезапуска"
+  },
+  "Unknown node type": {
+    "value": "Незнакомый тип узла"
+  },
+  "The app does not know this node type and does not check it. The node goes to the core as written.": {
+    "value": "Приложение не знает этот тип узла и не проверяет его. Узел уходит в ядро как написан."
+  },
+  "Comments were removed.": {
+    "value": "Комментарии убраны."
   }
 }

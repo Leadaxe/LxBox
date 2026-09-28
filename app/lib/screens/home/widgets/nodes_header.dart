@@ -31,6 +31,15 @@ class NodesHeader extends StatelessWidget {
   static bool _isSortNonDefault(HomeState s) =>
       !s.pinDirect || !s.pinAuto || !s.resortOnManualPing;
 
+  /// Число узлов в заголовке: при псевдо-направлении NETWORKS (задача 579) —
+  /// его узлы, иначе узлы выбранного направления.
+  static int listCount(HomeState s) =>
+      s.showingNetworks ? s.networksNodes.length : s.nodes.length;
+
+  /// Кнопки сортировки и фильтров: у NETWORKS своего фильтра и сортировки
+  /// нет (задача 579), кнопки скрыты.
+  static bool showsListTools(HomeState s) => !s.showingNetworks;
+
   @override
   Widget build(BuildContext context) {
     final state = controller.state;
@@ -39,113 +48,120 @@ class NodesHeader extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onLongPress: () {
-          Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => RoutingScreen(
-              subController: subController,
-              homeController: controller,
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => RoutingScreen(
+                subController: subController,
+                homeController: controller,
+              ),
             ),
-          ));
+          );
         },
         child: Row(
           children: [
             Text(
               getLocalText.s("Nodes"),
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
             ),
-            if (state.nodes.isNotEmpty) ...[
+            if (listCount(state) > 0) ...[
               const SizedBox(width: 4),
               Text(
-                '(${state.nodes.length})',
+                '(${listCount(state)})',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
             const Spacer(),
-            // §070: sort = InkWell (tap=cycle, long-press=меню), не IconButton.
-            // Amber-точка когда sort non-default; иконка в `manual` = ⠿ (§071).
-            Tooltip(
-              message: state.sortMode.label(),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  InkWell(
-                    onTap: state.nodes.isEmpty ? null : controller.cycleSortMode,
-                    onLongPress: state.nodes.isEmpty ? null : onSortLongPress,
-                    borderRadius: BorderRadius.circular(18),
-                    child: SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: Center(
-                        child: Icon(
-                          state.sortMode.icon,
-                          size: 20,
-                          color: state.nodes.isEmpty
-                              ? Theme.of(context).disabledColor
-                              : null,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_isSortNonDefault(state))
-                    Positioned(
-                      right: 4,
-                      top: 4,
-                      child: IgnorePointer(
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.amber,
-                            shape: BoxShape.circle,
+            if (showsListTools(state)) ...[
+              // §070: sort = InkWell (tap=cycle, long-press=меню), не IconButton.
+              // Amber-точка когда sort non-default; иконка в `manual` = ⠿ (§071).
+              Tooltip(
+                message: state.sortMode.label(),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    InkWell(
+                      onTap: state.nodes.isEmpty
+                          ? null
+                          : controller.cycleSortMode,
+                      onLongPress: state.nodes.isEmpty ? null : onSortLongPress,
+                      borderRadius: BorderRadius.circular(18),
+                      child: SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: Center(
+                          child: Icon(
+                            state.sortMode.icon,
+                            size: 20,
+                            color: state.nodes.isEmpty
+                                ? Theme.of(context).disabledColor
+                                : null,
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
-            // §048 / §044-new-profiler — toggle панели фильтров. Иконка
-            // `Icons.filter_list` (унифицирована с control-строкой профайлера).
-            // Primary-цвет + точка когда есть active match-filter (§095).
-            IconButton(
-              tooltip: filter.panelExpanded
-                  ? getLocalText.s("Hide filters")
-                  : getLocalText.s("Show filters"),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: filter.togglePanel,
-              icon: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(
-                    Icons.filter_list,
-                    size: 20,
-                    color: filter.hasActiveFilters
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
-                  if (filter.hasActiveFilters)
-                    Positioned(
-                      right: -2,
-                      top: -2,
-                      child: IgnorePointer(
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.amber, // видимый маркер «фильтр активен»
-                            shape: BoxShape.circle,
+                    if (_isSortNonDefault(state))
+                      Positioned(
+                        right: 4,
+                        top: 4,
+                        child: IgnorePointer(
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.amber,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              // §048 / §044-new-profiler — toggle панели фильтров. Иконка
+              // `Icons.filter_list` (унифицирована с control-строкой профайлера).
+              // Primary-цвет + точка когда есть active match-filter (§095).
+              IconButton(
+                tooltip: filter.panelExpanded
+                    ? getLocalText.s("Hide filters")
+                    : getLocalText.s("Show filters"),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: filter.togglePanel,
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      Icons.filter_list,
+                      size: 20,
+                      color: filter.hasActiveFilters
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    if (filter.hasActiveFilters)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: IgnorePointer(
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors
+                                  .amber, // видимый маркер «фильтр активен»
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

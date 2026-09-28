@@ -176,11 +176,139 @@ class BundleMerge {
 /// (spec §011 compliance). Если path нет, remote-rule_set пропускается +
 /// warning: правило не активно до первого download'а через UI (spec §033,
 /// task 011).
+///
+/// §578 — пресет с `for_each`: тело повторяется для каждого узла из [nodes]
+/// (порядок конфига), у которого `type` тела равен `node_type` и `filter`
+/// истинен; узел виден телу под именем `as` ([presetNodeResolver]). Фрагменты
+/// повторов склеиваются подряд. Нет подходящих узлов — пресет пуст. Теги
+/// такого пресета не неймспейсятся: их уникальность даёт тег узла (`@{node}-dns`),
+/// а ссылки пользователя на `<тег>-dns` остаются рабочими.
 PresetFragments expandPreset(
   CustomRulePreset rule,
   SelectableRule preset, {
   Map<String, String> srsPaths = const {},
   Map<String, String> globalVars = const {},
+  List<PresetNode> nodes = const [],
+}) {
+  final forEach = preset.forEach;
+  if (forEach == null) {
+    return _expandPresetBody(rule, preset,
+        srsPaths: srsPaths, globalVars: globalVars);
+  }
+  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  if (resolvedVars.error != null) {
+    return PresetFragments(warnings: [resolvedVars.error!]);
+  }
+  final parts = <PresetFragments>[
+    for (final node in _forEachMatches(forEach, nodes, resolvedVars.vars))
+      _expandPresetBody(rule, preset,
+          srsPaths: srsPaths,
+          globalVars: globalVars,
+          nodeVars: presetNodeResolver(forEach.as, node),
+          namespace: false),
+  ];
+  return PresetFragments(
+    dnsServers: [for (final p in parts) ...p.dnsServers],
+    dnsRules: [for (final p in parts) ...p.dnsRules],
+    ruleSets: [for (final p in parts) ...p.ruleSets],
+    routingRules: [for (final p in parts) ...p.routingRules],
+    // Одна и та же строка от каждого повтора — одна запись.
+    warnings: {for (final p in parts) ...p.warnings}.toList(),
+  );
+}
+
+/// §578 — узлы, которые обслуживает пресет с `for_each`: `type` тела равен
+/// `node_type`, `filter` истинен. Порядок — порядок [nodes]. Пресет без
+/// `for_each` или с ошибкой переменных — пусто. Та же выборка, что у
+/// [expandPreset]: экраны маршрутов и DNS показывают по ней, какие узлы
+/// обслуживает пресет.
+List<PresetNode> presetForEachNodes(
+  CustomRulePreset rule,
+  SelectableRule preset,
+  List<PresetNode> nodes, {
+  Map<String, String> globalVars = const {},
+}) {
+  final forEach = preset.forEach;
+  if (forEach == null) return const [];
+  final resolvedVars = presetVarsMap(rule, preset, globalVars: globalVars);
+  if (resolvedVars.error != null) return const [];
+  return _forEachMatches(forEach, nodes, resolvedVars.vars).toList();
+}
+
+Iterable<PresetNode> _forEachMatches(
+  PresetForEach forEach,
+  List<PresetNode> nodes,
+  Map<String, dynamic> varsMap,
+) sync* {
+  for (final node in nodes) {
+    if (node.body['type'] != forEach.nodeType) continue;
+    final filter = forEach.filter;
+    if (filter != null) {
+      final nodeVars = presetNodeResolver(forEach.as, node);
+      final ok = evalCond(deepCloneJson(filter), (name) {
+        final v = nodeVars(name);
+        if (v != null) return v;
+        if (!varsMap.containsKey(name)) return null;
+        return varsMap[name] ?? Dropped.instance;
+      });
+      if (!ok) continue;
+    }
+    yield node;
+  }
+}
+
+/// §578 — узел конфига для `for_each`: финальный тег, тело записи в конфиге
+/// и поле записи `skip_presets` (у узла подписки записи нет — `false`).
+class PresetNode {
+  const PresetNode({
+    required this.tag,
+    required this.body,
+    this.skipPresets = false,
+  });
+
+  final String tag;
+  final Map<String, dynamic> body;
+  final bool skipPresets;
+}
+
+/// §578 — поля записи узла, видимые пресету. Перечень закрытый, расширяется
+/// контрактом.
+const Set<String> kPresetNodeRecordFields = {'skip_presets'};
+
+/// §578 — резолвер имён узла под именем [as]:
+/// - `@<as>` — финальный тег;
+/// - `@<as>.<поле записи>` — поле из [kPresetNodeRecordFields];
+/// - `@<as>.body.<путь>` — поле тела, путь через точку.
+///
+/// Отсутствующее или пустое поле — [Dropped] (в условии ложь, в теле ключ
+/// или элемент снимается). Имя вне неймспейса узла — null (решает словарь
+/// переменных пресета).
+VarResolver presetNodeResolver(String as, PresetNode node) {
+  final prefix = '$as.';
+  return (String name) {
+    if (name == as) return node.tag;
+    if (!name.startsWith(prefix)) return null;
+    final field = name.substring(prefix.length);
+    if (field == 'skip_presets') return node.skipPresets;
+    if (!field.startsWith('body.')) return Dropped.instance;
+    Object? cur = node.body;
+    for (final part in field.substring('body.'.length).split('.')) {
+      if (cur is! Map || !cur.containsKey(part)) return Dropped.instance;
+      cur = cur[part];
+    }
+    if (cur == null) return Dropped.instance;
+    if (cur is String && cur.isEmpty) return Dropped.instance;
+    return deepCloneJson(cur);
+  };
+}
+
+PresetFragments _expandPresetBody(
+  CustomRulePreset rule,
+  SelectableRule preset, {
+  Map<String, String> srsPaths = const {},
+  Map<String, String> globalVars = const {},
+  VarResolver? nodeVars,
+  bool namespace = true,
 }) {
   final warnings = <String>[];
 
@@ -198,10 +326,10 @@ PresetFragments expandPreset(
   for (final rs in preset.ruleSets) {
     // SPEC 107: гейт фрагмента — #enable (канон) либо легаси
     // `enabled: "@var"` (§045). Отсутствие обоих = always-on.
-    if (!fragmentGateSatisfied(rs, varsMap)) continue;
+    if (!fragmentGateSatisfied(rs, varsMap, extra: nodeVars)) continue;
 
     final copy = deepCopyJson(rs);
-    final result = substituteVars(copy, varsMap);
+    final result = substituteVars(copy, varsMap, extra: nodeVars);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
     // §555 — набор без источника по `type` не выпадает молча.
@@ -253,7 +381,7 @@ PresetFragments expandPreset(
   final dnsRules = <Map<String, dynamic>>[];
   {
     final copy = <dynamic>[for (final r in preset.dnsRules) deepCopyJson(r)];
-    final substituted = substituteVars(copy, varsMap);
+    final substituted = substituteVars(copy, varsMap, extra: nodeVars);
     final items = substituted is List ? substituted : const [];
     for (final item in items) {
       if (item is! Map<String, dynamic>) continue;
@@ -324,7 +452,7 @@ PresetFragments expandPreset(
     // <dynamic>: if_engine._walkList мутирует список in-place через
     // addAll(List<dynamic>) — типизированный List<Map> тут упадёт на cast.
     final copy = <dynamic>[for (final r in preset.rules) deepCopyJson(r)];
-    final substituted = substituteVars(copy, varsMap);
+    final substituted = substituteVars(copy, varsMap, extra: nodeVars);
     final items = substituted is List ? substituted : const [];
     for (final item in items) {
       if (item is! Map<String, dynamic>) continue;
@@ -483,7 +611,7 @@ PresetFragments expandPreset(
   for (final s in preset.dnsServers) {
     if (wanted != null && !wanted.contains(s['tag'])) continue;
     final copy = deepCopyJson(s);
-    final result = substituteVars(copy, varsMap);
+    final result = substituteVars(copy, varsMap, extra: nodeVars);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
     // §555 — адресный сервер без адреса ядро не примет: выпадает с кодом,
@@ -496,16 +624,16 @@ PresetFragments expandPreset(
     dnsServers.add(result);
   }
 
-  return namespacePresetTags(
-    preset.presetId,
-    PresetFragments(
-      dnsServers: dnsServers,
-      dnsRules: dnsRules,
-      ruleSets: expandedRuleSets,
-      routingRules: routingRules,
-      warnings: warnings,
-    ),
+  final fragments = PresetFragments(
+    dnsServers: dnsServers,
+    dnsRules: dnsRules,
+    ruleSets: expandedRuleSets,
+    routingRules: routingRules,
+    warnings: warnings,
   );
+  return namespace
+      ? namespacePresetTags(preset.presetId, fragments)
+      : fragments;
 }
 
 /// §103 C7 (D-012) — неймспейс тегов пресета: `<preset_id>:<tag>`.
@@ -710,8 +838,17 @@ String? normalizeDnsDetour(
 /// - `@name`, имя в `vars`, значение null → [Dropped] (родитель удаляет);
 /// - `@name`, имени нет в `vars` → оставить плейсхолдер (legacy/section-var);
 /// - не-`@` строка → как есть.
-dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
+///
+/// §578 — [extra] (имена узла `for_each`) спрашивается первым; null от него —
+/// имя не его, решает [vars].
+dynamic substituteVars(
+  dynamic obj,
+  Map<String, dynamic> vars, {
+  VarResolver? extra,
+}) {
   return walk(obj, (name) {
+    final own = extra?.call(name);
+    if (own != null) return own;
     if (!vars.containsKey(name)) return null; // unknown → keep placeholder
     final v = vars[name];
     if (v == null) return Dropped.instance; // optional-var §033 → drop
@@ -815,11 +952,12 @@ dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
 /// на переменные пресета, которых нет в глобальном резолвере.
 bool fragmentGateSatisfied(
   Map<String, dynamic> fragment,
-  Map<String, dynamic> varsMap,
-) {
+  Map<String, dynamic> varsMap, {
+  VarResolver? extra,
+}) {
   final legacy = fragment['enabled'];
   if (legacy is String) {
-    final substituted = substituteVars(legacy, varsMap);
+    final substituted = substituteVars(legacy, varsMap, extra: extra);
     if (substituted is! String || substituted.trim().toLowerCase() != 'true') {
       return false;
     }
@@ -832,6 +970,8 @@ bool fragmentGateSatisfied(
   final gate = fragment[enableKey];
   if (gate == null) return true;
   Object? resolve(String name) {
+    final own = extra?.call(name);
+    if (own != null) return own;
     final v = varsMap[name];
     if (v == null) return null;
     return v is String ? coerceVarValue(v, _gateVarType(v)) : v;

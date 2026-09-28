@@ -20,6 +20,13 @@ import io.nekohasekai.libbox.PoolSlotIterator
 import io.nekohasekai.libbox.RuleIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
+import io.nekohasekai.libbox.TailscalePeer
+import io.nekohasekai.libbox.TailscalePingHandler
+import io.nekohasekai.libbox.TailscalePingResult
+import io.nekohasekai.libbox.TailscalePingSession
+import io.nekohasekai.libbox.TailscaleStatusHandler
+import io.nekohasekai.libbox.TailscaleStatusSubscription
+import io.nekohasekai.libbox.TailscaleStatusUpdate
 import io.nekohasekai.libbox.URLTestOutboundResult
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -270,6 +277,8 @@ class BoxCommandClient {
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")
         disconnectClient(pingClient, "shutdownAll") // §175
+        stopTailscaleStatus() // §579
+        stopTailscalePing() // §581
         screenAccumulator.set(null)
         profilerAccumulator.set(null)
     }
@@ -336,6 +345,177 @@ class BoxCommandClient {
     private fun scheduleReconnect(delayMs: Long, action: () -> Unit) {
         val capped = delayMs.coerceAtMost(RECONNECT_BACKOFF_MAX_MS)
         mainHandler.postDelayed({ runCatching { action() } }, capped)
+    }
+
+    // ═══════════════════════ §579 Tailscale status ═══════════════════════
+    // Подписка `SubscribeTailscaleStatus` на ОТДЕЛЬНОМ клиенте без команд:
+    // `cancelPing` рвёт pingClient, `pauseStatus`/`pauseScreen` — свои клиенты;
+    // подписку они не задевают. Держит её Dart: поднимает, пока VPN включён и в
+    // конфиге есть узел Tailscale без exit_node (псевдо-направление NETWORKS).
+    // Ядро шлёт полный список endpoint'ов на каждое обновление → coalesce.
+
+    private val tailscaleClient = AtomicReference<CommandClient?>(null)
+    private val tailscaleSub = AtomicReference<TailscaleStatusSubscription?>(null)
+    private val tailscaleGen = AtomicInteger(0)
+
+    /// Поднять (или переподнять) подписку. Старт стрима — gRPC, звать с
+    /// `Dispatchers.IO`. Ошибка наружу не бросается: пишется в лог, Dart
+    /// остаётся без записей (строка узла показывает `starting`).
+    fun startTailscaleStatus() {
+        stopTailscaleStatus()
+        val gen = tailscaleGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            tailscaleClient.getAndSet(client)?.runCatching { disconnect() }
+            val sub = client.subscribeTailscaleStatus(TailscaleHandler(gen))
+            tailscaleSub.getAndSet(sub)?.runCatching { close() }
+        }.onFailure { Log.w(TAG, "startTailscaleStatus failed (gen=$gen): ${it.message}") }
+    }
+
+    fun stopTailscaleStatus() {
+        tailscaleGen.incrementAndGet()
+        tailscaleSub.getAndSet(null)?.runCatching { close() }
+            ?.onFailure { Log.w(TAG, "tailscale sub close failed: ${it.message}") }
+        disconnectClient(tailscaleClient, "stopTailscaleStatus")
+    }
+
+    /// Колбэки приходят из Go-потока: ни одного исключения наружу (JNI abort).
+    private inner class TailscaleHandler(private val gen: Int) : TailscaleStatusHandler {
+        override fun onStatusUpdate(update: TailscaleStatusUpdate?) {
+            runCatching {
+                if (gen != tailscaleGen.get() || update == null) return@runCatching
+                val out = ArrayList<Map<String, Any>>()
+                val iter = update.endpoints() ?: return@runCatching
+                while (iter.hasNext()) {
+                    val e = iter.next() ?: continue
+                    // §581 — полное состояние для вкладки Network. Имена,
+                    // адреса и ссылка входа в лог не пишутся (раздел 9).
+                    val groups = ArrayList<Map<String, Any>>()
+                    val gi = e.userGroups()
+                    while (gi != null && gi.hasNext()) {
+                        val g = gi.next() ?: continue
+                        val peers = ArrayList<Map<String, Any>>()
+                        val pi = g.peers()
+                        while (pi != null && pi.hasNext()) {
+                            val p = pi.next() ?: continue
+                            peers.add(tailscalePeerMap(p))
+                        }
+                        groups.add(mapOf(
+                            "user_id" to g.userID,
+                            "login_name" to (g.loginName ?: ""),
+                            "display_name" to (g.displayName ?: ""),
+                            "peers" to peers,
+                        ))
+                    }
+                    val m = HashMap<String, Any>()
+                    m["tag"] = e.endpointTag ?: ""
+                    m["backend_state"] = e.backendState ?: ""
+                    m["state_text"] = e.stateText ?: ""
+                    m["auth_url"] = e.authURL ?: ""
+                    m["network_name"] = e.networkName ?: ""
+                    m["magic_dns_suffix"] = e.magicDNSSuffix ?: ""
+                    m["key_auth"] = e.keyAuth
+                    e.self?.let { m["self"] = tailscalePeerMap(it) }
+                    e.exitNode?.let { m["exit_node"] = tailscalePeerMap(it) }
+                    m["user_groups"] = groups
+                    out.add(m)
+                }
+                tailscaleEmitter.offer(out)
+            }.onFailure { Log.w(TAG, "tailscale onStatusUpdate failed: ${it.javaClass.simpleName}") }
+        }
+
+        override fun onError(message: String?) {
+            runCatching { Log.w(TAG, "tailscale status stream error (gen=$gen): $message") }
+        }
+    }
+
+    /// §581 — `TailscalePeer` в map канала. `key_expiry`/`last_seen` — Unix-секунды
+    /// ядра (`Time.Unix()`), 0 = нет значения.
+    private fun tailscalePeerMap(p: TailscalePeer): Map<String, Any> {
+        val ips = ArrayList<String>()
+        val iter = p.tailscaleIPs()
+        while (iter != null && iter.hasNext()) iter.next()?.let { ips.add(it) }
+        return mapOf(
+            "stable_id" to (p.stableID ?: ""),
+            "host_name" to (p.hostName ?: ""),
+            "dns_name" to (p.dnsName ?: ""),
+            "os" to (p.os ?: ""),
+            "online" to p.online,
+            "exit_node" to p.exitNode,
+            "exit_node_option" to p.exitNodeOption,
+            "sharee_node" to p.shareeNode,
+            "expired" to p.expired,
+            "key_expiry" to p.keyExpiry,
+            "last_seen" to p.lastSeen,
+            "ips" to ips,
+        )
+    }
+
+    /// §581 — выбор (`stableID`) или снятие (`""`) exit node на ходу. Блокирующий
+    /// gRPC — звать с `Dispatchers.IO`. `null` = успех, иначе текст ошибки ядра.
+    fun setTailscaleExitNode(tag: String, stableID: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.setTailscaleExitNode(tag, stableID); null }
+            .getOrElse { Log.w(TAG, "setTailscaleExitNode failed"); it.message ?: "failed" }
+    }
+
+    /// §581 — выход узла из аккаунта. `null` = успех, иначе текст ошибки.
+    fun tailscaleLogout(tag: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.tailscaleLogout(tag); null }
+            .getOrElse { Log.w(TAG, "tailscaleLogout failed"); it.message ?: "failed" }
+    }
+
+    // §581 — проверка устройства. Одна сессия за раз; ответы — в
+    // `ccTailscalePingSink` (EventChannel `lxbox/cc/tailscale_ping`).
+    private val tailscalePingClient = AtomicReference<CommandClient?>(null)
+    private val tailscalePingSession = AtomicReference<TailscalePingSession?>(null)
+    private val tailscalePingGen = AtomicInteger(0)
+    private val tailscalePingEmitter = SnapshotEmitter { BoxVpnService.ccTailscalePingSink }
+
+    fun startTailscalePing(tag: String, peerIP: String) {
+        stopTailscalePing()
+        val gen = tailscalePingGen.incrementAndGet()
+        runCatching {
+            val client = CommandClient(PingHandler(), CommandClientOptions())
+            client.connect()
+            tailscalePingClient.getAndSet(client)?.runCatching { disconnect() }
+            val session = client.startTailscalePing(tag, peerIP, TailscalePingCallback(gen))
+            tailscalePingSession.getAndSet(session)?.runCatching { close() }
+        }.onFailure {
+            Log.w(TAG, "startTailscalePing failed (gen=$gen)")
+            tailscalePingEmitter.offer(mapOf("error" to (it.message ?: "failed")))
+        }
+    }
+
+    fun stopTailscalePing() {
+        tailscalePingGen.incrementAndGet()
+        tailscalePingSession.getAndSet(null)?.runCatching { close() }
+        disconnectClient(tailscalePingClient, "stopTailscalePing")
+    }
+
+    /// Колбэки из Go-потока: исключения наружу не выходят (JNI abort).
+    private inner class TailscalePingCallback(private val gen: Int) : TailscalePingHandler {
+        override fun onPingResult(result: TailscalePingResult?) {
+            runCatching {
+                if (gen != tailscalePingGen.get() || result == null) return@runCatching
+                tailscalePingEmitter.offer(mapOf(
+                    "latency_ms" to result.latencyMs,
+                    "is_direct" to result.isDirect,
+                    "endpoint" to (result.endpoint ?: ""),
+                    "derp_region_code" to (result.derpRegionCode ?: ""),
+                    "error" to (result.error ?: ""),
+                ))
+            }
+        }
+
+        override fun onError(message: String?) {
+            runCatching {
+                if (gen != tailscalePingGen.get()) return@runCatching
+                tailscalePingEmitter.offer(mapOf("error" to (message ?: "failed")))
+            }
+        }
     }
 
     // ═══════════════════════ Imperative (unary) ═══════════════════════
@@ -1125,6 +1305,8 @@ class BoxCommandClient {
     private val connectionsEmitter = SnapshotEmitter { BoxVpnService.ccConnectionsSink }
     // §180 — DNS: событийный (НЕ coalesce), батч-доставка.
     private val dnsQueriesEmitter = EventEmitter { BoxVpnService.ccDnsQueriesSink }
+    // §579 — состояние узлов Tailscale: снапшот, coalesce.
+    private val tailscaleEmitter = SnapshotEmitter { BoxVpnService.ccTailscaleSink }
 
     /// Дросселированный эмиттер: queue + drop-newest + single Runnable + main-Handler + batch.
     /// Для status/outbounds/groups/connections эмитим ПОСЛЕДНИЙ снапшот (coalesce —

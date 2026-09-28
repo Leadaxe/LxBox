@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../../models/preset_rule_set.dart' show ruleSetsEnabledByVar;
+import '../../services/builder/preset_expand.dart' show PresetNode;
 import '../../services/l10n/locale_controller.dart';
 import '../../services/preset_on_change.dart';
 import '../../services/record_vars.dart';
@@ -50,9 +51,13 @@ class CustomRuleEditController extends ChangeNotifier {
     required this.preset,
     required this.existingNames,
     this.displayName,
+    this.presetNodes = const [],
   }) {
     _init();
   }
+
+  /// §578 — узлы для превью пресета с `for_each` в View-табе.
+  final List<PresetNode> presetNodes;
 
   /// Исходное правило (до open editor'а). На save сравнивается со
   /// `snapshot()` для dirty-check. Также — источник `id` (rule id не

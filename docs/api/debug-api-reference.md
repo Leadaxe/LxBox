@@ -104,6 +104,7 @@ auth), а не факт, что за границей всё открыто.
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
 | `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
+| `GET /state` (поле `tailscale`) | **§581** — узлы Tailscale: `тег → {backend_state, devices}` (состояние узла из `SubscribeTailscaleStatus` и число устройств сети). Имён устройств, адресов, имени сети, владельцев и ссылки входа нет (раздел 9 спеки 581). Пусто — VPN выключен или подписка не поднята (нет узла NETWORKS и не открыта вкладка Network). |
 | `GET /state` (поле `endpoint_states`) | **§535** (ядро SPEC 097) — карта `тег → состояние` WG/AWG-endpoint'ов: `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`. Снимается unary-pull'ом `GetOutbounds` на heartbeat-тике (5 с) — единственный путь, где ядро эти поля заполняет (поток `SubscribeOutbounds` и дерево групп их не несут). Пусто = туннель down, ядро не отдало, либо endpoint'ов в конфиге нет. |
 | `GET /state/subs` | массив подписок (без цепочек — §524, весь список у `GET /subs`), `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
@@ -354,9 +355,19 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 
 ## Subscriptions CRUD — `/subs/*`
 
-Подписки + inline user-servers. §435 — у записи `kind: UserServer` есть
-`sections` (секции узла как хранятся, с плейсхолдерами `@self`; `null` — нет);
-read-only, PATCH его не принимает.
+Подписки + inline user-servers. §575 — поля `sections` в ответе нет: секции
+узла упразднены.
+
+§578 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поле записи
+`skip_presets` (bool): `true` — узел не обслуживают пресеты с `for_each`
+(пресет `tailscale`). Read-only, PATCH его не принимает; меняется переключателем
+Skip presets на экране узла.
+
+```bash
+# узлы с отметкой «пропустить пресеты»
+curl -s -H "$HDR" "$BASE/subs" \
+  | jq '.[] | select(.kind=="UserServer") | {id, skip_presets}'
+```
 
 **§524 — `GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
 же, что видит пользователь на экране Servers: подписки, серверы, папки **и
@@ -411,6 +422,7 @@ credentials, поэтому симметрично папке: только по
         "severity": "warning",
         "path": "tls.utls.fingerprint",
         "value": "safari",
+        "applied": true,
         "title_en": "…", "text_en": "…"
       }
     ],
@@ -446,6 +458,12 @@ credentials, поэтому симметрично папке: только по
 — `null`, а `text_en` есть всегда (`NodeWarning.renderEn()`). По мере
 перевода классов на `RegistryWarning` форма ответа не меняется — у кода
 просто появляются `path`/`value`.
+
+§577 — `applied` (bool) есть у каждой записи: `false` — правило реестра не
+применено, потому что тело узла авторское (свой сервер или член папки с
+голым sing-box JSON, §576) и правило мягкое; тело ушло в ядро как написано.
+У классов приложения и у применённых кодов — `true`. В отчёте сборки
+(`emitWarnings`) такая строка кончается пометкой `(not applied)`.
 
 По умолчанию выключено: на 500 узлах это лишний вес.
 
@@ -965,7 +983,7 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §435: `sections` члена в GET read-only, PATCH не принимает |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` — §578: `skip_presets` в GET read-only, PATCH не принимает |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |

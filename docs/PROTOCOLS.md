@@ -9,6 +9,9 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
 - [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`. `toUri()` is **not** implemented per variant: every variant delegates to `uriViaEngineRequired`, which writes the link through the section engine (the emit rules live in the registry). Tailscale is the one exception — `toUriTailscale`, because the node has no link form of its own
+- `openvpn-client` (task 586, contract 1.1.99): a registry type without described fields (`body.fields_unchecked`). It is pasted as sing-box JSON only — no form, no `.ovpn` import, no links. Accepted from any source (own record, a document with other types, a subscription) as `UnknownTypeSpec` without warnings; the body goes to the core as written, into `endpoints[]`. On a core without `with_openvpn` the build drops it with `openvpn_core_unsupported`
+- Config section of every type — the `kind` of its registry record (`ContractRegistry.isEndpointType`); the app keeps no list of endpoint types (task 586)
+- Types outside the registry (e.g. `future-proto`): accepted only from an own source (own server, folder member, node editor) as `UnknownTypeSpec` with an info warning «Unknown node type»; the body goes to the core as written, into `outbounds[]`; in a subscription such an entry is still dropped (task 585)
 
 **Sanitisers and guards.** Every place where a value is dropped, normalised,
 defaulted or degraded so the core does not fail — the full registry with
@@ -1447,7 +1450,7 @@ would not start.
 
 ## 9.7 Tailscale (endpoint)
 
-§435 / contract ## 13 (`contract/docs/NODE_SECTIONS.md` §6, registry `protocols/tailscale.json`).
+§435 (historical, node sections removed by §575) / §578 (registry `protocols/tailscale.json`).
 A sing-box ≥ 1.12 **endpoint** (`type: tailscale`): tsnet runs in user space and joins the
 tailnet by `auth_key`; the node has **no address** (`server`/`server_port` are empty) and
 **no URI form** — it arrives only from sing-box JSON (`outbounds[]` or `endpoints[]`) or from
@@ -1465,31 +1468,63 @@ the Add Server Wizard's Tailscale mode.
   `tailscale_core_unsupported` warning line; the rest of the config builds. The node stays in
   storage — it survives a core update and a backup from a desktop.
 - **Directions:** a node without a non-empty `exit_node` is **not** a Direction candidate (it
-  does not reach the internet) and therefore is not listed on Home (Home lists the selector's
-  members); it lives in Servers, the detour picker and chain positions. With `exit_node` it is
-  a candidate like any other node.
+  does not reach the internet), so no selector lists it; it lives in Servers, the detour picker
+  and chain positions. With `exit_node` it is a candidate like any other node.
+- **Home, NETWORKS (task 579):** a node in `endpoints[]` of the built config, type `tailscale`,
+  that the registry does not count as an exit (`exit_capable_when` false) is listed on Home
+  under the pseudo-direction `NETWORKS`, the last entry of the Direction list, while the
+  VPN is on. NETWORKS is not in the config or in storage. Its rows have no delay test and no
+  node selection: a tap opens the node screen (View details), and the delay slot shows the
+  node state from the core stream `SubscribeTailscaleStatus` (`BackendState`: `Running` →
+  `running`, `NeedsLogin` → `sign-in needed`, `Stopped` → `stopped`, no record yet →
+  `starting`, anything else → the core's `StateText`).
+- **Network tab (task 581):** the node screens `node_settings_screen` and
+  `node_inspect_screen` of a `tailscale` node have a Network tab before Diagnostics. It
+  shows the node state, the network name, Sign in (`AuthURL`) and Log out
+  (`TailscaleLogout`), this device (name, MagicDNS name, addresses, key expiry), the exit
+  node list and the network's devices (online first, then by name; grouped by owner when
+  there are several owners; tap → Copy name, Copy address, Ping via `StartTailscalePing`).
+  VPN off → a hint; no record for the tag → “not in the running config”.
+- **Exit node (task 581):** picking a list entry calls `SetTailscaleExitNode(tag, StableID)`
+  and switches the exit on the fly; the node body does not change. When the saved
+  `exit_node` and the active exit differ, the block shows a warning sign and Save choice
+  (hidden on a subscription node). Save choice writes the active exit's Tailscale address
+  (IPv4 first) into `exit_node` of the node source (None removes the field) and saves the
+  node the way Save on the Source tab does. The core accepts in `exit_node` an address or
+  a device name (base name or MagicDNS name), not a `StableID`; an address also resolves at
+  start, before the peer list arrives. A choice made on the fly lives in the node's state
+  directory (`ExitNodeID` in the tailscaled prefs) and survives a restart while the config
+  has no `exit_node`; with `exit_node` in the config the config value wins at start.
+- **Diagnostics (task 581):** a Tailscale node with no active exit hides the external-URL
+  check and says so; with an active exit the check is as for any node (VPN off: the saved
+  `exit_node` decides).
+- **Privacy (task 581):** device names, addresses, the network name, owner names and the
+  sign-in link are not written to the app log, the support dump or the Debug API; `GET
+  /state` carries only `tailscale: {tag: {backend_state, devices}}`.
 - **Probe:** not tested (no address; a probe config would have to join the tailnet) — “—” instead
   of a delay.
-- **Companion records (sections):** a Tailscale node carries a DNS server
-  `{type: tailscale, endpoint: @self}`, a DNS rule for `.ts.net` and a route rule matching
-  `.ts.net` **or** the tailnet subnets (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) → `@self`, with a
-  non-terminal `resolve` through that DNS server emitted right before it — see STORAGE.md
-  “Node sections”. The domain match and the `resolve` are what make the node reachable under
-  FakeIP (a name without an address never matches `ip_cidr`) and over UDP (the core drops a
-  flow to an endpoint that has no address yet). A node created without records — a bare body,
-  or a config that never references its tag — gets this bundle by default; Clear sections
-  removes it. The DNS server type accepts at most one server per endpoint; a dangling
-  `endpoint` drops the server and the rules on it at build.
-- **Whole config as source:** a sing-box config with exactly one payload node yields the node
-  **with** its sections: DNS servers whose `detour`/`endpoint` is the node's tag, DNS rules on
-  those servers, route rules whose `outbound` is the node's tag (rule names — `body.name` or
-  `@{self} rule N`). In a **multi-node** config (an endpoint next to proxies) the same records
-  are extracted for each `tailscale` node by the explicit reference to its tag, and those nodes
-  become servers of their own — sections live on free nodes only, so inside a subscription the
-  tailnet route would be lost. The remaining nodes take the usual path (one → a server, several
-  → a file subscription) from the text with the `tailscale` entries removed.
-- **Inside a subscription:** a `tailscale` node from a URL subscription gets no sections — the
-  log says so; “add it as a server” is the fix.
+- **Companion records (preset, §578):** the template preset `tailscale` (on by default,
+  `ui.num` 945) serves every Tailscale node in the config through `for_each` (see
+  TEMPLATE.md): for each node a route rule `preferred_by: [<node>] → <node>`, a DNS server
+  `{type: tailscale, tag: <node>-dns, endpoint: <node>}`, a DNS rule
+  `preferred_by: [<node>-dns] → <node>-dns` (in a DNS rule the core looks `preferred_by` up
+  among DNS servers, so it names the server, not the node) and a non-terminal `resolve` through that server
+  right before the route rule. The DNS part follows the preset's `dns_enable` switch. The
+  condition `preferred_by` asks the endpoint whether an address or a name is its own, and
+  Tailscale answers from the live tailnet state (machine names, machine addresses, accepted
+  subnets with `accept_routes`), so the preset carries no fixed subnets and no `.ts.net`
+  suffix (launcher decision D-120). It matches only once the tailnet is up; until then the
+  traffic follows the other rules. Two nodes in one tailnet claim the same machines, and the
+  first by config order wins. A subscription node is served too. A server or a folder
+  member opts out with the record field `skip_presets` (the **Skip presets** switch on the
+  node screen, STORAGE.md). The DNS server tag stays `<node>-dns`, so user references to it
+  keep working. The preset replaces the node's own bundle, which §575 removed: a node no
+  longer carries route rules or DNS records of its own (see STORAGE.md “Node sections —
+  removed”), and import no longer extracts any such bundle from a config — a config with a
+  `tailscale` endpoint imports the node only, whatever route/DNS blocks sit next to it in the
+  file are dropped like any other config's `route`/`dns` (§10 below).
+- **Inside a subscription:** a `tailscale` node from a URL subscription gets the same preset
+  bundle as any other node — no per-node exception any more.
 
 ## 10. JSON Outbound
 

@@ -10,8 +10,10 @@
 ///
 /// Модели строятся конструкторами. Подчинённые объекты, форма которых в 1.0
 /// не менялась и которые читает кодек записей (`SubscriptionMeta`,
-/// `ImportRule`, `NodeSections`, `RuleDns`, `RuleResolve`), читаются своими
-/// `fromJson`.
+/// `ImportRule`, `RuleDns`, `RuleResolve`), читаются своими `fromJson`.
+///
+/// §575 — ключ `sections` (если был в старой форме) не читается: секций у
+/// узлов больше нет.
 ///
 /// Старые имена полей живут только здесь и только на чтении. Зовут модуль
 /// миграция хранения (`migrate_storage.dart`) и входы старой формы: файл правил
@@ -19,11 +21,11 @@
 library;
 
 import '../../config/consts.dart' show kDirectOutboundTag;
+import '../../models/codec/source_record.dart' show bareNodeSourceOf;
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/import_rule.dart';
 import '../../models/node_link.dart';
-import '../../models/node_sections.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
@@ -122,11 +124,12 @@ SubscriptionIdentityOverride _readIdentity(Map<String, dynamic> j) =>
 
 /// `UserServer.fromJson` 2.23.2: узлы перечитываются из `raw_body`.
 UserServer _readUserServer(Map<String, dynamic> j) {
-  final rawBody = (j['raw_body'] as String?) ?? '';
+  // §576 п.3 — документ и массив в источнике сводятся к телу узла.
+  final rawBody = bareNodeSourceOf((j['raw_body'] as String?) ?? '');
   final nodes = <NodeSpec>[];
   if (rawBody.isNotEmpty) {
     try {
-      nodes.addAll(parseAll(decode(rawBody)));
+      nodes.addAll(parseAll(decode(rawBody), own: true));
     } catch (_) {
       // Некорректный raw — узлов нет, запись остаётся.
     }
@@ -143,7 +146,6 @@ UserServer _readUserServer(Map<String, dynamic> j) {
       orElse: () => UserSource.manual,
     ),
     rawBody: rawBody,
-    sections: NodeSections.fromJson(j['sections']),
     nodes: nodes,
   );
 }
@@ -170,12 +172,12 @@ FolderServers _readFolder(Map<String, dynamic> j) => FolderServers(
 
 /// `FolderMember.fromJson` 2.23.2.
 FolderMember readLegacyFolderMember(Map<String, dynamic> j) => FolderMember(
-      raw: (j['raw'] as String?) ?? '',
+      // §576 п.3 — документ и массив в источнике сводятся к телу узла.
+      raw: bareNodeSourceOf((j['raw'] as String?) ?? ''),
       enabled: (j['enabled'] as bool?) ?? true,
       // 2.23.2 хранила финальный тег строкой: корневая ссылка, пару из неё
       // делает миграция (`migrate_storage.dart`, §439 п. 8).
       detour: NodeLink(tag: (j['detour'] as String?) ?? ''),
-      sections: NodeSections.fromJson(j['sections']),
     );
 
 /// `DetourPolicy.fromJson` 2.23.2.

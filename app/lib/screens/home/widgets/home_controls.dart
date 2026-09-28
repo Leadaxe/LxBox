@@ -15,6 +15,7 @@ import '../home_menus.dart';
 import '../node_list_presenter.dart';
 import 'app_banner.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../services/networks_direction.dart';
 
 /// Controls-блок главного экрана.
 ///
@@ -84,6 +85,8 @@ class HomeControls extends StatelessWidget {
     final isStopping = state.tunnel == TunnelStatus.stopping;
     final canToggle = !state.busy && !isConnecting && !isStopping;
     final toggleEnabled = canToggle && (state.tunnelUp || state.configRaw.isNotEmpty);
+    // Задача 579 — пункт NETWORKS в перечне направлений.
+    final hasNetworks = state.tunnelUp && state.networksNodes.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -207,9 +210,14 @@ class HomeControls extends StatelessWidget {
                     child: DropdownButton<String>(
                       isExpanded: true,
                       isDense: true,
-                      value: state.groups.contains(state.selectedGroup)
-                          ? state.selectedGroup
-                          : null,
+                      // Задача 579 — NETWORKS: значение-заглушка, не тег,
+                      // поэтому настоящее направление с тегом `NETWORKS` с
+                      // ним не совпадает.
+                      value: state.showingNetworks
+                          ? kNetworksDirectionValue
+                          : state.groups.contains(state.selectedGroup)
+                              ? state.selectedGroup
+                              : null,
                       // Поле высотой 40: перенос строки обрезал подсказку
                       // пополам (ru «Выберите Направление»). Одна строка с
                       // многоточием и у подсказки, и у длинного имени.
@@ -221,10 +229,24 @@ class HomeControls extends StatelessWidget {
                               child: Text(state.groupLabelOf(g),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis)))
-                          .toList(),
-                      onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
+                          .followedBy([
+                        // Задача 579 — псевдо-направление последним.
+                        if (hasNetworks)
+                          const DropdownMenuItem(
+                              value: kNetworksDirectionValue,
+                              child: Text(kNetworksLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis)),
+                      ]).toList(),
+                      onChanged: (!state.tunnelUp ||
+                              state.busy ||
+                              (state.groups.isEmpty && !hasNetworks))
                           ? null
                           : (value) async {
+                              if (value == kNetworksDirectionValue) {
+                                controller.openNetworks();
+                                return;
+                              }
                               controller.setSelectedGroup(value);
                               await controller.applyGroup(value);
                             },
@@ -238,7 +260,11 @@ class HomeControls extends StatelessWidget {
               // подсвечивается, поведение тапа/long-press то же.
               InkWell(
                 borderRadius: BorderRadius.circular(20),
-                onTap: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
+                // Задача 579 — в NETWORKS замера задержки нет.
+                onTap: (!state.tunnelUp ||
+                        state.busy ||
+                        state.nodes.isEmpty ||
+                        state.showingNetworks)
                     ? null
                     : () {
                         if (controller.massPingRunning) {
@@ -258,7 +284,10 @@ class HomeControls extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   child: Icon(
                     controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
-                    color: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
+                    color: (!state.tunnelUp ||
+                            state.busy ||
+                            state.nodes.isEmpty ||
+                            state.showingNetworks)
                         ? Theme.of(context).disabledColor
                         : null,
                     ),

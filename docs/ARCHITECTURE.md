@@ -337,6 +337,16 @@ sing-box body ──► (already a sing-box map: the step-1 pass judges it verba
 - **Sanitizer** (`contract/body_sanitizer.dart`) is the single judge of values.
   Core gates (`min_core`, `platform`) are off at parse time: they depend on the
   running core, the node does not.
+- **Edit point** (`contract/body_edit.dart`, §577) is the single place a
+  registry rule edits a node body. A build entry carries `authored`
+  (`SingboxEntry.authored`, set by `ServerListBuild` where `verbatimBodyOf`
+  put the body; the four conditions of §576), parsing reads the same property
+  as `parsingAuthoredBody`. On an authored body only hard rules edit (no
+  string `type`, the node core gate, a registry rule or relation with
+  `core_rejects`); every other rule leaves the body as written and gives its
+  code with `applied: false`. The registry gate, the detour yields and the
+  uTLS / REALITY heals go through it; global TLS settings do not (they are the
+  user's settings, not registry rules).
 - **`parseSingboxEntry`** is the only "map → model" route. It is fed the
   **clean** map, so the model is a typed view of what will reach the core.
   It is also, by construction, **the list of body keys LxBox can read** — it
@@ -614,8 +624,7 @@ node_spec.dart               # the sealed NodeSpec (11 variants: Vless/Vmess/Tro
 node_spec_emit.dart          # emit() per variant (NodeSpec → SingboxEntry); toUri() goes through the engine emitter
                              #   (uriViaEngineRequired, registry mapper sections) — hand-written only toUriTailscale
 singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard, Tailscale → Endpoint)
-node_sections.dart           # §435 — NodeSections (rules / dns.servers / dns.rules of a free node), @self substitution
-record_codec.dart            # §435/§439 — re-exports codec/: the contract 1.0 record codec of storage, backup, rules file, Debug API
+record_codec.dart            # §439 — re-exports codec/: the contract 1.0 record codec of storage, backup, rules file, Debug API
 codec/                       # §439 — model ↔ record, pure functions, tolerant read
   source_record.dart         #   subscription / server / folder with nodes[] (server, unsupported)
   chain_record.dart          #   kind: chain — body{type: chain, …} + hops[] links
@@ -808,8 +817,16 @@ builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   registry_gate.dart         #   §460 applyRegistryGate — the registry sanitiser over every node entry after
                              #   list.build(ctx) and before the post-steps; warnings → emitWarnings with the
-                             #   registry text, drop_node removes the entry. Registry not loaded → no-op
+                             #   registry text, drop_node removes the entry. Registry not loaded → no-op.
+                             #   §577: an authored entry is edited only by hard rules (contract/body_edit.dart);
+                             #   a soft code keeps the body and reports `(not applied)`
   server_list_build.dart     #   the per-subscription emit: the detour policy, tag allocation, selector/auto registration
+  verbatim_body.dart         #   §455/§576 verbatimBodyOf — a node goes to the core VERBATIM (its rawSource, detour
+                             #   stripped, an empty tag filled with the model tag) when all four hold: (1) the
+                             #   container is an own server or a folder member; (2) the node is not an auto-select
+                             #   group; (3) the record's source kind is exactly `singbox_outbound`; (4) the node's
+                             #   text parses as a JSON object. Everything else, subscriptions included, goes
+                             #   through the model
   if_engine.dart             #   the §120 typed template engine: var substitution plus the #if construct
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
                              #   §265: the globalVars parameter — ref-vars {"ref":…} take their value from the global scope
@@ -1767,7 +1784,7 @@ The core emits changes and the UI subscribes. The old flow of three pollers is g
 
 ### The native clients (`BoxCommandClient.kt`)
 
-Four independent `CommandClient`s decouple the update rates and the lifecycles.
+Five independent `CommandClient`s decouple the update rates and the lifecycles.
 
 | Client | Commands | Lifecycle |
 |---|---|---|
@@ -1775,6 +1792,7 @@ Four independent `CommandClient`s decouple the update rates and the lifecycles.
 | `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | Raised by `connectScreen`, paused in the background |
 | `profilerClient` | `CommandConnections` + `subscribeDNSQueries` (SPEC 018, §180) | Raised for recording and kept alive in the background |
 | `pingClient` | A bare `PingHandler` with no subscriptions — unary RPC only | §175/§209 — lifecycle-independent |
+| `tailscaleClient` | A bare client plus `subscribeTailscaleStatus` (task 579) | Raised by `ccStartTailscaleStatus` while the VPN is on and the config has a NETWORKS node; closed by `ccStopTailscaleStatus` and `shutdownAll` |
 
 A subscription in the gomobile facade is `CommandClientOptions.addCommand(int)` plus the `CommandClientHandler` callbacks.
 
@@ -1789,6 +1807,7 @@ Push streams over the `lxbox/cc/*` EventChannel (`status` · `outbounds` · `gro
 | `groups` | a push `Stream<List<CcGroup>>` | the selector and urltest groups plus selected/active |
 | `connections` | a push `Stream<List<CcConnection>>` | the active TCP/UDP connections plus bytes and packageName/processPath |
 | `dnsQueries` | a push `Stream<List<CcDnsQuery>>` | §180 (SPEC 018) — the DNS queries from the core (domain, rcode, latency) |
+| `tailscaleStatus` | a push `Stream<List<CcTailscaleStatus>>` (`lxbox/cc/tailscale`) | task 579 — per Tailscale endpoint: tag, `BackendState`, `StateText`; a full snapshot per core update. `startTailscaleStatus()` / `stopTailscaleStatus()` hold the core subscription |
 | `getGroups()` | a unary pull returning `List<CcGroup>?` | a deterministic snapshot of the groups |
 | `getRules()` | a unary pull returning `List<CcRule>` | a snapshot of the route and DNS rules (for diagnostics) |
 | `getPool(tag)` | a unary pull returning `List<CcPoolSlot>?` | §208/§209 — a snapshot of a round_robin group's pool |
@@ -1803,6 +1822,27 @@ The lifecycle signals (`connectScreen`/`disconnectScreen`, `connectProfiler`/`di
 ### Wiring
 
 On a `connected` event `HomeController` subscribes to the `status` and `groups` streams.
+
+### The NETWORKS pseudo-direction (task 579)
+
+Home's Direction list ends with `NETWORKS` when the VPN is on and the config the core runs
+(`HomeState.activeModel`) has at least one node that meets all of:
+
+1. its record is in `endpoints[]`;
+2. its type is `tailscale`;
+3. the registry does not count it as an exit (`exitCapableByRegistry` false: no `exit_node`).
+
+Such a node is in no `selector` or `urltest` group. NETWORKS is a view only: it is not written
+to the config or to storage, the dropdown value is a sentinel (`kNetworksDirectionValue`),
+not a tag, so a user Direction tagged `NETWORKS` does not clash, and `selectedGroup` (the
+real exit) does not change when NETWORKS is picked (`HomeState.networksOpen`). Automation
+and the Debug API switch Directions by tag and never reach it. The list shows NETWORKS
+instead of the Direction's nodes when it is picked, or when there are no real Directions;
+once the nodes are gone the selected real Direction shows again. The rows have no delay test
+and no selection; a tap opens `outbound_view_screen` (View details); the delay slot shows the
+node state from `CcChannel.tailscaleStatus`. `HomeController._syncTailnetStatus` holds the
+core subscription while the VPN is on and a NETWORKS node exists, and re-subscribes when the
+node set or the core's config snapshot changes. Code: `services/networks_direction.dart`.
 
 ### Gotchas
 
@@ -2073,7 +2113,7 @@ They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN n
 | **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
 | **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
 | 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
-| **435** | **Node sections + Tailscale** (contract ## 13: a free node carries its route rules and DNS records in `sections` in the contract 1.0 record form; `@self` = the final tag, substituted at build; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node) |
+| 435 | Node sections + Tailscale (superseded by §575/§578: node sections removed, the Tailscale bundle now comes from a template preset; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node remain) |
 | **439** | **Storage in the contract 1.0 form** (`lxbox_settings.json` keeps `sources[]` / `rules[]` / `dns{}` records with `storage_version: 1`; the 2.23.2 form is migrated inside `_load()` with a `.v0.bak` copy; node references are NodeLinks `{folder_id, tag}` resolved at build, fail-closed; the LX Backup 1.0 export is a slice of storage through the same codec) |
 
 **Demoted (through §054) — now in `tasks/`:**

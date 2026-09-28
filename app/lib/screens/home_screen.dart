@@ -54,6 +54,7 @@ import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
 import '../services/l10n/locale_controller.dart';
 import 'home/widgets/template_warnings_snack.dart';
+import '../widgets/double_back_to_exit.dart';
 import '../services/probe/probe_lifecycle.dart';
 import '../services/workspaces/workspace_controller.dart';
 import 'home/widgets/workspace_menu.dart';
@@ -808,97 +809,105 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           anyServerNodes: _subController.entries
               .any((e) => e.nodeCount > 0 || e.list.nodes.isNotEmpty),
         );
-        return Scaffold(
-          appBar: AppBar(
-            // l10n-exempt: brand name, идентичен во всех локалях
-            title: const Text('L×Box'),
-            // §417 — имя текущего workspace + попап Load / Save as.
-            actions: [
-              WorkspaceMenuButton(stopVpn: _stopForWorkspaceSwitch),
-              const SizedBox(width: 4),
-            ],
-          ),
-          drawer: HomeDrawer(
-            controller: _controller,
-            subController: _subController,
-            autoUpdater: _autoUpdater,
-          ),
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Empty state (§328 — нет серверов, не «нет конфига») → guide +
-              // CTA берёт на себя весь экран; controls/header не рисуем,
-              // чтобы disabled-кнопка не путала первого пользователя.
-              if (state.configRaw.isNotEmpty && !showEmptyGuide) ...[
-                HomeControls(
-                  controller: _controller,
-                  subController: _subController,
-                  presenter: _nodeList,
-                  autoApplying: _autoApplying, // §338
-
-                  connectingAnimChild: StatusChip(
-                    state: state,
-                    isRevoked: state.tunnel == TunnelStatus.revoked,
-                    isConnecting: state.tunnel == TunnelStatus.connecting,
-                    connectingAnim: _connectingAnim,
-                  ),
-                  state: state,
-                  startActive: startActive,
-                  startEnabled: startEnabled,
-                  stopEnabled: stopEnabled,
-                  needsRestart: _needsRestart,
-                  // §116 — таймер теперь в BannerStack; здесь только clear.
-                  errorTimerOnDismiss: _controller.clearError,
-                  onStartWithAutoRefresh: () =>
-                      unawaited(_startWithAutoRefresh()),
-                  onRebuildAndClearDirty: _rebuildAndClearDirty,
-                  onRebuildAndReconnect: _rebuildAndReconnect,
-                  onRebuildAndStart: _rebuildAndStart,
-                ),
-                // §095 Filter mode — при открытой фильтр-панели прячем
-                // стат-полосу + Nodes-хедер, освобождая зону под ноды.
-                if (state.tunnelUp && !_filter.panelExpanded)
-                  TrafficBar(
-                    state: state,
-                    controller: _controller,
-                    subController: _subController,
-                  ),
-                if (_subController.busy &&
-                    _subController.progressMessage != null)
-                  ProgressBanner(
-                      message:
-                          _subController.progressMessage!.render()),
-                // §095 — NODES-строка только когда подключено И фильтр закрыт.
-                // STOP-режим: нод нет → фильтровать нечего → строку прячем.
-                if (state.tunnelUp && !_filter.panelExpanded) ...[
-                  const SizedBox(height: 12),
-                  NodesHeader(
-                    controller: _controller,
-                    subController: _subController,
-                    filter: _filter,
-                    onSortLongPress: () =>
-                        showSortOptionsMenu(context, _controller),
-                  ),
-                  const SizedBox(height: 4),
+        // Задача 583 — выход по двойному «назад».
+        return DoubleBackToExit(
+          builder: (_, onDrawerChanged) => Scaffold(
+              appBar: AppBar(
+                // l10n-exempt: brand name, идентичен во всех локалях
+                title: const Text('L×Box'),
+                // §417 — имя текущего workspace + попап Load / Save as.
+                actions: [
+                  WorkspaceMenuButton(stopVpn: _stopForWorkspaceSwitch),
+                  const SizedBox(width: 4),
                 ],
-              ],
-              HomeNodeList(
+              ),
+              onDrawerChanged: onDrawerChanged,
+              drawer: HomeDrawer(
                 controller: _controller,
                 subController: _subController,
                 autoUpdater: _autoUpdater,
-                filter: _filter,
-                presenter: _nodeList,
-                state: state,
-                showEmptyGuide: showEmptyGuide,
-                onRestoreFromBackup: () =>
-                    restoreFromBackup(context, _subController, _autoUpdater),
-                onTapToConnect: () => unawaited(_startWithAutoRefresh()),
-                rowKeyFor: _nodeRowKey, // §203
-                onSelectServer: _scrollToNode, // §203
-                onViewPool: _showPool, // §208
               ),
-            ],
-          ),
+              body: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Empty state (§328 — нет серверов, не «нет конфига») → guide +
+                  // CTA берёт на себя весь экран; controls/header не рисуем,
+                  // чтобы disabled-кнопка не путала первого пользователя.
+                  if (state.configRaw.isNotEmpty && !showEmptyGuide) ...[
+                    HomeControls(
+                      controller: _controller,
+                      subController: _subController,
+                      presenter: _nodeList,
+                      autoApplying: _autoApplying, // §338
+
+                      connectingAnimChild: StatusChip(
+                        state: state,
+                        isRevoked: state.tunnel == TunnelStatus.revoked,
+                        isConnecting: state.tunnel == TunnelStatus.connecting,
+                        connectingAnim: _connectingAnim,
+                      ),
+                      state: state,
+                      startActive: startActive,
+                      startEnabled: startEnabled,
+                      stopEnabled: stopEnabled,
+                      needsRestart: _needsRestart,
+                      // §116 — таймер теперь в BannerStack; здесь только clear.
+                      errorTimerOnDismiss: _controller.clearError,
+                      onStartWithAutoRefresh: () =>
+                          unawaited(_startWithAutoRefresh()),
+                      onRebuildAndClearDirty: _rebuildAndClearDirty,
+                      onRebuildAndReconnect: _rebuildAndReconnect,
+                      onRebuildAndStart: _rebuildAndStart,
+                    ),
+                    // §095 Filter mode — при открытой фильтр-панели прячем
+                    // стат-полосу + Nodes-хедер, освобождая зону под ноды.
+                    if (state.tunnelUp &&
+                        (!_filter.panelExpanded || state.showingNetworks))
+                      TrafficBar(
+                        state: state,
+                        controller: _controller,
+                        subController: _subController,
+                      ),
+                    if (_subController.busy &&
+                        _subController.progressMessage != null)
+                      ProgressBanner(
+                          message:
+                              _subController.progressMessage!.render()),
+                    // §095 — NODES-строка только когда подключено И фильтр закрыт.
+                    // STOP-режим: нод нет → фильтровать нечего → строку прячем.
+                    // Задача 579: у NETWORKS панели фильтров нет — заголовок
+                    // виден и при открытой панели.
+                    if (state.tunnelUp &&
+                        (!_filter.panelExpanded || state.showingNetworks)) ...[
+                      const SizedBox(height: 12),
+                      NodesHeader(
+                        controller: _controller,
+                        subController: _subController,
+                        filter: _filter,
+                        onSortLongPress: () =>
+                            showSortOptionsMenu(context, _controller),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                  ],
+                  HomeNodeList(
+                    controller: _controller,
+                    subController: _subController,
+                    autoUpdater: _autoUpdater,
+                    filter: _filter,
+                    presenter: _nodeList,
+                    state: state,
+                    showEmptyGuide: showEmptyGuide,
+                    onRestoreFromBackup: () =>
+                        restoreFromBackup(context, _subController, _autoUpdater),
+                    onTapToConnect: () => unawaited(_startWithAutoRefresh()),
+                    rowKeyFor: _nodeRowKey, // §203
+                    onSelectServer: _scrollToNode, // §203
+                    onViewPool: _showPool, // §208
+                  ),
+                ],
+              ),
+            ),
         );
       },
     );

@@ -6,6 +6,130 @@
 
 ---
 
+## [Unreleased]
+
+---
+
+## [2.25.8] — 2026-09-28
+
+### Added
+
+- **OpenVPN endpoints as sing-box JSON ([task 586](docs/spec/tasks/586-endpoint-types-from-registry.md)).**
+  A node of type `openvpn-client` is now a known type: it is accepted as your
+  own record, inside a document with other nodes and from a subscription,
+  without the «Unknown node type» notice. The body goes to the core as
+  written into `endpoints[]`; the app does not check its fields. There is no
+  form and no `.ovpn` import. Which types are endpoints now comes from the
+  contract registry (1.1.99), not from a list in the app.
+
+- **Nodes of a type the app does not know ([task 585](docs/spec/tasks/585-unknown-node-type-accepted.md)).**
+  A sing-box node of a type the app has no model and the registry has no
+  record for is accepted when added by hand (Add server, paste, file,
+  folder member, node editor). It goes to the core as written and gets one
+  info notice «Unknown node type»; subscriptions still drop such entries.
+  Pasted JSON with `//` and `/* */` comments is accepted too: the comments are
+  removed from the saved source, and the app says «Comments were removed.»
+
+- **Home: press back twice to exit ([task 583](docs/spec/tasks/583-home-back-press-twice-to-exit.md)).**
+  On Home the first back press shows «Press back again to exit»; a second
+  press within 2 seconds closes the app as before. An open side menu, dialog
+  or sheet is closed by back as before. On Android 13+ the predictive back
+  gesture no longer plays the closing animation on the first press.
+- **Tailscale node: Network tab ([task 581](docs/spec/tasks/581-tailscale-network-tab.md)).**
+  The screen of a Tailscale node gets a Network tab: node state, sign in and
+  log out, this device, the network's devices with a ping, and the exit node
+  list. Picking an exit node switches it on the fly without touching the
+  node; Save choice writes it into the node. Diagnostics no longer offers the
+  external-URL check on a node without an exit.
+
+- **DNS cache settings ([task 580](docs/spec/tasks/580-dns-cache-settings.md)).**
+  The DNS screen gets three settings next to Clear DNS cache: `DNS cache size`
+  (entries, 1024..65535, default 4000), `Serve stale answers` (answer from cache
+  at once and refresh in the background, on by default) and `Keep DNS cache
+  after restart` (the cache is stored in `cache.db`, on by default). The config
+  gets `dns.cache_capacity`, `dns.optimistic` and
+  `experimental.cache_file.store_dns`. Existing installs get the defaults; the
+  three settings travel in backups. Contract 1.1.97.
+
+- **NETWORKS on Home ([task 579](docs/spec/tasks/579-networks-pseudo-direction.md)).**
+  A Tailscale node without an exit node is in no Direction, so Home did not show it.
+  While the VPN is on, such nodes are now listed under `NETWORKS`, the last entry of
+  the Direction list. A tap opens the node screen; instead of a delay the row shows the
+  node state from the core: `running`, `sign-in needed`, `stopped` or `starting`.
+  The config does not change.
+- **Tailscale preset ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  The new routing preset `Tailscale networks`, on by default, serves every
+  Tailscale node in the config, subscription nodes included: tailnet names go
+  to the node's own DNS, and addresses and names the node claims as its own
+  (`preferred_by`) go through the node. Existing installs get the preset once;
+  deleting it keeps it deleted. The preset row on the Routing and DNS screens
+  lists the nodes it serves.
+- **Skip presets on a node ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  A server or a folder member can opt out of presets that serve nodes one by
+  one: the `Skip presets` switch on the node screen, stored as `skip_presets`
+  in the record and in backups. The switch shows up only when the template has
+  such a preset for the node's type.
+- **Template language: `for_each`, `@node`, `#tpl` ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).**
+  A preset can repeat its rules and DNS servers for every matching node, read
+  the node's tag, record and body, and build strings such as `<node>-dns`.
+
+### Changed
+
+- **Core `v1.14.2-lx.8`.** Synced with sing-box `stable`: idle connections of
+  nodes and DNS servers nothing refers to any more are closed; WireGuard,
+  AmneziaWG and MASQUE inside another tunnel really allow fragmentation of the
+  outer UDP datagram on Android (the kernel kept DF and dropped oversized
+  datagrams); Hysteria, Hysteria2 and TUIC no longer allow it by default.
+  MASQUE no longer hangs without an error: `vhttp: auto` goes back to h3 when
+  the remembered h2 stops working, closing an h2 tunnel does not wait for a
+  stalled write, and an h3 endpoint that never answers no longer holds the
+  dial. From lx.6: an XHTTP node without an `xmux` section (or with
+  an empty one) now keeps at most three connections to the server and shares
+  them between streams; before, every stream opened a new TLS connection,
+  dozens to hundreds of parallel connections to one IP on a phone, the
+  pattern reported to be cut on mobile networks in Russia (sing-box-lx#32,
+  follows the Xray-core default). An `xmux` section with at least one field
+  set is taken as written, as before. The core's `sing-box schema` command
+  works again (sing-box-lx#30); the app does not use it.
+- **Default emoji of a Tailscale node is 🕸️.** It was 🪢. New nodes get the new
+  emoji; tags of existing nodes do not change.
+
+- **A hand-written node the core would reject is dropped ([task 582](docs/spec/tasks/582-authored-body-go-dart-parity.md)).**
+  A TUIC node whose `uuid` is not a UUID, or a WireGuard node with invalid peer
+  `allowed_ips`, is now dropped when parsed, with the reason in the list of
+  dropped nodes. A REALITY `short_id` longer than 16 characters is removed.
+  A MASQUE body without keys is now read instead of being rejected as unsupported.
+  A hand-written REALITY block with an invalid `public_key` is removed whole, as on a
+  subscription body, with a single `reality_pbk_invalid` warning.
+- **A node written by hand goes to the core as written ([§577](docs/spec/tasks/577-authored-json-registry-reports-only.md)).**
+  A sing-box JSON node saved as an own server or a folder member is no longer
+  fixed by the app's rules: an extra key, an AmneziaWG `mtu` above 1280, a
+  `tls.fragment` next to a detour stay as written. The node card still lists
+  each rule, says the app changed nothing, and gives the cause and what to do.
+  Rules the core cannot start with (an unsupported `flow`, an invalid port,
+  TLS fields `naive` does not take) are still applied. The build report marks
+  such lines `not applied`; the Debug API gives `applied` on each warning.
+- **A node's source keeps the node only ([§576](docs/spec/tasks/576-node-source-is-bare-body.md)).**
+  Saving a sing-box document or an array in the node editor keeps the first
+  node (not a service outbound and not a group) or the first element, and says
+  once that the rest of the input is not kept. A document with no such node is
+  refused. Records saved earlier with a document or an array are read as the
+  node's body; the config stays the same. The same sing-box JSON inside a
+  subscription no longer keeps an AmneziaWG `mtu` above 1280: the exemption is
+  for bodies written by hand as an own server or a folder member.
+- **Internal.** Contract synced to 1.1.99.
+
+### Removed
+
+- **Node sections ([§575](docs/spec/tasks/575-remove-node-sections.md)).**
+  A node no longer carries route rules or DNS records of its own. The
+  Tailscale bundle a node used to carry is now served by the `Tailscale
+  networks` preset instead ([§578](docs/spec/tasks/578-tailscale-preset-template-for-each.md)).
+  A stored record or a backup with a leftover `sections` field is read
+  without error and the field is dropped.
+
+---
+
 ## [2.25.7] — 2026-09-27
 
 ### Added

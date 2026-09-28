@@ -126,6 +126,10 @@ void main() {
             id: '14', tag: 't', label: 'l'),
         // §435 — Tailscale: endpoint без адреса, тело как есть.
         TailscaleSpec(id: '15', tag: 't', label: 'l', body: const {'auth_key': 'k'}),
+        // §585 — тип, которого приложение не знает: протокол = `type` тела.
+        UnknownTypeSpec(
+            id: '16', tag: 't', label: 'l', type: 'openvpn-client',
+            body: const {'type': 'openvpn-client'}),
       ];
 
       for (final s in specs) {
@@ -145,6 +149,7 @@ void main() {
           AnyTlsSpec() => 'anytls',
           AutoSelectSpec() => 'urltest',
           TailscaleSpec() => 'tailscale',
+          UnknownTypeSpec() => 'openvpn-client',
         };
         expect(p, s.protocol);
       }

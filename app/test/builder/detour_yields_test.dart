@@ -78,4 +78,35 @@ void main() {
       'fragment_fallback_delay': '500ms',
     });
   });
+
+  // §577 — авторское тело: уступка идёт через точку правки.
+  group('авторское тело', () {
+    test('tls.fragment остаётся, код с applied: false', () {
+      final ob = vless({
+        'enabled': true,
+        'fragment': true,
+        'fragment_fallback_delay': '500ms',
+      });
+      final ws = applyDetourYields({
+        'outbounds': [ob],
+      }, authored: Set.identity()..add(ob));
+      expect(ob['tls'], {
+        'enabled': true,
+        'fragment': true,
+        'fragment_fallback_delay': '500ms',
+      });
+      expect(ws.map((w) => (w.code, w.applied)),
+          [('detour_with_tls_fragment', false)]);
+    });
+
+    test('listen_port WireGuard при detour — жёсткое, снимается', () {
+      final ep = wg(detour: 'relay');
+      final ws = applyDetourYields({
+        'endpoints': [ep],
+      }, authored: Set.identity()..add(ep));
+      expect(ep.containsKey('listen_port'), isFalse);
+      expect(ws.map((w) => (w.code, w.applied)),
+          [('detour_with_listen_port', true)]);
+    });
+  });
 }

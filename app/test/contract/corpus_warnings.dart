@@ -79,6 +79,8 @@ Map<String, dynamic>? warningRecordOf(NodeWarning w) {
     if (path != null && path.isNotEmpty) 'path': path,
     if (value != null && value.isNotEmpty) 'value': value,
     if (params.isNotEmpty) 'params': params,
+    // §577 — контракт 1.1.87: пишется только `false`.
+    if (!w.applied) 'applied': false,
   };
 }
 

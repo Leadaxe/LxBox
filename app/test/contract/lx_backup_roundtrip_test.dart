@@ -9,7 +9,6 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/record_codec.dart';
-import 'package:lxbox/models/node_sections.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
@@ -110,36 +109,6 @@ LxBackupFile _import(_State s, String raw) {
   return file;
 }
 
-NodeSections _sections(String name) => NodeSections.fromJson({
-      'rules': [
-        {
-          'kind': 'inline',
-          'name': name,
-          'enabled': true,
-          'num': 945,
-          'body': {'ip_cidr': ['100.64.0.0/10'], 'outbound': '@self'},
-        },
-      ],
-      'dns': {
-        'servers': [
-          {
-            'kind': 'user',
-            'tag': '@{self}-dns',
-            'enabled': true,
-            'body': {'type': 'udp', 'server': '100.100.100.100', 'detour': '@self'},
-          },
-        ],
-        'rules': [
-          {
-            'kind': 'user',
-            'name': '',
-            'enabled': true,
-            'body': {'domain_suffix': ['.ts.net'], 'server': '@{self}-dns'},
-          },
-        ],
-      },
-    })!;
-
 String _compact(Map<String, dynamic> j) => jsonEncode(j);
 
 _State _source() {
@@ -173,7 +142,6 @@ _State _source() {
         origin: UserSource.manual,
         rawBody:
             'vless://11111111-1111-1111-1111-111111111111@example-3.com:443?type=tcp&security=tls&sni=example-3.com#root-jp',
-        sections: _sections('@{self} network'),
       ),
       UserServer(
         id: 'srv-2',
@@ -206,7 +174,6 @@ _State _source() {
               'server_port': 443,
               'uuid': '11111111-1111-1111-1111-111111111111',
             }),
-            sections: _sections('@{self} member net'),
           ),
           FolderMember(
             raw: 'trojan://secret@example-5.com:443#nl-1',

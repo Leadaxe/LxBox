@@ -153,17 +153,6 @@
           "enabled": true,
           "server_name": "common.dot.dns.yandex.net"
         }
-      },
-      {
-        "type": "tailscale",
-        "endpoint": "home-ts",
-        "tag": "home-ts-dns"
-      },
-      {
-        "type": "udp",
-        "server": "10.8.0.1",
-        "detour": "EU de-1",
-        "tag": "EU de-1-dns"
       }
     ],
     "rules": [
@@ -207,22 +196,12 @@
         ],
         "server": "ru-direct:dns_ru",
         "action": "route"
-      },
-      {
-        "domain_suffix": [
-          ".ts.net"
-        ],
-        "server": "home-ts-dns"
-      },
-      {
-        "domain_suffix": [
-          ".office.example-40.com"
-        ],
-        "server": "EU de-1-dns"
       }
     ],
     "final": "my-doh",
-    "strategy": "prefer_ipv4"
+    "strategy": "prefer_ipv4",
+    "cache_capacity": 4000,
+    "optimistic": true
   },
   "inbounds": [
     {
@@ -717,10 +696,6 @@
         "strategy": "prefer_ipv4"
       },
       {
-        "rule_set": "home-ts network",
-        "outbound": "home-ts"
-      },
-      {
         "rule_set": "Ads",
         "action": "reject"
       },
@@ -832,26 +807,11 @@
           "udp"
         ],
         "outbound": "direct-out"
-      },
-      {
-        "rule_set": "EU de-1 office",
-        "outbound": "EU de-1"
       }
     ],
     "final": "vpn-2",
     "auto_detect_interface": true,
     "rule_set": [
-      {
-        "type": "inline",
-        "tag": "home-ts network",
-        "rules": [
-          {
-            "ip_cidr": [
-              "100.64.0.0/10"
-            ]
-          }
-        ]
-      },
       {
         "type": "inline",
         "tag": "Ads",
@@ -994,17 +954,6 @@
         ]
       },
       {
-        "type": "inline",
-        "tag": "EU de-1 office",
-        "rules": [
-          {
-            "domain_suffix": [
-              ".office.example-40.com"
-            ]
-          }
-        ]
-      },
-      {
         "type": "local",
         "tag": "ds-geo",
         "format": "binary",
@@ -1022,7 +971,8 @@
     "cache_file": {
       "enabled": true,
       "path": "cache.db",
-      "store_fakeip": true
+      "store_fakeip": true,
+      "store_dns": true
     }
   },
   "services": [

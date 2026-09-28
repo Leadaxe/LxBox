@@ -19,7 +19,6 @@ import '../models/direction.dart';
 import '../models/dns_ref.dart';
 import '../models/import_rule.dart';
 import '../models/node_link.dart';
-import '../models/node_sections.dart';
 import '../models/node_spec.dart' show AutoSelectSpec, NodeSpec;
 import '../models/parser_config.dart' show kUserRuleNumStart;
 import '../models/record_codec.dart';
@@ -195,12 +194,14 @@ const String kWarnDnsEntrySkipped = 'backup_dns_entry_skipped';
 /// поэтому применять нечего.
 const String kWarnWarpSkipped = 'backup_warp_skipped';
 
-/// §438 — запись секций узла отброшена ЦЕЛИКОМ (норма B3,
-/// `NODE_SECTIONS.md` §1), или поле `sections` пришло у записи, которой оно
-/// не положено. [LxBackupWarning.kind] — вид отброшенной записи,
-/// [LxBackupWarning.reason] — `kind` | `rule_set` | `not_allowed`
-/// ([kSectionDropKind] и соседи). Остальные записи узла применяются.
+/// §438/§575 — поле `sections` записи файла снято целиком: секции узла
+/// упразднены (контракт 1.1.85). [LxBackupWarning.kind] — вид записи,
+/// [LxBackupWarning.reason] — всегда [kSectionDropReasonNotAllowed].
 const String kWarnSectionRecordDropped = 'backup_section_record_dropped';
+
+/// §575 — единственная причина [kWarnSectionRecordDropped] (контракт 1.1.85:
+/// прежние `kind` / `rule_set` / `unknown_key` отменены вместе с секциями).
+const String kSectionDropReasonNotAllowed = 'not_allowed';
 
 /// §438 — запись `sources[]` вида, которому на этой стороне нет места:
 /// корневые `auto`/`unsupported` (union 1.0 их не выражает, BACKUP.md §2),
@@ -223,8 +224,11 @@ const String kWarnGroupDegraded = 'backup_group_degraded';
 /// другое (пути, интерфейсы, платформенные флаги).
 const Set<String> kLxPortableVars = {
   'auto_detect_interface',
+  'dns_cache_capacity',
   'dns_default_domain_resolver',
   'dns_final',
+  'dns_optimistic',
+  'dns_store_cache',
   'dns_strategy',
   'ipv6_enabled',
   'log_level',
@@ -384,8 +388,7 @@ class LxServer {
     this.folder = '',
     this.folderRef = '',
     this.id = '',
-    this.sections,
-    this.sectionsPresent = false,
+    this.skipPresets = false,
     this.detour,
     this.position = 0,
     this.autoGroup,
@@ -424,13 +427,9 @@ class LxServer {
   /// §438 — `id` корневой записи 1.0; у членов папки и у 0.x пусто.
   final String id;
 
-  /// §438 — секции узла из файла 1.0, уже отсеянные по норме B3.
-  final NodeSections? sections;
-
-  /// §438 — было ли поле `sections` в записи вообще. Совпавший по телу узел
-  /// получает секции файла ЦЕЛИКОМ (включая пустые), только если поле было
-  /// (BACKUP.md §9 п. 2); иначе свои остаются.
-  final bool sectionsPresent;
+  /// §578 — поле записи `skip_presets` (пишется только `true`). Совпавший по
+  /// телу узел получает `true` из файла; отсутствие поля своё не сбрасывает.
+  final bool skipPresets;
 
   /// Имя записи: `node_tag` схемы, а не подпись. У канона имени, кроме тега,
   /// нет (SPEC 112), и `label` старого файла становится им только когда
@@ -2859,9 +2858,12 @@ LxBackupFile _parse10(
   );
 }
 
-/// Секции у записи, которой они не положены (подписка, папка, цепочка,
-/// `unsupported`): поле снимается целиком с `reason: not_allowed`. Пустой
-/// набор предупреждения не даёт — терять в нём нечего.
+/// §575 — секции у записи ЛЮБОГО вида (сервер, член папки, подписка, папка,
+/// цепочка, `auto`, `unsupported`): поле снимается целиком с
+/// `reason: not_allowed`, одно предупреждение на запись (контракт 1.1.85).
+/// Пустой набор предупреждения не даёт — терять в нём нечего. Само поле
+/// дальше не читается: у сервера и члена папки его снимает [_server10] до
+/// кодека, прочим видам кодек его не читает.
 void _dropForeignSections(
   Map<String, dynamic> j,
   String kind,
@@ -2878,7 +2880,7 @@ void _dropForeignSections(
     kWarnSectionRecordDropped,
     '${_source10Label(j)}: sections',
     kind: kind,
-    reason: kSectionDropNotAllowed,
+    reason: kSectionDropReasonNotAllowed,
   ));
 }
 
@@ -2892,8 +2894,8 @@ void _dropForeignSections(
 /// имя у share-ссылки в разных схемах лежит в разных местах, и переписывать
 /// его импорт не берётся.
 ///
-/// Секции узла читает кодек; отбраковка по норме B3 называется с причиной у
-/// каждой записи. `detour` — ссылка файла как есть: тег конфига из неё
+/// Поле `sections` снимается до кодека ([_dropForeignSections], §575).
+/// `detour` — ссылка файла как есть: тег конфига из неё
 /// получает слияние по карте контейнеров ([mergeBackupServers]).
 LxServer? _server10(
   Map<String, dynamic> j,
@@ -2905,10 +2907,11 @@ LxServer? _server10(
     j,
     folder == null ? BackupRecord.server : BackupRecord.folderNode,
   );
+  _dropForeignSections(j, _str(j['kind']), warnings);
+  if (j.containsKey('sections')) j = {...j}..remove('sections');
   final tag = _trimmed(j['tag']);
   final origin = _obj(j['origin']);
   final hasOrigin = _str(origin?['raw']).trim().isNotEmpty;
-  final drops = <NodeSectionDrop>[];
   final fileId = folder == null ? _trimmed(j['id']) : '';
   final read = sourceFromRecord(
     _sourceForCodec(
@@ -2918,7 +2921,6 @@ LxServer? _server10(
       fileId,
       override: const {'kind': kSourceKindServer},
     ),
-    sectionDrops: drops,
   );
   final node = read.value;
   if (node is! UserServer) return null;
@@ -2937,14 +2939,6 @@ LxServer? _server10(
     uri = raw;
   }
 
-  for (final d in drops) {
-    warnings.add(LxBackupWarning(
-      kWarnSectionRecordDropped,
-      '$tag: ${d.text}',
-      kind: d.kind,
-      reason: d.reason,
-    ));
-  }
   final root = folder == null;
   return LxServer(
     detour: _link10(j['detour']),
@@ -2963,8 +2957,7 @@ LxServer? _server10(
     folderRef: folder?.key ?? '',
     position: position,
     id: fileId,
-    sections: node.sections,
-    sectionsPresent: j.containsKey('sections'),
+    skipPresets: node.skipPresets,
   );
 }
 
@@ -3372,6 +3365,8 @@ const Set<String> _node10Keys = {
   'service',
   'reason',
   'sections',
+  // §578 — «пропустить пресеты» узла (запрос в контракт); пишется только true.
+  'skip_presets',
   // Фича 478 — вердикт на члене папки. Ключ известен обходу, чтобы старый
   // файл с `core_rejected` не давал `backup_unknown_field`; содержимое
   // срезает санитизация §489.
@@ -3412,8 +3407,6 @@ const Set<String> _group10Keys = {
   'pool_badge',
 };
 const Set<String> _membersRule10Keys = {'include', 'exclude'};
-const Set<String> _sections10Keys = {'rules', 'dns'};
-const Set<String> _sectionsDns10Keys = {'servers', 'rules'};
 
 const Set<String> _rule10Keys = {
   'kind',
@@ -3505,19 +3498,6 @@ List<LxBackupWarning> _scanUnknown10(Map<String, dynamic> root) {
     if (replace != null) {
       sc.object('$where.replace', replace, kReplaceRecordKeys);
       sc.nestedAt(replace, '$where.replace', 'auto', _directionAutoKeys);
-    }
-    final sections = _obj(item['sections']);
-    if (sections != null) {
-      final at = '$where.sections';
-      sc.object(at, sections, _sections10Keys);
-      sc.array(sections, '$at.rules', 'rules', ruleKeys, 'name', null);
-      final sdns = _obj(sections['dns']);
-      if (sdns != null) {
-        sc.object('$at.dns', sdns, _sectionsDns10Keys);
-        sc.array(sdns, '$at.dns.servers', 'servers', dnsServerKeys, 'tag',
-            sc.dnsServer10Body);
-        sc.array(sdns, '$at.dns.rules', 'rules', dnsRuleKeys, 'name', null);
-      }
     }
   }
 
@@ -3821,10 +3801,6 @@ String canonicalNodeBody(String body) {
 /// повторный импорт одного файла удваивал бы список. Порядок членов —
 /// порядок записей файла; новые встают в конец.
 ///
-/// **Секции** (§438, BACKUP.md §9 п. 2): у совпавшего по телу узла поле
-/// `sections` в файле есть → замещает локальные секции целиком (включая
-/// пустые); поля нет → свои остаются.
-///
 /// **Общий `detour` контейнера** (§439, BACKUP.md §9 пп. 1, 3): у папки 1.0
 /// берётся из её записи, у подписки — из [sourceDetours]
 /// ([mergeBackupSubscriptions]); тег конфига — по той же карте контейнеров,
@@ -4026,18 +4002,18 @@ BackupServerMerge mergeBackupServers(
       final hit = singleBodies[key];
       if (hit != null) {
         final local = merged[hit] as UserServer;
-        // §439 Л2 — объявленные настройки LxBox узла: как секции, поле есть —
-        // замещает, нет — своё остаётся. Ссылку detour совпавший узел держит.
+        // §439 Л2 — объявленные настройки LxBox узла: поле есть — замещает,
+        // нет — своё остаётся. Ссылку detour совпавший узел держит.
         final flags = srv.detourPolicy
             ?.copyWith(overrideDetour: local.detourPolicy.overrideDetour);
         final side = (flags != null && flags != local.detourPolicy) ||
             (srv.tagPrefix != null && srv.tagPrefix != local.tagPrefix);
-        if (srv.sectionsPresent || side) {
+        final skip = srv.skipPresets && !local.skipPresets; // §578
+        if (side || skip) {
           merged[hit] = local.copyWith(
-            sections: srv.sectionsPresent ? srv.sections : null,
-            clearSections: srv.sectionsPresent && srv.sections == null,
             detourPolicy: flags,
             tagPrefix: srv.tagPrefix,
+            skipPresets: skip ? true : null,
           );
           applied++;
         }
@@ -4054,7 +4030,7 @@ BackupServerMerge mergeBackupServers(
         rawBody: body,
         // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
         warnings: srv.warnings,
-        sections: srv.sections,
+        skipPresets: srv.skipPresets, // §578
       ));
       pendingLinks.add((
         at: merged.length - 1,
@@ -4274,7 +4250,7 @@ NodeLink Function(NodeLink link, {int? at, bool legacy}) _backupLinkMapper({
 List<NodeSpec> _nodesOf(String raw) {
   if (raw.trim().isEmpty) return const [];
   try {
-    return parseAll(decode(raw));
+    return parseAll(decode(raw), own: true);
   } catch (_) {
     return const [];
   }
@@ -4291,7 +4267,7 @@ Set<String> _fileFinalForms(String prefix, String raw) => {
     };
 
 /// Член папки [folderAt]: дедуп по канону тела в пределах этой папки, новые
-/// в конец. Возвращает, сколько применилось (0 — узнан без секций файла).
+/// в конец. Возвращает, сколько применилось (0 — узнан, применять нечего).
 int _mergeFolderMember(
   List<ServerList> merged,
   int folderAt,
@@ -4310,12 +4286,11 @@ int _mergeFolderMember(
       landings?[(folderAt, srv.name)] = here;
     }
     touched.add((list: folderAt, member: hit));
-    if (!srv.sectionsPresent) return 0;
+    // §578 — `skip_presets: true` из файла; отсутствие своё не сбрасывает.
+    final skip = srv.skipPresets && !folder.members[hit].skipPresets;
+    if (!skip) return 0;
     final members = folder.members.toList();
-    members[hit] = members[hit].copyWith(
-      sections: srv.sections,
-      clearSections: srv.sections == null,
-    );
+    members[hit] = members[hit].copyWith(skipPresets: true);
     merged[folderAt] = folder.copyWith(members: members);
     return 1;
   }
@@ -4325,7 +4300,7 @@ int _mergeFolderMember(
     // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
     warnings: srv.warnings,
     detour: detour,
-    sections: srv.sections,
+    skipPresets: srv.skipPresets, // §578
   );
   final here = member.node?.tag ?? '';
   if (srv.name.isNotEmpty && here.isNotEmpty) {
@@ -4478,8 +4453,7 @@ NodeLink _remapLink(NodeLink link, Map<String, String> ids) {
   return local == null ? link : NodeLink(folderId: local, tag: link.tag);
 }
 
-/// §438 — ось порядка импорта (BACKUP.md §9 п. 7, `NODE_SECTIONS.md` §5):
-/// корневые правила [rules] и правила секций узлов [touched] на ОДНОЙ оси.
+/// §438 — ось порядка импорта (BACKUP.md §9 п. 7): корневые правила [rules].
 ///
 /// Номера у LxBox — свои, и относительный порядок обязан сохраниться; при
 /// этом ось у сторон одна по раскладке шаблона (голова 0, пресеты 950–990,
@@ -4507,15 +4481,9 @@ NodeLink _remapLink(NodeLink link, Map<String, String> ids) {
 ///    размеченных), но не ниже [kUserRuleNumStart]: хвост файла с номерами
 ///    шаблона не уводит правило пользователя в зону пресетов.
 ///
-/// Правила секций без номера остаются без него — сборка ставит их на 945.
-///
 /// Возвращает корневые правила в порядке оси; номера проставляются в тех же
 /// объектах (как во всём §370).
-List<CustomRule> renumberBackupAxis(
-  List<CustomRule> rules,
-  List<ServerList> lists,
-  List<BackupNodeRef> touched,
-) {
+List<CustomRule> renumberBackupAxis(List<CustomRule> rules) {
   if (rules.every((r) => r.orderNum == null)) return rules;
 
   var last = -1;
@@ -4526,24 +4494,6 @@ List<CustomRule> renumberBackupAxis(
   for (final r in rules) {
     see(r.orderNum);
   }
-  final seen = <(int, int)>{};
-  for (final ref in touched) {
-    if (!seen.add((ref.list, ref.member))) continue;
-    if (ref.list < 0 || ref.list >= lists.length) continue;
-    final owner = lists[ref.list];
-    final NodeSections? sections;
-    if (ref.member < 0) {
-      sections = owner is UserServer ? owner.sections : null;
-    } else if (owner is FolderServers && ref.member < owner.members.length) {
-      sections = owner.members[ref.member].sections;
-    } else {
-      sections = null;
-    }
-    for (final r in sections?.rules ?? const <CustomRule>[]) {
-      see(r.orderNum ?? kNodeRuleDefaultNum);
-    }
-  }
-
   var next = last + 1 < kUserRuleNumStart ? kUserRuleNumStart : last + 1;
   for (final r in rules) {
     r.orderNum ??= next++;

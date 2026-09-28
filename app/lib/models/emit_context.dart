@@ -47,24 +47,15 @@ abstract class EmitContext {
   RuleSetRegistry get ruleSets;
 
   /// §435 — финальный тег эмитированного узла (после префикса контейнера и
-  /// `allocateTag`). По нему `buildConfig` инжектит секции узла
-  /// (`@self` → этот тег); узел, которого здесь нет, секций не даёт.
+  /// `allocateTag`). По нему `buildConfig` собирает узлы для `for_each`
+  /// пресетов (§578) и адресный индекс; узла, которого здесь нет, в конфиге
+  /// нет.
   void noteEmitted(NodeSpec node, String finalTag) {}
 
   /// Фича 478 / PARSING_PRINCIPLES §9.3 — дополнительный outbound (хоп родной цепочки)
   /// ведёт к [owner], а не к своему звену. При коллизии с main-тегом того же
   /// узла побеждает [noteEmitted].
   void noteEmittedAlias(String finalTag, NodeSpec owner) {}
-
-  /// §473 — запись, чьё тело взято ДОСЛОВНО из JSON-источника (§455,
-  /// `verbatimBodyOf`), а не собрано `emit()` модели.
-  ///
-  /// Нужно гарду реестра на сборке: у такой записи вход — `singbox`, и
-  /// правило `max_when.except_sources` оставляет ей значение, которое на
-  /// прочих входах заменило бы потолком. Гард работает над `SingboxEntry`, а
-  /// он источника не знает и знать не может — карту ведёт тот, кто тело
-  /// подставил.
-  void noteVerbatim(SingboxEntry entry) {}
 
   /// §435 — предупреждение сборки из `ServerList.build` (гейт ядра и т.п.):
   /// уходит в `emitWarnings` наравне с остальными строками отчёта.

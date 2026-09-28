@@ -588,7 +588,7 @@
   "value": "OpenDNS UDP（直连）"
  },
  "OpenDNS DoH": {
-   "value": "OpenDNS DoH"
+  "value": "OpenDNS DoH"
  },
  "Quad9 DoH (via VPN, anti-malware)": {
   "value": "Quad9 DoH（经 VPN，防恶意软件）"
@@ -625,5 +625,35 @@
  },
  "Also route UDP 500/4500 directly. Some modems get the gateway address from the carrier network and never send a DNS query, so the domain rule alone misses them. Those ports carry nothing but IPsec key exchange.": {
   "value": "同时把 UDP 500/4500 直连。部分基带从运营商网络获取网关地址，从不发 DNS 查询，仅靠域名规则会漏掉它们。这两个端口上除了 IPsec 密钥交换没有别的内容。"
+ },
+ "Tailscale networks": {
+  "value": "Tailscale 网络"
+ },
+ "Route each tailnet through its Tailscale node and resolve its names with the node's own DNS.": {
+  "value": "每个 tailnet 的流量经由其 Tailscale 节点，名称由该节点自身的 DNS 解析。"
+ },
+ "Resolve tailnet names with the node's own DNS.": {
+  "value": "使用节点自身的 DNS 解析 tailnet 名称。"
+ },
+ "MagicDNS of the tailnet": {
+  "value": "tailnet 的 MagicDNS"
+ },
+ "DNS cache size": {
+  "value": "DNS 缓存大小"
+ },
+ "Number of cached answers (1024..65535).": {
+  "value": "缓存的应答条数（1024..65535）。"
+ },
+ "Serve stale answers": {
+  "value": "返回过期应答"
+ },
+ "Answer from cache at once and refresh in the background.": {
+  "value": "立即用缓存应答，并在后台刷新。"
+ },
+ "Keep DNS cache after restart": {
+  "value": "重启后保留 DNS 缓存"
+ },
+ "Store the DNS cache in cache.db so it survives a restart.": {
+  "value": "将 DNS 缓存存入 cache.db，重启后仍然保留。"
  }
 }

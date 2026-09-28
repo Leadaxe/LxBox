@@ -22,6 +22,7 @@ import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'l10n/app_language_reconcile.dart';
 import 'record_vars.dart';
+import 'selectable_to_custom.dart';
 import 'settings_storage_keys.dart';
 import 'storage_migration/migrate_storage.dart';
 import 'subscription/http_cache.dart';
@@ -116,8 +117,11 @@ class SettingsStorage {
   /// из этих var через `setVar` → авто-dirty.
   static const _configVarKeys = <String>{
     'auto_detect_interface',
+    'dns_cache_capacity',
     'dns_default_domain_resolver',
     'dns_final',
+    'dns_optimistic',
+    'dns_store_cache',
     'dns_strategy',
     'log_level',
     'resolve_strategy',
@@ -167,6 +171,7 @@ class SettingsStorage {
     //                   allowlist → терялся при restore (default-deny)
     'last_global_update',
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
+    'late_presets_seeded', // §578 — guard разового seed поздних дефолтных пресетов
     'interrupt_connections_on_switch',
     'node_sort_mode',
     'node_manual_order',
@@ -530,6 +535,12 @@ class SettingsStorage {
   static Future<bool> hasDefaultsSeeded() => _hasDefaultsSeeded();
 
   static Future<void> markDefaultsSeeded() => _markDefaultsSeeded();
+
+  /// §578 — разовое добавление пресетов с `default: true`, появившихся в
+  /// шаблоне после первой установки ([kLateDefaultPresetIds]). `true` — список
+  /// правил изменился.
+  static Future<bool> seedLateDefaultPresets([WizardTemplate? template]) =>
+      _seedLateDefaultPresets(template);
 
   // ---------------------------------------------------------------------------
   // Route final outbound

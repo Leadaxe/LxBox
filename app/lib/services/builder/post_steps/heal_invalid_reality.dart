@@ -18,8 +18,14 @@ part of '../post_steps.dart';
 ///
 /// Возвращает список исправлений (`owner → field → исходное значение`).
 /// Пустой = всё чисто.
+///
+/// §577 — правка идёт через точку правки ([editBodyPath]) с кодом реестра
+/// (`reality_pbk_invalid`, `reality_short_id_invalid`): у авторского тела
+/// ([authored]) применяется только правило с `core_rejects`.
 List<({String owner, String field, String original})> healInvalidReality(
-    Map<String, dynamic> config) {
+  Map<String, dynamic> config, {
+  Set<Map<String, dynamic>> authored = const {},
+}) {
   final healed = <({String owner, String field, String original})>[];
   final outbounds = (config['outbounds'] as List<dynamic>? ?? const [])
       .whereType<Map<String, dynamic>>();
@@ -31,11 +37,17 @@ List<({String owner, String field, String original})> healInvalidReality(
     // Выключенный блок ядро не декодирует — не fatal, не трогаем (как §281).
     if (reality['enabled'] != true) continue;
     final tag = o['tag'] as String? ?? '';
+    final own = authored.contains(o);
 
     final pbk = reality['public_key'];
     if (pbk is! String || !isValidRealityPublicKey(pbk)) {
-      tls.remove('reality');
-      healed.add((owner: tag, field: 'public_key', original: '$pbk'));
+      if (editBodyPath(o,
+          authored: own,
+          code: 'reality_pbk_invalid',
+          path: 'tls.reality',
+          remove: true)) {
+        healed.add((owner: tag, field: 'public_key', original: '$pbk'));
+      }
       continue;
     }
 
@@ -43,15 +55,23 @@ List<({String owner, String field, String original})> healInvalidReality(
     if (sid != null && sid is! String) {
       // Не-строковый short_id (число из raw-JSON узла / §302-патча) ядро
       // тоже не декодирует — тот же fatal. Отброс, не подгон (§169).
-      reality['short_id'] = '';
-      healed.add((owner: tag, field: 'short_id', original: '$sid'));
+      if (_clearShortId(o, own)) {
+        healed.add((owner: tag, field: 'short_id', original: '$sid'));
+      }
     } else if (sid is String && sid.isNotEmpty && !_isValidRealityShortId(sid)) {
-      reality['short_id'] = '';
-      healed.add((owner: tag, field: 'short_id', original: sid));
+      if (_clearShortId(o, own)) {
+        healed.add((owner: tag, field: 'short_id', original: sid));
+      }
     }
   }
   return healed;
 }
+
+bool _clearShortId(Map<String, dynamic> o, bool authored) => editBodyPath(o,
+    authored: authored,
+    code: 'reality_short_id_invalid',
+    path: 'tls.reality.short_id',
+    value: '');
 
 /// Строгая проверка формы short_id (без нормализации — на этом рубеже
 /// значение обязано быть уже каноничным): hex 0-9a-fA-F, чётная длина, ≤16.

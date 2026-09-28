@@ -97,7 +97,7 @@ void main() {
         (tester) async {
       await pumpRow(tester, const [
         _infoTls,
-        SectionsConflictWarning(),
+        DetourToGroupWarning('grp'),
       ]);
       expect(find.text('Notifications'), findsNothing);
 
@@ -110,7 +110,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(NodeWarningsSheet),
-          matching: find.textContaining('The document carries both'),
+          matching: find.textContaining('grp'),
         ),
         findsOneWidget,
       );
@@ -127,7 +127,7 @@ void main() {
     testWidgets('тап по строке не срабатывает как тап по строке узла',
         (tester) async {
       var tileTaps = 0;
-      await pumpRow(tester, const [SectionsConflictWarning()],
+      await pumpRow(tester, const [DetourToGroupWarning('grp')],
           onTileTap: () => tileTaps++);
 
       await tester.tap(find.byType(NodeWarningRow));
@@ -468,10 +468,10 @@ void main() {
 
     testWidgets('рукописное предупреждение без кода реестра — без блоков',
         (tester) async {
-      await pumpView(tester, const [SectionsConflictWarning()]);
+      await pumpView(tester, const [DuplicateNodeWarning()]);
 
       // Заголовок на месте — он свой, из словаря UI.
-      expect(find.textContaining('The document carries both'), findsOneWidget);
+      expect(find.textContaining('Duplicate entry'), findsOneWidget);
       // А объяснять и вести некуда: кода в реестре нет.
       expect(find.text('Details'), findsNothing);
       expect(find.text('Why it happens'), findsNothing);
@@ -694,15 +694,6 @@ void main() {
           findsNothing);
       expect(find.text('Warnings'), findsOneWidget);
       expect(find.text('Info'), findsOneWidget);
-    });
-
-    test('groupWarningsByCode: код null в группу не входит', () {
-      final items = groupWarningsByCode(const [
-        SectionsConflictWarning(),
-        SectionsConflictWarning(),
-      ]);
-      // SectionsConflictWarning без кода в таблице — две отдельные плитки.
-      expect(items.map((g) => g.length), [1, 1]);
     });
   });
 

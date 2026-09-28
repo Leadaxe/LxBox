@@ -16,7 +16,9 @@ import '../widgets/chain_positions_block.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/pool_view_dialog.dart';
+import '../widgets/tailscale_network_tab.dart';
 import 'home/node_actions.dart' show toggleEndpoint;
+import 'node_settings/exit_node_store.dart';
 import 'owner_navigation.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 import '../services/l10n/locale_controller.dart';
@@ -40,7 +42,13 @@ class OutboundViewScreen extends StatefulWidget {
     required this.subController,
     required this.homeController,
     this.openDependents = false,
+    this.openNetwork = false,
   });
+
+  /// Задача 581 — открыть сразу вкладку Network (экран открыт из строки
+  /// NETWORKS главного экрана). У узла не Tailscale вкладки нет — обычный
+  /// Overview.
+  final bool openNetwork;
 
   /// §355 — открыть сразу вкладку Dependents (тап по ⚠-метке). Если
   /// зависимых нет (вкладка скрыта) — обычный Overview.
@@ -113,6 +121,47 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// послойная проба обязана мерить работающий маршрут.
   List<String>? get _chainHops =>
       chainHopsFromConfig(widget.config[widget.tag]?.raw);
+
+  /// Задача 581 — узел Tailscale: у экрана вкладка Network.
+  bool get _isTailscale => widget.config[widget.tag]?.type == 'tailscale';
+
+  /// Задача 581 — тело узла для вкладки Network: из собранного конфига, после
+  /// Save choice — с записанным `exit_node` (конфиг экрана — снимок).
+  Map<String, dynamic>? _tailscaleBody;
+
+  Map<String, dynamic> get _networkBody =>
+      _tailscaleBody ?? widget.config[widget.tag]?.raw ?? const {};
+
+  /// Задача 581 — Save choice: только когда по тегу нашлась запись своего
+  /// сервера или члена папки ([exitNodeTargetForTag]); подписка и узел без
+  /// записи — `null`, кнопки нет.
+  Future<void> Function(String?)? get _saveExitNode {
+    if (exitNodeTargetForTag(widget.tag, widget.subController.entries) ==
+        null) {
+      return null;
+    }
+    return _storeExitNode;
+  }
+
+  Future<void> _storeExitNode(String? value) async {
+    final target =
+        exitNodeTargetForTag(widget.tag, widget.subController.entries);
+    if (target == null) return;
+    final err =
+        await storeExitNodeChoice(widget.subController, target, value);
+    if (!mounted) return;
+    if (err == null) {
+      final body = Map<String, dynamic>.of(_networkBody);
+      if (value == null || value.isEmpty) {
+        body.remove('exit_node');
+      } else {
+        body['exit_node'] = value;
+      }
+      setState(() => _tailscaleBody = body);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(err ?? getLocalText.s("Saved"))));
+  }
 
   /// §565 / задача 570 — член, выбранный на этом экране, пока ядро (или
   /// пересборка) его не подтвердили.
@@ -209,11 +258,18 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       emittedTagMap: widget.subController.lastEmittedTagMap,
       buildWarningsByTag: widget.subController.lastBuildWarningsByTag,
     );
+    // Задача 581 — Network у узла Tailscale, перед Diagnostics.
+    final tailscale = _isTailscale;
+    final networkIndex = hasDependents ? 3 : 2;
     return DefaultTabController(
       // §392 — +1 вкладка Diagnostics; Dependents по-прежнему условная, и
       // индекс её открытия (openDependents) не меняется — она перед новой.
-      length: hasDependents ? 4 : 3,
-      initialIndex: (widget.openDependents && hasDependents) ? 2 : 0,
+      length: 3 + (hasDependents ? 1 : 0) + (tailscale ? 1 : 0),
+      initialIndex: (widget.openNetwork && tailscale)
+          ? networkIndex
+          : (widget.openDependents && hasDependents)
+              ? 2
+              : 0,
       child: Scaffold(
         appBar: AppBar(
           title: Text('${widget.kind} · ${widget.tag}',
@@ -226,6 +282,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               // l10n-exempt: acronym, same in all locales
               const Tab(text: 'JSON'),
               if (hasDependents) Tab(text: getLocalText.s("Dependents")),
+              if (tailscale) Tab(text: getLocalText.s("Network")),
               NodeDiagnosticsTabLabel(warnings: warnings),
             ],
           ),
@@ -283,6 +340,12 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               if (hasDependents)
                 _buildDependentsTab(
                     context, dependents, sick: sickDependents != null),
+              if (tailscale)
+                TailscaleNetworkTab(
+                  liveTag: widget.tag,
+                  body: _networkBody,
+                  onSaveExitNode: _saveExitNode,
+                ),
               // §392 — экран знает узел ТОЛЬКО по тегу собранного конфига
               // (NodeSpec тут нет), поэтому probe-ветка недоступна: при
               // выключенном VPN вкладка объяснит, откуда проверять.

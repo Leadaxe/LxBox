@@ -2,13 +2,13 @@ L×Box is a high-performance proxy client with no compromises.
 
 You choose the servers. You set the rules. You control the traffic. L×Box does exactly what you told it to.
 
-12+ protocols, advanced routing, full DNS control, detour chains, per-app split tunneling and built-in diagnostics. No account, no ads, no analytics. No server network of our own.
+12+ protocols, your Tailscale network, advanced routing, full DNS control, detour chains, per-app split tunneling and built-in diagnostics.
 
 THE CORE IS OURS
 
 L×Box runs on sing-box-lx, our own fork of sing-box, developed together with the app. On top of stock sing-box the core adds:
 
-• AmneziaWG 2.0 — obfuscated WireGuard;
+• AmneziaWG 3.1 — obfuscated WireGuard;
 • XHTTP — Xray transport, including stream-one;
 • VLESS + ML-KEM-768 — post-quantum protection;
 • MASQUE — Cloudflare WARP as a full node and a chain link.
@@ -22,15 +22,22 @@ And it is tuned for real life on a phone:
 • idle tunnel sleep — less memory, less battery;
 • observability — DNS, connections and chains visible from the app.
 
-The core stays in sync with upstream; changes are verified on real devices.
-
 12+ PROTOCOLS
 
-VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, AmneziaWG 2.0, MASQUE over QUIC/HTTP-3.
+VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC v5, NaiveProxy, AnyTLS, SSH, SOCKS, WireGuard, Tailscale, AmneziaWG 3.1, MASQUE over QUIC/HTTP-3.
 
-Cloudflare WARP in one tap: registration right in the app, the private key is generated on your device and never leaves it — Cloudflare receives only the public half. WireGuard or MASQUE, optional AmneziaWG obfuscation.
+Cloudflare WARP in one tap: simple registration right in the app, the private key is generated on your device and never leaves it — Cloudflare receives only the public half. WireGuard or MASQUE.
 
 Import any familiar format: subscriptions and links, Base64, Xray arrays, WireGuard URI/INI, Amnezia vpn://, sing-box JSON configs, local files, plain text.
+
+TAILSCALE WITHOUT A SECOND APP
+
+Android runs one VPN at a time, so a Tailscale app and a proxy client cannot run together. In L×Box the Tailscale node runs inside the core: the phone joins your tailnet, and the rest of the traffic follows your rules.
+
+• devices answer by name through MagicDNS;
+• exit to the internet through an exit node of your tailnet;
+• sign-in, device list and ping with the path in the app;
+• your own control server is supported.
 
 SUBSCRIPTIONS WITHOUT MANUAL WORK
 
@@ -38,17 +45,15 @@ Add a subscription — L×Box parses it and creates nodes with no duplicates. Un
 
 Processing rules with regex and capture groups rename, rewrite or disable nodes on every refresh — and show in advance which nodes a rule will hit.
 
-Coming from another sing-box client? Import the whole config — with auto-select groups and detour chains.
-
 ROUTING YOU ACTUALLY CONTROL
 
-Shape your internet exit around your life. One device can host several environments at once: work, travel, safe browsing and acceleration, the open internet. Each with its own rules and its own route.
+One device can host several environments at once: work, home, travel. Each with its own rules and its own route.
 
 Conditions: domain, IP and CIDR, port, protocol, app, network type.
 
 DNS UNDER YOUR CONTROL
 
-Several resolvers at once. A separate DNS per rule. FakeIP. You decide where every query goes.
+Several resolvers at once. A separate DNS per rule. FakeIP.
 
 FULL DIAGNOSTICS ON BOARD
 
@@ -65,6 +70,8 @@ No account. No ads, no analytics, no advertising ID, no crash reporters. L×Box 
 A CLIENT, NOT A VPN SERVICE
 
 L×Box provides no servers and sells no access to anyone's network — you choose your servers and subscriptions.
+
+L×Box is a professional tool for network security, routing and network health checks. Use is allowed only in strict compliance with the laws of the country where the tool is used. Full responsibility for compliance lies with the user.
 
 OPEN SOURCE
 

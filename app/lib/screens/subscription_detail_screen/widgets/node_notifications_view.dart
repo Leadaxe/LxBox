@@ -276,7 +276,14 @@ class _NotificationTile extends StatelessWidget {
               style: _monospace,
             ),
           ),
-        ..._breakdown(context, code, subst),
+        // §585 — у рукописного класса без кода реестра свой текст.
+        if (warning case final UnknownNodeTypeWarning u)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(u.detailWith(getLocalText),
+                style: theme.textTheme.bodySmall),
+          ),
+        ..._breakdown(context, code, subst, notApplied: !warning.applied),
       ],
     );
   }
@@ -352,7 +359,8 @@ class _NotificationGroupTile extends StatelessWidget {
               style: _monospace,
             ),
           ),
-        ..._breakdown(context, code, subst),
+        ..._breakdown(context, code, subst,
+            notApplied: group.every((w) => !w.applied)),
       ],
     );
   }
@@ -385,8 +393,13 @@ const _monospace = TextStyle(fontSize: 12, fontFamily: 'monospace');
 /// Подстановки несёт только RegistryWarning: у рукописного класса свои
 /// поля, и текст он собрал сам. Тексты реестра для его кода при этом
 /// остаются осмысленными — они про код, а не про конкретное значение.
+///
+/// §577 — [notApplied]: правило реестра не применено к авторскому телу.
+/// Текст реестра «что произошло» утверждает, что поле изменено, поэтому
+/// вместо него — общая строка; причина и что делать — из реестра.
 List<Widget> _breakdown(
-    BuildContext context, String? code, RegistryWarning? subst) {
+    BuildContext context, String? code, RegistryWarning? subst,
+    {bool notApplied = false}) {
   final theme = Theme.of(context);
   // Код есть у класса, а текстов может не быть: реестр не синхронизирован,
   // либо код в нём рукописный без описания. Ссылку даём только когда
@@ -398,8 +411,10 @@ List<Widget> _breakdown(
   final path = subst?.path;
   final value = subst?.value;
   final params = subst?.params ?? const <String, String>{};
-  final detail =
-      registryText(code, lang, path: path, value: value, params: params);
+  final detail = notApplied
+      ? getLocalText
+          .s("The node is written by hand, so the app changed nothing in it.")
+      : registryText(code, lang, path: path, value: value, params: params);
   final cause =
       registryCause(code, lang, path: path, value: value, params: params);
   final fix = registryFix(code, lang, path: path, value: value, params: params);

@@ -69,6 +69,7 @@ const _topLevelAppKeys = {
   'ping_options',
   'last_global_update',
   'presets_migrated',
+  'late_presets_seeded', // §578 — guard разового seed поздних пресетов
   'warp_account',
   'masque_account', // §130 — MASQUE-WARP аккаунт (ECDSA-ключи + endpoint)
   'interrupt_connections_on_switch',

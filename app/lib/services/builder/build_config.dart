@@ -4,7 +4,6 @@ import '../../models/direction.dart';
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/emit_context.dart';
-import '../../models/node_sections.dart';
 import '../../models/node_spec.dart' show NodeSpec;
 import '../../models/node_warning.dart';
 import '../../models/parser_config.dart';
@@ -29,6 +28,7 @@ import 'if_engine.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
+import 'preset_expand.dart' show PresetNode;
 import 'registry_gate.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
@@ -238,6 +238,22 @@ Future<BuildResult> buildConfig({
 String _renderTemplateWarning(TemplateWarning w) =>
     'Template: ${RegistryWarning(code: w.code, params: w.params).renderEn()}';
 
+/// §580 — границы int-переменных шаблона, у которых они есть
+/// (TEMPLATE_LANG §6.8). Экран не сохраняет значение вне границ, сборка его
+/// не подставляет.
+const Map<String, (int, int)> kVarIntBounds = {
+  'dns_cache_capacity': (1024, 65535),
+};
+
+/// Значение [raw] переменной [name] — целое в её границах (переменная без
+/// границ — всегда да).
+bool varIntInBounds(String name, String raw) {
+  final b = kVarIntBounds[name];
+  if (b == null) return true;
+  final n = int.tryParse(raw.trim());
+  return n != null && n >= b.$1 && n <= b.$2;
+}
+
 Future<BuildResult> _buildConfig({
   required List<ServerList> lists,
   required BuildSettings settings,
@@ -264,6 +280,14 @@ Future<BuildResult> _buildConfig({
             ? v.defaultValue
             : raw;
     byName[v.name] = v;
+  }
+  // §580 (TEMPLATE_LANG §6.8) — сохранённое вне границ (правка файла руками,
+  // импорт) в конфиг не уходит: действует значение по умолчанию шаблона.
+  for (final e in kVarIntBounds.entries) {
+    final v = byName[e.key];
+    final raw = vars[e.key];
+    if (v == null || raw == null) continue;
+    if (!varIntInBounds(e.key, raw)) vars[e.key] = v.defaultValue;
   }
   // Также пропускаем user-override'ы, которые могут прийти вне template.vars
   // (например, clash_api/secret, сохранённые раньше).
@@ -421,9 +445,6 @@ Future<BuildResult> _buildConfig({
     [...ctx.outbounds, ...ctx.endpoints],
     coreVersion: settings.coreVersion,
     coreBuildTags: settings.coreBuildTags,
-    // §473 — записи с дословным JSON-телом (§455) идут в ядро как написаны:
-    // правило условного потолка (`max_when`) им значение не подменяет.
-    verbatim: ctx.verbatimEntries,
   );
   ctx.dropRegistryEntries(registryReport.dropped);
 
@@ -620,13 +641,9 @@ Future<BuildResult> _buildConfig({
     ];
   }
 
-  // §435 / контракт ## 13 — секции узлов (NODE_SECTIONS.md §3): записи
-  // свободных узлов, эмитированных выше, после подстановки `@self` → финальный
-  // тег дописываются к общим спискам. Правила — на ту же ось `num`, что и
-  // корень с якорями пресетов (без `num` → 945); DNS — в конец. Выключенный,
-  // снятый гейтом или не разобранный узел в `emittedTagByNode` отсутствует и
-  // ничего не даёт. Инвариант: без узлов с секциями конфиг байт-в-байт прежний.
-  final injected = _collectNodeSections(lists, ctx.emittedTagByNode);
+  // §578 — узлы для пресетов с `for_each`: состав окончателен (снятия
+  // detour-прохода, гейта реестра и ядра уже применены), теги финальные.
+  final presetNodes = _collectPresetNodes(lists, ctx);
 
   // §370 — нормализация порядка по оси `num`: seed обязательного пресета
   // (traffic-processing) + разметка неразмеченных + сортировка. Гарантирует,
@@ -635,7 +652,7 @@ Future<BuildResult> _buildConfig({
   // первым). Одноразово здесь → все нижеследующие проходы видят нормализованный
   // список.
   final customRules = normalizeRuleOrder(
-    [...settings.customRules, ...injected.rules],
+    [...settings.customRules],
     template.selectableRules,
     template,
   );
@@ -723,6 +740,7 @@ Future<BuildResult> _buildConfig({
     srsPaths: srsPaths,
     presetSrsPaths: presetSrsPaths,
     globalVars: vars, // §265 — ref-vars резолвятся из flat global vars
+    presetNodes: presetNodes, // §578
   );
   emitWarnings.addAll(unifiedApply.warnings);
 
@@ -816,8 +834,16 @@ Future<BuildResult> _buildConfig({
   // (`listen_port` WireGuard), снимаются кодом связи реестра. Контракт 1.1.84
   // — туда же `tls.fragment` (`detour_with_tls_fragment`). Код ложится и в
   // предупреждения узла по его config-тегу — рядом с кодами гарда реестра.
-  for (final w in applyDetourYields(config)) {
-    emitWarnings.add(w.renderEn());
+  // §577 — тела авторских записей (identity: карты тел и есть элементы
+  // `outbounds[]`/`endpoints[]` конфига).
+  final authoredBodies = Set<Map<String, dynamic>>.identity()
+    ..addAll([
+      for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
+        if (e.authored) e.map,
+    ]);
+  for (final w in applyDetourYields(config, authored: authoredBodies)) {
+    emitWarnings
+        .add(w.applied ? w.renderEn() : '${w.renderEn()} (not applied)');
     if (w.ownerTag.isNotEmpty) {
       registryReport.warningsByEmittedTag
           .putIfAbsent(w.ownerTag, () => [])
@@ -845,8 +871,6 @@ Future<BuildResult> _buildConfig({
     dnsSrsCachedPaths: dnsSrsCachedPaths,
     dnsMirrors: unifiedApply.dnsMirrors,
     warningsOut: emitWarnings, // §312 — дропы членов DNS-групп
-    nodeServers: injected.dnsServers, // §435 — DNS-записи узлов в конец
-    nodeRules: injected.dnsRules,
     resolverDefaults: resolverDefaults, // §441 — Н10
     globalVars: vars, // §555/§570 — тела шаблонных серверов видят весь шаблон
   );
@@ -917,7 +941,8 @@ Future<BuildResult> _buildConfig({
   // («unknown uTLS fingerprint») — конфиг не встаёт целиком. Парсер уже
   // канонизирует на входе (xray-псевдонимы hellochrome_* → chrome, мусор →
   // chrome); этот post-step — страховка для путей мимо парсера.
-  final healedFingerprints = healUnknownUtlsFingerprints(config);
+  final healedFingerprints = healUnknownUtlsFingerprints(config,
+      authored: authoredBodies);
   for (final h in healedFingerprints) {
     emitWarnings.add(
         'Fingerprint replaced: outbound "${h.owner}" had unknown uTLS '
@@ -929,7 +954,7 @@ Future<BuildResult> _buildConfig({
   // (§169/§343), этот post-step — страховка для путей мимо парсера (raw
   // JSON, §302 import rules, vars). Битое значение отбрасывается, нода
   // деградирует — VPN стартует.
-  final healedReality = healInvalidReality(config);
+  final healedReality = healInvalidReality(config, authored: authoredBodies);
   for (final h in healedReality) {
     emitWarnings.add(h.field == 'short_id'
         ? 'REALITY short_id cleared: outbound "${h.owner}" had invalid '
@@ -975,59 +1000,34 @@ Future<BuildResult> _buildConfig({
   );
 }
 
-/// §435 — секции узлов после подстановки `@self`, готовые к инъекции:
-/// правила — на общую ось; DNS — тела с `tag` (серверы) и тела правил.
-class _NodeSectionsInjection {
-  final rules = <CustomRule>[];
-  final dnsServers = <Map<String, dynamic>>[];
-  final dnsRules = <Map<String, dynamic>>[];
-}
-
-/// §435 — обход свободных узлов с секциями (`UserServer.sections`,
-/// `FolderMember.sections`; NODE_SECTIONS.md §1: у подписок и цепочек поля
-/// нет). Узел без финального тега в [emittedTagByNode] пропускается —
-/// выключен, снят гейтом ядра или не разобран. Записи с `enabled: false`
-/// отсеиваются здесь же (§3 п. 3–4).
-_NodeSectionsInjection _collectNodeSections(
-  List<ServerList> lists,
-  Map<NodeSpec, String> emittedTagByNode,
-) {
-  final out = _NodeSectionsInjection();
-  void add(NodeSections? sections, NodeSpec? node) {
-    if (sections == null || sections.isEmpty || node == null) return;
-    final tag = emittedTagByNode[node];
-    if (tag == null || tag.isEmpty) return;
-    final s = sections.substituteSelf(tag);
-    for (final r in s.rules) {
-      if (!r.enabled) continue;
-      r.orderNum ??= kNodeRuleDefaultNum;
-      out.rules.add(r);
-    }
-    for (final srv in s.dnsServers) {
-      if (!srv.enabled) continue;
-      out.dnsServers.add(<String, dynamic>{...srv.body, 'tag': srv.tag});
-    }
-    for (final r in s.dnsRules) {
-      if (!r.enabled) continue;
-      out.dnsRules.add(Map<String, dynamic>.of(r.rule));
-    }
-  }
-
+/// §578 — узлы конфига для `for_each` в порядке конфига (`outbounds`, затем
+/// `endpoints`). Берутся только записи узлов из источников, у которых есть
+/// финальный тег в `emittedTagByNode`: выключенный, снятый гейтом реестра,
+/// ядра или detour-проходом узел туда не попадает. `skip_presets` — поле
+/// записи своего сервера или члена папки; у узла подписки записи нет.
+List<PresetNode> _collectPresetNodes(List<ServerList> lists, _BuildCtx ctx) {
+  final skip = <NodeSpec>{};
   for (final list in lists) {
-    if (!list.enabled) continue;
     switch (list) {
       case UserServer u:
-        add(u.sections, u.nodes.isEmpty ? null : u.nodes.first);
+        if (u.skipPresets) skip.addAll(u.nodes);
       case FolderServers f:
         for (final m in f.members) {
-          if (!m.enabled) continue;
-          add(m.sections, m.node);
+          final node = m.node;
+          if (m.skipPresets && node != null) skip.add(node);
         }
       case SubscriptionServers():
         break;
     }
   }
-  return out;
+  final nodeByTag = <String, NodeSpec>{
+    for (final e in ctx.emittedTagByNode.entries) e.value: e.key,
+  };
+  return [
+    for (final e in <SingboxEntry>[...ctx.outbounds, ...ctx.endpoints])
+      if (nodeByTag[e.tag] case final NodeSpec node)
+        PresetNode(tag: e.tag, body: e.map, skipPresets: skip.contains(node)),
+  ];
 }
 
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +
@@ -1115,13 +1115,6 @@ class _BuildCtx implements EmitContext {
   /// Фича 478 — финальный тег хопа цепочки → владелец узла (main outbound).
   final emittedTagAliases = <String, NodeSpec>{};
 
-  /// §473 — записи с дословным JSON-телом (§455): их вход — `singbox`.
-  ///
-  /// Identity-множество (`identityHashCode`), а не по равенству: тело
-  /// переписывается на месте и ключом карты быть не может, а две записи с
-  /// одинаковым телом — всё равно разные записи.
-  final verbatimEntries = <SingboxEntry>{};
-
   /// §435 — строки отчёта из `ServerList.build` (гейт ядра).
   final warnings = <String>[];
 
@@ -1145,11 +1138,6 @@ class _BuildCtx implements EmitContext {
   @override
   void noteEmittedAlias(String finalTag, NodeSpec owner) {
     emittedTagAliases[finalTag] = owner;
-  }
-
-  @override
-  void noteVerbatim(SingboxEntry entry) {
-    verbatimEntries.add(entry);
   }
 
   @override

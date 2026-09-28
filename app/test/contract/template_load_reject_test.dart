@@ -41,6 +41,9 @@ const _mustRejectOnLoad = <String, String>{
   'enable/both_and_or_is_false': '#enable: оба ключа and+or сразу',
   // "FAIL-CLOSED (D-058): неразобранное условие. Число вместо cond"
   'enable/invalid_cond_is_false': '#enable: скаляр вместо условия',
+  // "Объект с #tpl и другим ключом — ошибка шаблона: загрузка отвергает"
+  // (контракт 1.1.86, §4.8) — тот же fail-closed, что у `#if` без and/or.
+  'tpl/extra_key_is_error': '#tpl не допускает других ключей объекта',
 };
 
 /// Кейсы, где толерантность рантайма — И ЕСТЬ контракт: форма законна, и

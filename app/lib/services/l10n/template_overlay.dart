@@ -77,6 +77,21 @@ class TemplateOverlay {
   // полей, которых в английском шаблоне нет.
   // ---------------------------------------------------------------------------
 
+  /// §578 — ветки элемента массива тела пресета: плоский объект — он сам;
+  /// условная обёртка `{"#if": {..., "#value": X, "#else": Y}}` — `X` и,
+  /// если есть, `Y` (каждая ветка разворачивается так же: вложенный `#if`
+  /// и ветка-массив допустимы). Ветки — те же объекты шаблона, не копии: apply пишет в них.
+  static List<Map> conditionalBranches(dynamic item) {
+    if (item is List) return [for (final x in item) ...conditionalBranches(x)];
+    if (item is! Map) return const [];
+    final cond = item['#if'];
+    if (cond is! Map) return [item];
+    return [
+      for (final key in const ['#value', '#else'])
+        ...conditionalBranches(cond[key]),
+    ];
+  }
+
   static void _walk(Map<String, dynamic> t, _Visit visit) {
     void str(dynamic node, String address, String field) {
       if (node is! Map) return;
@@ -143,9 +158,19 @@ class TemplateOverlay {
         }
         final ds = r['dns_servers'];
         if (ds is List) {
-          for (final d in ds) {
-            if (d is Map && d['tag'] is String) {
-              str(d, 'preset.$pid.dns_server.${d['tag']}.description',
+          for (var i = 0; i < ds.length; i++) {
+            // §578 — элемент может быть условной обёрткой `#if`: отображаемые
+            // поля живут в ветках `#value`/`#else`. Тег пресета с `for_each`
+            // — конструкция `#tpl`, не строка: адрес тогда по индексу
+            // элемента (ключ перевода — сам английский текст, адрес только
+            // имя обхода).
+            for (final d in conditionalBranches(ds[i])) {
+              final tag = d['tag'];
+              str(
+                  d,
+                  tag is String
+                      ? 'preset.$pid.dns_server.$tag.description'
+                      : 'preset.$pid.dns_server.#$i.description',
                   'description');
             }
           }

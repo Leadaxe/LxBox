@@ -7,7 +7,7 @@
 | Дата завершения | 2026-09-14 |
 | Коммиты | `86803db6` feat(438): чтение 1.0 одним слиянием с 0.x; `9e5aa5e9` docs(438); `feat(438): запись LX Backup 1.0` — писатель 1.0 вместо 0.12, ответы лаунчера, синк контракта 1.0.0 |
 | Триггер | `app/contract/TASKS_LXBOX.md` ## 16 (контракт 1.0, D-109); решение владельца 14.09.2026: в этом же релизе LxBox пишет 1.0, экспорт 0.12 убран (D-110 — обе стороны пишут только 1.0) |
-| Связанные | [§435](../features/435%20node-sections-tailscale/spec.md) (секции узла, кодек записей; §9.7 — пробелы кодека), [§434](434-srs-rule-multiple-rule-sets.md) (`refs[]`), [§407](407-backup-corpus-pre-state-merge.md) (слияние по идентичности, предсостояние корпуса), [§370](370-rule-order-num-axis.md) (ось `num`), контракт `docs/BACKUP.md` §2, §6, §9, §11, `docs/NODE_SECTIONS.md` §1, §5, `docs/ONE_NAMESPACE.md` §1 |
+| Связанные | [§435](435-node-sections-tailscale.md) (секции узла, кодек записей; §9.7 — пробелы кодека), [§434](434-srs-rule-multiple-rule-sets.md) (`refs[]`), [§407](407-backup-corpus-pre-state-merge.md) (слияние по идентичности, предсостояние корпуса), [§370](370-rule-order-num-axis.md) (ось `num`), контракт `docs/BACKUP.md` §2, §6, §9, §11, `docs/NODE_SECTIONS.md` §1, §5, `docs/ONE_NAMESPACE.md` §1 |
 
 > **Заменено §439 (develop `230c3354`, до выпуска 2.23.3).** Переводчик между
 > формой хранения 2.23.2 и файлом 1.0, описанный ниже (`_subscription10ToJson`,

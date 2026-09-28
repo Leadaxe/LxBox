@@ -102,7 +102,7 @@ void main() {
       test('$format: номера не проставляются, загрузка даёт пресетам номера '
           'шаблона и голову первой', () {
         final file = parseLxBackup(raw);
-        final imported = renumberBackupAxis(file.rules, const [], const []);
+        final imported = renumberBackupAxis(file.rules);
         expect([for (final r in imported) r.name],
             ['user-a', 'block-ads', 'user-b', 'traffic-processing'],
             reason: 'порядок файла');
@@ -132,7 +132,7 @@ void main() {
         _preset10('private-ip', num: 950),
         _inline10('unmarked-2', 'b.example-1.com'),
       ]));
-      final rules = renumberBackupAxis(file.rules, const [], const []);
+      final rules = renumberBackupAxis(file.rules);
       expect(_axis(rules), [
         'traffic-processing=0',
         'private-ip=950',
@@ -147,7 +147,7 @@ void main() {
         _preset10('ru-inside', num: 1110),
         _inline10('user', 'b.example-1.com', num: 1000),
       ]));
-      final rules = renumberBackupAxis(file.rules, const [], const []);
+      final rules = renumberBackupAxis(file.rules);
       expect(_axis(rules), ['user=1000', 'ru-inside=1110', 'unmarked=1111']);
     });
   });

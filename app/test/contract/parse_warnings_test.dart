@@ -8,6 +8,7 @@ import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/app_log.dart';
+import 'package:lxbox/services/contract/body_sanitizer.dart' show BodySource;
 import 'package:lxbox/services/contract/parse_warnings.dart';
 import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
@@ -24,8 +25,8 @@ import 'package:lxbox/services/parser/parse_all.dart';
 /// Узлы из тела любого формата — тот же путь, которым идёт приложение.
 List<NodeSpec> _parse(String raw) => parseAll(decode(raw));
 
-NodeSpec _one(String raw) {
-  final nodes = _parse(raw);
+NodeSpec _one(String raw, {bool own = false}) {
+  final nodes = parseAll(decode(raw), own: own);
   expect(nodes, hasLength(1), reason: 'ожидался ровно один узел из $raw');
   return nodes.first;
 }
@@ -387,7 +388,8 @@ void main() {
   // §473 (контракт 1.1.5) — условный потолок MTU у AmneziaWG и исключение по
   // входу. Правило одно, а исход у него два, и решает вход узла.
   group('§473 — потолок MTU AmneziaWG', () {
-    // AWG-endpoint ТЕЛОМ sing-box: вход `singbox`.
+    // AWG-endpoint ТЕЛОМ sing-box своего сервера: вход `singbox` (§576 п.5 —
+    // только у своей записи и члена папки).
     String awgBody(int? mtu) => '{"type":"wireguard","tag":"awg-ep",'
         '${mtu == null ? '' : '"mtu":$mtu,'}'
         '"address":["10.0.0.2/32"],'
@@ -397,7 +399,7 @@ void main() {
         '"allowed_ips":["0.0.0.0/0"]}]}';
 
     test('тело sing-box с mtu=1420: значение цело, код info', () {
-      final n = _one(awgBody(1420));
+      final n = _one(awgBody(1420), own: true);
       expect(n.emit(TemplateVars.empty).map['mtu'], 1420,
           reason: 'написанное человеком в форме ядра не переписывается');
       final w = _byCode(n, 'awg_mtu_high');
@@ -407,6 +409,28 @@ void main() {
       // разойдись они входом, узел получил бы и info, и warning об одном поле.
       expect(
           _registry(n).where((w) => w.code.startsWith('awg_mtu_')), hasLength(1));
+    });
+
+    // §576 п.5 — вход `singbox` только у своей записи и члена папки. Тот же
+    // JSON узлом подписки — вход `other`: исключение по входу на него не
+    // действует, значение заменено (корпус `body/singbox/endpoints_awg_mtu_high`).
+    test('bodySourceOf: узел подписки с sing-box JSON — вход other', () {
+      final sub = _one(awgBody(1420));
+      expect(bodySourceOf(sub), BodySource.other);
+      expect(sub.emit(TemplateVars.empty).map['mtu'], 1280);
+      expect(_byCode(sub, 'awg_mtu_clamped').value, '1420');
+      expect(_registry(sub).map((w) => w.code), isNot(contains('awg_mtu_high')));
+
+      // Тот же текст своим сервером — вход `singbox`, значение цело.
+      final own = _one(awgBody(1420), own: true);
+      expect(own.emit(TemplateVars.empty).map['mtu'], 1420);
+    });
+
+    test('документ своего сервера — не голое тело, вход other', () {
+      final doc = '{"endpoints":[${awgBody(1420)}]}';
+      final n = _one(doc, own: true);
+      expect(n.emit(TemplateVars.empty).map['mtu'], 1280);
+      expect(_byCode(n, 'awg_mtu_clamped').value, '1420');
     });
 
     test('та же нода ССЫЛКОЙ: значение заменено, код warning', () {
@@ -447,7 +471,8 @@ void main() {
       // Условие `any_set` судит НАЛИЧИЕ ключа. Прочитай оно `jc: 0` как «поля
       // нет» (предикат `conflicts`/`requires`, §467), с такого узла потолок
       // снялся бы, и туннель молча перестал бы нести данные.
-      final n = _one(awgBody(1420).replaceFirst('"jc":10', '"jc":0'));
+      final n =
+          _one(awgBody(1420).replaceFirst('"jc":10', '"jc":0'), own: true);
       expect(_byCode(n, 'awg_mtu_high').value, '1420');
     });
 
@@ -464,7 +489,7 @@ void main() {
         tagPrefix: '',
         detourPolicy: DetourPolicy.defaults,
         rawBody: raw,
-        nodes: _parse(raw),
+        nodes: parseAll(decode(raw), own: true),
       );
       expect(before.nodes.single.emit(TemplateVars.empty).map['mtu'], 1420);
 

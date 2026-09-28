@@ -256,9 +256,9 @@ Future<({int rules, int dnsServers})> _healDirectionRefs(
 
 /// §441 — ссылки DNS-серверов на Направление по [retarget]: корневой список
 /// ([retargetDnsServerDirectionRefs]: переменные типа `outbound` template,
-/// `body.detour` user) и секции узлов ([retargetSectionsDnsDetours]).
-/// Возвращает число вылеченных серверов. flush:false — атомарный `_save()` на
-/// вызывающем; зеркало секций в контроллере — `DirectionMutations`.
+/// `body.detour` user). §575 — секций узлов больше нет, их DNS-серверы не
+/// лечатся. Возвращает число вылеченных серверов. flush:false — атомарный
+/// `_save()` на вызывающем.
 Future<int> _healDnsServerDirectionRefs(
   Map<String, String> retarget,
   RecordVarDecls decls,
@@ -276,19 +276,6 @@ Future<int> _healDnsServerDirectionRefs(
     await SettingsStorage.saveDnsServers(healedServers, flush: false);
   }
   count += rootCount;
-
-  final lists = await _getServerLists();
-  var listsChanged = false;
-  final healedLists = <ServerList>[];
-  for (final l in lists) {
-    final r = retargetSectionsDnsDetours(l, retarget);
-    if (r.healed != null) {
-      listsChanged = true;
-      count += r.count;
-    }
-    healedLists.add(r.healed ?? l);
-  }
-  if (listsChanged) await _saveServerLists(healedLists, flush: false);
   return count;
 }
 

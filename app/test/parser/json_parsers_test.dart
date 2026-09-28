@@ -288,12 +288,15 @@ void main() {
       expect(hy.emitRaw(TemplateVars.empty).map.containsKey('obfs'), isFalse);
     });
 
-    test('masque без ключей → null', () {
-      expect(
-        parseSingboxEntry(
-            {'type': 'masque', 'server': 'h', 'server_port': 443}),
-        isNull,
-      );
+    test('masque без ключей разбирается, пустых ключей в теле нет (§582)', () {
+      final spec = parseSingboxEntry(
+          {'type': 'masque', 'server': 'h', 'server_port': 443});
+      expect(spec, isA<MasqueSpec>());
+      final map = spec!.emitRaw(TemplateVars.empty).map;
+      expect(map['server'], 'h');
+      expect(map['server_port'], 443);
+      expect(map.containsKey('private_key'), isFalse);
+      expect(map.containsKey('public_key'), isFalse);
     });
 
     test('unknown type → null', () {

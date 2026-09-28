@@ -181,11 +181,6 @@ class _PoolCtx implements EmitContext {
   @override
   void noteEmittedAlias(String finalTag, node) {}
 
-  // §473 — пул звеньев тел в конфиг не отдаёт: он считает теги, а гард
-  // реестра сюда не заглядывает. Метку записывать некуда и незачем.
-  @override
-  void noteVerbatim(SingboxEntry entry) {}
-
   @override
   void warn(String line) {}
 

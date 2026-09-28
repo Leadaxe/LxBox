@@ -61,6 +61,7 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`obfs_object_flattened`](#obfs_object_flattened) · `info` — Obfuscation password taken from an object
 - [`obfs_password_missing`](#obfs_password_missing) · `warning` — Obfuscation removed: no password
 - [`obfs_unknown`](#obfs_unknown) · `warning` — Unknown obfuscation removed
+- [`openvpn_core_unsupported`](#openvpn_core_unsupported) · `warning` — OpenVPN is unavailable in this core
 - [`packet_encoding_unknown`](#packet_encoding_unknown) · `warning` — Field removed: unknown packet_encoding
 - [`password_empty`](#password_empty) · `warning` — Password is empty
 - [`port_invalid`](#port_invalid) · `error` — Invalid port {value}
@@ -84,7 +85,6 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`ssh_user_default`](#ssh_user_default) · `info` — SSH: user root substituted
 - [`tailscale_core_unsupported`](#tailscale_core_unsupported) · `warning` — Tailscale is unavailable in this core
 - [`tailscale_default_route_advertised`](#tailscale_default_route_advertised) · `warning` — Tailscale: default route {value} removed from advertised routes
-- [`tailscale_from_subscription`](#tailscale_from_subscription) · `info` — Tailscale node arrived from a subscription
 - [`template_fragment_dropped`](#template_fragment_dropped) · `warning` — Entry of {kind} from {owner} left out
 - [`template_int_clamped`](#template_int_clamped) · `warning` — Value of {name} clamped
 - [`template_int_invalid`](#template_int_invalid) · `warning` — Variable {name} is not a number
@@ -340,8 +340,8 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 **AmneziaWG: MTU above 1280**
 
-- **What happened:** The MTU at {path} is {value}, above the 1280 this launcher recommends for AmneziaWG. The value was kept as written, because the body came in the core's own form; be aware that a too-high MTU makes an AmneziaWG tunnel connect and then carry no data.
-- **Why it happens:** AmneziaWG pads every packet, so the obfuscated packet is bigger than the plain WireGuard one the MTU was calculated for; past the path MTU the system refuses to send it ("sendmsg: message too long") instead of fragmenting. The value is kept here because a sing-box body is written in the core's own form, by hand or by the subscription, and the launcher does not silently rewrite what you wrote yourself.
+- **What happened:** The MTU at {path} is {value}, above the 1280 this launcher recommends for AmneziaWG. The value was kept as written, because the node was written by hand in the core's own form; be aware that a too-high MTU makes an AmneziaWG tunnel connect and then carry no data.
+- **Why it happens:** AmneziaWG pads every packet, so the obfuscated packet is bigger than the plain WireGuard one the MTU was calculated for; past the path MTU the system refuses to send it ("sendmsg: message too long") instead of fragmenting. The value is kept here because this node was written by hand in the core's own form, and the launcher does not silently rewrite what you wrote yourself.
 - **What you can do:**
   - Nothing to do if the tunnel carries data: your server accepts this MTU.
   - If the handshake succeeds but nothing goes through, lower the MTU to 1280 in the node body.
@@ -1105,6 +1105,23 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`hysteria2`](protocols/hysteria2.md)
   - [`obfs.type`](protocols/hysteria2.md#body-obfs-type) — the value does not fit the field → removed
 
+<a id="openvpn_core_unsupported"></a>
+### openvpn_core_unsupported
+
+**severity:** `warning` · **params:** `reason`
+
+**OpenVPN is unavailable in this core**
+
+- **What happened:** The node uses OpenVPN, which this core cannot run ({reason}). The node was excluded from the config, because the core rejects such a value and would refuse to start the whole config; the remaining nodes work.
+- **Why it happens:** OpenVPN is an extension of the lx fork: it needs a core built with the with_openvpn tag, version 1.14.0-lx.10 or newer. A core without it rejects the whole config as soon as such a node appears in it.
+- **What you can do:**
+  - Update the core to 1.14.0-lx.10 or newer, built with the with_openvpn tag.
+  - Use another node until the core is updated.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
 <a id="packet_encoding_unknown"></a>
 ### packet_encoding_unknown
 
@@ -1513,23 +1530,6 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 - [`tailscale`](protocols/tailscale.md)
   - [`advertise_routes`](protocols/tailscale.md#body-advertise-routes) — a list item is `0.0.0.0/0`, `::/0` → item removed
-
-<a id="tailscale_from_subscription"></a>
-### tailscale_from_subscription
-
-**severity:** `info`
-
-**Tailscale node arrived from a subscription**
-
-- **What happened:** The subscription brought a Tailscale node. It is kept, but a subscription cannot bring the DNS server, rule and routes that make it useful — the machine identity in a tailnet lives locally; add those yourself.
-- **Why it happens:** The provider put a Tailscale node into the subscription body. A subscription can carry the node itself but not the settings around it: the machine's identity in a tailnet lives in local state on this computer and cannot travel with a link.
-- **What you can do:**
-  - Add the DNS server, the rule and the route for the tailnet yourself, or create the node locally through Add server → Tailscale — that way it gets them by default.
-  - Nothing to do if you only use this node as a hop and do not need *.ts.net names.
-
-**Where it comes from:**
-
-- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
 <a id="template_fragment_dropped"></a>
 ### template_fragment_dropped

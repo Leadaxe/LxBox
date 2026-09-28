@@ -52,6 +52,10 @@ const kWarningCodes = <Type, String>{
   // сверяет allowlists и backup-коды, не её), так что per-app код здесь
   // законен — текст живёт в классе, как у `Sections*Warning`.
   DuplicateNodeWarning: 'duplicate',
+  // §585 — код НАШ, per-app: узел незнакомого приложению типа принят без
+  // проверок. `protocol_unsupported` реестра не подходит — он `error` и
+  // говорит об отброшенном узле.
+  UnknownNodeTypeWarning: 'unknown_node_type',
 };
 
 /// Код предупреждения: у реестра он поле, у рукописных классов — тип.

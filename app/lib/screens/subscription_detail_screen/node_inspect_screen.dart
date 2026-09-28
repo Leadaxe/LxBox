@@ -9,6 +9,7 @@ import '../../services/l10n/locale_controller.dart';
 import '../../services/tag_resolver.dart';
 import '../../widgets/lx_code_editor.dart';
 import '../../widgets/node_diagnostics_tab.dart';
+import '../../widgets/tailscale_network_tab.dart';
 
 /// §302 — экран разбора одной ноды подписки: две вкладки.
 ///
@@ -41,8 +42,10 @@ class NodeInspectScreen extends StatefulWidget {
   /// §498/§501 — начальная вкладка (страховка открывает Diagnostics).
   final NodeInspectTab initialTab;
 
-  /// Индекс вкладки [tab] с учётом наличия Replacements.
-  static int tabIndex(NodeInspectTab tab, {required bool hasReplacements}) {
+  /// Индекс вкладки [tab] с учётом наличия Replacements и (§581) вкладки
+  /// Network перед Diagnostics у узла Tailscale.
+  static int tabIndex(NodeInspectTab tab,
+      {required bool hasReplacements, bool hasNetwork = false}) {
     switch (tab) {
       case NodeInspectTab.json:
         return 0;
@@ -51,7 +54,7 @@ class NodeInspectScreen extends StatefulWidget {
       case NodeInspectTab.replacements:
         return hasReplacements ? 2 : 0;
       case NodeInspectTab.diagnostics:
-        return hasReplacements ? 3 : 2;
+        return (hasReplacements ? 3 : 2) + (hasNetwork ? 1 : 0);
     }
   }
 
@@ -88,10 +91,15 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
     final title = _node.label.isNotEmpty ? _node.label : _node.tag;
     final hasReplacements = _hasReplacements;
     final warnings = _node.warnings;
+    // §581 — у узла Tailscale вкладка Network перед Diagnostics; Save choice
+    // у узла подписки нет (правку сотрёт обновление подписки).
+    final node = _node;
+    final tailscale = node is TailscaleSpec;
+    final liveTag = TagResolver.displayTag(widget.tagPrefix, _node.tag);
     return DefaultTabController(
-      length: hasReplacements ? 4 : 3,
+      length: (hasReplacements ? 4 : 3) + (tailscale ? 1 : 0),
       initialIndex: NodeInspectScreen.tabIndex(widget.initialTab,
-          hasReplacements: hasReplacements),
+          hasReplacements: hasReplacements, hasNetwork: tailscale),
       child: Scaffold(
         appBar: AppBar(
           title: Text(title.isEmpty ? _node.server : title,
@@ -104,6 +112,7 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
               Tab(text: getLocalText.s("Source")),
               if (hasReplacements)
                 Tab(text: getLocalText.s("Replacements")),
+              if (tailscale) Tab(text: getLocalText.s("Network")),
               // §392/§501 — диагностика + уведомления узла; точка на ярлыке
               // при наличии предупреждений.
               NodeDiagnosticsTabLabel(warnings: warnings),
@@ -115,9 +124,11 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
             _monoBody(context, _json),
             _sourceTab(context),
             if (hasReplacements) _replacementsTab(context),
+            if (node is TailscaleSpec)
+              TailscaleNetworkTab(liveTag: liveTag, body: node.body),
             NodeDiagnosticsTab(
               node: _node,
-              liveTag: TagResolver.displayTag(widget.tagPrefix, _node.tag),
+              liveTag: liveTag,
               warnings: warnings,
               scrollToNotifications:
                   widget.initialTab == NodeInspectTab.diagnostics,

@@ -1,4 +1,5 @@
 import '../models/node_warning.dart';
+import '../services/networks_direction.dart' show TailnetRowState;
 
 /// Immutable view-model для одной node row на главной (или другом screen'е
 /// который захочет переиспользовать `NodeRow`).
@@ -31,6 +32,7 @@ class NodeViewItem {
     this.isSickRoot = false,
     this.notificationWarnings,
     this.endpointState = '',
+    this.tailnetState,
   });
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
@@ -115,4 +117,9 @@ class NodeViewItem {
   /// строка (Direct / Auto / Block), значок не рисуется; пустой список — узел
   /// без уведомлений.
   final List<NodeWarning>? notificationWarnings;
+
+  /// Задача 579 — строка псевдо-направления NETWORKS: на месте задержки
+  /// состояние узла Tailscale, без выбора узла и замера. `null` — обычная
+  /// строка.
+  final TailnetRowState? tailnetState;
 }

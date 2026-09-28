@@ -1,16 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/custom_rule.dart';
 import '../models/dns_ref.dart';
+import '../services/builder/build_config.dart' show varIntInBounds;
 import '../services/builder/post_steps.dart';
 import '../services/dns/dns_controller.dart';
-import '../services/dns/node_dns_records.dart';
+import '../services/dns/tailscale_endpoint_options.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
+import '../services/preset_nodes_view.dart';
 import '../services/preset_on_change.dart';
 import '../services/ui_helpers.dart';
 import '../services/settings_storage.dart';
@@ -25,7 +28,6 @@ import 'dns_settings_screen/widgets/dns_mirror_group_card.dart';
 import 'dns_settings_screen/widgets/dns_rule_tile.dart';
 import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
 import 'dns_settings_screen/widgets/merged_server_tile.dart';
-import 'dns_settings_screen/widgets/node_dns_tiles.dart';
 import 'dns_settings_screen/widgets/resolver_picker.dart';
 import 'lazy_persist_mixin.dart';
 import '../services/l10n/locale_controller.dart';
@@ -90,6 +92,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
   Map<String, String> _presetLabelByPresetId = {};
 
+  /// §578 — пресет с `for_each` → обслуживаемые узлы (подпись строки).
+  Map<String, List<String>> _presetServedTagsByPresetId = {};
+
   /// §117: Направления для `type: outbound` vars DNS-серверов — Direct + активные
   /// Направления (решение №2). Активность = как в `_buildPresetGroups`:
   /// stored enabled_groups (или default_enabled при пустом) + vpn-1 всегда.
@@ -111,16 +116,13 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// (тумблера нет, DNS-блок жив пока routing on).
   Map<String, bool> _presetDnsEnable = const {};
 
-  /// §435 — DNS-серверы/правила узлов (секции) после подстановки `@self`:
-  /// read-only строки внизу списков. Производные (как preset-серверы), в
-  /// [_servers]/[_rules] НЕ кладутся — стейджинг записал бы их в корневой
-  /// `dns_options`. Перечитываются при правке узла (экран слушает
-  /// [SubscriptionController]).
-  List<NodeDnsServerRecord> _nodeServers = const [];
-  List<NodeDnsRuleRecord> _nodeRules = const [];
-
-  /// §435 — узлы Tailscale для пикера `endpoint` в форме DNS-сервера.
-  List<TailscaleEndpointOption> _tailscaleEndpoints = const [];
+  /// §435/§575 — узлы Tailscale для пикера `endpoint` в форме DNS-сервера:
+  /// перечень узлов источников на момент открытия редактора.
+  List<TailscaleEndpointOption> get _tailscaleEndpoints =>
+      collectTailscaleEndpointOptions(
+        [for (final e in widget.subController.entries) e.list],
+        lastEmittedTagMap: widget.subController.lastEmittedTagMap,
+      );
 
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
@@ -128,6 +130,36 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   String _strategy = '';
   String _dnsFinal = '';
   String _defaultResolver = '';
+
+  // §580 — кэш DNS (`dns_cache_capacity`, `dns_optimistic`, `dns_store_cache`).
+  String _cacheCapacity = '';
+  bool _optimistic = true;
+  bool _storeCache = true;
+  String _cacheCapacityError = '';
+  final TextEditingController _cacheCapacityCtl = TextEditingController();
+
+  @override
+  void dispose() {
+    _cacheCapacityCtl.dispose();
+    super.dispose();
+  }
+
+  /// §580 — ввод размера кэша: вне границ не сохраняется, поле показывает
+  /// ошибку с границами.
+  void _applyCacheCapacity(String raw) {
+    final v = raw.trim();
+    if (!varIntInBounds('dns_cache_capacity', v)) {
+      setState(() => _cacheCapacityError =
+          getLocalText.s("Range 1024..65535"));
+      return;
+    }
+    setState(() {
+      _cacheCapacityError = '';
+      if (v == _cacheCapacity) return;
+      _cacheCapacity = v;
+      _markDirty();
+    });
+  }
 
   // §279 — _load() стартует из onLocaleTemplateFetch (TemplateAwareState):
   // первый вызов — до первого build; смена локали — повторный _load()
@@ -146,40 +178,19 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   // §085 R4 — alias: сохраняет существующие call-sites `_markDirty()`.
   void _markDirty() => markDirty();
 
-  @override
-  void initState() {
-    super.initState();
-    // §435 — правка узла (секции, тумблер, переименование, tag_prefix папки)
-    // при открытом экране перечитывает узловые записи. Свои мутации экрана
-    // сюда не попадают: `configDirty` контроллер ставит без notify.
-    widget.subController.addListener(_onSourcesChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.subController.removeListener(_onSourcesChanged);
-    super.dispose();
-  }
-
-  void _onSourcesChanged() => unawaited(_reloadNodeRecords());
-
-  /// §435 — только узловые записи и опции endpoint, без полного [_load]
-  /// (тот перечитывает буферы экрана; staged-мутации он бы вернул те же, но
-  /// дёргать резолверы серверов/правил на каждый notify незачем).
-  Future<void> _reloadNodeRecords() async {
-    final n = await DnsController.loadNodeRecords();
-    if (!mounted) return;
-    setState(() {
-      _nodeServers = n.servers;
-      _nodeRules = n.rules;
-      _tailscaleEndpoints = n.tailscaleEndpoints;
-    });
-  }
-
   Future<void> _load() async {
     // §300 — вся read+derive-логика вынесена в DnsController.load() (тело
     // verbatim + типизация краёв §294). Экран только присваивает snapshot.
-    final s = await DnsController.load();
+    // §578 — узлы для пресетов с `for_each`: тот же отбор, что у строки
+    // пресета на экране маршрутов.
+    final template = await TemplateLoader.load();
+    final s = await DnsController.load(
+      presetNodes: presetNodesForView(
+        [for (final e in widget.subController.entries) e.list],
+        nodeTypes: forEachNodeTypes(template.selectableRules),
+        lastEmittedTagMap: widget.subController.lastEmittedTagMap,
+      ),
+    );
     if (!mounted) return;
     setState(() {
       _servers = s.servers;
@@ -189,6 +200,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _templateRulesByName = s.templateRulesByName;
       _presetRulesByPresetId = s.presetRulesByPresetId;
       _presetLabelByPresetId = s.presetLabelByPresetId;
+      _presetServedTagsByPresetId = s.presetServedTagsByPresetId;
       _presetDnsEnable = s.presetDnsEnable;
       _outboundOptions = s.outboundOptions;
       _customRules = s.customRules;
@@ -196,9 +208,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _strategy = s.strategy;
       _dnsFinal = s.dnsFinal;
       _defaultResolver = s.defaultResolver;
-      _nodeServers = s.nodeServers;
-      _nodeRules = s.nodeRules;
-      _tailscaleEndpoints = s.tailscaleEndpoints;
+      _cacheCapacity = s.cacheCapacity;
+      _optimistic = s.optimistic;
+      _storeCache = s.storeCache;
+      _cacheCapacityError = '';
+      _cacheCapacityCtl.text = s.cacheCapacity;
       _loading = false;
     });
     // §121: исчезнувший resolver-tag сброшен → persist (config dirty).
@@ -219,6 +233,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       strategy: _strategy,
       dnsFinal: _dnsFinal,
       defaultResolver: _defaultResolver,
+      cacheCapacity: _cacheCapacity,
+      optimistic: _optimistic,
+      storeCache: _storeCache,
     );
   }
 
@@ -450,6 +467,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           onToggle: dnsEnable == null
               ? null
               : (v) => _togglePresetDnsEnable(cr.presetId, v),
+          // §578 — пресет с `for_each`: какие узлы он обслуживает.
+          note: switch (_presetServedTagsByPresetId[cr.presetId]) {
+            final List<String> tags => presetServedNodesLabel(tags),
+            null => null,
+          },
         ));
       } else {
         // §257: объединённый блок DNS-аспектов правила — заголовок = имя,
@@ -616,17 +638,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 onTap: _editServer,
                 liveGroup: _liveDnsGroups[entry.tag], // §312
               )),
-          // §435 — серверы узлов (секции) read-only внизу списка: при сборке
-          // они идут после корневых (спека §4 п. 3). Без свитча/тапа —
-          // правятся в редакторе узла.
-          // Ключ по индексу: два узла с одним display-тегом и одинаковыми
-          // секциями дали бы дубль ключа по тегам.
-          for (var i = 0; i < _nodeServers.length; i++)
-            NodeDnsServerTile(
-              key: ValueKey('dns-server-node-$i'),
-              record: _nodeServers[i],
-            ),
-
           const Divider(height: 32),
 
           // --- Strategy ---
@@ -661,7 +672,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             ],
           ),
           const SizedBox(height: 4),
-          if (_rules.isEmpty && mirrors.isEmpty && _nodeRules.isEmpty)
+          if (_rules.isEmpty && mirrors.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
@@ -708,15 +719,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 );
               },
             ),
-          // §435 — DNS-правила узлов (секции) read-only ПОСЛЕ reorder-списка:
-          // при сборке они идут в конец `dns.rules` (спека §4 п. 3), в
-          // reorder не участвуют, тумблера нет — правятся в редакторе узла.
-          if (_nodeRules.isNotEmpty)
-            NodeDnsRulesCard(
-              key: const ValueKey('dns-node-rules'),
-              records: _nodeRules,
-            ),
-
           const Divider(height: 32),
 
           // --- Final ---
@@ -761,9 +763,50 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
               }),
             ),
 
+          // §580 — кэш DNS ядра: размер, устаревшие ответы, хранение в
+          // cache.db. Изменение помечает конфиг к пересборке.
+          const Divider(height: 32),
+          TextField(
+            key: const ValueKey('dns_cache_capacity'),
+            controller: _cacheCapacityCtl,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: getLocalText.s("DNS cache size"),
+              helperText: getLocalText.s("Number of cached answers."),
+              errorText:
+                  _cacheCapacityError.isEmpty ? null : _cacheCapacityError,
+              isDense: true,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: _applyCacheCapacity,
+          ),
+          SwitchListTile(
+            key: const ValueKey('dns_optimistic'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText.s("Serve stale answers")),
+            subtitle: Text(getLocalText.s(
+                "Answer from cache at once and refresh in the background.")),
+            value: _optimistic,
+            onChanged: (v) => setState(() {
+              _optimistic = v;
+              _markDirty();
+            }),
+          ),
+          SwitchListTile(
+            key: const ValueKey('dns_store_cache'),
+            contentPadding: EdgeInsets.zero,
+            title: Text(getLocalText.s("Keep DNS cache after restart")),
+            value: _storeCache,
+            onChanged: (v) => setState(() {
+              _storeCache = v;
+              _markDirty();
+            }),
+          ),
+
           // §263 — сброс DNS-кэша ядра (cache.db). Внизу экрана, отдельным
           // блоком: это разовое действие, не настройка конфига (не в rebuild).
-          const Divider(height: 32),
+          // §580: удаляется файл целиком — с ним и записи DNS (`store_dns`).
           ListTile(
             leading: Icon(Icons.cleaning_services_outlined,
                 color: Theme.of(context).colorScheme.error),

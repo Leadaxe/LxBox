@@ -46,11 +46,6 @@ Future<void> applyCustomDns(
   Map<String, String> dnsSrsCachedPaths = const {},
   List<DnsMirrorEntry> dnsMirrors = const [],
   List<String>? warningsOut, // §312 — дропы членов DNS-групп → emitWarnings
-  // §435 — DNS-записи узлов (NODE_SECTIONS.md §3 п. 4) после подстановки
-  // `@self`: серверы — тела с `tag`, в конец `dns.servers`; правила — тела,
-  // в конец `dns.rules`. `enabled: false` отсеян вызывающим.
-  List<Map<String, dynamic>> nodeServers = const [],
-  List<Map<String, dynamic>> nodeRules = const [],
   // §441/§443 (SPEC 129 Н10) — умолчания шаблона; вторая линия читает
   // `dns_default_domain_resolver` — замену резолверов на сервер, выпавший из-за
   // висячего detour ([healDetourDroppedDnsRefs]). `dns.final` на такой сервер
@@ -117,7 +112,6 @@ Future<void> applyCustomDns(
     knownOutboundTags: knownOutboundTags,
     ruleReferencedTags: ruleReferencedTags,
     warningsOut: warningsOut,
-    nodeServers: nodeServers, // §435
     tailscaleEndpointTags: tailscaleEndpointTags, // §435
     detourDroppedOut: detourDropped, // §441
     globalVars: globalVars, // §555/§570
@@ -261,20 +255,6 @@ Future<void> applyCustomDns(
   }
   // §117: якоря не нашлось (нет preset/template записей) → группа в конец.
   if (dnsMirrors.isNotEmpty) emitMirrorGroup();
-  // §435 — DNS-правила узлов в конец, после пользовательских и mirror-группы
-  // (NODE_SECTIONS.md §3 п. 4). Правило на сервер, который не доехал до
-  // `dns.servers` (висячий `endpoint`, дубль тега, гейт ядра), выбрасывается:
-  // DNS-правило без действующего `server` ядро отвергает. Правила только с
-  // `action` живут.
-  for (final r in nodeRules) {
-    final srv = r['server'];
-    if (srv is String && srv.isNotEmpty && !emittedServerTags.contains(srv)) {
-      warningsOut?.add(
-          'Node DNS rule dropped: its server "$srv" is not in dns.servers.');
-      continue;
-    }
-    outRules.add(Map<String, dynamic>.of(r));
-  }
   if (outRules.isNotEmpty) dns['rules'] = outRules;
   config['dns'] = dns;
   // §441/§443 (SPEC 129 Н10) — правила, `dns.final` и резолверы на серверы,

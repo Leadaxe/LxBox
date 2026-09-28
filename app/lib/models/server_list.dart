@@ -3,10 +3,8 @@ import 'package:collection/collection.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/parse_all.dart';
 import 'core_reject_verdict.dart';
-import 'dns_ref.dart';
 import 'import_rule.dart';
 import 'node_link.dart';
-import 'node_sections.dart';
 import 'node_spec.dart';
 import 'node_warning.dart';
 import 'source_replace.dart';
@@ -423,17 +421,14 @@ final class UserServer extends ServerList {
 
   final String rawBody; // оригинал paste'а для reparse в случае багов
 
-  /// §435 — секции узла (контракт ## 13): правила маршрута и DNS-записи,
-  /// которые узел носит с собой. Форма хранения — ONE_NAMESPACE §2, с
-  /// плейсхолдерами `@self` как есть. `null` = поля нет (пустые секции не
-  /// пишутся). Истина — это поле; `importedSections` узла, найденные при
-  /// перечитывании `raw_body`, на старте игнорируются.
-  final NodeSections? sections;
-
   /// Фича 478 / PARSING_PRINCIPLES §9.4 — хранимые предупреждения ручного сервера:
   /// сегодня ровно `core_rejected`. Персистится рядом с `enabled` (ключ
   /// `warnings` записи источника). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
+
+  /// §578 — поле записи `skip_presets`: узел не обслуживается пресетами с
+  /// `for_each`, чей `filter` читает поле. Хранится только `true`.
+  final bool skipPresets;
 
   UserServer({
     required super.id,
@@ -444,9 +439,9 @@ final class UserServer extends ServerList {
     this.origin = UserSource.manual,
     this.rawBody = '',
     this.warnings = const [],
-    NodeSections? sections,
+    this.skipPresets = false,
     super.nodes,
-  }) : sections = (sections == null || sections.isEmpty) ? null : sections;
+  });
 
   @override
   String get type => 'user';
@@ -460,10 +455,7 @@ final class UserServer extends ServerList {
     String? rawBody,
     List<StoredWarning>? warnings,
     List<NodeSpec>? nodes,
-    NodeSections? sections,
-    // §435 — `sections ?? this.sections` не позволяет обнулить: явный флаг
-    // (паттерн `clearDns` у правил).
-    bool clearSections = false,
+    bool? skipPresets,
   }) =>
       UserServer(
         id: id,
@@ -474,7 +466,7 @@ final class UserServer extends ServerList {
         origin: origin ?? this.origin,
         rawBody: rawBody ?? this.rawBody,
         warnings: warnings ?? this.warnings,
-        sections: clearSections ? null : (sections ?? this.sections),
+        skipPresets: skipPresets ?? this.skipPresets,
         nodes: nodes ?? this.nodes,
       );
 
@@ -490,11 +482,11 @@ final class UserServer extends ServerList {
           detourPolicy == other.detourPolicy &&
           rawBody == other.rawBody &&
           _eq.equals(warnings, other.warnings) &&
-          sections == other.sections);
+          skipPresets == other.skipPresets);
 
   @override
-  int get hashCode => Object.hash(
-      id, enabled, tagPrefix, detourPolicy, rawBody, _eq.hash(warnings), sections);
+  int get hashCode => Object.hash(id, enabled, tagPrefix, detourPolicy,
+      rawBody, _eq.hash(warnings), skipPresets);
 }
 
 /// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
@@ -520,8 +512,8 @@ final class FolderMember {
   /// server_list_build). Сосед по папке — пара с `id` этой папки.
   final NodeLink detour;
 
-  /// §435 — секции узла-члена (контракт ## 13), как у `UserServer.sections`.
-  final NodeSections? sections;
+  /// §578 — поле записи `skip_presets`, как у `UserServer.skipPresets`.
+  final bool skipPresets;
 
   /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
   /// нечитаемый, юзер может отредактировать/удалить).
@@ -533,10 +525,9 @@ final class FolderMember {
     this.warnings = const [],
     this.detour = NodeLink.none,
     this.nameHint = '',
-    NodeSections? sections,
+    this.skipPresets = false,
     NodeSpec? node,
-  })  : sections = (sections == null || sections.isEmpty) ? null : sections,
-        node = node ?? _parseFirst(raw, nameHint);
+  }) : node = node ?? _parseFirst(raw, nameHint);
 
   /// §439 — член-группа (запись `kind: auto`, `codec/auto_group_record.dart`):
   /// текста нет, узел — сама группа. detour и секций у группы не бывает.
@@ -551,7 +542,8 @@ final class FolderMember {
     if (raw.trim().isEmpty) return null;
     try {
       final nodes =
-          parseAll(decode(raw), nameHint: nameHint.isEmpty ? null : nameHint);
+          parseAll(decode(raw),
+          nameHint: nameHint.isEmpty ? null : nameHint, own: true);
       return nodes.isEmpty ? null : nodes.first;
     } catch (_) {
       return null;
@@ -564,8 +556,7 @@ final class FolderMember {
     List<StoredWarning>? warnings,
     NodeLink? detour,
     String? nameHint,
-    NodeSections? sections,
-    bool clearSections = false,
+    bool? skipPresets,
   }) =>
       FolderMember(
         raw: raw ?? this.raw,
@@ -573,7 +564,7 @@ final class FolderMember {
         warnings: warnings ?? this.warnings,
         detour: detour ?? this.detour,
         nameHint: nameHint ?? this.nameHint,
-        sections: clearSections ? null : (sections ?? this.sections),
+        skipPresets: skipPresets ?? this.skipPresets,
         // Смена raw или имени → re-parse в конструкторе; иначе нода та же.
         node: raw == null && nameHint == null ? node : null,
       );
@@ -589,7 +580,7 @@ final class FolderMember {
           _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
           nameHint == other.nameHint &&
-          sections == other.sections &&
+          skipPresets == other.skipPresets &&
           _sameGroup(node, other.node));
 
   static bool _sameGroup(NodeSpec? a, NodeSpec? b) => a is AutoSelectSpec
@@ -597,8 +588,8 @@ final class FolderMember {
       : b is! AutoSelectSpec;
 
   @override
-  int get hashCode =>
-      Object.hash(raw, enabled, _eq.hash(warnings), detour, nameHint, sections);
+  int get hashCode => Object.hash(
+      raw, enabled, _eq.hash(warnings), detour, nameHint, skipPresets);
 }
 
 /// §234 — папка ручных серверов: контейнер членов с общим toggle,
@@ -744,55 +735,6 @@ final class FolderServers extends ServerList {
     if (membersChanged) next = next.copyWith(members: ms);
   }
   return (healed: count > 0 ? next : null, count: count);
-}
-
-/// §441 (SPEC 129 §6, D-114) — `body.detour` DNS-серверов в секциях узлов
-/// списка [l] (одиночный сервер, члены папки) по [retarget]
-/// ([retargetDnsServerDetour]). Возвращает копию (null — нечего лечить) и
-/// число переписанных серверов.
-///
-/// Общее ядро: storage-heal (`_healDnsServerDirectionRefs`) и in-memory
-/// ресинк `SubscriptionController.syncSectionsDnsDetourRefsHealed` обязаны
-/// переписывать одинаково, иначе следующий `_persist()` воскресит ссылку.
-({ServerList? healed, int count}) retargetSectionsDnsDetours(
-  ServerList l,
-  Map<String, String> retarget,
-) {
-  var count = 0;
-  NodeSections? heal(NodeSections? sections) {
-    if (sections == null || sections.dnsServers.isEmpty) return null;
-    var changed = false;
-    final servers = <DnsServerInline>[];
-    for (final d in sections.dnsServers) {
-      final next = retargetDnsServerDetour(d, retarget);
-      if (!identical(next, d)) {
-        changed = true;
-        count++;
-      }
-      servers.add(next);
-    }
-    return changed ? sections.copyWith(dnsServers: servers) : null;
-  }
-
-  switch (l) {
-    case UserServer u:
-      final s = heal(u.sections);
-      return (healed: s == null ? null : u.copyWith(sections: s), count: count);
-    case FolderServers f:
-      var changed = false;
-      final members = <FolderMember>[];
-      for (final m in f.members) {
-        final s = heal(m.sections);
-        if (s != null) changed = true;
-        members.add(s == null ? m : m.copyWith(sections: s));
-      }
-      return (
-        healed: changed ? f.copyWith(members: members) : null,
-        count: count,
-      );
-    case SubscriptionServers():
-      return (healed: null, count: 0);
-  }
 }
 
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).

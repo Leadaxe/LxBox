@@ -7,6 +7,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
 import '../models/ui_msg.dart';
+import '../services/community_servers_loader.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
@@ -575,6 +576,14 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     });
   }
 
+  /// §585 — комментарии вставленного JSON убраны из источника записи.
+  void _snackCommentsRemoved() {
+    if (!mounted || !widget.subController.lastCommentsRemoved) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(getLocalText.s("Comments were removed."))),
+    );
+  }
+
   Future<void> _add() async {
     final text = _inputController.text.trim();
     if (text.isEmpty) {
@@ -589,6 +598,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       _ignoreInputDismiss = true;
       _inputController.clear();
       _ignoreInputDismiss = false;
+      _snackCommentsRemoved();
       await _regenerateAndSave(entryBaseline: baseline);
     } else {
       _presentParseRejectSheetIfNeeded();
@@ -650,6 +660,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     await widget.subController.addFromInput(text);
     final addErr = widget.subController.lastError;
     if (addErr == null) {
+      _snackCommentsRemoved();
       await _regenerateAndSave(entryBaseline: baseline);
     } else if (mounted) {
       _presentParseRejectSheetIfNeeded();
@@ -923,7 +934,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     PopupMenuItem(value: 'folder', child: Text(getLocalText.s("New folder…"))),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'warp', child: Text(getLocalText.s("Get WARP"))),
-                    PopupMenuItem(value: 'public', child: Text(getLocalText.s("Get Public Test Servers"))),
+                    if (CommunityServersLoader.enabled)
+                      PopupMenuItem(value: 'public', child: Text(getLocalText.s("Get Public Test Servers"))),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'paste', child: Text(getLocalText.s("Paste from clipboard"))),
                     // §375 — на устройстве без камеры (Android TV) пункта нет:
@@ -1092,7 +1104,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (_rows(ctrl).isEmpty) {
       return SubscriptionsEmptyState(
         busy: ctrl.busy,
-        onPickPublicTestServer: () => unawaited(_pickPublicTestServer()),
+        onPickPublicTestServer: CommunityServersLoader.enabled
+            ? () => unawaited(_pickPublicTestServer())
+            : null,
       );
     }
     final rows = _rows(ctrl);

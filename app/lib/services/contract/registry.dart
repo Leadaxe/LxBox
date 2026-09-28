@@ -371,7 +371,13 @@ final class BodySchema {
     this.minCore,
     this.onCoreUnsupported,
     this.levels = const [],
+    this.fieldsUnchecked = false,
   });
+
+  /// Контракт 1.1.99 — `fields_unchecked`: поля тела не описаны и не
+  /// проверяются (`openvpn-client`). Санитайзер отдаёт такое тело как
+  /// написано, без кодов.
+  final bool fieldsUnchecked;
 
   /// Тег ядра, по которому сверен список полей.
   final String core;
@@ -770,6 +776,18 @@ final class ContractRegistry {
   Map<String, dynamic>? rawProtocol(String singboxType) =>
       _protocols[singboxType];
 
+  /// Контракт 1.1.99 — ядро держит узел этого `type` в `endpoints[]`, а не
+  /// в `outbounds[]`: `kind` записи протокола — `endpoint`. Единственный
+  /// источник этого знания — реестр; тип вне реестра — `false`.
+  bool isEndpointType(String singboxType) =>
+      _protocols[singboxType]?['kind'] == 'endpoint';
+
+  /// Контракт 1.1.99 — тип известен реестру, но поля его тела не описаны
+  /// (`body.fields_unchecked`): узел принимается без своей модели, тело
+  /// уходит как написано, предупреждений нет.
+  bool isUncheckedType(String singboxType) =>
+      schemaFor(singboxType)?.fieldsUnchecked == true;
+
   /// §480 W5 — имена загруженных протоколов.
   ///
   /// Нужны загрузчику секций, чтобы перебрать секции вида источника, не
@@ -865,6 +883,7 @@ final class ContractRegistry {
       levels: [
         for (final e in (body['levels'] as List?) ?? const []) '$e',
       ],
+      fieldsUnchecked: body['fields_unchecked'] == true,
     );
   }
 

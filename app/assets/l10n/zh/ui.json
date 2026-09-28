@@ -60,16 +60,6 @@
       "other": "%d 个链式"
     }
   },
-  "%d DNS rules": {
-    "value": {
-      "other": "%d 条 DNS 规则"
-    }
-  },
-  "%d DNS servers": {
-    "value": {
-      "other": "%d 个 DNS 服务器"
-    }
-  },
   "%d elements": {
     "value": {
       "other": "%d 个元素"
@@ -258,11 +248,6 @@
   "%d proto": {
     "value": {
       "other": "%d 个协议"
-    }
-  },
-  "%d rules": {
-    "value": {
-      "other": "%d 条规则"
     }
   },
   "%d seconds": {
@@ -1038,12 +1023,6 @@
   },
   "Clear cached files": {
     "value": "删除缓存文件"
-  },
-  "Clear sections": {
-    "value": "清除区块"
-  },
-  "Clear sections?": {
-    "value": "清除区块？"
   },
   "Client subnet": {
     "value": "客户端子网"
@@ -2003,9 +1982,6 @@
   "From %s %s": {
     "value": "来自 %s %s"
   },
-  "From nodes · read-only, edited in the node": {
-    "value": "来自节点 · 只读，需在节点中编辑"
-  },
   "From routing rules · ordered as in Routing": {
     "value": "来自路由规则 · 顺序同「路由」"
   },
@@ -2086,9 +2062,6 @@
   },
   "Haptic feedback": {
     "value": "震动反馈"
-  },
-  "Has node sections": {
-    "value": "带有节点区块"
   },
   "Headers copied": {
     "value": "请求头已复制"
@@ -2847,9 +2820,6 @@
   "No valid outbounds in JSON": {
     "value": "JSON 中没有有效的 outbound"
   },
-  "Node": {
-    "value": "节点"
-  },
   "down": {
     "value": "down"
   },
@@ -2885,9 +2855,6 @@
   },
   "Node info copied": {
     "value": "节点信息已复制"
-  },
-  "Node section record dropped: %s": {
-    "value": "已丢弃节点区块记录：%s"
   },
   "Node — direct detour": {
     "value": "节点 —— 直连 detour"
@@ -3035,6 +3002,9 @@
   "Only single servers can be moved": {
     "value": "只能移动单个服务器"
   },
+  "Only the node is saved. The rest of the input is not kept.": {
+    "value": "仅保存了节点。其余输入内容未保留。"
+  },
   "Open": {
     "value": "打开"
   },
@@ -3127,9 +3097,6 @@
   },
   "Paste a proxy URL": {
     "value": "粘贴代理链接"
-  },
-  "Paste a sing-box config with dns/route or a document with \"sections\" on the JSON tab to attach the node's rules.": {
-    "value": "要为节点附加规则，请在 JSON 标签页粘贴含 dns/route 的 sing-box 配置，或含「sections」的文档。"
   },
   "Paste a sing-box outbound JSON": {
     "value": "粘贴 sing-box 出站 JSON"
@@ -3271,6 +3238,9 @@
   },
   "Preferences, ping options, auto-update, wifi history": {
     "value": "偏好设置、测速选项、自动更新、Wi-Fi 历史"
+  },
+  "Press back again to exit": {
+    "value": "再按一次返回键退出"
   },
   "Prefix": {
     "value": "前缀"
@@ -3701,9 +3671,6 @@
   "Rules": {
     "value": "规则"
   },
-  "Rules and DNS records this node carries": {
-    "value": "该节点自带的规则与 DNS 记录"
-  },
   "Rules changed. Refresh the subscription to apply them.": {
     "value": "规则已更改。刷新订阅即可应用。"
   },
@@ -3791,11 +3758,6 @@
   "Saved to Downloads: %s (%d bytes)": {
     "value": "已保存到「下载」：%s（%d 字节）"
   },
-  "Saved · %d section records dropped": {
-    "value": {
-      "other": "已保存 · 丢弃了 %d 条区块记录"
-    }
-  },
   "Saved. Force-stop & reopen app to apply.": {
     "value": "已保存。需强制停止并重新打开应用才会生效。"
   },
@@ -3811,11 +3773,14 @@
   "Search domain / IP / app": {
     "value": "搜索域名 / IP / 应用"
   },
-  "Sections": {
-    "value": "区块"
+  "Skip presets": {
+    "value": "跳过预设"
   },
-  "Sections cleared": {
-    "value": "区块已清除"
+  "Presets will not add routing or DNS rules for this node.": {
+    "value": "预设不会为此节点添加路由或 DNS 规则。"
+  },
+  "No matching nodes": {
+    "value": "没有匹配的节点"
   },
   "Select a %s file": {
     "value": "选择 %s 文件"
@@ -3980,9 +3945,6 @@
   "Shown as the server title in the Servers list. If empty, \"%s\" is used.": {
     "value": "作为「服务器」列表中服务器的标题显示。留空则使用「%s」。"
   },
-  "Shown in Routing and DNS with the node's tag": {
-    "value": "在「路由」与 DNS 中以该节点的标签显示"
-  },
   "Single object or array of outbounds. WireGuard routes to endpoints[] automatically.": {
     "value": "单个对象或出站数组。WireGuard 会自动路由到 endpoints[]。"
   },
@@ -4099,9 +4061,6 @@
   },
   "Stopping…": {
     "value": "正在停止…"
-  },
-  "Stored JSON": {
-    "value": "存储中的 JSON"
   },
   "Stored locally only. Existing entries persist when you turn this off — remove individually in Pick saved (long-press chip → Remove).": {
     "value": "仅保存在本机。关闭后已有记录仍会保留——可在「Pick saved」中逐个移除（长按标签 → Remove）。"
@@ -4350,14 +4309,11 @@
   "The current workspace cannot be deleted": {
     "value": "当前工作区无法删除"
   },
+  "The document has no node to save.": {
+    "value": "文档中没有可保存的节点。"
+  },
   "The device is removed from the tailnet when it goes offline": {
     "value": "设备离线后会从 tailnet 中移除"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\" — keep only one of them": {
-    "value": "文档同时含有「sections」和「dns」/「route」——请只保留其中一种"
-  },
-  "The document carries both \"sections\" and \"dns\"/\"route\": \"sections\" was taken, the rest was ignored.": {
-    "value": "文档同时含有「sections」和「dns」/「route」：已采用「sections」，其余忽略。"
   },
   "The first position (%s) dials through its own detour — the real path is longer than shown: one more hop precedes it that is not in this list.": {
     "value": "第一个位置（%s）经自己的 detour 拨号——实际路径比显示的更长：它前面还有一跳，未列入此表。"
@@ -4367,9 +4323,6 @@
   },
   "The node's original text. Save writes it as is.": {
     "value": "节点的原始文本。保存时原样写入。"
-  },
-  "The node's rules and DNS records will be removed. The node itself stays.": {
-    "value": "该节点的规则与 DNS 记录将被删除。节点本身保留。"
   },
   "The servers it selects from stay in the folder.": {
     "value": "它挑选的服务器仍留在文件夹里。"
@@ -4916,9 +4869,6 @@
   "first matching node becomes default": {
     "value": "第一个匹配的节点成为默认节点"
   },
-  "from node %s": {
-    "value": "来自节点 %s"
-  },
   "group": {
     "value": "分组"
   },
@@ -4966,9 +4916,6 @@
   },
   "node": {
     "value": "节点"
-  },
-  "node is disabled": {
-    "value": "节点已停用"
   },
   "not found": {
     "value": "未找到"
@@ -5212,5 +5159,155 @@
     "value": {
       "other": "将跳过 %d 个条目"
     }
+  },
+  "The node is written by hand, so the app changed nothing in it.": {
+    "value": "该节点为手动编写，应用未对其做任何更改。"
+  },
+  "starting": {
+    "value": "启动中"
+  },
+  "running": {
+    "value": "运行中"
+  },
+  "sign-in needed": {
+    "value": "需要登录"
+  },
+  "stopped": {
+    "value": "已停止"
+  },
+  "Start VPN to see the network.": {
+    "value": "启动 VPN 以查看网络。"
+  },
+  "The node is not in the running config.": {
+    "value": "该节点不在运行中的配置里。"
+  },
+  "Devices": {
+    "value": "设备"
+  },
+  "No devices": {
+    "value": "没有设备"
+  },
+  "Status": {
+    "value": "状态"
+  },
+  "signed in with a key": {
+    "value": "已用密钥登录"
+  },
+  "Sign in": {
+    "value": "登录"
+  },
+  "Log out": {
+    "value": "退出登录"
+  },
+  "Log out?": {
+    "value": "退出登录？"
+  },
+  "The node leaves the network. The node has a sign-in key, so it signs in again on the next start.": {
+    "value": "节点将退出网络。节点中写有登录密钥，下次启动时会再次登录。"
+  },
+  "The node leaves the network. To join again, sign in from this tab.": {
+    "value": "节点将退出网络。要重新加入，请在此标签页登录。"
+  },
+  "Failed: %s": {
+    "value": "失败：%s"
+  },
+  "This device": {
+    "value": "本设备"
+  },
+  "MagicDNS name": {
+    "value": "MagicDNS 名称"
+  },
+  "Address": {
+    "value": "地址"
+  },
+  "Key expiry": {
+    "value": "密钥到期"
+  },
+  "Exit node": {
+    "value": "出口节点"
+  },
+  "None": {
+    "value": "无"
+  },
+  "offline": {
+    "value": "离线"
+  },
+  "Save choice": {
+    "value": "保存选择"
+  },
+  "online": {
+    "value": "在线"
+  },
+  "last seen %s": {
+    "value": "最后在线 %s"
+  },
+  "key expired": {
+    "value": "密钥已过期"
+  },
+  "shared": {
+    "value": "共享"
+  },
+  "exit node": {
+    "value": "出口节点"
+  },
+  "Copy name": {
+    "value": "复制名称"
+  },
+  "Copy address": {
+    "value": "复制地址"
+  },
+  "No reply: %s": {
+    "value": "无响应：%s"
+  },
+  "%s ms, direct": {
+    "value": "%s 毫秒，直连"
+  },
+  "%s ms, direct, %s": {
+    "value": "%s 毫秒，直连，%s"
+  },
+  "%s ms, relay": {
+    "value": "%s 毫秒，中继"
+  },
+  "%s ms, relay %s": {
+    "value": "%s 毫秒，中继 %s"
+  },
+  "Network": {
+    "value": "网络"
+  },
+  "Not saved. Traffic is not routed through this node until you save the choice.": {
+    "value": "未保存。保存选择之前，流量不会经过此节点。"
+  },
+  "Not saved. The node stays in the lists, but has no exit until you save the choice.": {
+    "value": "未保存。节点仍在列表中，但在保存选择之前没有出口。"
+  },
+  "Not saved. The choice is lost after restart.": {
+    "value": "未保存。重启后选择会丢失。"
+  },
+  "This node has no exit. Check devices on the Network tab.": {
+    "value": "此节点没有出口。请在“网络”标签页检查设备。"
+  },
+  "DNS cache size": {
+    "value": "DNS 缓存大小"
+  },
+  "Number of cached answers.": {
+    "value": "缓存的应答条数。"
+  },
+  "Serve stale answers": {
+    "value": "返回过期应答"
+  },
+  "Answer from cache at once and refresh in the background.": {
+    "value": "立即用缓存应答，并在后台刷新。"
+  },
+  "Keep DNS cache after restart": {
+    "value": "重启后保留 DNS 缓存"
+  },
+  "Unknown node type": {
+    "value": "未知的节点类型"
+  },
+  "The app does not know this node type and does not check it. The node goes to the core as written.": {
+    "value": "应用不认识此节点类型，也不对其做检查。节点按原样交给内核。"
+  },
+  "Comments were removed.": {
+    "value": "注释已移除。"
   }
 }

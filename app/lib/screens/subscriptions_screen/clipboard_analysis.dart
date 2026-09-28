@@ -1,6 +1,7 @@
 import '../../models/node_warning.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/parser/body_decoder.dart';
+import '../../services/parser/json_comments.dart';
 import '../../services/parser/parse_all.dart';
 import '../../services/subscription/input_helpers.dart';
 
@@ -47,7 +48,12 @@ const _kIgnoredConfigSections = ['route', 'dns', 'inbounds'];
 List<NodeWarning> _droppedOf(DecodedBody decoded) {
   final dropped = <NodeWarning>[];
   try {
-    parseAll(decoded, dropped: dropped);
+    final nodes = parseAll(decoded, dropped: dropped);
+    // §585 — узел незнакомого типа импорт принимает своей записью
+    // (`acceptsOwnUnknownType`); превью обязано сказать то же.
+    if (nodes.isEmpty && acceptsOwnUnknownType(decoded) != null) {
+      return const [];
+    }
   } catch (_) {
     return const [];
   }
@@ -111,7 +117,9 @@ ClipboardAnalysis analyzeClipboard(String text) {
   // Раньше здесь была своя эвристика (`startsWith('{') && contains('"type"')`),
   // третья по счёту, и она разошлась с гейтом контроллера: превью обещало
   // «Outbound JSON» там, где импорт отказывал.
-  final decoded = decode(text);
+  // §585 — комментарии `//` и `/* */` снимаются тем же правилом, что у
+  // импорта (`addFromInput`).
+  final decoded = decode(uncommentedJson(text) ?? text);
   if (decoded is JsonConfig) {
     final analysis = _analyzeJson(decoded);
     if (analysis != null) return analysis.withDropped(_droppedOf(decoded));
