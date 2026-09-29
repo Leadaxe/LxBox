@@ -1,20 +1,28 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 016 — DPI_HARDENING — DPI evasion and protective settings of the TLS transport
+# DPI hardening — TLS fragmentation, mixed-case SNI, uTLS, REALITY, ECH and XHTTP
+
+LxBox hardens TLS-based VPN nodes (VLESS, Trojan, AnyTLS and others) against
+deep packet inspection with ClientHello fragmentation and mixed-case SNI. The
+same feature normalises what subscriptions carry — uTLS fingerprints, REALITY
+keys, ECH, XHTTP transport parameters, VLESS flow and encryption — so that a bad
+value degrades one node instead of breaking the whole sing-box config. Server
+certificate checks stay under the user's control and are never weakened
+silently.
 
 | Field | Value |
 |-------|-------|
+| Feature | 016-DPI_HARDENING |
 | Type | Product feature |
 | Absorbed | `§020F` (security & DPI bypass — only the fragmentation part is alive; the Clash API was removed from it together with `clash_api`), `§028F` (mixed-case SNI), `§045F` (ECH — the Draft was not implemented as intended: instead of a per-node toggle — a pass-through `tls.ech` from JSON and refusal of the link's `ech=`), `§127F` (the full set of XHTTP link parameters) |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
 
-Responsible for how a node's ClientHello and transport look on the wire and
-how the server is verified. The user enables global techniques with a single
-checkbox; everything that came from the subscription (fingerprint, REALITY,
-XHTTP, `flow`, the provider's fragmentation) reaches the core in a form the
-core will accept.
+Defines how a node's ClientHello and transport look on the wire and how the
+server is verified. The user enables global techniques with a single checkbox;
+everything that came from the subscription (fingerprint, REALITY, XHTTP, `flow`,
+the provider's fragmentation) reaches the core in a form the core will accept.
 
 Principles the feature protects:
 
@@ -40,27 +48,27 @@ Out of the box: global techniques are off, delay `500ms`, CA store `system`.
   `detour`; nodes with `detour` are not touched. **Witness:** unit
   "tls_fragment=true fragments first-hop TLS only". **Mutation:** remove the
   `detour` check.
-- **P2. Fragmentation does not break startup.** naive and MASQUE on `h3` do
-  not get the flags; MASQUE on `h2`/auto gets them (with the new `tls{}`).
-  **Witness:** units "§270 — tls_fragment пропускает naive", "h3 пропускается
-  молча — блок tls не создаётся", "h2 получает fragment во вложенном tls{}".
+- **P2. Fragmentation does not break startup.** naive and MASQUE on `h3` do not
+  get the flags; MASQUE on `h2`/auto gets them (with the new `tls{}`).
+  **Witness:** units "§270 — tls_fragment skips naive", "h3 is skipped silently
+  — no tls block is created", "h2 gets fragment in a nested tls{}".
   **Mutation:** write the flags into any `tls`.
-- **P3. `tls.fragment` yields to the build's `detour`.** The node flag (from
-  a subscription or JSON) under a `detour` assigned by the build is removed
-  with the code `detour_with_tls_fragment` together with the orphaned delay;
-  `record_fragment` stays; on an authored JSON body the flag is not removed,
-  the code is marked "not applied". **Witness:** units "явный
-  record_fragment под detour остаётся, fragment снят", "только
-  record_fragment под detour — тело не трогается", "при record_fragment
-  пауза остаётся". **Mutation:** not removing the flag — a 500 ms delay per
-  segment and the core's default switched off.
+- **P3. `tls.fragment` yields to the build's `detour`.** The node flag (from a
+  subscription or JSON) under a `detour` assigned by the build is removed with
+  the code `detour_with_tls_fragment` together with the orphaned delay;
+  `record_fragment` stays; on an authored JSON body the flag is not removed, the
+  code is marked "not applied". **Witness:** units "explicit record_fragment
+  under detour stays, fragment removed", "only record_fragment under detour —
+  the body is not touched", "with record_fragment the delay stays".
+  **Mutation:** not removing the flag — a 500 ms delay per segment and the
+  core's default switched off.
 - **P4. Xray provider fragmentation is carried over.** `dialerProxy` to
-  `freedom` with `fragment` and `finalmask.tcp[type=fragment]` →
-  `tls.fragment: true`, if TLS is enabled and there is no hop; Xray
-  parameters are dropped without a code. **Witness:** units "TLS + fragment
-  freedom → прямой узел, tls.fragment, без кода", "finalmask_tcp_fragment:
-  xhttp + REALITY → tls.fragment", "…_no_tls: флага нет", "…_with_hop:
-  флага нет". **Mutation:** set the flag even without TLS.
+  `freedom` with `fragment` and `finalmask.tcp[type=fragment]` → `tls.fragment:
+  true`, if TLS is enabled and there is no hop; Xray parameters are dropped
+  without a code. **Witness:** units "TLS + fragment freedom → direct node,
+  tls.fragment, no code", "finalmask_tcp_fragment: xhttp + REALITY →
+  tls.fragment", "…_no_tls: no flag", "…_with_hop: no flag". **Mutation:** set
+  the flag even without TLS.
 - **P5. Mixed-case SNI — random case, the same string.** With the checkbox
   on, the `server_name` of each first-hop outbound gets its own random case
   mix, equal to the original case-insensitively; IP literals and `xn--`
@@ -76,71 +84,70 @@ Out of the box: global techniques are off, delay `500ms`, CA store `system`.
 - **P7. The uTLS fingerprint is always from the core's dictionary.** Xray
   aliases (`hellochrome_120`, …) and case are canonicalised silently; junk →
   `chrome` with `utls_fp_unknown`; on QUIC `utls`/`reality` are removed.
-  **Witness:** units "REALITY + fp=hellochrome_120 → chrome, МОЛЧА", "мусор
-  → chrome + utls_fp_unknown (TLS и REALITY)", "hysteria2 URI с fp →
-  emit-конфиг БЕЗ utls". **Mutation:** pass the raw value through.
+  **Witness:** units "REALITY + fp=hellochrome_120 → chrome, SILENTLY", "junk →
+  chrome + utls_fp_unknown (TLS and REALITY)", "hysteria2 URI with fp → emitted
+  config WITHOUT utls". **Mutation:** pass the raw value through.
 - **P8. The fingerprint under REALITY is not replaced, but warned about.**
   `edge`/`ios`/`android`/`360`/`qq`/`randomized` go as is with the code
-  `reality_fp_not_chrome`; `chrome*`, `firefox`, `safari` — without a code;
-  an implicit `random` on vless-REALITY → `chrome` with the code
+  `reality_fp_not_chrome`; `chrome*`, `firefox`, `safari` — without a code; an
+  implicit `random` on vless-REALITY → `chrome` with the code
   `reality_fp_random_pinned`. **Witness:** units "REALITY + fp=edge/…/qq →
-  предупреждение на узле", "REALITY + fp=firefox/safari → как есть, без
-  предупреждения", "vless REALITY без fp и с fp= → chrome с кодом".
-  **Mutation:** rewrite `edge` to `chrome`.
-- **P9. A broken REALITY degrades rather than breaking the config.** An
-  invalid `public_key` (not 32 bytes) → the node goes over regular TLS; a
-  `short_id` that is odd-length, longer than 16 or not a string → empty;
-  `key_share` outside `hybrid`/`classical` → removed. **Witness:** units
-  "БОЕВОЙ КЕЙС: security=tls + pbk=enabled → plain TLS", "нечётный short_id
-  → очищен, нода и конфиг живы", "key_share вне enum — поле отброшено молча,
-  узел жив". **Mutation:** truncate `short_id` to 16.
-- **P10. ECH from a link is never enabled.** `ech=` → the code
-  `ech_ignored`, no `tls.ech`; `echfq` is not read; `tls.ech{}` from sing-box
-  JSON passes as is. **Witness:** units "name+resolver → ech-блока нет,
-  warning есть", "sing-box JSON: tls.ech{} доезжает до эмита, URI-ветка —
-  нет", "toUri не изобретает ech". **Mutation:** map `ech=` to
+  warning on the node", "REALITY + fp=firefox/safari → as is, no warning",
+  "vless REALITY without fp and with fp= → chrome with a code". **Mutation:**
+  rewrite `edge` to `chrome`.
+- **P9. A broken REALITY degrades rather than breaking the config.** An invalid
+  `public_key` (not 32 bytes) → the node goes over regular TLS; a `short_id`
+  that is odd-length, longer than 16 or not a string → empty; `key_share`
+  outside `hybrid`/`classical` → removed. **Witness:** units "REAL-WORLD CASE:
+  security=tls + pbk=enabled → plain TLS", "odd-length short_id → cleared, node
+  and config alive", "key_share outside the enum — field dropped silently, node
+  alive". **Mutation:** truncate `short_id` to 16.
+- **P10. ECH from a link is never enabled.** `ech=` → the code `ech_ignored`, no
+  `tls.ech`; `echfq` is not read; `tls.ech{}` from sing-box JSON passes as is.
+  **Witness:** units "name+resolver → no ech block, a warning is present",
+  "sing-box JSON: tls.ech{} reaches the emitted config, the URI branch does
+  not", "toUri does not invent ech". **Mutation:** map `ech=` to
   `tls.ech.enabled`.
 - **P11. XHTTP: three inputs — one set of fields.** The link, Xray JSON and
-  sing-box JSON read the same set of keys (camelCase and snake_case), `extra`
-  is merged in, `xmux` as a nested object is equivalent to flat keys.
-  **Witness:** units "три ветки читают один и тот же набор ключей",
-  "extra={"xmux":{…}} эквивалентен плоским ключам", "golden: все 15 полей
-  camelCase → snake_case transport". **Mutation:** a new field only in the
-  URI branch.
+  sing-box JSON read the same set of keys (camelCase and snake_case), `extra` is
+  merged in, `xmux` as a nested object is equivalent to flat keys. **Witness:**
+  units "the three branches read the same set of keys", "extra={"xmux":{…}} is
+  equivalent to flat keys", "golden: all 15 camelCase fields → snake_case
+  transport". **Mutation:** a new field only in the URI branch.
 - **P12. XHTTP: `extra` does not break working flat parameters.** A broken
-  `extra` is ignored; an empty value in `extra` does not override the flat
-  one; `host`/`path`/`mode` are not read from `extra`. **Witness:** units
-  "битый extra игнорируется", "пустое значение в extra не перекрывает
-  плоское поле (§410)", "extra.host/path/mode не перекрывают плоские".
-  **Mutation:** extra-first for `path`.
+  `extra` is ignored; an empty value in `extra` does not override the flat one;
+  `host`/`path`/`mode` are not read from `extra`. **Witness:** units "a broken
+  extra is ignored", "an empty value in extra does not override the flat field
+  (§410)", "extra.host/path/mode do not override the flat ones". **Mutation:**
+  extra-first for `path`.
 - **P13. XHTTP: an invalid mode pair does not reach the core.** Values outside
   the enum (`mode`, placements, `x_padding_method`) are removed with
   `xhttp_param_reset`; header/cookie placement without `mode` → `mode:
-  packet-up` with `xhttp_mode_forced_packet_up`; with an explicit other
-  `mode` — the placement is removed. **Witness:** units "mode: мусор снят +
-  xhttp_param_reset", "JSON: header/cookie без mode → mode: packet-up + код",
-  "header/cookie + mode=stream-one → placement снят, mode цел".
+  packet-up` with `xhttp_mode_forced_packet_up`; with an explicit other `mode` —
+  the placement is removed. **Witness:** units "mode: junk removed +
+  xhttp_param_reset", "JSON: header/cookie without mode → mode: packet-up +
+  code", "header/cookie + mode=stream-one → placement removed, mode intact".
   **Mutation:** emit the pair as is.
 - **P14. VLESS `flow` — only from the link and only without a transport.**
   `flow` is not imposed; `xtls-rprx-vision` with a transport is removed with
-  `vision_with_transport`, except on a node with `encryption`;
-  `none`/deprecated values are not emitted. **Witness:** units "bare TCP +
-  REALITY, без flow → flow не эмитится", "XHTTP + REALITY, flow=vision → flow
-  гасится", "vision + xhttp + encryption → flow остаётся (§544)".
-  **Mutation:** default `vision` for REALITY.
+  `vision_with_transport`, except on a node with `encryption`; `none`/deprecated
+  values are not emitted. **Witness:** units "bare TCP + REALITY, no flow → flow
+  is not emitted", "XHTTP + REALITY, flow=vision → flow is dropped", "vision +
+  xhttp + encryption → flow stays (§544)". **Mutation:** default `vision` for
+  REALITY.
 - **P15. VLESS `encryption`: an invalid form rejects the node.** A valid value
-  goes verbatim (edges trimmed); empty and exact `none` — no layer; a
-  different case `None` and broken grammar → the node does not get into the
-  list, with a code. **Witness:** units "негодная форма отбраковывает УЗЕЛ, а
-  не снимает поле", "None другого регистра — НЕ выключатель". **Mutation:**
+  goes verbatim (edges trimmed); empty and exact `none` — no layer; a different
+  case `None` and broken grammar → the node does not get into the list, with a
+  code. **Witness:** units "an invalid form rejects the NODE instead of removing
+  the field", "None in a different case is NOT the off switch". **Mutation:**
   remove the field and keep the node — a silent downgrade of protection.
-- **P16. Server verification is not weakened silently.** `insecure` from a
-  link is kept but marked with the code `tls_insecure`; hysteria(2)
-  `pinSHA256` → `tls.certificate_public_key_sha256`; a custom CA
-  (`tls.certificate`) survives editing the node. **Witness:** units
-  "insecure даёт код реестра с путём и значением" (anytls), "pinSHA256
-  доезжает до тела (на QUIC он валиден)", "certificate строкой переживает
-  round-trip строкой". **Mutation:** lose `pinSHA256` during parsing.
+- **P16. Server verification is not weakened silently.** `insecure` from a link
+  is kept but marked with the code `tls_insecure`; hysteria(2) `pinSHA256` →
+  `tls.certificate_public_key_sha256`; a custom CA (`tls.certificate`) survives
+  editing the node. **Witness:** units "insecure yields a registry code with
+  path and value" (anytls), "pinSHA256 reaches the body (it is valid on QUIC)",
+  "certificate as a string survives the round trip as a string". **Mutation:**
+  lose `pinSHA256` during parsing.
 - **P17. The root CA store is chosen by the user.** "Certificate store" →
   `certificate.store`. Manual check: `mozilla` → in the resulting config
   `"certificate": {"store": "mozilla"}`. `no witness` (no unit).
@@ -238,14 +245,14 @@ core (under detour enables record_fragment itself if there are no flags)
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| TLS fragmentation | Global checkboxes, first hop, incompatible nodes, yielding to `detour`, carrying over Xray fragmentation | P1 P2 P3 P4 | [tls-fragmentation.md](FUNCTIONS/tls-fragmentation.md) |
-| Mixed-case SNI | Random case of `server_name`, skipping REALITY | P5 P6 | [mixed-case-sni.md](FUNCTIONS/mixed-case-sni.md) |
-| uTLS fingerprint | Defaults, canonicalisation, junk → `chrome`, QUIC, hybrid key share | P7 P8 | [utls-fingerprint.md](FUNCTIONS/utls-fingerprint.md) |
-| REALITY parameters | `public_key`, `short_id`, `key_share`, degrading a broken block | P9 | [reality-params.md](FUNCTIONS/reality-params.md) |
-| ECH | Pass-through `tls.ech` from JSON, refusal of the link's `ech=` | P10 | [ech.md](FUNCTIONS/ech.md) |
-| XHTTP parameters | Full set of fields, `extra`, `xmux`, enum gate, mode/placement pair | P11 P12 P13 | [xhttp-params.md](FUNCTIONS/xhttp-params.md) |
-| VLESS flow and encryption | Vision from the link, conflict with a transport, `encryption` grammar | P14 P15 | [vless-flow-encryption.md](FUNCTIONS/vless-flow-encryption.md) |
-| Server certificate verification | CA store, `insecure`, key pin, custom CA | P16 P17 | [server-certificate.md](FUNCTIONS/server-certificate.md) |
+| TLS fragmentation | Splits the ClientHello so DPI cannot read the SNI: global checkboxes for the first hop, skipping incompatible nodes, yielding to `detour`, carrying over Xray fragmentation. | P1 P2 P3 P4 | [tls-fragmentation.md](FUNCTIONS/tls-fragmentation.md) |
+| Mixed-case SNI | Randomises the letter case of `server_name` against exact-match DPI and skips REALITY nodes. | P5 P6 | [mixed-case-sni.md](FUNCTIONS/mixed-case-sni.md) |
+| uTLS fingerprint | Keeps the ClientHello fingerprint inside the core's dictionary: defaults, canonicalisation, junk → `chrome`, QUIC, hybrid key share. | P7 P8 | [utls-fingerprint.md](FUNCTIONS/utls-fingerprint.md) |
+| REALITY parameters | Validates `public_key`, `short_id` and `key_share` so that a broken REALITY block degrades one node instead of the config. | P9 | [reality-params.md](FUNCTIONS/reality-params.md) |
+| ECH | Passes `tls.ech` through from node JSON only and drops the link's `ech=` with an explanation. | P10 | [ech.md](FUNCTIONS/ech.md) |
+| XHTTP parameters | Carries the full XHTTP transport from a subscription to the core: all fields, `extra`, `xmux`, enum gate, mode/placement pair. | P11 P12 P13 | [xhttp-params.md](FUNCTIONS/xhttp-params.md) |
+| VLESS flow and encryption | Keeps XTLS Vision and VLESS Encryption exactly as the provider set them: Vision from the link, conflict with a transport, `encryption` grammar. | P14 P15 | [vless-flow-encryption.md](FUNCTIONS/vless-flow-encryption.md) |
+| Server certificate verification | Keeps TLS server verification as strict as the subscription promised: CA store, `insecure`, key pin, custom CA. | P16 P17 | [server-certificate.md](FUNCTIONS/server-certificate.md) |
 
 ## Related features
 

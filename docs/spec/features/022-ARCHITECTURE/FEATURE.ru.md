@@ -123,10 +123,13 @@ sing-box-lx); его находки на стыке с клиентом ведё
 - [005-DNS](../005-DNS/FEATURE.ru.md) — худший домен карты §291, типизированная модель и фасад.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — надёжный канал статуса туннеля.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — эфемерный канал данных экрана.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md), [014-AUTOMATION](../014-AUTOMATION/FEATURE.ru.md) — внешние адаптеры (Debug API, Intent API) поверх фасадов.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md),
+  [014-AUTOMATION](../014-AUTOMATION/FEATURE.ru.md) — внешние адаптеры (Debug
+  API, Intent API) поверх фасадов.
 - [020-APP_SHELL](../020-APP_SHELL/FEATURE.ru.md) — английский как исходный язык UI.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — граница с ядром и контрактом, аудит ядра.
-- [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.ru.md) — где правила проверяются автоматически (analyze, чекеры, тесты на CI).
+- [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.ru.md) — где правила
+  проверяются автоматически (analyze, чекеры, тесты на CI).
 
 ## Особенности сопровождения
 

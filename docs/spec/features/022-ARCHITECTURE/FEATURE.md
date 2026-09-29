@@ -121,14 +121,18 @@ tracked by [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the template as the source of defaults, building without the network.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the template as the
+  source of defaults, building without the network.
 - [005-DNS](../005-DNS/FEATURE.md) — the worst domain of the §291 map, typed model and facade.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the reliable tunnel status channel.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — the ephemeral screen data channel.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md), [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — external adapters (Debug API, Intent API) on top of facades.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md),
+  [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — external adapters (Debug
+  API, Intent API) on top of facades.
 - [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — English as the UI source language.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the boundary with the core and the contract, the core audit.
-- [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.md) — where the rules are checked automatically (analyze, checkers, tests on CI).
+- [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.md) — where the rules
+  are checked automatically (analyze, checkers, tests on CI).
 
 ## Maintenance notes
 
