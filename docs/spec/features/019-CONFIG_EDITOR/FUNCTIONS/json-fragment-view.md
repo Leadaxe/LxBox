@@ -1,6 +1,10 @@
 [English](json-fragment-view.md) · [Русский](json-fragment-view.ru.md)
 
-# Config JSON fragment view
+# Config JSON fragment view — a node's or rule's piece of the final config
+
+The node details screen and the custom rule editor show the part of the final
+config that belongs to them, read-only, with copying of a node together with its
+detour chain.
 
 | Field | Value |
 |-------|-------|
@@ -52,7 +56,8 @@ data for the tag".
 
 - There is no editing here — a node is edited in [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md),
   a rule — in [004-ROUTING](../../004-ROUTING/FEATURE.md).
-- The node link (`Copy URI`) is not JSON and lives in the node menu ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
+- The node link (`Copy URI`) is not JSON and lives in the node menu
+  ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
 
 ## Revisions
 

@@ -1,6 +1,9 @@
 [English](config-pin.md) · [Русский](config-pin.ru.md)
 
-# Config pinning
+# Config pinning — a hand-made config that rebuilds do not overwrite
+
+For experiments, a config written through the Debug API or the editor can be
+pinned so that UI actions stop rebuilding it from the settings.
 
 | Field | Value |
 |-------|-------|

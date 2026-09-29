@@ -93,8 +93,8 @@ LxBox защищает TLS-узлы VPN (VLESS, Trojan, AnyTLS и другие) 
 - **P9. Битый REALITY деградирует, а не валит конфиг.** Невалидный
   `public_key` (не 32 байта) → узел идёт обычным TLS; `short_id`
   нечётный, длиннее 16 или не строка → пустой; `key_share` вне
-  `hybrid`/`classical` → снят. Свидетель: юниты «БОЕВОЙ КЕЙС: security=tls
-  + pbk=enabled → plain TLS», «нечётный short_id → очищен, нода и конфиг
+  `hybrid`/`classical` → снят. Свидетель: юниты «БОЕВОЙ КЕЙС:
+  security=tls + pbk=enabled → plain TLS», «нечётный short_id → очищен, нода и конфиг
   живы», «key_share вне enum — поле отброшено молча, узел жив». Мутация:
   обрезать `short_id` до 16.
 - **P10. ECH из ссылки не включается никогда.** `ech=` → код
@@ -250,13 +250,21 @@ removed…»).
 
 ## Связанные фичи
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — фильтр узлов по `tls.utls.fingerprint`.
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор ссылок и форматов в целом, включая `packet_encoding`; здесь только поля TLS и транспорта.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — порядок шагов сборки, в который встроены глобальные приёмы; настройки ядра и их переносимость в бэкап.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — цепочки, detour и `strip_evasion`, от которых зависит, что считается первым хопом.
-- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — ручная правка TLS-полей и отпечатка узла через его JSON.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — локальный прокси режима Proxy и его авторизация.
-- [015-WARP](../015-WARP/FEATURE.ru.md) — обфускация AmneziaWG/WARP и фрагментация QUIC Initial, отдельный не-TLS слой.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — фильтр узлов по
+  `tls.utls.fingerprint`.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор ссылок и форматов
+  в целом, включая `packet_encoding`; здесь только поля TLS и транспорта.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — порядок шагов сборки,
+  в который встроены глобальные приёмы; настройки ядра и их переносимость в
+  бэкап.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — цепочки,
+  detour и `strip_evasion`, от которых зависит, что считается первым хопом.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — ручная правка TLS-полей
+  и отпечатка узла через его JSON.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — локальный прокси режима
+  Proxy и его авторизация.
+- [015-WARP](../015-WARP/FEATURE.ru.md) — обфускация AmneziaWG/WARP и
+  фрагментация QUIC Initial, отдельный не-TLS слой.
 
 ## Особенности сопровождения
 

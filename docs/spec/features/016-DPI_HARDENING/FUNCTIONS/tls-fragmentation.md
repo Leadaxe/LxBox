@@ -71,8 +71,8 @@ the node's notifications; a build warning line.
   without a code; both forms at once — one flag. On hysteria/hysteria2 the
   entry has no effect. Other `type` values in `finalmask.tcp[]` —
   `json_field_unknown`.
-- REALITY nodes are fragmented on a par with others (core ≥
-  `v1.14.1-lx.4`; earlier the flag was silently ignored).
+- REALITY nodes are fragmented like any other node (core ≥ `v1.14.1-lx.4`;
+  earlier the flag was silently ignored).
 
 - All three settings are portable: they go into the cross-platform backup.
 

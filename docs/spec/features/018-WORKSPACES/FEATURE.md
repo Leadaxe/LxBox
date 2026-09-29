@@ -48,7 +48,7 @@ the scene** — leftovers of the previous set do not write into the new one;
   startup.
 - **P3. Loading saves the scene before replacing it.** The scene goes into the
   current slot ("Default" gets its copy on the first load), then the target
-  comes onto the scene whole. **Witness:** units "the scene goes to current, the
+  replaces the scene whole. **Witness:** units "the scene goes to current, the
   target comes onto the scene, .bak removed", "the first load without a folder
   for current creates “Default”". **Mutation:** loading without saving the
   current one.
@@ -162,9 +162,14 @@ Save as Y: flush to disk → scene → slot Y → current = Y (tunnel not touche
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — after a load the config is rebuilt from the new scene through the regular build and its gates; the build also assigns Tailscale state directories to nodes.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — tunnel stop and start around a switch.
-- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — the backup sees only the scene, not the slots; slots in the old storage form are loaded by its migration.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — after a load the config
+  is rebuilt from the new scene through the regular build and its gates; the
+  build also assigns Tailscale state directories to nodes.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — tunnel stop and start
+  around a switch.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — the backup
+  sees only the scene, not the slots; slots in the old storage form are loaded
+  by its migration.
 
 ## Maintenance notes
 

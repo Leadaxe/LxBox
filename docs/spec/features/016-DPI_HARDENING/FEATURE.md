@@ -256,13 +256,21 @@ core (under detour enables record_fragment itself if there are no flags)
 
 ## Related features
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — filtering nodes by `tls.utls.fingerprint`.
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parses links and formats as a whole, including `packet_encoding`; here only the TLS and transport fields.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the order of build steps into which the global techniques are embedded; core settings and their backup portability.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — chains, detour and `strip_evasion` that decide what counts as the first hop.
-- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — manual editing of a node's TLS fields and fingerprint via its JSON.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the local proxy of Proxy mode and its authorisation.
-- [015-WARP](../015-WARP/FEATURE.md) — AmneziaWG/WARP obfuscation and QUIC Initial fragmentation, a separate non-TLS layer.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — filtering nodes by
+  `tls.utls.fingerprint`.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parses links and formats as
+  a whole, including `packet_encoding`; here only the TLS and transport fields.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the order of build steps
+  into which the global techniques are embedded; core settings and their backup
+  portability.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — chains,
+  detour and `strip_evasion` that decide what counts as the first hop.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — manual editing of a node's
+  TLS fields and fingerprint via its JSON.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the local proxy of Proxy
+  mode and its authorisation.
+- [015-WARP](../015-WARP/FEATURE.md) — AmneziaWG/WARP obfuscation and QUIC
+  Initial fragmentation, a separate non-TLS layer.
 
 ## Maintenance notes
 

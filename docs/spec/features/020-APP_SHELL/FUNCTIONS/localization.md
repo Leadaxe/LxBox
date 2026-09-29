@@ -1,6 +1,10 @@
 [English](localization.md) · [Русский](localization.ru.md)
 
-# Localization
+# Localization — English, Russian and Chinese interface without a restart
+
+LxBox shows its interface, notification, tile and shortcuts in English, Russian
+or Simplified Chinese and switches language on the fly without stopping the
+tunnel.
 
 | Field | Value |
 |-------|-------|

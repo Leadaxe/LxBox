@@ -1,6 +1,10 @@
 [English](first-run.md) · [Русский](first-run.ru.md)
 
-# First launch
+# First launch — permission and consent prompts one at a time
+
+On the first opening of the home screen LxBox asks, one question at a time, for
+notification permission, background activity, the Quick Settings tile and
+consent to the update check.
 
 | Field | Value |
 |-------|-------|
@@ -10,10 +14,10 @@
 
 ## What it does
 
-When the home screen opens for the first time, asks in turn the questions
-without which the tunnel works poorly in the background or without which the
-app has no right to go to the network: notification permission, background
-activity, the Quick Settings tile, consent to the update check.
+When the home screen opens for the first time, the app asks, one by one, the
+questions without which the tunnel works poorly in the background or without
+which the app has no right to go to the network: notification permission,
+background activity, the Quick Settings tile, consent to the update check.
 
 ## Parameters
 

@@ -1,6 +1,9 @@
 [English](app-settings.md) · [Русский](app-settings.ru.md)
 
-# App settings
+# App settings — one screen for settings outside the core config
+
+The App Settings screen groups the settings that do not go into the sing-box
+config and saves each one the moment it changes.
 
 | Field | Value |
 |-------|-------|
@@ -11,8 +14,8 @@
 ## What it does
 
 Gathers settings unrelated to the core config on one App Settings screen and
-saves each one at the moment of change. The screen is a home; the contents of
-most sections belong to neighboring features.
+saves each one at the moment of change. The screen only hosts them: the contents
+of most sections belong to neighboring features.
 
 ## Parameters
 

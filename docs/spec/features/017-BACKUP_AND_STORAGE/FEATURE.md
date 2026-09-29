@@ -250,15 +250,27 @@ Start: document → old form? → migration → copy of the original → write
 
 ## Related features
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — subscription records in storage and in the backup; subscription bodies are not copied but re-fetched.
-- [003-CONFIG_BUILD · P11](../003-CONFIG_BUILD/FEATURE.md#promises) — the "config is stale" flag and aligning the config time on settings writes; the config is built from the restored settings.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — rules and Directions in the backup; a separate rules file.
-- [005-DNS](../005-DNS/FEATURE.md) — DNS records in the backup and their merge on transfer.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — detour links and chain positions are stored as a node address; their renaming and deletion is handled by this feature's link registry.
-- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping settings in the backup; the core rejection verdict is not transferred.
-- [015-WARP](../015-WARP/FEATURE.md) — registrations travel as `warp[]` records; a live registration is not overwritten.
-- [018-WORKSPACES](../018-WORKSPACES/FEATURE.md) — the backup sees only the scene; slots in the old form are loaded by the storage migration; the write barrier against stale controllers.
-- [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — language and preferences are in the backup, the theme is not; startup prompt flags survive replace.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — subscription records in
+  storage and in the backup; subscription bodies are not copied but re-fetched.
+- [003-CONFIG_BUILD · P11](../003-CONFIG_BUILD/FEATURE.md#promises) — the
+  "config is stale" flag and aligning the config time on settings writes; the
+  config is built from the restored settings.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — rules and Directions in the backup;
+  a separate rules file.
+- [005-DNS](../005-DNS/FEATURE.md) — DNS records in the backup and their merge
+  on transfer.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — detour links
+  and chain positions are stored as a node address; their renaming and deletion
+  is handled by this feature's link registry.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping settings in the
+  backup; the core rejection verdict is not transferred.
+- [015-WARP](../015-WARP/FEATURE.md) — registrations travel as `warp[]` records;
+  a live registration is not overwritten.
+- [018-WORKSPACES](../018-WORKSPACES/FEATURE.md) — the backup sees only the
+  scene; slots in the old form are loaded by the storage migration; the write
+  barrier against stale controllers.
+- [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — language and preferences are in
+  the backup, the theme is not; startup prompt flags survive replace.
 
 ## Maintenance notes
 

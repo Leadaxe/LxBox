@@ -1,6 +1,10 @@
 [English](appearance.md) · [Русский](appearance.ru.md)
 
-# Appearance
+# Appearance — dark theme, rotation, two-column layout and app icon
+
+LxBox follows the system light or dark theme or a fixed one, stays in portrait
+unless rotation is allowed and can show the node list in two columns from 600
+dp.
 
 | Field | Value |
 |-------|-------|
@@ -10,7 +14,7 @@
 
 ## What it does
 
-Defines how the app looks and behaves under the fingers: light or dark theme,
+Defines how the app looks and responds to touch: light or dark theme,
 orientation lock, the node list layout on a wide screen, the pull-to-refresh
 gesture and the app icon.
 
