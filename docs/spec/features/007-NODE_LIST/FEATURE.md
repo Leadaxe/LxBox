@@ -50,11 +50,7 @@ and traffic — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
 
 ## Promises
 
-- **P1. Node selection is applied live.** Choosing another node in a
-  Direction with the tunnel up goes to the core as `SelectOutbound`, then the
-  list pulls a fresh group snapshot; the tunnel is not restarted.
-  **Witness:** unit "selecting another node goes to the core via a select
-  call". **Mutation:** rebuild the config on node selection.
+- **P1.** moved to [026-DIRECTIONS · P15](../026-DIRECTIONS/FEATURE.md#promises)
 - **P2. Re-selecting the active node is a no-op.** The core is not called,
   connections are not broken. **Witness:** unit "selecting the already active
   node — no-op, event 'already active'". **Mutation:** remove the comparison
@@ -144,10 +140,7 @@ and traffic — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
   reordering a neighbour does not move someone else's result. **Witness:**
   unit "the key does not depend on position: deleting a neighbour does not
   shift the rest". **Mutation:** key by index.
-- **P17. Breaking connections on switch — only by the toggle.** With
-  "Interrupt connections on switch" on, after a node is selected the live
-  connections of that Direction are closed; by default — not.
-  `no witness`.
+- **P17.** moved to [026-DIRECTIONS · P17](../026-DIRECTIONS/FEATURE.md#promises)
 
 ## Controlled parameters
 
@@ -237,8 +230,10 @@ snapshot.
   [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md).
 - The traffic bar above the list (speed, connections, time) and navigation to
   statistics — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
-- The application itself does not store the selection in a Direction's
-  selector between VPN restarts.
+- Selecting a Direction and a node in the running core, the `NETWORKS`
+  pseudo-direction — [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md); the
+  application itself does not store the selection in a Direction's selector
+  between VPN restarts.
 - The folder test requires the VPN to be off: one core session runs at a
   time (depends on OS and core capabilities).
 
@@ -246,7 +241,6 @@ snapshot.
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Direction and active node | Selects a Direction and a node in the running core, pins the active node at the top and handles `NETWORKS` and swipe-to-refresh. | P1 P2 P3 P17 | [directions-and-active-node.md](FUNCTIONS/directions-and-active-node.md) |
 | Group genus and folding a source into a group | Keeps the manual or automatic genus of a source group together with its selected member, and folds a whole subscription or folder into one group. | P12 P13 | [selector-genus-and-fold.md](FUNCTIONS/selector-genus-and-fold.md) |
 | Node filters | Filters a Direction's nodes by regex or emoji, protocol, transport/security, source, ping threshold and detour role, and remembers the filter per Direction. | P5 P6 P7 P8 | [node-filters.md](FUNCTIONS/node-filters.md) |
 | Sorting and manual order | Orders the list by config, ping, name or a custom drag-and-drop order, keeps service nodes and the active node pinned, and uses two columns on wide screens. | P3 P4 P9 P10 | [node-sorting.md](FUNCTIONS/node-sorting.md) |
@@ -255,12 +249,15 @@ snapshot.
 | Server folders and the single source list | Groups standalone servers into folders with a shared switch, tag prefix and detour policy, and keeps subscriptions, servers, folders and chains in one ordered list. | P14 | [server-folders.md](FUNCTIONS/server-folders.md) |
 | Folder test | Measures a folder's servers in a separate core session without the VPN, colours results by thresholds and offers bulk actions on slow and unreachable servers. | P15 P16 | [folder-testing.md](FUNCTIONS/folder-testing.md) |
 
+Direction and active node moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) (as "Direction and active node"); the node list stays here.
+
 ## Related features
 
 - [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — where nodes come from: subscriptions, adding a source, disabling subscription nodes.
 - [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parsing groups from formats (the `selector`/`urltest` genus) and parse notifications in the row.
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — building groups, Directions and the template; folders and folds reach the main screen through it.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — Directions, the auto-select node, folder detour policy, Direction filters in the config.
+- [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) — the Direction model, its groups in the config, selecting a Direction and the active node on the main screen.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — the auto-select node, folder detour policy, group folds.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — the node screen (View details), Copy URI, editing a folder member's node.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping, mass ping, group URLTest, ⚠ "root of trouble"; here only the badge's place and the order.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — the traffic bar above the list and navigation to statistics.

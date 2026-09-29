@@ -62,30 +62,9 @@ are hidden from node selection.
   main.detour = override (1-hop)", "replace (explicit toggle)",
   "useDetourServers=false + override → no detour". **Mutation:** the
   override is written into `main`, wiping out the native link.
-- **P3. A detour Direction is a permission, not a role.** In the detour
-  picker the Directions section contains only enabled Directions with "Use
-  as detour"; they also remain a legitimate target of rules and
-  `route.final`; `vpn-1` is never a detour Direction, neither via the UI nor
-  via a backup. **Witness:** units "ordinary Direction hidden, detour one
-  visible, disabled detour hidden", "vpn-1 + detour:true → isDetour coerced
-  to false", "custom rule to a detour Direction → config valid",
-  "route_final = detour Direction stays". **Mutation:** subtract detour
-  Directions from rule targets.
-- **P4. A retired layer leaves no dangling detour references.** Disabling or
-  deleting a Direction or clearing "Use as detour" resets references to it
-  and to `<tag>-auto` to "None", irreversibly; setting the flag heals
-  nothing. The result is reported in a single notification. **Witness:** units
-  "flag-unset: all four kinds of detour references", "flag-unset is
-  irreversible", "disable/delete of a detour Direction heals detour
-  references", "resync mirrors the storage heal; saving does not resurrect
-  the reference". **Mutation:** heal only storage without the in-memory
-  mirror.
-- **P5. The ⚙ marker lives in the Direction's name.** The "Use as detour"
-  flag adds `⚙ ` to the name, clearing it removes it; the marker cannot be
-  removed by hand and is not doubled on repeat. **Witness:** units
-  "copyWith(isDetour:true) renames the label", "user erased ⚙ with the box
-  checked → it comes back", "storage roundtrip: label with ⚙ is stable".
-  **Mutation:** ⚙ only in the display.
+- **P3.** moved to [026-DIRECTIONS · P18](../026-DIRECTIONS/FEATURE.md#promises)
+- **P4.** moved to [026-DIRECTIONS · P19](../026-DIRECTIONS/FEATURE.md#promises)
+- **P5.** moved to [026-DIRECTIONS · P20](../026-DIRECTIONS/FEATURE.md#promises)
 - **P6. Rings are fixed by the build, fatal is the last resort.** A node with a
   detour to a group it belongs to is excluded from the group's membership
   (detour kept); any other ring is broken at the closing edge with a
@@ -233,9 +212,10 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
 
 ## Boundaries
 
-- Directions as rule targets, the membership filter, `route.final`, healing
-  rule references — [004-ROUTING](../004-ROUTING/FEATURE.md); here a
-  Direction is only an exit for detour and an auto-select pool.
+- The Direction model — tags, membership filter, `route.final`, healing of
+  rule references, the detour layer itself — [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md);
+  rules that target a Direction — [004-ROUTING](../004-ROUTING/FEATURE.md).
+  Here a Direction is only an exit for detour and an auto-select pool.
 - Node settings in general (protocol, tag, JSON) — [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md).
 - A DNS server's channel through a Direction — [005-DNS](../005-DNS/FEATURE.md).
 - The main screen filter "Hide detour servers / Show only detour servers",
@@ -253,17 +233,19 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
 |---|---|---|---|
 | Node detour | Routes a server or folder member through another server first, with a target picker, a path preview and fail-closed handling of broken references. | P1 P12 | [node-detour.md](FUNCTIONS/node-detour.md) |
 | Source detour and jump servers | Sets one detour policy for a whole subscription or folder (Use, Add detour with Fill missing or Replace all, Don't use) and decides whether provider chain links are shown as nodes. | P2 | [source-detour-policy.md](FUNCTIONS/source-detour-policy.md) |
-| Direction as a detour layer | Turns a Direction into a switchable upstream for many nodes, marks it with ⚙ and resets detour references when the layer is retired. | P3 P4 P5 | [detour-directions.md](FUNCTIONS/detour-directions.md) |
 | Hop chains | Builds a multi-hop route as a `type: chain` outbound in packet order, drops an invalid chain whole and shortens a chain when one of its sources is deleted. | P7 P8 P9 P10 | [hop-chains.md](FUNCTIONS/hop-chains.md) |
 | Chain editor | Edits a hop chain in a form with a position picker and save-blocking checks, and measures each hop with a per-layer probe. | P11 P16 | [chain-editor.md](FUNCTIONS/chain-editor.md) |
 | Detour dependency graph | Repairs loops and dangling references before start, cancels the start with named culprits when a loop cannot be broken, and flags dead nodes that others route through. | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.md) |
 | Auto-select and balancing | Adds auto-select groups (`<tag>-auto`, an auto-select node, "Replace with a group") that keep the fastest node or balance load across a pool. | P13 P14 | [balancing.md](FUNCTIONS/balancing.md) |
 
+Direction as a detour layer moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) (as "Direction as a detour layer").
+
 ## Related features
 
 - [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parsing native detour links (`dialerProxy`, `detour`) from a subscription.
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the pre-start check and the "Settings changed" banner that the graph sanitizer is built into.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — Directions as rule targets, the membership filter, `route.final`; here a Direction is a detour exit and an auto-select pool.
+- [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) — the Direction model and the detour layer (⚙, healing of detour references); here a Direction is a detour exit and an auto-select pool.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — rules that send traffic to a Direction.
 - [005-DNS](../005-DNS/FEATURE.md) — a DNS server's channel through a Direction, DNS group rings, DNS victims of dead supports.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — the detour server filter on the main screen, node selection in a group, pool badges.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — the other node settings that host the Detour block.

@@ -67,7 +67,7 @@ a screen. One task may be listed as a revision of several functions.
 | [020-APP_SHELL](020-APP_SHELL/FEATURE.md) | App shell: settings, theme, haptic feedback, icon, localization, first launch, support, update check | 009 022 029 034 036 105 126 | ✅ 2026-09-28 |
 | [024-TEMPLATE](024-TEMPLATE/FEATURE.md) | The config template, its language (`#if`, `for_each`, `#tpl`, typed variables) and the preset language; how the client is extended through the template | 120 (functions) 033 (language) | ✅ 2026-09-29 |
 | [025-CONTRACT_REGISTRY](025-CONTRACT_REGISTRY/FEATURE.md) | The contract registry: protocol schemas, the mapper → sanitizer → model pipeline, the build gate for the pinned core, warning codes, sync and guards | 460 472 480 (registry parts) | ✅ 2026-09-29 |
-| [026-DIRECTIONS](026-DIRECTIONS/FEATURE.md) | Directions — the routing targets `vpn-N`, `direct-out`, `block`: model, groups in the config, selection, detour role, health | 125 248 393 (direction parts) | — |
+| [026-DIRECTIONS](026-DIRECTIONS/FEATURE.md) | Directions — the routing targets `vpn-N`, `direct-out`, `block`: model, groups in the config, selection, detour role, health | 125 248 393 (direction parts) | ✅ 2026-09-29 |
 | [027-DEBUG_API](027-DEBUG_API/FEATURE.md) | Debug API — the local HTTP control surface: access and security, route map, `/help`, write operations, automation recipes | 031 | ✅ 2026-09-29 |
 | [028-TRAFFIC_PROFILER](028-TRAFFIC_PROFILER/FEATURE.md) | Traffic profiler — per-app connection log, attribution, filters and views, DNS trace | 044 | ✅ 2026-09-29 |
 | [029-LOCALIZATION](029-LOCALIZATION/FEATURE.md) | Localization — languages, the English-as-key model, translation workflow, native and core strings | 279 | ✅ 2026-09-29 |

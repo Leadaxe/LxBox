@@ -1,4 +1,4 @@
-[English](detour-directions.md) · [Русский](detour-directions.ru.md)
+[English](direction-as-detour.md) · [Русский](direction-as-detour.ru.md)
 
 # Direction as a detour layer — switching the upstream of many nodes at once
 
@@ -7,9 +7,9 @@ node on the main screen moves every server that goes through it.
 
 | Field | Value |
 |------|----------|
-| Feature | [006-DETOUR_AND_BALANCE](../FEATURE.md) |
-| Promises | P3 P4 P5 |
-| State | ✅ written from code, 2026-09-28 |
+| Feature | [026-DIRECTIONS](../FEATURE.md) |
+| Promises | P18 P19 P20 |
+| State | ✅ written from code, 2026-09-29 |
 
 ## What it does
 
@@ -28,7 +28,7 @@ auto-select the layer is self-steering.
 
 `vpn-1` has no checkbox. The other Direction knobs (membership, filter,
 `include_block`, auto-select) are shared with an ordinary Direction,
-[004-ROUTING](../../004-ROUTING/FUNCTIONS/directions.md).
+[direction-model.md](direction-model.md).
 
 ## Inputs / Outputs
 
@@ -42,18 +42,18 @@ and the `healed` counters.
 
 ## Rules and invariants
 
-- A permission, not a role (P3): a Direction with the flag remains a target
+- A permission, not a role (P18): a Direction with the flag remains a target
   of rules, `route.final`, presets and DNS; `include_block` is compatible
   with the flag.
 - `vpn-1` is never a detour Direction: the flag is coerced on read (an
   edited backup, a hand-written file), the Debug API answers 409 "…is the
   primary direction and cannot be a detour direction".
-- The ⚙ marker is stored in the name (P5): enabling the flag renames to
+- The ⚙ marker is stored in the name (P20): enabling the flag renames to
   `⚙ <name>`, disabling removes the prefix; a marker erased by hand comes
   back; an empty name is not touched (`⚙ <tag>` is shown).
 - The picker shows only enabled Directions with the flag; the selector's
   current selection — in parentheses when the tunnel is up.
-- Healing (P4), by reference to the tag or `<tag>-auto`, root references
+- Healing (P19), by reference to the tag or `<tag>-auto`, root references
   only (a folder member's address is never a Direction):
 
 | Event | detour references (source override, member's personal detour) |
@@ -73,12 +73,14 @@ and the `healed` counters.
   that went through it are blocked rather than going direct, and the build
   names them in a separate warning.
 - A layer member node with a detour to the same layer is a ring, see
-  [detour-graph.md](detour-graph.md).
+  [detour-graph.md](../../006-DETOUR_AND_BALANCE/FUNCTIONS/detour-graph.md).
 
 ## Boundaries
 
 - Healing rule references, `include`, DNS servers on deletion/disabling —
-  [004-ROUTING](../../004-ROUTING/FUNCTIONS/directions.md), [005-DNS](../../005-DNS/FEATURE.md).
+  [direction-model.md](direction-model.md), [005-DNS](../../005-DNS/FEATURE.md).
+- The detour picker, source detour policy and the ring sanitizer —
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - Compatibility of AmneziaWG with WireGuard within a layer is not checked
   (neither a prohibition nor a warning).
 - A possible ring is not highlighted right in the picker.

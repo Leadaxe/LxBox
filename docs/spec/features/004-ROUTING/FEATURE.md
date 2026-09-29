@@ -103,23 +103,10 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   place". **Mutation:** `//` in the config — the core rejects it.
 - **P13.** moved to [024-TEMPLATE · P8](../024-TEMPLATE/FEATURE.md#promises)
 - **P14.** moved to [024-TEMPLATE · P9](../024-TEMPLATE/FEATURE.md#promises)
-- **P15. Rule targets — only live ones:** `direct`, enabled Directions
-  (`vpn-1` always), `block`, Reject. Deleting/disabling a Direction
-  moves rules, preset overrides and Default traffic to `vpn-1`
-  in storage; re-enabling does not resurrect them. **Witness:** unit tests
-  "a disabled Direction is hidden, vpn-1 is always present", "disabling
-  a Direction (§202): route_final + rule outbound → vpn-1", "re-enabling
-  does NOT resurrect the old reference". **Mutation:** a dangling target — fatal.
-- **P16. Default traffic to a vanished target → `vpn-1`** with a warning.
-  **Witness:** unit test "route_final to a deleted Direction → vpn-1".
-- **P17. An empty Direction does not bring down the config:** the filter cut everything →
-  `[block, direct-out]`, default `block`, a warning; a broken regex →
-  all nodes. **Witness:** unit tests "regex with no matches → fallback [block,
-  direct-out] default block", "invalid regex → fallback to all nodes".
-- **P18. A Direction tag is immutable and does not conflict:** the first free
-  `vpn-N` without a ceiling, or an own one; forbidden are empty, service ones, a duplicate,
-  a collision with `<tag>-auto`. **Witness:** unit tests "the first free one, not
-  max + 1", "config service tags and rule pseudo-targets → reserved".
+- **P15.** moved to [026-DIRECTIONS · P1](../026-DIRECTIONS/FEATURE.md#promises)
+- **P16.** moved to [026-DIRECTIONS · P9](../026-DIRECTIONS/FEATURE.md#promises)
+- **P17.** moved to [026-DIRECTIONS · P8](../026-DIRECTIONS/FEATURE.md#promises)
+- **P18.** moved to [026-DIRECTIONS · P2](../026-DIRECTIONS/FEATURE.md#promises)
 - **P19. Rule import is safe:** presets are outside the exchange; a new id and number in
   its zone; `.srs` disabled; a dangling target → `vpn-1` + disabled; a dangling
   DNS server → the option disabled; a taken name — rejection; format newer than 2 —
@@ -208,8 +195,10 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
   destination IP" — [005-DNS](../005-DNS/FEATURE.md).
 - A Direction as a detour target (⚙), auto-select `<tag>-auto`, balancing,
   chains, group folds — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md).
-- Selecting a node within a Direction on the main screen, the NETWORKS
-  pseudo-direction — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
+- The Direction model itself — tags, `vpn-1`, members, `-auto` twin, healing of
+  references, node selection on the main screen — [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md);
+  here a Direction is only a rule target. The NETWORKS pseudo-direction —
+  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
 - Which apps go into the tunnel at all (the Tunnel apps tab) —
   [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md). A rule by
   package here acts inside the core and sees only traffic that already got into the
@@ -231,10 +220,10 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
 | Raw JSON rule | Puts a hand-written sing-box route rule into the config, with any condition or action the form does not expose. | P12 | [raw-json-rules.md](FUNCTIONS/raw-json-rules.md) |
 | Rule order and enabling | Keeps one rule list ordered by a number axis, with drag, on/off and deletion; the first match wins. | P1 P2 P3 P4 | [rule-order.md](FUNCTIONS/rule-order.md) |
 | Rule action | Sends matched traffic to a Direction, `direct`, `block` or Reject, optionally resolving the domain first; other actions go through raw JSON. | P6 P7 | [rule-actions.md](FUNCTIONS/rule-actions.md) |
-| Directions | Defines named exits for rules and Default traffic and their node members; references to a removed Direction move to `vpn-1`. | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.md) |
 | Rule exchange via a file | Exports selected own rules to a file and imports them safely on another device; presets are not transferred. | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.md) |
 
 Preset bundles moved to [024-TEMPLATE](../024-TEMPLATE/FEATURE.md) (as "Preset language and catalog").
+Directions moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) (as "Direction model").
 
 ## Related features
 
@@ -246,8 +235,10 @@ Preset bundles moved to [024-TEMPLATE](../024-TEMPLATE/FEATURE.md) (as "Preset l
   "Resolve destination IP".
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — a Direction as a detour target,
   `<tag>-auto`, balancing, chains, group folds.
-- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — selecting a node within a Direction on the main
-  screen, the NETWORKS pseudo-direction.
+- [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) — the Direction model: tags, `vpn-1`, members and
+  the `-auto` twin, healing of rule and Default traffic references, node selection on the main screen.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — the node list of the selected Direction on the main
+  screen.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — latency measurement settings per Direction.
 - [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — which apps enter the tunnel at all;
   package rules here only see tunnelled traffic.

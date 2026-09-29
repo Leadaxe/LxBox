@@ -73,7 +73,7 @@ the config; a warning if the node dropped out.
 ## Boundaries
 
 - Detour of a whole subscription/folder — [source-detour-policy.md](source-detour-policy.md).
-- A Direction target and its healing — [detour-directions.md](detour-directions.md).
+- A Direction target and its healing — [026-DIRECTIONS](../../026-DIRECTIONS/FUNCTIONS/direction-as-detour.md).
 - Storing references, updating them when nodes are renamed or deleted —
   [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md).
 - Other node settings — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md).

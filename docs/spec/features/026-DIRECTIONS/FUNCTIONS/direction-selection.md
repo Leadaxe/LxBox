@@ -1,4 +1,4 @@
-[English](directions-and-active-node.md) · [Русский](directions-and-active-node.ru.md)
+[English](direction-selection.md) · [Русский](direction-selection.ru.md)
 
 # Direction and active node — seeing and switching the node that carries traffic
 
@@ -7,9 +7,9 @@ switches either one in the running core without restarting the VPN tunnel.
 
 | Field | Value |
 |------|----------|
-| Feature | [007-NODE_LIST](../FEATURE.md) |
-| Promises | P1, P2, P3, P17 |
-| State | ✅ written from code, 2026-09-28 |
+| Feature | [026-DIRECTIONS](../FEATURE.md) |
+| Promises | P15 P16 P17 |
+| State | ✅ written from code, 2026-09-29 |
 
 ## What it does
 
@@ -27,7 +27,7 @@ The active node is highlighted and pinned at the top of the list.
 The Direction list includes not only the application's Directions but any
 selectable selector groups of the config: a provider `selector` from a
 subscription and the selector of a source fold ([genus and
-fold](selector-genus-and-fold.md)).
+fold](../../007-NODE_LIST/FUNCTIONS/selector-genus-and-fold.md)).
 
 ## Inputs / Outputs
 
@@ -47,7 +47,8 @@ for a subscription or folder group — the saved member selection.
   background) — no selection happens. A node is selected with the ▷ button or "Use
   this node".
 - Selecting the active node is a no-op: the core is not called, connections
-  are not broken; an external automation tool receives "already active".
+  are not broken; an external automation tool receives "already active"
+  ([007-NODE_LIST · P2](../../007-NODE_LIST/FEATURE.md#promises)).
 - After selection the list immediately highlights the new node, then pulls a
   fresh group snapshot and sets ACTIVE from the core's answer. If the
   snapshot did not arrive — ACTIVE is set by the selection.
@@ -57,15 +58,19 @@ for a subscription or folder group — the saved member selection.
   has already closed is skipped.
 - **Pinning:** the active node stands right after direct / auto-select twins
   / block under any sort; if the active node is a service node itself, it is
-  not duplicated.
+  not duplicated ([007-NODE_LIST · P3](../../007-NODE_LIST/FEATURE.md#promises)).
 - An empty group snapshot on top of a non-empty one with a live tunnel is
   race noise and is ignored. Swipe down pulls the snapshot again; without a
   core answer the current one stays.
 - If the selected Direction vanished from the snapshot (renamed, disabled) —
   `route.final` is selected, otherwise the first one.
+- The selection lives in the core: the app does not store it, but the config
+  enables `experimental.cache_file` (`cache.db`), so the core itself brings the
+  selector back to the last chosen node on the next start; the cache database
+  is not part of a backup or a workspace slot.
 - Changing the Direction resets the "frozen" sort order
-  ([sorting](node-sorting.md)) and switches the filter memory
-  ([filters](node-filters.md)).
+  ([sorting](../../007-NODE_LIST/FUNCTIONS/node-sorting.md)) and switches the filter memory
+  ([filters](../../007-NODE_LIST/FUNCTIONS/node-filters.md)).
 - `NETWORKS` is a view, not a traffic exit: it shows nodes outside the
   selection lists (e.g. Tailscale) in config order, without filter, sorting
   and ping; in place of the latency — the node state from the core; tapping
@@ -75,13 +80,16 @@ for a subscription or folder group — the saved member selection.
 
 ## Boundaries
 
-- Selecting a member of a group that is not a Direction, from the node
-  screen — same place ([group genus](selector-genus-and-fold.md)); the node
+- The node list itself — filters, sorting, pinning of service rows, badges —
+  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md); selecting a member of a group
+  that is not a Direction, from the node screen — [group
+  genus](../../007-NODE_LIST/FUNCTIONS/selector-genus-and-fold.md); the node
   screen itself — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md).
 - Automation tools (switching a node/Direction from outside) —
   [014-AUTOMATION](../../014-AUTOMATION/FEATURE.md).
 - The application does not store the selection in a Direction's selector
-  between VPN starts.
+  between VPN starts; what survives is the core's cache.
+- `NETWORKS` composition and state — [012-LIVE_STATE · P19](../../012-LIVE_STATE/FEATURE.md#promises).
 - The traffic bar above the list — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
 
 ## Revisions

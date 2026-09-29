@@ -256,6 +256,7 @@ rejection:   Start → core start → rejection names the node → disable + ver
 - [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — registry checks at parse time; core-rejection auto-disable is the second line behind them.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — group composition, balancing, detour, the dead-node dependency graph and the layered chain probe; fed by this feature's measurements.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — the node list, sort by ping, endpoint state badges and node/folder toggles.
+- [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) — the Direction whose nodes are measured: per-Direction ping maps and overrides, the `<tag>-auto` twin's parameters.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — live statistics, the group's current selection and speed on the home screen.
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — texts and grouping of node notifications by code (including `core_rejected`).
 - [015-WARP](../015-WARP/FEATURE.md) — the WARP endpoint scanner reuses the same test session and sets a folder's own test URL/timeout.
