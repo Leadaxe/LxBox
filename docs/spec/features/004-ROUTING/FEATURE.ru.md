@@ -235,6 +235,18 @@ num, isSortable}`, `vars`, `rule`/`rules`, `rule_set`, DNS-части);
 | Направления | Адресаты правил, Default traffic, состав, лечение ссылок | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.ru.md) |
 | Обмен правилами | Экспорт/импорт выбранных правил файлом | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.ru.md) |
 
+## Связанные фичи
+
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — язык шаблона, переменные, проверка перед стартом и плашка «Settings changed».
+- [005-DNS](../005-DNS/FEATURE.ru.md) — DNS-опция правила, DNS-части пресетов, FakeIP и его связь с «Resolve destination IP».
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — Направление как detour-цель, `<tag>-auto`, балансировка, цепочки, свёртки групп.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — выбор узла внутри Направления на главном экране, псевдо-направление NETWORKS.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — настройки замера задержки на Направление.
+- [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.ru.md) — какие приложения вообще идут в туннель; правило по пакету здесь видит только туннелированный трафик.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — показывает, каким правилом ушло соединение.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — Debug API `/rules`, `/directions`.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — бэкап правил и Направлений.
+
 ## Особенности сопровождения
 
 - `sniff` обязан быть первым правилом: любое правило выше Traffic Processing

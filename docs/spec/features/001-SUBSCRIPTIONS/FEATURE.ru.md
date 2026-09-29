@@ -226,6 +226,20 @@
 | Правила импорта | Replace / Disable / Enable над узлами подписки | P12 | [import-rules.md](FUNCTIONS/import-rules.ru.md) |
 | Метаданные подписки | Трафик, срок, имя, ссылки, интервал | P4, P13 | [subscription-meta.md](FUNCTIONS/subscription-meta.ru.md) |
 
+## Связанные фичи
+
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — превращает тело подписки, вставку или файл в узлы; распознаёт формат ввода.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — выключенные подписки и узлы не попадают в сборку; «On update» запускает пересборку.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — префикс тегов, detour-настройки и свёртка подписки в группу.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — показ и выбор узлов подписок; папки ручных серверов.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — одиночные серверы, созданные здесь из вставки/файла, редактируются там.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — проверка доступности, массовое выключение и автовыключение отвергнутых ядром узлов поверх общей карты отметок.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — перезагружает ядро при «On update» = Reload.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — забрала модель каналов ядра (`§123F`).
+- [014-AUTOMATION](../014-AUTOMATION/FEATURE.ru.md) — получает события «подписка обновлена / не обновилась».
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — хранение и бэкап записей подписки.
+- [018-WORKSPACES](../018-WORKSPACES/FEATURE.ru.md) — переключение пространства останавливает апдейтер (P14).
+
 ## Особенности сопровождения
 
 - **Ответ 200 ≠ успех.** HTML-заглушка, DDoS-challenge, чужой формат дают

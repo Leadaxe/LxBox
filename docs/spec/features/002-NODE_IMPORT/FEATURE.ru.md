@@ -213,6 +213,19 @@
 | Предупреждения разбора | Коды на узле и в отбраковке, тексты из реестра | P5 P6 P11 P12 | [parse-warnings.md](FUNCTIONS/parse-warnings.ru.md) |
 | Экспорт в share-ссылку | Узел → ссылка по реестру, подтверждение для ключа | P2 P13 | [share-link-export.md](FUNCTIONS/share-link-export.ru.md) |
 
+## Связанные фичи
+
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — поставляет текст (URL, файл, вставка, QR) и решает, куда кладутся узлы.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — собирает итоговый конфиг и судит гейты ядра (теги сборки, `min_core`), выключенные при разборе.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — придаёт смысл группам и цепочкам, которые даёт импорт.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — показывает предупреждения и отбраковку узлов в списке.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — редактирует узел по той же схеме тела реестра.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — отказы ядра и включение/проба WireGuard-узлов на лету.
+- [015-WARP](../015-WARP/FEATURE.ru.md) — генерирует WARP-узлы; ссылки `masque` — узлы WARP.
+- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — детали TLS-обфускации и XHTTP, которые несут импортированные узлы.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — форма хранения узлов (своя ссылка / исходный текст) и бэкап.
+- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — синхронизация реестра и версия контракта, которые исполняет фича.
+
 ## Особенности сопровождения
 
 - **Схема = данные.** Новая схема или алиас приезжает синком реестра; правка
