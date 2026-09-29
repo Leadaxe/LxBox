@@ -394,15 +394,20 @@ List<String> resolveAutoSelectMembers(
       for (final e in resolved.entries) {
         final key = nodeIdentityKey(e.key);
         if (scoped && !ownKeys.contains(key)) continue;
-        // Имена для матчинга: итоговый тег, базовый тег и теги провайдера
-        // (правило из `selector` написано именно на них).
-        final names = <String>[
-          e.value,
-          e.key.tag,
-          ...spec.tagSynonyms.entries
-              .where((s) => s.value == key)
-              .map((s) => s.key),
+        // Имена для матчинга. Пул из `selector` (scoped): только теги
+        // провайдера записей своего элемента — Xray матчит `tag` префиксом, а
+        // наши подписи (`remarks tag`) селектор не называет (контракт 1.1.107,
+        // PARSING_PRINCIPLES §5): иначе `selector: ["pool"]` забрал бы в пул
+        // все серверы элемента «pool». Без синонимов — итоговый и базовый
+        // тег (правило написал человек, на наших тегах).
+        final providerTags = [
+          for (final s in spec.tagSynonyms.entries)
+            if (s.value == key && !s.key.startsWith(kXrayUntaggedSynonymMark))
+              s.key.split(kXrayUntaggedSynonymMark).first,
         ];
+        final names = scoped
+            ? providerTags
+            : <String>[e.value, e.key.tag, ...providerTags];
         // Контракт 1.1.106 — запись пула без `tag`: `selector` её не
         // называет, но она член пула своего элемента (как в теле разбора).
         final untagged = scoped &&

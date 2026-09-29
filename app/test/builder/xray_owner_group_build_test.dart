@@ -107,4 +107,24 @@ void main() {
     }
     expect(members.toSet(), {for (final n in servers) n.tag});
   });
+
+  // Контракт 1.1.107 — пул по `selector`: префикс `px` выбирает `px-1` и
+  // `px-2`; `other` остаётся узлом элемента, но в группу не входит.
+  test('balancer_selector_subset: в группе ровно pool px-1, pool px-2',
+      () async {
+    final nodes = parseAll(decode(corpusBody(
+        'contract/corpus/body/xray/balancer_selector_subset.body')));
+    final auto = nodes.whereType<AutoSelectSpec>().single;
+    final servers = nodes.where((n) => n is! AutoSelectSpec).toList();
+    expect(servers.map((n) => n.label), ['pool px-1', 'pool px-2', 'pool other']);
+
+    final all = await buildAll(nodes);
+    final tags = {for (final o in all) o['tag']};
+    expect(tags, contains(servers.last.tag),
+        reason: 'невыбранный сервер — узел конфига');
+    final group = all.firstWhere((o) => o['tag'] == auto.tag);
+    final members = (group['outbounds'] as List).cast<String>();
+    expect(members, [servers[0].tag, servers[1].tag]);
+    expect(members, ['pool px-1', 'pool px-2']);
+  });
 }

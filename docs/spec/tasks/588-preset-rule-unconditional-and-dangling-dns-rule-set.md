@@ -93,3 +93,15 @@ dns_rule — `preset_expand.dart`. Новый код показывается в
   `games` при нескачанном `.srs` → в `route.rules` нет
   `{"network": ["tcp","udp"], "outbound": …}`, `template_fragment_dropped`
   от `games`.
+
+## Дополнение: логическое правило (контракт 1.1.107, 29.09.2026)
+
+Признак сбоя (ссылка без значения) по-прежнему на всё правило; гейт «без
+условий» заходит в под-правила `type: logical` на любой глубине — одно
+под-правило без условий + сбой → всё правило выпадает с
+`template_fragment_dropped`, без сбоя → `template_rule_unconditional`.
+Висячие ссылки `rule_set` под-правил чистятся тем же `cleanRuleSetRefsDeep`
+при раскрытии пресета (набор не объявлен / `.srs` не скачан) и у
+пользовательских DNS-правил (`cleanDanglingDnsRuleSet`); префикс пресета
+(`namespacePresetTags`) получают и ссылки под-правил. Кейс
+`template/for_each/logical_sub_rule_conditions_lost_dropped`.

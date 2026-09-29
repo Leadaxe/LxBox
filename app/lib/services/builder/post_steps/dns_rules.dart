@@ -348,20 +348,8 @@ Map<String, dynamic>? cleanDanglingDnsRuleSet(
     return matches == 1;
   }
 
-  final ref = rule['rule_set'];
-  if (ref is String) {
-    if (ref.isEmpty || isLive(ref)) return rule;
-    return null;
-  }
-  if (ref is List) {
-    final refs = ref.whereType<String>().where((r) => r.isNotEmpty).toList();
-    if (refs.isEmpty) return rule;
-    final present = refs.where(isLive).toList();
-    if (present.isEmpty) return null;
-    if (present.length == ref.length) return rule;
-    return {...rule, 'rule_set': present};
-  }
-  return rule;
+  // §104 (контракт 1.1.107) — то же в под-правилах логического правила.
+  return cleanRuleSetRefsDeep(rule, isLive);
 }
 
 /// §061 + §033: разрешает текущий список DNS-правил из storage.
