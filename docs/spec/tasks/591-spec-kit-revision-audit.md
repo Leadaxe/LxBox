@@ -167,7 +167,7 @@
 - [doc] Реестр `emit.note` для naive устарел (`:443`, `naive+quic`); 037F тоже.
 - [bug] Реестр: shadowsocks не эмитит `plugin`/`plugin_opts` в ссылку — возможная потеря SIP003 при экспорте (не проверено).
 - [owner] `limits.max_nodes_per_subscription=3000` — код `max_nodes_exceeded` есть в словаре, проверки в парсере нет. → Вопрос: Лимит `max_nodes_per_subscription=3000` — ввести проверку в парсере или убрать код из словаря? (варианты: A проверять / B убрать)
-- [doc] Коды `duplicate`, `unknown_node_type` есть в приложении, нет в `docs/contract/warnings.md`; `amnezia_container_choice` в словаре, приложение его не производит.
+- [doc] Код `unknown_node_type` есть в приложении, нет в `docs/contract/warnings.md` (`duplicate` снят задачей 589 → `duplicates_collapsed`); `amnezia_container_choice` в словаре, приложение его не производит.
 - [doc-legacy] 321F/368F §5: `selector` импортируется как `urltest` с предупреждением — в коде остаётся `selector` с `default` (§565).
 - [bug] WireGuard-тело с несколькими `peers` → пустая ссылка, «Copy link» молчит; экспорт считает `lost`, но пользователю не сообщает.
 - [decided] 584F хочет распознавание по расширению файла; сейчас только по тексту. → Вопрос: Распознавание типа импортируемого файла по расширению (584F) — делать? (варианты: A да / B нет) → **Решено 2026-09-29: B** — распознавание по расширению не планируется; граница в 002 (вопрос 8 про `.ovpn` остаётся открытым).
@@ -410,7 +410,7 @@
 - [doc] Статусы 578, 371, 364 отстали от кода.
 
 ## 025-CONTRACT_REGISTRY — расхождения (кандидаты в задачи)
-- [doc] `duplicate`, `unknown_node_type` — коды только в приложении, в `docs/contract/warnings.md` нет; `amnezia_container_choice`, `max_nodes_exceeded` в словаре без производителя (лимит 3000 не проверяется).
+- [doc] `unknown_node_type` — код только в приложении, в `docs/contract/warnings.md` нет (`duplicate` снят задачей 589 → `duplicates_collapsed`); `amnezia_container_choice`, `max_nodes_exceeded` в словаре без производителя (лимит 3000 не проверяется).
 - [test] Корпус контракта не гоняется на CI; зелёные реестровые тесты его не покрывают (529).
 - [test] Зеркало build-тегов — ручная копия; страж сверяет только версию, не набор.
 - [doc] `docs/contract/index.md` называет `body.core` 1.14.1-lx.4 / 1.14.2-lx.6 при пине v1.14.2-lx.8.

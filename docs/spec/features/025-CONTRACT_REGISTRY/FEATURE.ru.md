@@ -160,7 +160,8 @@ LxBox проверяет каждый VPN-узел — от share-ссылки V
 
 Общие под-схемы: `tls` (TLS, uTLS, REALITY, ECH), `transports` (по `transport.type`), `multiplex`,
 `dialer`. Словарь предупреждений: 108 кодов реестра (24 `error`, 54 `warning`, 30 `info`) плюс
-2 кода только приложения (`duplicate`, `unknown_node_type`).
+1 код только приложения (`unknown_node_type`); прежний `duplicate` заменён словарным кодом
+`duplicates_collapsed` (контракт 1.1.102, задача 589).
 
 ## Входы / Выходы
 
@@ -241,7 +242,7 @@ flowchart TD
 - Отказы ядра после старта и автоотключение — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md).
 - Коды предупреждений бэкапа — отдельный словарь (`backup_warnings.json`) — [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
 - Реестр не решает идентичность узла (тег), дедуп между источниками и сетевые проверки.
-- Словарь и приложение расходятся в трёх кодах: `duplicate` и `unknown_node_type` есть только в
+- Словарь и приложение расходятся в двух кодах: `unknown_node_type` есть только в
   приложении; `amnezia_container_choice` есть в словаре, но приложение его не производит
   (аудит [591](../../tasks/591-spec-kit-revision-audit.md)).
 
@@ -272,8 +273,8 @@ flowchart TD
 
 - **Зеркало словаря — байт в байт.** `docs/contract/warnings.md` копируется из сгенерированных
   страниц лаунчера; ручную правку ловит сверка lock, и она теряется на следующем синке.
-- **Три кода расходятся со словарём.** `duplicate` и `unknown_node_type` есть только в приложении
-  (их тексты живут в приложении, не в реестре); `amnezia_container_choice` есть в словаре, но
+- **Два кода расходятся со словарём.** `unknown_node_type` есть только в приложении
+  (его текст живёт в приложении, не в реестре); `amnezia_container_choice` есть в словаре, но
   приложение его не производит. Обе стороны — пункты аудита
   [591](../../tasks/591-spec-kit-revision-audit.md).
 - **У `max_nodes_exceeded` нет производителя.** Лимит `max_nodes_per_subscription = 3000`

@@ -61,7 +61,7 @@ build gate, the core-reject machine or an app class; the active locale.
   changed nothing in it"; reason and fix still come from the registry.
 - **Counters count entries, not groups**, so the number matches the icons in the lists.
 - **The Debug API is locale-free**: `title_en` and `text_en` always, regardless of the device.
-- **App-only codes** (`duplicate`, `unknown_node_type`) have their texts in the app and no
+- **App-only codes** (`unknown_node_type`) have their texts in the app and no
   `path`/`value`/`title_en`; `text_en` is always present.
 - Language: `ru` locale reads `*_ru`, every other locale reads `*_en`.
 
@@ -74,7 +74,8 @@ build gate, the core-reject machine or an app class; the active locale.
 - Template and build-degradation lines (not per node) — [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md).
 - Backup codes are a separate dictionary (`backup_warnings.json`) — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md).
 - Dictionary vs. app divergence (audit [591](../../../tasks/591-spec-kit-revision-audit.md)):
-  `duplicate` and `unknown_node_type` are app-only by design; `amnezia_container_choice` and
+  `unknown_node_type` is app-only by design; repeats of a server are reported with the
+  dictionary code `duplicates_collapsed` on the surviving node (contract 1.1.102, task 589); `amnezia_container_choice` and
   `max_nodes_exceeded` are in the dictionary with no producer in the app.
 
 ## Revisions

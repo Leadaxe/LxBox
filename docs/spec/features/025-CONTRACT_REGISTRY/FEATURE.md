@@ -166,7 +166,8 @@ Registry composition shipped in the build: `VERSION`; `registry/` — `allowlist
 
 Shared sub-schemas: `tls` (TLS, uTLS, REALITY, ECH), `transports` (by `transport.type`),
 `multiplex`, `dialer`. Warning dictionary: 108 registry codes (24 `error`, 54 `warning`, 30 `info`)
-plus 2 app-only codes (`duplicate`, `unknown_node_type`).
+plus 1 app-only code (`unknown_node_type`); the former app-only `duplicate` is replaced by the
+dictionary code `duplicates_collapsed` (contract 1.1.102, task 589).
 
 ## Inputs / Outputs
 
@@ -247,7 +248,7 @@ The same flow in text:
 - Core rejections after start and auto-disabling — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md).
 - Backup warning codes are a separate dictionary (`backup_warnings.json`) — [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).
 - The registry does not decide node identity (tag), dedup across sources, or network checks.
-- The dictionary and the app diverge in three codes: `duplicate` and `unknown_node_type` are
+- The dictionary and the app diverge in two codes: `unknown_node_type` is
   app-only; `amnezia_container_choice` is in the dictionary with no producer in the app
   (audit [591](../../tasks/591-spec-kit-revision-audit.md)).
 
@@ -278,8 +279,8 @@ The same flow in text:
 
 - **The dictionary mirror is byte for byte.** `docs/contract/warnings.md` is copied from the
   launcher's generated pages; a hand edit is caught by the lock check and lost on the next sync.
-- **Three codes diverge from the dictionary.** `duplicate` and `unknown_node_type` exist only in
-  the app (their texts live in the app, not in the registry); `amnezia_container_choice` is in the
+- **Two codes diverge from the dictionary.** `unknown_node_type` exists only in
+  the app (its text lives in the app, not in the registry); `amnezia_container_choice` is in the
   dictionary but the app never produces it. Both directions are audit items in
   [591](../../tasks/591-spec-kit-revision-audit.md).
 - **`max_nodes_exceeded` has no producer.** The limit `max_nodes_per_subscription = 3000` is

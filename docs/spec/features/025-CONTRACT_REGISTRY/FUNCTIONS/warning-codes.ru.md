@@ -61,7 +61,7 @@ Debug API. Словарь — `docs/contract/warnings.md`, байт-в-байт 
   нём не меняло»; причина и способ исправления по-прежнему из реестра.
 - **Счётчики считают записи, а не группы**, поэтому число совпадает со значками в списках.
 - **Debug API не зависит от локали**: всегда `title_en` и `text_en`, какое бы ни было устройство.
-- **Коды только приложения** (`duplicate`, `unknown_node_type`) держат тексты в приложении и не
+- **Коды только приложения** (`unknown_node_type`) держат тексты в приложении и не
   имеют `path`/`value`/`title_en`; `text_en` есть всегда.
 - Язык: локаль `ru` читает `*_ru`, любая другая — `*_en`.
 
@@ -74,7 +74,8 @@ Debug API. Словарь — `docs/contract/warnings.md`, байт-в-байт 
 - Строки шаблона и деградаций сборки (не по узлу) — [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.ru.md).
 - Коды бэкапа — отдельный словарь (`backup_warnings.json`) — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
 - Расхождение словаря и приложения (аудит [591](../../../tasks/591-spec-kit-revision-audit.md)):
-  `duplicate` и `unknown_node_type` — коды только приложения, намеренно; `amnezia_container_choice`
+  `unknown_node_type` — код только приложения, намеренно; повторы сервера сообщаются словарным
+  кодом `duplicates_collapsed` на выжившем узле (контракт 1.1.102, задача 589); `amnezia_container_choice`
   и `max_nodes_exceeded` есть в словаре без производителя в приложении.
 
 ## Ревизии
