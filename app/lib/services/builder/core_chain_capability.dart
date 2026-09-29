@@ -133,7 +133,7 @@ bool coreSupportsChain(String coreVersion) {
 /// `sing-box-lx cmd/internal/build_libbox/main.go`. Бамп ядра обязан
 /// сверить набор: `core_build_tags_pin_test` падает, пока [kCoreBuildTagsPin]
 /// не совпадёт с `app/android/libbox.version`.
-const String kCoreBuildTagsPin = 'v1.14.2-lx.8';
+const String kCoreBuildTagsPin = 'v1.14.2-lx.11';
 
 const Set<String> kCoreBuildTags = {
   'with_gvisor',
