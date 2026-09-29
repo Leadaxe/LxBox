@@ -868,17 +868,18 @@ tag: <сырой тег, до префикса>}`; одиночный серве
 другая цепочка — `{tag}`. Строка читается как `{tag}`. Сборка резолвит ссылки в
 финальные теги; не разрешившаяся позиция роняет цепочку целиком.
 
-Ответ `GET /chains`, `GET /chains/{tag}` и мутаций: `tag`, `label`, `enabled` +
+Ответ `GET /chains`, `GET /chains/{tag}` и мутаций: `tag`, `enabled` +
 канон `source_chain.schema.json` (`idle_timeout`, `strip_evasion`, `strip`,
 `rewrite`, `hops` ссылками). Поля `order` нет: место цепочки — её индекс в
-списке.
+списке. Поля `label` нет (§594): имя цепочки — её тег; `label` в теле
+POST/PATCH не читается, как любое неизвестное поле.
 
 | Endpoint | Метод | Body |
 |---|---|---|
 | `/chains` | GET | — |
 | `/chains/{tag}` | GET | 404, если тега нет |
-| `/chains` | POST | опц. `{"tag":"...","label":"..."}` + любые PATCH-поля; без `tag` — первый свободный `chain-N`, 201 |
-| `/chains/{tag}` | PATCH | subset: `label,enabled,hops,idle_timeout,strip_evasion,strip,rewrite` |
+| `/chains` | POST | опц. `{"tag":"..."}` + любые PATCH-поля; без `tag` — первый свободный `chain-N`, 201 |
+| `/chains/{tag}` | PATCH | subset: `enabled,hops,idle_timeout,strip_evasion,strip,rewrite` |
 | `/chains/{tag}` | DELETE | — |
 | `/chains/{tag}/probe` | GET | `?url=&timeout_ms=` — послойная проба |
 
@@ -912,7 +913,7 @@ Write'ы проходят **тот же гейт, что и форма реда�
 
 ```bash
 # Список (порядок нормативен)
-curl -s -H "$HDR" "$BASE/chains" | jq 'map({tag,label,enabled,hops})'
+curl -s -H "$HDR" "$BASE/chains" | jq 'map({tag,enabled,hops})'
 
 # Создать цепочку из двух хопов (порядок = порядок пакета):
 # одиночный сервер de-frankfurt-01 и узел подписки nl-ams-02 (сырой тег)

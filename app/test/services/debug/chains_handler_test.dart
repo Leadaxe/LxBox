@@ -88,7 +88,6 @@ void main() {
       () async {
     final r = await chainsHandler(
       req('POST', '/chains', body: {
-        'label': 'Via Germany',
         'hops': ['direct-out', 'vpn-1'],
         'idle_timeout': '30s',
       }),
@@ -97,7 +96,7 @@ void main() {
     expect((r as JsonResponse).status, 201);
     final body = r.body as Map<String, dynamic>;
     expect(body['tag'], 'chain-1');
-    expect(body['label'], 'Via Germany');
+    expect(body.containsKey('label'), isFalse); // §594
     expect(body['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
     expect(body['idle_timeout'], '30s');
 
@@ -175,7 +174,9 @@ void main() {
       ctx(),
     );
     expect(asMap(r)['tag'], 'home-exit');
-    expect(asMap(r)['label'], 'Home');
+    // §594 — `label` у цепочки упразднён: ключ тела не читается, как любое
+    // неизвестное поле, и в ответ не попадает.
+    expect(asMap(r).containsKey('label'), isFalse);
   });
 
   test('POST /chains с занятым/служебным тегом → 409', () async {
@@ -204,7 +205,6 @@ void main() {
       await chainsHandler(
         req('POST', '/chains', body: {
           'hops': ['direct-out', 'vpn-1'],
-          'label': 'Route',
         }),
         ctx(),
       );
@@ -212,10 +212,10 @@ void main() {
 
     test('частичный update не трогает прочие поля', () async {
       final r = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'label': 'Renamed'}),
+        req('PATCH', '/chains/chain-1', body: {'idle_timeout': '1m'}),
         ctx(),
       );
-      expect(asMap(r)['label'], 'Renamed');
+      expect(asMap(r)['idle_timeout'], '1m');
       expect(asMap(r)['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
     });
 
@@ -229,7 +229,7 @@ void main() {
 
     test('404 на неизвестный тег', () async {
       await expectLater(
-        chainsHandler(req('PATCH', '/chains/nope', body: {'label': 'x'}), ctx()),
+        chainsHandler(req('PATCH', '/chains/nope', body: {'enabled': false}), ctx()),
         throwsA(isA<NotFound>()),
       );
     });
@@ -240,7 +240,7 @@ void main() {
       expect(asMap(off)['strip_evasion'], isFalse);
       // Отсутствие ключа — сохранить явный выбор.
       final keep = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'label': 'Keep'}), ctx());
+        req('PATCH', '/chains/chain-1', body: {'enabled': true}), ctx());
       expect(asMap(keep)['strip_evasion'], isFalse);
       // null — вернуть умолчание ядра: ключа в storage-форме больше нет.
       final cleared = await chainsHandler(

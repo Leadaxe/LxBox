@@ -32,13 +32,11 @@ import 'node_link_resolve.dart';
 class ChainDegradation {
   const ChainDegradation({
     required this.tag,
-    required this.label,
     required this.reason,
     required this.code,
   });
 
   final String tag;
-  final String label;
 
   /// Готовая EN-строка для `emitWarnings`.
   final String reason;
@@ -54,14 +52,12 @@ class ChainDegradation {
 class ChainNote {
   const ChainNote({
     required this.tag,
-    required this.label,
     required this.code,
     required this.params,
     required this.line,
   });
 
   final String tag;
-  final String label;
 
   /// Код реестра (`chain_strip_utls_on_reality` и т.п.).
   final String code;
@@ -137,11 +133,11 @@ ChainResolution resolveChains(
   for (final c in live) {
     void degrade(String code, String reason) =>
         degraded.add(ChainDegradation(
-            tag: c.tag, label: c.displayLabel, reason: reason, code: code));
+            tag: c.tag, reason: reason, code: code));
 
     if (!supported) {
       degrade('chain_unsupported_by_core',
-          chainUnsupportedByCoreLine(c.displayLabel, coreVersion));
+          chainUnsupportedByCoreLine(c.tag, coreVersion));
       continue;
     }
     // Инварианты ядра — до всего остального: собственные диагностики цепочки
@@ -149,7 +145,7 @@ ChainResolution resolveChains(
     final invalid = chainEmitError(c);
     if (invalid.isNotEmpty) {
       degrade('chain_invalid',
-          'Hop chain "${c.displayLabel}" was skipped: $invalid.');
+          'Hop chain "${c.tag}" was skipped: $invalid.');
       continue;
     }
     // Коллизия имени: цепочка, названная как существующий узел, Направление
@@ -159,8 +155,8 @@ ChainResolution resolveChains(
     if (knownTags.contains(c.tag)) {
       degrade(
           'chain_invalid',
-          'Hop chain "${c.displayLabel}" was skipped: the tag "${c.tag}" is '
-              'already taken by another outbound, direction or chain.');
+          'Hop chain "${c.tag}" was skipped: the tag is already taken by '
+              'another outbound, direction or chain.');
       continue;
     }
     // Позиция-ссылка, которая не разрешилась, — ссылка в никуда, на которой
@@ -196,11 +192,11 @@ ChainResolution resolveChains(
       degrade(
           'chain_hop_missing',
           notFound
-              ? 'Hop chain "${c.displayLabel}" was dropped: position $missingAt '
+              ? 'Hop chain "${c.tag}" was dropped: position $missingAt '
                   '("${missing.tag}") was not found among nodes, directions and '
                   'chains declared above it. A route without a hop is a '
                   'different route, so the whole chain is skipped.'
-              : 'Hop chain "${c.displayLabel}" was dropped: position $missingAt '
+              : 'Hop chain "${c.tag}" was dropped: position $missingAt '
                   '(${targets?.describe(missing) ?? '"${missing.tag}"'}) did not '
                   'resolve — $missingWhy. A route without a hop is a different '
                   'route, so the whole chain is skipped.');
@@ -217,7 +213,7 @@ ChainResolution resolveChains(
     if (nested.isNotEmpty) {
       degrade(
           'chain_nested_position',
-          'Hop chain "${c.displayLabel}" was dropped: nested chains '
+          'Hop chain "${c.tag}" was dropped: nested chains '
               '${nested.map((t) => '"$t"').join(', ')} are not at position 1 — '
               'the core allows a nested chain only as the first hop.');
       continue;
@@ -237,10 +233,9 @@ ChainResolution resolveChains(
         final params = {'target': u.target};
         notes.add(ChainNote(
           tag: c.tag,
-          label: c.displayLabel,
           code: u.code,
           params: params,
-          line: 'Hop chain "${c.displayLabel}": '
+          line: 'Hop chain "${c.tag}": '
               '${registryText(u.code, RegistryLang.en, params: params)} '
               '[${u.code}]',
         ));

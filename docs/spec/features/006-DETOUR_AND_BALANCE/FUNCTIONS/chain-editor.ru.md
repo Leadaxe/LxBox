@@ -13,7 +13,7 @@
 
 ## Что делает
 
-Создание («New hop chain»: Tag + необязательный Title) и правка цепочки
+Создание («New hop chain»: только Tag — тег и есть единственное имя цепочки) и правка цепочки
 на экране «Hop chain · <tag>»: список позиций с перетаскиванием,
 «Add position», блок Advanced, находки проверки прямо в форме. Из окна
 узла-цепочки — живой путь и **послойная проба**: сколько стоит каждый хоп.
@@ -23,7 +23,6 @@
 | Элемент | Поведение |
 |---|---|
 | Tag (при создании) | «System id, cannot be changed later»; пустой, служебный, занятый, `<tag>-auto`-коллизия — отказ с причиной |
-| Title | «optional — defaults to the tag» |
 | Enabled | «A disabled chain is not built and cannot be used as a position» |
 | Positions | подпись «In packet order: the first position is the hop closest to you, the last one is what the destination sees.»; у позиции — вид (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | пикер: секции **Directions** (только с «Use as detour») и **Servers** (узлы собранного конфига по алфавиту, `TYPE · server:port`); уже занятые исключены; нечего добавить — «Nothing left to add…» |

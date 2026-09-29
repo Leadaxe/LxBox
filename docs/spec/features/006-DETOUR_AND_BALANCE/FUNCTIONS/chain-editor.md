@@ -14,7 +14,7 @@ costs.
 
 ## What it does
 
-Creating ("New hop chain": Tag + an optional Title) and editing a chain on
+Creating ("New hop chain": Tag only — the tag is the chain's one name) and editing a chain on
 the "Hop chain · <tag>" screen: a list of positions with drag-and-drop,
 "Add position", the Advanced block, check findings right in the form. From
 the chain node's window — the live path and the **per-layer probe**: how
@@ -25,7 +25,6 @@ much each hop costs.
 | Element | Behaviour |
 |---|---|
 | Tag (on creation) | "System id, cannot be changed later"; empty, reserved, occupied, `<tag>-auto` collision — refusal with a reason |
-| Title | "optional — defaults to the tag" |
 | Enabled | "A disabled chain is not built and cannot be used as a position" |
 | Positions | caption "In packet order: the first position is the hop closest to you, the last one is what the destination sees."; each position shows its kind (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | picker: sections **Directions** (only with "Use as detour") and **Servers** (nodes of the built config alphabetically, `TYPE · server:port`); those already used are excluded; nothing to add — "Nothing left to add…" |

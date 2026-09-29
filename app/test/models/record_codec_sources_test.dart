@@ -252,10 +252,9 @@ void main() {
       expect(back.nodes.map((n) => n.tag), ['Alpha', 'ts', _wgTagOf(back)]);
     });
 
-    test('цепочка с rewrite, strip, strip_evasion и label', () {
+    test('цепочка с rewrite, strip и strip_evasion', () {
       const c = SourceChain(
         tag: 'chain-1',
-        label: 'Work',
         enabled: false,
         hops: [NodeLink(tag: 'PR NL-1'), NodeLink(tag: 'Tokyo'), NodeLink(tag: 'vpn-1')],
         idleTimeout: '5m',
@@ -370,12 +369,11 @@ void main() {
 
     test('цепочка: настройки в body, позиции ссылками, поля позиции нет', () {
       final record = chainToRecord(const SourceChain(
-          tag: 'c', label: 'L', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], idleTimeout: '1m'));
+          tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], idleTimeout: '1m'));
       expect(record, {
         'kind': 'chain',
         'tag': 'c',
         'enabled': true,
-        'label': 'L',
         'body': {'type': 'chain', 'idle_timeout': '1m'},
         'hops': [
           {'tag': 'a'},

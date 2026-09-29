@@ -82,10 +82,10 @@ Future<void> _setChains(List<SourceChain> chains, {bool flush = true}) async =>
 /// ними разруливает аллокатор тегов билдера (тот же путь, что у Направлений,
 /// §351 — узел-тёзка получает суффикс). Машинный код причины — в тексте
 /// [StateError], как у [_addDirection].
-Future<SourceChain> _addChain({String? label, String? tag}) async {
+Future<SourceChain> _addChain({String? tag}) async {
   final chains = (await _getChains()).toList();
   final wanted = await _requireFreeChainTag(tag, chains);
-  final chain = SourceChain(tag: wanted, label: label ?? wanted, enabled: true);
+  final chain = SourceChain(tag: wanted, enabled: true);
   chains.add(chain);
   await _setChains(chains);
   return chain;
@@ -128,7 +128,6 @@ Future<SourceChain> _createChain(SourceChain chain) async {
   final wanted = await _requireFreeChainTag(chain.tag, chains);
   final created = SourceChain(
     tag: wanted,
-    label: chain.label,
     enabled: chain.enabled,
     hops: chain.hops,
     idleTimeout: chain.idleTimeout,

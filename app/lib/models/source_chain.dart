@@ -43,7 +43,6 @@ const String kChainOutboundType = 'chain';
 class SourceChain {
   const SourceChain({
     required this.tag,
-    this.label = '',
     this.enabled = true,
     this.hops = const [],
     this.idleTimeout = '',
@@ -52,13 +51,12 @@ class SourceChain {
     this.rewrite = const {},
   });
 
-  /// Тег будущего outbound'а — он же id записи. Immutable после создания, как
+  /// Тег будущего outbound'а — он же id записи и ЕДИНСТВЕННОЕ имя цепочки
+  /// (§594: отдельной подписи нет — фильтр Направления видит то же имя, что
+  /// пользователь). Immutable после создания, как
   /// [Direction.tag]: на него ссылаются фильтры Направлений, `route_final` и
   /// позиции ДРУГИХ цепочек.
   final String tag;
-
-  /// Отображаемое имя. Пусто → показываем [tag] (см. [displayLabel]).
-  final String label;
 
   /// Выключенная цепочка не эмитится и не попадает в пул — как выключенная
   /// подписка. Ссылка на неё из другой цепочки деградирует ту цепочку
@@ -114,15 +112,10 @@ class SourceChain {
   /// round-trip как есть, без «чистки пустого».
   final Map<String, dynamic> rewrite;
 
-  /// Имя для показа. Пустой label → сам тег: выдумывать имя цепочке, которую
-  /// пользователь не назвал, значило бы врать о её содержимом.
-  String get displayLabel => label.isNotEmpty ? label : tag;
-
   /// Умолчание ядра: отсутствие ключа = true.
   bool get stripEvasionEnabled => stripEvasion ?? true;
 
   SourceChain copyWith({
-    String? label,
     bool? enabled,
     List<NodeLink>? hops,
     String? idleTimeout,
@@ -133,7 +126,6 @@ class SourceChain {
   }) =>
       SourceChain(
         tag: tag, // immutable — не параметр copyWith (как у Direction)
-        label: label ?? this.label,
         enabled: enabled ?? this.enabled,
         hops: hops ?? this.hops,
         idleTimeout: idleTimeout ?? this.idleTimeout,
@@ -144,7 +136,7 @@ class SourceChain {
       );
 
   /// Канон `source_chain.schema.json`: маршрут и его настройки, без полей
-  /// записи источника (`tag`, `label`, `enabled`).
+  /// записи источника (`tag`, `enabled`).
   ///
   /// Round-trip обязан быть точным: `strip_evasion` пишется, ТОЛЬКО когда
   /// пользователь высказался (null = умолчание ядра), пустые каталоги ключа
@@ -164,7 +156,6 @@ class SourceChain {
       identical(this, other) ||
       (other is SourceChain &&
           tag == other.tag &&
-          label == other.label &&
           enabled == other.enabled &&
           _eq.equals(hops, other.hops) &&
           idleTimeout == other.idleTimeout &&
@@ -173,7 +164,7 @@ class SourceChain {
           _eq.equals(rewrite, other.rewrite));
 
   @override
-  int get hashCode => Object.hash(tag, label, enabled, _eq.hash(hops),
+  int get hashCode => Object.hash(tag, enabled, _eq.hash(hops),
       idleTimeout, stripEvasion, _eq.hash(strip), _eq.hash(rewrite));
 }
 

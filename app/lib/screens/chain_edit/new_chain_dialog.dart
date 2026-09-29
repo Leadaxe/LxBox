@@ -1,4 +1,5 @@
-// §393 C7 — диалог создания цепочки: тег + имя.
+// §393 C7 — диалог создания цепочки: тег. Он же единственное имя цепочки
+// (§594: отдельной подписи нет).
 //
 // Идиома — `showNewDirectionDialog` (§393 A3). Тег спрашивается ЗДЕСЬ и
 // только здесь: после создания он immutable (на него ссылаются фильтры
@@ -17,10 +18,9 @@ import '../../models/source_chain.dart';
 import '../../services/l10n/locale_controller.dart';
 
 class NewChainRequest {
-  const NewChainRequest({required this.tag, required this.label});
+  const NewChainRequest({required this.tag});
 
   final String tag;
-  final String label;
 }
 
 /// Открывает диалог создания. null — пользователь отменил.
@@ -46,20 +46,17 @@ class _NewChainDialog extends StatefulWidget {
 
 class _NewChainDialogState extends State<_NewChainDialog> {
   late final TextEditingController _tagCtrl;
-  late final TextEditingController _labelCtrl;
 
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController(text: nextChainTag(widget.usedTags))
       ..addListener(_onChange);
-    _labelCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _tagCtrl.dispose();
-    _labelCtrl.dispose();
     super.dispose();
   }
 
@@ -107,17 +104,6 @@ class _NewChainDialogState extends State<_NewChainDialog> {
             ),
             style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _labelCtrl,
-            decoration: InputDecoration(
-              labelText: getLocalText.s("Title"),
-              hintText: getLocalText.s("optional — defaults to the tag"),
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            style: const TextStyle(fontSize: 14),
-          ),
         ],
       ),
       actions: [
@@ -130,10 +116,7 @@ class _NewChainDialogState extends State<_NewChainDialog> {
               ? null
               : () => Navigator.pop(
                     context,
-                    NewChainRequest(
-                      tag: _tagCtrl.text.trim(),
-                      label: _labelCtrl.text.trim(),
-                    ),
+                    NewChainRequest(tag: _tagCtrl.text.trim()),
                   ),
           child: Text(getLocalText.s("Create")),
         ),

@@ -442,11 +442,10 @@ void _checkChains(_State state, Map<String, dynamic> expected) {
     final tag = want['tag'] as String;
     final got = byTag[tag];
     expect(got, isNotNull, reason: 'цепочка $tag не создана импортом');
-    // §405 — та же указательная семантика, что у `directions[]`.
-    final wantLabel = want['label'];
-    if (wantLabel is String) {
-      expect(got!.label, wantLabel, reason: '$tag: имя');
-    }
+    // §594 — `label` у цепочки упразднён: имя цепочки — её тег, приехавшая
+    // подпись отбрасывается молча. Ожидание корпуса (`chains_roundtrip`) ещё
+    // несёт `label` — правка корпуса за владельцем через лаунчер, раннер
+    // поле не сверяет.
     // enabled — УКАЗАТЕЛЬНАЯ семантика (контракт 0.7.1): отсутствие ключа в
     // ожиданиях = «не проверяем», НЕ «ожидаем false».
     final wantEnabled = want['enabled'];

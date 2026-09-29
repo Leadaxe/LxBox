@@ -162,6 +162,9 @@ const List<BackupField> kBackupFields = [
   BackupField(BackupRecord.chain, 'kind', _c),
   BackupField(BackupRecord.chain, 'tag', _c),
   BackupField(BackupRecord.chain, 'enabled', _c),
+  // §594 — `label` у цепочки упразднён: кодек его не пишет, а приехавший
+  // молча отбрасывает. Строка остаётся ради объявленности ключа: без неё
+  // импорт назвал бы `chains[].label` неизвестным полем.
   BackupField(BackupRecord.chain, 'label', _s, declared: true),
   BackupField(BackupRecord.chain, 'body', _c),
   BackupField(BackupRecord.chain, 'hops', _c),
@@ -309,10 +312,6 @@ Map<String, dynamic> stripUndeclaredBackupFields(
 }
 
 /// Поле настройки со значением «ничего не задано» потерей не называется.
-///
-/// Имя цепочки, равное её тегу, — то же, что пустое: показ падает на тег
-/// (`SourceChain.displayLabel`), а Debug API заводит цепочку с `label` = тег.
-/// Приехавшая без имени цепочка выглядит так же, потери нет.
 bool _isDefault(
   BackupRecord record,
   String key,
@@ -322,8 +321,7 @@ bool _isDefault(
     v == null ||
     (v is String && v.isEmpty) ||
     (v is Map && v.isEmpty) ||
-    (v is List && v.isEmpty) ||
-    (record == BackupRecord.chain && key == 'label' && v == stored['tag']);
+    (v is List && v.isEmpty);
 
 List<dynamic> _sliceNodes(List<dynamic> nodes, List<String> dropped) => [
       for (var i = 0; i < nodes.length; i++)

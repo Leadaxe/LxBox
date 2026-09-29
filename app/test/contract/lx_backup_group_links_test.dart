@@ -181,7 +181,8 @@ void main() {
     ]);
     expect(best.poolBadge, '');
 
-    expect(got.chains.single.label, 'Через релей');
+    // §594 — `label` у цепочки упразднён: имя цепочки — её тег.
+    expect(got.chains.single.tag, isNotEmpty);
 
     final ads = got.rules.whereType<CustomRuleSrs>().single;
     expect(ads.updateIntervalHours, 24);

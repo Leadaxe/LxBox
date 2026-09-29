@@ -54,7 +54,7 @@ Map<String, Object?> _serializeChainAsSource(
       'source_key': entry.sourceKey,
       'id': chain.tag, // у цепочки идентичность — тег (§509)
       'kind': 'SourceChain',
-      'title': chain.displayLabel,
+      'title': chain.tag, // §594 — у цепочки одно имя
       'enabled': chain.enabled,
       // §520 — счётчик узлов записи: у цепочки это её позиции.
       'nodes_count': chain.hops.length,

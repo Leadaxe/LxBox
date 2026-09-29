@@ -43,7 +43,7 @@ import '_shared.dart';
 /// - `GET    /chains`            → list в порядке хранения ([serializeChain]:
 ///                                поля источника + канон
 ///                                `source_chain.schema.json`)
-/// - `POST   /chains`            → create (body: `{"tag":"...","label":"..."}`
+/// - `POST   /chains`            → create (body: `{"tag":"..."}`
 ///                                + опционально любые PATCH-поля; `tag`
 ///                                только при создании)
 /// - `GET    /chains/{tag}`      → single
@@ -213,7 +213,6 @@ Future<DebugResponse> _single(String tag) async {
 /// что зовёт форма создания, — правила не дублируются здесь.
 Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
-  final label = fieldString(body, 'label');
   final tag = fieldString(body, 'tag');
 
   final existing = await SettingsStorage.getChains();
@@ -224,7 +223,7 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
       .trim();
 
   // Черновик записи — ровно то, что ляжет на диск. Ничего ещё не записано.
-  var chain = SourceChain(tag: wanted, label: label ?? wanted, enabled: true);
+  var chain = SourceChain(tag: wanted, enabled: true);
   chain = _applyPatch(chain, body, tagConsumed: true) ?? chain;
 
   // Валидируем, ТОЛЬКО когда маршрут задан. Пустая цепочка законна как
@@ -361,10 +360,11 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
   // `route_final` и позиции других цепочек.
   if (!tagConsumed && body.containsKey('tag')) {
     throw const BadRequest(
-        'field "tag" is immutable (outbound id, edit "label" instead)');
+        'field "tag" is immutable (outbound id)');
   }
 
-  final label = fieldString(body, 'label');
+  // §594 — `label` у цепочки упразднён: ключ не читается, как любое
+  // неизвестное поле.
   final enabled = fieldBool(body, 'enabled');
   // §439 (D-112) — позиции ссылками `{folder_id?, tag}`; строка — корневая
   // ссылка (форма до 2.23.3).
@@ -433,8 +433,7 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
     }
   }
 
-  final changed = label != null ||
-      enabled != null ||
+  final changed = enabled != null ||
       hops != null ||
       idleTimeout != null ||
       stripEvasion != null ||
@@ -444,7 +443,6 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
   if (!changed) return null;
 
   return c.copyWith(
-    label: label,
     enabled: enabled,
     hops: hops,
     idleTimeout: idleTimeout,

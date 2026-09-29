@@ -201,7 +201,6 @@ LegacyChain readLegacyChain(Map<String, dynamic> json) {
   return (
     chain: SourceChain(
       tag: tag,
-      label: json['label'] as String? ?? '',
       enabled: json['enabled'] as bool? ?? true,
       hops: [
         for (final h in (json['hops'] as List? ?? const []))

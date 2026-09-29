@@ -459,8 +459,8 @@ class SettingsStorage {
   /// Добавить цепочку. [tag] опционален (по умолчанию первый свободный
   /// `chain-N`, [nextChainTag]); throws [StateError] на конфликте тега с
   /// другой цепочкой или Направлением.
-  static Future<SourceChain> addChain({String? label, String? tag}) =>
-      _addChain(label: label, tag: tag);
+  static Future<SourceChain> addChain({String? tag}) =>
+      _addChain(tag: tag);
 
   /// §393 D3 — создать цепочку ЦЕЛИКОМ, одной записью на диск.
   ///

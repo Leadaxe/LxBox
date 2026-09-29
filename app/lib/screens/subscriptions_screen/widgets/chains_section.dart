@@ -52,7 +52,7 @@ class ChainEntryTile extends StatelessWidget {
         ),
       ),
       title: Text(
-        chain.displayLabel,
+        chain.tag,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -61,11 +61,10 @@ class ChainEntryTile extends StatelessWidget {
           color: chain.enabled ? null : cs.onSurfaceVariant,
         ),
       ),
-      // Тег + число позиций: тег — то, чем цепочка зовётся в конфиге и в
-      // фильтрах Направлений, число хопов — единственное, что отличает
-      // маршруты друг от друга с одного взгляда.
+      // Число позиций — единственное, что отличает маршруты друг от друга с
+      // одного взгляда; имя (тег) уже в заголовке (§594).
       subtitle: Text(
-        '${chain.tag} · ${getLocalText.plural("%d hops", chain.hops.length)}',
+        getLocalText.plural("%d hops", chain.hops.length),
         style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
       ),
       trailing: Icon(Icons.route, size: 20, color: cs.onSurfaceVariant), // §393 — route: цепочка = маршрут (alt_route — развилка, смысл Направления)
