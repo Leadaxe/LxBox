@@ -268,7 +268,7 @@ The same flow in text:
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — runs the registry gate as build stage 5.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — shows codes on the node row and opens the card.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — core rejections carry registry codes too.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the Debug API that returns codes with pinned texts.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API that returns codes with pinned texts.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — the node storage form the
   pipeline re-parses; backup codes are a separate dictionary.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the core pin the build gate judges against.

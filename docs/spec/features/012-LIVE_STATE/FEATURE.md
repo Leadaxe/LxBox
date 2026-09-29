@@ -97,7 +97,7 @@ The feature protects four principles:
   node cannot be chosen as the exit. **Witness**: units "NETWORKS
   composition", "VPN off — NETWORKS is not shown", "a state in place of
   latency, a tap does not select the node". **Mutation**: NETWORKS is written
-  to the config as a group.
+  to the config as a group. In detail — [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - **P20. The freshness verdict is three-valued.** "Matches / stale / don't
   know"; "don't know" does not clear the "restart needed" banner. **Witness**:
   units §324 "no canonical form → unknown (NOT fresh)", "no snapshot of the
@@ -189,11 +189,13 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
   010-VPN_SERVICE.
 - The profiler and the DNS trace — 028-TRAFFIC_PROFILER: recording,
   attribution, filters, DNS health, the `/profiler/*` routes.
-- The app and core log, Debug API, crash reports — 013-DIAGNOSTICS.
+- The app and core log, crash reports — 013-DIAGNOSTICS; the Debug API —
+  027-DEBUG_API.
 - The "restart needed" banner and when to raise it — 003-CONFIG_BUILD; here
   only the verdict that can clear it.
-- Latency measurement, the probe, the Tailscale Network tab — 009 / 008; node
-  selection and the list of directions — 007-NODE_LIST (NETWORKS is only added).
+- Latency measurement, the probe — 009-NODE_HEALTH; the Tailscale Network tab
+  — 030-TAILSCALE; node selection and the list of directions — 007-NODE_LIST
+  (NETWORKS is only added).
 - There is no per-app traffic breakdown on the Stats screen — that is the profiler's log.
 - Depends on OS capabilities: "foreground / background" events, the traffic
   owner.
@@ -227,11 +229,15 @@ DNS query trace moved to [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
   owns the status, "Connection lost" on status silence and the "Interrupt
   connections on switch" setting.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — app and core logs, the
-  Debug API, crash reports.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — app and core logs,
+  crash reports.
 - [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md) — viewing the resulting config.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API: `/state/*`
+  and `/config/running` read what this feature shows.
 - [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.md) — the profiler
   and the DNS trace built on the profiler channel of this feature.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — the Tailscale node behind
+  the NETWORKS row: its identity, the Network tab and the tailnet route.
 
 ## Maintenance notes
 

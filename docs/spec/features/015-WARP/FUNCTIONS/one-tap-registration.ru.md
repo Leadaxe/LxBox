@@ -75,8 +75,8 @@ DER, ключ сервера в PKIX DER, адреса, сервер и порт
 - WARP+ для MASQUE не поддержан.
 - Удаления устройства в Cloudflare нет: Re-register оставляет старое
   устройство в аккаунте Cloudflare.
-- Регистрация без интерфейса (`POST /warp`, только WireGuard) —
-  013-DIAGNOSTICS, Debug API.
+- Регистрация без интерфейса (`POST /warp`, только WireGuard) — Debug API,
+  [027-DEBUG_API](../../027-DEBUG_API/FUNCTIONS/route-map.ru.md).
 
 ## Ревизии
 

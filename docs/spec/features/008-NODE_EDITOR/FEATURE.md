@@ -125,7 +125,8 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   Hostname is prefilled with `LxBox-<model>`, erased — no key. **Witness:**
   widgets "empty Auth key → the validator does not let it through", "optional
   fields and toggles get into the body as is", "§449 Hostname with the LxBox…
-  default". **Mutation:** write `false` and empty strings.
+  default". **Mutation:** write `false` and empty strings. In detail —
+  [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - **P14. A subscription node is not edited individually.** The subscription
   node screen is inspection only: no Save, no Edit JSON, Tailscale has no
   Save choice. **Witness** — manual check: subscription → node → "Inspect
@@ -212,7 +213,8 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
   [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 - Node diagnostics and notifications — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md);
   Cloudflare WARP — [015-WARP](../015-WARP/FEATURE.md); the Tailscale preset —
-  [004-ROUTING](../004-ROUTING/FEATURE.md).
+  [004-ROUTING](../004-ROUTING/FEATURE.md); the Tailscale node itself, its
+  identity and the Network tab — [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - Does not do: overrides of a subscription node, node duplication, a form by
   protocol schema, a separate WireGuard/AmneziaWG form, a TLS form.
 - Camera and file picking — depend on OS capabilities
@@ -247,6 +249,7 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — record storage and the reference registry.
 - [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md) — the whole resulting config.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the contract registry: field schema, warning codes and texts.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — the Tailscale node created by the wizard form: device identity, the Network tab with the exit node switch, tailnet DNS and routes.
 
 ## Maintenance notes
 

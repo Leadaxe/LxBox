@@ -57,7 +57,7 @@ responses; snackbars "Config locked. UI actions will not rebuild config." /
 
 - There is no protection against a config invalid for the core: an accepted
   JSON object goes to the core as is; the error shows up on start/restart.
-- Transport, token and port of the Debug API — [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FEATURE.md).
+- Transport, token and port of the Debug API — [027-DEBUG_API](../../027-DEBUG_API/FUNCTIONS/access-and-security.md).
 - An edit from the editor while pinned holds the same way as `PUT /config`.
 
 ## Revisions

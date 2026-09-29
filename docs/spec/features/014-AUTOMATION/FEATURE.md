@@ -165,7 +165,8 @@ tile touch / menu item / command / plugin
 - Commands other than start/stop/toggle, and all events, require a live app;
   with the UI unloaded the command is skipped without an answer.
 - The service notification with Stop / Reconnect buttons — 010-VPN_SERVICE.
-- Remote control over HTTP with a token — Debug API, 013-DIAGNOSTICS.
+- Remote control over HTTP with a token — Debug API,
+  [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 - **Depends on OS capabilities:** the shade tile, the dynamic icon menu, the
   system request to add the tile (Android 13+), the one-time VPN permission
   dialog, delivery of broadcast commands and events, firmwares that forbid
@@ -187,8 +188,9 @@ tile touch / menu item / command / plugin
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
   external start/stop drives directly; owns the service notification with Stop
   / Reconnect.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the Debug API, whose
-  handlers and error codes the commands reuse; remote control over HTTP.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API, whose
+  handlers and error codes the commands reuse; remote control over HTTP
+  ([automation-recipes](../027-DEBUG_API/FUNCTIONS/automation-recipes.md)).
 
 ## Maintenance notes
 

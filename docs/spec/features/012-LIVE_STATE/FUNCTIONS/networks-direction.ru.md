@@ -63,7 +63,7 @@
 ## Границы
 
 - Вкладка Network узла Tailscale (устройства, exit node, проверка) —
-  008-NODE_EDITOR / 009-NODE_HEALTH.
+  [030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/networks-tab.ru.md).
 - Какие узлы попадают в обычные направления — 007-NODE_LIST.
 
 ## Ревизии

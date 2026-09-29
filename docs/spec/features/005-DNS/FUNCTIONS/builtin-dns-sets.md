@@ -80,7 +80,8 @@ preset servers live in the preset namespace (`ru-direct:dns_ru`,
 - `ru-direct` routing (rule-sets, GeoIP, applications) —
   [004-ROUTING](../../004-ROUTING/FEATURE.md).
 - The Tailscale preset gives one MagicDNS server per node — described with
-  Tailscale nodes, only the server type is here.
+  Tailscale nodes ([030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/tailnet-dns-and-routes.md)),
+  only the server type is here.
 
 ## Revisions
 

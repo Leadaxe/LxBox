@@ -160,13 +160,16 @@ logcat/дамп. Клиент при этом не патчит поведени
   эндпоинта; автоотключение отвергнутых ядром.
 - [010-VPN_SERVICE · P17](../010-VPN_SERVICE/FEATURE.ru.md#обещания) — ключи `lx.wg.*`.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — подписки CommandClient.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — версия ядра в `/device` и дампе, отчёты о падении ядра.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — версия ядра в дампе, отчёты о падении ядра.
 - [015-WARP](../015-WARP/FEATURE.ru.md),
   [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — поля AWG, MASQUE,
   XHTTP, VLESS encryption.
 - [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.ru.md) — fetch ядра в CI, проверка версии ядра в релизном APK.
 - [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.ru.md) — реестр контракта: схемы,
   санитайзер, гейт сборки, коды предупреждений, синк и стражи.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — версия ядра в `/device`.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md) — endpoint `tailscale`, тег сборки `with_tailscale`
+  и поток `SubscribeTailscaleStatus` в работе.
 
 ## Особенности сопровождения
 

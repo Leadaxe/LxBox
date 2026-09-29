@@ -227,6 +227,8 @@ Hysteria2, TUIC, AnyTLS, SOCKS, HTTP, SSH, NaiveProxy, WireGuard и MASQUE. Ка
   судит гейт сборки.
 - [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.ru.md) — конвейер реестра, санитайзер,
   гейт сборки и коды предупреждений, которые исполняет фича.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md) — чем становится разобранный здесь endpoint
+  `tailscale`: узел, его личность, DNS и маршруты tailnet.
 
 ## Особенности сопровождения
 

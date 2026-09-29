@@ -271,6 +271,8 @@ Start: document → old form? → migration → copy of the original → write
   barrier against stale controllers.
 - [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — language and preferences are in
   the backup, the theme is not; startup prompt flags survive replace.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — Tailscale node state (device
+  identities) is not in the backup and lives per slot.
 
 ## Maintenance notes
 

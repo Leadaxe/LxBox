@@ -57,7 +57,7 @@ API; снеки «Config locked. UI actions will not rebuild config.» /
 
 - Защиты от невалидного для ядра конфига нет: принятый JSON-объект уходит в
   ядро как есть; ошибку покажет старт/перезапуск.
-- Транспорт, токен и порт Debug API — [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FEATURE.ru.md).
+- Транспорт, токен и порт Debug API — [027-DEBUG_API](../../027-DEBUG_API/FUNCTIONS/access-and-security.ru.md).
 - Правка из редактора при закреплении держится так же, как `PUT /config`.
 
 ## Ревизии

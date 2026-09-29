@@ -181,7 +181,9 @@ Android TV is best-effort (§372): the manifest is compatible, there is no separ
 - [022-ARCHITECTURE](../022-ARCHITECTURE/FEATURE.md) — rules CI checks
   automatically (analyze, English UI, tests only on CI).
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the app and core version
-  in the dump and `/device` as a check of the release APK.
+  in the dump as a check of the release APK.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the app and core version in
+  `/device` as a check of the release APK.
 
 ## Maintenance notes
 

@@ -83,7 +83,7 @@ active Directions, Tailscale nodes, references from routing rules.
 ## Boundaries
 
 - Preset server variables and the preset itself — [004-ROUTING](../../004-ROUTING/FEATURE.md).
-- Tailscale nodes — outside the feature; only the server type is here.
+- Tailscale nodes — outside the feature ([030-TAILSCALE](../../030-TAILSCALE/FEATURE.md)); only the server type is here.
 - `tls` fields other than SNI (ALPN, certificates, `insecure`) — JSON only;
   SNI from the form overwrites the whole `tls` (defect §530).
 - There is no one-off server latency test (§365).

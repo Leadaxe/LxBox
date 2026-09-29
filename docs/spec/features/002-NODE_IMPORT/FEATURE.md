@@ -225,6 +225,8 @@ Registry-driven parse pipeline and Parse warnings moved to [025-CONTRACT_REGISTR
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the core pin whose version and build tags the build gate judges.
 - [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md) — the registry pipeline, sanitizer, build gate and
   warning codes the feature executes.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — what the `tailscale` endpoint parsed here becomes:
+  the node, its identity, the tailnet DNS and routes.
 
 ## Maintenance notes
 

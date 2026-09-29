@@ -93,7 +93,7 @@ Editor» (боковое меню) — сохранённый конфиг яд�
 | Lock config (debug) | Настройки → Диагностика, при включённом Debug API | вкл/выкл | выкл |
 | Порог только-чтения | — | 1 048 576 символов | фиксирован |
 
-Debug API (контракт — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md)):
+Debug API (контракт — [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md)):
 `GET /config` (`?pretty`), `PUT /config` (сырой JSON-объект),
 `GET /state/config_locked`, `PUT /settings/config_locked {"locked": bool}`,
 `POST /action/rebuild-config` (409 при закреплении). Ключей конфига ядра
@@ -150,8 +150,10 @@ Debug API (контракт — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — односторонний конвейер
   настройки → сборка → конфиг, результат которого показывает редактор; гейты
   сборки, сравнение с работающим конфигом и признак «config changed».
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — транспорт, токен и порт
-  Debug API, через который конфиг пишется и закрепляется.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — транспорт, токен и порт
+  Debug API, через который конфиг пишется и закрепляется
+  ([access-and-security](../027-DEBUG_API/FUNCTIONS/access-and-security.ru.md),
+  [write-operations](../027-DEBUG_API/FUNCTIONS/write-operations.ru.md)).
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — хранение и
   бэкап настроек, из которых собирается конфиг.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — правка отдельного узла;

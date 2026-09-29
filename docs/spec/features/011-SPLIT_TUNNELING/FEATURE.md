@@ -182,6 +182,8 @@ user choice / Debug API / backup
   creation applies the list, the VPN/Proxy modes (no list in Proxy) and "Allow
   VPN bypass".
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — per-app traffic view.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API `GET|PUT
+  /settings/tun_apps` that reads and writes the mode and the list.
 
 ## Maintenance notes
 

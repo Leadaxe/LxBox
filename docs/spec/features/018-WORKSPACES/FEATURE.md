@@ -88,7 +88,8 @@ the scene** — leftovers of the previous set do not write into the new one;
 - **P12. Each slot has its own Tailscale identities.** **Witness:** units "Save
   as → build of another slot → Load → Rename → Delete", "without a Tailscale
   index Workspaces operations create no files". **Mutation:** state directories
-  are copied into the slot.
+  are copied into the slot. In detail —
+  [030-TAILSCALE](../030-TAILSCALE/FUNCTIONS/device-identity-and-state.md).
 - **P13. A slot in the old storage form loads.** **Witness:** units "loading a
   2.23.2 slot: the scene migrates, the slot original is kept as a copy…", "a
   slot in the current form gets no copy". **Mutation:** the original is lost.
@@ -170,6 +171,8 @@ Save as Y: flush to disk → scene → slot Y → current = Y (tunnel not touche
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — the backup
   sees only the scene, not the slots; slots in the old storage form are loaded
   by its migration.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — the Tailscale device identity
+  (state directory per node) that each slot keeps its own set of.
 
 ## Maintenance notes
 

@@ -169,13 +169,16 @@ Registry revisions (460F, contract syncs, 486, 491, 529) moved to
   endpoint on/off; auto-disabling nodes rejected by the core.
 - [010-VPN_SERVICE · P17](../010-VPN_SERVICE/FEATURE.md#promises) — the `lx.wg.*` keys.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — CommandClient subscriptions.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the core version in `/device` and the dump, core crash reports.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the core version in the dump, core crash reports.
 - [015-WARP](../015-WARP/FEATURE.md),
   [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — AWG, MASQUE, XHTTP,
   VLESS encryption fields.
 - [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.md) — core fetch in CI, core version check in the release APK.
 - [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md) — the contract registry: schemas,
   sanitizer, build gate, warning codes, sync and guards.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the core version in `/device`.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — the `tailscale` endpoint, the `with_tailscale`
+  build tag and the `SubscribeTailscaleStatus` stream in use.
 
 ## Maintenance notes
 

@@ -94,7 +94,7 @@ The feature protects three principles:
 | Lock config (debug) | App Settings → Diagnostics, when the Debug API is enabled | on/off | off |
 | Read-only threshold | — | 1 048 576 characters | fixed |
 
-Debug API (contract — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md)):
+Debug API (contract — [027-DEBUG_API](../027-DEBUG_API/FEATURE.md)):
 `GET /config` (`?pretty`), `PUT /config` (raw JSON object),
 `GET /state/config_locked`, `PUT /settings/config_locked {"locked": bool}`,
 `POST /action/rebuild-config` (409 while pinned). The feature produces no core
@@ -153,8 +153,10 @@ any UI action → [pinned?] ─ no  → rebuild from settings (edit erased)
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the one-way settings →
   build → config pipeline whose output the editor shows; the build's gates,
   comparison with the running config and the "config changed" flag.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — transport, token and port
-  of the Debug API through which the config is written and pinned.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — transport, token and port
+  of the Debug API through which the config is written and pinned
+  ([access-and-security](../027-DEBUG_API/FUNCTIONS/access-and-security.md),
+  [write-operations](../027-DEBUG_API/FUNCTIONS/write-operations.md)).
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — storage and
   backup of the settings the config is built from.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — editing a single node; here

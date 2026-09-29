@@ -173,6 +173,8 @@ Debug API, восстановление бэкапа; список устано�
   создании которого применяется список, режимами VPN/Proxy (в Proxy списка
   нет) и «Allow VPN bypass».
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — трафик по приложениям.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — Debug API `GET|PUT
+  /settings/tun_apps`, читающий и пишущий режим и список.
 
 ## Особенности сопровождения
 

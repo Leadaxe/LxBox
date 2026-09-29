@@ -217,8 +217,10 @@ CI: код + словари + нативные строки → четыре п�
   [014-AUTOMATION](../014-AUTOMATION/FEATURE.ru.md) — уведомление, сообщения
   об остановке, плитка, ярлыки и окна плагина — нативные строки; строки команд
   и события остаются английскими.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — журналы и Debug API —
-  английские машинные поверхности; `app_language` — настройка Debug API.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — журналы — английская
+  машинная поверхность.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — Debug API — английская
+  машинная поверхность; `app_language` — настройка Debug API.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md),
   [018-WORKSPACES](../018-WORKSPACES/FEATURE.ru.md) — язык входит в резервную
   копию и в набор настроек; восстановление или загрузка применяет его.

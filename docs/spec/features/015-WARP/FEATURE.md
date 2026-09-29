@@ -247,8 +247,8 @@ transports → N random candidates → links → the "WARP GENERATOR" folder.
 - Country auto-detection depends on OS capabilities (operator network →
   locale).
 - Secrets in the Debug API are deliberately not masked (root access by
-  design, 013-DIAGNOSTICS); registration without the UI — `POST /warp` in the
-  same place.
+  design, [027-DEBUG_API](../027-DEBUG_API/FUNCTIONS/access-and-security.md));
+  registration without the UI — `POST /warp` in the same place.
 
 ## Functions
 
@@ -267,7 +267,7 @@ transports → N random candidates → links → the "WARP GENERATOR" folder.
   / `masque://` links and WG INI that this feature produces.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — editing a WARP node after it is added.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping and checking of WARP nodes and the "WARP GENERATOR" folder.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — Debug API: `POST /warp`
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — Debug API: `POST /warp`
   registration without the UI, unmasked secrets by design.
 - [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — global TLS fragmentation reaches MASQUE nodes over `h2`/`auto`.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) —

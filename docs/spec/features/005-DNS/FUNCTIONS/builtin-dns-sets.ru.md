@@ -79,7 +79,8 @@ DNS работает без настройки: шифрованная груп�
 - Маршрутизация `ru-direct` (rule-set'ы, GeoIP, приложения) —
   [004-ROUTING](../../004-ROUTING/FEATURE.ru.md).
 - Пресет Tailscale даёт по серверу MagicDNS на узел — описан у узлов
-  Tailscale, здесь только тип сервера.
+  Tailscale ([030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/tailnet-dns-and-routes.ru.md)),
+  здесь только тип сервера.
 
 ## Ревизии
 

@@ -229,7 +229,8 @@ WG и MASQUE; записи `warp[]` в резервной копии; снек �
 - `tls.disable_sni` в мастере не выставляется — только через ссылку/импорт.
 - Автоопределение страны зависит от возможностей ОС (сеть оператора → локаль).
 - Секреты в Debug API не маскируются намеренно (root-доступ by design,
-  013-DIAGNOSTICS); регистрация без интерфейса — `POST /warp` там же.
+  [027-DEBUG_API](../027-DEBUG_API/FUNCTIONS/access-and-security.ru.md));
+  регистрация без интерфейса — `POST /warp` там же.
 
 ## Функции
 
@@ -248,7 +249,7 @@ WG и MASQUE; записи `warp[]` в резервной копии; снек �
   `wireguard://` / `masque://` и WG INI, которые порождает эта фича.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — правка WARP-узла после добавления.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — пинг и проверка WARP-узлов и папки «WARP GENERATOR».
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — Debug API: регистрация
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — Debug API: регистрация
   `POST /warp` без интерфейса, секреты без маски by design.
 - [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — глобальная
   фрагментация TLS доходит до MASQUE-узлов при `h2`/`auto`.

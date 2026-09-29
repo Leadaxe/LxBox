@@ -51,7 +51,8 @@ new set does not raise "config is stale" because of someone else's leftover.
   slot has its own set of "node → directory" entries. "Save as" copies the
   current slot's entries into the new slot, Rename moves them, Delete removes
   only directories not referenced by other slots. An index failure does not
-  stop the set operation.
+  stop the set operation. In detail —
+  [030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/device-identity-and-state.md).
 
 ## Boundaries
 

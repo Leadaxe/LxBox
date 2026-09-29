@@ -234,7 +234,8 @@ gesture / OS event
   banner — [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md); tunnel
   interface parameters (address, MTU, stack, IPv6) — there as well, as
   template variables.
-- Logs, Debug API, the core crash report — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md).
+- Logs, the core crash report — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md);
+  the Debug API — [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 - An active health watchdog with probes and escalation (§042F, §088) — not
   implemented on purpose (battery).
 - Depends on OS capabilities: autostart after boot, surviving in the
@@ -267,9 +268,10 @@ gesture / OS event
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — the connecting-phase expiry is the start verdict for the node safety net; passive health check and URLTest intervals.
 - [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — which apps go through the tunnel this feature brings up.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — live status, speed, connections, connection time, WG/AWG endpoint state, sleep of data streams in the background.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — logs, Debug API, the core crash report and the "core crashed" banner.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — logs, the core crash report and the "core crashed" banner.
 - [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — quick settings tile, shortcuts, Intent API: starts without the screen and without the foreign-VPN question.
 - [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — the startup wizard asks for the battery optimization exception that autostart and survival depend on.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API: start, stop, reconnect, reload and network reset over HTTP (`/action/*`), the VPN mode and proxy settings (`/settings/*`).
 
 ## Maintenance notes
 

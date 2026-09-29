@@ -65,7 +65,7 @@ its nodes; the state in the row in place of latency.
 ## Boundaries
 
 - The Network tab of a Tailscale node (devices, exit node, check) —
-  008-NODE_EDITOR / 009-NODE_HEALTH.
+  [030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/networks-tab.md).
 - Which nodes go into ordinary directions — 007-NODE_LIST.
 
 ## Revisions

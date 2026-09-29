@@ -233,14 +233,16 @@ template (servers, presets)   user records   routing rules
 - Routing rules, presets as such, Hijack DNS, "Resolve destination IP", the
   DNS option in the rule editor — [004-ROUTING](../004-ROUTING/FEATURE.md);
   here — only their DNS trace.
-- The core's DNS query stream (`subscribeDNSQueries`), the group trace in the
-  profiler, the "DNS failing en masse while the link is alive" detector —
-  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) and
-  [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md); the Debug API
-  `/settings/dns_options/*` — there too.
+- The core's DNS query stream (`subscribeDNSQueries`) —
+  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md); the group trace in the
+  profiler and the "DNS failing en masse while the link is alive" detector —
+  [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FUNCTIONS/dns-trace.md); the
+  Debug API `/settings/dns_options/*` —
+  [027-DEBUG_API](../027-DEBUG_API/FUNCTIONS/write-operations.md).
 - Carrying DNS records in a backup and merging — [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).
 - Tailscale nodes and their preset — not here; the feature only provides
-  the `tailscale` server type in the form.
+  the `tailscale` server type in the form. In detail —
+  [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - There are no regional DNS sets: `ru-direct` is enabled by default for
   everyone, the usage region does not affect DNS.
 - There is no one-off "test DNS servers" button and there will not be one
@@ -266,9 +268,11 @@ template (servers, presets)   user records   routing rules
 - [004-ROUTING](../004-ROUTING/FEATURE.md) — presets, routing rules with a DNS option, Hijack DNS
   and "Resolve destination IP" leave their DNS trace here.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — the core's DNS query stream and group trace live there.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the mass DNS failure detector, the Debug API
-  `/settings/dns_options/*`, core cache reset on a failure.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — core cache reset on a failure.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — DNS records are carried and merged in a backup.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API `/settings/dns_options/*` routes.
+- [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.md) — the DNS query trace, the group trace and the mass DNS failure detector.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — Tailscale nodes, the MagicDNS server per node and the tailnet DNS preset.
 
 ## Maintenance notes
 

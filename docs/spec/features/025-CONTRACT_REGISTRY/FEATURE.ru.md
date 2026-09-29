@@ -262,7 +262,7 @@ flowchart TD
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — исполняет гейт реестра стадией 5 сборки.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — показывает коды на строке узла и открывает карточку.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — отказы ядра тоже несут коды реестра.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — Debug API, который отдаёт коды с пиненными текстами.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — Debug API, который отдаёт коды с пиненными текстами.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — форма хранения узлов, которую
   конвейер разбирает заново; коды бэкапа — отдельный словарь.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — пин ядра, против которого судит гейт сборки.

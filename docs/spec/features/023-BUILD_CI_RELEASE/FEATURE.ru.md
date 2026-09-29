@@ -176,7 +176,9 @@ Android TV — best-effort (§372): манифест совместим, отд�
 - [022-ARCHITECTURE](../022-ARCHITECTURE/FEATURE.ru.md) — правила, которые CI
   проверяет автоматически (analyze, английский UI, тесты только на CI).
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — версия приложения и
-  ядра в дампе и `/device` как проверка релизного APK.
+  ядра в дампе как проверка релизного APK.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — версия приложения и ядра в
+  `/device` как проверка релизного APK.
 
 ## Особенности сопровождения
 

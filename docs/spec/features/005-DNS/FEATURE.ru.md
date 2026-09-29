@@ -222,14 +222,15 @@ Traffic Processing, [004-ROUTING](../004-ROUTING/FEATURE.ru.md)), DNS у
 - Правила маршрутизации, пресеты как таковые, Hijack DNS, «Resolve
   destination IP», DNS-опция в редакторе правила —
   [004-ROUTING](../004-ROUTING/FEATURE.ru.md); здесь — только их DNS-след.
-- Поток DNS-запросов ядра (`subscribeDNSQueries`), трасса групп в
-  профайлере, детектор «DNS массово падает при живой связи» —
-  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) и
-  [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md); Debug API
-  `/settings/dns_options/*` — там же.
+- Поток DNS-запросов ядра (`subscribeDNSQueries`) —
+  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md); трасса групп в
+  профайлере и детектор «DNS массово падает при живой связи» —
+  [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FUNCTIONS/dns-trace.ru.md);
+  Debug API `/settings/dns_options/*` —
+  [027-DEBUG_API](../027-DEBUG_API/FUNCTIONS/write-operations.ru.md).
 - Перенос DNS-записей в резервной копии и слияние — [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
 - Узлы Tailscale и их пресет — не здесь; фича лишь даёт тип сервера
-  `tailscale` в форме.
+  `tailscale` в форме. Подробно — [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md).
 - Региональных DNS-наборов нет: `ru-direct` включён по умолчанию для всех,
   регион использования на DNS не влияет.
 - Разовой кнопки «протестировать DNS-серверы» нет и не будет (§365).
@@ -254,9 +255,11 @@ Traffic Processing, [004-ROUTING](../004-ROUTING/FEATURE.ru.md)), DNS у
 - [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — пресеты, правила маршрутизации с DNS-опцией, Hijack
   DNS и «Resolve destination IP» оставляют здесь свой DNS-след.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — поток DNS-запросов ядра и трасса групп живут там.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — детектор массовых сбоев DNS, Debug API
-  `/settings/dns_options/*`, сброс кэша ядра при сбое.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — сброс кэша ядра при сбое.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — перенос и слияние DNS-записей в резервной копии.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — маршруты Debug API `/settings/dns_options/*`.
+- [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.ru.md) — трасса DNS-запросов, трасса групп и детектор массовых сбоев DNS.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md) — узлы Tailscale, сервер MagicDNS на узел и DNS-пресет tailnet.
 
 ## Особенности сопровождения
 

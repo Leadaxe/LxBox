@@ -77,8 +77,8 @@ registration cache; a log line with secrets masked.
 - WARP+ for MASQUE is not supported.
 - There is no device deletion at Cloudflare: Re-register leaves the old device
   in the Cloudflare account.
-- Registration without the UI (`POST /warp`, WireGuard only) —
-  013-DIAGNOSTICS, Debug API.
+- Registration without the UI (`POST /warp`, WireGuard only) — Debug API,
+  [027-DEBUG_API](../../027-DEBUG_API/FUNCTIONS/route-map.md).
 
 ## Revisions
 

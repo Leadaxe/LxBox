@@ -59,7 +59,8 @@ re-reading (P1).
   Tailscale chooses the name itself.
 - Without Exit node a Tailscale node gives access to the tailnet but does not
   become a Direction candidate; the tailnet route and DNS are provided by the
-  template preset, not by the node.
+  template preset, not by the node
+  ([030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/tailnet-dns-and-routes.md)).
 - A tag without an emoji gets an emoji by node kind ([name-is-tag.md](name-is-tag.md)).
 - Tag uniqueness is not checked: the build suffixes a colliding tag with
   `-1`, `-2`; the message shows the entered tag, not the final one.

@@ -117,7 +117,8 @@ detour и цепочки — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/
   предзаполнен `LxBox-<модель>`, стёртый — ключа нет. Свидетель: виджеты
   «пустой Auth key → валидатор не пускает», «необязательные поля и тумблеры
   попадают в тело как есть», «§449 Hostname с дефолтом LxBox…». Мутация:
-  писать `false` и пустые строки.
+  писать `false` и пустые строки. Подробно —
+  [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md).
 - **P14. Узел подписки поштучно не правится.** Экран узла подписки — только
   осмотр: нет Save, нет Edit JSON, у Tailscale нет Save choice. Свидетель —
   ручная проверка: подписка → узел → «Inspect node»: вкладки JSON/Source
@@ -199,7 +200,8 @@ kept.», «Comments were removed.», «The core rejected the node: …».
 - Папки, перенос в папку, порядок, главный экран — [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md).
 - Диагностика узла и уведомления — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md);
   Cloudflare WARP — [015-WARP](../015-WARP/FEATURE.ru.md); пресет Tailscale —
-  [004-ROUTING](../004-ROUTING/FEATURE.ru.md).
+  [004-ROUTING](../004-ROUTING/FEATURE.ru.md); сам узел Tailscale, его
+  личность и вкладка Network — [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md).
 - Не делает: переопределения (overrides) узла подписки, дублирование узла,
   форму по схеме протокола, отдельную форму WireGuard/AmneziaWG, форму TLS.
 - Камера и выбор файла — зависят от возможностей ОС
@@ -234,6 +236,7 @@ kept.», «Comments were removed.», «The core rejected the node: …».
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — хранение записи и реестр ссылок.
 - [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.ru.md) — итоговый конфиг целиком.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — реестр контракта: схема полей, коды и тексты предупреждений.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md) — узел Tailscale, создаваемый формой мастера: личность устройства, вкладка Network с переключением exit node, DNS и маршруты tailnet.
 
 ## Особенности сопровождения
 

@@ -31,7 +31,7 @@ address, not as a final-tag string, and follow the node on rename and move.
 | Rule-set cache | downloaded rule-sets | no | yes |
 | Built config | the build result | no | no |
 | Core cache database, logs, crash reports | service data | no | no |
-| Tailscale node state | node identities | no | per slot ([018](../../018-WORKSPACES/FEATURE.md)) |
+| Tailscale node state | node identities | no | per slot ([018](../../018-WORKSPACES/FEATURE.md), [030](../../030-TAILSCALE/FUNCTIONS/device-identity-and-state.md)) |
 | Device properties outside the document | theme; the OS working copy of VPN toggles | no | no |
 
 **Settings document, top level:** `storage_version: 1` (form marker),

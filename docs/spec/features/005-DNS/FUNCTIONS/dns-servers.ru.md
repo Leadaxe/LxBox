@@ -81,7 +81,7 @@ AdGuard Family), `opendns_udp`, `opendns_doh`, `quad9_doh` (через `vpn-1`),
 ## Границы
 
 - Переменные пресетных серверов и сам пресет — [004-ROUTING](../../004-ROUTING/FEATURE.ru.md).
-- Узлы Tailscale — вне фичи; здесь только тип сервера.
+- Узлы Tailscale — вне фичи ([030-TAILSCALE](../../030-TAILSCALE/FEATURE.ru.md)); здесь только тип сервера.
 - Поля `tls`, кроме SNI (ALPN, сертификаты, `insecure`), — только JSON; SNI
   из формы перезаписывает весь `tls` (дефект §530).
 - Разового теста латентности серверов нет (§365).

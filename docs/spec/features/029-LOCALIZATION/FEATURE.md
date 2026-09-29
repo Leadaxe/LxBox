@@ -214,8 +214,10 @@ CI: code + dictionaries + native strings → four checks in strict mode → buil
   [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — the service notification,
   stop alerts, tile, shortcuts and plugin windows are native strings; command
   strings and events stay English.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — logs and the Debug API
-  are English machine surfaces; `app_language` is a Debug API setting.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — logs are an English
+  machine surface.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API is an English
+  machine surface; `app_language` is a Debug API setting.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md),
   [018-WORKSPACES](../018-WORKSPACES/FEATURE.md) — the language is part of the
   backup and of a settings set; a restore or a load applies it.
