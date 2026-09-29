@@ -238,6 +238,19 @@
 | Проверка обновлений | Источник, частота, всплывашка, отклонение | P12–P17 | [update-check.md](FUNCTIONS/update-check.ru.md) |
 | Лента поддержки | Сообщения автора: источник, гейты, кнопки | P12, P18–P21 | [support-feed.md](FUNCTIONS/support-feed.ru.md) |
 
+## Связанные фичи
+
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — настройки туннеля, автозапуск и режимы живут там; разрешение на VPN запрашивается при первом подключении; события туннеля питают вибрацию и гейты ленты поддержки.
+- [014-AUTOMATION](../014-AUTOMATION/FEATURE.ru.md) — плитка, ярлыки и Intent API; событие автоматизации «доступна новая версия»; шаг плитки в первом запуске.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — вкладка Diagnostics в App Settings (System setup, журналы, Developer) и Debug API.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — вкладка Subscriptions в App Settings; обновления подписок питают вибрацию.
+- [015-WARP](../015-WARP/FEATURE.ru.md) — раздел Region на вкладке General.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — язык, вибрация, поворот, колонки и согласие на обновления входят в резервную копию, тема — нет; отметки вопросов первого запуска переживают полную замену.
+- [018-WORKSPACES](../018-WORKSPACES/FEATURE.ru.md) — настройки оболочки, кроме темы, принадлежат набору; загрузка набора применяет его язык; меню наборов — в заголовке главного экрана.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — автоперезапуск VPN при изменении настроек в разделе Behavior; сборка видит правку уже при возврате на главный.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — автопинг после подключения в разделе Feedback.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md), [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — пустой главный экран с призывом добавить сервер вместо мастера настройки в первом запуске.
+
 ## Особенности сопровождения
 
 - Каталоги F-Droid считают фоновый запрос к GitHub без согласия слежкой

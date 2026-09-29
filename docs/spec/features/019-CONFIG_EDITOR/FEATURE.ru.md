@@ -135,6 +135,17 @@ Debug API (контракт — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.
 | Закрепление конфига | Свой конфиг через Debug API, блок пересборки | P6, P7 | [config-pin.md](FUNCTIONS/config-pin.ru.md) |
 | Просмотр JSON-фрагментов | JSON узла и копирование с detour, превью правила | P10, P11 | [json-fragment-view.md](FUNCTIONS/json-fragment-view.ru.md) |
 
+## Связанные фичи
+
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — односторонний конвейер настройки → сборка → конфиг, результат которого показывает редактор; гейты сборки, сравнение с работающим конфигом и признак «config changed».
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — транспорт, токен и порт Debug API, через который конфиг пишется и закрепляется.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — хранение и бэкап настроек, из которых собирается конфиг.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — правка отдельного узла; здесь JSON узла только просматривается и копируется.
+- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — правила правятся там; вкладка View правила — превью из этой фичи.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — ссылка узла (`Copy URI`) не JSON и живёт в меню узла.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — перезапуск работающего ядра; сохранение из редактора его не перезапускает.
+- [018-WORKSPACES](../018-WORKSPACES/FEATURE.ru.md) — закрепление хранится среди настроек приложения и принадлежит текущему набору.
+
 ## Особенности сопровождения
 
 - **Большой текст — только построчный редактор.** Однопараграфное поле на
