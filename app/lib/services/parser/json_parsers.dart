@@ -201,10 +201,15 @@ List<NodeSpec> parseXrayElement(
   // [_xrayAutoSelect]): их выброс правилом владения не называет имён.
   final poolMember = onCollapse == null ? null : _xrayPoolMemberTest(element);
 
+  // Контракт 1.1.106 (§103) — подписи, уже занятые в элементе с
+  // балансировщиком: `remarks` (за группой) и подписи предыдущих серверов.
+  final takenLabels = <String>{remarks};
+
   final result = <NodeSpec>[];
   // §565 — тег outbound'а элемента → тег выпущенного узла: тело группы
-  // называет членов сразу при разборе.
-  final memberTagByObTag = <String, String>{};
+  // называет членов сразу при разборе. Список, не карта: повторённый `tag`
+  // (контракт 1.1.106) — разные серверы пула, ни один не теряется.
+  final memberTagByObTag = <MapEntry<String, String>>[];
   // §322 — подпись → тег узла, выпущенного ЭТИМ элементом: член пула,
   // схлопнутый дедупом внутри элемента, ссылается на выжившего.
   final keptTagBySig = <String, String>{};
@@ -235,9 +240,13 @@ List<NodeSpec> parseXrayElement(
         ob: ob,
         index: i,
         solo: soloNode,
-        pooled: hasBalancer,
         tagUses: tagUses,
+        // Номер записи в пуле — позиция в исходном порядке серверных записей
+        // (цели `dialerProxy` не считаются), не в `ordered`.
+        poolPos: hasBalancer ? candidates.indexOf(ob) + 1 : null,
+        taken: takenLabels,
       );
+      if (hasBalancer) takenLabels.add(label);
       // §477 — реестр вправе снять запись ЦЕЛИКОМ (`on_invalid: drop_node`):
       // негодная форма `vless.encryption` значит, что ядро не примет конфиг и
       // не стартует НА ВСЁМ наборе (случай #147). Такой узел обязан исчезнуть
@@ -318,7 +327,7 @@ List<NodeSpec> parseXrayElement(
         // §322 — сервер выпустил владелец: группа называет его узел.
         final t = pooled ? survivorTag?.call(signature) : null;
         if (t != null && obTag.isNotEmpty) {
-          memberTagByObTag.putIfAbsent(obTag, () => t);
+          memberTagByObTag.add(MapEntry(obTag, t));
         }
         continue;
       }
@@ -327,7 +336,7 @@ List<NodeSpec> parseXrayElement(
           if (!pooled) onCollapse?.call(signature, node, kept: false);
           final t = pooled ? keptTagBySig[signature] : null;
           if (t != null && obTag.isNotEmpty) {
-            memberTagByObTag.putIfAbsent(obTag, () => t);
+            memberTagByObTag.add(MapEntry(obTag, t));
           }
           continue;
         }
@@ -338,9 +347,7 @@ List<NodeSpec> parseXrayElement(
       final memberRef = node.label.isNotEmpty ? node.label : node.tag;
       keptTagBySig.putIfAbsent(signature, () => memberRef);
 
-      if (obTag.isNotEmpty) {
-        memberTagByObTag.putIfAbsent(obTag, () => memberRef);
-      }
+      memberTagByObTag.add(MapEntry(obTag, memberRef));
       result.add(node..sourceExtended = extended == compact ? null : extended);
     } catch (_) {
       // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
@@ -357,11 +364,22 @@ List<NodeSpec> parseXrayElement(
   // Синонимы отдаём ТОЛЬКО по тегам этого элемента: `selector: ["proxy"]`
   // написан в границах своего конфига, а тег `proxy` встречается ещё в 30
   // соседних элементах Liberty — общая таблица растащила бы в пул всё подряд.
+  // Контракт 1.1.106 — повторённый `tag` и запись без `tag` — тоже серверы
+  // пула: ключ с меткой [kXrayUntaggedSynonymMark], чтобы сборка их не
+  // потеряла (карта по голому тегу держала бы одну запись из двух).
   final localSyn = <String, String>{};
-  for (final o in payloadAll) {
+  for (var i = 0; i < payloadAll.length; i++) {
+    final o = payloadAll[i];
     final t = o['tag']?.toString() ?? '';
     final k = _xrayIdentity(o);
-    if (t.isNotEmpty && k != null) localSyn[t] = k;
+    if (k == null) continue;
+    if (t.isEmpty) {
+      localSyn['$kXrayUntaggedSynonymMark${i + 1}'] = k;
+    } else if (localSyn.containsKey(t)) {
+      localSyn['$t$kXrayUntaggedSynonymMark${i + 1}'] = k;
+    } else {
+      localSyn[t] = k;
+    }
   }
   final auto = _xrayAutoSelect(element, remarks, localSyn, memberTagByObTag);
   if (auto != null) result.add(auto..sourceExtended = extended);
@@ -419,7 +437,7 @@ AutoSelectSpec? _xrayAutoSelect(
   Map<String, dynamic> element,
   String remarks,
   Map<String, String>? synonyms, [
-  Map<String, String> memberTags = const {},
+  List<MapEntry<String, String>> memberTags = const [],
 ]) {
   final routing = element['routing'];
   final balancers = routing is Map ? routing['balancers'] : null;
@@ -502,11 +520,12 @@ AutoSelectSpec? _xrayAutoSelect(
   final membership = RuleMembers.fromXraySelector(selector);
   // §565 — члены, которых `selector` называет префиксами, в теле разбора
   // перечисляются сразу (корпус `body/xray/balancer_group`); пул на сборке
-  // держит прежнее правило.
+  // держит прежнее правило. Запись без `tag` селектор назвать не может — она
+  // сервер пула элемента (контракт 1.1.106, `body/xray/balancer_pool_labels_taken`).
   final inc = tryCompileRegex(membership.include);
   final sourceMembers = <String>[
-    for (final e in memberTags.entries)
-      if (inc == null || inc.hasMatch(e.key)) e.value,
+    for (final e in memberTags)
+      if (inc == null || e.key.isEmpty || inc.hasMatch(e.key)) e.value,
   ];
   return AutoSelectSpec(
     id: newUuidV4(),
@@ -588,8 +607,10 @@ NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
 /// «Лучший сервер» и «Лучший сервер-1» в списке).
 ///
 /// [solo] — элемент даёт ровно один узел и группы нет.
-/// [pooled] — у элемента есть балансировщик (контракт 1.1.105, §102):
-/// запись без `tag` подписана `remarks`.
+/// [poolPos] — у элемента есть балансировщик (контракт 1.1.105/1.1.106,
+/// §102/§103): номер записи в пуле с 1. Подпись `remarks tag`; занятая в
+/// элементе ([taken]: `remarks` группы и подписи предыдущих серверов) —
+/// с номером: запись без `tag` → `remarks N`, повтор `tag` → `remarks tag N`.
 /// [index] — позиция в ИСХОДНОМ порядке элемента (§321 P3): при пропуске
 /// дубля имена не съезжают, второй выживший не занимает имя первого.
 /// [tagUses] — сколько раз тег встречается у выживших; при повторе `remarks
@@ -600,15 +621,17 @@ String _elementLabel({
   required Map<String, dynamic> ob,
   required int index,
   required bool solo,
-  required bool pooled,
   required Map<String, int> tagUses,
+  int? poolPos,
+  Set<String> taken = const {},
 }) {
   if (solo) return remarks;
   final tag = ob['tag']?.toString().trim() ?? '';
   if (remarks.isEmpty) return tag.isNotEmpty ? tag : '${index + 1}';
-  // Контракт 1.1.105 (§102) — в элементе с балансировщиком запись без `tag`
-  // подписана чистым `remarks`.
-  if (pooled && tag.isEmpty) return remarks;
+  if (poolPos != null) {
+    final base = tag.isEmpty ? remarks : '$remarks $tag';
+    return taken.contains(base) ? '$base $poolPos' : base;
+  }
   // Пустой или неуникальный тег именем не служит — индексный фолбэк §310.
   if (tag.isEmpty || (tagUses[tag] ?? 0) > 1) return '$remarks ${index + 1}';
   return '$remarks $tag';

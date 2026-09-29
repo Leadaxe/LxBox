@@ -29,12 +29,7 @@ void main() {
     return lines.skip(start).join('\n');
   }
 
-  test('duplicates_collapsed_owner: члены группы «Авто» — реальные теги',
-      () async {
-    final nodes = parseAll(decode(corpusBody(
-        'contract/corpus/body/xray/duplicates_collapsed_owner.body')));
-    final auto = nodes.whereType<AutoSelectSpec>().single;
-
+  Future<List<Map<String, dynamic>>> buildAll(List<NodeSpec> nodes) async {
     final r = await buildConfig(
       lists: [
         UserServer(
@@ -69,11 +64,19 @@ void main() {
       ),
     );
     expect(r.validation.isOk, isTrue, reason: r.validation.issues.join('\n'));
-
-    final all = [
+    return [
       ...(r.config['outbounds'] as List? ?? const []),
       ...(r.config['endpoints'] as List? ?? const []),
     ].cast<Map<String, dynamic>>();
+  }
+
+  test('duplicates_collapsed_owner: члены группы «Авто» — реальные теги',
+      () async {
+    final nodes = parseAll(decode(corpusBody(
+        'contract/corpus/body/xray/duplicates_collapsed_owner.body')));
+    final auto = nodes.whereType<AutoSelectSpec>().single;
+
+    final all = await buildAll(nodes);
     final tags = {for (final o in all) o['tag']};
     final group = all.firstWhere((o) => o['tag'] == auto.tag);
     final members = (group['outbounds'] as List).cast<String>();
@@ -84,5 +87,24 @@ void main() {
     }
     // Оба сервера пула (a — у «Австрии», b — у «Польши») в группе.
     expect(members, containsAll(['🇦🇹 Австрия', '🇵🇱 Польша']));
+  });
+
+  // Контракт 1.1.106 — повторённый `tag` и запись без `tag` в пуле: группа
+  // в конфиге держит все три сервера, ни один не теряется.
+  test('balancer_pool_labels_taken: группа держит все три сервера', () async {
+    final nodes = parseAll(decode(corpusBody(
+        'contract/corpus/body/xray/balancer_pool_labels_taken.body')));
+    final auto = nodes.whereType<AutoSelectSpec>().single;
+    final servers = nodes.where((n) => n is! AutoSelectSpec).toList();
+    expect(servers.map((n) => n.label), ['pool p', 'pool p 2', 'pool 3']);
+
+    final all = await buildAll(nodes);
+    final tags = {for (final o in all) o['tag']};
+    final group = all.firstWhere((o) => o['tag'] == auto.tag);
+    final members = (group['outbounds'] as List).cast<String>();
+    for (final m in members) {
+      expect(tags, contains(m), reason: 'член $m — не тег конфига');
+    }
+    expect(members.toSet(), {for (final n in servers) n.tag});
   });
 }

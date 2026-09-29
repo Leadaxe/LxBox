@@ -403,7 +403,13 @@ List<String> resolveAutoSelectMembers(
               .where((s) => s.value == key)
               .map((s) => s.key),
         ];
-        if (ruleAccepts(names, inc, exc)) out.add(e.value);
+        // Контракт 1.1.106 — запись пула без `tag`: `selector` её не
+        // называет, но она член пула своего элемента (как в теле разбора).
+        final untagged = scoped &&
+            spec.tagSynonyms.entries.any((s) =>
+                s.value == key &&
+                s.key.startsWith(kXrayUntaggedSynonymMark));
+        if (untagged || ruleAccepts(names, inc, exc)) out.add(e.value);
       }
   }
   return out;
