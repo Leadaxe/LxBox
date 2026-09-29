@@ -7,15 +7,16 @@ the registry, shared with the launcher.
 
 | Field | Value |
 |------|----------|
-| Feature | [002-NODE_IMPORT](../FEATURE.md) |
-| Promises | P5 P6 P11 P12 |
-| State | ✅ written from code, 2026-09-28 |
+| Feature | [025-CONTRACT_REGISTRY](../FEATURE.md) |
+| Promises | P2 P4 P5 P14 |
+| State | ✅ written from code, 2026-09-29 |
 
 ## What it does
 
 Explains to the user what parsing did with their data: which field was removed
 or replaced, which node was dropped and why. Codes and texts are shared with the launcher —
-one event is named the same in both apps.
+one event is named the same in both apps. The dictionary itself, its levels and where the
+codes are shown are described in [warning-codes.md](warning-codes.md).
 
 ## Parameters
 
@@ -67,9 +68,11 @@ Typical parse codes: `scheme_unsupported`, `protocol_unsupported`,
 
 ## Boundaries
 
+- Which code a given link, body or `.conf` defect produces — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)
+  (its promise [002-NODE_IMPORT · P5](../../002-NODE_IMPORT/FEATURE.md#promises) names the loss).
 - Showing codes on the node row and the "Why / What to do / Learn more" card —
-  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
-- Build guard codes and core rejections — [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md),
+  [warning-codes.md](warning-codes.md), [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
+- Build gate codes — [registry-gate.md](registry-gate.md); core rejections after start —
   [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
 - The code dictionary is edited on the launcher side and arrives with a sync.
 

@@ -7,9 +7,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Фича | [002-NODE_IMPORT](../FEATURE.ru.md) |
-| Обещания | P2 P6 P7 P8 P10 P11 |
-| Состояние | ✅ написана по коду, 2026-09-28 |
+| Фича | [025-CONTRACT_REGISTRY](../FEATURE.ru.md) |
+| Обещания | P1 P2 P3 P4 P6 P7 P17 |
+| Состояние | ✅ написана по коду, 2026-09-29 |
 
 ## Что делает
 
@@ -25,12 +25,13 @@
 | протоколы (`scheme`, `aliases`, `kind`, `sources`) | написания схем, тип тела, outbound или endpoint, допустимые входы |
 | `mappers.<вход>` (`uri`, `conf`, `xray`, `singbox`) | формы записи, как из неё собрать тело ядра, дефолты, фолбэк имени |
 | `body` + `tls` / `transports` / `multiplex` / `dialer` | схема тела: поля, типы, допустимые значения, `on_invalid`, `secret`, `min_core` |
-| `emit` | сборка share-ссылки ([экспорт](share-link-export.ru.md)) |
-| `source_kinds` | виды документа ([опознание тела](body-recognition.ru.md)) |
-| `warnings` | тексты и severity кодов ([предупреждения](parse-warnings.ru.md)) |
+| `emit` | сборка share-ссылки ([экспорт](../../002-NODE_IMPORT/FUNCTIONS/share-link-export.ru.md)) |
+| `source_kinds` | виды документа ([опознание тела](../../002-NODE_IMPORT/FUNCTIONS/body-recognition.ru.md)) |
+| `warnings` | тексты и severity кодов ([предупреждения](parse-warnings.ru.md), [словарь](warning-codes.ru.md)) |
 | `limits` | лимиты длины, глубины, цепочек |
 
-Версия реестра — `1.1.99`; реестр приезжает синком, руками не правится.
+Версия реестра — `1.1.99`; реестр приезжает синком, руками не правится
+([синк и стражи](registry-sync-and-guards.ru.md)).
 
 ## Входы / Выходы
 
@@ -51,14 +52,17 @@
   ядра» (`except_sources`) различают ссылку, INI, Xray и авторский
   sing-box JSON.
 - **Гейты ядра (`min_core`, платформа) при разборе выключены** — узел не
-  зависит от того, какое ядро запущено; их судит сборка.
+  зависит от того, какое ядро запущено; их судит [гейт сборки](registry-gate.ru.md).
 - **Реестр не загружен — ссылки не разбираются.** Отката на рукописную копию
   правил нет; единственное запасное число — потолок MTU AmneziaWG.
+- **Состав протоколов — из бандла.** Схемы грузятся по манифесту отгруженного
+  зеркала; протокол, добавленный синком, грузится без правки кода.
 - **Дедуп внутри одного тела** — по подписи: эмиссия узла без `tag` и
   `detour` плюс подпись пути дозвона. Выживает первая запись, повтор уходит в
-  отбраковку кодом `duplicate` с именем выжившего. Группы не дедупятся.
+  отбраковку кодом `duplicate` с именем выжившего. Группы не дедупятся
+  ([002-NODE_IMPORT · P8](../../002-NODE_IMPORT/FEATURE.ru.md#обещания)).
 - **Идентичность узла — его тег.** Смена движка не меняет ни хеша, ни тега,
-  ни тела ни одного кейса корпуса.
+  ни тела ни одного кейса корпуса ([002-NODE_IMPORT · P10](../../002-NODE_IMPORT/FEATURE.ru.md#обещания)).
 - **Узел хранится текстом источника** и разбирается заново при каждой
   загрузке; модель, дельта тела и коды — производные.
 - **Поля тела, которых модель не держит**, возвращаются в тело из очищенной
@@ -67,12 +71,10 @@
 
 ## Границы
 
-- Правила импорта подписки (замена/выключение полей после разбора) —
-  [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.ru.md).
-- Гард реестра на сборке, гейты по тегам и версии ядра —
-  [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.ru.md).
-- Синк реестра, версия контракта, корпус конформанса —
-  [021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.ru.md).
+- Схемы ссылок, формы тела, обходы JSON и чтение `.conf` — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md);
+  правила импорта подписки после разбора — [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.ru.md).
+- Гейт реестра на сборке, гейты по тегам и версии ядра — [registry-gate.md](registry-gate.ru.md).
+- Синк реестра, версия контракта, корпус конформанса — [registry-sync-and-guards.md](registry-sync-and-guards.ru.md).
 
 ## Ревизии
 
@@ -86,13 +88,17 @@
 | 6 | [476](../../../tasks/476-body-fields-roundtrip-guard.md) | Released v2.25.0 | Каждое поле реестра переживает круг |
 | 7 | [477](../../../tasks/477-vless-encryption-grammar.md) | Released v2.25.0 | Вердикт «снять узел» — при разборе |
 | 8 | [480F](../../../tasks/480F-registry-driven-mapper/spec.md) | Released v2.25.0 | Маппер — движок, секции в реестре |
-| 9 | [532](../../../tasks/532-registry-engine-primitives-parity.md) | Done | Семантика примитивов сведена с лаунчером |
-| 10 | [533](../../../tasks/533-contract-1-1-53-sync-overlays-body-runner.md) | Done | Сняты черновые оверлеи, сверка тел |
-| 11 | [538](../../../tasks/538-subscription-dedup-by-identity.md) | Done | Дедуп внутри тела |
-| 12 | [546](../../../tasks/546-emitters-drop-registry-rule-copies.md) | Done | Эмиттеры без копий правил реестра |
-| 13 | [547](../../../tasks/547-last-registry-rule-copies.md) | Done | Последние копии правил в коде сняты |
-| 14 | [551](../../../tasks/551-parse-route-cache.md) | Done | Маршрут схем считается раз на состав реестра |
-| 15 | [553](../../../tasks/553-registry-expand-refs.md) | Done | Ссылки реестра разворачиваются при загрузке |
-| 16 | [556](../../../tasks/556-registry-debt-1157-1170.md) | Частично | Долг реестра 1.1.57–1.1.70 |
-| 17 | [566](../../../tasks/566-scheme-literals-outside-dispatcher.md) | Готово | Имён схем вне диспетчера нет |
-| 18 | [577](../../../tasks/577-authored-json-registry-reports-only.md) | Done | Авторское тело: коды без правок |
+| 9 | [512](../../../tasks/512-registry-scheme-set-contract-1149.md) | Released v2.25.2 | Набор схем берётся из реестра |
+| 10 | [532](../../../tasks/532-registry-engine-primitives-parity.md) | Done | Семантика примитивов сведена с лаунчером |
+| 11 | [533](../../../tasks/533-contract-1-1-53-sync-overlays-body-runner.md) | Done | Сняты черновые оверлеи, сверка тел |
+| 12 | [538](../../../tasks/538-subscription-dedup-by-identity.md) | Done | Дедуп внутри тела |
+| 13 | [545](../../../tasks/545-singbox-json-entries-through-registry-sanitizer.md) | Done | Записи sing-box JSON строятся по карте санитайзера |
+| 14 | [546](../../../tasks/546-emitters-drop-registry-rule-copies.md) | Done | Эмиттеры без копий правил реестра |
+| 15 | [547](../../../tasks/547-last-registry-rule-copies.md) | Done | Последние копии правил в коде сняты |
+| 16 | [551](../../../tasks/551-parse-route-cache.md) | Done | Маршрут схем считается раз на состав реестра |
+| 17 | [553](../../../tasks/553-registry-expand-refs.md) | Done | Ссылки реестра разворачиваются при загрузке |
+| 18 | [556](../../../tasks/556-registry-debt-1157-1170.md) | Частично | Долг реестра 1.1.57–1.1.70 |
+| 19 | [562](../../../tasks/562-uri-scheme-dispatch-from-registry.md) | Выполнено | Диспетчер схем читается из реестра |
+| 20 | [566](../../../tasks/566-scheme-literals-outside-dispatcher.md) | Готово | Имён схем вне диспетчера нет; состав протоколов из манифеста |
+| 21 | [577](../../../tasks/577-authored-json-registry-reports-only.md) | Done | Авторское тело: коды без правок |
+| 22 | [586](../../../tasks/586-endpoint-types-from-registry.md) | Реализовано | Типы endpoint из реестра; `openvpn-client` известен без схемы полей |

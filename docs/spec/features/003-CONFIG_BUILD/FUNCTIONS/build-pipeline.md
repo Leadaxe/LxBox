@@ -43,17 +43,10 @@ No knobs of its own. Stage order:
 
 ## The role of the contract registry
 
-The protocol registry of the contract shared with the launcher takes part in
-the build twice. Before the build: the node bodies the build receives were
-already produced by the registry pipeline (mapper → sanitizer → model) at
-import and on every load — see
-[Registry pipeline](../../002-NODE_IMPORT/FUNCTIONS/registry-pipeline.md).
-Inside the build: stage 5, the core registry gate, checks every body against
-the registry schema for the pinned core version and its build tags; a field
-the core does not know is removed with a warning, an unacceptable entry is
-dropped whole. A node's authored JSON is only commented on. The registry
-itself, its version and the warning codes are in
-[021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.md).
+Stage 5 is the registry gate: every body is checked against the contract schema for the pinned
+core version and its build tags, an authored JSON body is only commented on. The gate, the parse
+pipeline that produced the bodies and the warning codes are described in
+[025-CONTRACT_REGISTRY](../../025-CONTRACT_REGISTRY/FEATURE.md) ([registry gate](../../025-CONTRACT_REGISTRY/FUNCTIONS/registry-gate.md)).
 
 ## Inputs / Outputs
 
@@ -86,7 +79,7 @@ lines); values fixed by the build, to be saved; the
   DNS in stages 11–12 — [005-DNS](../../005-DNS/FEATURE.md); TLS transformations —
   [016-DPI_HARDENING](../../016-DPI_HARDENING/FEATURE.md); `lx.wg.*` —
   [010-VPN_SERVICE](../../010-VPN_SERVICE/FEATURE.md).
-- Body schema and registry codes — [021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.md).
+- Body schema and registry codes — [025-CONTRACT_REGISTRY](../../025-CONTRACT_REGISTRY/FEATURE.md).
 
 ## Revisions
 

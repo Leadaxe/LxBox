@@ -14,7 +14,7 @@
 | Тип | Процессная фича (постоянная работа на границе с ядром и лаунчером) |
 | Поглотила | `§121F` (+ `§122F` как объяснение удаления Clash API) |
 | Ядро | [Leadaxe/sing-box-lx](https://github.com/Leadaxe/sing-box-lx), ветка `lx`; пин **`v1.14.2-lx.8`** (база — sing-box `1.14.2` + 15 коммитов `stable`) |
-| Контракт | реестр контракта с лаунчером **`1.1.99`**, копия сверена хешем `388251fc…` (синк 2026-09-27) |
+| Контракт | реестр контракта с лаунчером **`1.1.99`** — сам реестр описан в [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.ru.md) |
 | Состояние | ✅ написана по коду, 2026-09-29 · живой watchlist |
 
 ## Какие принципы защищает
@@ -41,9 +41,10 @@
 | Пин ядра | `v1.14.2-lx.8` | `app/android/libbox.version` — единственный источник |
 | Поставка AAR | GitHub Releases форка: `libbox-<ver>.aar` + `SHA256SUMS`, проверка хеша; AAR в git не лежит | `scripts/fetch-libbox.sh`; CI — шаг «Fetch sing-box-lx core» в job `android` |
 | Теги сборки AAR | `with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound, with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend, with_lx_chain, with_openvpn, with_openconnect, with_tailscale` + `ts_omit_*`; **без** `with_clash_api` | зашиты в ядре; libbox их не отдаёт, приложение держит зеркало набора со своим пином — юнит «пин тегов ядра совпадает с `libbox.version`» краснеет до сверки |
-| Реестр контракта | `1.1.99` | источник — репозиторий лаунчера, `contract/`; в приложении — коммитнутое зеркало реестра (едет в APK); `app/contract/` — вендорная копия (gitignored), `app/contract.lock` — sha256 копии |
-| Документация контракта | байт-в-байт зеркало `contract/docs/generated/**` | [`docs/contract/`](../../../contract/README.md) — руками не правится |
 | Управление ядром | libbox CommandClient (push-потоки + unary RPC) | Clash HTTP API удалён (§122) |
+
+Реестр контракта — его версия, копия, lock, зеркала, синк и стражи — это
+[025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.ru.md).
 
 ## Реестр: что приложение отдаёт ядру сверх апстрима
 
@@ -66,22 +67,8 @@
 | подписки `CommandStatus`, `CommandGroup`, `CommandOutbounds`, `CommandConnections`, `CommandDNS`; `GetRunningConfig`, `SubscribeTailscaleStatus` | живое состояние | [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) | — |
 
 Гейт реестра на сборке: узел, которому нужен тег сборки или `min_core`,
-которых у текущего ядра нет, в конфиг не попадает (`build_tag` +
-`on_core_unsupported`, контракт 1.1.60) — см.
-[003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md).
-
-## Как контракт держится честным
-
-| Страж | Что ловит | Где идёт |
-|-------|-----------|----------|
-| sync-тесты реестра | словарь в коде разошёлся с реестром | CI, на зеркале реестра, **не скипаются** (§486) |
-| страж dart-ссылок реестра | `refs.dart` в записях реестра указывает на удалённый файл; протухшие — только из allowlist, список самоочищается (§491) | CI |
-| зеркало документации контракта | страница «Learn more» от прошлого контракта | CI |
-| сверка lock | копия контракта правлена руками; зеркало реестра ≠ копии | CI-шаг «Contract lock» (без копии на CI сверять не с чем) |
-| тесты корпуса (`contract/corpus/**`) | общее поведение разошлось с лаунчером | **только локально**: копии на CI нет, пропуск громкий (страж пропуска перечисляет сьюты) |
-
-Новая схема, форма тела подписки или конструкция языка шаблона добавляется
-**вместе с фикстурой** — иначе другая сторона узнаёт о ней от пользователя.
+которых у текущего ядра нет, в конфиг не попадает — см.
+[025-CONTRACT_REGISTRY · P8](../025-CONTRACT_REGISTRY/FEATURE.ru.md#обещания).
 
 ## Ритуал приёма новой версии ядра
 
@@ -126,8 +113,6 @@ logcat/дамп. Клиент при этом не патчит поведени
 ## Запрещено
 
 - Править ядро «из приложения» и держать его локальные сборки в релизе.
-- Править руками вендорную копию контракта, зеркало реестра в приложении и
-  `docs/contract/` — они только приезжают синком.
 - Возвращать Clash API: `experimental.clash_api` в конфиге — фатальная ошибка
   старта, `with_clash_api` в AAR нет намеренно (§122: контракт данных
   перешёл с pull-снапшотов на push-дельты CommandClient с единой отменой).
@@ -148,18 +133,14 @@ logcat/дамп. Клиент при этом не патчит поведени
 | 9 | [522](../../tasks/522-kernel-lx9-xmux-local-cancel.md) · [526](../../tasks/526-kernel-lx10-upstream-sync-naive-addr.md) | Released v2.25.3 | 1.14.1-lx.9, lx.10 |
 | 10 | [535](../../tasks/535-kernel-1-14-2-lx1-pin-lx-wg-keys-endpoint-state.md) | Реализовано | 1.14.2-lx.1: блок `lx`, `endpointState` |
 | 11 | [557](../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | Реализовано | 1.14.2-lx.4: вкл/выкл WG/AWG на лету |
-| 12 | [460F](../../tasks/460F-contract-registry-bundle/spec.md) | — | реестр контракта в APK, санитайзер по схеме тела |
-| 13 | [443](../../tasks/443-contract-1-0-2-spec129.md) · [464](../../tasks/464-contract-w2d-sync.md) · [467](../../tasks/467-contract-111-sync.md) · [493](../../tasks/493-contract-sync-11146.md) · [514](../../tasks/514-contract-sync-11152.md) · [533](../../tasks/533-contract-1-1-53-sync-overlays-body-runner.md) | Released / Done / — | синки контракта 1.0.2 → 1.1.53 |
-| 14 | [486](../../tasks/486-ci-registry-tests.md) | Released v2.25.0 | реестровые тесты на CI, безопасный `sync_contract` |
-| 15 | [491](../../tasks/491-registry-dart-refs.md) | Released v2.25.0 | страж dart-ссылок реестра |
-| 16 | [529](../../tasks/529-contract-corpus-local-reds-triage.md) | In progress | разбор локально красных кейсов корпуса 1.1.55 |
+
+Ревизии реестра (460F, синки контракта, 486, 491, 529) перенесены в
+[025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.ru.md).
 
 ## Следить за
 
 - **Бампы `v1.14.2-lx.5…lx.8` без своей задачи.** Они есть в KERNEL.md и
   CHANGELOG, но не в `tasks/` — ревизии этой фичи для них нет.
-- **Корпус на CI не идёт.** Красное в корпусе видно только локально (529:
-  URI −6, тела −27); реестровые тесты зелёные на CI этого не отменяют.
 - **Зеркало тегов сборки** в приложении — ручная копия; страж сверяет только
   пин версии, а не сам набор.
 - **Противоречивые списки тегов в KERNEL.md:** `with_openvpn`/`with_openconnect`
@@ -169,9 +150,10 @@ logcat/дамп. Клиент при этом не патчит поведени
 
 ## Связанные фичи
 
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — исполняет реестр
-  контракта при разборе; `min_core` при разборе выключен.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — гейт реестра ядра на сборке, схема тел и коды реестра.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбирает узлы без
+  ядра; `min_core` при разборе выключен.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — исполняет гейт реестра против запиненного
+  ядра стадией 5 сборки.
 - [005-DNS](../005-DNS/FEATURE.ru.md) — DNS-группы форка.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — балансировщик и цепочки, минимальная версия ядра.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — RPC замера и вкл/выкл
@@ -183,6 +165,8 @@ logcat/дамп. Клиент при этом не патчит поведени
   [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — поля AWG, MASQUE,
   XHTTP, VLESS encryption.
 - [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.ru.md) — fetch ядра в CI, проверка версии ядра в релизном APK.
+- [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.ru.md) — реестр контракта: схемы,
+  санитайзер, гейт сборки, коды предупреждений, синк и стражи.
 
 ## Особенности сопровождения
 

@@ -14,7 +14,7 @@ written for contributors who bump the core or sync the contract.
 | Type | Process feature (ongoing work on the boundary with the core and the launcher) |
 | Absorbed | `§121F` (+ `§122F` as the explanation of the Clash API removal) |
 | Core | [Leadaxe/sing-box-lx](https://github.com/Leadaxe/sing-box-lx), branch `lx`; pin **`v1.14.2-lx.8`** (base — sing-box `1.14.2` + 15 commits of `stable`) |
-| Contract | launcher contract registry **`1.1.99`**, copy verified by hash `388251fc…` (synced 2026-09-27) |
+| Contract | launcher contract registry **`1.1.99`** — the registry itself is [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md) |
 | State | ✅ written from code, 2026-09-29 · living watchlist |
 
 ## Principles it protects
@@ -45,9 +45,10 @@ written for contributors who bump the core or sync the contract.
 | Core pin | `v1.14.2-lx.8` | `app/android/libbox.version` — the single source |
 | AAR delivery | the fork's GitHub Releases: `libbox-<ver>.aar` + `SHA256SUMS`, hash check; the AAR is not in git | `scripts/fetch-libbox.sh`; CI — the "Fetch sing-box-lx core" step in the `android` job |
 | AAR build tags | `with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound, with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend, with_lx_chain, with_openvpn, with_openconnect, with_tailscale` + `ts_omit_*`; **without** `with_clash_api` | baked into the core; libbox does not export them, the app keeps a mirror of the set with its own pin — the unit "the core tag pin matches `libbox.version`" is red until reconciled |
-| Contract registry | `1.1.99` | source — the launcher repo, `contract/`; in the app — the committed registry mirror (ships in the APK); `app/contract/` — the vendored copy (gitignored), `app/contract.lock` — sha256 of the copy |
-| Contract documentation | byte-for-byte mirror of `contract/docs/generated/**` | [`docs/contract/`](../../../contract/README.md) — not edited by hand |
 | Core control | libbox CommandClient (push streams + unary RPC) | the Clash HTTP API is removed (§122) |
+
+The contract registry — its version, copy, lock, mirrors, sync and guards — is
+[025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md).
 
 ## Registry: what the app hands the core beyond upstream
 
@@ -71,22 +72,8 @@ so that a core bump knows what to check.
 | subscriptions `CommandStatus`, `CommandGroup`, `CommandOutbounds`, `CommandConnections`, `CommandDNS`; `GetRunningConfig`, `SubscribeTailscaleStatus` | live state | [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) | — |
 
 The registry gate at build time: a node that needs a build tag or a `min_core`
-the current core lacks stays out of the config (`build_tag` +
-`on_core_unsupported`, contract 1.1.60) — see
-[003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md).
-
-## How the contract is kept honest
-
-| Guard | What it catches | Where it runs |
-|-------|-----------|----------|
-| registry sync tests | a dictionary in code diverged from the registry | CI, on the registry mirror, **not skipped** (§486) |
-| registry dart-refs guard | a `refs.dart` in a registry record points to a deleted file; stale ones only from an allowlist, the list cleans itself up (§491) | CI |
-| contract documentation mirror | a "Learn more" page from the previous contract | CI |
-| lock check | the contract copy was edited by hand; the registry mirror ≠ the copy | CI step "Contract lock" (with no copy on CI there is nothing to compare) |
-| corpus tests (`contract/corpus/**`) | shared behaviour diverged from the launcher | **local only**: there is no copy on CI, the skip is loud (the skip guard lists the suites) |
-
-A new schema, subscription body shape or template-language construct is added
-**together with a fixture** — otherwise the other side learns about it from a user.
+the current core lacks stays out of the config — see
+[025-CONTRACT_REGISTRY · P8](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 
 ## The ritual for accepting a new core version
 
@@ -134,8 +121,6 @@ registry divergences (for example, [529](../../tasks/529-contract-corpus-local-r
 ## Forbidden
 
 - Editing the core "from the app" and shipping local builds of it in a release.
-- Hand-editing the vendored contract copy, the registry mirror in the app and
-  `docs/contract/` — they only arrive by sync.
 - Bringing back the Clash API: `experimental.clash_api` in the config is a fatal
   start error, and `with_clash_api` is deliberately absent from the AAR (§122:
   the data contract moved from pull snapshots to CommandClient push deltas with
@@ -157,18 +142,14 @@ registry divergences (for example, [529](../../tasks/529-contract-corpus-local-r
 | 9 | [522](../../tasks/522-kernel-lx9-xmux-local-cancel.md) · [526](../../tasks/526-kernel-lx10-upstream-sync-naive-addr.md) | Released v2.25.3 | 1.14.1-lx.9, lx.10 |
 | 10 | [535](../../tasks/535-kernel-1-14-2-lx1-pin-lx-wg-keys-endpoint-state.md) | Implemented | 1.14.2-lx.1: the `lx` block, `endpointState` |
 | 11 | [557](../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | Implemented | 1.14.2-lx.4: WG/AWG on/off at runtime |
-| 12 | [460F](../../tasks/460F-contract-registry-bundle/spec.md) | — | contract registry in the APK, sanitiser by body schema |
-| 13 | [443](../../tasks/443-contract-1-0-2-spec129.md) · [464](../../tasks/464-contract-w2d-sync.md) · [467](../../tasks/467-contract-111-sync.md) · [493](../../tasks/493-contract-sync-11146.md) · [514](../../tasks/514-contract-sync-11152.md) · [533](../../tasks/533-contract-1-1-53-sync-overlays-body-runner.md) | Released / Done / — | contract syncs 1.0.2 → 1.1.53 |
-| 14 | [486](../../tasks/486-ci-registry-tests.md) | Released v2.25.0 | registry tests on CI, a safe `sync_contract` |
-| 15 | [491](../../tasks/491-registry-dart-refs.md) | Released v2.25.0 | registry dart-refs guard |
-| 16 | [529](../../tasks/529-contract-corpus-local-reds-triage.md) | In progress | triage of locally red cases of corpus 1.1.55 |
+
+Registry revisions (460F, contract syncs, 486, 491, 529) moved to
+[025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md).
 
 ## Watch for
 
 - **Bumps `v1.14.2-lx.5…lx.8` without a task of their own.** They are in
   KERNEL.md and CHANGELOG, but not in `tasks/` — this feature has no revision for them.
-- **The corpus does not run on CI.** Red in the corpus is visible only locally
-  (529: URI −6, bodies −27); green registry tests on CI do not cancel that.
 - **The build-tag mirror** in the app is a manual copy; the guard checks only
   the version pin, not the set itself.
 - **Contradictory tag lists in KERNEL.md:** `with_openvpn`/`with_openconnect`
@@ -178,10 +159,10 @@ registry divergences (for example, [529](../../tasks/529-contract-corpus-local-r
 
 ## Related features
 
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — executes the contract
-  registry at parse time; `min_core` is off at parse time.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the core registry gate
-  at build time, body schema and registry codes.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parses nodes without a
+  core; `min_core` is off at parse time.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — runs the registry gate
+  against the pinned core as build stage 5.
 - [005-DNS](../005-DNS/FEATURE.md) — the fork's DNS groups.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — balancer and chains, the minimum core version.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — measurement RPCs and
@@ -193,6 +174,8 @@ registry divergences (for example, [529](../../tasks/529-contract-corpus-local-r
   [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — AWG, MASQUE, XHTTP,
   VLESS encryption fields.
 - [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.md) — core fetch in CI, core version check in the release APK.
+- [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md) — the contract registry: schemas,
+  sanitizer, build gate, warning codes, sync and guards.
 
 ## Maintenance notes
 
