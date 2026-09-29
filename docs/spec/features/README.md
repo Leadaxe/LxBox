@@ -57,7 +57,7 @@ a screen. One task may be listed as a revision of several functions.
 | [014-AUTOMATION](014-AUTOMATION/FEATURE.md) | External control: quick connect, public Intent API, integration with automation apps | 032 047 | ✅ 2026-09-28 |
 | [015-WARP](015-WARP/FEATURE.md) | Cloudflare WARP: one-tap registration, MASQUE transport | 025 130 | ✅ 2026-09-28 |
 | [016-DPI_HARDENING](016-DPI_HARDENING/FEATURE.md) | DPI circumvention: TLS fragmentation, SNI obfuscation, ECH, XHTTP parameters | 020 028 045 127 | ✅ 2026-09-28 |
-| [017-BACKUP_AND_STORAGE](017-BACKUP_AND_STORAGE/FEATURE.md) | Backup and restore, storage contract, migrations | 040 439 | — |
+| [017-BACKUP_AND_STORAGE](017-BACKUP_AND_STORAGE/FEATURE.md) | Backup and restore, storage contract, migrations | 040 439 | ✅ 2026-09-29 |
 | [018-WORKSPACES](018-WORKSPACES/FEATURE.md) | Named settings sets | 417 | ✅ 2026-09-28 |
 | [019-CONFIG_EDITOR](019-CONFIG_EDITOR/FEATURE.md) | Viewing and editing the final config | 007 | ✅ 2026-09-28 |
 | [020-APP_SHELL](020-APP_SHELL/FEATURE.md) | App shell: settings, theme, haptic feedback, icon, localization, first launch, support, update check | 009 022 029 034 036 105 126 279 | ✅ 2026-09-28 |
