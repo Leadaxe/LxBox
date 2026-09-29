@@ -71,6 +71,7 @@ prioritised registry → remediation in separate commits.
 | 2026-07-02 | [219](../../tasks/219-deep-audit-2026-07.md) | 69 units (16 shards × 4 dimensions + 5 doc auditors) | 352 claimed → 190 confirmed + 96 partial, 66 refuted | audit Done, findings in progress |
 | 2026-07-15 | [273](../../tasks/273-energy-audit-client.md) | client energy audit, 5 axes | 6 findings on the config-generator axis | partial (4 axes not run) |
 | 2026-07-20 | [291F](../../tasks/291F-layered-architecture-facades/spec.md) | domain health map | worst — DNS (raw lists, dual-write); VPN mode and probe without a facade | ✅ mostly achieved |
+| 2026-09-28 | [588](../../tasks/588-spec-kit-revision-audit.md) | every feature of the catalogue, code and tests against the legacy `F` specs | ~200 code-vs-spec mismatches, ~25 promises without a witness | Open — waiting for the owner's triage |
 
 The sibling cycle in the core is the audit of the fork's delta (SPEC 022
 LX_DEEP_AUDIT in sing-box-lx); its findings on the client boundary are
