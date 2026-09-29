@@ -1,8 +1,12 @@
 [English](README.md) · [Русский](README.ru.md)
 
-# FEATURES — L×Box features
+# L×Box features — what the Android VPN client can do
 
-A feature catalog modeled on the core's Spec Kit
+L×Box is an Android VPN client built on the sing-box-lx core. This catalogue
+lists every capability of the app — subscriptions and node import, routing and
+DNS, hop chains, split tunneling, Cloudflare WARP, DPI bypass, diagnostics,
+backup — as black-box specifications: what each feature promises, how it is
+controlled and where it stops. The structure follows the core's Spec Kit
 ([sing-box-lx/SPECS/FEATURES](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS/FEATURES)).
 
 A feature describes **the current state** of a whole domain area as a

@@ -47,6 +47,34 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 
 ## Возможности
 
+Каждая возможность ниже описана как спецификация «чёрного ящика» в
+**[каталоге фич](docs/spec/features/README.ru.md)**: что она обещает
+пользователю, что принимает и отдаёт, где заканчивается. За точным
+поведением — туда; разделы ниже — обзор.
+
+| Область | Спецификация |
+|---------|--------------|
+| Подписки, файловые и вставленные источники, автообновление, отключение узлов | [001-SUBSCRIPTIONS](docs/spec/features/001-SUBSCRIPTIONS/FEATURE.ru.md) |
+| Импорт ссылок и конфигов: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, AnyTLS, NaïveProxy, SSH, SOCKS, HTTP, WireGuard, AmneziaWG, MASQUE, Tailscale, Xray и sing-box JSON | [002-NODE_IMPORT](docs/spec/features/002-NODE_IMPORT/FEATURE.ru.md) |
+| Сборка конфига sing-box: шаблон, переменные, жизненный цикл настроек | [003-CONFIG_BUILD](docs/spec/features/003-CONFIG_BUILD/FEATURE.ru.md) |
+| Правила маршрутизации, пресеты, кэш rule-set, Направления | [004-ROUTING](docs/spec/features/004-ROUTING/FEATURE.ru.md) |
+| DNS: серверы, правила, группы, FakeIP, кэш | [005-DNS](docs/spec/features/005-DNS/FEATURE.ru.md) |
+| Detour, цепочки хопов, балансировка | [006-DETOUR_AND_BALANCE](docs/spec/features/006-DETOUR_AND_BALANCE/FEATURE.ru.md) |
+| Главный экран: список узлов, фильтры, сортировка, папки, активный узел | [007-NODE_LIST](docs/spec/features/007-NODE_LIST/FEATURE.ru.md) |
+| Свои узлы, настройки узла, мастер добавления сервера | [008-NODE_EDITOR](docs/spec/features/008-NODE_EDITOR/FEATURE.ru.md) |
+| Пинг, URLTest, диагностика узла, автоотключение, тест скорости | [009-NODE_HEALTH](docs/spec/features/009-NODE_HEALTH/FEATURE.ru.md) |
+| Туннель: запуск и остановка, режимы VPN и Proxy, автозапуск, сон, восстановление | [010-VPN_SERVICE](docs/spec/features/010-VPN_SERVICE/FEATURE.ru.md) |
+| Раздельное туннелирование по приложениям | [011-SPLIT_TUNNELING](docs/spec/features/011-SPLIT_TUNNELING/FEATURE.ru.md) |
+| Живой статус, соединения, статистика, трафик по приложениям, трасса DNS | [012-LIVE_STATE](docs/spec/features/012-LIVE_STATE/FEATURE.ru.md) |
+| Журналы, отчёты о сбоях, дамп диагностики, Debug API | [013-DIAGNOSTICS](docs/spec/features/013-DIAGNOSTICS/FEATURE.ru.md) |
+| Quick Connect, Intent API, интеграция с Tasker | [014-AUTOMATION](docs/spec/features/014-AUTOMATION/FEATURE.ru.md) |
+| Cloudflare WARP: регистрация в один тап, узлы WireGuard и MASQUE | [015-WARP](docs/spec/features/015-WARP/FEATURE.ru.md) |
+| Обход DPI: фрагментация TLS, приёмы с SNI, ECH, REALITY, XHTTP | [016-DPI_HARDENING](docs/spec/features/016-DPI_HARDENING/FEATURE.ru.md) |
+| Резервная копия, восстановление, перенос на десктоп, контракт хранения | [017-BACKUP_AND_STORAGE](docs/spec/features/017-BACKUP_AND_STORAGE/FEATURE.ru.md) |
+| Наборы настроек (workspaces) | [018-WORKSPACES](docs/spec/features/018-WORKSPACES/FEATURE.ru.md) |
+| Редактор конфига и закрепление конфига | [019-CONFIG_EDITOR](docs/spec/features/019-CONFIG_EDITOR/FEATURE.ru.md) |
+| Настройки приложения, тема, локализация, первый запуск, проверка обновлений | [020-APP_SHELL](docs/spec/features/020-APP_SHELL/FEATURE.ru.md) |
+
 <details>
 <summary><strong>Серверы и подписки</strong> — все источники прокси в одном месте</summary>
 
@@ -343,6 +371,8 @@ Auto-группа Направления умеет не только выбир
 ---
 
 ## Архитектура
+
+Спецификации лежат в [`docs/spec/`](docs/spec/README.ru.md): фичи как чёрные ящики в `features/`, история реализации в `tasks/`.
 
 L×Box построен вокруг **3-слойного parser/builder pipeline** (спека 026):
 
