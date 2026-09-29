@@ -333,7 +333,8 @@ List<NodeSpec> parseXrayElement(
         seen.add(signature);
       }
       onCollapse?.call(signature, node, kept: true);
-      final memberRef = xrayGroupMemberRef(remarks, node.tag);
+      // §101 (1.1.104) — член группы в теле разбора = label узла, без замен.
+      final memberRef = node.label.isNotEmpty ? node.label : node.tag;
       keptTagBySig.putIfAbsent(signature, () => memberRef);
 
       if (obTag.isNotEmpty) {
@@ -371,46 +372,6 @@ List<NodeSpec> parseXrayElement(
 /// лаунчера, `xray_balancer.go`).
 const kXrayBalancerDefaultUrl = 'https://www.gstatic.com/generate_204';
 const kXrayBalancerDefaultInterval = '3m';
-
-/// §322 — имя узла в составе группы Xray-массива, как его пишет лаунчер
-/// (эталон корпуса `body/xray/duplicates_collapsed_owner`): голова тега —
-/// слаг `remarks` элемента (буквы, цифры и флаги, прочее — одним дефисом,
-/// не длиннее 48 рун), хвост различителя — как у узла. [nodeTag] — тег
-/// выпущенного узла элемента с этими [remarks]. Слаг только в теле разбора:
-/// итоговый состав группы пишет сборка по своим тегам.
-String xrayGroupMemberRef(String remarks, String nodeTag) {
-  final head = remarks.trim().replaceAll('🇪🇳', '🇬🇧');
-  if (head.isEmpty) return nodeTag;
-  final String tail;
-  if (nodeTag == head) {
-    tail = '';
-  } else if (nodeTag.startsWith('$head ')) {
-    tail = nodeTag.substring(head.length);
-  } else {
-    return nodeTag;
-  }
-  final buf = StringBuffer();
-  var lastSep = false;
-  for (final r in head.runes) {
-    final keep = (r >= 0x1F1E6 && r <= 0x1F1FF) ||
-        _kSlugKeep.hasMatch(String.fromCharCode(r));
-    if (keep) {
-      buf.writeCharCode(r);
-      lastSep = false;
-    } else if (buf.isNotEmpty && !lastSep) {
-      buf.write('-');
-      lastSep = true;
-    }
-  }
-  var base = buf.toString().replaceAll(RegExp(r'^-+|-+$'), '');
-  final runes = base.runes.toList();
-  if (runes.length > 48) {
-    base = String.fromCharCodes(runes.take(48)).replaceAll(RegExp(r'-+$'), '');
-  }
-  return base.isEmpty ? nodeTag : '$base$tail';
-}
-
-final _kSlugKeep = RegExp(r'^[\p{L}\p{N}]$', unicode: true);
 
 /// §560/§561 — причина отбраковки непрочитанной записи для `dropped[]`.
 ///

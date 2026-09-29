@@ -513,8 +513,9 @@ List<NodeSpec> _parseXrayDocument(
         parseXrayElement(e, seen: seen, synonyms: synonyms,
             onCollapse: (sig, node, {required kept}) {
           if (kept) {
-            ownerTagOf.putIfAbsent(sig,
-                () => xrayGroupMemberRef('${e['remarks'] ?? ''}', node.tag));
+            // §101 (1.1.104) — член группы = label выжившего, без замен.
+            ownerTagOf.putIfAbsent(
+                sig, () => node.label.isNotEmpty ? node.label : node.tag);
           }
         });
         for (final id in seen.difference(before)) {
