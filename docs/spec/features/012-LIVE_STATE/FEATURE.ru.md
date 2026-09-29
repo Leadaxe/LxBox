@@ -232,6 +232,18 @@ NETWORKS; снимок работающего конфига и вердикт �
 | Псевдо-направление NETWORKS | Узлы Tailscale вне списков выбора с их состоянием | P19 | [networks-direction.md](FUNCTIONS/networks-direction.ru.md) |
 | Работающий конфиг и свежесть | Снимок конфига из ядра, вердикт «совпадает / устарел / не знаю» | P20, P21 | [running-config.md](FUNCTIONS/running-config.ru.md) |
 
+## Связанные фичи
+
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — владеет плашкой «нужен перезапуск»; эта фича даёт лишь вердикт свежести, умеющий её гасить.
+- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — справочник пользовательских правил, по которому правила называются в статистике, соединениях и профайлере.
+- [005-DNS](../005-DNS/FEATURE.ru.md) — DNS-группы, настройки DNS и FakeIP, стоящие за трассой DNS и листом «DNS queries are failing».
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — выбор узла и перечень направлений, в который добавляется NETWORKS.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — вкладка Network узла Tailscale, делящая с NETWORKS подписку на состояние.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — замер задержек и пробник; спидтест отсылает скорость на главном к этой фиче.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — служба туннеля: владелец статуса, «Connection lost» по тишине статуса и настройки «Interrupt connections on switch».
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — журналы приложения и ядра, Debug API (включая выдачу журнала профайлера), отчёты о сбоях.
+- [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.ru.md) — просмотр итогового конфига.
+
 ## Особенности сопровождения
 
 - Соединения — дельты, а не снапшот. Любая «оптимизация», отбрасывающая

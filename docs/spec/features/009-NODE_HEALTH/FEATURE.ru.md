@@ -232,6 +232,17 @@ RPC `urlTestOutbound` (замер одного узла по тегу), `urlTest
 | Автоотключение отвергнутых ядром | выключение узлов по отказу ядра, вердикт, плашка | P14–P16 | [core-reject-auto-disable.md](FUNCTIONS/core-reject-auto-disable.ru.md) |
 | Спидтест | ping / download / upload текущего пути | P17 | [speed-test.md](FUNCTIONS/speed-test.ru.md) |
 
+## Связанные фичи
+
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — владеет выключателями узлов, которые переключают автоотключение и массовые действия проверки.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — проверки реестра при разборе; автоотключение по отказу ядра — второй эшелон за ними.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — состав и балансировка групп, detour, граф зависимостей мёртвых узлов и послойная проба цепочки; питается замерами этой фичи.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — список узлов, сортировка по пингу, бейджи состояния endpoint'а и выключатели узлов и папок.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — живая статистика, текущий выбор группы и скорость на главном экране.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — тексты и группировка уведомлений узла по кодам (в т.ч. `core_rejected`).
+- [015-WARP](../015-WARP/FEATURE.ru.md) — сканер WARP-endpoint'ов пользуется той же сессией проверки и задаёт папке свои URL/таймаут.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — экспорт и импорт настроек пинга; вердикт отказа ядра в бэкап не едет.
+
 ## Особенности сопровождения
 
 - **Групповой тест — отдельный RPC.** Замер «сквозь группу» по её тегу
