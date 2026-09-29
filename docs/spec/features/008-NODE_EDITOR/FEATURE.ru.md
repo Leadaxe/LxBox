@@ -204,6 +204,23 @@ kept.», «Comments were removed.», «The core rejected the node: …».
 | Узел подписки | Только осмотр; нет overrides; что переживает обновление | P14 | [subscription-node.md](FUNCTIONS/subscription-node.ru.md) |
 | Удаление и дублирование | Удаление своего сервера, судьба ссылок; дублирования нет | P11 | [delete-and-duplicate.md](FUNCTIONS/delete-and-duplicate.ru.md) |
 
+## Связанные фичи
+
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — узлы подписки меняются только её правилами импорта; добавление источника по ссылке, QR, файлу.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор ссылок, JSON, INI и `vpn://`, из которых получается свой узел.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — правила сборки, по которым своё JSON-тело уходит в конфиг дословно.
+- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — пресет Tailscale, дающий маршрут и DNS tailnet.
+- [005-DNS](../005-DNS/FEATURE.ru.md) — форма DNS-сервера как прецедент ловушки «замены `tls` целиком».
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — выбор detour, политика папки и подписки, цепочки, судьба ссылок после удаления цели.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — список узлов, папки, перенос в папку, порядок, копирование ссылки.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — вкладка Diagnostics, уведомления узла, отказ ядра и автоотключение.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — состояние WireGuard-endpoint'а (handshake, asleep).
+- [015-WARP](../015-WARP/FEATURE.ru.md) — отдельный мастер Cloudflare WARP со своими полями обфускации.
+- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — настройки обхода DPI (фрагментация, ECH).
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — хранение записи и реестр ссылок.
+- [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.ru.md) — итоговый конфиг целиком.
+- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — реестр контракта: схема полей, коды и тексты предупреждений.
+
 ## Особенности сопровождения
 
 - **Битый источник одиночного сервера записывается.** У члена папки есть

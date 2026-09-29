@@ -229,6 +229,18 @@ detour-связи), записи источников (префиксы, пап�
 | Папки и список источников | папки серверов, единый список источников, порядок | P14 | [server-folders.md](FUNCTIONS/server-folders.ru.md) |
 | Тест папки | замер пачки без VPN, пороги, массовые действия | P15 P16 | [folder-testing.md](FUNCTIONS/folder-testing.ru.md) |
 
+## Связанные фичи
+
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — откуда берутся узлы: подписки, добавление источника, выключение узлов подписки.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор групп из форматов (род `selector`/`urltest`) и уведомления разбора в строке.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — сборка групп, Направлений и шаблона; папки и свёртки попадают на главный через неё.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — Направления, узел автовыбора, detour-политика папок, фильтры Направлений в конфиге.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — экран узла (View details), Copy URI, правка узла члена папки.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — пинг, массовый пинг, URLTest групп, ⚠ «корень беды»; здесь только место бейджа и порядок.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — полоса трафика над списком и переход в статистику.
+- [014-AUTOMATION](../014-AUTOMATION/FEATURE.ru.md) — внешнее переключение узла и Направления.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — хранение и бэкап `replace`, `group_type`, `default`, восстановление из бэкапа.
+
 ## Особенности сопровождения
 
 - **Узлы выбранного Направления — это члены selector-группы ядра**, а не

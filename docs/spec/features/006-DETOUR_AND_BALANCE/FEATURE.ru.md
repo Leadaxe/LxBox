@@ -239,6 +239,18 @@ fatal «Routing loop»; ⚠ у мёртвых опор и баннер для DN
 | Граф detour-зависимостей | Кольца, висячие ссылки, fatal с виновниками, ⚠ мёртвых опор, живой путь | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.ru.md) |
 | Автовыбор и балансировка | `<tag>-auto`, узел автовыбора, «Replace with a group», Load balance | P13 P14 | [balancing.md](FUNCTIONS/balancing.ru.md) |
 
+## Связанные фичи
+
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор родных detour-звеньев (`dialerProxy`, `detour`) из подписки.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — проверка перед стартом и плашка «Settings changed», в которые встроен граф-санитайзер.
+- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — Направления как цели правил, фильтр состава, `route.final`; здесь Направление — выход для detour и пул автовыбора.
+- [005-DNS](../005-DNS/FEATURE.ru.md) — канал DNS-сервера через Направление, кольца DNS-групп, DNS-жертвы мёртвых опор.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — фильтр detour-серверов на главном, выбор узла в группе, значки пула.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — прочие настройки узла, в которых живёт блок Detour.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — замеры и настройки пинга для автовыбора, мёртвых опор и послойной пробы.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — detour-хвост в списке соединений.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — хранение detour-ссылок, их переименование и удаление, цепочки в бэкапе.
+
 ## Особенности сопровождения
 
 - Стрелки противоположны: у `detour` «узел через кого», у цепочки

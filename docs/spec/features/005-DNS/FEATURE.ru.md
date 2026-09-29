@@ -239,6 +239,14 @@ Traffic Processing, [004-ROUTING](../004-ROUTING/FEATURE.ru.md)), DNS у
 | FakeIP | Пресет с выдачей подставных адресов | P6 P11 P12 | [fakeip.md](FUNCTIONS/fakeip.ru.md) |
 | Кэш DNS | Размер, устаревшие ответы, хранение, сброс | P13 P14 | [dns-cache.md](FUNCTIONS/dns-cache.ru.md) |
 
+## Связанные фичи
+
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — DNS-секцию собирает, переменные подставляет и плашку «Settings changed» показывает общая сборка конфига.
+- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — пресеты, правила маршрутизации с DNS-опцией, Hijack DNS и «Resolve destination IP» оставляют здесь свой DNS-след.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — поток DNS-запросов ядра и трасса групп живут там.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — детектор массовых сбоев DNS, Debug API `/settings/dns_options/*`, сброс кэша ядра при сбое.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — перенос и слияние DNS-записей в резервной копии.
+
 ## Особенности сопровождения
 
 - Тег шаблонного сервера живёт внутри `server.tag` обёртки; поменять формат
