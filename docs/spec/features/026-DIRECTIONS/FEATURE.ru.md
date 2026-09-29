@@ -240,7 +240,7 @@ flowchart LR
   [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md); замеры —
   [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md); конвейер сборки и проверка перед стартом —
   [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md).
-- Перестановки Направлений в UI нет и не планируется (решение владельца 2026-09-29, аудит [588](../../tasks/588-spec-kit-revision-audit.md)):
+- Перестановки Направлений в UI нет и не планируется (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)):
   порядок меняется только через Debug API (`POST /directions/reorder`). Ссылок на отдельные узлы
   у Направления нет (состав — regex).
 - Расхождения оставлены как есть: клэмп `pool_tolerance` 65535 против предела ядра 15000;

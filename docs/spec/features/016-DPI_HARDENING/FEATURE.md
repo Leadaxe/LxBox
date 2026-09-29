@@ -238,7 +238,7 @@ core (under detour enables record_fragment itself if there are no flags)
   all" (the core enables `record_fragment` itself).
 - Dropped from the plan (§020F): encrypted storage of secrets, app pinning,
   masking links in the UI and logs.
-- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): ECH as designed in `§045F` — a
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): ECH as designed in `§045F` — a
   per-node ECH checkbox and the `?ech=` link parameter. ECH reaches the core
   only from the node JSON and Xray `echConfigList` ([ECH](FUNCTIONS/ech.md)).
 - Certificate verification is performed by the core; the `system` store

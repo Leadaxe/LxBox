@@ -96,7 +96,7 @@ warnings when the index is unreadable or a target key is already taken.
 - The Android system backup includes `files/` together with the `tailscale/`
   keys — stock behaviour (`android:allowBackup` at its default), by design: the
   login credentials move to a new phone with the rest of the data (owner's
-  decision 2026-09-29, audit 588 · 80). Consequence: restoring onto a new
+  decision 2026-09-29, audit 591 · 80). Consequence: restoring onto a new
   device while the old one is alive yields two copies of one tailnet identity;
   the user resolves it by logging out on one of them.
 - No confirmation names the loss of the tailnet login when a Tailscale node

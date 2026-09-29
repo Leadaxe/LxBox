@@ -73,7 +73,7 @@ Debug API. Словарь — `docs/contract/warnings.md`, байт-в-байт 
   экран узла — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.ru.md).
 - Строки шаблона и деградаций сборки (не по узлу) — [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.ru.md).
 - Коды бэкапа — отдельный словарь (`backup_warnings.json`) — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
-- Расхождение словаря и приложения (аудит [588](../../../tasks/588-spec-kit-revision-audit.md)):
+- Расхождение словаря и приложения (аудит [591](../../../tasks/591-spec-kit-revision-audit.md)):
   `duplicate` и `unknown_node_type` — коды только приложения, намеренно; `amnezia_container_choice`
   и `max_nodes_exceeded` есть в словаре без производителя в приложении.
 

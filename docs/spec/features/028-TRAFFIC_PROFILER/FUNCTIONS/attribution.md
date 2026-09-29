@@ -78,7 +78,7 @@ tab title.
   no longer exist (§044, §288).
 - The hint "DNS / router events off — turn on 'Forward sing-box logs'" above
   the log does not affect attribution: since §180 the owner arrives as a
-  structured stream ([588](../../../tasks/588-spec-kit-revision-audit.md)).
+  structured stream ([591](../../../tasks/591-spec-kit-revision-audit.md)).
 
 ## Revisions
 

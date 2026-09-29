@@ -80,7 +80,7 @@ snackbar.
 
 - Export uploads the whole log, not the filtered list, although the
   serialiser is meant for the filtered one
-  ([588](../../../tasks/588-spec-kit-revision-audit.md)).
+  ([591](../../../tasks/591-spec-kit-revision-audit.md)).
 - Rules are not created from the log (no "Add to ru-direct", "Block this
   domain").
 - There is no comparison of two recordings and no per-domain latency.

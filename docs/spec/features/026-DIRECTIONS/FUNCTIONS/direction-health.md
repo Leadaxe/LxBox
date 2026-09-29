@@ -64,7 +64,7 @@ the group's selected node in the home-screen row ("→ node").
 - Round-robin balancing and the pool view — [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - The folder and subscription server test does not see Direction overrides.
 - The ping settings sheet caption "Shared with the home screen ping" stays even when a
-  Direction override is active (588).
+  Direction override is active (591).
 
 ## Revisions
 

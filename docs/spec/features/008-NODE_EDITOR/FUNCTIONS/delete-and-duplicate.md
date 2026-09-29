@@ -61,7 +61,7 @@ notification counting the affected ones; a config rebuild.
   and [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md) (custom ones).
 - The reference registry and storage — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md).
 - The meaning of detour and chains after the target is deleted — [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
-- Node duplication is not planned (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)).
+- Node duplication is not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
 
 ## Revisions
 

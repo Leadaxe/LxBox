@@ -249,7 +249,7 @@ The same flow in text:
 - The registry does not decide node identity (tag), dedup across sources, or network checks.
 - The dictionary and the app diverge in three codes: `duplicate` and `unknown_node_type` are
   app-only; `amnezia_container_choice` is in the dictionary with no producer in the app
-  (audit [588](../../tasks/588-spec-kit-revision-audit.md)).
+  (audit [591](../../tasks/591-spec-kit-revision-audit.md)).
 
 ## Functions
 
@@ -281,9 +281,9 @@ The same flow in text:
 - **Three codes diverge from the dictionary.** `duplicate` and `unknown_node_type` exist only in
   the app (their texts live in the app, not in the registry); `amnezia_container_choice` is in the
   dictionary but the app never produces it. Both directions are audit items in
-  [588](../../tasks/588-spec-kit-revision-audit.md).
+  [591](../../tasks/591-spec-kit-revision-audit.md).
 - **`max_nodes_exceeded` has no producer.** The limit `max_nodes_per_subscription = 3000` is
-  declared; the app does not enforce it (audit 588).
+  declared; the app does not enforce it (audit 591).
 - **The corpus does not run on CI.** Red corpus cases are visible locally only
   ([529](../../tasks/529-contract-corpus-local-reds-triage.md)); green registry tests on CI do not
   cancel that.

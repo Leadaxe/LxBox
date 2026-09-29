@@ -247,7 +247,7 @@ template (servers, presets)   user records   routing rules
   [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - There are no regional DNS sets: `ru-direct` is enabled by default for
   everyone, the usage region does not affect DNS. Regional DNS presets
-  (`014F`) are not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)).
+  (`014F`) are not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
 - There is no one-off "test DNS servers" button and there will not be one
   (§365).
 - Deleting `cache.db` and reloading the core depend on OS capabilities.

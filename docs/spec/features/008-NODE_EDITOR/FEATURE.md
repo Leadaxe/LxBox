@@ -217,7 +217,7 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
   identity and the Network tab — [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - Does not do: overrides of a subscription node, a form by protocol schema,
   a TLS form.
-- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): node duplication; a separate
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): node duplication; a separate
   WireGuard/AmneziaWG form (`097F` Phase 2b) — such nodes are edited as text.
 - Camera and file picking — depend on OS capabilities
   ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md)).

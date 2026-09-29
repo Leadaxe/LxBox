@@ -193,7 +193,7 @@ node ─► emit by the registry emit section ─► share link (or rejection)
   [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
 - Does not do: `.ovpn`, Clash YAML (recognized, yields no nodes), hysteria v1
   as a node, Amnezia containers other than WG/AWG, network checks of a node.
-- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): recognizing the format by the file
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): recognizing the format by the file
   extension (`584F`) — the format is recognized by text only.
 
 ## Functions

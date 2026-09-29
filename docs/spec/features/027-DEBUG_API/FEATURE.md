@@ -220,7 +220,7 @@ handler → owning service (the same as the screen) → storage
 - An MCP wrapper over the API (`§035F`) — cancelled, not implemented. Clash
   API routes (`/clash/*`, `/state/clash`) — removed (§122), 404. No log
   streaming; the only stream is `/profiler/live/stream`.
-- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): raising the server on a VPN autostart
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): raising the server on a VPN autostart
   without the UI (`043F` A.2) — the server is raised by opening the main screen.
 - The full route reference is
   [`docs/api/debug-api-reference.md`](../../../api/debug-api-reference.md);
@@ -259,7 +259,7 @@ handler → owning service (the same as the screen) → storage
 
 - The capability map in `/help` is written by hand; there is no generator
   from the router. Rule: a new route = an entry in `/help` (text and JSON) + a
-  line in the reference. Known gaps are collected in task 589.
+  line in the reference. Known gaps are collected in task 592.
 - The scrubber in `/state/storage` is a denylist: a new sensitive key must be
   added to it and to the test, otherwise it is returned as is.
 - The API is root access by design: an audit checks the boundary (token, bind,

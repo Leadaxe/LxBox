@@ -88,7 +88,7 @@ Result — "Saved as … (N bytes)", "Saved to Downloads: … (N bytes)" or
 
 - The subscription device identifier (HWID) travels with the backup, so a
   restored phone presents the same identity to the provider — by design
-  (2026-09-29, audit 588 · 75). Planned: an export toggle "carry the device
+  (2026-09-29, audit 591 · 75). Planned: an export toggle "carry the device
   identifier", on by default, for the case of a genuinely new device.
 
 ## Revisions

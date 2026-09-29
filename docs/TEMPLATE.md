@@ -213,8 +213,8 @@ Every key is described in detail in the sections below.
 
 | Key | Type | Purpose |
 |---|---|---|
-| `version` | int | Read into the model, but nothing depends on it: the template has no migration mechanism of its own, its version is the app build; a breaking change of the template form is served by the storage form (owner decision 2026-09-29, audit [588](spec/tasks/588-spec-kit-revision-audit.md)). |
-| `parser.reload` | a duration string | Not used by the app. Subscriptions refresh by their own per-subscription interval and the auto-update triggers; refreshing by this interval on Start (§010F) is not planned (audit [588](spec/tasks/588-spec-kit-revision-audit.md)). |
+| `version` | int | Read into the model, but nothing depends on it: the template has no migration mechanism of its own, its version is the app build; a breaking change of the template form is served by the storage form (owner decision 2026-09-29, audit [591](spec/tasks/591-spec-kit-revision-audit.md)). |
+| `parser.reload` | a duration string | Not used by the app. Subscriptions refresh by their own per-subscription interval and the auto-update triggers; refreshing by this interval on Start (§010F) is not planned (audit [591](spec/tasks/591-spec-kit-revision-audit.md)). |
 
 ---
 

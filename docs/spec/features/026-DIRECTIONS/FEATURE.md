@@ -240,7 +240,7 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
   [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md); measurement —
   [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md); the build pipeline and the pre-start check —
   [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md).
-- No UI reordering of Directions, and it is not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): the
+- No UI reordering of Directions, and it is not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the
   order changes only through the Debug API (`POST /directions/reorder`). No per-node references
   from a Direction (membership is a regex).
 - Discrepancies kept as they are: `pool_tolerance` clamp 65535 vs the core's 15000 limit; a

@@ -226,7 +226,7 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
   application.
 - There is no separate `loadbalance` outbound; the "consistent hashing" and
   "sticky sessions" strategies are expressed by the `sticky_hash` set.
-- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): the "AWG → channel with WireGuard"
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the "AWG → channel with WireGuard"
   warning (`248F`) — a detour through WireGuard/AmneziaWG is allowed without it.
 
 ## Functions
@@ -262,7 +262,7 @@ Direction as a detour layer moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.
   working but wrong route — noticeable only by the exit country.
 - Healing references to a Direction must be mirrored in the in-memory source
   list, otherwise the next save resurrects the healed reference.
-- Owner's decision 2026-09-29 (audit 588 · 36): one failure mode for a
+- Owner's decision 2026-09-29 (audit 591 · 36): one failure mode for a
   dangling detour — fail-closed. Today a `detour` in a node body pointing at a
   missing tag and a loop broken by the sanitizer send the node direct
-  (fail-open); that is a divergence from P1, closed by a task (audit 588).
+  (fail-open); that is a divergence from P1, closed by a task (audit 591).

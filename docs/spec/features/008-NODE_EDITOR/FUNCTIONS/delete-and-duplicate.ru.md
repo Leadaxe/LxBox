@@ -61,7 +61,7 @@
   [007-NODE_LIST](../../007-NODE_LIST/FEATURE.ru.md) (свои).
 - Реестр ссылок и хранение — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
 - Смысл detour и цепочек после удаления цели — [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
-- Дублирование узла не планируется (решение владельца 2026-09-29, аудит [588](../../../tasks/588-spec-kit-revision-audit.md)).
+- Дублирование узла не планируется (решение владельца 2026-09-29, аудит [591](../../../tasks/591-spec-kit-revision-audit.md)).
 
 ## Ревизии
 

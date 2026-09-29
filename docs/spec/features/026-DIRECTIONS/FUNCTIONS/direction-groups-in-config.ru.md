@@ -88,7 +88,7 @@
   [direction-health.md](direction-health.ru.md); режимы балансировки, detour-кольца —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
 - Приложение клэмпит `pool_tolerance` в 65535, а ядро отвергает значения выше 15000 — такой
-  конфиг не стартует (588).
+  конфиг не стартует (591).
 - Свёртки источников и группы подписок — группы другого рода —
   [007-NODE_LIST](../../007-NODE_LIST/FEATURE.ru.md).
 

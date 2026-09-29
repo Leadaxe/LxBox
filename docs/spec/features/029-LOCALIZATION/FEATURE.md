@@ -229,7 +229,7 @@ CI: code + dictionaries + native strings → four checks in strict mode → buil
 ## Maintenance notes
 
 - Known untranslated spots (audit
-  [588](../../tasks/588-spec-kit-revision-audit.md)): theme option labels
+  [591](../../tasks/591-spec-kit-revision-audit.md)): theme option labels
   System/Light/Dark, update check result lines in About, "Add tile" messages,
   Tunnel apps mode labels and hint, rule editor JSON error strings and the APPS
   section, "Copy server + detour(s)" / "Server copied" / "Detour copied" in the
@@ -239,12 +239,12 @@ CI: code + dictionaries + native strings → four checks in strict mode → buil
   "Selection mode") are written as plain strings instead of `{"value": …}`
   objects: the runtime treats them as absent and prints English, and the
   dictionary check counts them as present. A shape check for flat entries is
-  missing (→ 588).
+  missing (→ 591).
 - The Debug API error text for `app_language` still lists only `system`, `en`
-  and `ru`; `zh` is accepted (→ 588).
+  and `ru`; `zh` is accepted (→ 591).
 - The core's message language is set from the device at process start and from
   the app choice only on a language change: a saved Russian on an English
-  device gives English core errors until the user touches the language (→ 588).
+  device gives English core errors until the user touches the language (→ 591).
 - A new snackbar or dialog helper with a display parameter must be registered
   for the hardcoded check, otherwise its literals slip past.
 - The supported-language list is mirrored in four places plus the Android

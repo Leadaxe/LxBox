@@ -1776,4 +1776,4 @@ curl -s -H "$HDR" "$BASE/config" > /tmp/config.backup.json
 расхождении смотреть код (`handlers/*.dart`, `serializers/*.dart`).
 Известные расхождения `/help` с кодом и тест паритета «каждый `path` из
 `/help?format=json` есть здесь» — задача
-[589](../spec/tasks/589-debug-api-help-parity.md).
+[592](../spec/tasks/592-debug-api-help-parity.md).

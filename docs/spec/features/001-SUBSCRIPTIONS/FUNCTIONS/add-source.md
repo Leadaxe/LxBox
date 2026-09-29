@@ -71,7 +71,7 @@ each file; empty files are listed in the message.
 - File picking and the camera depend on OS capabilities; without a file
   manager a hint is shown.
 - The "Get Free VPN" preset with automatic rule setup (from `§010F`) no longer exists in the app
-  and is not planned (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md));
+  and is not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md));
   public lists only put a URL into the field.
 
 ## Revisions

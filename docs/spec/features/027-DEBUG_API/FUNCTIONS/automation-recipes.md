@@ -111,4 +111,4 @@ curl -s -H "$HDR" $BASE/core_reject | jq '{phase,outcome,disabled}'
 | 2 | [037](../../../tasks/037-debug-api-write-config-and-lock-rebuild.md) | ✅ Implemented | The "pin a custom config" flow |
 | 3 | [316](../../../tasks/316-kernel-crash-reports-access.md) | Device-verified | Crash reports and snapshots downloadable with curl |
 | 4 | [494](../../../tasks/494-debug-api-debts.md) | Released v2.25.0 | Headless start through the guard for autotests |
-| 5 | [589](../../../tasks/589-debug-api-help-parity.md) | N (new) | Parity of the map with the reference that the recipes rely on |
+| 5 | [592](../../../tasks/592-debug-api-help-parity.md) | N (new) | Parity of the map with the reference that the recipes rely on |

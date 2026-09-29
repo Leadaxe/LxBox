@@ -261,4 +261,4 @@ Localization moved to [029-LOCALIZATION](../029-LOCALIZATION/FEATURE.md).
   would silently fail.
 - Theme option labels, the update check result lines in About and the "Add
   tile" messages are rendered outside the localizer and stay English (audit
-  588; the mechanism — 029).
+  591; the mechanism — 029).

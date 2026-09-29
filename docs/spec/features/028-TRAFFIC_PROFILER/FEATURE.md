@@ -195,7 +195,7 @@ STOP ──► unsubscribe; the log is frozen until the next START
   profiler channel does not reconnect by itself: a recording started with the
   tunnel down or one that survived its restart receives no events, although
   the `Live` chip is lit (task candidate,
-  [588](../../tasks/588-spec-kit-revision-audit.md)).
+  [591](../../tasks/591-spec-kit-revision-audit.md)).
 - Live connections, statistics, status — 012-LIVE_STATE. The rule in the log
   is the core's string, not a name from the 004-ROUTING catalog; empty —
   `final`.
@@ -207,7 +207,7 @@ STOP ──► unsubscribe; the log is frozen until the next START
   app is analysed with the App filter.
 - L4 only: domain, IP, port; no HTTP headers, URLs or per-domain latency.
 - There is no "record only while the tab is open" mode, and it is not
-  planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): recording runs from START to STOP.
+  planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): recording runs from START to STOP.
 - Depends on OS capabilities: the traffic owner; the OS may not name it for
   part of the connections.
 
@@ -247,6 +247,6 @@ STOP ──► unsubscribe; the log is frozen until the next START
   server, the source and the group trace that the screen shows (§315).
 - The "DNS / router events off" hint above the log is a leftover of core log
   parsing; since §180 DNS comes as a structured stream and does not depend on
-  "Forward sing-box logs" (task candidate, 588).
+  "Forward sing-box logs" (task candidate, 591).
 - Export uploads the whole log, not the filtered list, although the serialiser
-  is meant for the filtered one (task candidate, 588).
+  is meant for the filtered one (task candidate, 591).

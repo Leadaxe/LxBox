@@ -88,7 +88,7 @@ without nodes for a home-screen snackbar.
   [direction-health.md](direction-health.md); balancing modes, detour rings —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - The app clamps `pool_tolerance` to 65535 while the core rejects values above 15000 —
-  such a config does not start (588).
+  such a config does not start (591).
 - Source folds and subscription groups are groups of another kind —
   [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
 

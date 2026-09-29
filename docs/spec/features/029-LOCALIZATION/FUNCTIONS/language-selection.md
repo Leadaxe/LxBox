@@ -99,4 +99,4 @@ guide link in About.
 | 4 | [280](../../../tasks/280-l10n-first-version.md) | — | First cycle: interface, template, system surfaces, reconciliation with Android 13+ |
 | 5 | [452](../../../tasks/452-zh-localization.md) | Implemented | Simplified Chinese as the third language |
 | 6 | [541](../../../tasks/541-appearance-tab-two-columns-toggle.md) | Done | Language choice moved to the Appearance tab |
-| 7 | [588](../../../tasks/588-spec-kit-revision-audit.md) | Open | Audit: core locale from the device, Debug API error text without `zh` |
+| 7 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: core locale from the device, Debug API error text without `zh` |

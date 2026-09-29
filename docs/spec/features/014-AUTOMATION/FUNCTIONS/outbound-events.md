@@ -68,7 +68,7 @@ subscription update results; the update check; command failures.
 - `old_tag` / `old_group` are absent if there is no previous value (the first
   switch after launch); empty values are not sent.
 - `reason` for a node and group change is always `user`; `urltest` /
-  `automation` from `047F` are not planned (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)).
+  `automation` from `047F` are not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
 - `SUB_REFRESH_FAILED` — no more than once a minute per subscription; other
   events have no rate limit.
 - `sub_id` — the masked subscription address, without the token; the

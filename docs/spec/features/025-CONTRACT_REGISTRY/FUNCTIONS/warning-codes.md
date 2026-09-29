@@ -73,7 +73,7 @@ build gate, the core-reject machine or an app class; the active locale.
   the node screen — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md).
 - Template and build-degradation lines (not per node) — [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md).
 - Backup codes are a separate dictionary (`backup_warnings.json`) — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md).
-- Dictionary vs. app divergence (audit [588](../../../tasks/588-spec-kit-revision-audit.md)):
+- Dictionary vs. app divergence (audit [591](../../../tasks/591-spec-kit-revision-audit.md)):
   `duplicate` and `unknown_node_type` are app-only by design; `amnezia_container_choice` and
   `max_nodes_exceeded` are in the dictionary with no producer in the app.
 

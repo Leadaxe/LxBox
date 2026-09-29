@@ -42,7 +42,7 @@ the procedure has two sides: the app repository and the launcher contract.
 | A variable on a dedicated screen or with bounds | `wizard_ui: fix` is rendered by that screen; `int` bounds are not in the template | [580](../../../tasks/580-dns-cache-settings.md) DNS cache variables on the DNS tab, 1024..65535 |
 | A variable of a new `type` | a renderer on the settings screen, coercion | — |
 | A new top-level template key | a reader in the build | — |
-| A variable that must mark the config stale | the list of config variable names is fixed in code (audit 588: 18 variables are missing from it) | — |
+| A variable that must mark the config stale | the list of config variable names is fixed in code (audit 591: 18 variables are missing from it) | — |
 | A preset that must reach users with saved state | the late-defaults list | [578](../../../tasks/578-tailscale-preset-template-for-each.md) `tailscale` |
 | A new record field (a node field a preset reads) | storage, backup, Debug API, transfer | `skip_presets` ([578](../../../tasks/578-tailscale-preset-template-for-each.md)) |
 | A core config key | the installed core must accept it; checked against the core sources or the contract registry | [580](../../../tasks/580-dns-cache-settings.md) `dns.cache_capacity`, `dns.optimistic`, `store_dns` |
@@ -135,4 +135,4 @@ Invariants:
 | 7 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Done (items 1–6) | Parity campaign: the norm, the registry and the corpus are kept in step |
 | 8 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec. Implementation started | Constructs with code, a record field, late seeding, a contract bump |
 | 9 | [580](../../../tasks/580-dns-cache-settings.md) | Done | Variables with bounds and a dedicated screen; portable in the registry |
-| 10 | [588](../../../tasks/588-spec-kit-revision-audit.md) | Open | Audit: `docs/TEMPLATE.md` drift, stale-flag variable list |
+| 10 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: `docs/TEMPLATE.md` drift, stale-flag variable list |

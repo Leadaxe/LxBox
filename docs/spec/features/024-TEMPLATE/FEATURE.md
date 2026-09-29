@@ -354,7 +354,7 @@ app update ─► new template ─► load: overlay → construct check → mode
 - There is no user template and no preset created by the user.
 - The UI for multi-select and free input for `options_open` is not finished
   (§555 follow-up).
-- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): migrations by `parser_config.version`
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): migrations by `parser_config.version`
   (the template's version is the app build); moving the bounds of `int`
   variables into the template declaration; bringing back the one-off remap of
   old `preset_id`s (§229) — such records show "Preset not found — tap to fix".
@@ -392,7 +392,7 @@ app update ─► new template ─► load: overlay → construct check → mode
 - **Two documents to keep in step with the template.** `docs/TEMPLATE.md`
   (schema of the shipped file) and the language norm `TEMPLATE_LANG.md` in
   the launcher repository; a template change that touches either is not done
-  until they match (audit 588 lists the current drift: 8 vs 11 presets, old
+  until they match (audit 591 lists the current drift: 8 vs 11 presets, old
   `#if` keys).
 - A `#if` key with a suffix (`#if1`, `#if tun-only`) is the only way to
   attach two conditions to one object: a second JSON key with the same name

@@ -193,7 +193,7 @@ Hysteria2, TUIC, AnyTLS, SOCKS, HTTP, SSH, NaiveProxy, WireGuard и MASQUE. Ка
   [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md).
 - Не делает: `.ovpn`, Clash YAML (опознаётся, узлов не даёт), hysteria v1
   узлом, контейнеры Amnezia кроме WG/AWG, сетевые проверки узла.
-- Не планируется (решение владельца 2026-09-29, аудит [588](../../tasks/588-spec-kit-revision-audit.md)): распознавание формата по расширению
+- Не планируется (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)): распознавание формата по расширению
   файла (`584F`) — формат опознаётся только по тексту.
 
 ## Функции

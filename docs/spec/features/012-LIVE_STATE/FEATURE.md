@@ -197,7 +197,7 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
   — 030-TAILSCALE; node selection and the list of directions — 007-NODE_LIST
   (NETWORKS is only added).
 - There is no per-app traffic breakdown on the Stats screen, and it is not
-  planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)) — that is the profiler's log.
+  planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)) — that is the profiler's log.
 - Depends on OS capabilities: "foreground / background" events, the traffic
   owner.
 

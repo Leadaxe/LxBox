@@ -80,7 +80,7 @@ tab."; the `Live` chip on the home screen.
   the tunnel down or one that survived its restart receives no events while
   the `Live` chip stays lit. Returning after a swipe from recents stops the
   orphaned channel, the buffer is lost
-  ([588](../../../tasks/588-spec-kit-revision-audit.md)).
+  ([591](../../../tasks/591-spec-kit-revision-audit.md)).
 - Owner and route attribution — [attribution](attribution.md); the DNS part
   of events — [dns-trace](dns-trace.md).
 - There are no saved sessions; export — [filters-and-views](filters-and-views.md).

@@ -102,4 +102,4 @@ English render of the same object for machine surfaces.
 | 2 | [285](../../../tasks/285-getlocaltext-migration.md) | — | English text as the key, `ui.json` dictionaries, plurals and special forms, ARB removed |
 | 3 | [452](../../../tasks/452-zh-localization.md) | Implemented | Chinese single plural form; endonym labels |
 | 4 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | — | Overlay visits preset servers inside conditional and template branches |
-| 5 | [588](../../../tasks/588-spec-kit-revision-audit.md) | Open | Audit: plain-string dictionary entries are invisible to the check and English at runtime |
+| 5 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: plain-string dictionary entries are invisible to the check and English at runtime |

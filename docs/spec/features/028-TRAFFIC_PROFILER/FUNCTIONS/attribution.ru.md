@@ -72,7 +72,7 @@ detect the owner package for some DNS/TCP traffic» и ⚠ в названии �
   больше нет (§044, §288).
 - Подсказка «DNS / router events off — turn on 'Forward sing-box logs'» над
   журналом на атрибуцию не влияет: после §180 владелец приходит структурным
-  потоком ([588](../../../tasks/588-spec-kit-revision-audit.md)).
+  потоком ([591](../../../tasks/591-spec-kit-revision-audit.md)).
 
 ## Ревизии
 

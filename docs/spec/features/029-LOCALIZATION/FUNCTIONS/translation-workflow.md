@@ -101,4 +101,4 @@ pass in strict mode · the localization tests pass.
 | 2 | [279F](../../../tasks/279F-localization/spec.md) | — | Ratchet on hardcoded strings, native string parity, machine-surface locality |
 | 3 | [285](../../../tasks/285-getlocaltext-migration.md) | — | Dictionary check on natural keys, strict CI, empty baseline |
 | 4 | [452](../../../tasks/452-zh-localization.md) | Implemented | Checks discover languages by directory; per-language plural forms |
-| 5 | [588](../../../tasks/588-spec-kit-revision-audit.md) | Open | Audit: untranslated spots that pass the checks |
+| 5 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: untranslated spots that pass the checks |

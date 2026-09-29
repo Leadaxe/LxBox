@@ -54,7 +54,7 @@ body?, description, response?}]}`, pretty-printed.
   ([`docs/api/debug-api-reference.md`](../../../../api/debug-api-reference.md))
   is wider on purpose (examples, flows, semantics); `/help` is the short map.
   When they disagree, the code is right and both are fixed.
-- **Known gaps** (task 589, open): `POST /settings/rebuild-config`,
+- **Known gaps** (task 592, open): `POST /settings/rebuild-config`,
   `GET /files/external` and the `source` parameter of `POST /logs/clear` are
   missing from the JSON form; the 413/502/504 codes are absent from the
   Errors section; `POST /subs/reorder`, `GET /subs`,
@@ -73,7 +73,7 @@ body?, description, response?}]}`, pretty-printed.
   chain position means is in the owning feature and the reference.
 - No OpenAPI or MCP output; the JSON form is the raw material for one, and
   the MCP wrapper (`§035F`) was cancelled.
-- Content parity with the reference is not yet tested (task 589); only the
+- Content parity with the reference is not yet tested (task 592); only the
   router parity is.
 
 ## Revisions
@@ -84,5 +84,5 @@ body?, description, response?}]}`, pretty-printed.
 | 2 | [218](../../../tasks/218-debug-help-sync.md) | DONE | `/help` matches the mounted routes |
 | 3 | [494](../../../tasks/494-debug-api-debts.md) | Released v2.25.0 | `/help` text and JSON updated together with the reference |
 | 4 | [510](../../../tasks/510-review-findings-after-v2251.md) | — | `/pool` was missing from the JSON form; the "every mounted prefix is in `/help`" test |
-| 5 | [589](../../../tasks/589-debug-api-help-parity.md) | N (new) | Catch `/help` up with the code; parity test with the reference |
+| 5 | [592](../../../tasks/592-debug-api-help-parity.md) | N (new) | Catch `/help` up with the code; parity test with the reference |
 | 6 | [035F](../../../tasks/035F-mcp-server/spec.md) | 🚫 Cancelled | An MCP server generated from the map — not to be implemented |

@@ -76,7 +76,7 @@ preset servers live in the preset namespace (`ru-direct:dns_ru`,
 ## Boundaries
 
 - The set is not chosen by the user's region, and this is not planned
-  (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)): `ru-direct` is enabled by
+  (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)): `ru-direct` is enabled by
   default for everyone, the region setting does not affect DNS.
 - `ru-direct` routing (rule-sets, GeoIP, applications) —
   [004-ROUTING](../../004-ROUTING/FEATURE.md).

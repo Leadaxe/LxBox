@@ -109,4 +109,4 @@ curl -s -H "$HDR" $BASE/core_reject | jq '{phase,outcome,disabled}'
 | 2 | [037](../../../tasks/037-debug-api-write-config-and-lock-rebuild.md) | ✅ Реализовано | Сценарий «закрепить свой конфиг» |
 | 3 | [316](../../../tasks/316-kernel-crash-reports-access.md) | Device-verified | Отчёты о сбоях и снимки скачиваются curl |
 | 4 | [494](../../../tasks/494-debug-api-debts.md) | Released v2.25.0 | Headless-старт через страховку для автотестов |
-| 5 | [589](../../../tasks/589-debug-api-help-parity.md) | N (new) | Паритет карты со справочником, на который опираются рецепты |
+| 5 | [592](../../../tasks/592-debug-api-help-parity.md) | N (new) | Паритет карты со справочником, на который опираются рецепты |

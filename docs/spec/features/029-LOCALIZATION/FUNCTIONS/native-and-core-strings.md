@@ -97,4 +97,4 @@ English render of stored errors and warnings for machine surfaces.
 | 2 | [280](../../../tasks/280-l10n-first-version.md) | — | First cycle: system surfaces, mirror on the native side, device language receiver |
 | 3 | [452](../../../tasks/452-zh-localization.md) | Implemented | Chinese native strings; parity check finds languages by directory |
 | 4 | [460F](../../../tasks/460F-contract-registry-bundle/spec.md) | — | Warning registry bundled with English and Russian texts |
-| 5 | [588](../../../tasks/588-spec-kit-revision-audit.md) | Open | Audit: core locale follows the device until the first language change |
+| 5 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: core locale follows the device until the first language change |

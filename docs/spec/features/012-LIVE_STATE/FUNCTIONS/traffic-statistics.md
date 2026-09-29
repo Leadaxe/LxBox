@@ -58,7 +58,7 @@ chain under a card).
 ## Boundaries
 
 - There is no per-app breakdown on Stats, and it is not planned
-  (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)) — it is in the profiler
+  (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)) — it is in the profiler
   ([028-TRAFFIC_PROFILER](../../028-TRAFFIC_PROFILER/FEATURE.md)).
 - Speed is not shown — only volume and number of connections.
 - Rules and their texts — 004-ROUTING.
