@@ -1,250 +1,271 @@
-# FEATURE 017 — BACKUP_AND_STORAGE — резервная копия, перенос и хранение настроек
+[English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-| Поле | Значение |
-|------|----------|
-| Тип | Продуктовая фича |
-| Поглотила | `§040F` `§439F` |
-| Состояние | ✅ написана по коду, 2026-09-28 |
+# FEATURE 017 — BACKUP_AND_STORAGE — backup, transfer and storage of settings
 
-## Назначение
+| Field | Value |
+|-------|-------|
+| Type | Product feature |
+| Absorbed | `§040F` `§439F` |
+| State | ✅ written from code, 2026-09-28 |
 
-Всё, что пользователь настроил — подписки, серверы, папки, цепочки, правила,
-Направления, DNS, режимы, предпочтения, — должно пережить убийство процесса,
-обновление приложения и смену телефона. Фича даёт три вещи:
+## Purpose
 
-- **Полная резервная копия** той же установки: снимок настроек в JSON по
-  категориям и восстановление слиянием или заменой — в том числе одним тапом
-  с пустого главного экрана.
-- **Перенос на десктоп** — обмен общей частью настроек с десктопным
-  лаунчером в формате LX Backup (контракт 1.0): чему у другой стороны нет
-  места, то отбрасывается и называется.
-- **Надёжное хранение**: одна форма записей (та же, что в LX Backup 1.0),
-  атомарная запись, восстановление битого файла, разовая миграция старой
-  формы, отложенная запись правок, защита от записи «из прошлого».
+Everything the user has configured must survive a process kill, an app
+update and a phone change. The feature provides three things:
 
-Принципы:
+- **Full backup** of the same installation: a JSON snapshot of settings by
+  category and restore by merge or replace — including one tap from the
+  empty home screen.
+- **Transfer to desktop** — exchanging the shared part of settings with the
+  desktop launcher in the LX Backup format (contract 1.0): whatever the
+  other side has no place for is dropped and named.
+- **Reliable storage**: one record form (the same as in LX Backup 1.0),
+  atomic writes, recovery of a corrupted file, a one-time migration of the
+  old form, deferred writing of edits, protection against writes "from the
+  past".
 
-- **Файл — сериализация состояния.** Экспорт — чистая функция состояния;
-  импорт своего экспорта возвращает то же состояние; полей «на провоз» нет.
-- **Нет молчаливых потерь.** Неприменённое названо: кодом предупреждения,
-  счётчиком в итоговой строке, записью в журнале.
-- **Вход — default-deny.** В хранение попадают только известные ключи.
-- **Сбой не стирает настройки:** остаётся прежнее или новое целое состояние.
+Principles: **the file is a serialization of state** (importing your own
+export returns the same state, no "carry-along" fields); **no silent
+losses** (whatever is not applied is named by a code, a counter, a log
+entry); **the input is default-deny**; **a failure does not wipe settings**
+(the previous or the new whole state).
 
-## Обещания
+## Promises
 
-- **P1. Секрет не уезжает случайно.** «Debug API config» на экспорте выключена
-  по умолчанию; без неё ключи Debug API в файл не пишутся. Свидетель: юниты
-  «without debugConfig — debug-keys are stripped from vars», «only debugConfig
-  — keeps only debug-keys». Мутация: Debug-ключи едут с «App settings».
-- **P2. Экспорт выгружает всё, что принимает импорт.** Свидетель: юниты
-  «allowlist ⊆ export (все категории)», «ключи directions + directions_migrated
-  экспортируются в routing». Мутация: ключ добавлен в допуск, но не в категорию.
-- **P3. Круг полной копии без потерь.** Экспорт всех категорий → сброс →
-  импорт = исходное хранение. Свидетель: юнит «round-trip: export → reset →
-  import → bytewise equal». Мутация: ключ вне категорий.
-- **P4. Чужой файл отвергается до применения.** Не JSON, нет маркеров
-  `app: lxbox` / `kind: backup`, нет блока `storage` (формат до v1.7.3) —
-  «Invalid backup» с причиной, ничего не записано. Свидетель: юниты «rejects
-  non-JSON», «rejects file without app/kind markers», «rejects legacy format (no
-  storage key)». Мутация: частичный разбор.
-- **P5. Вход default-deny.** Неизвестные ключи верхнего уровня и переменных
-  отбрасываются в обоих режимах и считаются («N unknown keys skipped»); своя
-  копия ничего не теряет. Свидетель: юниты «отбрасывает чужеродный top-level
-  ключ», «отбрасывает чужой vars-подключ, оставляет известные», «merge=true
-  тоже фильтрует чужие ключи», «чистый бэкап (наш) ничего не отбрасывает».
-  Мутация: фильтр только в режиме замены.
-- **P6. Слияние ничего не удаляет.** Источники дописываются по `id`,
-  переменные — по ключу, отсутствующее в файле остаётся. Свидетель: юниты
-  «merge=true preserves untouched keys», «merge Server lists: источники
-  дописываются по id, цепочки архива заменяют цепочки хранения». Мутация:
-  слияние источников заменой списка.
-- **P7. Замена — замена всего документа настроек.** «Replace all» записывает
-  только выбранные категории файла; невыбранные категории текущих настроек не
-  сохраняются. Свидетель: юниты «replace только Routing: правила и DNS; ни
-  источников, ни цепочек», «merge=false overwrites everything». Мутация: замена
-  по категориям.
-- **P8. Доступ к устройству переживает замену.** Если файл молчит о Debug API
-  и о флагах «уже спрашивали» стартовых вопросов, текущие значения остаются;
-  ключ из файла побеждает. Свидетель: юниты «merge=false keeps device Debug
-  API keys absent in snapshot», «Debug API keys from snapshot win», «keeps
-  startup prompt flags». Мутация: замена переменных целиком.
-- **P9. Старая копия восстанавливается.** Блок формы 2.23.2 мигрирует до
-  фильтра категорий; превью считает мигрированное; конфиг ядра = эталон.
-  Свидетель: юниты «блок мигрирует: превью считает по sources[].kind», «бэкап
-  2.23.2 → replace всех категорий → config.json = эталон». Мутация: фильтр по
-  легаси-ключам.
-- **P10. LX Backup: пишется 1.0, читаются 1.0 и 0.x, новее — отказ целиком.**
-  Свидетель: юниты «пишем 2, читаем 2 и legacy 1», «больше читаемого и вне {1,
-  2} — отказ». Мутация: частичный разбор новой версии.
-- **P11. Перенос — сериализация состояния.** Экспорт → импорт в пустое = исходное;
-  повторный импорт ничего не добавляет. Свидетель: юниты «круг: экспорт → импорт
-  в пустое состояние = исходное состояние», «импорт собственного экспорта в
-  совпадающее состояние ничего не добавляет», «две тёзки файла в пустое
-  состояние — две папки; повторный импорт не растёт». Мутация: дедуп узлов по
-  имени, а не по телу.
-- **P12. Потери переноса названы.** Незнакомое поле, поле чужого типа, ключ
-  вне таблицы среза, настройка LxBox без места в 1.0 — код предупреждения на
-  импорте и на экспорте. Свидетель: юниты «неизвестный ключ корня назван, но
-  файл читается», «неизвестное поле записи названо, а не съедено», «ключ записи
-  вне таблицы срезается с названием», «поля стороны LxBox едут, потеря без дома
-  в 1.0 названа». Мутация: тихий срез поля.
-- **P13. Перенос не перетирает своё.** Занятый тег Направления или цепочки —
-  приехавшее не применяется и названо; отметки «выключено» объединяются.
-  Свидетель: юниты «занятый тег не применяется и назван warning'ом», «занятый
-  тег: своя цепочка остаётся, приехавшая пропущена», «отметки из файла
-  доливаются, вердикт файла — нет». Живая регистрация WARP не перезаписывается
-  — `без свидетеля`. Мутация: «последний пишет».
-- **P14. Правило не уезжает в никуда.** Правило с неизвестной приёмнику целью
-  приезжает выключенным; `route.final` в никуда не применяется; приехавшее
-  Направление делает правило рабочим. Свидетель: юниты «несуществующий outbound
-  выключает правило», «route.final в никуда не применяется», «приехавшая цель
-  делает правило РАБОЧИМ». Мутация: сверка целей до слияния источников.
-- **P15. Переносятся только переносимые переменные** — список совпадает с
-  реестром контракта, прочие — `backup_var_skipped`. Свидетель: юниты
-  «совпадает с реестром», «непереносимая переменная пропускается с warning».
-  Мутация: перенос путей и интерфейсов машины.
-- **P16. Вердикт ядра не переносится**, выключение узла — переносится.
-  Свидетель: юниты «страховка: после импорта узел выключен, вердикта нет»,
-  «файл с вердиктом: запись снята, узел остаётся выключенным». Мутация: вердикт
-  едет в файле.
-- **P17. Ссылка на узел следует за узлом.** Адрес `{folder_id?, tag}`;
-  переименование и перенос переписывают все ссылки, удаление гасит и называет
-  задетых, смена префикса папки ссылок не трогает. Свидетель: юниты
-  «переименование члена папки переписывает все носители», «перенос члена между
-  папками переписывает folder_id», «удаление гасит ссылки и называет задетых
-  порознь», «смена tag_policy папки ссылок не трогает». Мутация: сопоставление
-  по похожему тегу.
-- **P18. Миграция хранения разовая и безвредная.** Идемпотентна; исходник
-  копируется один раз; конфиг до и после совпадает; документ новее известной
-  формы читается и не переписывается. Свидетель: юниты «идемпотентна:
-  результат, поданный снова, не меняется», «копия исходника пишется один раз»,
-  «config.json совпадает с эталоном», «версия выше известной: читается как
-  текущая, не переписывается». Мутация: миграция на каждом старте.
-- **P19. Прерванная миграция повторяется.** Свидетель: юниты «сбой между
-  шагами 4 и 5: старый файл + копия → миграция заново», «битый основной файл,
-  предыдущая копия старой формы: восстановление мигрирует и пишет». Мутация:
-  отметка «мигрировано» до записи.
-- **P20. Позиции цепочек и detour указывают на узел.** После миграции ссылка
-  на узел подписки или папки — пара `{id контейнера, сырой тег}`, и на
-  выключенные цели тоже; ненайденное — корневой `{tag}` с предупреждением.
-  Свидетель: юниты «узел подписки из кэша тел — пара {id подписки, сырой тег}»,
-  «позиции цепочки: выключенный сервер — корень, узел выключенной папки — пара»,
-  «неоднозначная строка — корень с предупреждением». Мутация: перевод ссылок
-  без тел подписок.
-- **P21. Запись атомарна.** Убийство в любой момент оставляет прежний или
-  новый целый файл; битый основной восстанавливается из предыдущей копии;
-  осиротевшие временные файлы убираются; параллельные записи не мешают.
-  Свидетель: юниты «битый основной, валидная копия → восстановление», «копия
-  делается только из валидного основного», «осиротевший временный файл
-  удаляется при чтении», «конкурентные записи не оставляют сирот и не бросают».
-  Мутация: запись поверх основного файла.
-- **P22. Битый файл без копии не затирается** до первой правки; настройки —
-  по умолчанию. Свидетель: юниты «битый основной, копии нет → пусто, признак
-  повреждения», «после сброса и правки — основной перезаписан, признак снят».
-  Мутация: немедленная запись пустого документа.
-- **P23. Правка видна сразу, на диск — при уходе.** Правки редакторов видны
-  пересборке и старту до записи; на диск — одной записью при уходе с экрана
-  или сворачивании. Свидетель: юниты «staged custom rules видны читателю ДО
-  дисковой записи», «staged-серия + flush → файл содержит всё»; виджет-тесты
-  «запись при уходе с экрана, если есть несохранённое», «запись при сворачивании».
-  Мутация: запись в хранение только при уходе.
-- **P24. Запись «из прошлого» не проходит.** Контроллер, переживший смену
-  набора настроек, в новый набор не пишет; остановленный проход обновления не
-  продолжается. Свидетель: юниты «отложенный фетч старого контроллера не
-  трогает новый слот», «disposed контроллер не пишет», «halt прерывает идущий
-  проход между подписками». Мутация: запись без сверки поколения.
-- **P25. Перенос пишется по свежему состоянию:** план LX-импорта
-  пересчитывается в момент подтверждения, а не берётся из превью. `без свидетеля`.
+- **P1. A secret does not leave by accident.** "Debug API config" on export
+  is off by default; without it Debug API keys are not written to the file.
+  **Witness:** unit tests "without Debug API config the Debug API keys are
+  stripped from vars", "only Debug API config — only Debug API keys".
+  **Mutation:** Debug keys travel with "App settings".
+- **P2. Export writes out everything import accepts.** **Witness:** unit
+  tests "allowlist ⊆ export (all categories)", "Directions and their
+  migration marker are exported in Routing". **Mutation:** a key added to
+  the allowlist but not to a category.
+- **P3. Full backup round-trip is lossless.** Export of all categories →
+  reset → import = the original storage. **Witness:** unit test "round-trip:
+  export → reset → import → bytewise equal". **Mutation:** a key outside
+  the categories.
+- **P4. A foreign file is rejected before applying.** Not JSON, no
+  `app: lxbox` / `kind: backup` markers, no `storage` block (format before
+  v1.7.3) — "Invalid backup" with a reason, nothing written. **Witness:**
+  unit tests "not JSON — rejected", "no app/kind markers — rejected", "old
+  format without storage — rejected". **Mutation:** partial parsing.
+- **P5. The input is default-deny.** Unknown top-level keys and vars are
+  dropped in both modes and counted ("N unknown keys skipped").
+  **Witness:** unit tests "foreign key dropped", "foreign var dropped, known
+  ones kept", "merge filters too". **Mutation:** filtering only in replace
+  mode.
+- **P6. Merge deletes nothing.** Sources are appended by `id`, vars by key,
+  whatever is absent in the file stays. **Witness:** unit tests "merge keeps
+  untouched keys", "sources are appended by id". **Mutation:** merging
+  sources by replacing the list.
+- **P7. Replace replaces the whole settings document.** "Replace all" writes
+  only the selected categories of the file; unselected categories of the
+  current settings are not kept. **Witness:** unit test "replace only
+  Routing: rules and DNS; neither sources nor chains". **Mutation:** replace
+  per category.
+- **P8. Device properties survive replace.** If the file is silent about the
+  Debug API and about the "already asked" flags of startup prompts, the
+  current values stay; a key from the file wins; `wizard_*` flags are never
+  accepted from the file. **Witness:** unit tests "replace keeps the Debug
+  API absent in the snapshot", "keys from the snapshot win", "replace keeps
+  startup prompt flags". **Mutation:** replacing vars wholesale.
+- **P9. An old backup restores.** A 2.23.2-form block migrates before the
+  category filter; the preview counts the migrated block; the core config
+  = golden. **Witness:** unit tests "block migrates: preview counts by
+  record kind", "2.23.2 backup → replace all categories → config = golden".
+  **Mutation:** filtering by legacy keys.
+- **P10. LX Backup: 1.0 is written, 1.0 and 0.x are read, newer — rejected
+  whole.** **Witness:** unit tests "write 2, read 2 and legacy 1", "greater
+  than readable and outside {1, 2} — rejected". **Mutation:** partial
+  parsing of a new version.
+- **P11. Transfer is a serialization of state.** Export → import into empty
+  = original; repeated import adds nothing. **Witness:** unit tests
+  "round-trip: export → import into empty = original", "two same-named
+  folders in the file — two folders; repeated import does not grow".
+  **Mutation:** deduplicating nodes by name, not by body.
+- **P12. Transfer losses are named.** An unknown field, a field of the wrong
+  type, a key outside the slice table, an LxBox setting with no place in 1.0
+  — a warning code on import and export. **Witness:** unit tests "unknown
+  record field is named, not swallowed", "record key outside the table is
+  cut with a name", "loss with no home in 1.0 is named". **Mutation:**
+  silently cutting a field.
+- **P13. Transfer does not overwrite your own.** A taken Direction or chain
+  tag — the incoming one is not applied and is named; "disabled" marks are
+  merged. **Witness:** unit tests "taken tag is not applied and is named",
+  "marks from the file are added". A live WARP registration is not
+  overwritten — `no witness`. **Mutation:** "last writer wins".
+- **P14. A rule does not go nowhere.** A rule with a target unknown to the
+  receiver arrives disabled; `route.final` to nowhere is not applied; an
+  incoming Direction makes the rule working. **Witness:** unit tests
+  "nonexistent outbound disables the rule", "incoming target makes the rule
+  working". **Mutation:** checking targets before merging sources.
+- **P15. Only portable vars are transferred** — the list matches the
+  contract registry, others — `backup_var_skipped`. **Witness:** unit tests
+  "matches the registry", "non-portable var is skipped with a warning".
+  **Mutation:** transferring machine paths and interfaces.
+- **P16. The core verdict is not transferred**, node disabling is.
+  **Witness:** unit tests "safeguard: after import the node is disabled, no
+  verdict", "file with a verdict: the entry is removed, the node stays
+  disabled". **Mutation:** the verdict travels in the file.
+- **P17. A node link follows the node.** Address `{folder_id?, tag}`;
+  rename and move rewrite all links, deletion clears them and names the
+  affected ones, changing a folder prefix does not touch links.
+  **Witness:** unit tests "renaming a folder member rewrites all carriers",
+  "moving between folders rewrites folder_id", "deletion clears links and
+  names the affected", "changing tag_policy does not touch links".
+  **Mutation:** matching by a similar tag.
+- **P18. The storage migration is one-time and harmless.** Idempotent; the
+  original is copied once; the config before and after matches; a document
+  newer than the known form is read and not rewritten. **Witness:** unit
+  tests "idempotent", "the original copy is written once", "config matches
+  golden", "a version above the known one is not rewritten". **Mutation:**
+  migration on every start.
+- **P19. An interrupted migration is repeated.** **Witness:** unit tests
+  "failure between writing the copy and writing the document: old file +
+  copy → migration again", "corrupted main file, previous copy of the old
+  form: recovery migrates and writes". **Mutation:** a "migrated" mark
+  before the write.
+- **P20. Chain positions and detour point to a node.** After migration a
+  link to a subscription or folder node is a pair `{container id, raw
+  tag}`, including links to disabled targets; not found — a root `{tag}`
+  with a warning. **Witness:** unit tests "subscription node from the body
+  cache — pair {subscription id, raw tag}", "chain positions: disabled
+  server — root, node of a disabled folder — pair", "ambiguous string — root
+  with a warning". **Mutation:** translating links without subscription
+  bodies.
+- **P21. The write is atomic.** A kill at any moment leaves the previous or
+  the new whole file; a corrupted main file is recovered from the previous
+  copy; orphaned temporary files are removed; parallel writes do not
+  interfere. **Witness:** unit tests "corrupted main, valid copy →
+  recovery", "copy only from a valid main", "orphaned temporary file is
+  removed", "concurrent writes leave no orphans". **Mutation:** writing
+  over the main file.
+- **P22. A corrupted file without a copy is not overwritten** until the
+  first edit; settings are at defaults. **Witness:** unit tests "corrupted
+  main, no copy → empty, corruption flag", "after reset and an edit — main
+  rewritten, flag cleared". **Mutation:** immediately writing an empty
+  document.
+- **P23. An edit is visible at once, on disk — on leaving.** Editor edits
+  are visible to the rebuild and to Start before the write; to disk — in one
+  write on leaving the screen or backgrounding. **Witness:** unit test
+  "staged rules are visible to a reader before the disk write"; widget tests
+  "write on leaving the screen when there are unsaved changes", "write on
+  backgrounding". **Mutation:** writing to memory only on leaving.
+- **P24. A write "from the past" does not go through.** A controller that
+  outlived a settings-set switch does not write into the new set; a halted
+  update pass does not continue. **Witness:** unit tests "a deferred fetch
+  of the old controller does not touch the new slot", "halt interrupts the
+  pass between subscriptions". **Mutation:** writing without a generation
+  check.
+- **P25. Transfer is written against fresh state:** the LX import plan is
+  recomputed at confirmation time, not taken from the preview.
+  `no witness`.
 
-## Контролируемые параметры
+## Controlled parameters
 
-| Настройка | Где | Значения | Дефолт |
-|-----------|-----|----------|--------|
-| Server lists / Routing / App settings / VPN system toggles | Backup & restore → Export | вкл/выкл | вкл |
-| Debug API config | там же, с предупреждением | вкл/выкл | **выкл** |
-| Категории импорта | превью импорта | те, что есть в файле | все, что есть в файле |
-| Mode | превью импорта | Merge with existing / Replace all | Merge |
-| Способ сохранения | лист экспорта | в файл / в Загрузки / поделиться | выбор пользователя |
+| Setting | Where | Values | Default |
+|---------|-------|--------|---------|
+| Server lists / Routing / App settings / VPN system toggles | Backup & restore → Export | on/off | on |
+| Debug API config | same place, with a warning | on/off | **off** |
+| Import categories | import preview | those present in the file | all present in the file |
+| Mode | import preview | Merge with existing / Replace all | Merge |
+| Save method | export sheet | to file / to Downloads / share | user's choice |
 
-Фиксировано: имя полной копии `lxbox-backup-v<версия>-<ГГГГММДД-ЧЧММ>.json`
-(формат не зависит от языка); имя файла переноса `lx-backup.json`; LX Backup
-пишется с `lx_backup: 2` (контракт 1.0), читается `1` и `2`. Ключей конфига
-ядра фича не отдаёт: конфиг собирается из восстановленных настроек
+Fixed: full backup name `lxbox-backup-v<version>-<YYYYMMDD-HHMM>.json`
+(locale-independent); transfer file `lx-backup.json`, `lx_backup: 2`
+(contract 1.0), `1` and `2` are read; form marker `storage_version: 1`.
+The feature emits no core config keys
 ([003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md)).
 
-## Входы / Выходы
+## Inputs / Outputs
 
-**Входы:** категории и режим; JSON-файл пользователя; Debug API
-`GET /backup/export`, `POST /backup/import`; документ настроек с диска
-(текущей или старой формы); правки экранов.
+**Inputs:** categories and mode; a JSON file; Debug API
+`GET /backup/export`, `POST /backup/import`; the settings document from
+disk; screen edits.
 
-**Выходы:** полная копия `{app: "lxbox", kind: "backup", created_at,
-source_app_version, storage{…}, vpn_settings{…}}`; LX Backup 1.0 (`lx_backup`,
-`exported_by`, `exported_at`, `sources`, `directions`, `rules`, `dns`, `vars`,
-`route`, `warp`); применённые настройки; итоги; коды `backup_*`; журнал.
+**Outputs:** full backup `{app: "lxbox", kind: "backup", created_at,
+source_app_version, storage{…}, vpn_settings{…}}`; LX Backup 1.0
+(`lx_backup`, `exported_by`, `exported_at`, `sources`, `directions`, `rules`,
+`dns`, `vars`, `route`, `warp`); applied settings; summaries; `backup_*` codes.
 
 ## Data flow
 
 ```
-Полная копия:  настройки → категории → конверт + блок VPN → файл
-Восстановление: файл → маркеры → миграция старого блока → превью (категории,
-   счётчики, режим) → merge: источники по id + upsert | replace: документ целиком
-   (+ Debug API и флаги вопросов устройства) → допуск default-deny → атомарная
-   запись → досев Направлений → блок VPN → итог + «Restart now»
-Перенос: настройки → срез записей + тонкий слой → LX Backup 1.0;
-   файл → декодер 1.0 | 0.x → план по свежему приёмнику → превью → запись → итог
-Хранение: правка → память (сразу) → одна атомарная запись (уход/сворачивание)
-Старт: документ → старая форма? → миграция → копия исходника → запись
+Full backup:  settings → categories → envelope + VPN block → file
+Restore: file → markers → migration of an old block → preview (categories,
+   counters, mode) → merge: sources by id + upsert | replace: whole document
+   (+ device Debug API and prompt flags) → default-deny allowlist → atomic
+   write → Directions seeding → VPN block → summary + "Restart now"
+Transfer: settings → record slice + thin layer → LX Backup 1.0;
+   file → 1.0 | 0.x decoder → plan against the fresh receiver → preview → write → summary
+Storage: edit → memory (at once) → one atomic write (leaving/backgrounding)
+Start: document → old form? → migration → copy of the original → write
 ```
 
-## Правила и гарантии
+## Rules and guarantees
 
-- Полная копия и перенос — разные форматы; чужой вид вход отвергает.
-- Категории полной копии (кроме блока VPN) режут один документ настроек;
-  признак формы документа едет при любом наборе. Цепочки — с «Server lists».
-- Превью до записи; замена — отдельное подтверждение «Replace all data?».
-  Восстановление с пустого главного экрана: без превью, замена, все категории.
-- Перенос: подписка — по URL, папка — по `id`, затем по имени среди прежних,
-  узел — по телу; правила файла замещают правила приёмника; DNS — слиянием.
-- Одна форма записей для диска, полной копии, LX Backup и Debug API; одна
-  миграция старой формы для всех входов.
+- Full backup and transfer are different formats; each input rejects the
+  other's.
+- Full backup categories (except the VPN block) slice one settings document;
+  the form marker travels with any set. Chains go with "Server lists".
+- Preview before writing; replace has a separate "Replace all data?"
+  confirmation. Restore from the empty home screen: no preview, replace, all
+  categories.
+- One record form for disk, full backup, LX Backup and Debug API; one
+  migration of the old form for all inputs.
 
-## Границы
+## Boundaries
 
-- Наборы настроек — [018-WORKSPACES](../018-WORKSPACES/FEATURE.md); здесь —
-  какие наборы данных они переносят и защита записи от устаревших контроллеров.
-- Смысл самих настроек — в их фичах; файл правил —
-  [004-ROUTING](../004-ROUTING/FUNCTIONS/rule-transfer.md).
-- Не входят ни в копию, ни в перенос: кэш ядра, журналы, отчёты о сбоях, кэш
-  наборов правил, тела подписок, итоговый конфиг, состояние узлов Tailscale,
-  тема оформления.
-- Шифрования, облачного автобэкапа, выбора отдельных подписок — нет.
-- Зависит от возможностей ОС: выбор и сохранение файла (на ТВ без файлового
-  менеджера — подсказка), «Поделиться», Загрузки, уведомление о сворачивании;
-  установка младшей версии поверх невозможна.
+- Settings sets — [018-WORKSPACES](../018-WORKSPACES/FEATURE.md); here — which
+  data sets they carry and write protection from stale controllers.
+- The meaning of the settings themselves is in their features; the rules
+  file — [004-ROUTING](../004-ROUTING/FUNCTIONS/rule-transfer.md).
+- Neither in the backup nor in the transfer: core cache, logs, crash
+  reports, rule-set cache, subscription bodies, the built config, Tailscale
+  state, slots, theme ([020-APP_SHELL](../020-APP_SHELL/FEATURE.md)).
+- No encryption, cloud auto-backup, or choice of individual subscriptions.
+- Depends on OS capabilities: picking and saving a file (on TV — a hint),
+  "Share", Downloads, backgrounding; an older version cannot be installed
+  over.
 
-## Функции
+## Functions
 
-| Функция | Что делает | Обещания | Файл |
-|---------|-----------|----------|------|
-| Экспорт полной копии | Категории, формат-снимок, способы сохранения | P1–P3 | [full-backup-export.md](FUNCTIONS/full-backup-export.md) |
-| Восстановление полной копии | Проверка, превью, merge/replace, допуск, что переживает | P4–P9 | [full-backup-restore.md](FUNCTIONS/full-backup-restore.md) |
-| Перенос на десктоп | LX Backup 1.0: запись, чтение, слияние, потери | P10–P16, P25 | [desktop-transfer.md](FUNCTIONS/desktop-transfer.md) |
-| Контракт хранения | Наборы данных, записи 1.0, ссылки на узлы | P17 | [storage-contract.md](FUNCTIONS/storage-contract.md) |
-| Миграция хранения | Разовый перевод формы 2.23.2 | P18–P20 | [storage-migration.md](FUNCTIONS/storage-migration.md) |
-| Надёжная запись | Атомарность, восстановление, отложенная запись, гонки | P21–P24 | [durable-writes.md](FUNCTIONS/durable-writes.md) |
+| Function | What it does | Promises | File |
+|----------|--------------|----------|------|
+| Full backup export | Categories, snapshot format, save methods | P1–P3 | [full-backup-export.md](FUNCTIONS/full-backup-export.md) |
+| Full backup restore | Validation, preview, merge/replace, allowlist, what survives | P4–P9 | [full-backup-restore.md](FUNCTIONS/full-backup-restore.md) |
+| Transfer to desktop | LX Backup 1.0: write, read, merge, losses | P10–P16, P25 | [desktop-transfer.md](FUNCTIONS/desktop-transfer.md) |
+| Storage contract | Data sets, 1.0 records, node links | P17 | [storage-contract.md](FUNCTIONS/storage-contract.md) |
+| Storage migration | One-time conversion of the 2.23.2 form | P18–P20 | [storage-migration.md](FUNCTIONS/storage-migration.md) |
+| Durable writes | Atomicity, recovery, deferred writes, races | P21–P24 | [durable-writes.md](FUNCTIONS/durable-writes.md) |
 
-## Особенности сопровождения
+## Related features
 
-- Новый ключ настроек вносится и в допуск импорта, и в категорию экспорта:
-  асимметрия уже теряла Направления (§221), автопинг (§349), MASQUE (§219).
-  Страж — P2.
-- Подпись «Wipes existing data in selected categories» у замены не совпадает
-  с P7: невыбранные категории тоже уходят.
-- После восстановления из «Backup & restore» экраны держат старый снимок до
-  перезапуска — отсюда «Restart now». Восстановление с главного экрана
-  перечитывает источники само и сразу обновляет подписки.
-- Общий с лаунчером корпус переноса без реестра контракта пропускается.
-- Миграция формы 2.23.2 — техдолг на удаление (§440, backlog); пока она жива,
-  исходная копия файла хранится всё время установки.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — subscription records in storage and in the backup; subscription bodies are not copied but re-fetched.
+- [003-CONFIG_BUILD · P11](../003-CONFIG_BUILD/FEATURE.md#promises) — the "config is stale" flag and aligning the config time on settings writes; the config is built from the restored settings.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — rules and Directions in the backup; a separate rules file.
+- [005-DNS](../005-DNS/FEATURE.md) — DNS records in the backup and their merge on transfer.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — detour links and chain positions are stored as a node address; their renaming and deletion is handled by this feature's link registry.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping settings in the backup; the core rejection verdict is not transferred.
+- [015-WARP](../015-WARP/FEATURE.md) — registrations travel as `warp[]` records; a live registration is not overwritten.
+- [018-WORKSPACES](../018-WORKSPACES/FEATURE.md) — the backup sees only the scene; slots in the old form are loaded by the storage migration; the write barrier against stale controllers.
+- [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — language and preferences are in the backup, the theme is not; startup prompt flags survive replace.
+
+## Maintenance notes
+
+- A new settings key goes both into the import allowlist and into an export
+  category: the asymmetry already lost Directions (§221), auto-ping (§349),
+  MASQUE (§219). The guard is P2. The reverse asymmetry is not caught by a
+  test: `wizard_*` flags travel in the backup and give "unknown keys
+  skipped" on your own backup.
+- The replace caption "Wipes existing data in selected categories" does not
+  match P7: unselected categories go too.
+- After a restore from "Backup & restore" the screens keep the old snapshot
+  until restart — hence "Restart now"; from the home screen the sources are
+  re-read automatically.
+- A new data set must be classified: into the document (and into a
+  category) or explicitly a "device property".
+- The 2.23.2 form migration is tech debt to remove (§440, backlog); while it
+  lives, the original copy of the file is kept for the whole lifetime of the
+  installation.

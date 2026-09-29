@@ -250,3 +250,18 @@
 - 279F §7.4: язык в General, en/ru — сейчас Appearance (541), три языка (452).
 - Без свидетеля: P13; частично P12; ручные P1, P2, P14, P23.
 - Неясно: выключить ленту поддержки нельзя; локаль ядра берётся из системы, не из приложения; нет тематической иконки Android 13+; флаги `wizard_*` не в allowlist бэкапа.
+## 021–023 (процессные) — расхождения (кандидаты в задачи)
+- `docs/BUILD.md` «Versions» называет ядро `v1.14.0-lx.28-rc.1`, пин — `v1.14.2-lx.8`; в таблице CI нет `google-play`, `PublicSubsCorpus`, поведения rc.
+- 021F устарела (черновой релиз, один APK, push только в `main`).
+- Подпись F-Droid: RELEASE_PROCESS.md и FDROID.md противоречат друг другу.
+- GOOGLE_PLAY.md «without a build-time define» — на деле `--dart-define=LXBOX_DISTRIBUTION=play`.
+- Чек-лист RELEASE_PROCESS требует `gh run watch`, который тот же документ запрещает.
+- KERNEL.md: `with_openvpn`/`with_openconnect` в списке тегов и «deliberately omitted» одновременно.
+- Комментарий ссылается на `core_build_tags_pin_test`, реальный страж `node_core_gate_test` сверяет только пин, не теги.
+- Бампы ядра lx.5…lx.8 без задач в `tasks/`.
+- 4 импорта из сервисов в `screens/` (нарушение слоёв).
+- Таблица «крупных исключений» ARCHITECTURE.md устарела: 24 файла > 1000 строк, крупнейшие не перечислены.
+- Тесты границ §291 в `app/test` не найдены.
+- ARCHITECTURE.md: NDK захардкожен, targetSdk размыт.
+- §436: статус и доки про `PLAY_RELEASE_STATUS` расходятся.
+- `check_contract_lock` на CI ничего не сверяет (копии контракта нет); корпус 529 краснеет только локально.

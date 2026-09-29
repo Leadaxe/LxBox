@@ -1,93 +1,96 @@
-# Экспорт полной резервной копии
+[English](full-backup-export.md) · [Русский](full-backup-export.ru.md)
 
-| Поле | Значение |
-|------|----------|
-| Фича | [017-BACKUP_AND_STORAGE](../FEATURE.md) |
-| Обещания | P1–P3 |
-| Состояние | ✅ написана по коду, 2026-09-28 |
+# Full backup export
 
-## Что делает
+| Field | Value |
+|-------|-------|
+| Feature | [017-BACKUP_AND_STORAGE](../FEATURE.md) |
+| Promises | P1–P3 |
+| State | ✅ written from code, 2026-09-28 |
 
-Сохраняет снимок настроек этой установки в JSON-файл, чтобы восстановить их
-здесь же после сброса или на новом телефоне с LxBox. Пользователь выбирает
-категории и способ сохранения; файл несёт документ настроек почти как есть,
-поэтому новые настройки попадают в копию без правки формата.
+## What it does
 
-## Параметры
+Saves a snapshot of this installation's settings to a JSON file, to restore
+them here after a reset or on a new phone with LxBox. The user picks
+categories and a save method; the file carries the settings document almost
+as is, so new settings get into the backup without changing the format (the
+full backup has no format version — it is a snapshot format).
 
-| Категория | Что входит | Дефолт |
-|-----------|-----------|--------|
-| Server lists | Все записи списка источников: подписки, одиночные серверы, папки, узлы автовыбора, цепочки | вкл |
-| Routing | Правила, Направления и признак их миграции, `route.final`, DNS, раздельное туннелирование, режим VPN/Proxy, пороги idle-suspend, бюджет сборки WG, пассивная проверка | вкл |
-| App settings | Все переменные, кроме Debug API; параметры теста узлов, WARP- и MASQUE-аккаунты, сортировка и ручной порядок узлов, окно профилировщика, разрыв соединений при смене узла, служебные отметки засева пресетов | вкл |
-| VPN system toggles | Автозапуск, keep on exit, фоновый режим, пересылка и подробность журнала ядра, allow bypass, auto redirect, лимит памяти | вкл |
-| Debug API config | Включение, порт, токен Debug API | **выкл**, подпись «Includes the access token. Sensitive — leave OFF unless you know why.» |
+## Parameters
 
-Способы сохранения — лист действий: «в файл» (системный диалог), «в
-Загрузки», «поделиться». Пункты, недоступные на устройстве, не предлагаются.
+| Category | What is included | Default |
+|----------|------------------|---------|
+| Server lists | All records of the source list: subscriptions, single servers, folders, auto-select nodes, chains | on |
+| Routing | Rules, Directions and their migration marker, `route.final`, DNS, split tunneling, VPN/Proxy mode, idle-suspend thresholds, WG build budget, passive check | on |
+| App settings | All vars except the Debug API: template vars, app flags (auto-update, language, region, haptics, rotation, subscription request identity including the HWID, automation, Wi-Fi history, config pinning for debugging §037, startup prompt flags); node test parameters, WARP and MASQUE accounts, node sorting and manual order, profiler window, dropping connections on node switch, preset seeding marks | on |
+| VPN system toggles | Auto-start, keep on exit, background mode, core log and its verbosity, allow bypass, auto redirect, memory limit | on |
+| Debug API config | Enabling, port, token of the Debug API | **off**, caption "Includes the access token. Sensitive — leave OFF unless you know why." |
 
-## Входы / Выходы
+Save methods — an action sheet: "to file" (system dialog), "to Downloads",
+"share". Items unavailable on the device are not offered.
 
-**Входы:** галочки категорий; выбор способа сохранения.
+## Inputs / Outputs
 
-**Выходы:** файл `lxbox-backup-v<версия>-<ГГГГММДД-ЧЧММ>.json`:
+**Inputs:** category checkboxes; the choice of save method.
+
+**Outputs:** the file `lxbox-backup-v<version>-<YYYYMMDD-HHMM>.json`:
 
 ```json
 {
   "app": "lxbox", "kind": "backup",
   "created_at": "<ISO-8601 UTC>",
-  "source_app_version": "<версия>+<сборка>",
-  "storage": { …документ настроек, срезанный по категориям… },
-  "vpn_settings": { …тумблеры VPN… }
+  "source_app_version": "<version>+<build>",
+  "storage": { …settings document sliced by category… },
+  "vpn_settings": { …VPN toggles… }
 }
 ```
 
-Итог — «Saved as … (N bytes)», «Saved to Downloads: … (N bytes)» или
-«Backup exported (N bytes)»; размер — в байтах файла.
+Result — "Saved as … (N bytes)", "Saved to Downloads: … (N bytes)" or
+"Backup exported (N bytes)"; the size is in file bytes.
 
-## Правила и инварианты
+## Rules and invariants
 
-- Ни одной категории — «Nothing to export — pick at least one category.»,
-  файл не создаётся.
-- Способ сохранения выбирается до построения файла: закрытый лист — работа не
-  делается.
-- Признак формы документа (`storage_version`) пишется при любом наборе
-  категорий: без него копия читалась бы как форма 2.23.2.
-- Список источников едет одной галочкой целиком, цепочки — вместе с
-  остальными записями (§524).
-- Фильтр категорий работает только по известным ключам; неизвестный ключ не
-  попадает никуда (чистка мусора — на входе импорта).
-- Каждый ключ, который принимает импорт, принадлежит какой-то категории (P2).
-- Блок `storage` отсутствует, если после среза он пуст; `vpn_settings` —
-  только при включённой категории.
-- Имя файла и время в нём не зависят от языка интерфейса.
-- Отмена системного диалога сохранения — молча; ошибка сохранения — строка с
-  причиной; сбой построения — «Export failed: …».
-- Debug API `GET /backup/export[?include=storage,vpn_settings]` отдаёт тот же
-  конверт, но документ настроек целиком, без категорий (включая Debug API);
-  `from=v0_bak` — исходник формы 2.23.2, сохранённый миграцией (для стендов
-  отката, кнопки нет).
+- No category — "Nothing to export — pick at least one category.", no file
+  is created.
+- The document form marker (`storage_version`) is written with any set of
+  categories: without it the backup would be read as the 2.23.2 form.
+- The source list travels as a whole with one checkbox, chains — together
+  with the other records (§524).
+- The category filter works only on known keys; an unknown key goes nowhere
+  (garbage cleanup is at the import input).
+- Every key import accepts belongs to some category (P2). The reverse is not
+  guaranteed: `wizard_*` flags are exported with "App settings", but import
+  does not accept them.
+- The `storage` block is absent if it is empty after slicing; `vpn_settings`
+  — only when the category is on.
+- The file name and the time in it do not depend on the UI language.
+- Cancelling the system save dialog — silently; a save error — a line with
+  the reason; a build failure — "Export failed: …".
+- Debug API `GET /backup/export[?include=storage,vpn_settings]` returns the
+  same envelope, but with the whole settings document, without categories
+  (including the Debug API); `from=v0_bak` — the 2.23.2-form original saved
+  by the migration (for rollback test benches, no button).
 
-## Границы
+## Boundaries
 
-- Копия не шифруется; где хранить файл — решает пользователь.
-- Не входят: кэш ядра, журналы, отчёты о сбоях, кэш наборов правил, тела
-  подписок (узлы подписок перекачиваются), итоговый конфиг, состояние узлов
-  Tailscale, тема оформления.
-- Файл предназначен LxBox; для десктопного лаунчера —
-  [перенос на десктоп](desktop-transfer.md).
-- Сохранение в файл, в Загрузки и «Поделиться» зависят от возможностей ОС.
+- The backup is not encrypted; where to keep the file is the user's call.
+- Not included: core cache, logs, crash reports, rule-set cache,
+  subscription bodies (subscription nodes are re-fetched), the built config,
+  Tailscale node state, set slots, theme.
+- The file is meant for LxBox; for the desktop launcher —
+  [transfer to desktop](desktop-transfer.md).
+- Saving to file, to Downloads and "Share" depend on OS capabilities.
 
-## Ревизии
+## Revisions
 
-| # | Ревизия | Статус | Суть |
-|---|---------|--------|------|
-| 1 | [026](../../../tasks/026-backup-export-import.md) | Done | Экспорт и импорт настроек через Debug API |
-| 2 | [040F](../../../tasks/040F-backup-restore-ui/spec.md) | Implemented | Экран Backup & restore, категории с галочками, Debug выкл по умолчанию |
-| 3 | [063](../../../tasks/063-backup-format-snapshot-rewrite.md) | Done | Один формат — снимок документа настроек, без поля версии |
-| 4 | [189](../../../tasks/189-native-prefs-mirror-in-json.md) | ✅ Реализовано | Тумблеры VPN — из единого зеркала, формат блока прежний |
-| 5 | [221](../../../tasks/221-backup-export-allowlist-asymmetry.md) | Done | Экспорт терял Направления: допуск ⊆ экспорт |
-| 6 | [349](../../../tasks/349-two-month-revision-services-fixes.md) | — | Автопинг при старте был сиротой копии |
-| 7 | [374](../../../tasks/374-backup-export-save-to-file.md) | Device-verified | «Сохранить в файл» и «в Загрузки» вместо только «Поделиться» |
-| 8 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | Признак формы едет при любом наборе категорий |
-| 9 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Цепочки — в категории Server lists |
+| # | Revision | Status | Summary |
+|---|----------|--------|---------|
+| 1 | [026](../../../tasks/026-backup-export-import.md) | Done | Settings export and import via the Debug API |
+| 2 | [040F](../../../tasks/040F-backup-restore-ui/spec.md) | Implemented | Backup & restore screen, category checkboxes, Debug off by default |
+| 3 | [063](../../../tasks/063-backup-format-snapshot-rewrite.md) | Done | One format — a snapshot of the settings document, no version field |
+| 4 | [189](../../../tasks/189-native-prefs-mirror-in-json.md) | ✅ Implemented | VPN toggles — from the single mirror, block format unchanged |
+| 5 | [221](../../../tasks/221-backup-export-allowlist-asymmetry.md) | Done | Export lost Directions: allowlist ⊆ export |
+| 6 | [349](../../../tasks/349-two-month-revision-services-fixes.md) | Released v2.19.3 | Auto-ping on start was an orphan of the backup |
+| 7 | [374](../../../tasks/374-backup-export-save-to-file.md) | Device-verified | "Save to file" and "to Downloads" instead of only "Share" |
+| 8 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | The form marker travels with any set of categories |
+| 9 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Chains — in the Server lists category |

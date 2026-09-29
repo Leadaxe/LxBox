@@ -66,9 +66,9 @@ a screen. One task may be listed as a revision of several functions.
 
 | # | Feature | What it gives | Absorbed (`F`) | State |
 |---|---------|---------------|----------------|-------|
-| [021-CORE_CONTRACT](021-CORE_CONTRACT/FEATURE.md) | The boundary with the sing-box-lx core: versions, libbox contract, feedback to the core | 121 · `docs/CONTRACT.md` · `docs/contract/` | — |
-| [022-ARCHITECTURE](022-ARCHITECTURE/FEATURE.md) | Code structure principles: layers, facades, "cohesion over line count" | 291 | — |
-| [023-BUILD_CI_RELEASE](023-BUILD_CI_RELEASE/FEATURE.md) | Build, checks, release, stores | 021 · `docs/RELEASE_PROCESS.md` | — |
+| [021-CORE_CONTRACT](021-CORE_CONTRACT/FEATURE.md) | The boundary with the sing-box-lx core: versions, libbox contract, feedback to the core | 121 · `docs/CONTRACT.md` · `docs/contract/` | ✅ 2026-09-29 |
+| [022-ARCHITECTURE](022-ARCHITECTURE/FEATURE.md) | Code structure principles: layers, facades, "cohesion over line count" | 291 | ✅ 2026-09-29 |
+| [023-BUILD_CI_RELEASE](023-BUILD_CI_RELEASE/FEATURE.md) | Build, checks, release, stores | 021 · `docs/RELEASE_PROCESS.md` | ✅ 2026-09-29 |
 
 State: `—` not written · `✍` in progress · `✅` written from code · `D` confirmed by the owner.
 

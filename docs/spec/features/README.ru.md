@@ -66,9 +66,9 @@
 
 | # | Фича | Что даёт | Поглотила (`F`) | Состояние |
 |---|------|----------|-----------------|-----------|
-| [021-CORE_CONTRACT](021-CORE_CONTRACT/FEATURE.ru.md) | Граница с ядром sing-box-lx: версии, контракт libbox, обратная связь ядру | 121 · `docs/CONTRACT.md` · `docs/contract/` | — |
-| [022-ARCHITECTURE](022-ARCHITECTURE/FEATURE.ru.md) | Принципы устройства кода: слои, фасады, «cohesion over line count» | 291 | — |
-| [023-BUILD_CI_RELEASE](023-BUILD_CI_RELEASE/FEATURE.ru.md) | Сборка, проверки, релиз, магазины | 021 · `docs/RELEASE_PROCESS.md` | — |
+| [021-CORE_CONTRACT](021-CORE_CONTRACT/FEATURE.ru.md) | Граница с ядром sing-box-lx: версии, контракт libbox, обратная связь ядру | 121 · `docs/CONTRACT.md` · `docs/contract/` | ✅ 2026-09-29 |
+| [022-ARCHITECTURE](022-ARCHITECTURE/FEATURE.ru.md) | Принципы устройства кода: слои, фасады, «cohesion over line count» | 291 | ✅ 2026-09-29 |
+| [023-BUILD_CI_RELEASE](023-BUILD_CI_RELEASE/FEATURE.ru.md) | Сборка, проверки, релиз, магазины | 021 · `docs/RELEASE_PROCESS.md` | ✅ 2026-09-29 |
 
 Состояние: `—` не написана · `✍` в работе · `✅` написана по коду · `D` подтверждена владельцем.
 
