@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-20 |
 | Дата завершения | 2026-04-20 |
 | Коммиты | `8c3df2f` feat(vpn): blocking stopVPN + intent-based sticky reset |
-| Связанные spec'ы | [`003 home screen §8b`](../features/003%20home%20screen/spec.md), [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md) |
+| Связанные spec'ы | [`003 home screen §8b`](../tasks/003F-home-screen/spec.md), [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md) |
 | Связанные задачи | [001](./001-reconnect-sink-leak.md) |
 
 ## Проблема

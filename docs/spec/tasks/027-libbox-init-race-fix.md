@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md), [`038 crash diagnostics`](../features/038%20crash%20diagnostics/spec.md) |
+| Связанные spec'ы | [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md), [`038 crash diagnostics`](../tasks/038F-crash-diagnostics/spec.md) |
 
 ## Проблема
 

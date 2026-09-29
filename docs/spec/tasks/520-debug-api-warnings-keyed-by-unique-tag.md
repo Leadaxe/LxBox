@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-24 |
 | Дата завершения | 2026-09-24 |
 | Коммиты | ветка `task-520` (не в develop) |
-| Связанные spec'ы | [`519`](519-connecting-timeout-post-start.md) (разведка, раздел про счётчик), [`310`](310-xray-array-multi-node-import.md) (провайдер зовёт все узлы `proxy`), [`439`](../features/439%20storage-contract-1-0/spec.md) (NODE_LINK, адреса узлов), [`400`](400-identity-tag-mirror.md) (идентичность = уникализованный тег) |
+| Связанные spec'ы | [`519`](519-connecting-timeout-post-start.md) (разведка, раздел про счётчик), [`310`](310-xray-array-multi-node-import.md) (провайдер зовёт все узлы `proxy`), [`439`](../tasks/439F-storage-contract-1-0/spec.md) (NODE_LINK, адреса узлов), [`400`](400-identity-tag-mirror.md) (идентичность = уникализованный тег) |
 | Источник | Разведка в спеке 519 (демо A–D на эмуляторе 24.09.2026) |
 
 ## Проблема

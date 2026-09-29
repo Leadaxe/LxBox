@@ -9,7 +9,7 @@
 | Status | Implemented (device-smoke ✅) |
 | Started | 2026-06-16 |
 | Trigger | Ядро `sing-box-lx v1.13.13-lx.11` (downstream 009) получило WireSock-style поля `id/ip/ib` на `wireguard`-endpoint — ядро само разворачивает их в AmneziaWG `i1` CPS-пакет нужного протокола. LxBox генерил `i1` сам в Dart (§126/§136) — дублирующая логика. Переходим на поля ядра (модель A): меньше Dart-кода, один источник истины, 4 протокола вместо одного, домен реально виден для dns/sip. |
-| Related | [§126](126-warp-amneziawg-obfuscation.md)/[§136](136-warp-quic-i1-generator.md) (Dart-генератор i1 — ВЫПИЛЕН); [§142](142-warp-reserved-optional.md) (reserved); [§025](../features/025%20warp%20integration/spec.md); ядро: `sing-box-lx/SPECS/009-F-O-WIRESOCK_MASQUERADE_PROFILES` |
+| Related | [§126](126-warp-amneziawg-obfuscation.md)/[§136](136-warp-quic-i1-generator.md) (Dart-генератор i1 — ВЫПИЛЕН); [§142](142-warp-reserved-optional.md) (reserved); [§025](../tasks/025F-warp-integration/spec.md); ядро: `sing-box-lx/SPECS/009-F-O-WIRESOCK_MASQUERADE_PROFILES` |
 | Files touched | `models/node_spec.dart` (Awg.strKeys += id/ip/ib), `services/warp/warp_client.dart` (buildAmneziaAwg), `services/warp/masquerade_params.dart` (был awg_junk.dart → QuicParams), `controllers/subscription_controller.dart`, `screens/warp_wizard_screen.dart`, `android/libbox.version` (lx.11) |
 
 ## Поля masquerade (WireSock-формат, ядро 009)

@@ -5,7 +5,7 @@
 | Тип | bugfix (тихий: узлы не поднимаются, ошибки в UI нет) |
 | Статус | ✅ DEVICE-VERIFIED (эмулятор, узлы из дампа с разрешения пользователя) |
 | Дата | 2026-08-03 |
-| Связанные | [`028 antidpi sni obfuscation`](../features/028%20antidpi%20sni%20obfuscation/spec.md) (источник бага), [`281`](281-utls-fingerprint-normalize.md), [`343`](343-reality-short-id.md) |
+| Связанные | [`028 antidpi sni obfuscation`](../tasks/028F-antidpi-sni-obfuscation/spec.md) (источник бага), [`281`](281-utls-fingerprint-normalize.md), [`343`](343-reality-short-id.md) |
 | Источник | Жалоба пользователя (Telegram, 02–03.08.2026) + дамп `lxbox-dump-2026-08-03T20-13-39.json` |
 
 ## Проблема

@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-05-10 |
-| Зависимости | [`features/040 backup restore ui`](../features/040%20backup%20restore%20ui/spec.md) — родительская фича; этот task — её v2 wire-format. [§031 debug api](../features/031%20debug%20api/spec.md) (`/backup/*` endpoints). |
+| Зависимости | [`tasks/040F-backup-restore-ui`](../tasks/040F-backup-restore-ui/spec.md) — родительская фича; этот task — её v2 wire-format. [§031 debug api](../tasks/031F-debug-api/spec.md) (`/backup/*` endpoints). |
 | Триггер | Юзер пытается восстановить backup от 10 мая, в котором был inline rule_set «Ru Apps» (57 `package_name`) → выясняется что **в backup'е custom_rules вообще нет**: они хранятся top-level в `lxbox_settings.json`, а `BackupService` ходил только через `getAllVars()` который читает только `data['vars']`. Тот же баг с `tun_apps`, `enabled_groups`, `enabled_rules`, `route_final`, `rule_outbounds`, `dns_options`. Restore терял routing полностью. |
 
 ## Цель
@@ -211,6 +211,6 @@ Symmetric с UI. Файл export'нутый из UI можно скормить 
 | [app/lib/services/debug/handlers/backup.dart](../../../app/lib/services/debug/handlers/backup.dart) | Sync wire-format с BackupService |
 | [app/lib/screens/backup_screen.dart](../../../app/lib/screens/backup_screen.dart) | +5-й checkbox "VPN system toggles"; preview категории |
 | [app/test/services/backup_service_test.dart](../../../app/test/services/backup_service_test.dart) | NEW — 13 cases including round-trip |
-| [docs/spec/features/040 backup restore ui/spec.md](../features/040%20backup%20restore%20ui/spec.md) | Update note наверху, статус Implemented |
+| [docs/spec/tasks/040F-backup-restore-ui/spec.md](../tasks/040F-backup-restore-ui/spec.md) | Update note наверху, статус Implemented |
 | [docs/api/debug-api-reference.md](../../api/debug-api-reference.md) | `/backup/*` секция переписана |
 | [CHANGELOG.md](../../../CHANGELOG.md) | Unreleased entry |

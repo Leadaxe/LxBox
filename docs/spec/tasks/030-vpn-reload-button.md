@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | ✅ Реализовано (позже) — `reloadVPN()` + `canReload` cooldown + UI-тап in-place reload; native `ACTION_RELOAD`→`startOrReloadService`. Шапка «Draft» устарела. |
 | Дата | 2026-05-01 |
-| Связанные spec'ы | [`tasks/060-libbox-1-13-migration`](060-libbox-1-13-migration/spec.md), [`031 debug api`](../features/031%20debug%20api/spec.md) |
+| Связанные spec'ы | [`tasks/060-libbox-1-13-migration`](060-libbox-1-13-migration/spec.md), [`031 debug api`](../tasks/031F-debug-api/spec.md) |
 
 ## Цель
 

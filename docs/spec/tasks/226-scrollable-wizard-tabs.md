@@ -28,6 +28,6 @@ TabBar в Add server wizard (`add_server_wizard_screen.dart`) по умолча�
 
 ## Связано
 
-- Фича [074 add-server-wizard](../features/074%20add-server-wizard/spec.md).
+- Фича [074 add-server-wizard](../tasks/074F-add-server-wizard/spec.md).
 - §222 (HTTP-таб — рост числа вкладок, из-за которого скролл и нужен).
 - §158 (тот же `TabAlignment.start`-паттерн в App Settings).

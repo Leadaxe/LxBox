@@ -262,7 +262,7 @@ flag-set — честный 0 (формат ответа не меняется).
   переписать).
 - `docs/api/debug-api-reference.md` 447-478 (409-quirks убрать, пример с
   `healed.rules:1` перезаписать, heal-триггеры).
-- `docs/spec/features/248 detour-channels/spec.md` — update-блоки
+- `docs/spec/tasks/248F-detour-channels/spec.md` — update-блоки
   (blockquote-прецедент §254 там же, строки 72-78) в секции: роли (34-36),
   Q1/инварианты (48-55, 62-70), validFinals (99-103), «одна точка» (125-128),
   heal-матрица (160-166), SnackBar-матрица (188-198), Debug API (220-231),

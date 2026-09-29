@@ -5,7 +5,7 @@
 | Статус | **Исправлено в ветке `wave-446-fixes`**, юнит- и widget-тесты. Device-verify НЕ проводился |
 | Дата | 2026-09-15 |
 | Повод | Проверка выпущенной v2.24.0 на AVD `LxBox_test` |
-| Связанные | [§417](../features/417%20workspaces/spec.md) (Workspaces), §076/§113 (признак грязного конфига), [§225](225-raw-json-routing-rule.md) (JSON-правило), [§413](413-backup-replace-keeps-debug-api.md) (перенос ключей при полной замене) |
+| Связанные | [§417](../tasks/417F-workspaces/spec.md) (Workspaces), §076/§113 (признак грязного конфига), [§225](225-raw-json-routing-rule.md) (JSON-правило), [§413](413-backup-replace-keeps-debug-api.md) (перенос ключей при полной замене) |
 
 ## 1. Загрузка слота Workspaces не пересобирала конфиг
 

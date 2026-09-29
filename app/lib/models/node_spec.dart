@@ -1077,7 +1077,7 @@ final class MasqueSpec extends NodeSpec {
   final int? mtu;
 
   /// idle-suspend туннеля (Go-duration, напр. `5m`). Пусто = дефолт ядра (5m);
-  /// отрицательное (`-1s`) = выключить. См. [§128](../128%20idle-suspend/).
+  /// отрицательное (`-1s`) = выключить. См. §128F (docs/spec/tasks/128F-idle-suspend/spec.md).
   final String idleTimeout;
 
   /// QUIC keepalive-период (Go-duration, напр. `30s`). Пусто = дефолт (30s);

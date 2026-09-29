@@ -47,6 +47,41 @@ Use of L×Box is allowed only in strict compliance with the laws of the country 
 
 ## Features
 
+Every capability below is described as a black-box specification in the
+**[feature catalogue](docs/spec/features/README.md)**: what it promises the
+user, what it takes and gives, where it stops. Start there if you want the
+precise behaviour; the sections below are the tour.
+
+| Area | Feature spec |
+|------|--------------|
+| Subscriptions, file and pasted sources, auto-update, per-node disable | [001-SUBSCRIPTIONS](docs/spec/features/001-SUBSCRIPTIONS/FEATURE.md) |
+| Importing share links and configs: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, AnyTLS, NaïveProxy, SSH, SOCKS, HTTP, WireGuard, AmneziaWG, MASQUE, Tailscale, Xray and sing-box JSON | [002-NODE_IMPORT](docs/spec/features/002-NODE_IMPORT/FEATURE.md) |
+| Building the sing-box config: template, variables, settings lifecycle | [003-CONFIG_BUILD](docs/spec/features/003-CONFIG_BUILD/FEATURE.md) |
+| Routing rules, presets, rule-set cache, Directions | [004-ROUTING](docs/spec/features/004-ROUTING/FEATURE.md) |
+| DNS servers, rules, groups, FakeIP, cache | [005-DNS](docs/spec/features/005-DNS/FEATURE.md) |
+| Detour, hop chains, load balancing | [006-DETOUR_AND_BALANCE](docs/spec/features/006-DETOUR_AND_BALANCE/FEATURE.md) |
+| Home screen: node list, filters, sorting, folders, active node | [007-NODE_LIST](docs/spec/features/007-NODE_LIST/FEATURE.md) |
+| Custom nodes, node settings, add-server wizard | [008-NODE_EDITOR](docs/spec/features/008-NODE_EDITOR/FEATURE.md) |
+| Ping, URLTest, node diagnostics, auto-disable, speed test | [009-NODE_HEALTH](docs/spec/features/009-NODE_HEALTH/FEATURE.md) |
+| The VPN tunnel: start/stop, VPN and proxy modes, autostart, sleep, recovery | [010-VPN_SERVICE](docs/spec/features/010-VPN_SERVICE/FEATURE.md) |
+| Split tunneling by app | [011-SPLIT_TUNNELING](docs/spec/features/011-SPLIT_TUNNELING/FEATURE.md) |
+| Live status, connections, statistics, per-app traffic, DNS trace | [012-LIVE_STATE](docs/spec/features/012-LIVE_STATE/FEATURE.md) |
+| Logs, crash reports, diagnostic dump, Debug API | [013-DIAGNOSTICS](docs/spec/features/013-DIAGNOSTICS/FEATURE.md) |
+| Quick Connect, Intent API, Tasker integration | [014-AUTOMATION](docs/spec/features/014-AUTOMATION/FEATURE.md) |
+| Cloudflare WARP: one-tap registration, WireGuard and MASQUE nodes | [015-WARP](docs/spec/features/015-WARP/FEATURE.md) |
+| DPI bypass: TLS fragmentation, SNI tricks, ECH, REALITY, XHTTP | [016-DPI_HARDENING](docs/spec/features/016-DPI_HARDENING/FEATURE.md) |
+| Backup, restore, desktop transfer, storage contract | [017-BACKUP_AND_STORAGE](docs/spec/features/017-BACKUP_AND_STORAGE/FEATURE.md) |
+| Workspaces — named settings sets | [018-WORKSPACES](docs/spec/features/018-WORKSPACES/FEATURE.md) |
+| Config editor and config pinning | [019-CONFIG_EDITOR](docs/spec/features/019-CONFIG_EDITOR/FEATURE.md) |
+| App settings, theme, localization, first run, update check | [020-APP_SHELL](docs/spec/features/020-APP_SHELL/FEATURE.md) |
+| The config template, its language and preset language; extending the client through the template | [024-TEMPLATE](docs/spec/features/024-TEMPLATE/FEATURE.md) |
+| Contract registry: protocol schemas, node sanitizing, build gate, warning codes | [025-CONTRACT_REGISTRY](docs/spec/features/025-CONTRACT_REGISTRY/FEATURE.md) |
+| Directions: the routing targets vpn-N, direct-out, block | [026-DIRECTIONS](docs/spec/features/026-DIRECTIONS/FEATURE.md) |
+| Debug API: local HTTP control surface for automation and diagnostics | [027-DEBUG_API](docs/spec/features/027-DEBUG_API/FEATURE.md) |
+| Traffic profiler: per-app connection log, attribution, DNS trace | [028-TRAFFIC_PROFILER](docs/spec/features/028-TRAFFIC_PROFILER/FEATURE.md) |
+| Localization: languages, English-as-key model, translation workflow | [029-LOCALIZATION](docs/spec/features/029-LOCALIZATION/FEATURE.md) |
+| Tailscale: the phone as a node of your tailnet inside the VPN | [030-TAILSCALE](docs/spec/features/030-TAILSCALE/FEATURE.md) |
+
 <details>
 <summary><strong>Servers & Subscriptions</strong> — every proxy source in one place</summary>
 
@@ -82,7 +117,7 @@ Tap **Get WARP** on the servers screen → a tunnel to Cloudflare is registered 
 - **SCAN WARP** (§284) — the **Make experiment** button in the wizard creates an experiment folder: it generates a pool of WARP variants (WireGuard / AWG / MASQUE h2/h3) across Cloudflare address ranges and pings them; dead nodes disable themselves. Finds a working endpoint on your specific network without manual trial and error.
 - **WARP+** (optional): paste a license key under *Advanced* to bind WARP+ (Argo Smart Routing). Empty = free WARP.
 - **Idempotent**: re-tapping reuses the cached account instead of registering a new device; *Re-register* forces a fresh one.
-- See [spec 025](docs/spec/features/025%20warp%20integration/spec.md)
+- See [spec 025](docs/spec/tasks/025F-warp-integration/spec.md)
 </details>
 
 <details>
@@ -106,7 +141,7 @@ Subscriptions refresh in the background without spamming providers. Every reques
 - **Gates**: `minRetryInterval=15min` (persists via `lastUpdateAttempt`), `maxFailsPerSession=5`, `10s ± 2s` between subscriptions, dedup flags against concurrent runs and double-clicks
 - Crash-safe init sweep: a stuck `inProgress` on disk resets to `failed`
 - Rebuilding the config **never** triggers HTTP — only local assembly from already-loaded nodes
-- See [spec 027](docs/spec/features/027%20subscription%20auto%20update/spec.md)
+- See [spec 027](docs/spec/tasks/027F-subscription-auto-update/spec.md)
 </details>
 
 <details>
@@ -148,7 +183,7 @@ Block ads, route Russian domains directly, send BitTorrent through a chosen dire
 - **SRS is local-only** — no auto-update, manual download via the ☁ icon, the rule stays disabled until it is cached
 - Drag-reorder, long-press → Delete with confirmation, dirty-aware save ("Discard changes?"), a View tab with the exact sing-box fragment
 - Default traffic fallback (`route.final`)
-- See [spec 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [spec 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
+- See [spec 030](docs/spec/tasks/030F-custom-routing-rules/spec.md), [spec 011](docs/spec/tasks/011F-local-ruleset-cache/spec.md)
 </details>
 
 <details>
@@ -175,7 +210,7 @@ Declare rules like *"on this Wi-Fi → direct"* persistently — no temporary ha
 
 The rule editor offers chips with **Add current** (read the live SSID), **Pick saved** (history of visited networks) and **Manual**; Android permission gates are wired in. Network history is recorded only if you opt in (App Settings → Diagnostics), a network is stored after ≥5 minutes on it, and the history is capped at 50 entries.
 
-- See [spec 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [feature highlight](docs/features/wifi-aware-routing.md)
+- See [spec 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [feature highlight](docs/spec/tasks/051-wifi-aware-routing-guide.md)
 </details>
 
 <details>
@@ -230,7 +265,7 @@ Three orthogonal tricks — combinable on the same outbound.
 - **TLS Record Fragment** — splits the handshake into multiple TLS records
 - **Mixed-case SNI** — randomises `server_name` case (`WwW.gOoGle.CoM`); bypasses naive exact-match DPI used by regional providers (per RFC 6066 the field is case-insensitive, so server behaviour doesn't change). Ineffective against GFW-class filtering
 - All tricks apply to the first hop only (inner hops are inside the tunnel, local DPI can't see them)
-- See [spec 020](docs/spec/features/020%20security%20and%20dpi%20bypass/spec.md), [spec 028](docs/spec/features/028%20antidpi%20sni%20obfuscation/spec.md)
+- See [spec 020](docs/spec/tasks/020F-security-and-dpi-bypass/spec.md), [spec 028](docs/spec/tasks/028F-antidpi-sni-obfuscation/spec.md)
 </details>
 
 <details>
@@ -343,6 +378,8 @@ See [Protocol Documentation](docs/PROTOCOLS.md) for full URI format details and 
 ---
 
 ## Architecture
+
+Specifications live in [`docs/spec/`](docs/spec/README.md): black-box features in `features/`, implementation history in `tasks/`.
 
 L×Box is built around a **3-layer parser/builder pipeline** (spec 026):
 

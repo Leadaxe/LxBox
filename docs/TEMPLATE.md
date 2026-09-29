@@ -30,9 +30,9 @@ At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
 wizard_template.json
 │
 ├─ parser_config                   object{2 keys}
-│   ├─ version                     int           the parser pipeline's schema (§026)
+│   ├─ version                     int           read, nothing depends on it (no template migrations)
 │   └─ parser                      object{1 keys}
-│       └─ reload                  duration      auto-refresh subscriptions interval (Go-style "12h")
+│       └─ reload                  duration      not used by the app (Go-style "12h")
 │
 ├─ dns_options                     object{2 keys}       the default DNS shape for the builder
 │   ├─ servers[]                   list          template-level DNS servers (7 defaults)
@@ -213,8 +213,8 @@ Every key is described in detail in the sections below.
 
 | Key | Type | Purpose |
 |---|---|---|
-| `version` | int | The parser pipeline's version ([§026]). It is bumped on breaking parser changes. |
-| `parser.reload` | a duration string | The periodic auto-refresh interval for subscriptions ([§027]). Go style: `12h`, `30m`, and so on. It is overridden per subscription. |
+| `version` | int | Read into the model, but nothing depends on it: the template has no migration mechanism of its own, its version is the app build; a breaking change of the template form is served by the storage form (owner decision 2026-09-29, audit [591](spec/tasks/591-spec-kit-revision-audit.md)). |
+| `parser.reload` | a duration string | Not used by the app. Subscriptions refresh by their own per-subscription interval and the auto-update triggers; refreshing by this interval on Start (§010F) is not planned (audit [591](spec/tasks/591-spec-kit-revision-audit.md)). |
 
 ---
 
@@ -1229,7 +1229,7 @@ and swaps in the translation keyed by that text.
   key (a `template_check` failure) and the new English key is missing (a warning; a failure
   under strict). The workflow is identical to a UI string: rename the key and revisit the translation.
 
-**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/features/279%20localization/spec.md)):
+**The traversal schema** (the full table is in [the §279 spec, §3.2](./spec/tasks/279F-localization/spec.md)):
 the applier visits the display fields of sections, of global and rule-local vars, of magic nodes,
 of directions, of DNS servers and of the ping and speed presets. An element of a preset's
 `dns_servers[]` wrapped in `#if` is unwrapped: the display fields come from `#value` and, when
@@ -1300,12 +1300,12 @@ on both pseudo-vars (`rule_enable` AND `dns_enable`), so it fires along either p
 
 - [`STORAGE.md`](./STORAGE.md) — the user state in `lxbox_settings.json` (what the user changes, including the directions)
 - [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution and expansion (formerly feature §005x, superseded by §026)
-- [§026 parser v2](./spec/features/026%20parser%20v2/spec.md) — `parser_config.version`
-- [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` and expansion
-- [§030 custom routing rules](./spec/features/030%20custom%20routing%20rules/spec.md) — `selectable_rules[*].rule` shape, order matters
+- [§026 parser v2](./spec/tasks/026F-parser-v2/spec.md) — `parser_config.version`
+- [§033 preset bundles](./spec/tasks/033F-preset-bundles/spec.md) — `selectable_rules[]` and expansion
+- [§030 custom routing rules](./spec/tasks/030F-custom-routing-rules/spec.md) — `selectable_rules[*].rule` shape, order matters
 - [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (formerly feature §041)
 - [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) plus [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` and the template-versus-storage relationship
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
-- [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`
-- [§022 app settings](./spec/features/022%20app%20settings/spec.md) — the Wizard UI and `sections[]`
-- [§279 localization](./spec/features/279%20localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)
+- [§015 speed test](./spec/tasks/015F-speed-test/spec.md) — `speed_test_options`
+- [§022 app settings](./spec/tasks/022F-app-settings/spec.md) — the Wizard UI and `sections[]`
+- [§279 localization](./spec/tasks/279F-localization/spec.md) — the l10n overlay of the template's display text; the overlay key is the English text itself (the same principle as the `ui/` dictionary, the `{value}` format, with no addresses and no `src` hash — §285); the translator guide is [`l10n.md`](./l10n.md)

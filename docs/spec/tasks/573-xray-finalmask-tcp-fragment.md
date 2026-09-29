@@ -7,7 +7,7 @@
 | Дата завершения | 2026-09-27 |
 | Коммиты | `chore(contract): синк 1.1.83 (2a373e8c)`; `feat(573): Xray finalmask.tcp fragment → tls.fragment; шум tcpSettings и extra` |
 | Контракт | 1.1.83, коммит лаунчера `2a373e8c`, `TASKS_LXBOX.md` §80 |
-| Связанные spec'ы | [§488](488-xray-dialer-proxy-freedom-fragment.md) (та же фрагментация через `dialerProxy` → freedom), [§572](572-notifications-group-by-code.md), features/321 xray-json-parsing, features/480 registry-driven-mapper |
+| Связанные spec'ы | [§488](488-xray-dialer-proxy-freedom-fragment.md) (та же фрагментация через `dialerProxy` → freedom), [§572](572-notifications-group-by-code.md), tasks/321F-xray-json-parsing, tasks/480F-registry-driven-mapper |
 
 ## Проблема
 

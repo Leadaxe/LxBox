@@ -5,7 +5,7 @@
 | Статус | Done (рефакторная база, схема в продакшене; live spec — §014 dns settings) |
 | Дата | 2026-05-02 |
 | История | Был `features/041 dns rules refactor`, демотирован в task через §054 (refactor → результат описан в §014) |
-| Зависимости | [`features/014 dns settings`](../../features/014%20dns%20settings/spec.md), [`features/033 preset bundles`](../../features/033%20preset%20bundles/spec.md) |
+| Зависимости | [`tasks/014F-dns-settings`](../../tasks/014F-dns-settings/spec.md), [`tasks/033F-preset-bundles`](../../tasks/033F-preset-bundles/spec.md) |
 | Триггер | Открытие `DnsSettingsScreen` молча промоутит template defaults в user override (`dns_options.rules_json`), что заставляет builder игнорировать `extraRules` от активных пресетов. Симптом: preset `ru-direct` имеет `dns_rule: {rule_set: "ru-domains", server: yandex_doh}` — но в финальном конфиге его нет, RU-домены резолвятся через дефолтный resolver. Также в текущей модели DNS-правила хранятся одной строкой JSON без имён и без индивидуального enable — пользователь не может выбирать "это правило мне нужно, это нет". |
 
 ## Цель

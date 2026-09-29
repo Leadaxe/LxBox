@@ -1,6 +1,6 @@
 # §300 — DnsController: фасад DNS под probe-эталон (load/snapshot + чистые статики)
 
-**Тип:** structural refactor (Шаг 2a фичи [§291](../features/291%20layered-architecture-facades/spec.md); эталон — ProbeController §296) · **Статус:** D1+D3 РЕАЛИЗОВАНЫ; D2 остаётся · **Размер:** S–M · **Зависит от:** [§294](294-dns-typed-model.md) (done) · **Разблокирует:** [§295](295-dns-dual-write-fix.md)
+**Тип:** structural refactor (Шаг 2a фичи [§291](../tasks/291F-layered-architecture-facades/spec.md); эталон — ProbeController §296) · **Статус:** D1+D3 РЕАЛИЗОВАНЫ; D2 остаётся · **Размер:** S–M · **Зависит от:** [§294](294-dns-typed-model.md) (done) · **Разблокирует:** [§295](295-dns-dual-write-fix.md)
 
 > **Реализовано (D1+D3, коммит ниже):** `lib/services/dns/dns_controller.dart` —
 > `DnsController.load()` → `DnsSettingsSnapshot` (тело `_load` ~175 строк verbatim,

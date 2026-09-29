@@ -2,7 +2,7 @@
 
 **Тип:** schema cleanup / зеркалирование контракта
 **Область:** `services/lx_backup.dart`, `screens/backup_screen.dart`
-**Связано:** §393 (прошлая спека бэкапа, `features/393 directions`), §400
+**Связано:** §393 (прошлая спека бэкапа, `tasks/393F-directions`), §400
 (`disabled`-ключи по тегу), §302 (import rules), §234 (папки), §112 контракта
 (identity = тег)
 **Источник:** `singbox-launcher/contract/docs/BACKUP_PRINCIPLES.md` (П1–П7),

@@ -4,7 +4,7 @@
 |------|----------|
 | Тип | Task (реализация энергомодели из feature 123 §4) |
 | Статус | Реализовано (device-verified) |
-| Связано | [feature 123 subscription-model](../features/123%20subscription-model/spec.md) §3-4 |
+| Связано | [feature 123 subscription-model](../tasks/123F-subscription-model/spec.md) §3-4 |
 
 Снижение CPU/батареи от status-стрима: адаптивная частота + сон CC-клиентов в фоне. Реализует §3-4 feature 123.
 

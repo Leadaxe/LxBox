@@ -7,7 +7,7 @@
 | Дата завершения | — |
 | Коммиты | — |
 | Контракт | 1.1.86 (995a0e3b) — три возможности языка шаблона, пресет `tailscale`, поле записи `skip_presets`, D-120 подтверждён |
-| Связанные spec'ы | [§575](575-remove-node-sections.md) (выходит в одном релизе), [§435](435-node-sections-tailscale.md), [§437](437-tailscale-bundle-import.md), [features/120](../features/120%20template-engine-typed-vars-and-if/spec.md) (движок `#if`) |
+| Связанные spec'ы | [§575](575-remove-node-sections.md) (выходит в одном релизе), [§435](435-node-sections-tailscale.md), [§437](437-tailscale-bundle-import.md), [features/120](../tasks/120F-template-engine-typed-vars-and-if/spec.md) (движок `#if`) |
 
 ## Проблема
 

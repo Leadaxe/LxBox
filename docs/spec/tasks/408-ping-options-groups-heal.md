@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-03 |
 | Дата завершения | 2026-09-03 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [tasks/040 per-group ping settings](040-per-group-ping-test-settings.md), [tasks/402](402-direction-chain-label-removed.md), [tasks/393](393-masque-config-schema-migration.md), [features/125 configurable-directions](../features/125%20configurable-directions/spec.md) |
+| Связанные spec'ы | [tasks/040 per-group ping settings](040-per-group-ping-test-settings.md), [tasks/402](402-direction-chain-label-removed.md), [tasks/393](393-masque-config-schema-migration.md), [features/125 configurable-directions](125F-configurable-channels/spec.md) |
 
 Дыра найдена в §402 при пересчёте мест, где хранится ссылка на тег
 Направления, и там же отложена отдельной задачей: она предсуществующая и от

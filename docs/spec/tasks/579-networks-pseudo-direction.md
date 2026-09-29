@@ -7,7 +7,7 @@
 | Дата завершения | — |
 | Коммиты | 298b3000 |
 | Контракт | Не затрагивается: конфиг не меняется |
-| Связанные spec'ы | [§578](578-tailscale-preset-template-for-each.md) (пресет Tailscale), [§435](435-node-sections-tailscale.md) (узел без выхода не идёт в пул Направлений), [features/392](../features/392%20node-diagnostics/spec.md) |
+| Связанные spec'ы | [§578](578-tailscale-preset-template-for-each.md) (пресет Tailscale), [§435](435-node-sections-tailscale.md) (узел без выхода не идёт в пул Направлений), [features/392](../tasks/392F-node-diagnostics/spec.md) |
 
 ## Проблема
 

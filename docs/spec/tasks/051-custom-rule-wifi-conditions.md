@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | All phases done (1, 2, 3) — released v14010 |
 | Дата | 2026-05-10 |
-| Связанные | [`030 custom routing`](../features/030%20custom%20routing/spec.md) — расширяет sealed model; [`050 libbox-debug-build`](./050-libbox-debug-build/findings.md) — F12.3 readWIFIState fix (prerequisite); [`052 vpn settings system/service tabs`](./052-vpn-settings-system-service-tabs.md) — permission rows перенесены в Diagnostics |
+| Связанные | [`030 custom routing`](030F-custom-routing-rules/spec.md) — расширяет sealed model; [`050 libbox-debug-build`](./050-libbox-debug-build/findings.md) — F12.3 readWIFIState fix (prerequisite); [`052 vpn settings system/service tabs`](./052-vpn-settings-system-service-tabs.md) — permission rows перенесены в Diagnostics |
 | Затронутые файлы | `app/lib/models/custom_rule.dart`, `app/lib/services/builder/post_steps.dart`, `app/lib/services/debug/handlers/rules.dart`, `app/lib/services/debug/serializers/rules.dart`, `app/lib/screens/custom_rule_edit_screen.dart`, `app/lib/services/url_launcher.dart`, `app/lib/services/settings_storage.dart`, `app/lib/widgets/wifi_permission_dialog.dart`, `app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt`, `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt`, `test/builder/`, `test/parser/` |
 
 ## Phases
@@ -100,7 +100,7 @@ Pравила:
 
 ## Builder pipeline
 
-> ⚠ **Обновление под sing-box 1.14** (§030 [new_fields.md](../features/030%20custom%20routing%20rules/new_fields.md)):
+> ⚠ **Обновление под sing-box 1.14** (§030 [new_fields.md](../tasks/030F-custom-routing-rules/new_fields.md)):
 > headless rule_set 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ `wifi_ssid`/`wifi_bssid`
 > (сверено `option/rule_set.go:207-208`). Поэтому для **inline** правил wifi-условия
 > теперь эмитятся **в headless `match`** (внутри rule_set), а не на routing-rule

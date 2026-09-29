@@ -143,6 +143,6 @@ INI-фикстуру добавлен `Jmax`), `reality_key_share_test.dart` (п
   списком с объяснением риска), TUIC (`udp_relay_mode`/`congestion_control`),
   AnyTLS (мусорный SNI), NaïveProxy (пустой host), VLESS и XHTTP (`splithttp`)
 - `CHANGELOG.md` → Unreleased → Fixed (7 записей) и Changed (4 записи)
-- `docs/spec/features/460 contract-registry-bundle/spec.md` — раздел «Что из W2
+- `docs/spec/tasks/460F-contract-registry-bundle/spec.md` — раздел «Что из W2
   закрыл §463»: конформанс с объектными warnings закрыт целиком, перечислено
   оставшееся на W2

@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Released (v1.6.1) |
 | Дата | 2026-05-07 |
-| Связанные spec'ы | [`014 dns settings`](../features/014%20dns%20settings/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md) (был §041), [`042 dns servers merge`](./042-dns-servers-merge-and-cleanup.md) — заменяется этой задачей |
+| Связанные spec'ы | [`014 dns settings`](../tasks/014F-dns-settings/spec.md), [`033 preset bundles`](../tasks/033F-preset-bundles/spec.md), [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md) (был §041), [`042 dns servers merge`](./042-dns-servers-merge-and-cleanup.md) — заменяется этой задачей |
 | Затронутые файлы | `app/lib/services/settings_storage.dart`, `app/lib/services/builder/post_steps.dart`, `app/lib/services/builder/build_config.dart`, `app/lib/screens/dns_settings_screen.dart`, `app/lib/services/debug/handlers/settings.dart`, тесты |
 
 ## Цель

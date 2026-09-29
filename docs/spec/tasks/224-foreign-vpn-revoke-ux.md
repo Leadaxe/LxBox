@@ -5,7 +5,7 @@
 | Статус | Done (закрыт в §276) |
 | Дата старта | 2026-07-02 |
 | Дата завершения | 2026-07-16 |
-| Связанные spec'ы | [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md) |
+| Связанные spec'ы | [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md) |
 | Связанные задачи | [002](./002-blocking-stopvpn-intent-reset.md) (blocking stopVPN), [129](./129-vpnservice-force-stop-on-stuck-core.md)/[140](./140-force-stop-port-race-and-connecting-timeout.md) (force-stop), [182](./182-notification-action-buttons.md) (native reconnect) |
 
 ## Жалоба (4PDA, dewch)

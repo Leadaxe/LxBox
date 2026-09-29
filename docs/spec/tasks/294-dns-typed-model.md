@@ -1,6 +1,6 @@
 # §294 — DNS servers+rules: типизированная sealed-модель
 
-**Тип:** structural refactor (Шаг 2 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** реализовано (develop; device-pending) · **Размер:** факт. S (типизация §044/§279 уже была) · **Приоритет:** высший структурный
+**Тип:** structural refactor (Шаг 2 фичи [§291](../tasks/291F-layered-architecture-facades/spec.md)) · **Статус:** реализовано (develop; device-pending) · **Размер:** факт. S (типизация §044/§279 уже была) · **Приоритет:** высший структурный
 
 > **Реализация (коммит ниже):** новый `lib/models/dns_ref.dart` — sealed
 > `DnsServerRef` {inline,preset,template} + `DnsRuleRef` {inline,srs,preset,

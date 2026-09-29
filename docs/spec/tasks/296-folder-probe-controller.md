@@ -1,6 +1,6 @@
 # §296 — ProbeController: общий probe-фасад над ServerList
 
-**Тип:** structural refactor (Шаг 3 фичи [§291](../features/291%20layered-architecture-facades/spec.md)) · **Статус:** фундамент РЕАЛИЗОВАН (Steps 0–2, develop); UI-надстройка (Steps 3–4) pending-device · **Размер:** M (фундамент S–M) · **Заменяет:** прежний «FolderProbeController»
+**Тип:** structural refactor (Шаг 3 фичи [§291](../tasks/291F-layered-architecture-facades/spec.md)) · **Статус:** фундамент РЕАЛИЗОВАН (Steps 0–2, develop); UI-надстройка (Steps 3–4) pending-device · **Размер:** M (фундамент S–M) · **Заменяет:** прежний «FolderProbeController»
 
 > **Реализовано (Steps 0–2, коммиты 21f5116e · ebe43643 · cf108da0):**
 > - Step 0 — probe-ядро обобщено `FolderServers`→`List<NodeSpec?>`

@@ -3,11 +3,11 @@
 | Поле | Значение |
 |------|----------|
 | Статус | Done (device-verified 2026-06-26) |
-| Тип | task (UX-улучшение существующей фичи [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md)) |
+| Тип | task (UX-улучшение существующей фичи [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md)) |
 | Дата старта | 2026-06-26 |
 | Дата завершения | 2026-06-26 |
 | Коммиты | `7dd86a8` feat(§182): кнопки Stop/Reconnect в foreground-уведомлении |
-| Связанные spec'ы | [§012 native vpn service](../features/012%20native%20vpn%20service/spec.md), [§002 blocking stopVPN + intent reset](002-blocking-stopvpn-intent-reset.md), [§123 имя сервера в шторке](123-server-name-in-notification.md), [§129 force-stop](129-vpnservice-force-stop-on-stuck-core.md) |
+| Связанные spec'ы | [§012 native vpn service](../tasks/012F-native-vpn-service/spec.md), [§002 blocking stopVPN + intent reset](002-blocking-stopvpn-intent-reset.md), [§123 имя сервера в шторке](123-server-name-in-notification.md), [§129 force-stop](129-vpnservice-force-stop-on-stuck-core.md) |
 
 ## Проблема
 
@@ -247,7 +247,7 @@ notification-канал; пересборка Dart `reconnect()`; кнопка �
 
 | Файл | Что добавить |
 |---|---|
-| [`docs/spec/features/012 native vpn service/spec.md`](../features/012%20native%20vpn%20service/spec.md) | В раздел про ServiceNotification — action-кнопки Stop/Reconnect + новый `ACTION_RECONNECT` + companion `reconnect()`. |
+| [`docs/spec/tasks/012F-native-vpn-service/spec.md`](../tasks/012F-native-vpn-service/spec.md) | В раздел про ServiceNotification — action-кнопки Stop/Reconnect + новый `ACTION_RECONNECT` + companion `reconnect()`. |
 | [`docs/ARCHITECTURE.md`](../../ARCHITECTURE.md) | Native-side секция: `ACTION_RECONNECT` в списке broadcast-action'ов сервиса. |
 | [`CHANGELOG.md`](../../../CHANGELOG.md) / `RELEASE_NOTES.md` | На bump'е версии: «Stop / Reconnect buttons in the persistent notification (#180/#261)». |
 | [`app/pubspec.yaml`](../../../app/pubspec.yaml) | Patch bump в release-batch'е. |

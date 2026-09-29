@@ -261,7 +261,7 @@ reset = убить старые.** Отсюда «новое грузится, �
 
 ## Файлы / источники
 - `docs/spec/tasks/086-stale-connections-network-change-doze.md` (этот файл).
-- `docs/spec/features/042 health watchdog/spec.md` (DRAFT, не построен).
+- `docs/spec/tasks/042F-health-watchdog/spec.md` (DRAFT, не построен).
 - Код: `DefaultNetworkMonitor.kt`, `BoxService.kt`,
   `box_vpn_client.dart` (`resetNetwork`/`reloadVPN`/`startVPN`),
   `clash_api_client.dart` (`closeAllConnections`/`delay`),

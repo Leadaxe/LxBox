@@ -5,7 +5,7 @@
 | Тип | bugfix (пачка по итогам code review) |
 | Статус | ✅ Released v2.19.3 — тесты зелёные |
 | Дата | 2026-08-02 |
-| Связанные | [`321 xray-json`](../features/321%20xray-json-parsing/spec.md), [`322 balancer-node`](../features/322%20balancer-node/spec.md), [`335`](335-vless-encryption-passthrough.md), [`342`](342-xray-preserve-subscription-order.md), [`343`](343-reality-short-id-validation.md) |
+| Связанные | [`321 xray-json`](../tasks/321F-xray-json-parsing/spec.md), [`322 balancer-node`](../tasks/322F-balancer-node/spec.md), [`335`](335-vless-encryption-passthrough.md), [`342`](342-xray-preserve-subscription-order.md), [`343`](343-reality-short-id-validation.md) |
 
 ## Контекст
 

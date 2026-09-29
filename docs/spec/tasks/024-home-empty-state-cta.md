@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md), [`009 ux and theme`](../features/009%20ux%20and%20theme/spec.md) |
+| Связанные spec'ы | [`003 home screen`](../tasks/003F-home-screen/spec.md), [`009 ux and theme`](../tasks/009F-ux-and-theme/spec.md) |
 
 ## Проблема
 

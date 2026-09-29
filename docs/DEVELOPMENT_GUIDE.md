@@ -42,13 +42,15 @@ Owner's decision, 2026-09-24.
 
 ### 1. Spec first
 
-- Before code: `docs/spec/features/NNN name/spec.md` — even for small features.
+- Before code: a task in `docs/spec/tasks/NNN-title.md` (a feature-level change also updates
+  the black-box `docs/spec/features/NNN-NAME/FEATURE.md`) — even for small features.
 - A feature spec = status, context, implementation, files, acceptance criteria.
 - Bugs with a non-trivial cause, perf passes, refactors, one-off work:
   `docs/spec/tasks/NNN-title.md`, template and criteria in
   [`docs/spec/tasks/README.md`](spec/tasks/README.md).
 - Features describe a capability; tasks log one work cycle.
-- Index of live features: [`docs/spec/features/README.md`](spec/features/README.md).
+- Index of features: [`docs/spec/features/README.md`](spec/features/README.md);
+  legacy feature specs (pre Spec Kit): [`docs/spec/tasks/F-INDEX.md`](spec/tasks/F-INDEX.md).
   Demoted/superseded specs live in `docs/spec/tasks/` (§054).
 
 ### 2. Commits and push
@@ -113,7 +115,7 @@ Operator's decision, 2026-07-24.
 
 - `buildConfig` stages, post-steps, validator — `ARCHITECTURE.md`.
 - Detour servers, `DetourPolicy` (register / use / override) — spec
-  [018](spec/features/018%20detour%20server%20management/spec.md),
+  [018](spec/tasks/018F-detour-server-management/spec.md),
   `app/lib/services/builder/server_list_build.dart`; `overrideDetour` is a
   NodeLink since §439 — `STORAGE.md`.
 

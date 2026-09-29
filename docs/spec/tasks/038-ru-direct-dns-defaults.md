@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Implemented |
 | Дата | 2026-05-06 |
-| Связанные spec'ы | [`033 preset bundles`](../features/033%20preset%20bundles/spec.md) |
+| Связанные spec'ы | [`033 preset bundles`](../tasks/033F-preset-bundles/spec.md) |
 | Файл изменений | `app/assets/wizard_template.json` |
 
 ## Цель

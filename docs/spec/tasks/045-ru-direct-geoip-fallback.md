@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Released (v1.7.0) |
 | Дата | 2026-05-08 |
-| Связанные spec'ы | [`033 preset bundles`](../features/033%20preset%20bundles/spec.md) — расширяет; [`011 local ruleset cache`](../features/011%20local%20ruleset%20cache/spec.md) — переиспользует .srs кэш; [`030 custom routing rules`](../features/030%20custom%20routing%20rules/spec.md) — routing rule shape |
+| Связанные spec'ы | [`033 preset bundles`](../tasks/033F-preset-bundles/spec.md) — расширяет; [`011 local ruleset cache`](../tasks/011F-local-ruleset-cache/spec.md) — переиспользует .srs кэш; [`030 custom routing rules`](../tasks/030F-custom-routing-rules/spec.md) — routing rule shape |
 | Затронутые файлы | `app/assets/wizard_template.json`, `app/lib/services/builder/preset_expand.dart`, `app/lib/screens/routing_screen.dart`, `app/lib/screens/custom_rule_edit_screen.dart`, `app/lib/models/custom_rule.dart`, `app/test/services/builder/preset_expand_test.dart` |
 
 ## Цель

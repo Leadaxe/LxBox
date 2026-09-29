@@ -5,7 +5,7 @@
 | Status | Implemented (analyze ✅, device-test pending) |
 | Started | 2026-06-18 |
 | Trigger | Для device-тестов WARP-обфускации (§143/§146 — генерит ли ядро `lx.12` фрагментированный QUIC из `id/ip/ib`) нужно заводить WARP-узел программно. В Debug API **не было** эндпоинта для Get WARP — регистрация только из UI-визарда (`WarpWizardScreen`). `/subs` принимает лишь готовый конфиг (raw_body), а не штатный `addWarp` (регистрация в Cloudflare + генерация ключей на устройстве). |
-| Related | [§025](../features/025%20warp%20integration/spec.md) (WARP), [§143](143-warp-masquerade-id-ip-ib.md) (id/ip/ib), [§146](146-warp-quic-initial-fragmented-i1.md) (фрагментированный i1), [§031] (Debug API) |
+| Related | [§025](../tasks/025F-warp-integration/spec.md) (WARP), [§143](143-warp-masquerade-id-ip-ib.md) (id/ip/ib), [§146](146-warp-quic-initial-fragmented-i1.md) (фрагментированный i1), [§031] (Debug API) |
 | Files touched | NEW `services/debug/handlers/warp.dart`; EDIT `services/debug/transport/server.dart` (mount), `services/debug/handlers/help.dart` (capability map text+json) |
 
 ## Что сделано

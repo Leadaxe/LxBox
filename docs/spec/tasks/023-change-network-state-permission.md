@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md) |
+| Связанные spec'ы | [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md) |
 
 ## Проблема
 

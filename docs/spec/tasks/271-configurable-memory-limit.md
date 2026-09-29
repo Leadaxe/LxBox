@@ -116,7 +116,7 @@ WG/AWG/WARP живая куча упирается в потолок (Android-п
 | `android .../vpn/BootReceiver.kt` | `KEY_MEMORY_LIMIT` + set/get |
 | `android .../vpn/BoxApplication.kt` | `resolveMemoryLimitBytes` (companion) + использование в `initializeLibbox` |
 | `android .../vpn/VpnPlugin.kt` | методы `getMemoryLimit`/`setMemoryLimit` + live-apply через `reloadSetupOptions` |
-| `docs/spec/features/128 idle-suspend/spec.md` | UX-раздел: секция Optimization — три рычага |
+| `docs/spec/tasks/128F-idle-suspend/spec.md` | UX-раздел: секция Optimization — три рычага |
 | `docs/spec/tasks/052-vpn-settings-system-service-tabs.md` | состав System tab |
 | `docs/spec/tasks/173-oom-killer-setup-options.md` | пометка: лимит стал настраиваемым |
 | `docs/STORAGE.md` | секция native_prefs: +memory_limit |

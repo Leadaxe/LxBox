@@ -58,7 +58,7 @@
 | `server_lists[].type=user` | `sections` (необязателен; пустой не пишется) | `UserServer.toJson` |
 | `server_lists[].type=folder` → `members[]` | `sections` (то же) | `FolderMember.toJson` |
 
-> **С 2.23.3 ([§439](../features/439%20storage-contract-1-0/spec.md))** `sections` лежат в
+> **С 2.23.3 ([§439](../tasks/439F-storage-contract-1-0/spec.md))** `sections` лежат в
 > записях `sources[]` `kind: server` и `nodes[]` папки, пишет их кодек
 > `lib/models/codec/source_record.dart`. Кодек записей из §2 стал корневым:
 > теми же записями хранятся `rules[]` и `dns{}` (`toJson`/`fromJson` моделей

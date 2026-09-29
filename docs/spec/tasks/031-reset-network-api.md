@@ -18,7 +18,7 @@
 > | Вызов из automation (§047) | [`automation/handlers.dart:102`](../../../app/lib/services/automation/handlers.dart) | ✅ |
 >
 > «Auto-recovery на wake» (§035-candidate, ради которого затевался эксперимент) —
-> **не делается**: относится к health-watchdog [§042](../features/042%20health%20watchdog/spec.md),
+> **не делается**: относится к health-watchdog [§042](../tasks/042F-health-watchdog/spec.md),
 > от которого отказались из-за расхода батареи. Ручной resetNetwork остаётся как
 > recovery-действие. Разбор семантики ниже сохранён как reference.
 

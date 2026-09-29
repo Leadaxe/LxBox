@@ -5,7 +5,7 @@
 | Status | Done (device-smoke pending) |
 | Started | 2026-06-16 |
 | Trigger | Поле field-report (Iliya, Крым): «Меняю endpoint на ваш ip:port — register, файл создаётся, но если глянуть в json то endpoint **сохраняется без изменений**». Юзер вписывал в Advanced `188.114.97.6:988` (живой Cloudflare-endpoint на нестандартном порту из публичного генератора), а в конфиг шёл дефолтный `engage.cloudflareclient.com:2408` — заблокированный его провайдером. Advanced-поле Endpoint было фактически мёртвым. |
-| Related | [§025 warp integration](../features/025%20warp%20integration/spec.md) (Advanced → Endpoint); [§126](126-warp-amneziawg-obfuscation.md) (обфускация поверх); [§132](132-warp-endpoint-scanner-research.md) (research: подбор живого endpoint — этот фикс его предпосылка); [[project_warp_integration]] |
+| Related | [§025 warp integration](../tasks/025F-warp-integration/spec.md) (Advanced → Endpoint); [§126](126-warp-amneziawg-obfuscation.md) (обфускация поверх); [§132](132-warp-endpoint-scanner-research.md) (research: подбор живого endpoint — этот фикс его предпосылка); [[project_warp_integration]] |
 | Files touched | `app/lib/services/warp/warp_client.dart` (`_parseReg`); `app/test/warp/warp_client_test.dart` (+2 теста) |
 
 ## Корень

@@ -9,7 +9,7 @@
 /// `NodeFilter` **не знает про detour** — это семантически другая концепция
 /// (pool filter в caller, не часть predicate).
 ///
-/// Spec: docs/spec/features/048 home-node-filters/spec.md
+/// Spec: docs/spec/tasks/048F-home-node-filters/spec.md
 class NodeFilter {
   const NodeFilter({
     required this.regex,

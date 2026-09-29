@@ -4,7 +4,7 @@ This document describes the L×Box threat model and the concrete protection mech
 
 > Русская версия: [SECURITY.ru.md](SECURITY.ru.md)
 
-Related specs: [`020 — Security & DPI Bypass`](spec/features/020%20security%20and%20dpi%20bypass/spec.md), [`119 — VPN Mode`](spec/features/119%20vpn-mode/spec.md), [`124 — per-app allowlist`](spec/tasks/124-allowlist-self-package-investigation.md).
+Related specs: [`020 — Security & DPI Bypass`](spec/tasks/020F-security-and-dpi-bypass/spec.md), [`119 — VPN Mode`](spec/tasks/119F-vpn-mode/spec.md), [`124 — per-app allowlist`](spec/tasks/124-allowlist-self-package-investigation.md).
 
 ---
 
@@ -142,7 +142,7 @@ Threat: another app on the same device abuses our local proxy or API (the class 
 | **Automation receivers — exported but disabled** | The §047/§157 automation receiver and Locale-plugin components are declared `android:exported="true"` but `android:enabled="false"`, so they are inert until the user flips the master "accept automation commands" toggle | Off by default means no third-party app can drive the client out of the box |
 | **VpnService / BootReceiver not exported** | `android:exported="false"` | Third-party apps can't invoke our core service components |
 
-Source and roadmap — [`020 — Security & DPI Bypass`](spec/features/020%20security%20and%20dpi%20bypass/spec.md).
+Source and roadmap — [`020 — Security & DPI Bypass`](spec/tasks/020F-security-and-dpi-bypass/spec.md).
 
 > **Automation caveat (§157).** Once the automation master toggle is ON, the receiver accepts its control commands from **any** caller on the device — a broadcast carries no caller identity, so there is no per-app authentication (`android:permission` is deliberately unset). The commands are control-only (start/stop/switch node/set group/rebuild/refresh/reset/urltest — no secret-exfiltration path), and outgoing automation events carry status labels only. See the “Security” section of [`AUTOMATION.md`](AUTOMATION.md).
 
@@ -152,8 +152,8 @@ Source and roadmap — [`020 — Security & DPI Bypass`](spec/features/020%20sec
 
 | Secret | How we protect it |
 |--------|-------------------|
-| **WARP private key** | The X25519 key is generated **on the device** and never leaves it — only the public key is sent to Cloudflare. We don't use third-party generator workers (they hand out a server-generated private key). See [§025 WARP](spec/features/025%20warp%20integration/spec.md). |
-| **MASQUE key & device token** | The §130 MASQUE transport uses a **separate** ECDSA P-256 keypair generated on the device; only the public part is enrolled with Cloudflare (PATCH enroll), the SEC1-DER private key never leaves the phone. The per-device Cloudflare Bearer token is stored locally and is marked never-log alongside the private key. See [§130 MASQUE](spec/features/130%20masque-warp-transport/spec.md). |
+| **WARP private key** | The X25519 key is generated **on the device** and never leaves it — only the public key is sent to Cloudflare. We don't use third-party generator workers (they hand out a server-generated private key). See [§025 WARP](spec/tasks/025F-warp-integration/spec.md). |
+| **MASQUE key & device token** | The §130 MASQUE transport uses a **separate** ECDSA P-256 keypair generated on the device; only the public part is enrolled with Cloudflare (PATCH enroll), the SEC1-DER private key never leaves the phone. The per-device Cloudflare Bearer token is stored locally and is marked never-log alongside the private key. See [§130 MASQUE](spec/tasks/130F-masque-warp-transport/spec.md). |
 | **Debug API Bearer token** | Held in settings storage; the Debug API is off by default and bound to loopback only (see §3). |
 | **Subscription credentials** | Roadmap: encrypted storage (Android Keystore), URL masking in the UI — see the roadmap in spec 020. A §129 file-based subscription additionally persists its imported body as a plaintext `HttpCache` snapshot (keyed `file:<uuid>`) in the app's private storage; the same encrypted-storage roadmap item covers these snapshots. |
 

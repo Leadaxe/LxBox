@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done (Stage 1+2+3 — v14100) |
 | Дата | 2026-05-10 / Stage 3 — 2026-05-11 |
-| Связанные | [`030 custom routing`](../features/030%20custom%20routing/spec.md) — sealed `CustomRule`; [`051 custom rule wifi conditions`](./051-custom-rule-wifi-conditions.md) — последний big-add (+539 LOC wifi секции в editor) |
+| Связанные | [`030 custom routing`](030F-custom-routing-rules/spec.md) — sealed `CustomRule`; [`051 custom rule wifi conditions`](./051-custom-rule-wifi-conditions.md) — последний big-add (+539 LOC wifi секции в editor) |
 | Затронутые файлы | `app/lib/screens/custom_rule_edit_screen.dart` (split source) → `app/lib/screens/custom_rule_edit/` (новая папка с секциями); `app/lib/widgets/wifi_saved_picker_sheet.dart` (extract); tests / smoke |
 
 ## Цель

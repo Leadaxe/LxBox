@@ -2,7 +2,7 @@
 
 This document describes the structure of the L×Box Flutter application, the boundaries of responsibility, the data flows and the native side.
 
-The current parser and builder version is **v2** (spec 026, phase 5 completed in v1.3.0). Details are in [spec/features/026 parser v2](./spec/features/026%20parser%20v2/spec.md).
+The current parser and builder version is **v2** (spec 026, phase 5 completed in v1.3.0). Details are in [spec/tasks/026F-parser-v2](./spec/tasks/026F-parser-v2/spec.md).
 
 ---
 
@@ -128,7 +128,7 @@ the thresholds, the ping and the pure decisions, plus the `probeNodesOf` adapter
 snapshot plus `stage()` over the DNS section, leaving the screen thin), and
 `VpnSettingsFacade` (`services/vpn_settings/` — `applyVpnMode` carries the password-gen,
 auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
-The full invariant plus the strangler plan is in `docs/spec/features/291 layered-architecture-facades/`.
+The full invariant plus the strangler plan is in `docs/spec/tasks/291F-layered-architecture-facades/`.
 
 **The event brokers (push, bottom-up):** §122 moved the UI's control channel onto the
 libbox **CommandClient** (a server-stream push instead of Timer polling). The push channels:
@@ -1326,7 +1326,7 @@ Sensitive fields are filtered on `GET /state/storage` by the denylist scrubber i
 ### 6.5. Traffic profiler (§044 / §048)
 
 `TrafficProfiler` is a singleton ChangeNotifier holding a system-wide
-rolling buffer of events. Everything is in memory; persistence is deliberately absent. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md).
+rolling buffer of events. Everything is in memory; persistence is deliberately absent. Spec: [`docs/spec/tasks/044F-per-app-traffic-profiler/spec.md`](./spec/tasks/044F-per-app-traffic-profiler/spec.md).
 
 ```
               ┌────────────────────────────────────────┐
@@ -1865,8 +1865,8 @@ one is under the CI gates as soon as its files exist.
 Switching at runtime needs no app restart, including the native surfaces on a
 live VPN service. Since §285 the UI strings are localized through **natural keys**
 (the English call-site text IS the key; ARB and gen_l10n are gone). The full
-architecture is in [the §279 spec](spec/features/279%20localization/spec.md) plus
-[the getLocalText review](spec/features/279%20localization/getlocaltext.md);
+architecture is in [the §279 spec](spec/tasks/279F-localization/spec.md) plus
+[the getLocalText review](spec/tasks/279F-localization/getlocaltext.md);
 translator-guide — [`l10n.md`](l10n.md).
 
 | Component | Role |
@@ -2041,96 +2041,15 @@ A full round trip would require a sing-box JSON → state parser covering everyt
 
 ## Feature Specs
 
-They live in [`docs/spec/features/`](./spec/features/). Each feature is a `NNN name/spec.md` folder.
+The black-box feature catalogue lives in [`docs/spec/features/`](./spec/features/README.md):
+one `NNN-NAME/FEATURE.md` per feature (purpose, promises, parameters, boundaries) plus
+`FUNCTIONS/<function>.md` per user-facing function with its revision table. That folder
+carries no code or platform detail and is the source of truth for *what* the app promises.
 
-| # | Feature |
-|---|---------|
-| 003 | Home screen |
-| 006 | Servers UI |
-| 007 | Config editor |
-| 008 | Ping and node management |
-| 009 | UX and theme |
-| 010 | Quick start and offline |
-| 011 | Local ruleset cache |
-| 012 | Native VPN service |
-| 014 | DNS settings |
-| 015 | Speed test |
-| 016 | Statistics and connections |
-| 017 | Custom nodes and node settings |
-| 018 | Detour server management |
-| 019 | WireGuard endpoint |
-| 020 | Security and DPI bypass (TLS fragment) |
-| 021 | CI/CD pipeline |
-| 022 | App settings |
-| 023 | Debug and logging |
-| 024 | Load balance — *Released* (§208 round-robin balancer, v2.7.0) |
-| 025 | WARP integration — *Released* (v2.3.0; the §130 MASQUE transport) |
-| **026** | **Parser v2** (sealed NodeSpec, 3-layer pipeline) |
-| **027** | **Subscription auto-update** (4 triggers, spam gates) |
-| **028** | **AntiDPI: mixed-case SNI** |
-| **029** | **Haptic feedback** |
-| 030 | Custom routing rules (unified `CustomRule` model: inline + local-only SRS) |
-| 031 | The Debug API (a localhost HTTP server for dev introspection) |
-| 032 | Quick Connect (QS tile + home shortcut) |
-| 033 | Preset bundles (selectable rules with a `preset_id`, expansion plus merge) |
-| 034 | App icon |
-| 035 | MCP server — *Draft* |
-| 036 | Update check (GitHub Releases polling, sideload-flow) |
-| 037 | Naive proxy support |
-| 038 | Crash diagnostics (`getHistoricalProcessExitReasons`) |
-| 040 | Backup & restore UI (4 toggleable categories) |
-| 042 | Health watchdog (heartbeat metrics + auto-recovery) |
-| 043 | AppLog per-source quotas + diagnostics platform (Debug API + AppLog + Crash diagnostics) |
-| **044** | **Per-app traffic profiler** (recording per-app DNS/connections/routing chain — Live/Domains/IPs/Connections sub-tabs, connection-issue detection, Debug API + SSE) |
-| 045 | TLS ECH (Encrypted Client Hello) — an anti-DPI extension that hides the SNI entirely — *Draft* |
-| 046 | Tunnel apps split tunneling (a per-app include/exclude through VpnService.Builder) |
-| 047 | The Public Intent API (Tasker / MacroDroid automation through Android broadcast intents) — *Draft* |
-| 048 | The home node filters (a two-phase pool/match model — the foundation of Filter mode) |
-| 070 | Sort options (the node sorting menu) |
-| 071 | Manual node reordering (drag; §100 — manual in the carousel, with persistence) |
-| 074 | Add server wizard |
-| 076 | Settings & config lifecycle (lazy/eager persist, HomeReturnObserver, mtime-bootstrap) |
-| **097** | **AWG2 (AmneziaWG 2.0) plus the move to the `sing-box-lx` core** (`with_awg` / `with_xhttp`) |
-| 105 | The support message (the support and web URLs in a subscription's meta) |
-| 117 | DNS rework |
-| 118 | Subscription fetch identity (User-Agent / identity headers) |
-| 120 | The template engine — typed vars plus `if` (the shared substitution core, §120) |
-| 119 | VPN mode (vpn / vpn_proxy / proxy — §119, has_tun) |
-| **121** | **libbox 1.14 adoption** (migrating the bindings to the 1.14 core) |
-| **122** | **The CommandClient migration** (dropping the Clash HTTP API entirely for the libbox CommandClient) |
-| 123 | The subscription model (three CC clients: status/screen/profiler; the §123/§164 power model) |
-| 124 | Background mode — tunnel sleep (the tunnel's Doze behaviour) |
-| **125** | **Configurable directions** (CRUD directions over directions[]; enabled_groups is DEPRECATED) |
-| 126 | First-run wizard |
-| **127** | **XHTTP full URL params** (native XHTTP: mode/x_padding_bytes/no_grpc_header) |
-| **128** | **Idle-suspend** (`lx.wg.idle_suspend`, the core's SPEC 020; default `30s`; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535) |
-| **129** | **File subscriptions** (url=file:<uuid>, an HttpCache snapshot, a transactional source switch) |
-| **130** | **The MASQUE WARP transport** (the flagship of v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP) |
-| **234** | **Server folders** (folders of manual servers: FolderMember plus a per-member toggle and tag_prefix) |
-| 236 | Folder server testing (a headless probe of the folder's members) |
-| **248** | **Detour directions** (directions as detour targets; §254 turns cycles into a fatal with the culprit named) |
-| **279** | **Localization** (en plus ru and zh: the dictionary, the template overlay and values-<lang>; §280 phases 0–7, §452 zh) |
-| **283** | **Subscription node disable** (a per-node toggle in a subscription, keyed by the node's identity hash) |
-| **393** | **Directions** (the Channel→Direction rename: arbitrary tags, no cap, include[]; the storage key channels→directions with a one-shot migration) plus **hop chains** (SPEC 110: a chain as a third source kind, `type: chain`, a layered probe) |
-| 417 | Workspaces (named copies of the whole state — settings + subscription bodies + .srs; Load = auto-save current → copy → re-read in place → rebuild → VPN back up; Save as; the working paths never move) |
-| 435 | Node sections + Tailscale (superseded by §575/§578: node sections removed, the Tailscale bundle now comes from a template preset; `TailscaleSpec` endpoint without an address, core gate by AAR version, `state_directory` per node remain) |
-| **439** | **Storage in the contract 1.0 form** (`lxbox_settings.json` keeps `sources[]` / `rules[]` / `dns{}` records with `storage_version: 1`; the 2.23.2 form is migrated inside `_load()` with a `.v0.bak` copy; node references are NodeLinks `{folder_id, tag}` resolved at build, fail-closed; the LX Backup 1.0 export is a slice of storage through the same codec) |
-
-**Demoted (through §054) — now in `tasks/`:**
-
-| Was | Now |
-|-----|--------|
-| ~~001~~ Mobile stack | [`tasks/055-mobile-stack-decision/`](./spec/tasks/055-mobile-stack-decision/spec.md) — historical architectural decision |
-| ~~002~~ MVP scope | [`tasks/056-mvp-scope-historical/`](./spec/tasks/056-mvp-scope-historical/spec.md) — historical milestone |
-| ~~004x~~ Subscription parser | [`tasks/057-subscription-parser-v1-superseded/`](./spec/tasks/057-subscription-parser-v1-superseded/spec.md) — superseded by §026 |
-| ~~005x~~ Config generator | [`tasks/058-config-generator-wizard-v1-superseded/`](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — superseded by §026 |
-| ~~013~~ Routing | [`tasks/059-routing-v1-superseded/`](./spec/tasks/059-routing-v1-superseded/spec.md) — superseded by §030 |
-| ~~039~~ libbox 1.13 migration | [`tasks/060-libbox-1-13-migration/`](./spec/tasks/060-libbox-1-13-migration/spec.md) — one-shot migration (Done) |
-| ~~041~~ DNS rules refactor | [`tasks/061-dns-rules-refactor/`](./spec/tasks/061-dns-rules-refactor/spec.md) — refactor, live spec — §014 |
-
-The freed numbers (001, 002, 004, 005, 013, 039, 041) are **never reused**.
-
-In addition there is a chronicle of individual work cycles (bugs, refactors) in `tasks/`.
+Implementation history lives in [`docs/spec/tasks/`](./spec/tasks/README.md). The specs
+written before the Spec Kit (`NNN name/spec.md`) were moved there as `NNNF-name/` with the
+`F` index (legacy index: [`F-INDEX.md`](./spec/tasks/F-INDEX.md)); each new feature lists
+the legacy specs it absorbed in its header.
 
 ---
 
