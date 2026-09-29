@@ -1,0 +1,12 @@
+{
+  "dropped": [
+    {
+      "code": "transport_header_unsupported",
+      "index": 0,
+      "reason": "parse_error",
+      "ref": "vless://22222222-2222-2222-2222-222222222222@192.0.2.14:58387?encryption=none&type=raw&headerType=http&host=cdn.example-7.com&path=%2F&security=none#t"
+    }
+  ],
+  "nodes": [],
+  "v": 1
+}

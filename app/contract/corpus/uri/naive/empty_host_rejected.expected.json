@@ -1,0 +1,12 @@
+{
+  "dropped": [
+    {
+      "code": "field_missing",
+      "index": 0,
+      "reason": "emit_error",
+      "ref": "naive+https://"
+    }
+  ],
+  "nodes": [],
+  "v": 1
+}

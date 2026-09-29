@@ -1,0 +1,258 @@
+{
+  "v": 1,
+  "note": "ВИДЫ ИСТОЧНИКА (SPEC 133 §3A, MAPPER_ENGINE §1–§2): чем оказался текст подписки ЦЕЛИКОМ. Уровнем ниже стоит секция-маппер (`mappers.<kind>` у схемы): вид источника говорит, как текст разрезать на элементы и каким маппером читать элемент, а маппер — как из элемента собрать узел. Судится тем же языком предикатов `detect`, что и уровень элемента: отдельного «документного» языка норма не допускает, иначе сниффер формата вернулся бы в код. Сегодняшний рукописный сниффер — core/config/subscription/body_classify.go, нарезка Xray-массива — core/config/subscription/xray_json_array.go; оба заменяются этой таблицей (исполнение — core/config/linkmap/source.go:ClassifySource). Форма файла пришла черновиком LxBox (app/assets/contract_draft/source_kinds.json, их §480 W6), сведение имён — GRAMMAR_SYNC §4.",
+  "source_kinds": {
+    "note_order": "Ветки пробуются по `priority` (меньше = раньше); совпало несколько — побеждает меньший. Ветка `default: true` НИКОГДА не конкурирует с настоящим предикатом, даже если её priority меньше, и она ровно одна на таблицу (проверяет линтер).",
+    "note_unrecognized": "`on_unrecognized` здесь НЕ объявлен намеренно: ветка `uri_lines` стоит `default: true` и ловит всё остальное, поэтому «не опознано» недостижимо, а код, который не может сработать, — мёртвые данные. Объявить его придётся ровно тогда, когда default-ветка уйдёт (например, если построчный разбор перестанет быть ветвью по умолчанию).",
+    "max_unwrap_depth": 2,
+    "kinds": [
+      {
+        "source_kind": "amnezia_link",
+        "priority": 10,
+        "detect": {
+          "all": [
+            { "text": { "prefix_fold": "vpn://" } },
+            { "not": { "regex": "\\n\\s*[A-Za-z][A-Za-z0-9+.\\-]*://" } }
+          ]
+        },
+        "unwrap": "amnezia_vpn",
+        "mapper": "conf",
+        "elements": "texts",
+        "payload_forms": [
+          {
+            "id": "profile_json",
+            "detect": {
+              "default": true
+            },
+            "desc_en": "Amnezia profile bundle: JSON with `containers[]`, either bare or inside qCompress framing. The branch by default: qCompress framing is not expressible by predicates. A text whose later lines start with another `xxx://` link is a list, not one container, and goes to `uri_lines`.",
+            "desc_ru": "Пакет-профиль Amnezia: JSON с `containers[]`, голый либо под фреймингом qCompress. Форма по умолчанию: фрейминг qCompress предикатами не выражается. Текст, где следующие строки начинаются другой ссылкой `xxx://`, — список, а не один контейнер, и уходит в `uri_lines`.",
+            "impl": "Историческая и основная форма: распаковщик достаёт из профиля по одному ini-тексту на WG/AWG-контейнер. `default: true`, а не предикат: голый JSON опознался бы по `prefix_trim: \"{\"`, но сжатый профиль начинается с четырёх байт ДЛИНЫ, и выразить его предикатом о тексте нельзя — фрейминг судит сам распаковщик. Объявить половину условия значило бы соврать, что вторая половина проверяется здесь же. Как и у видов источника, форма по умолчанию ровно одна и с настоящими предикатами не конкурирует. СТРОКА `vpn://` ВНУТРИ СПИСКА ССЫЛОК (ветка `uri_lines`) и вставка `vpn://` в форму источника дают ТЕ ЖЕ узлы, что тело из одной этой ссылки (контракт 1.1.80): все WG/AWG-контейнеры профиля, origin каждого — самодостаточный текст `.conf` (`wg_ini`), номер записи у узлов одного контейнера — подряд; ссылка, не распаковавшаяся вовсе, — отбраковка записи на её позиции с исходником-строкой (origin `uri`). Go: core/config/subscription/parse_body.go:bodyParseState.acceptVPNLinkLine, core/config/migrate_materialize.go:MaterializeVPNLinkNodes. Кейс корпуса body/uri_list/vpn_link_line. ОДНА ССЫЛКА, А НЕ СПИСОК (контракт 1.1.80): второе условие detect — «ни одна строка после первой не начинается со схемы `xxx://`». Без него список, у которого первая строка `vpn://`, опознавался телом-ссылкой ЦЕЛИКОМ: распаковщик склеивал все строки в один base64 и терял и профиль, и остальные ссылки. Теперь такой текст уходит в `uri_lines`, и строка `vpn://` разворачивается там в контейнер целиком. Условие НЕ «одна строка»: ссылку из чата переносят с переводами строк внутри base64 (payload_forms, распаковщик выбрасывает пробелы и переводы), и строки-продолжения схемы не несут — такой перенос остаётся телом-ссылкой. Текст судится после trim, завершающий перевод строки на вывод не влияет. Кейс корпуса body/uri_list/vpn_link_first_line."
+          },
+          {
+            "id": "bare_conf",
+            "detect": {
+              "ini": {
+                "first_section_fold": "interface"
+              }
+            },
+            "redetect": "wireguard_conf",
+            "desc_en": "A bare wg-quick / AmneziaWG `.conf` under `vpn://`: the base64 payload is INI, not a profile bundle.",
+            "desc_ru": "Голый `.conf` wg-quick / AmneziaWG под `vpn://`: полезная нагрузка base64 — это INI, а не пакет-профиль.",
+            "impl": "Панели (rrtrg и соседи) кладут под `vpn://` сам конфиг, без обёртки-профиля. Форма судится ТЕМ ЖЕ предикатом, что и ветка `wireguard_conf` (60), и потому не заводит второго определения «что такое .conf»: первая НЕ-комментарная секция — `[Interface]`. Прежде такой payload уходил в ветку qCompress, где первые четыре байта INI читались как длина, и пользователь получал ноль узлов с диагнозом про zlib («declared uncompressed size … out of range») — сообщение, уводившее чинить не то. `redetect` называет вид ЯВНО, а не оставляет его на общий повторный суд: распаковщик уже знает, что отдал, и повторное угадывание добавило бы ветку, которой нечего решать."
+          }
+        ],
+        "desc_en": "Amnezia container export (`vpn://`): base64url of either a compressed JSON bundle (unwrapped into one INI text per WireGuard/AmneziaWG container) or a bare wg-quick / AmneziaWG `.conf`. The node origin is that INI text (`wg_ini`) with the container values carried into it, not the link itself.",
+        "desc_ru": "Контейнерный экспорт Amnezia (`vpn://`): base64url либо сжатого JSON-пакета (распаковывается в один INI-текст на WireGuard/AmneziaWG-контейнер), либо голого `.conf` wg-quick / AmneziaWG. Происхождение узла — этот INI-текст (`wg_ini`) с перенесёнными в него значениями контейнера, а не сама ссылка.",
+        "impl": "Оболочку снимает ИМЕНОВАННЫЙ распаковщик-код (base64url/base64 от qCompress(JSON, 8), голого JSON-профиля либо голого INI): формат предикатами не выражается, но ВЫЗЫВАЕТСЯ он по имени через `unwrap`, а не веткой в сниффере. Что именно оказалось под base64, решает `payload_forms` — вид элемента заранее известен ТОЛЬКО у формы профиля, поэтому общий `redetect` у ветки не стоит, а объявлен у той формы, которой он нужен. Паддинг `=` у payload необязателен: панели его срезают, и обе азбуки (rawurl и std) пробуются без него. Ветка идёт ПЕРВОЙ: base64-эвристика её и так не зацепит (`:` вне алфавита), но порядок обязан быть объявлен, а не выведен. Этот же detect — единственный признак контейнера и у строки внутри списка ссылок, и у тела подписки: Go спрашивает его по имени распаковщика (core/config/linkmap/source.go:MatchesUnwrap, контракт 1.1.63), литерала префикса в коде нет. Контракт 1.1.72: у формы `profile_json` распаковщик отдаёт вместе с текстом контекст (`context.container`, `context.profile`), и записи секции `conf` переносят его В ТЕКСТ один раз при распаковке (MTU, адреса DNS; MAPPER_ENGINE.md, источник `context.<path>`); получившийся самодостаточный текст — origin узла (`wg_ini`), тело строится из него без контекста. У формы `bare_conf` текст самодостаточен сам и едет в origin как есть."
+      },
+      {
+        "source_kind": "base64_wrapped",
+        "priority": 20,
+        "detect": {
+          "all": [
+            { "text": { "min_len": 16 } },
+            { "regex": "^[A-Za-z0-9+/_=\\-\\s]+$" }
+          ]
+        },
+        "unwrap": "base64_utf8",
+        "redetect": true,
+        "requires_after_unwrap": {
+          "any": [
+            { "text": { "contains": "://" } },
+            { "text": { "prefix_trim": "{" } },
+            { "text": { "prefix_trim": "[" } },
+            { "text": { "contains": "[Interface]" } }
+          ]
+        },
+        "desc_en": "Whole subscription re-encoded as base64. The decoded text is classified again from scratch, and must look like a real document before it wins.",
+        "desc_ru": "Подписка, перекодированная в base64 целиком. Распакованный текст судится заново с самого начала и обязан быть похож на настоящий документ.",
+        "impl": "`redetect` — распакованный текст судится ЗАНОВО с самого начала (предел `max_unwrap_depth`): внутри бывает и список ссылок, и JSON, и ini, поэтому своего маппера у ветки нет. `requires_after_unwrap` — страховка от ложного срабатывания: строка ссылок без спецсимволов тоже проходит алфавит base64, и без проверки правдоподобия распакованный мусор вытеснил бы настоящий список. Сегодня то же делает core/config/subscription/decoder.go:DecodeSubscriptionContent до классификации, и предела вложенности у неё нет вовсе — ограничение новое (DELTAS D133-35)."
+      },
+      {
+        "source_kind": "singbox_config_array",
+        "priority": 30,
+        "detect": {
+          "json": {
+            "type_of": { "$root": "array" },
+            "array_elem_any_keys": ["[].outbounds[].type"]
+          },
+          "not": {
+            "json": { "array_elem_any_keys": ["[].outbounds[].protocol"] }
+          }
+        },
+        "mapper": "singbox",
+        "elements": "[].outbounds[]",
+        "desc_en": "Array of standalone sing-box configs (one node per config). Requires `type` and the absence of `protocol`: an ambiguous array stays with Xray.",
+        "desc_ru": "Массив автономных sing-box-конфигов (по узлу на конфиг). Требует `type` и отсутствия `protocol`: неоднозначный массив остаётся за Xray.",
+        "impl": "Массив автономных sing-box-конфигов (подписка пер-узел), core/config/subscription/body_classify.go:classifyJSONArrayBody. Массив конфигов бывает и Xray, и sing-box: обе формы — список элементов с `outbounds`, и различаются они СОДЕРЖИМЫМ. Ветка требует `type` И ОТСУТСТВИЯ `protocol`: неоднозначный массив (есть оба признака либо нет ни одного) остаётся за Xray — так решал и рукописный код, где проверка xray стояла раньше. Композиция `not` живёт на уровне `detect`, а не внутри `json` (GRAMMAR_SYNC §1 №3)."
+      },
+      {
+        "source_kind": "xray_config_array",
+        "priority": 31,
+        "detect": {
+          "json": {
+            "type_of": { "$root": "array" },
+            "array_elem_any_keys": ["[].outbounds"]
+          }
+        },
+        "mapper": "xray",
+        "elements": "[].outbounds[]",
+        "desc_en": "Array of standalone Xray configs, and the catch-all for a config array whose dialect did not name itself.",
+        "desc_ru": "Массив автономных Xray-конфигов и ветка «массив конфигов, чей диалект не назвался».",
+        "impl": "Массив автономных Xray-конфигов И ветка «массив конфигов, чей диалект не назвался»: признак тут — сам `outbounds` у элемента, а приоритет ниже sing-box-ветки. Сегодняшний Go-классификатор (core/config/subscription/body_classify.go:classifyJSONArrayBody, признак — core/config/subscription/xray_json_array.go:xrayElementHasProtocolOutbounds) смотрит ПЕРВЫЙ элемент-объект и решает за весь массив; `array_elem_any_keys` спрашивает массив целиком (DELTAS D133-36)."
+      },
+      {
+        "source_kind": "singbox_outbound_array",
+        "priority": 32,
+        "detect": {
+          "json": {
+            "type_of": { "$root": "array" },
+            "array_elem_any_keys": ["[].type"]
+          },
+          "not": {
+            "json": { "array_elem_any_keys": ["[].outbounds"] }
+          }
+        },
+        "mapper": "singbox",
+        "elements": "[]",
+        "desc_en": "Array of bare sing-box outbounds.",
+        "desc_ru": "Массив голых sing-box outbound'ов.",
+        "impl": "core/config/subscription/body_classify.go:classifyJSONArrayBody — массив outbound'ов sing-box. Отрицание `[].outbounds` отделяет его от массива КОНФИГОВ: у конфига тоже бывает `type` (в его собственных outbound'ах), и без отрицания массив конфигов уехал бы сюда, где элементом стал бы конфиг целиком."
+      },
+      {
+        "source_kind": "xray_outbound_array",
+        "priority": 33,
+        "detect": {
+          "json": {
+            "type_of": { "$root": "array" },
+            "array_elem_any_keys": ["[].protocol"]
+          }
+        },
+        "mapper": "xray",
+        "elements": "[]",
+        "desc_en": "Array of bare Xray outbounds. `protocol` is the Xray marker, as `type` is the sing-box one.",
+        "desc_ru": "Массив голых Xray-outbound'ов. Признак Xray — `protocol`, как `type` у sing-box.",
+        "impl": "Ветка НОВАЯ (DELTAS D133-37, находка LxBox §480 Д-3): массив голых outbound'ов Xray сегодня не опознаётся ничем — у ветки sing-box-массива признак `[].type`, которого у Xray нет, у xray-ветки требовался `outbounds` у элемента, и такой массив доезжал до построчного разбора, где давал ноль узлов. Приоритет ниже sing-box-массива: неоднозначный вход (есть оба признака) остаётся за sing-box, как и у пары 30/31."
+      },
+      {
+        "source_kind": "xray_outbound",
+        "priority": 34,
+        "detect": {
+          "json": {
+            "type_of": { "$root": "object" },
+            "required_keys": ["protocol"]
+          }
+        },
+        "mapper": "xray",
+        "elements": "$self",
+        "desc_en": "A single Xray outbound object, the form copied out of an Xray config by hand.",
+        "desc_ru": "Одиночный Xray-outbound — форма, которую выписывают из конфига Xray руками.",
+        "impl": "Ветка НОВАЯ (DELTAS D133-37): одиночный outbound Xray сегодня не принимается — ветки на него нет вовсе, а ветка одиночного sing-box-outbound'а требует `type`. Стоит РАНЬШЕ sing-box-одиночки: объект с `protocol` — это Xray, и вопрос решает признак диалекта, а не порядок."
+      },
+      {
+        "source_kind": "xray_config",
+        "priority": 35,
+        "detect": {
+          "json": {
+            "type_of": { "$root": "object" },
+            "array_elem_any_keys": ["outbounds[].protocol"]
+          },
+          "not": {
+            "json": { "required_keys": ["type"] }
+          }
+        },
+        "mapper": "xray",
+        "elements": "outbounds[]",
+        "desc_en": "Full Xray config, `inbounds` and the rest included. Recognised by `protocol` inside `outbounds`, so it does not fall to the sing-box config branch.",
+        "desc_ru": "Полный конфиг Xray, вместе с `inbounds` и прочим. Опознаётся по `protocol` внутри `outbounds` и потому не падает в ветку sing-box-конфига.",
+        "impl": "Признак диалекта — ключ `protocol` у ЭЛЕМЕНТА: без него полный конфиг Xray забирала бы ветка `singbox_config` (50), у которой признак `outbounds` без проверки диалекта, и Xray-элементы уехали бы в sing-box-маппер, который их не читает (узлов ноль). Отрицание `type` — как у пары 30/31: неоднозначный конфиг остаётся за sing-box."
+      },
+      {
+        "source_kind": "singbox_outbound",
+        "priority": 40,
+        "detect": {
+          "json": {
+            "type_of": { "$root": "object" },
+            "required_keys": ["type"]
+          }
+        },
+        "mapper": "singbox",
+        "elements": "$self",
+        "desc_en": "A single sing-box outbound object. `type` is checked before `outbounds`: a lone selector carries both and is an outbound, not a config.",
+        "desc_ru": "Одиночный sing-box outbound. `type` проверяется раньше `outbounds`: одиночный selector несёт оба признака и является outbound'ом, а не конфигом.",
+        "impl": "core/config/subscription/body_classify.go:classifyJSONObjectBody. `type` проверяется РАНЬШЕ `outbounds`: одиночный `selector` несёт и `type`, и `outbounds` — он outbound, а не конфиг."
+      },
+      {
+        "source_kind": "singbox_config",
+        "priority": 50,
+        "detect": {
+          "json": { "type_of": { "$root": "object" } },
+          "any": [
+            { "json": { "required_keys": ["outbounds"] } },
+            { "json": { "required_keys": ["endpoints"] } }
+          ],
+          "not": {
+            "json": { "required_keys": ["type"] }
+          }
+        },
+        "mapper": "singbox",
+        "elements": "outbounds[]+endpoints[]",
+        "desc_en": "Full sing-box config. `endpoints` (sing-box >= 1.11) counts equally: a config may consist of WireGuard nodes alone.",
+        "desc_ru": "Полный sing-box-конфиг. `endpoints` (sing-box >= 1.11) равноправен: конфиг может состоять из одних WireGuard-узлов.",
+        "impl": "core/config/subscription/body_classify.go:classifyJSONObjectBody. `endpoints` (sing-box ≥1.11) равноправен: конфиг может состоять из одних WireGuard-узлов, и требовать `outbounds` значило бы объявить такой конфиг неопознанным. Порядок в `elements` — сначала `outbounds`, потом `endpoints`: тот же, в каком их обходит сегодняшний разбор, и от него зависит нумерация тегов."
+      },
+      {
+        "source_kind": "wireguard_conf",
+        "priority": 60,
+        "detect": {
+          "ini": { "first_section_fold": "interface" }
+        },
+        "mapper": "conf",
+        "elements": "$self",
+        "desc_en": "A `wg-quick` / AmneziaWG `.conf` file. The first non-comment line is `[Interface]`; a `[Peer]` section is not required.",
+        "desc_ru": "Файл `wg-quick` / AmneziaWG `.conf`. Первая не-комментарная строка — `[Interface]`; секция `[Peer]` не требуется.",
+        "impl": "Первая НЕ-КОММЕНТАРНАЯ строка — `[Interface]`: комментарий над ней законен и несёт имя узла. Требования `contains \"[Peer]\"` тут НЕТ, и это сверено с LxBox (GRAMMAR_SYNC §4 №10, правда наша): у заготовки без пира `[Peer]` отсутствует законно, и требование уронило бы такой файл в построчную ветку. Сегодня то же делает core/config/subscription/body_classify.go:looksLikeWGConf, но по НАЛИЧИЮ секции, а не по её порядку (DELTAS D133-38)."
+      },
+      {
+        "source_kind": "uri_lines",
+        "priority": 100,
+        "detect": { "default": true },
+        "mapper": "uri",
+        "elements": "lines",
+        "line_comment_prefixes": ["#", "//", ";"],
+        "banner_targets": {
+          "note": "Цели, которые СЕРВЕРОМ НЕ БЫВАЮТ. Запись со такой целью есть БАННЕР провайдера, а не узел: панели не отдают пустое тело при истёкшей подписке, а пишут синтаксически валидную ссылку в никуда и кладут объяснение в ремарку после `#`. Наблюдаемые производители: Remnawave (`createFallbackHosts` — `vless://…@0.0.0.0:1` с нулевым uuid, ветки EXPIRED/DISABLED/LIMITED/emptyHosts) и 3x-ui (`3x-ui:internal/sub/service.go` — `socks://127.0.0.1:1080#<remark>`, при expired/depleted ЕДИНСТВЕННОЙ записью тела). Прежде признаком баннера было отсутствие `://` (`isProviderBannerLine`), и обе эти записи проходили в состав ПОЛНОЦЕННЫМИ узлами: пользователь с истёкшей подпиской получал «рабочий» узел-пустышку `0.0.0.0:1` вместо сообщения о том, что подписка истекла. Признак объявлен ДАННЫМИ, чтобы эвристика не размазывалась по коду: список целей — здесь, а не в разборщике. Судится ТОЛЬКО цель, не схема: баннером бывает и `vless`, и `socks`, и любая другая ссылка, а годный узел на такой адрес не ведёт ни при какой схеме. `hosts` сверяются ДОСЛОВНО после снятия скобок IPv6 (`[::1]` → `::1`): адрес узла — значение, а не выражение, и сопоставлять его образцом значило бы ловить заодно законные адреса вроде `10.0.0.1`. `port_any_of` обязателен НЕ ВСЕГДА: у 3x-ui порт `1080` законный, и один порт `1` баннера не доказывает — доказывает адрес. Поэтому порт здесь не отдельный признак, а уточнение для `0.0.0.0`, где сам адрес уже нулевой.",
+          "hosts": [
+            "0.0.0.0",
+            "127.0.0.1",
+            "::",
+            "::1",
+            "localhost"
+          ],
+          "action": "drop",
+          "code": "provider_banner_link",
+          "message_from": "fragment",
+          "desc_en": "Targets that are never a server (`0.0.0.0`, loopback, `localhost`). An entry aimed at one of them is a provider banner, not a node: panels deliver an expiry notice as a syntactically valid link and put the text in the remark after `#`. Dropped with an info code, and the remark travels in the code as the provider's message.",
+          "desc_ru": "Цели, которые сервером не бывают (`0.0.0.0`, loopback, `localhost`). Запись с такой целью — баннер провайдера, а не узел: панели отдают сообщение об истечении синтаксически валидной ссылкой, а текст кладут в ремарку после `#`. Отбраковывается с info-кодом, а ремарка едет в коде сообщением провайдера.",
+          "impl": "Проверяется ПОСЛЕ разбора ссылки, а не по тексту строки: цель надо прочитать, а до чтения `vless://…@0.0.0.0:1` от годной ссылки ничем не отличается. `message_from: fragment` — ремарка после `#` есть ТО САМОЕ сообщение, ради которого запись написана, и она уезжает параметром `message` кода: выбросить её значило бы отбраковать запись вместе с единственным её содержимым. Порт в признак не входит (у 3x-ui он законный 1080) — сверяется только адрес. `localhost` в списке потому, что панели-форки пишут и имя: адрес `127.0.0.1` и имя `localhost` для этой цели одно и то же."
+        },
+        "service_schemes": {
+          "note": "СЛУЖЕБНЫЕ схемы строки состава: запись со схемой, которая узлом не является и никогда им не была. Это не «неподдержанный протокол» (`protocol_unsupported`, узел сломан и его надо чинить) и не баннер провайдера (у баннера схемы нет вовсе, признак — отсутствие `://`): это команда СОСЕДНЕЙ подсистеме, которую данный клиент не исполняет. Разбирать её незачем, а шуметь «unsupported scheme» — значит объявлять ошибкой то, что ошибкой не является: у пользователя формально рабочая подписка показывает пять отказов при живых узлах. Обращение с такой записью — как с баннером (`provider_banner`): в состав она не идёт, из списка тихо выпадает, а чтобы выпадение не было МОЛЧАЛИВЫМ, ей назначен info-код.",
+          "schemes": [
+            "incy",
+            "happ"
+          ],
+          "path_prefix_fold": "routing/",
+          "action": "drop",
+          "code": "service_record_ignored",
+          "desc_en": "Service schemes of the composition line: routing commands for a neighbouring client (`incy://routing/…`, `happ://routing/…`). Not nodes; dropped with an info code instead of an `unsupported scheme` error.",
+          "desc_ru": "Служебные схемы строки состава: команды маршрутизации соседнему клиенту (`incy://routing/…`, `happ://routing/…`). Узлами не являются; отбраковываются с info-кодом, а не ошибкой «unsupported scheme».",
+          "impl": "Тот же набор приезжает и ЗАГОЛОВКОМ подписки (`Routing: happ://routing/onadd/<base64>`, `Routing-Enable: true` — наблюдалось у панели rrtrg). Заголовки контрактом не описаны вовсе (протокол живёт в SPEC 061 на стороне лаунчера), поэтому здесь объявлена только форма строки ТЕЛА; заголовок обязан молчать по тому же правилу. `path_prefix_fold` требует, чтобы за схемой шёл именно `routing/`: схема, объявившая что-то другое, тихого игнора не заслуживает — про неё мы не знаем ничего. Проверка регистронезависимая, как у остальных схемных предикатов."
+        },
+        "desc_en": "Catch-all branch: a line-by-line list of links. Blank lines and comments are skipped; no lines left means the document was not parsed.",
+        "desc_ru": "Ветка «всё остальное»: построчный список ссылок. Пустые строки и комментарии пропускаются; не осталось ни одной строки — документ не разобран.",
+        "impl": "Ветка «всё остальное»: построчный список ссылок. Пустые строки и комментарии пропускаются; префиксы комментариев объявлены данными (`line_comment_prefixes`), а не зашиты в обходчик. Ни одной строки не осталось — документ не разобран."
+      }
+    ]
+  }
+}

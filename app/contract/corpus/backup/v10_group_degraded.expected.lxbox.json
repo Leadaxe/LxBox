@@ -1,0 +1,36 @@
+{
+  "rules": [],
+  "warnings": [],
+  "folders": {
+    "Rules": ["a", "b", "by-rule", "pick"]
+  },
+  "root_servers": [
+    "relay-root"
+  ],
+  "groups": {
+    "by-rule": {
+      "members": []
+    },
+    "pick": {
+      "members": [
+        { "tag": "a", "folder": "Rules" },
+        { "tag": "b", "folder": "Rules" }
+      ],
+      "default": { "tag": "b", "folder": "Rules" }
+    }
+  },
+  "chains": [
+    {
+      "tag": "via-rule",
+      "chain": {
+        "hops": ["relay-root", "by-rule"],
+        "idle_timeout": "0s"
+      },
+      "hops": [
+        { "tag": "relay-root" },
+        { "tag": "by-rule", "folder": "Rules" }
+      ]
+    }
+  ],
+  "detours": {}
+}

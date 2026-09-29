@@ -1,0 +1,30 @@
+{
+  "groups": [
+    {
+      "outbounds": [
+        "proxy-out",
+        "🇳🇱 Amsterdam"
+      ],
+      "tag": "via-de",
+      "type": "chain"
+    },
+    {
+      "outbounds": [
+        "🇩🇪 Frankfurt",
+        "🇳🇱 Amsterdam"
+      ],
+      "tag": "proxy-out",
+      "type": "selector"
+    },
+    {
+      "outbounds": [
+        "via-de"
+      ],
+      "tag": "other",
+      "type": "selector"
+    }
+  ],
+  "warnings": [
+    "chain_cycle_through_direction"
+  ]
+}

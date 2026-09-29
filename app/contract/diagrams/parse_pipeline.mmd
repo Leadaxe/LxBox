@@ -1,0 +1,34 @@
+%% Нормативный пайплайн разбора: тело/URI → канонические узлы (SPEC 103).
+%% Стадии «вне контракта» — постобработка приложений, корпусом не покрываются
+%% (нативные тесты + фикстуры backup для переносимого).
+flowchart TD
+  subgraph contract["Контракт (корпус corpus/uri и corpus/body)"]
+    A["Вход: share-URI / тело"] --> C["Классификация тела
+(diagrams/body_classify.mmd)"]
+    C --> P["Per-scheme разбор
+(registry/protocols/*.json)"]
+    P --> N["Нормализация значений:
+allowlist'ы (uTLS fp, obfs, методы),
+reality pbk/sid, ws ?ed=N, клампы
+(registry/allowlists.json, limits.json)"]
+    N --> W["Warnings-коды
+(registry/warnings.json);
+битая нода → dropped"]
+    W --> CE["Канонический узел
+{kind, scheme, label, entry, chain}
+(schema/node.schema.json, docs/PARSING_PRINCIPLES.md)"]
+    CE --> IH["Идентичность = сырой тег,
+уникализированный в источнике
+(docs/IDENTITY.md §1)"]
+  end
+  subgraph app["Вне контракта (постобработка приложений)"]
+    IH --> TG["Tag-политика:
+prefix/postfix/mask/uniquify
+(идентичность УЖЕ снята)"]
+    TG --> DIS["Фильтр disabled (ключ = идентичность,
+миграция legacy-хешей, TTL)"]
+    DIS --> DET["Detour источника / цепочки
+(узел адресуется финальным тегом)"]
+    DET --> OUT["Вставка в config
+(секции outbounds / endpoints)"]
+  end

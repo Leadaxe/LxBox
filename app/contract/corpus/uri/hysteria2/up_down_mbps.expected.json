@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {
+      "entry": {
+        "down_mbps": 200,
+        "password": "pass123",
+        "server": "example-2.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "example-2.com"
+        },
+        "type": "hysteria2",
+        "up_mbps": 100
+      },
+      "kind": "outbound",
+      "label": "hy2-mbps",
+      "scheme": "hysteria2"
+    }
+  ],
+  "v": 1
+}

@@ -1,0 +1,517 @@
+{
+  "v": 1,
+  "scheme": "http",
+  "kind": "outbound",
+  "singbox_type": "http",
+  "aliases": [
+    "proxy-http",
+    "proxy-https",
+    "proxy+http",
+    "proxy+https"
+  ],
+  "sources": [
+    "uri",
+    "singbox",
+    "xray"
+  ],
+  "extension": null,
+  "uri": {
+    "userinfo": {
+      "maps_to": [
+        "username",
+        "password"
+      ],
+      "meaning": "username:password",
+      "desc_en": "username:password of the account.",
+      "desc_ru": "username:password учётной записи.",
+      "impl": "HTTP(S) CONNECT proxy. Кастомные схемы вместо голых http(s):// — те перехватываются как URL подписки. Суффикс схемы — TLS-дискриминатор: *-https/+https → TLS on (порт по умолчанию 443), *-http/+http → plain (порт 80). §9.B6 закрыт: схемы разбираются и в Go (общий движок по mappers.uri этого файла; прежде — рукописный parseHTTPProxyURI), и в Dart. Тело для ядра строит общий эмиттер по body.fields: username/password/path/headers, tls — общей секцией. Sing-box-импорт принимает type http общей веткой разбора тела (mappers.singbox)."
+    },
+    "query": {
+      "path": {
+        "type": "string",
+        "default": null,
+        "ext": null,
+        "maps_to": "path",
+        "desc_en": "Path of the CONNECT request.",
+        "desc_ru": "Путь запроса CONNECT.",
+        "impl": "→ path outbound'а (uri прокси-запроса)."
+      },
+      "headers": {
+        "type": "string",
+        "default": null,
+        "ext": null,
+        "maps_to": "headers",
+        "desc_en": "Extra HTTP headers of the request.",
+        "desc_ru": "Дополнительные HTTP-заголовки запроса.",
+        "impl": "Та же сериализация, что naive extra-headers: URL-encoded «H1: V1\\r\\nH2: V2» → headers map; ключи при эмите сортируются."
+      },
+      "sni": {
+        "type": "string",
+        "default": null,
+        "aliases": [
+          "peer",
+          "host"
+        ],
+        "ext": null,
+        "maps_to": "tls.server_name",
+        "desc_en": "Server name sent in SNI.",
+        "desc_ru": "Имя сервера, отправляемое в SNI.",
+        "impl": "server_name (только при TLS-схеме); trojan-конвенция sni/peer/host, fallback на server."
+      },
+      "fp": {
+        "type": "alias_enum",
+        "allowlist": "utls_fingerprints",
+        "default": null,
+        "ext": null,
+        "maps_to": "tls.utls.fingerprint",
+        "desc_en": "Browser fingerprint mimicked in the ClientHello.",
+        "desc_ru": "Отпечаток браузера, который подделывается в ClientHello.",
+        "impl": "uTLS fingerprint (только при TLS-схеме); канонизация §281."
+      },
+      "alpn": {
+        "type": "string",
+        "default": null,
+        "ext": null,
+        "maps_to": "tls.alpn",
+        "desc_en": "Comma-separated list of ALPN protocols.",
+        "desc_ru": "Список протоколов ALPN через запятую.",
+        "impl": "Список через запятую → tls.alpn (только при TLS-схеме)."
+      },
+      "insecure": {
+        "type": "bool",
+        "default": null,
+        "aliases": [
+          "allowInsecure",
+          "allowinsecure",
+          "allow_insecure",
+          "allow-insecure",
+          "skipCertVerify",
+          "skipcertverify",
+          "skip_cert_verify",
+          "skip-cert-verify",
+          "noverify"
+        ],
+        "ext": null,
+        "maps_to": "tls.insecure",
+        "desc_en": "Skip server certificate verification.",
+        "desc_ru": "Не проверять сертификат сервера.",
+        "impl": "tls.insecure; 1/true/yes. ЦЕЛЕВОЙ НАБОР ИМЁН — объединение обоих проектов (DRIFT §2(a), общая запись — tls.json /tls/params/insecure): insecure, allowinsecure, allow_insecure, allow-insecure, skipcertverify, skip_cert_verify, skip-cert-verify, noverify; сверка по strings.ToLower со снятием '-'/'_'; истина 1|true|yes единообразно."
+      },
+      "security": {
+        "type": "string",
+        "default": null,
+        "ext": null,
+        "maps_to": "tls.enabled",
+        "desc_en": "Whether the link asks for TLS, and in which flavour.",
+        "desc_ru": "Просит ли ссылка TLS и в каком виде.",
+        "impl": "security=none гасит TLS даже на https-схеме (trojan-конвенция parseTrojanTls)."
+      }
+    },
+    "fragment": "label"
+  },
+  "emit": {
+    "share_uri": true,
+    "param_order": [
+      "path",
+      "headers",
+      "sni",
+      "fp",
+      "alpn",
+      "insecure"
+    ],
+    "note": "Dart toUriHttp и Go — секция mappers.uri.emit, общий эмиттер core/config/linkmap/emit.go:Emit (прежний рукописный shareURIFromHTTP удалён): схема по tls.enabled (proxy-https/proxy-http), insecure эмитится как allowInsecure=1."
+  },
+  "refs": {
+    "dart": [
+      "lib/services/parser/uri_parsers.dart:70-74",
+      "app/lib/services/parser/mappers/uri_pipeline.dart:parseLinkViaPipeline",
+      "lib/services/parser/transport.dart:375-395",
+      "lib/models/node_spec_emit.dart:526-578",
+      "lib/services/parser/json_parsers.dart:797"
+    ]
+  },
+  "body": {
+    "core": "1.14.1-lx.4",
+    "order": [
+      "server",
+      "server_port",
+      "username",
+      "password",
+      "path",
+      "headers",
+      "tls",
+      "__dialer"
+    ],
+    "fields": {
+      "server": {
+        "type": "ref",
+        "ref": "dialer.common",
+        "desc_en": "Server address: domain or IP.",
+        "desc_ru": "Адрес сервера: домен или IP.",
+        "impl": "ServerOptions; правило значения — registry/dialer.json, секция common."
+      },
+      "server_port": {
+        "type": "ref",
+        "ref": "dialer.common",
+        "desc_en": "Server port.",
+        "desc_ru": "Порт сервера.",
+        "impl": "ServerOptions; правило значения — registry/dialer.json, секция common."
+      },
+      "username": {
+        "type": "string",
+        "role": "credential",
+        "desc_en": "Account user name.",
+        "desc_ru": "Имя пользователя учётной записи.",
+        "impl": "option/http.go Username."
+      },
+      "password": {
+        "type": "string",
+        "secret": true,
+        "desc_en": "Account password.",
+        "desc_ru": "Пароль учётной записи.",
+        "impl": "option/http.go Password. Секрет."
+      },
+      "path": {
+        "type": "string",
+        "desc_en": "Request path of the CONNECT request.",
+        "desc_ru": "Путь запроса CONNECT.",
+        "impl": "option/http.go Path."
+      },
+      "headers": {
+        "type": "object",
+        "desc_en": "Extra HTTP headers sent with the request.",
+        "desc_ru": "Дополнительные HTTP-заголовки в запросе.",
+        "impl": "badoption.HTTPHeader: map[string]listable_string."
+      },
+      "tls": {
+        "type": "ref",
+        "ref": "tls",
+        "desc_en": "TLS settings.",
+        "desc_ru": "Настройки TLS.",
+        "impl": "OutboundTLSOptions; поля — registry/tls.json."
+      },
+      "__dialer": {
+        "type": "ref",
+        "ref": "dialer",
+        "inline": true,
+        "desc_en": "Common dialer fields, inlined flat into the body.",
+        "desc_ru": "Общие поля dialer, вливаются в тело плоско.",
+        "impl": "DialerOptions встроены в структуру ядра плоско — поля пишутся в корень тела, без обёртки. Список — registry/dialer.json, секция body."
+      }
+    }
+  },
+  "mappers": {
+    "uri": {
+      "body_source": "uri",
+      "detect": {
+        "scheme_in": [
+          "proxy-http",
+          "proxy-https",
+          "proxy+http",
+          "proxy+https"
+        ]
+      },
+      "forms": [
+        {
+          "id": "url",
+          "detect": {
+            "default": true
+          },
+          "decode": [
+            "url"
+          ],
+          "space": "url"
+        }
+      ],
+      "userinfo": {
+        "split": {
+          "sep": ":",
+          "limit": 2
+        },
+        "into": [
+          "username",
+          "password"
+        ],
+        "single_into": "username",
+        "impl": "Три формы: 'user' | 'user:pass' | ':pass' — оба компонента опциональны (uri.userinfo.impl). Пароль — всё после ПЕРВОГО двоеточия."
+      },
+      "label": {
+        "source": "fragment",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "singbox_type"
+        }
+      },
+      "defaults": {
+        "type": "http"
+      },
+      "scheme_sets": {
+        "proxy-https": {
+          "tls.enabled": true,
+          "$default_port": 443
+        },
+        "proxy+https": {
+          "tls.enabled": true,
+          "$default_port": 443
+        },
+        "proxy-http": {
+          "$default_port": 80
+        },
+        "proxy+http": {
+          "$default_port": 80
+        }
+      },
+      "params": {
+        "security": {
+          "source": "query.security",
+          "selector": true,
+          "priority": 10,
+          "merge": "overwrite",
+          "sets": {
+            "none": {
+              "tls": null
+            },
+            "": {
+              "tls": null
+            },
+            "tls": {
+              "tls": null
+            }
+          },
+          "when": {
+            "scheme": {
+              "not_in": [
+                "proxy-https",
+                "proxy+https"
+              ]
+            }
+          },
+          "impl": "Перекрывает одноимённую запись блока tls#uri тем же приёмом, что anytls.security: priority 10 против умолчания 0 ставит её ПОЗЖЕ в проходе A, merge overwrite возвращает решение ей. Отличие от anytls — знак: у http наличие блока TLS решает НАПИСАНИЕ схемы, а не этот параметр, и запись гейтится по нему же (when.scheme.not_in). На http-суффиксе блока быть не должно НИ ПРИ КАКОМ security, поэтому все три ветки снимают путь: общая запись блока со своим sets[\"\"] → tls.enabled сочиняла бы TLS простому proxy-http прокси (корпус proxy_http_plain_basic и ещё пять кейсов). На https-суффиксе запись молчит, и блок целиком ведёт tls#uri + tls#uri_with_host; значение none снимает его там своей веткой блока — прежний путь читал его тем же trojanTLSFromNode. QUIRKS Q133-45."
+        },
+        "server": {
+          "source": "host",
+          "maps_to": "server",
+          "required": true
+        },
+        "server_port": {
+          "source": "port",
+          "maps_to": "server_port",
+          "type": "int",
+          "materialize_default": true,
+          "impl": "Дефолт задаёт scheme_sets: 443 у https-суффикса, 80 у http-суффикса."
+        },
+        "username": {
+          "source": "userinfo.user",
+          "maps_to": "username"
+        },
+        "password": {
+          "source": "userinfo.pass",
+          "maps_to": "password"
+        },
+        "path": {
+          "source": "query.path",
+          "maps_to": "path",
+          "impl": "Читается у ОБОИХ суффиксов — так делал прежний путь."
+        },
+        "headers": {
+          "source": "query.headers",
+          "maps_to": "headers",
+          "type": "object",
+          "sort_keys": true,
+          "list": {
+            "sep": "\r\n"
+          },
+          "extract": {
+            "re": "^(?P<k>[!#$%&'*+.0-9A-Z\\\\^_`a-z|~-]+):[ \\t]*(?P<v>[^\\r\\n\\x00]*)$",
+            "into": {
+              "k": "$key",
+              "v": "$value"
+            }
+          },
+          "emit_as": "pairs",
+          "emit_pair_sep": ": ",
+          "impl": "Та же сериализация И ТА ЖЕ регулярка, что extra-headers у naive: 'H1: V1\\r\\nH2: V2' → карта тела. sort_keys — порядок ключей входит в тело, то есть в identity. Битая пара пропускается МОЛЧА: код naive_extra_headers_invalid объявлен у naive, и под контракт эти заголовки не попадают (так было и на прежнем пути). Прежде здесь жил ДЕФЕКТ, воспроизведённый намеренно: запись читала только 'headers', а не 'extra-headers', как у naive и как пишут реальные ссылки — обе фикстуры b480 (extra_headers_https и extra_headers_unsorted) шлют 'extra-headers' и теряли заголовки ЦЕЛИКОМ, на ОБОИХ суффиксах схемы. Так же вёл себя и прежний рукописный путь: http читал только 'headers', naive — только 'extra-headers', при ОБЩЕМ разборе parseNaiveExtraHeaders; ссылка с extra-headers на http-прокси теряла заголовки молча. Закрыто DELTAS D133-18: extra-headers — АЛИАС headers (aliases этой записи). Каноническое имя для эмита остаётся headers — тела рабочих узлов не меняются. QUIRKS Q133-39.",
+          "aliases": [
+            "extra-headers"
+          ]
+        }
+      },
+      "include": [
+        "tls#uri",
+        "tls#uri_security",
+        "tls#uri_with_host",
+        "dialer#uri"
+      ],
+      "unknown_key": {
+        "action": "keep",
+        "code": "uri_param_unknown"
+      },
+      "emit": {
+        "form": "url",
+        "form_from": {
+          "tls.enabled": {
+            "true": "proxy-https",
+            "*": "proxy-http"
+          }
+        },
+        "param_order": "alphabetical",
+        "names": {
+          "insecure": "allowInsecure"
+        },
+        "omit_default": [
+          "security"
+        ],
+        "impl": "security в ссылку не пишется: истину TLS у http несёт НАПИСАНИЕ схемы (form_from proxy-http / proxy-https), и параметр сказал бы то же самое вторым голосом. names.insecure = allowInsecure (оверлей LxBox)."
+      }
+    },
+    "xray": {
+      "body_source": "xray",
+      "detect": {
+        "json": {
+          "value_in": {
+            "protocol": [
+              "http"
+            ]
+          }
+        }
+      },
+      "forms": [
+        {
+          "id": "servers",
+          "detect": {
+            "json": {
+              "type_of": {
+                "settings": "object"
+              }
+            }
+          },
+          "space": "json",
+          "base": "settings.servers.0",
+          "impl": "Как у socks: условие называет ТОЛЬКО settings. TLS у такого элемента объявляется streamSettings.security, и его читает подключённый tls#xray — поэтому контейнер в условии не назван, а в ignore перечислен."
+        }
+      ],
+      "defaults": {
+        "type": "http"
+      },
+      "label": {
+        "source": "json.remarks",
+        "normalize": [
+          "strip_control",
+          "trim"
+        ],
+        "fallback": {
+          "template": "{scheme}-{server}-{server_port}",
+          "scheme_source": "as_written"
+        }
+      },
+      "params": {
+        "address": {
+          "source": "json.$base.address",
+          "maps_to": "server",
+          "required": true,
+          "desc_en": "empty server address"
+        },
+        "port": {
+          "source": "json.$base.port",
+          "maps_to": "server_port",
+          "type": "int",
+          "required": true,
+          "desc_en": "server port is missing or out of range"
+        },
+        "user": {
+          "source": "json.$base.users.0.user",
+          "maps_to": "username",
+          "impl": "Xray зовёт пару user/pass, ядро — username/password (option/simple.go HTTPOutboundOptions)."
+        },
+        "pass": {
+          "source": "json.$base.users.0.pass",
+          "maps_to": "password"
+        },
+        "headers": {
+          "source": "json.$base.headers",
+          "maps_to": "headers",
+          "type": "object",
+          "sort_keys": true,
+          "impl": "badoption.HTTPHeader ядра — map[string]listable_string, и Xray пишет ровно карту: значение едет КАРТОЙ, без склейки в строку (§4) — склейка это источник живого дефекта Q133-16. Отличие от записи блока uri: там та же карта приходит СТРОКОЙ («H1: V1\\r\\nH2: V2») и собирается extract'ом, здесь она уже разобрана JSON'ом, и разбирать нечем. sort_keys — порядок ключей входит в тело, то есть в identity. Значения элементов к строке НЕ приводятся: у ядра значением законны и строка, и массив строк, и Xray пишет оба."
+        },
+        "$extra_servers": {
+          "source": "json.settings.servers",
+          "maps_to": null,
+          "on_len_gt": {
+            "n": 1,
+            "action": "note",
+            "code": "xray_extra_entries_dropped"
+          }
+        },
+        "$extra_users": {
+          "source": "json.$base.users",
+          "maps_to": null,
+          "on_len_gt": {
+            "n": 1,
+            "action": "note",
+            "code": "xray_extra_entries_dropped"
+          }
+        }
+      },
+      "include": [
+        "tls#xray",
+        "dialer#xray"
+      ],
+      "unknown_key": {
+        "action": "drop",
+        "code": "json_field_unknown",
+        "ignore": [
+          "protocol",
+          "tag",
+          "remarks",
+          "settings",
+          "streamSettings",
+          "mux",
+          "sendThrough",
+          "proxySettings"
+        ],
+        "nested_quiet": [
+          "streamSettings.sockopt"
+        ],
+        "impl": "Список дословно равен списку остальных xray-секций — см. развёрнутую сноску у vless."
+      },
+      "emit": null
+    },
+    "singbox": {
+      "detect": {
+        "json": {
+          "value_in": {
+            "type": [
+              "http"
+            ]
+          }
+        }
+      },
+      "body_source": "singbox",
+      "forms": [
+        {
+          "id": "outbound",
+          "detect": {
+            "default": true
+          },
+          "space": "json",
+          "level": "outbound"
+        }
+      ],
+      "params": {},
+      "unknown_key": {
+        "action": "keep",
+        "code": "json_field_unknown",
+        "ignore": [
+          "type",
+          "tag"
+        ],
+        "impl": "keep, а не drop: тело уже в каноне ядра, и чужой ключ может быть расширением форка — выбрасывать его нельзя. Но и молчать нельзя: сегодня неизвестный ключ уезжает в тело слепой копией и всплывает, лишь когда ядро отвергнет весь конфиг. `ignore` — бухгалтерия ЭЛЕМЕНТА, полем узла не являющаяся: `type` (по нему элемент и опознан) и `tag` (имя, которое читает сборка документа). Секция ПОРОЖДЕНА МЕХАНИЧЕСКИ по норме MAPPER_ENGINE §8a (образец — trojan/vless, приехавшие контрактом 1.1.15); забрана из черновика LxBox контрактом 1.1.53, ревизия зеркала §3 п.20. Пустая `params` — нормальное КОНЕЧНОЕ состояние, а не заготовка: вход sing-box это тело УЖЕ В КАНОНЕ ЯДРА, переводить нечего, и секция нужна ради detect, body_source и unknown_key. Записи появляются только там, где диалект всё-таки есть."
+      }
+    }
+  }
+}

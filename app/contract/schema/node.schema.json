@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lx-contract/schema/node.schema.json",
+  "title": "LX Parse Result",
+  "description": "Результат разбора источника (docs/PARSING_PRINCIPLES.md §0–§1), языконезависимо: канонические узлы + отброшенные входы + meta. Форма expected.json фикстур корпуса и общий язык обсуждения нод.",
+  "type": "object",
+  "required": ["v", "nodes"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "dropped": {
+      "type": "array",
+      "description": "Отброшенные целиком входы (битая нода → подписка живёт). PARSING_PRINCIPLES §4. С контракта 1.1.49 нормативны ref, index и code; reason — человеческий текст стороны, сравнением не покрывается (D-088).",
+      "items": {
+        "type": "object",
+        "required": ["ref", "index", "code"],
+        "additionalProperties": false,
+        "properties": {
+          "ref": { "type": "string", "description": "Что отвергнуто, как это видно глазами: тег outbound'а у JSON-тел, сама ссылка у одиночной ссылки." },
+          "index": { "type": "integer", "minimum": 0, "description": "С 1.1.49. Позиция отвергнутого элемента в нарезке elements вида источника (registry/source_kinds.json), с нуля. Дополнительный адрес рядом с ref, а не его замена: у одиночной ссылки всегда 0." },
+          "code": { "type": "string", "description": "Машинная причина — код из registry/warnings.json. С 1.1.49 обязателен у каждой отбраковки, в том числе у отказа РАЗБОРА (form_unrecognized, scheme_unsupported, field_missing, protocol_unsupported, uri_too_long); граница form_unrecognized/scheme_unsupported — PARSING_PRINCIPLES §4.1." },
+          "reason": { "type": "string", "description": "Человеческий текст причины стороны. Ненормативен (D-088): раннеры его не сравнивают." }
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "description": "Только для body-фикстур: распознанные метаданные подписки.",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["kind", "scheme", "entry"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["outbound", "endpoint", "group"] },
+        "scheme": { "type": "string", "description": "Имя из registry/protocols/" },
+        "label": { "type": "string", "description": "Человекочитаемое имя ДО tag-политики (prefix/mask/uniquify — постобработка вне контракта)" },
+        "entry": {
+          "type": "object",
+          "description": "sing-box outbound/endpoint map БЕЗ tag; канонизация — docs/PARSING_PRINCIPLES.md",
+          "required": ["type"],
+          "properties": { "type": { "type": "string" } },
+          "additionalProperties": true
+        },
+        "chain": {
+          "type": "array",
+          "description": "Detour-цепочка, ближний хоп первым, cap 8 (registry/limits.json)",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/node" }
+        },
+        "warnings": {
+          "type": "array",
+          "description": "Записи деградаций (PARSING_PRINCIPLES §6, контракт 1.1.0): {code, path?, value?, params?}; до 1.1.0 — строки-коды, читаются по-прежнему. Порядок: коды узла — по появлению, коды полей — по body.order реестра.",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["code"],
+                "additionalProperties": false,
+                "properties": {
+                  "code": { "type": "string", "description": "Код из registry/warnings.json" },
+                  "path": { "type": "string", "description": "Путь поля в entry (tls.reality.short_id); нет у кодов уровня узла" },
+                  "value": { "type": "string", "description": "Исходное значение до деградации, ≤64 символов; у secret-полей \"***\"" },
+                  "params": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Подстановки шаблона text_* кода" },
+                  "applied": { "type": "boolean", "default": true, "description": "Контракт 1.1.87 (LxBox §577): false — правило реестра сработало бы, но тело авторское и правило мягкое, поэтому тело НЕ изменено (PARSING_PRINCIPLES §10). Отсутствие = true. Пишется только false." }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
