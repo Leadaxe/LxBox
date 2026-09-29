@@ -74,6 +74,13 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 | Наборы настроек (workspaces) | [018-WORKSPACES](docs/spec/features/018-WORKSPACES/FEATURE.ru.md) |
 | Редактор конфига и закрепление конфига | [019-CONFIG_EDITOR](docs/spec/features/019-CONFIG_EDITOR/FEATURE.ru.md) |
 | Настройки приложения, тема, локализация, первый запуск, проверка обновлений | [020-APP_SHELL](docs/spec/features/020-APP_SHELL/FEATURE.ru.md) |
+| Шаблон конфига, его язык и язык пресетов; расширение клиента через шаблон | [024-TEMPLATE](docs/spec/features/024-TEMPLATE/FEATURE.ru.md) |
+| Реестр контракта: схемы протоколов, санитайзинг узлов, гейт сборки, коды предупреждений | [025-CONTRACT_REGISTRY](docs/spec/features/025-CONTRACT_REGISTRY/FEATURE.ru.md) |
+| Направления: адресаты маршрутизации vpn-N, direct-out, block | [026-DIRECTIONS](docs/spec/features/026-DIRECTIONS/FEATURE.ru.md) |
+| Debug API: локальный HTTP-интерфейс для автоматизации и диагностики | [027-DEBUG_API](docs/spec/features/027-DEBUG_API/FEATURE.ru.md) |
+| Профайлер трафика: журнал соединений по приложениям, атрибуция, трасса DNS | [028-TRAFFIC_PROFILER](docs/spec/features/028-TRAFFIC_PROFILER/FEATURE.ru.md) |
+| Локализация: языки, модель «английский как ключ», процесс перевода | [029-LOCALIZATION](docs/spec/features/029-LOCALIZATION/FEATURE.ru.md) |
+| Tailscale: телефон как узел вашей сети tailnet внутри VPN | [030-TAILSCALE](docs/spec/features/030-TAILSCALE/FEATURE.ru.md) |
 
 <details>
 <summary><strong>Серверы и подписки</strong> — все источники прокси в одном месте</summary>

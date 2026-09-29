@@ -74,6 +74,13 @@ precise behaviour; the sections below are the tour.
 | Workspaces — named settings sets | [018-WORKSPACES](docs/spec/features/018-WORKSPACES/FEATURE.md) |
 | Config editor and config pinning | [019-CONFIG_EDITOR](docs/spec/features/019-CONFIG_EDITOR/FEATURE.md) |
 | App settings, theme, localization, first run, update check | [020-APP_SHELL](docs/spec/features/020-APP_SHELL/FEATURE.md) |
+| The config template, its language and preset language; extending the client through the template | [024-TEMPLATE](docs/spec/features/024-TEMPLATE/FEATURE.md) |
+| Contract registry: protocol schemas, node sanitizing, build gate, warning codes | [025-CONTRACT_REGISTRY](docs/spec/features/025-CONTRACT_REGISTRY/FEATURE.md) |
+| Directions: the routing targets vpn-N, direct-out, block | [026-DIRECTIONS](docs/spec/features/026-DIRECTIONS/FEATURE.md) |
+| Debug API: local HTTP control surface for automation and diagnostics | [027-DEBUG_API](docs/spec/features/027-DEBUG_API/FEATURE.md) |
+| Traffic profiler: per-app connection log, attribution, DNS trace | [028-TRAFFIC_PROFILER](docs/spec/features/028-TRAFFIC_PROFILER/FEATURE.md) |
+| Localization: languages, English-as-key model, translation workflow | [029-LOCALIZATION](docs/spec/features/029-LOCALIZATION/FEATURE.md) |
+| Tailscale: the phone as a node of your tailnet inside the VPN | [030-TAILSCALE](docs/spec/features/030-TAILSCALE/FEATURE.md) |
 
 <details>
 <summary><strong>Servers & Subscriptions</strong> — every proxy source in one place</summary>
