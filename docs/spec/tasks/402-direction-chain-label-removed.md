@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-02 |
 | Дата завершения | 2026-09-02 |
 | Коммиты | см. ветку задачи |
-| Связанные spec'ы | [features/125 configurable-directions](../features/125%20configurable-directions/spec.md), [tasks/393](393-masque-config-schema-migration.md), [tasks/274](274-detour-role-to-permission.md) |
+| Связанные spec'ы | [features/125 configurable-directions](125F-configurable-channels/spec.md), [tasks/393](393-masque-config-schema-migration.md), [tasks/274](274-detour-role-to-permission.md) |
 
 Зеркало контракта singbox-launcher: **0.9.0** (снос `label` у Направления),
 решение **D-082** (то же для цепочки) и **0.11.1** (masque `vhttp=auto`).

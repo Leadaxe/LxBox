@@ -2,7 +2,7 @@
 
 > # 🚫 SUPERSEDED
 >
-> **Полностью заменено спекой [`features/026 parser v2`](../../features/026%20parser%20v2/spec.md)** (2026-04-18, v1.3.0).
+> **Полностью заменено спекой [`tasks/026F-parser-v2`](../../tasks/026F-parser-v2/spec.md)** (2026-04-18, v1.3.0).
 > Все файлы, упомянутые здесь (`node_parser.dart`, `source_loader.dart`, `subscription_fetcher.dart`, `subscription_decoder.dart`, `xray_json_parser.dart`, модели `ParsedNode`, `ProxySource`), **удалены** в Фазе 4 спеки 026.
 >
 > **Текущая реализация:** `lib/services/parser/` + `lib/services/subscription/sources.dart`. Sealed `NodeSpec` вместо `ParsedNode`, sealed `ServerList` (`SubscriptionServers` / `UserServer`) вместо `ProxySource`.

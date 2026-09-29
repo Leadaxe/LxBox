@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-24 |
 | Дата завершения | 2026-09-24 |
 | Коммиты | ветка `task-519` (не в develop) |
-| Связанные spec'ы | [`140`](140-force-stop-port-race-and-connecting-timeout.md) (порог введён), [`129`](129-vpnservice-force-stop-on-stuck-core.md) (force-stop на зависшем ядре), [`415`](415-stop-timeout-budget.md) (лестница бюджетов stop), [`279`](../features/279%20localization/spec.md) (`StopReason`), [`250`](250-last-start-error.md) (`lastStartError`) |
+| Связанные spec'ы | [`140`](140-force-stop-port-race-and-connecting-timeout.md) (порог введён), [`129`](129-vpnservice-force-stop-on-stuck-core.md) (force-stop на зависшем ядре), [`415`](415-stop-timeout-budget.md) (лестница бюджетов stop), [`279`](../tasks/279F-localization/spec.md) (`StopReason`), [`250`](250-last-start-error.md) (`lastStartError`) |
 | Источник | Демо A–D на эмуляторе 24.09.2026, ДЕФЕКТ 2 |
 
 ## Проблема

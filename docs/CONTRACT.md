@@ -17,7 +17,7 @@ the content.
 - SPEC 103 is the launcher's spec and lives in the launcher repo (this repo's
   `docs/spec/tasks/103-…` is an unrelated task). The in-repo spec for the
   registry mirror is feature
-  [460](spec/features/460%20contract-registry-bundle/spec.md).
+  [460](spec/tasks/460F-contract-registry-bundle/spec.md).
 
 ## Where it lives
 

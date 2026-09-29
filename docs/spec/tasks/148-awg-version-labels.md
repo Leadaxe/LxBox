@@ -5,7 +5,7 @@
 | Status | Implemented |
 | Started | 2026-06-18 |
 | Trigger | Subtitle/variant-фильтр (§102/§103) различал только `awg` / `awg2`, причём весь набор `i1`–`i5` падал в `awg2`. По **официальному версионированию AmneziaWG** (у Amnezia это явные версии формата конфига): signature-пакеты `i1`–`i5` (CPS) — это 1.5 (водораздел 1.0→1.5 = появление `I1`); 2.0 — динамика: ranged-заголовки `h1`–`h4` (`"N-M"`, §112) + transport-padding `s3`/`s4`. Плюс masquerade-sugar `ip`/`id`/`ib` (§143) — надстройка над любой базой, которую полезно видеть отдельно. |
-| Related | [§097](../features/097%20awg2-amneziawg2/spec.md) (поля Awg, эмит/парс); [§102](102-node-subtitle-transport-security.md)/[§103](103-variant-filter.md) (subtitle + variant-фильтр); [§143](143-warp-masquerade-id-ip-ib.md) (masquerade ip/id/ib); [§112](112-ranged-magic-headers.md) (ranged h1–h4) |
+| Related | [§097](../tasks/097F-awg2-amneziawg2/spec.md) (поля Awg, эмит/парс); [§102](102-node-subtitle-transport-security.md)/[§103](103-variant-filter.md) (subtitle + variant-фильтр); [§143](143-warp-masquerade-id-ip-ib.md) (masquerade ip/id/ib); [§112](112-ranged-magic-headers.md) (ranged h1–h4) |
 | Files touched | `models/config_node.dart` (`_deriveSecurity` + doc), `screens/home/node_list_presenter.dart` (`_variantOrder` + `_variantRank`), `test/models/config_node_test.dart`, `docs/PROTOCOLS.md` |
 
 ## Семантика детекции

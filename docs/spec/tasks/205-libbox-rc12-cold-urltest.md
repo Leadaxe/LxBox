@@ -38,6 +38,6 @@ rc.11 (SPEC 019 load-balancing) пропущен как пин — берём с
 
 ## Связанные
 
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) — auto-двойник канала (urltest).
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) — auto-двойник канала (urltest).
 - [§203](203-select-server-on-auto.md) — Select server (зависит от непустого urltestNow — теперь работает с холодной).
 - [§048 rc.10](048*) и предыдущие бампы ядра — паттерн «бамп пина + fetch + javap».

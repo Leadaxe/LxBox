@@ -15,7 +15,7 @@ import 'storage_migration/migrate_storage.dart';
 import 'template_loader.dart';
 
 /// Backup categories — параллельно с UI-toggle'ами в [BackupScreen].
-/// Спека: docs/spec/features/040 backup restore ui/spec.md
+/// Спека: docs/spec/tasks/040F-backup-restore-ui/spec.md
 enum BackupCategory {
   serverLists,
   routing,

@@ -6,7 +6,7 @@
 | Дата старта | 2026-04-28 |
 | Дата завершения | 2026-04-28 |
 | Коммиты | (закомичено в одном/двух коммитах §032 на ветке `develop`) |
-| Связанные spec'ы | [`032 quick connect`](../features/032%20quick%20connect/spec.md) |
+| Связанные spec'ы | [`032 quick connect`](../tasks/032F-quick-connect/spec.md) |
 | Связанные issue | [#1 Add Android Quick Settings tile and app icon shortcut](https://github.com/Leadaxe/LxBox/issues/1) |
 
 ## Проблема

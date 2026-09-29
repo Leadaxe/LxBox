@@ -204,7 +204,7 @@ device-verify ночью = не оправдано. Кандидат на focuse
 - **E1 — SRS-cache у Preset.** Sealed-split УЖЕ сделан (custom_rule sealed
   Inline/Srs/Preset). Остаток = offline SRS-кэш remote rule_sets (spec 011) +
   Preset.name read-only. Уже специфицировано: [task 011](011-sealed-customrule-split.md)
-  + [feature 011](../features/011%20local%20ruleset%20cache/spec.md) + memory-план.
+  + [feature 011](../tasks/011F-local-ruleset-cache/spec.md) + memory-план.
   **Почему не ночью:** корректность = sing-box принимает cached SRS по local
   path → проверяется ТОЛЬКО на устройстве с реальным preset'ом; тихий fail =
   routing не применяется. + memory прямо: «самостоятельный refactor, свой flow,

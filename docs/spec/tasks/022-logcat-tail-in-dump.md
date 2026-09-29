@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`038 crash diagnostics`](../features/038%20crash%20diagnostics/spec.md) |
+| Связанные spec'ы | [`038 crash diagnostics`](../tasks/038F-crash-diagnostics/spec.md) |
 
 ## Проблема
 
@@ -15,7 +15,7 @@
 - **Native MethodChannel `getLogcatTail`** в [`VpnPlugin.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt) → `ProcessBuilder("logcat", "-d", "-t", N, "*:L")` с timeout 2s. `count` clamp 50..5000, default 1000; `level` default `E` (Error+Fatal).
 - **Без `READ_LOGS`**: logd UID-фильтрует автоматически — отдаются только события нашего UID + связанные system messages (`tombstoned`/`DEBUG`/`AM died` пишутся под нашим pid).
 - **Dart-сервис** [`LogcatReader.tail()`](../../../app/lib/services/logcat_reader.dart) — обёртка над MethodChannel.
-- **Интеграция**: поле `logcat_tail` в [`DumpBuilder.build()`](../../../app/lib/services/dump_builder.dart). Также `GET /diag/logcat?count=N&level=L` ([§031](../features/031%20debug%20api/spec.md)).
+- **Интеграция**: поле `logcat_tail` в [`DumpBuilder.build()`](../../../app/lib/services/dump_builder.dart). Также `GET /diag/logcat?count=N&level=L` ([§031](../tasks/031F-debug-api/spec.md)).
 
 ## Verification
 

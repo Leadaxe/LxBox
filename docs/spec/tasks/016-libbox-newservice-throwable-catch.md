@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md) |
+| Связанные spec'ы | [`012 native vpn service`](../tasks/012F-native-vpn-service/spec.md) |
 
 ## Проблема
 
@@ -26,7 +26,7 @@ val svc = try {
 }
 ```
 
-**Не защищает** от Go panic без recover в нативе — такой краш улетает SIGABRT'ом мимо JVM. Защита от него — превентивная (валидация конфига, см. [task 012](012-vless-packet-encoding-libbox-panic.md)) и постфактум (stderr-redirect, см. [§038](../features/038%20crash%20diagnostics/spec.md)).
+**Не защищает** от Go panic без recover в нативе — такой краш улетает SIGABRT'ом мимо JVM. Защита от него — превентивная (валидация конфига, см. [task 012](012-vless-packet-encoding-libbox-panic.md)) и постфактум (stderr-redirect, см. [§038](../tasks/038F-crash-diagnostics/spec.md)).
 
 ## Verification
 

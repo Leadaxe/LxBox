@@ -5,7 +5,7 @@
 | Статус | Done (libbox 1.13.11 в продакшене) |
 | Дата | 2026-04-30 |
 | История | Был `features/039 libbox 1.13 migration`, демотирован в task через §054 (one-shot migration) |
-| Зависимости | [`features/012 native vpn service`](../../features/012%20native%20vpn%20service/spec.md), [`features/031 debug api`](../../features/031%20debug%20api/spec.md) |
+| Зависимости | [`tasks/012F-native-vpn-service`](../../tasks/012F-native-vpn-service/spec.md), [`tasks/031F-debug-api`](../../tasks/031F-debug-api/spec.md) |
 | Триггер | Issue: после ~27 минут аптайма VPN clash delay endpoint молча перестаёт отвечать → все ноды показывают "err" в UI. Root cause найден: DNS cache dedup-lock leak в sing-box, fix `aba8346b`/`e7a9c902` ("Fix DNS cache lock goroutine leak") вошёл в `v1.12.21+` и `v1.13.0+`. Решение — bump libbox; одновременно мигрируем на 1.13.x как актуальную major-ветку. |
 
 ## Цель

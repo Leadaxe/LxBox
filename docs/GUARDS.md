@@ -10,7 +10,7 @@ instead of guessing.
 
 Related: [`PROTOCOLS.md`](PROTOCOLS.md) (what each protocol's fields mean),
 [`ARCHITECTURE.md`](ARCHITECTURE.md) (where the parser and builder sit in the
-pipeline), [`spec/features/026 parser v2/spec.md`](spec/features/026%20parser%20v2/spec.md)
+pipeline), [`spec/tasks/026F-parser-v2/spec.md`](spec/tasks/026F-parser-v2/spec.md)
 (the parser's original design).
 
 ## Why this exists

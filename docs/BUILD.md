@@ -13,7 +13,7 @@
 
 ## The Flutter app
 
-The **`app/`** directory is the L×Box project. Dependencies come from `flutter pub get`. The native VPN lives in `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (our own `BoxVpnService`, not a Flutter plugin). libbox on Android is the **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** fork (branch `lx-1.14`): AWG/AWG2 (AmneziaWG) + native XHTTP ([§097](spec/features/097%20awg2-amneziawg2/spec.md)) + MASQUE / idle-suspend / balancer. The AAR is wired in as the file `app/android/app/libs/libbox.aar` (a relative `files("libs/libbox.aar")` in `build.gradle`); downloading it and pinning the version is [§104](spec/tasks/104-libbox-fork-ci-fetch.md) — see [“The sing-box-lx core (libbox)”](#the-sing-box-lx-core-libbox). Pin history: stock `com.github.singbox-android:libbox:1.13.11` from JitPack ([task §060](spec/tasks/060-libbox-1-13-migration/spec.md)) ← `io.github.sagernet:libbox:1.12.12`.
+The **`app/`** directory is the L×Box project. Dependencies come from `flutter pub get`. The native VPN lives in `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (our own `BoxVpnService`, not a Flutter plugin). libbox on Android is the **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** fork (branch `lx-1.14`): AWG/AWG2 (AmneziaWG) + native XHTTP ([§097](spec/tasks/097F-awg2-amneziawg2/spec.md)) + MASQUE / idle-suspend / balancer. The AAR is wired in as the file `app/android/app/libs/libbox.aar` (a relative `files("libs/libbox.aar")` in `build.gradle`); downloading it and pinning the version is [§104](spec/tasks/104-libbox-fork-ci-fetch.md) — see [“The sing-box-lx core (libbox)”](#the-sing-box-lx-core-libbox). Pin history: stock `com.github.singbox-android:libbox:1.13.11` from JitPack ([task §060](spec/tasks/060-libbox-1-13-migration/spec.md)) ← `io.github.sagernet:libbox:1.12.12`.
 
 Config import via the **Read** button accepts **JSON** or **JSON5/JSONC** (`//` and `/* */` comments — the `json5` parser); canonical JSON is then handed to the core. The source is either the clipboard or the system file picker.
 
@@ -169,9 +169,11 @@ Rejected alternatives for delivering the core to CI:
 
 - ⚠ Updating the core means raising the pin in `app/android/libbox.version`, rebuilding locally (fetch re-downloads the AAR on its own), running the smoke tests (Start/Stop, vless + wg + awg regression) and updating the [“Versions”](#versions) section.
 
-## A minimal config for testing on a phone
+## Testing on a phone
 
-The file **[`docs/examples/minimal_local_test.json`](examples/minimal_local_test.json)** is valid sing-box JSON: just **tun** plus **direct/block** in the selector, with no paid or third-party proxy. It is enough to confirm that **Read → Start** brings the tunnel up and that the **proxy** group with the **direct** / **block** nodes appears in the UI. The internet keeps working as usual through direct — this is not a bypass.
+Smoke test after a core bump: **Start → Stop**, then a VLESS, a WireGuard and an
+AmneziaWG node. The config is built from the template; there is no hand-written
+test config to keep in sync.
 
 ⚠ The core is controlled through the **libbox CommandClient**, not Clash HTTP (the Clash API was removed in §122). An `experimental.clash_api` block in a config is a **fatal startup failure** on our core (built without `with_clash_api`): `clash api is not included in this build`. Do not put it in a config you intend to test.
 

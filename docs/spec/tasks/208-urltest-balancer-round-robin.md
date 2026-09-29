@@ -311,7 +311,7 @@ Future<List<CcPoolSlot>> getPool(String tag) async {
 ## Связанные
 
 - ядро SPEC 019 (`sing-box-lx/SPECS/019-URLTEST_MODE_STICKY/SPEC.md`).
-- [§125 configurable-channels](../features/125%20configurable-channels/spec.md) — auto-двойник = urltest-группа.
+- [§125 configurable-channels](../tasks/125F-configurable-channels/spec.md) — auto-двойник = urltest-группа.
 - [§203 select-server](203-select-server-on-auto.md) — контекстное меню auto-ноды (рядом «View pool»).
 - [§205 rc.12](205-libbox-rc12-cold-urltest.md) — предыдущий бамп ядра; этот = rc.12→rc.14.
 - §161 — uint16-кламп tolerance (reuse для pool_tolerance).

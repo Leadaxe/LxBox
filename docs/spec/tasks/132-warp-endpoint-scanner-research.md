@@ -5,7 +5,7 @@
 | Status | Research done — implementation NOT started |
 | Started | 2026-06-16 |
 | Trigger | Сторонние «WARP-генераторы» выдают endpoint вида `Endpoint = 8.47.69.3:7156` (живой Cloudflare-IP из менее известного блока на нестандартном порту). При блокировке дефолта `engage.cloudflareclient.com:2408` юзеру негде взять рабочий `IP:port` внутри приложения — приходится тащить чужой конфиг. Нужно понять, как генераторы подбирают живой endpoint, прежде чем встраивать свой сканер (в §025 он явно вынесен «вне итерации»). |
-| Related | [§025 warp integration](../features/025%20warp%20integration/spec.md) (base WARP, дефолтный endpoint, кастомный endpoint в Advanced); [§126](126-warp-amneziawg-obfuscation.md) (AWG-обфускация поверх WARP — паддит handshake, см. caveat ниже); [§127](127-pseudo-name-domain-generator.md) (pseudo-gen, переиспользуем для junk) |
+| Related | [§025 warp integration](../tasks/025F-warp-integration/spec.md) (base WARP, дефолтный endpoint, кастомный endpoint в Advanced); [§126](126-warp-amneziawg-obfuscation.md) (AWG-обфускация поверх WARP — паддит handshake, см. caveat ниже); [§127](127-pseudo-name-domain-generator.md) (pseudo-gen, переиспользуем для junk) |
 | Files touched | НЕТ — это research-таска. Реализация = отдельная таска (см. «Next»). |
 | Sources | deep-research workflow `wf_b026618f-3c2` (2026-06-16): 17 источников, 80 claims, 25 проверено adversarial-голосованием (21 ✓ / 4 убито). Память: [[project_warp_endpoint_scanning]]. |
 
@@ -85,4 +85,4 @@
 
 ## Next (реализация — отдельная таска, по [[feedback_feature_vs_task_spec]])
 
-Эта таска — только research. Реализация встроенного сканера = новая `docs/spec/tasks/NNN.md` + update в [§025](../features/025%20warp%20integration/spec.md) (снять «сканер вне итерации»). До неё закрыть open questions 2 и 3 (AWG-проба + где крутить).
+Эта таска — только research. Реализация встроенного сканера = новая `docs/spec/tasks/NNN.md` + update в [§025](../tasks/025F-warp-integration/spec.md) (снять «сканер вне итерации»). До неё закрыть open questions 2 и 3 (AWG-проба + где крутить).

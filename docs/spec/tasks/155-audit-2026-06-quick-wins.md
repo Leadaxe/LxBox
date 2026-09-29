@@ -6,7 +6,7 @@
 | Дата старта | 2026-06-22 |
 | Тип | audit + hardening (native / Dart / docs) |
 | Метод | статический анализ + точечная проверка по коду; деструктивных операций не выполнялось (см. [DIAGNOSTICS.md](../../DIAGNOSTICS.md)) |
-| Связанные | [§141](141-deep-code-audit-hardening.md) (предыдущий deep-audit), [§151](151-jni-iterator-throw-and-alpn-double-decode.md) (JNI-граница), [§042](../features/042%20health%20watchdog/spec.md), [§036](../features/036%20update%20check/spec.md) |
+| Связанные | [§141](141-deep-code-audit-hardening.md) (предыдущий deep-audit), [§151](151-jni-iterator-throw-and-alpn-double-decode.md) (JNI-граница), [§042](../tasks/042F-health-watchdog/spec.md), [§036](../tasks/036F-update-check/spec.md) |
 
 > Read-only обзор всех частей проекта (Dart-слой, native Kotlin, docs/спеки,
 > тесты/CI). Находки верифицированы по коду. Severity: 🔴 high · 🟡 medium · 🟢 low.

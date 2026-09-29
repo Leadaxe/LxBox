@@ -208,16 +208,16 @@ STORAGE.md НЕ упоминаются (grep пусто). Правок НЕ тр
 обновить, что sniff/hijack/resolve поставляются пресетом traffic-processing (первым), а не
 жёстким блоком шаблона.
 
-**docs/spec/features/030 custom routing rules/spec.md:** добавить раздел про механику
+**docs/spec/tasks/030F-custom-routing-rules/spec.md:** добавить раздел про механику
 `locked`/`pinned` пресетов (нельзя выключить/удалить/двигать; pinned:0 = позиция 0 в
 route.rules и списке). Референс — §125 vpn-1.
 
-**docs/spec/features/120 template-engine-typed-vars-and-if/spec.md:**
+**docs/spec/tasks/120F-template-engine-typed-vars-and-if/spec.md:**
 | Строка | Что |
 |---|---|
 | L383-388 | раздел `sniff_enabled`: var (и resolve_enabled/resolve_strategy) теперь объявлены в traffic-processing пресете, не в Network; `#if`-механика без изменений |
 
-**docs/spec/features/125 configurable-channels** — НЕ правим, только референс (паттерн
+**docs/spec/tasks/125F-configurable-channels** — НЕ правим, только референс (паттерн
 locked/pinned vpn-1 берём оттуда).
 
 ## 9. Открытые вопросы / верификация

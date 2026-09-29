@@ -1,0 +1,252 @@
+[English](FEATURE.md) · [Русский](FEATURE.ru.md)
+
+# Config build — turning nodes and settings into a validated sing-box config
+
+LxBox builds the sing-box core config from your nodes, routing presets, DNS and VPN settings, so you
+never write JSON by hand. A template shipped with the app, with typed variables and conditions,
+defines the structure; a fixed pipeline of stages adds nodes, groups, rules and DNS, repairs what
+can be repaired and rejects a config the core would not start. The app tracks when the config is
+stale, rebuilds it automatically and shows a restart banner only when the running VPN actually uses
+a different config.
+
+| Field | Value |
+|------|----------|
+| Feature | 003-CONFIG_BUILD |
+| Type | Product feature |
+| Absorbed | `§076F` (settings and config lifecycle: the staleness flag, banners, rebuild on return), `§120F` (template engine: typed variables, `#if`, ref variables — its functions now live in 024-TEMPLATE) |
+| State | ✅ written from code, 2026-09-28 |
+
+## Purpose
+
+The user does not write JSON for the core. They pick nodes, enable presets,
+flip toggles — and the app turns this into one sing-box config. The feature
+owns the transformation itself: the pipeline of stages that assembles nodes,
+groups, rules and DNS into a whole; the check of the result before start; and
+the lifecycle "changed a setting → config rebuilt → core on the new config".
+The template the pipeline starts from, and the language it is written in, are
+[024-TEMPLATE](../024-TEMPLATE/FEATURE.md).
+
+Three principles the feature protects:
+
+1. **A config the core will not accept is not saved and never reaches the core.**
+   What can be fixed by degradation is fixed with a warning; what cannot is
+   fatal with a clear reason, and the previous config stays on disk.
+2. **A setting edit is not lost.** The change is visible to the next build immediately,
+   the "config is stale" flag is cleared only on a successful build and survives
+   the process being killed.
+3. **The banner does not lie.** "Config changed" is shown only when the core
+   is actually running a different config; false banners are a defect.
+
+## Promises
+
+- **P1.** moved to [024-TEMPLATE · P1](../024-TEMPLATE/FEATURE.md#promises)
+- **P2.** moved to [024-TEMPLATE · P2](../024-TEMPLATE/FEATURE.md#promises)
+- **P3.** moved to [024-TEMPLATE · P3](../024-TEMPLATE/FEATURE.md#promises)
+- **P4.** moved to [024-TEMPLATE · P4](../024-TEMPLATE/FEATURE.md#promises)
+- **P5.** moved to [024-TEMPLATE · P5](../024-TEMPLATE/FEATURE.md#promises)
+- **P6.** moved to [024-TEMPLATE · P6](../024-TEMPLATE/FEATURE.md#promises)
+- **P7.** moved to [024-TEMPLATE · P7](../024-TEMPLATE/FEATURE.md#promises)
+- **P8. The fixable is fixed by degradation before the check.** A dangling detour, a ghost
+  group member, `route.final` to a vanished Direction (→ `vpn-1`),
+  `resolve` to a missing DNS server, an unknown uTLS fingerprint (→
+  `chrome`), a broken REALITY — are removed/replaced with a warning.
+  **Witness:** unit tests "several broken detours → all removed, the valid one survived",
+  "resolve referencing a missing server → server removed", "a garbage
+  fingerprint → chrome with a record", "an odd short_id cleared, the node and config
+  are alive". **Mutation:** keep the reference — a core fatal at start.
+- **P9. The unfixable is fatal; the config is not saved.** A dangling rule reference,
+  `route.final`, detour, `dns.final`/resolver; an empty urltest; a selector `default`
+  outside its members; a detour/group ring. **Witness:** unit tests "a dangling
+  rule reference → fatal", "a ring via a selector node→group→node — one
+  culprit"; "not saved" — manual: build a detour ring → Start →
+  a sheet with the culprits, the VPN does not start. **Mutation:** return JSON on fatal.
+- **P10. An edit is visible to the next build immediately.** A mutation on a settings screen
+  goes into the in-memory store right away; the disk write — on leaving the screen
+  or minimizing. **Witness:** unit tests "staged rules are visible to a reader before
+  the disk write", "an edit immediately raises the flag and is staged in memory".
+  **Mutation:** give the build the state only after the disk write.
+- **P11. The "config is stale" flag is neither lost nor set without reason.** It is cleared
+  only on a successful build; a mutation during a build keeps it; a disk
+  write after the build does not re-raise it; a failed or empty subscription fetch
+  does not set it. **Witness:** unit tests "toggling a subscription during
+  a build does not lose the flag", "the write on leaving the screen does not re-raise the flag
+  after a rebuild", "fetch failures do not raise the flag", "the same composition
+  again — the flag is not raised". **Mutation:** clear the flag at the start of the build.
+- **P12. Staleness survives the process being killed.** At launch the flag is
+  restored by comparing the modification times of the settings and the config (with
+  one-second precision) and the config is silently rebuilt. **Witness:** unit tests
+  "a fresh config in the native part's directory → not stale", "a settings write
+  with the flag raised does not touch the config (honestly stale)", "edit → flag
+  cleared by a rebuild → write → clean". **Mutation:** look for the config in the wrong directory
+  (§414) — a perpetual "dirty".
+- **P13. The VPN starts on the current config.** There are unwritten changes
+  or a build in progress — Start first awaits/does a rebuild (one for
+  all triggers). **Witness:** no autotest — manual: edit a rule → immediately
+  Start → in the log "Config built" comes before the core start.
+- **P14. The banners are mutually exclusive.** The blue "Settings changed — tap to
+  rebuild config" — the flag is raised and no build is running; "Config changed — restart
+  VPN to apply" — the tunnel is up, the flag is cleared, the saved config diverged from
+  the running one, and no auto-apply is in progress. **Witness:** unit tests "flag raised, but
+  a build is running — no banner", "restart is not shown with the flag raised",
+  "restart is not shown with the tunnel off", "restart is suppressed for the
+  auto-apply window". **Mutation:** both banners at once.
+- **P15. "Restart" does not appear if the core is already on this config.**
+  The saved config is compared with the running one in the core's canonical form;
+  no answer — the banner stays (an extra one is better than a missed one). **Witness:** unit tests
+  "forms matched → fresh", "no snapshot of the running one → unknown, not
+  fresh".
+  **Mutation:** compare the file bytes with the previous build.
+- **P16. Auto-restart — only when there is something to apply.** Checkbox on,
+  tunnel up, the config diverged from the running one, the rebuild succeeded, not in
+  cooldown. **Witness:** unit tests "all conditions met → restart", "tunnel
+  down → no", "the core is already on this config → no", "cooldown → skip,
+  the banner stays as the fallback path". **Mutation:** restart on every build.
+- **P17. Selecting a member of an own group is applied live.** The core switches
+  immediately, no banner; the choice is saved and gets into the config on the next
+  start. **Witness:** unit test "live selection: the state is written, the config awaits a
+  rebuild at start". **Mutation:** raise the staleness flag.
+
+## Controlled parameters
+
+| Setting | Values | Default | Core config key |
+|---|---|---|---|
+| Log level | `trace`…`panic` | `warn` | `log.level` |
+| Certificate store | `system` · `mozilla` · `chrome` | `system` | `certificate.store` |
+| Auto-detect interface | on/off | on | `route.auto_detect_interface` |
+| TUN: IPv4 address | CIDR | `172.16.0.1/30` | `inbounds[tun-in].address[0]` |
+| TUN: Enable IPv6 | on/off; when enabled the strategies → `prefer_ipv4`, when disabled → `ipv4_only` | off | `address[1]` = IPv6 address |
+| TUN: IPv6 address | CIDR | `fdfe:dcba:9876::1/126` | `inbounds[tun-in].address[1]` |
+| TUN: Custom tunnel routes | on/off | off | `route_address` (four v4/v6 halves) |
+| TUN: interface / MTU / Stack | name · int · `system`/`gvisor`/`mixed` | `lxbox` · 1492 · `system` | `interface_name` · `mtu` · `stack` |
+| TUN: Auto route / Strict route | on/off | on / off | `auto_route` · `strict_route` |
+| Auto-restart VPN on settings change | on/off | off | — (apply behaviour) |
+
+Immutable keys of the template skeleton: `log.timestamp: true`,
+`route.find_process: true`, `outbounds` `direct-out` and `block`,
+`experimental.cache_file` (`enabled`, `path: cache.db`, `store_fakeip`),
+`services: [{type: oom-killer}]`. Variables of the DNS, VPN Mode, TLS
+Fragmentation, Auto Proxy and preset sections live in their own features (see Boundaries).
+
+## Inputs / Outputs
+
+**Inputs:** the shipped template (variable sections, the `config` skeleton,
+the preset catalog, group templates, the DNS catalog) with an overlay of locale display
+texts; the user's variable values; node sources;
+Directions and chains; rules and preset records; DNS records; VPN mode,
+split tunneling, tunnel sleep parameters; the core version and its build tags;
+a snapshot of the core's running config.
+
+**Outputs:** the final JSON for the core (saved only without a fatal);
+build warnings (template codes first, then degradations); fatal
+reasons; values the build fixed itself and asks to save
+(DNS resolver defaults); the "final tag → source node" map;
+banners on the main screen, the snackbar "Config rebuilt: N nodes".
+
+## Data flow
+
+```
+ settings ──┐                           change on a screen
+ template ──┼─► VARIABLES                │ in-memory store + "stale" flag
+ nodes ─────┘   (default ← value,        ▼
+                type, bounds, VPN mode)  trigger: return to main · tap on the
+                    ▼                    blue banner · Start · launch · subscription
+ SKELETON: copy of the template config, substitution of @var and conditions
+                    ▼
+ NODES: tags (Directions reserve) → detour references → core registry gate →
+        source folds → chains → Direction groups
+                    ▼
+ PRESETS AND RULES (axis order, for_each) → lx.wg → route.final
+                    ▼
+ POST-STEPS: detour concessions · TLS transformations · DNS · split tunneling ·
+             tag migration · healing · graph sanitizer
+                    ▼
+ CHECK ── fatal → rejection, the config on disk stays the previous one, reason in a snackbar/sheet
+                    ▼
+ save ─► comparison with the running one ─► "restart" / auto-restart / nothing
+```
+
+## Rules and guarantees
+
+- Variable metadata (type, default, options) comes only from the template;
+  storage holds only the value. A value equal to the default is not stored in preset
+  records and template DNS servers.
+- The build is a single point: all paths (return to main, the banner, Start,
+  launch, subscription reaction, Debug API) go through it and share one current
+  rebuild.
+- The "stale" flag is one per process and is not stored on disk; at launch it is
+  derived from file modification times.
+- If the config is pinned via the Debug API (`PUT /config`), rebuilds
+  silently do not happen — see [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md).
+- Settings outside the config (haptic feedback, language) do not raise the flag.
+
+## Boundaries
+
+- The shipped template, its language, the preset catalog and what an app
+  update does to saved overrides — [024-TEMPLATE](../024-TEMPLATE/FEATURE.md).
+- Parsing links and files into nodes — [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md).
+- Preset contents, user rules, rule order —
+  [004-ROUTING](../004-ROUTING/FEATURE.md); the DNS part of the template and the build —
+  [005-DNS](../005-DNS/FEATURE.md); detour, chains, Direction groups,
+  Auto Proxy — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md).
+- VPN/Proxy modes, `lx.wg.*`, the core reload and its cooldown —
+  [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md); split tunneling packages —
+  [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md); TLS Fragmentation,
+  mixed-case SNI — [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md).
+- Reaction to a subscription update (rebuild/reload) —
+  [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md); disabling nodes
+  rejected by the core at start — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md).
+- Manual editing of the final JSON — [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md);
+  loading a set of settings — [018-WORKSPACES](../018-WORKSPACES/FEATURE.md).
+- Native tunnel settings (Allow bypass, Keep on exit, Background mode)
+  are not part of the config and are applied on the next tunnel bring-up — depends
+  on OS capabilities.
+
+## Functions
+
+| Function | What it does | Promises | File |
+|---|---|---|---|
+| Build pipeline | Runs fixed stages from variables to the final JSON, including post-steps and healing of broken references. | P8 P13 | [build-pipeline.md](FUNCTIONS/build-pipeline.md) |
+| Final config check | Rejects a config with dangling tag references, empty groups or detour rings and keeps the previous config. | P9 | [config-validation.md](FUNCTIONS/config-validation.md) |
+| Settings lifecycle | Tracks the "stale" flag, stages edits in memory, writes them to disk and rebuilds on triggers, including after the process is killed. | P10 P11 P12 P13 | [settings-lifecycle.md](FUNCTIONS/settings-lifecycle.md) |
+| Applying to a running tunnel | Compares the saved config with the running one, shows the matching banner, auto-restarts on request and applies group selection live. | P14 P15 P16 P17 | [apply-to-running-tunnel.md](FUNCTIONS/apply-to-running-tunnel.md) |
+
+Config template and Template language moved to [024-TEMPLATE](../024-TEMPLATE/FEATURE.md).
+
+## Related features
+
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — the subscription update reaction
+  (rebuild/reload) goes through this build.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — supplies the parsed nodes the build assembles.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — preset contents, user rules and rule order fed into the build.
+- [005-DNS](../005-DNS/FEATURE.md) — the DNS part of the template and the build.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — detour, chains, Direction groups, Auto Proxy.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — node emission details (build stages 3–7) and live
+  node selection in a Direction.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — disabling nodes rejected by the core at start.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — VPN/Proxy modes, `lx.wg.*`, the core reload and its cooldown.
+- [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — split tunneling packages applied in post-steps.
+- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — TLS Fragmentation and mixed-case SNI applied in post-steps.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — atomic file writes, backup and
+  import that feed the settings lifecycle.
+- [018-WORKSPACES](../018-WORKSPACES/FEATURE.md) — loading a set of settings.
+- [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md) — manual editing of the final JSON; a config
+  pinned via `PUT /config` stops rebuilds.
+- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — node body schema and registry codes behind
+  the core registry gate.
+- [024-TEMPLATE](../024-TEMPLATE/FEATURE.md) — the shipped template and its language that the
+  pipeline starts from; template warnings go first in this build's report.
+
+## Maintenance notes
+
+- Template pitfalls (the two documents to keep in step, `#if` suffixes, `on_change`
+  pseudo-variables) — [024-TEMPLATE](../024-TEMPLATE/FEATURE.md#maintenance-notes).
+- A screen that saves on leaving must put the edit into memory immediately:
+  return to main fires at the moment of pop, and the screen's leave — ~300 ms
+  later; otherwise the config lags one visit behind (§107).
+- The "stale" flag may be cleared only on the result of a build and only if the composition
+  did not change under it (§360); re-staging an edit on leaving the screen
+  must not set the flag again (§338).
+- The config modification time is aligned to the settings time, not to "now":
+  the one-second precision of the file system otherwise gives a false "dirty" (§113).
+- `reject` in a preset's `outbound` is not a tag: the build itself turns it into
+  `action: reject`, otherwise it is a dangling reference.

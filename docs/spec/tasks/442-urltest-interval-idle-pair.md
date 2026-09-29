@@ -6,7 +6,7 @@
 | Дата | 2026-09-15 |
 | Коммиты | `fix(442)` 57d1051f — правило и хелпер; `test(442)` 92d436aa; `feat(442)` eb6ccc25 — подсказка в редакторе Направления; `docs(442)` — эта таска, CHANGELOG |
 | Норма | SPEC 128 лаунчера — [`128-B-C-URLTEST_INTERVAL_PAIR/SPEC.md`](../../../../singbox-launcher/SPECS/128-B-C-URLTEST_INTERVAL_PAIR/SPEC.md), эталон `core/build/outbound_graph_urltest.go` |
-| Связанные | [§393](../features/393%20directions/spec.md) A4 (графовый санитайзер), [§208](208-urltest-balancer-round-robin.md) (round_robin), [§322](../features/322%20balancer-node/spec.md) (Xray-балансер) |
+| Связанные | [§393](../tasks/393F-directions/spec.md) A4 (графовый санитайзер), [§208](208-urltest-balancer-round-robin.md) (round_robin), [§322](../tasks/322F-balancer-node/spec.md) (Xray-балансер) |
 
 ## Проблема
 

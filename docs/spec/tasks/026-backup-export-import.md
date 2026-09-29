@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`031 debug api`](../features/031%20debug%20api/spec.md) |
+| Связанные spec'ы | [`031 debug api`](../tasks/031F-debug-api/spec.md) |
 
 ## Проблема
 

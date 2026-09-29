@@ -5,7 +5,7 @@
 | Статус | Done, DEVICE-VERIFIED (эмулятор `LxBox_test`, Android 14) |
 | Дата старта | 2026-08-06 |
 | Дата завершения | 2026-08-06 |
-| Связанные spec'ы | [§312](../features/312%20dns%20groups/spec.md) — тот же запрет ядра для членов DNS-групп; [§324](324-staleness-verdict.md) — вердикт свежести, теряющий собеседника; [§311](311-running-config-from-kernel.md) — снапшот running config |
+| Связанные spec'ы | [§312](312F-dns-group/spec.md) — тот же запрет ядра для членов DNS-групп; [§324](324-staleness-verdict.md) — вердикт свежести, теряющий собеседника; [§311](311-running-config-from-kernel.md) — снапшот running config |
 
 ## Проблема
 

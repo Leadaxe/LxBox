@@ -5,7 +5,7 @@
 | Тип | bugfix (потеря данных при регидрации) |
 | Статус | ✅ Released v2.19.3 — тесты зелёные |
 | Дата | 2026-08-02 |
-| Связанные | [`348`](348-two-month-revision-parser-fixes.md) (находка P3-8 ревизии), [`322 balancer-node`](../features/322%20balancer-node/spec.md) §7 (URI-форма) |
+| Связанные | [`348`](348-two-month-revision-parser-fixes.md) (находка P3-8 ревизии), [`322 balancer-node`](../tasks/322F-balancer-node/spec.md) §7 (URI-форма) |
 
 ## Проблема
 

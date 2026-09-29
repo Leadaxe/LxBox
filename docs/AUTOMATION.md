@@ -289,7 +289,7 @@ Wait Event.
 
 ## Links
 
-- [§047 — Public Intent API spec](spec/features/047%20public%20intent%20api/spec.md)
+- [§047 — Public Intent API spec](spec/tasks/047F-public-intent-api/spec.md)
 - [Android BroadcastReceiver guide](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
 - [Tasker — Send Intent](https://tasker.joaoapps.com/userguide/en/help/ah_send_intent.html)
 - [Locale plugin API (twofortyfouram)](https://github.com/twofortyfouram/android-plugin-api-for-locale) — the standard behind the plugin route (FIRE_SETTING / QUERY_CONDITION)

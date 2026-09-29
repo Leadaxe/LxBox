@@ -440,4 +440,4 @@ Google Play). Метод: три release-сборки с разными `--dart-
 | `docs/BUILD.md` | таблица dart-define'ов: `LXBOX_DISTRIBUTION` (значения, дефолт, кто ставит); уточнить строку «`--dart-define`-маркеры убраны в §065/§066» — она про версионные маркеры, не про механизм |
 | `docs/RELEASE_PROCESS.md` | публикация в Play: AAB собирается с `=play`; подписи Play/GitHub/F-Droid взаимно несовместимы |
 | `docs/ARCHITECTURE.md` | `install_source.dart` в дереве сервисов |
-| `docs/spec/features/036 update check/spec.md` | модель показа изменена — сослаться на §390 |
+| `docs/spec/tasks/036F-update-check/spec.md` | модель показа изменена — сослаться на §390 |

@@ -4,7 +4,7 @@
 |---|---|
 | Статус | ✅ Реализовано (device-pending) |
 | Дата | 2026-07-31 |
-| Связанные | [`312 dns-group`](../features/312%20dns-group/spec.md), [`263 resolve_enabled`](263-resolve-enabled-toggle.md), [`300 dns controller`](300-dns-controller.md), [`121 routing king`](121-routing-toggle-is-king.md) |
+| Связанные | [`312 dns-group`](../tasks/312F-dns-group/spec.md), [`263 resolve_enabled`](263-resolve-enabled-toggle.md), [`300 dns controller`](300-dns-controller.md), [`121 routing king`](121-routing-toggle-is-king.md) |
 
 ## Проблема
 

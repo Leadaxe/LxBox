@@ -1292,7 +1292,7 @@ The cached registered Cloudflare WARP account (the “Get WARP” button). The p
 
 **`reserved`.** The `client_id` (base64, 3 bytes) is carried to the sing-box endpoint as a per-peer `reserved: [b0,b1,b2]`. Without it WARP drops the traffic.
 
-CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null clears it). See [features/025](spec/features/025%20warp%20integration/spec.md).
+CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null clears it). See [features/025](spec/tasks/025F-warp-integration/spec.md).
 
 ---
 
@@ -1530,7 +1530,7 @@ After the migration the set of directions lives in `directions[]` and is edited 
   node of a container and is never a direction (D-112), so healing leaves it alone. A backup restore does not
   re-run healing (the degradations are accepted — the builder collapses danglers at build
   time). Legacy `✨auto` references fall under the same rule. Details:
-  [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
+  [`spec/tasks/248F-detour-channels/`](spec/tasks/248F-detour-channels/).
 - CRUD: `getDirections` / `setDirections` / `addDirection` / `updateDirection` /
   `deleteDirection` (throws for vpn-1) / `migrateDirectionsIfNeeded`.
 - ⚠ **Mutate through `services/direction_mutations.dart`**, never directly (§275):
@@ -1541,8 +1541,8 @@ After the migration the set of directions lives in `directions[]` and is edited 
   service is an analyze error. `setDirections` is a raw bulk overwrite with no healing
   (for persisting the whole list).
 
-Specs: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
-[`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
+Specs: [`docs/spec/tasks/125F-configurable-channels/`](spec/tasks/125F-configurable-channels/),
+[`docs/spec/tasks/248F-detour-channels/`](spec/tasks/248F-detour-channels/)
 (the detour layer).
 
 ---
@@ -1766,30 +1766,30 @@ The scrubber only handles the `vars` and `sources` keys; everything else (`meta.
 
 ---
 
-[§011]: ./spec/features/011%20local%20ruleset%20cache/spec.md
-[§027]: ./spec/features/027%20subscription%20auto%20update/spec.md
+[§011]: ./spec/tasks/011F-local-ruleset-cache/spec.md
+[§027]: ./spec/tasks/027F-subscription-auto-update/spec.md
 [§414]: ./spec/tasks/414-config-dirty-check-files-dir.md
-[§029]: ./spec/features/029%20haptic%20feedback/spec.md
-[§030]: ./spec/features/030%20custom%20routing%20rules/spec.md
-[§031]: ./spec/features/031%20debug%20api/spec.md
-[§033]: ./spec/features/033%20preset%20bundles/spec.md
-[§036]: ./spec/features/036%20update%20check/spec.md
+[§029]: ./spec/tasks/029F-haptic-feedback/spec.md
+[§030]: ./spec/tasks/030F-custom-routing-rules/spec.md
+[§031]: ./spec/tasks/031F-debug-api/spec.md
+[§033]: ./spec/tasks/033F-preset-bundles/spec.md
+[§036]: ./spec/tasks/036F-update-check/spec.md
 [§037]: ./spec/tasks/037-debug-api-write-config-and-lock-rebuild.md
-[§038]: ./spec/features/038%20crash%20diagnostics/spec.md
+[§038]: ./spec/tasks/038F-crash-diagnostics/spec.md
 [§040]: ./spec/tasks/040-per-group-ping-test-settings.md
 [§408]: ./spec/tasks/408-ping-options-groups-heal.md
 [§061]: ./spec/tasks/061-dns-rules-refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
-[§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md
-[§117]: ./spec/features/117%20dns-rework/spec.md
+[§046]: ./spec/tasks/046F-tunnel-apps-split-tunneling/spec.md
+[§117]: ./spec/tasks/117F-dns-rework/spec.md
 [§189]: ./spec/tasks/189-native-prefs-mirror-in-json.md
 [§192]: ./spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md
-[§279]: ./spec/features/279%20localization/spec.md
+[§279]: ./spec/tasks/279F-localization/spec.md
 [§220]: ./spec/tasks/220-allow-rotation-setting.md
-[043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
+[043-applog]: ./spec/tasks/043F-applog-per-source-quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md
 [§438]: ./spec/tasks/438-lx-backup-1-0-read-write.md
-[§439]: ./spec/features/439%20storage-contract-1-0/spec.md
+[§439]: ./spec/tasks/439F-storage-contract-1-0/spec.md
 [§370]: ./spec/tasks/370-rule-order-num-axis.md
 [§434]: ./spec/tasks/434-srs-rule-multiple-rule-sets.md
 [§435]: ./spec/tasks/435-node-sections-tailscale.md

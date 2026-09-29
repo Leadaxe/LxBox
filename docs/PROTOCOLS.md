@@ -128,7 +128,7 @@ Parsing lives in [`app/lib/services/subscription/sources.dart`](../app/lib/servi
 - `SubscriptionMeta.{totalBytes, uploadBytes, downloadBytes, expireTimestamp}` ← `subscription-userinfo`
 - `SubscriptionMeta.supportUrl` ← `support-url`
 - `SubscriptionMeta.webPageUrl` ← `profile-web-page-url`
-- `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (used by [spec 027](./spec/features/027%20subscription%20auto%20update/spec.md))
+- `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (used by [spec 027](./spec/tasks/027F-subscription-auto-update/spec.md))
 
 The User-Agent of HTTP requests is `LxBox-android/<appVersion>` (for example `LxBox-android/2.9.0`; the brand token since §114, previously `LxBox Android subscription client` / `SubscriptionParserClient`). It can be overridden per request through App Settings → Subscriptions → Custom User-Agent (§118). Panels route the response body by the `LxBox` substring in the UA (`user_agent.dart`, `resolveSubscriptionUserAgent`).
 
@@ -686,13 +686,13 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 
 ### Build-tag Requirement
 
-NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound`. Since §097/§104 L×Box bundles its own fork core `sing-box-lx` (local `app/android/libbox.aar`, pin in [`app/android/libbox.version`](../app/android/libbox.version); the old Maven `com.github.singbox-android:libbox` dependency is gone), built **with** this tag — see [spec 037 §2](spec/features/037%20naive%20proxy/spec.md#2-build-tag-в-libbox--проверено) for verification details. If a future core build ever ships without naive, `BoxVpnClient` surfaces a `NaiveBuildTagWarning` per node when sing-box returns the upstream error string `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`.
+NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound`. Since §097/§104 L×Box bundles its own fork core `sing-box-lx` (local `app/android/libbox.aar`, pin in [`app/android/libbox.version`](../app/android/libbox.version); the old Maven `com.github.singbox-android:libbox` dependency is gone), built **with** this tag — see [spec 037 §2](spec/tasks/037F-naive-proxy/spec.md#2-build-tag-в-libbox--проверено) for verification details. If a future core build ever ships without naive, `BoxVpnClient` surfaces a `NaiveBuildTagWarning` per node when sing-box returns the upstream error string `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`.
 
 ### Reference
 
 - sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/naive/
 - DuckSoft URI spec: https://gist.github.com/DuckSoft/ca03913b0a26fc77a1da4d01cc6ab2f1
-- LxBox spec: [`docs/spec/features/037 naive proxy/spec.md`](spec/features/037%20naive%20proxy/spec.md)
+- LxBox spec: [`docs/spec/tasks/037F-naive-proxy/spec.md`](spec/tasks/037F-naive-proxy/spec.md)
 
 ---
 
@@ -1037,7 +1037,7 @@ One link is one node. A blob holding several `[Interface]` blocks is not an erro
 
 ## 8.5 AmneziaWG (AWG, AWG2)
 
-Added in §097 (the [`097`](./spec/features/097%20awg2-amneziawg2/spec.md) spec) together with the switch of the bundled core to the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork (the `with_awg` build tag, `option.AmneziaWGOptions`; the version pin is `app/android/libbox.version`). AmneziaWG is WireGuard plus obfuscation: the same keys, peers and handshake, plus a set of parameters that disguise WG traffic from DPI.
+Added in §097 (the [`097`](./spec/tasks/097F-awg2-amneziawg2/spec.md) spec) together with the switch of the bundled core to the [`sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) fork (the `with_awg` build tag, `option.AmneziaWGOptions`; the version pin is `app/android/libbox.version`). AmneziaWG is WireGuard plus obfuscation: the same keys, peers and handshake, plus a set of parameters that disguise WG traffic from DPI.
 
 Every field is **config-only** — nothing is negotiated over the wire, and the values **must match on the client and the server**. A mismatch fails silently: the handshake may succeed while no data flows.
 
@@ -1275,7 +1275,7 @@ Step 0 in `decode()` ([body_decoder.dart](../app/lib/services/parser/body_decode
 
 ## 9.5 TUIC v5
 
-Added in Parser v2 (the [`026`](./spec/features/026%20parser%20v2/spec.md) spec). v1 had no TUIC parsing at all.
+Added in Parser v2 (the [`026`](./spec/tasks/026F-parser-v2/spec.md) spec). v1 had no TUIC parsing at all.
 
 ### URI format
 
@@ -1441,10 +1441,10 @@ would not start.
 ### Reference
 
 - RFC 9484 (CONNECT-IP over MASQUE)
-- §130 spec: [docs/spec/features/130 masque-warp-transport/spec.md](spec/features/130%20masque-warp-transport/spec.md)
+- §130 spec: [docs/spec/tasks/130F-masque-warp-transport/spec.md](spec/tasks/130F-masque-warp-transport/spec.md)
 - §393 (the schema migration): [docs/spec/tasks/393-masque-config-schema-migration.md](spec/tasks/393-masque-config-schema-migration.md)
 - The sing-box-lx core: SPEC 021 (`type: masque`), SPEC 062 (the config schema)
-- [WARP integration (§025)](spec/features/025%20warp%20integration/spec.md)
+- [WARP integration (§025)](spec/tasks/025F-warp-integration/spec.md)
 
 ---
 

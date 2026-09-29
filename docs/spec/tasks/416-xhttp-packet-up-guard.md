@@ -124,7 +124,7 @@ uplink_http_method — pure passthrough` поправлен: под-случай
   защит парсера/эмиссии/сборки. Заведён этой задачей (владелец просил список
   в одном месте). Ссылки на него — из `docs/PROTOCOLS.md`,
   `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT_GUIDE.md`,
-  `docs/spec/features/026 parser v2/spec.md` и таблицы «Документация» в
+  `docs/spec/tasks/026F-parser-v2/spec.md` и таблицы «Документация» в
   `app/CLAUDE.md`.
 - `CHANGELOG.md` — строка в `Unreleased → Fixed`.
 

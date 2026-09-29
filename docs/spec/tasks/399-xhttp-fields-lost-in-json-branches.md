@@ -159,6 +159,6 @@ ping без 400. **DEVICE-PENDING** до проверки на живом узл
 | Файл | Что |
 |---|---|
 | `CHANGELOG.md` | `Unreleased` → Fixed: XHTTP-поля из Xray-JSON и sing-box-JSON подписок больше не теряются |
-| `docs/spec/features/127 xhttp-full-url-params/spec.md` | пометка: набор полей теперь общий для трёх веток, точка правды — `xhttpFromMap` |
+| `docs/spec/tasks/127F-xhttp-full-url-params/spec.md` | пометка: набор полей теперь общий для трёх веток, точка правды — `xhttpFromMap` |
 
 `ARCHITECTURE.md` — не требуется (структура pipeline не меняется).

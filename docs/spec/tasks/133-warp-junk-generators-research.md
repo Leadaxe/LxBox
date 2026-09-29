@@ -5,7 +5,7 @@
 | Status | Research done — implementation NOT started |
 | Started | 2026-06-16 |
 | Trigger | В §126 мы сделали свой генератор i1 (2 шаблона: WG-traffic / SIP-traffic) + хардкод 1.5-preset (`Jc=4, Jmin=40, Jmax=70, S1=S2=0, H1..H4=1,2,3,4`). Вопрос юзера: «есть куча WARP-генераторов, обходящих DPI — изучи лучшие практики». Нужно понять, чем живые рабочие генераторы (2026) отличаются от нашего подхода и куда нам расти, прежде чем расширять генератор. |
-| Related | [§126](126-warp-amneziawg-obfuscation.md) (наш i1-генератор + 1.5-preset — апгрейдим именно его); [§132](132-warp-endpoint-scanner-research.md) (endpoint-сканер — комплементарная половина, junk ≠ замена скана); [§097](097-awg2-obfuscation.md)/[§112](112-awg2-ranged-headers.md) (AWG 2.0 / ranged headers в ядре); [§025 warp integration](../features/025%20warp%20integration/spec.md); [§127](127-pseudo-name-domain-generator.md) (pseudo-gen для SIP-шаблона) |
+| Related | [§126](126-warp-amneziawg-obfuscation.md) (наш i1-генератор + 1.5-preset — апгрейдим именно его); [§132](132-warp-endpoint-scanner-research.md) (endpoint-сканер — комплементарная половина, junk ≠ замена скана); [§097](097-awg2-obfuscation.md)/[§112](112-awg2-ranged-headers.md) (AWG 2.0 / ranged headers в ядре); [§025 warp integration](../tasks/025F-warp-integration/spec.md); [§127](127-pseudo-name-domain-generator.md) (pseudo-gen для SIP-шаблона) |
 | Files touched | НЕТ — research-таска. Реализация = отдельная таска (см. «Next»). |
 | Sources | WebSearch + чтение исходников (2026-06-16). Источник истины по тегам — `amnezia-vpn/amneziawg-go` `device/obf.go` (карта `obfBuilders`, прочитана целиком). Память: [[reference_awg_cps_tags]], [[project_warp_junk_generator_practices]]. |
 

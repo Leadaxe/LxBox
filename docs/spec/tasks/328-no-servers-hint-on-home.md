@@ -4,7 +4,7 @@
 |---|---|
 | Статус | ✅ Реализовано |
 | Дата | 2026-07-31 |
-| Связанные | [`274 detour-role (снэкбар пустых каналов)`](274-detour-role-to-permission.md), [`283 node-disable`](../features/283%20subscription-node-disable/spec.md), [`267 group templates`](267-group-templates-magic-nodes.md), [`311 running config`](311-running-config-from-kernel.md) |
+| Связанные | [`274 detour-role (снэкбар пустых каналов)`](274-detour-role-to-permission.md), [`283 node-disable`](../tasks/283F-subscription-node-disable/spec.md), [`267 group templates`](267-group-templates-magic-nodes.md), [`311 running config`](311-running-config-from-kernel.md) |
 
 ## Проблема
 

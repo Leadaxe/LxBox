@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Done |
 | Дата | 2026-04-29 |
-| Связанные spec'ы | [`038 crash diagnostics`](../features/038%20crash%20diagnostics/spec.md), [`023 debug and logging`](../features/023%20debug%20and%20logging/spec.md) |
+| Связанные spec'ы | [`038 crash diagnostics`](../tasks/038F-crash-diagnostics/spec.md), [`023 debug and logging`](../tasks/023F-debug-and-logging/spec.md) |
 
 ## Проблема
 

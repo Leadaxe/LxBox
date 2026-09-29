@@ -287,7 +287,7 @@ String resolveTpl(String tpl, String parentTag) =>
 | `app/scripts/format_wizard_template.py` | форматтер [285-299](../../../app/scripts/format_wizard_template.py) переписать: `preset_groups`-блок → `group_templates` + `default_channels` |
 | **(Вариант 2) миграция литералов категории A → `k*OutboundTag`** | `custom_rule.dart`, `build_config.dart`, `probe_config.dart`, `preset_expand.dart`, `debug/handlers/rules.dart`, `dns_server_edit/edit_controller.dart`, `routing_screen.dart`, `routing_screen/routing_screen_helpers.dart` (только `tag`-позиции; см. классификацию) |
 | `docs/TEMPLATE.md` | секцию `preset_groups` (строки ~68, ~350-374, ~762) переписать под `group_templates`/`magic_nodes`/`default_channels`; убрать `@auto_proxy_tag` из примеров |
-| `docs/spec/features/125 configurable-channels/spec.md` | update: source-of-truth сида = `default_channels`, служебные ноды = `magic_nodes` |
+| `docs/spec/tasks/125F-configurable-channels/spec.md` | update: source-of-truth сида = `default_channels`, служебные ноды = `magic_nodes` |
 
 ## Тесты
 

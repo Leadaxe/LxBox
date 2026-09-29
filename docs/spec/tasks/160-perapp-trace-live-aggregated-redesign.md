@@ -5,7 +5,7 @@
 | Статус | **Done** — в develop (`15da916`), analyze 0 / 1196 tests green, on-device проверено; вышло в **v2.4.1** |
 | Дата | 2026-06-22 |
 | Тип | Task (нетривиальное изменение UI существующей фичи §044) |
-| Фича-владелец | [`044 per-app traffic profiler`](../features/044%20per-app%20traffic%20profiler/spec.md) |
+| Фича-владелец | [`044 per-app traffic profiler`](../tasks/044F-per-app-traffic-profiler/spec.md) |
 | Затронутые файлы | `app/lib/screens/per_app_trace_tab.dart`, `app/lib/screens/per_app_trace_tab/widgets/{live_view,domains_view,ips_view,connections_view}.dart`, новый `app/lib/screens/per_app_trace_tab/widgets/aggregated_view.dart`, новый общий `app/lib/screens/stats_screen/traffic_event_detail_sheet.dart`, новый `app/lib/screens/stats_screen/aggregate_detail_sheet.dart`, новый общий движок `app/lib/screens/stats_screen/trace_explorer.dart` |
 | Целевой релиз | **v2.4.1** |
 | Связанные | [`152 conn-detail-sheet`](152-conn-detail-sheet.md) — образец bottom-sheet для одного соединения (паттерн `_group`/`_row`/Copy JSON), переиспользуем структуру |
