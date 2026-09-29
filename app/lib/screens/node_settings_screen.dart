@@ -341,7 +341,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final String toStore;
     var droppedExtras = false;
     var commentsRemoved = false;
-    if (text.startsWith('{') || text.startsWith('[')) {
+    if (isJsonSourceText(text)) {
       // §435 — голое тело или документ; тег из поля Tag уходит в тело узла.
       // §575 — `dns`/`route`/`sections` документа не сохраняются.
       final prep = prepareNodeDocumentForSave(text, _tagCtrl.text);

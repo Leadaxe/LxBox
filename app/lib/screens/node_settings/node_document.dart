@@ -75,6 +75,17 @@ const Set<String> _kNonNodeTypes = {
 /// Ключи документа, где лежат узлы.
 const Set<String> _kNodeListKeys = {'outbounds', 'endpoints'};
 
+/// §594 — текст вкладки Source идёт JSON-веткой Save
+/// ([prepareNodeDocumentForSave] + ворота ядра). `{` — всегда JSON. `[` —
+/// JSON-массив, КРОМЕ WireGuard/AWG INI: он тоже начинается с `[`
+/// (`[Interface]`), и принять его за массив значило отказать в сохранении
+/// с «Invalid JSON: Unexpected character».
+bool isJsonSourceText(String text) {
+  final t = text.trim();
+  if (t.startsWith('{')) return true;
+  return t.startsWith('[') && originKindOf(t) != 'wg_ini';
+}
+
 NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag) {
   // §585 — комментарии снимаются до разбора; в источник уходит текст без них.
   final uncommented = uncommentedJson(text);

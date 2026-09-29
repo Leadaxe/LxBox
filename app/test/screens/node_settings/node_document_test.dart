@@ -14,7 +14,7 @@ void main() {
   }
 
   // §576 п.1 — строки таблицы: голое тело, документ, массив здесь; ссылка и
-  // INI через эту функцию не идут (экран решает по первому символу и пишет
+  // INI через эту функцию не идут (экран решает [isJsonSourceText] и пишет
   // их как раньше), группа `ссылка и INI` ниже фиксирует это.
   group('голое тело', () {
     test('объект с type → тег подмешан в корень, isDocument=false', () {
@@ -123,6 +123,18 @@ void main() {
   });
 
   group('ссылка и INI', () {
+    // §594 — INI начинается с `[`, но в JSON-ветку Save не идёт.
+    test('isJsonSourceText: INI и ссылка — нет, объект и массив — да', () {
+      expect(
+          isJsonSourceText(
+              '[Interface]\nPrivateKey = x\nJc = 4\n\n[Peer]\nEndpoint = h:1\n'),
+          isFalse);
+      expect(isJsonSourceText('trojan://p@h:443#t'), isFalse);
+      expect(isJsonSourceText('  {"type":"socks"}'), isTrue);
+      expect(isJsonSourceText('[{"type":"socks"}]'), isTrue);
+      expect(isJsonSourceText('[{"type":'), isTrue);
+    });
+
     test('не JSON — отказ этой функции, экран пишет их своей веткой', () {
       expect(prepareNodeDocumentForSave('trojan://p@h:443#t', 't'),
           isA<NodeDocumentRejected>());
