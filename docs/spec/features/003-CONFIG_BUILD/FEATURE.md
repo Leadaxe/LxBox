@@ -13,18 +13,18 @@ a different config.
 |------|----------|
 | Feature | 003-CONFIG_BUILD |
 | Type | Product feature |
-| Absorbed | `§076F` (settings and config lifecycle: the staleness flag, banners, rebuild on return), `§120F` (template engine: typed variables, `#if`, ref variables) |
+| Absorbed | `§076F` (settings and config lifecycle: the staleness flag, banners, rebuild on return), `§120F` (template engine: typed variables, `#if`, ref variables — its functions now live in 024-TEMPLATE) |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
 
 The user does not write JSON for the core. They pick nodes, enable presets,
 flip toggles — and the app turns this into one sing-box config. The feature
-owns the transformation mechanism itself: the config template shipped inside
-the app; the language of that template (variables with a declared type, conditions,
-repetition over nodes); the pipeline of stages that assembles nodes, groups, rules
-and DNS into a whole; the check of the result before start; and the lifecycle
-"changed a setting → config rebuilt → core on the new config".
+owns the transformation itself: the pipeline of stages that assembles nodes,
+groups, rules and DNS into a whole; the check of the result before start; and
+the lifecycle "changed a setting → config rebuilt → core on the new config".
+The template the pipeline starts from, and the language it is written in, are
+[024-TEMPLATE](../024-TEMPLATE/FEATURE.md).
 
 Three principles the feature protects:
 
@@ -39,46 +39,13 @@ Three principles the feature protects:
 
 ## Promises
 
-- **P1. A variable value is coerced by its declared type, not by its appearance.**
-  `bool`/`int` are coerced, `text`/`secret`/`enum`/`outbound`/`dns_servers`
-  go as a string verbatim: the password `1234` stays a string, `urltest_tolerance`
-  goes as a number. **Witness:** unit tests "secret/text: NOT coerced even if they
-  look like a number/bool", "urltest_tolerance is substituted as a number, not
-  a string". **Mutation:** guess the type from the string contents.
-- **P2. No value the core would reject goes into the config.** `int`
-  is clamped to 0..65535; for a variable with bounds (`dns_cache_capacity`
-  1024..65535) an out-of-bounds value is replaced with the default; an empty
-  required one — with the default (except `secret` and optional ones). **Witness:**
-  unit tests "int is clamped to 0..65535", "an out-of-bounds cache size does not get into the
-  config — 4000 applies", "empty required int → default",
-  "an empty optional one is not replaced with the default". **Mutation:**
-  substitute the saved string as is.
-- **P3. A condition is evaluated lazily; a false one without `#else` removes the node.**
-  The discarded branch is not walked; an array element drops out, a key is removed.
-  **Witness:** unit tests "outer condition false — a nested one in the discarded branch
-  has no effect", "false without else — the element drops out", the contract corpus
-  for the template engine. **Mutation:** walk both branches.
-- **P4. A malformed shipped template is rejected at load, not at
-  build.** Exception: a preset with an incomplete `for_each` is removed alone, the template
-  lives. **Witness:** unit tests "the shipped template passes the check",
-  "a broken #enable of the shipped template is rejected at load",
-  "for_each without as — only this preset is removed". **Mutation:** validation
-  only at build.
-- **P5. Something unknown at runtime does not break the build, but is visible.** An undeclared
-  `@name` stays a literal, an unknown `#` directive is removed — both with
-  a warning code; template warnings go first in the build report
-  and do not block saving. **Witness:** unit tests "unknown @name →
-  the placeholder stays", "an unknown #-key neighbour is removed", widget test
-  "N warnings — a snackbar, the button opens a sheet". **Mutation:** a silent drop.
-- **P6. A preset's ref variable reads the global value.** Its own value
-  in the preset record is ignored. **Witness:** unit tests "ref variable: value
-  from globals → enabled", "no global value, only in the preset
-  record → disabled". **Mutation:** read the ref from the preset record.
-- **P7. `for_each` yields one body per node that actually made it into the
-  config.** Zero nodes — the preset is empty; `filter` (for example `skip_presets`)
-  excludes a node. **Witness:** unit tests "zero nodes — the preset is empty", "two nodes —
-  repetitions in a row in node order, tags without a namespace", "filter false
-  (skip_presets)". **Mutation:** serve a disabled node or one removed by a gate.
+- **P1.** moved to [024-TEMPLATE · P1](../024-TEMPLATE/FEATURE.md#promises)
+- **P2.** moved to [024-TEMPLATE · P2](../024-TEMPLATE/FEATURE.md#promises)
+- **P3.** moved to [024-TEMPLATE · P3](../024-TEMPLATE/FEATURE.md#promises)
+- **P4.** moved to [024-TEMPLATE · P4](../024-TEMPLATE/FEATURE.md#promises)
+- **P5.** moved to [024-TEMPLATE · P5](../024-TEMPLATE/FEATURE.md#promises)
+- **P6.** moved to [024-TEMPLATE · P6](../024-TEMPLATE/FEATURE.md#promises)
+- **P7.** moved to [024-TEMPLATE · P7](../024-TEMPLATE/FEATURE.md#promises)
 - **P8. The fixable is fixed by degradation before the check.** A dangling detour, a ghost
   group member, `route.final` to a vanished Direction (→ `vpn-1`),
   `resolve` to a missing DNS server, an unknown uTLS fingerprint (→
@@ -214,6 +181,8 @@ banners on the main screen, the snackbar "Config rebuilt: N nodes".
 
 ## Boundaries
 
+- The shipped template, its language, the preset catalog and what an app
+  update does to saved overrides — [024-TEMPLATE](../024-TEMPLATE/FEATURE.md).
 - Parsing links and files into nodes — [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md).
 - Preset contents, user rules, rule order —
   [004-ROUTING](../004-ROUTING/FEATURE.md); the DNS part of the template and the build —
@@ -236,12 +205,12 @@ banners on the main screen, the snackbar "Config rebuilt: N nodes".
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Config template | Declares variable sections, the config skeleton and the preset catalog; it is loaded and checked once, with localized display texts. | P4 | [config-template.md](FUNCTIONS/config-template.md) |
-| Template language | Coerces variables by declared type and evaluates `@var`, `#if`/`#enable`, predicates, `for_each`/`#tpl`, ref variables and `on_change`. | P1 P2 P3 P5 P6 P7 | [template-language.md](FUNCTIONS/template-language.md) |
 | Build pipeline | Runs fixed stages from variables to the final JSON, including post-steps and healing of broken references. | P8 P13 | [build-pipeline.md](FUNCTIONS/build-pipeline.md) |
 | Final config check | Rejects a config with dangling tag references, empty groups or detour rings and keeps the previous config. | P9 | [config-validation.md](FUNCTIONS/config-validation.md) |
 | Settings lifecycle | Tracks the "stale" flag, stages edits in memory, writes them to disk and rebuilds on triggers, including after the process is killed. | P10 P11 P12 P13 | [settings-lifecycle.md](FUNCTIONS/settings-lifecycle.md) |
 | Applying to a running tunnel | Compares the saved config with the running one, shows the matching banner, auto-restarts on request and applies group selection live. | P14 P15 P16 P17 | [apply-to-running-tunnel.md](FUNCTIONS/apply-to-running-tunnel.md) |
+
+Config template and Template language moved to [024-TEMPLATE](../024-TEMPLATE/FEATURE.md).
 
 ## Related features
 
@@ -264,10 +233,13 @@ banners on the main screen, the snackbar "Config rebuilt: N nodes".
   pinned via `PUT /config` stops rebuilds.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — node body schema and registry codes behind
   the core registry gate.
+- [024-TEMPLATE](../024-TEMPLATE/FEATURE.md) — the shipped template and its language that the
+  pipeline starts from; template warnings go first in this build's report.
 
 ## Maintenance notes
 
-- **Two documents to keep in step with the template.** `docs/TEMPLATE.md` (schema of the shipped file) and the language norm `TEMPLATE_LANG.md` in the launcher repository; a template change that touches either is not done until they match (audit 588 lists the current drift).
+- Template pitfalls (the two documents to keep in step, `#if` suffixes, `on_change`
+  pseudo-variables) — [024-TEMPLATE](../024-TEMPLATE/FEATURE.md#maintenance-notes).
 - A screen that saves on leaving must put the edit into memory immediately:
   return to main fires at the moment of pop, and the screen's leave — ~300 ms
   later; otherwise the config lags one visit behind (§107).
@@ -276,8 +248,5 @@ banners on the main screen, the snackbar "Config rebuilt: N nodes".
   must not set the flag again (§338).
 - The config modification time is aligned to the settings time, not to "now":
   the one-second precision of the file system otherwise gives a false "dirty" (§113).
-- A `#if` key with a suffix (`#if1`, `#if tun-only`) is the only way to
-  attach two conditions to one object: a second JSON key with the same name silently
-  overwrites the first.
 - `reject` in a preset's `outbound` is not a tag: the build itself turns it into
   `action: reject`, otherwise it is a dangling reference.

@@ -102,17 +102,8 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks.
   массив. Свидетель: юниты «битый JSON → skip + warning», «§350: //-ключи
   вычищаются рекурсивно», виджет «Save в AppBar заблокирован, текст на
   месте». Мутация: `//` в конфиге — ядро отвергает.
-- **P13. Пресет — ссылка на шаблон:** разворачивается на каждой сборке;
-  умолчания переменных не хранятся; цель пользователя заменяет решение
-  шаблона целиком, промежуточные `resolve`/`sniff` не трогает. Свидетель:
-  юниты «outbound override == vpn-tag», «override vpn-1 → #if-гейт роняет
-  resolve; route получает override», «все пресеты шаблона: умолчания в vars
-  ≡ пустые vars». Мутация: копия тела пресета в правиле.
-- **P14. Битый пресет не ломает сборку:** нет в шаблоне — пропуск и «Preset
-  not found — tap to fix»; правило без полей-условий выпадает. Свидетель:
-  юниты «broken preset (presetId не найден) → warning + skip», «§571:
-  правило без полей-условий реестра выпадает с кодом». Мутация: правило
-  без условий матчит весь трафик.
+- **P13.** перенесено в [024-TEMPLATE · P8](../024-TEMPLATE/FEATURE.ru.md#обещания)
+- **P14.** перенесено в [024-TEMPLATE · P9](../024-TEMPLATE/FEATURE.ru.md#обещания)
 - **P15. Цели правил — только живые:** `direct`, включённые Направления
   (`vpn-1` всегда), `block`, Reject. Удаление/выключение Направления
   переводит правила, переопределения пресетов и Default traffic на `vpn-1`
@@ -184,7 +175,7 @@ num, isSortable}`, `vars`, `rule`/`rules`, `rule_set`, DNS-части);
                     ▼
                ОБХОД ПО ПОРЯДКУ (выключенные — пропуск, P4)
    inline → headless rule_set + route (P5, P7)   srs → local rule_set (P8) ◄ кэш .srs
-   json   → тело, `//` снят (P12)                preset → разворот шаблона (P13, P14)
+   json   → тело, `//` снят (P12)                preset → разворот шаблона (024 · P8, P9)
                     ▼
                reject → action (P6); DNS-аспекты → сборка DNS (005)
                     ▼
@@ -210,8 +201,9 @@ num, isSortable}`, `vars`, `rule`/`rules`, `rule_set`, DNS-части);
 
 ## Границы
 
-- Язык шаблона, переменные, проверка перед стартом и плашка «Settings
-  changed» — [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md).
+- Проверка перед стартом и плашка «Settings changed» —
+  [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md); каталог и язык
+  пресетов, язык шаблона и переменные — [024-TEMPLATE](../024-TEMPLATE/FEATURE.ru.md).
 - DNS-опция правила, DNS-части пресетов, FakeIP и его связь с «Resolve
   destination IP» — [005-DNS](../005-DNS/FEATURE.ru.md).
 - Направление как detour-цель (⚙), автовыбор `<tag>-auto`, балансировка,
@@ -237,16 +229,19 @@ num, isSortable}`, `vars`, `rule`/`rules`, `rule_set`, DNS-части);
 | Условия Wi-Fi | Ограничивает правило перечисленными сетями Wi-Fi по SSID/BSSID, с «Add current» и названной причиной, если сеть не читается. | P20 | [wifi-conditions.md](FUNCTIONS/wifi-conditions.ru.md) |
 | Внешние rule-set и локальный кэш | Маршрутизирует по спискам `.srs`, которые приложение скачивает, кэширует и обновляет по TTL; ядро получает только локальные файлы. | P8 P9 P10 P11 | [remote-rule-sets.md](FUNCTIONS/remote-rule-sets.ru.md) |
 | Правило сырым JSON | Кладёт в конфиг написанное вручную правило маршрутизации sing-box с любыми условиями и действиями, которых нет в форме. | P12 | [raw-json-rules.md](FUNCTIONS/raw-json-rules.ru.md) |
-| Пресеты-бандлы | Добавляет готовые правила из каталога шаблона, настраиваемые переменными, с закреплённым пресетом Traffic Processing и заменяемой целью. | P2 P13 P14 | [preset-bundles.md](FUNCTIONS/preset-bundles.ru.md) |
 | Порядок и включение правил | Держит один список правил, упорядоченный осью номеров, с перетаскиванием, вкл/выкл и удалением; побеждает первое совпадение. | P1 P2 P3 P4 | [rule-order.md](FUNCTIONS/rule-order.ru.md) |
 | Действие правила | Отправляет совпавший трафик в Направление, `direct`, `block` или Reject, при желании сначала разрешив домен; прочие действия — через сырой JSON. | P6 P7 | [rule-actions.md](FUNCTIONS/rule-actions.ru.md) |
 | Направления | Задаёт именованные выходы для правил и Default traffic и их состав узлов; ссылки на убранное Направление переходят на `vpn-1`. | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.ru.md) |
 | Обмен правилами файлом | Выгружает выбранные свои правила в файл и безопасно загружает их на другом устройстве; пресеты не переносятся. | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.ru.md) |
 
+Пресеты-бандлы перенесены в [024-TEMPLATE](../024-TEMPLATE/FEATURE.ru.md) (как «Язык и каталог пресетов»).
+
 ## Связанные фичи
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — язык шаблона, переменные, проверка перед
-  стартом и плашка «Settings changed».
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — проверка перед стартом и плашка
+  «Settings changed».
+- [024-TEMPLATE](../024-TEMPLATE/FEATURE.ru.md) — каталог и язык пресетов, язык шаблона и
+  переменные; закреплённый головной пресет обещан здесь как P2.
 - [005-DNS](../005-DNS/FEATURE.ru.md) — DNS-опция правила, DNS-части пресетов, FakeIP и его связь с
   «Resolve destination IP».
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — Направление как detour-цель,

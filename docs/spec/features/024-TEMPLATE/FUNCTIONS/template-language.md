@@ -7,7 +7,7 @@ concrete sing-box JSON; the declared type decides how each value is written.
 
 | Field | Value |
 |------|----------|
-| Feature | [003-CONFIG_BUILD](../FEATURE.md) |
+| Feature | [024-TEMPLATE](../FEATURE.md) |
 | Promises | P1 P2 P3 P5 P6 P7 |
 | State | ✅ written from code, 2026-09-28 |
 
@@ -92,8 +92,9 @@ without duplicates by the "code + parameters" pair.
 
 ## Boundaries
 
-- What exactly is gated by variables in presets and DNS —
-  [004-ROUTING](../../004-ROUTING/FEATURE.md), [005-DNS](../../005-DNS/FEATURE.md).
+- How a preset is declared with these constructs — [preset language and
+  catalog](preset-bundles.md); what exactly is gated by variables in presets
+  and DNS — [004-ROUTING](../../004-ROUTING/FEATURE.md), [005-DNS](../../005-DNS/FEATURE.md).
 - The UI for multi-select and free input for `options_open` — not finished (§555 follow-up).
 
 ## Documentation

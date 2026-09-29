@@ -101,17 +101,8 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   an array. **Witness:** unit tests "broken JSON → skip + warning", "§350: //-keys
   are cleaned recursively", widget "Save in the AppBar is blocked, the text stays in
   place". **Mutation:** `//` in the config — the core rejects it.
-- **P13. A preset is a reference to the template:** it is expanded on every build;
-  variable defaults are not stored; the user's target replaces the template's
-  decision entirely, intermediate `resolve`/`sniff` are not touched. **Witness:**
-  unit tests "outbound override == vpn-tag", "override vpn-1 → the #if gate drops
-  resolve; route gets the override", "all template presets: defaults in vars
-  ≡ empty vars". **Mutation:** a copy of the preset body in the rule.
-- **P14. A broken preset does not break the build:** missing from the template — skipped and "Preset
-  not found — tap to fix"; a rule without condition fields drops out. **Witness:**
-  unit tests "broken preset (presetId not found) → warning + skip", "§571:
-  a rule without registry condition fields drops out with a code". **Mutation:** a rule
-  without conditions matches all traffic.
+- **P13.** moved to [024-TEMPLATE · P8](../024-TEMPLATE/FEATURE.md#promises)
+- **P14.** moved to [024-TEMPLATE · P9](../024-TEMPLATE/FEATURE.md#promises)
 - **P15. Rule targets — only live ones:** `direct`, enabled Directions
   (`vpn-1` always), `block`, Reject. Deleting/disabling a Direction
   moves rules, preset overrides and Default traffic to `vpn-1`
@@ -183,7 +174,7 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
                     ▼
                WALK IN ORDER (disabled — skipped, P4)
    inline → headless rule_set + route (P5, P7)   srs → local rule_set (P8) ◄ .srs cache
-   json   → body, `//` removed (P12)             preset → template expansion (P13, P14)
+   json   → body, `//` removed (P12)             preset → template expansion (024 · P8, P9)
                     ▼
                reject → action (P6); DNS aspects → DNS build (005)
                     ▼
@@ -209,8 +200,10 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
 
 ## Boundaries
 
-- The template language, variables, the pre-start check and the "Settings
-  changed" banner — [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md).
+- The pre-start check and the "Settings changed" banner —
+  [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md); the preset catalog and
+  the preset language, the template language and variables —
+  [024-TEMPLATE](../024-TEMPLATE/FEATURE.md).
 - A rule's DNS option, DNS parts of presets, FakeIP and its link with "Resolve
   destination IP" — [005-DNS](../005-DNS/FEATURE.md).
 - A Direction as a detour target (⚙), auto-select `<tag>-auto`, balancing,
@@ -236,16 +229,19 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
 | Wi-Fi conditions | Limits a rule to listed Wi-Fi networks by SSID/BSSID, with "Add current" and a named reason when the network cannot be read. | P20 | [wifi-conditions.md](FUNCTIONS/wifi-conditions.md) |
 | External rule sets and the local cache | Routes by `.srs` lists that the app downloads, caches and refreshes by TTL; the core gets only local files. | P8 P9 P10 P11 | [remote-rule-sets.md](FUNCTIONS/remote-rule-sets.md) |
 | Raw JSON rule | Puts a hand-written sing-box route rule into the config, with any condition or action the form does not expose. | P12 | [raw-json-rules.md](FUNCTIONS/raw-json-rules.md) |
-| Preset bundles | Adds ready-made rules from the template catalog, configured by variables, with the pinned Traffic Processing preset and a replaceable target. | P2 P13 P14 | [preset-bundles.md](FUNCTIONS/preset-bundles.md) |
 | Rule order and enabling | Keeps one rule list ordered by a number axis, with drag, on/off and deletion; the first match wins. | P1 P2 P3 P4 | [rule-order.md](FUNCTIONS/rule-order.md) |
 | Rule action | Sends matched traffic to a Direction, `direct`, `block` or Reject, optionally resolving the domain first; other actions go through raw JSON. | P6 P7 | [rule-actions.md](FUNCTIONS/rule-actions.md) |
 | Directions | Defines named exits for rules and Default traffic and their node members; references to a removed Direction move to `vpn-1`. | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.md) |
 | Rule exchange via a file | Exports selected own rules to a file and imports them safely on another device; presets are not transferred. | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.md) |
 
+Preset bundles moved to [024-TEMPLATE](../024-TEMPLATE/FEATURE.md) (as "Preset language and catalog").
+
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the template language, variables, the
-  pre-start check and the "Settings changed" banner.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the pre-start check and the "Settings
+  changed" banner.
+- [024-TEMPLATE](../024-TEMPLATE/FEATURE.md) — the preset catalog and preset language, the
+  template language and variables; the pinned head preset is promised here as P2.
 - [005-DNS](../005-DNS/FEATURE.md) — a rule's DNS option, preset DNS parts, FakeIP and its link with
   "Resolve destination IP".
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — a Direction as a detour target,

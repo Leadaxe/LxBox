@@ -7,8 +7,8 @@ core config skeleton and the preset catalog.
 
 | Field | Value |
 |------|----------|
-| Feature | [003-CONFIG_BUILD](../FEATURE.md) |
-| Promises | P4 |
+| Feature | [024-TEMPLATE](../FEATURE.md) |
+| Promises | P4 P14 |
 | State | ✅ written from code, 2026-09-28 |
 
 ## What it does
@@ -28,7 +28,7 @@ Top-level template sections:
 |---|---|---|
 | `sections[]` | Variable cards: `id`, `name`, `chapter`, `description`, `vars[]` | this one (the mechanism), section owners |
 | `config` | The core config skeleton with `@var` and conditions | this one |
-| `selectable_rules[]` | The preset catalog | [004-ROUTING](../../004-ROUTING/FEATURE.md) |
+| `selectable_rules[]` | The preset catalog | this one ([preset language](preset-bundles.md)); what the presets do — [004-ROUTING](../../004-ROUTING/FEATURE.md) |
 | `dns_options` | The catalog of DNS servers and rules | [005-DNS](../../005-DNS/FEATURE.md) |
 | `group_templates`, `default_directions` | Direction group templates, the starting set | [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md) |
 | `ping_options`, `speed_test_options`, `parser_config` | Probe and parse parameters | 009, 002 |
@@ -76,18 +76,21 @@ on a malformed construct.
 
 ## Boundaries
 
-- The language of constructs inside the template — [template language](template-language.md).
+- The language of constructs inside the template — [template language](template-language.md);
+  how a preset is declared — [preset language and catalog](preset-bundles.md).
 - The contents of specific presets, the DNS catalog, group templates — the owning
   features from the table above.
 - There is no user template: the template comes only with an app
-  update.
+  update. What the update does to saved state — [template lifecycle](template-lifecycle.md).
 
 ## Documentation
 
 The full schema of `wizard_template.json` — every section, preset, variable
 and DNS catalogue entry — is [`docs/TEMPLATE.md`](../../../../TEMPLATE.md).
 The language the template is written in is described in
-[Template language](template-language.md).
+[Template language](template-language.md); verbatim syntax examples and the
+links to the launcher norm and corpus are in the feature's
+[Documentation and examples](../FEATURE.md#documentation-and-examples).
 
 ## Revisions
 
