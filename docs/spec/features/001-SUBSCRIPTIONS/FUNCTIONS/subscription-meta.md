@@ -1,6 +1,9 @@
 [English](subscription-meta.md) · [Русский](subscription-meta.ru.md)
 
-# Subscription metadata
+# Subscription metadata — traffic, expiry, name and support links from the provider
+
+The app reads traffic usage, expiry, name, update interval and support links from the provider's
+response headers or body comments and shows them in the subscription header.
 
 | Field | Value |
 |------|----------|

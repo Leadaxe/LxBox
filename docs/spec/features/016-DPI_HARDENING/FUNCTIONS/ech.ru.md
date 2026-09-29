@@ -1,6 +1,9 @@
 [English](ech.md) · [Русский](ech.ru.md)
 
-# ECH (Encrypted Client Hello)
+# ECH (Encrypted Client Hello) — сквозной из JSON, из ссылки не включается
+
+LxBox передаёт ядру блок `tls.ech` узла, только если он есть в JSON узла;
+параметр ссылки `ech=` снимается с объяснением.
 
 | Поле | Значение |
 |------|----------|

@@ -1,9 +1,18 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 006 — DETOUR_AND_BALANCE — detour, цепочки хопов, балансировка
+# Detour и балансировка — detour-серверы, цепочки хопов и балансировка нагрузки для VPN-узлов
+
+LxBox пускает трафик VPN-узла через другой сервер, многохоповую цепочку или
+пул с автовыбором и балансировкой, и всё это настраивается без правки JSON.
+Фича охватывает личный detour, jump-серверы провайдера (Xray `dialerProxy`,
+sing-box `detour`), Направления как переключаемый upstream, цепочки хопов
+ядра sing-box-lx и группы `urltest` в режиме Fastest или round-robin. Сборка
+конфига проверяет каждую связь: ядро принимает результат, а сломанная ссылка
+никогда не превращается в прямое соединение.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 006-DETOUR_AND_BALANCE |
 | Тип | Продуктовая фича |
 | Поглотила | `§018F` (detour-серверы, jump-серверы, цепочки), `§024F` (Load Balance — реализован режимом `round_robin` автовыбора, отдельного outbound'а нет), `§248F` (Направление как detour-прослойка), `§322F` (узел автовыбора в папке/подписке) |
 | Состояние | ✅ написана по коду, 2026-09-28 |
@@ -231,13 +240,13 @@ fatal «Routing loop»; ⚠ у мёртвых опор и баннер для DN
 
 | Функция | Что делает | Обещания | Файл |
 |---|---|---|---|
-| Detour узла | Личный detour сервера и члена папки, пикер целей, превью пути, fail-closed | P1 P12 | [node-detour.md](FUNCTIONS/node-detour.ru.md) |
-| Detour источника и jump-серверы | Use / Add detour (Fill missing · Replace all) / Don't use, register, звенья цепочек провайдера | P2 | [source-detour-policy.md](FUNCTIONS/source-detour-policy.ru.md) |
-| Направление как detour-прослойка | «Use as detour», ⚙, лечение ссылок | P3 P4 P5 | [detour-directions.md](FUNCTIONS/detour-directions.ru.md) |
-| Цепочки хопов | Источник-цепочка → `type: chain`, деградации, лечение позиций | P7 P8 P9 P10 | [hop-chains.md](FUNCTIONS/hop-chains.ru.md) |
-| Редактор цепочки | Форма, пикер позиций, проверки, послойная проба | P11 P16 | [chain-editor.md](FUNCTIONS/chain-editor.ru.md) |
-| Граф detour-зависимостей | Кольца, висячие ссылки, fatal с виновниками, ⚠ мёртвых опор, живой путь | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.ru.md) |
-| Автовыбор и балансировка | `<tag>-auto`, узел автовыбора, «Replace with a group», Load balance | P13 P14 | [balancing.md](FUNCTIONS/balancing.ru.md) |
+| Detour узла | Направляет сервер или член папки сначала через другой сервер: пикер цели, превью пути, fail-closed при сломанной ссылке. | P1 P12 | [node-detour.md](FUNCTIONS/node-detour.ru.md) |
+| Detour источника и jump-серверы | Задаёт одну detour-политику для всей подписки или папки (Use, Add detour с Fill missing или Replace all, Don't use) и решает, видны ли звенья цепочек провайдера как узлы. | P2 | [source-detour-policy.md](FUNCTIONS/source-detour-policy.ru.md) |
+| Направление как detour-прослойка | Делает Направление переключаемым upstream для многих узлов, помечает его ⚙ и сбрасывает detour-ссылки, когда прослойку убирают. | P3 P4 P5 | [detour-directions.md](FUNCTIONS/detour-directions.ru.md) |
+| Цепочки хопов | Собирает многохоповый маршрут в outbound `type: chain` в порядке пакета, выбрасывает невалидную цепочку целиком и укорачивает цепочку при удалении её источника. | P7 P8 P9 P10 | [hop-chains.md](FUNCTIONS/hop-chains.ru.md) |
+| Редактор цепочки | Правит цепочку хопов в форме с пикером позиций и блокирующими проверками и меряет каждый хоп послойной пробой. | P11 P16 | [chain-editor.md](FUNCTIONS/chain-editor.ru.md) |
+| Граф detour-зависимостей | Чинит кольца и висячие ссылки перед стартом, отменяет старт с названными виновниками, если кольцо не разорвать, и помечает мёртвые узлы, через которые идут другие. | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.ru.md) |
+| Автовыбор и балансировка | Добавляет группы автовыбора (`<tag>-auto`, узел автовыбора, «Replace with a group»), которые держат самый быстрый узел или распределяют нагрузку по пулу. | P13 P14 | [balancing.md](FUNCTIONS/balancing.ru.md) |
 
 ## Связанные фичи
 

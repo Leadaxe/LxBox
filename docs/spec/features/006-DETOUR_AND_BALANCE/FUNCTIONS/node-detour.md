@@ -1,6 +1,10 @@
 [English](node-detour.md) · [Русский](node-detour.ru.md)
 
-# Node detour
+# Node detour — routing a server through another server first
+
+A custom server or folder member can reach the internet through another
+node; the path is previewed in packet order, and a broken reference never
+turns into a direct connection.
 
 | Field | Value |
 |------|----------|
@@ -10,7 +14,7 @@
 
 ## What it does
 
-Gives a custom server or a folder member "go through another server first":
+Lets a custom server or a folder member "go through another server first":
 the **Detour** block in the node settings ("Route through another server
 first"); the **Detour server** row opens the target picker. Under the row —
 a path preview in packet order: `Phone → <hops> → <node> → Internet`, with

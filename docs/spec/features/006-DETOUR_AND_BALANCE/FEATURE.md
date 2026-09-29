@@ -1,16 +1,25 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 006 — DETOUR_AND_BALANCE — detour, hop chains, balancing
+# Detour and balancing — detour servers, hop chains and load balancing for VPN nodes
+
+LxBox sends a VPN node's traffic through another server, a multi-hop chain
+or a pool with auto-select and load balancing, all set up without editing
+JSON. The feature covers personal detours, provider jump servers (Xray
+`dialerProxy`, sing-box `detour`), Directions used as a switchable upstream,
+hop chains built by the sing-box-lx core and `urltest` groups in Fastest or
+round-robin mode. The config build checks every link, so the core accepts
+the result and a broken reference never becomes a direct connection.
 
 | Field | Value |
 |------|----------|
+| Feature | 006-DETOUR_AND_BALANCE |
 | Type | Product feature |
 | Absorbed | `§018F` (detour servers, jump servers, chains), `§024F` (Load Balance — implemented as the `round_robin` mode of auto-select, there is no separate outbound), `§248F` (Direction as a detour layer), `§322F` (auto-select node in a folder/subscription) |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
 
-Answers the question "what does a node go out to the network through":
+Answers the question "how does a node reach the network":
 directly, through another server (detour), through a switchable
 Direction layer, through a chain of several hops, through a pool of nodes
 with auto-select or balancing. The user assembles multi-hop routes without
@@ -65,7 +74,7 @@ are hidden from node selection.
 - **P4. A retired layer leaves no dangling detour references.** Disabling or
   deleting a Direction or clearing "Use as detour" resets references to it
   and to `<tag>-auto` to "None", irreversibly; setting the flag heals
-  nothing. The result — in a single notification. **Witness:** units
+  nothing. The result is reported in a single notification. **Witness:** units
   "flag-unset: all four kinds of detour references", "flag-unset is
   irreversible", "disable/delete of a detour Direction heals detour
   references", "resync mirrors the storage heal; saving does not resurrect
@@ -77,7 +86,7 @@ are hidden from node selection.
   "copyWith(isDetour:true) renames the label", "user erased ⚙ with the box
   checked → it comes back", "storage roundtrip: label with ⚙ is stable".
   **Mutation:** ⚙ only in the display.
-- **P6. Rings are fixed by the build, fatal is the last line.** A node with a
+- **P6. Rings are fixed by the build, fatal is the last resort.** A node with a
   detour to a group it belongs to is excluded from the group's membership
   (detour kept); any other ring is broken at the closing edge with a
   warning. An untangled ring — fatal "Routing loop — VPN not started" with
@@ -242,13 +251,13 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Node detour | Personal detour of a server and a folder member, target picker, path preview, fail-closed | P1 P12 | [node-detour.md](FUNCTIONS/node-detour.md) |
-| Source detour and jump servers | Use / Add detour (Fill missing · Replace all) / Don't use, register, provider chain links | P2 | [source-detour-policy.md](FUNCTIONS/source-detour-policy.md) |
-| Direction as a detour layer | "Use as detour", ⚙, reference healing | P3 P4 P5 | [detour-directions.md](FUNCTIONS/detour-directions.md) |
-| Hop chains | Chain source → `type: chain`, degradations, position healing | P7 P8 P9 P10 | [hop-chains.md](FUNCTIONS/hop-chains.md) |
-| Chain editor | Form, position picker, checks, per-layer probe | P11 P16 | [chain-editor.md](FUNCTIONS/chain-editor.md) |
-| Detour dependency graph | Rings, dangling references, fatal with culprits, ⚠ of dead supports, live path | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.md) |
-| Auto-select and balancing | `<tag>-auto`, auto-select node, "Replace with a group", Load balance | P13 P14 | [balancing.md](FUNCTIONS/balancing.md) |
+| Node detour | Routes a server or folder member through another server first, with a target picker, a path preview and fail-closed handling of broken references. | P1 P12 | [node-detour.md](FUNCTIONS/node-detour.md) |
+| Source detour and jump servers | Sets one detour policy for a whole subscription or folder (Use, Add detour with Fill missing or Replace all, Don't use) and decides whether provider chain links are shown as nodes. | P2 | [source-detour-policy.md](FUNCTIONS/source-detour-policy.md) |
+| Direction as a detour layer | Turns a Direction into a switchable upstream for many nodes, marks it with ⚙ and resets detour references when the layer is retired. | P3 P4 P5 | [detour-directions.md](FUNCTIONS/detour-directions.md) |
+| Hop chains | Builds a multi-hop route as a `type: chain` outbound in packet order, drops an invalid chain whole and shortens a chain when one of its sources is deleted. | P7 P8 P9 P10 | [hop-chains.md](FUNCTIONS/hop-chains.md) |
+| Chain editor | Edits a hop chain in a form with a position picker and save-blocking checks, and measures each hop with a per-layer probe. | P11 P16 | [chain-editor.md](FUNCTIONS/chain-editor.md) |
+| Detour dependency graph | Repairs loops and dangling references before start, cancels the start with named culprits when a loop cannot be broken, and flags dead nodes that others route through. | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.md) |
+| Auto-select and balancing | Adds auto-select groups (`<tag>-auto`, an auto-select node, "Replace with a group") that keep the fastest node or balance load across a pool. | P13 P14 | [balancing.md](FUNCTIONS/balancing.md) |
 
 ## Related features
 
@@ -264,8 +273,8 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
 
 ## Maintenance notes
 
-- The arrows are opposite: for `detour` it is "node through whom", for a
-  chain — "in what order the packet travels". A mixed-up order gives a
+- The arrows point in opposite directions: `detour` reads "the node goes
+  through whom", a chain reads "in what order the packet travels". A mixed-up order gives a
   working but wrong route — noticeable only by the exit country.
 - Healing references to a Direction must be mirrored in the in-memory source
   list, otherwise the next save resurrects the healed reference.

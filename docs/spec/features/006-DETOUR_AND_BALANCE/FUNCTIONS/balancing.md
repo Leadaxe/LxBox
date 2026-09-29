@@ -1,6 +1,10 @@
 [English](balancing.md) · [Русский](balancing.ru.md)
 
-# Auto-select and balancing
+# Auto-select and balancing — the fastest node or load spread across a pool
+
+A Direction, a folder or a subscription can use a `urltest` group that
+either keeps the fastest node or spreads connections round-robin across a
+pool of live nodes.
 
 | Field | Value |
 |------|----------|
@@ -11,7 +15,7 @@
 ## What it does
 
 Spreads traffic across several nodes instead of a single selected one.
-Three carriers of one auto-select form:
+One auto-select form has three carriers:
 
 | Carrier | Where it is enabled | What is in the config |
 |---|---|---|

@@ -1,6 +1,9 @@
 [English](on-update-action.md) · [Русский](on-update-action.ru.md)
 
-# Action on update
+# Action on update — rebuild, reload or wait when subscription nodes change
+
+When an update changes a subscription's nodes, its "On update" setting decides whether the config is
+rebuilt, rebuilt and reloaded into the core, or left for the next rebuild.
 
 | Field | Value |
 |------|----------|
@@ -12,9 +15,9 @@
 
 Decides what to do with the config when a subscription has updated and **its composition
 has changed**: only rebuild, rebuild and have the core re-read it on the fly, or
-do nothing until the next regular rebuild. Needed so that a subscription with
-an hourly interval does not raise the "restart to apply" banner every hour for
-a user who has not touched anything.
+do nothing until the next regular rebuild. Without this gate, a subscription with
+an hourly interval would show the "restart to apply" banner every hour to
+a user who has not changed anything.
 
 ## Parameters
 
@@ -46,8 +49,8 @@ the core re-reads the config on the fly (drop ≈ 3 s, open TCP connections brea
 - Reload runs only if the tunnel is up and the rebuilt config
   differs from the running one; within the reload cooldown — skipped,
   the banner stays.
-- A rebuild in flight is awaited, then our own runs — so as not to
-  apply a config built before the new nodes were written.
+- A rebuild already in progress is awaited before this one starts, so a config
+  built before the new nodes were written is never applied.
 - Do nothing: nodes are updated, the config is marked as changed; it applies on
   returning to the main screen, Start or a manual Apply.
 - A reaction error does not break the updater pass.

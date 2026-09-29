@@ -1,6 +1,10 @@
 [English](detour-graph.md) · [Русский](detour-graph.ru.md)
 
-# Detour dependency graph
+# Detour dependency graph — fixing loops and flagging dead supports
+
+Before start the build repairs loops and dangling detour references; on a
+running tunnel the app shows a node's live path and warns about dead nodes
+that others depend on.
 
 | Field | Value |
 |------|----------|

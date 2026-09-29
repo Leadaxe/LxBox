@@ -1,6 +1,10 @@
 [English](desktop-transfer.md) · [Русский](desktop-transfer.ru.md)
 
-# Transfer to desktop (LX Backup)
+# Transfer to desktop (LX Backup) — sharing settings with the desktop launcher
+
+LxBox exchanges subscriptions, servers, rules, DNS and WARP registrations with
+the desktop launcher in the LX Backup 1.0 format and names everything that did
+not fit.
 
 | Field | Value |
 |-------|-------|

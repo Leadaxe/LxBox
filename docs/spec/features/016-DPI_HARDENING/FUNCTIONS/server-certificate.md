@@ -1,6 +1,9 @@
 [English](server-certificate.md) · [Русский](server-certificate.ru.md)
 
-# Server certificate verification
+# Server certificate verification — CA store, insecure flag and key pinning
+
+LxBox lets the user pick the root CA store for the core and keeps each node's
+`insecure` flag, certificate pin and custom CA intact and visible.
 
 | Field | Value |
 |-------|-------|

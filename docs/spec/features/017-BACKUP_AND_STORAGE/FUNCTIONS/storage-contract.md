@@ -1,6 +1,9 @@
 [English](storage-contract.md) · [Русский](storage-contract.ru.md)
 
-# Storage contract
+# Storage contract — one record form for disk, backup and transfer
+
+LxBox keeps the user's settings in one document with LX Backup 1.0 records and
+stores node links as addresses that follow the node.
 
 | Field | Value |
 |-------|-------|

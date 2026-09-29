@@ -1,9 +1,16 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 001 — SUBSCRIPTIONS — node sources and keeping them fresh
+# Subscriptions — VPN node sources, auto-update and per-node control
+
+LxBox imports VPN nodes from subscription URLs, files, QR codes and pasted links, keeps them updated
+and lets you disable single nodes. Subscriptions refresh on a schedule and on app events without
+flooding the provider with requests, and a failed update never replaces a working node list. The
+request identifies itself to provider panels such as Remnawave and Marzban with a branded User-Agent
+and optional HWID headers.
 
 | Field | Value |
 |------|----------|
+| Feature | 001-SUBSCRIPTIONS |
 | Type | Product feature |
 | Absorbed | `§006F` `§010F` `§027F` `§118F` `§129F` `§283F` (`§123F` — the core channel model, assigned to 012-LIVE_STATE) |
 | State | ✅ written from code, 2026-09-28 |
@@ -23,7 +30,7 @@ Three principles the feature protects:
 2. **Do not spam the provider.** Every automatic request is justified by an
    interval, every series of failures has a cap, parallel requests for one
    subscription collapse into one.
-3. **Introduce itself to the panel correctly.** The request carries a
+3. **Identify itself to the panel correctly.** The request carries a
    recognizable User-Agent and, if the user wants, HWID headers — this decides
    which format and how many "devices" the panel hands out.
 
@@ -147,7 +154,7 @@ connects 2 min; 3 request attempts with pauses of 1 s and 3 s, attempt timeout
 9 s; 4xx is not retried.
 
 The feature emits no core config keys: a disabled subscription or a disabled node
-simply does not get into the build ([003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md)).
+is left out of the build ([003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md)).
 
 ## Inputs / Outputs
 
@@ -217,15 +224,15 @@ app start: read sources → "updating" → failed
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Adding a source | URL, clipboard, QR, public test lists, file import | — | [add-source.md](FUNCTIONS/add-source.md) |
-| File subscription and source change | A file of >1 node as a subscription; online ↔ file transactionally | P2, P4, P8 | [file-subscription.md](FUNCTIONS/file-subscription.md) |
-| Request identity | User-Agent, HWID, device-meta, Default/Custom | P7 | [fetch-identity.md](FUNCTIONS/fetch-identity.md) |
-| Auto-update | Triggers, intervals, anti-spam, manual update | P3, P4, P5, P6, P14, P15 | [auto-update.md](FUNCTIONS/auto-update.md) |
-| Request, cache and offline start | Retries, keeping the previous result, body cache, rehydration, statuses | P1, P8, P15 | [fetch-cache-offline.md](FUNCTIONS/fetch-cache-offline.md) |
-| Action on update | Rebuild / Reload / Do nothing, composition gate | P6, P11 | [on-update-action.md](FUNCTIONS/on-update-action.md) |
-| Disabling subscription nodes | Marks by node name, bulk actions, TTL | P9, P10 | [node-disable.md](FUNCTIONS/node-disable.md) |
-| Import rules | Replace / Disable / Enable over subscription nodes | P12 | [import-rules.md](FUNCTIONS/import-rules.md) |
-| Subscription metadata | Traffic, expiry, name, links, interval | P4, P13 | [subscription-meta.md](FUNCTIONS/subscription-meta.md) |
+| Adding a source | Turns a URL, pasted text, a QR code or a file into a subscription, a single server, a folder or a file subscription. | — | [add-source.md](FUNCTIONS/add-source.md) |
+| File subscription and source change | Keeps a multi-node file as a subscription and changes a subscription's URL or online/file mode only when the new source yields nodes. | P2, P4, P8 | [file-subscription.md](FUNCTIONS/file-subscription.md) |
+| Subscription request identity | Sets the User-Agent, HWID and device headers of the subscription request, globally (Default) or per subscription (Custom). | P7 | [fetch-identity.md](FUNCTIONS/fetch-identity.md) |
+| Subscription auto-update | Refreshes subscriptions on a schedule and on app and VPN events within intervals and anti-spam limits; a manual update bypasses the limits. | P3, P4, P5, P6, P14, P15 | [auto-update.md](FUNCTIONS/auto-update.md) |
+| Request, cache and offline start | Retries the request, keeps the previous nodes on a failed or empty response and caches the last good response for an offline start. | P1, P8, P15 | [fetch-cache-offline.md](FUNCTIONS/fetch-cache-offline.md) |
+| Action on update | Rebuilds the config, reloads the core or waits when the node composition of an enabled subscription changes. | P6, P11 | [on-update-action.md](FUNCTIONS/on-update-action.md) |
+| Disabling subscription nodes | Switches single subscription nodes off by name; the mark survives updates and restarts and expires by TTL once the node is gone. | P9, P10 | [node-disable.md](FUNCTIONS/node-disable.md) |
+| Subscription import rules | Disables, enables or edits subscription nodes with rules applied to every parse of the subscription body. | P12 | [import-rules.md](FUNCTIONS/import-rules.md) |
+| Subscription metadata | Shows traffic, expiry, name, support links and the recommended interval from the provider's headers or body comments. | P4, P13 | [subscription-meta.md](FUNCTIONS/subscription-meta.md) |
 
 ## Related features
 

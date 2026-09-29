@@ -1,6 +1,9 @@
 [English](reality-params.md) · [Русский](reality-params.ru.md)
 
-# REALITY parameters
+# REALITY parameters — validated keys and short IDs for VLESS REALITY nodes
+
+LxBox builds the REALITY block of VLESS and AnyTLS nodes from links and JSON and
+drops an invalid key, short ID or key share on that node only.
 
 | Field | Value |
 |-------|-------|

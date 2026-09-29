@@ -1,6 +1,9 @@
 [English](utls-fingerprint.md) · [Русский](utls-fingerprint.ru.md)
 
-# uTLS fingerprint
+# uTLS fingerprint — a ClientHello fingerprint the core always accepts
+
+LxBox maps the fingerprint (`fp`) from a subscription onto the uTLS dictionary
+of the sing-box core, so that an Xray alias or a typo never breaks the config.
 
 | Field | Value |
 |-------|-------|

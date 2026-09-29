@@ -5,7 +5,7 @@
 | Статус | Reference |
 | Дата | 2026-07-04 |
 | Версия API | совместим со [`spec 031`](../spec/tasks/031F-debug-api/spec.md) |
-| Парный doc | [`clash-api-reference.md`](clash-api-reference.md) — **deprecated**: `/clash/*` proxy выпилен в §122 (Clash API dropped, переход на CommandClient) |
+| Clash API | удалён в §122 (переход на CommandClient); роутов `/clash/*` и `/state/clash` нет — `404 not_found` |
 
 Compact curl-ready reference для **Debug API** — HTTP-сервера L×Box на `127.0.0.1:9269`, который пробрасывается через `adb forward`. Полные объяснения полей/middleware/архитектуры — в [spec 031](../spec/tasks/031F-debug-api/spec.md); здесь — «что послать чтобы получить нужное».
 
@@ -1653,7 +1653,7 @@ curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
 - proxies / switch selector / group urltest → CommandClient unary-RPC + `/action/urltest` / `/action/switch-node` / `/action/set-group`.
 - connections snapshot / live → CommandClient connections-push, см. [Profiler](#profiler--profiler) (`/profiler/live*`).
 
-Старый `clash-api-reference.md` сохранён как историческая справка по поведению sing-box clash-api, но соответствующих роутов в Debug API больше **нет** — запрос на `/clash/*` или `/state/clash` вернёт `404 not_found`.
+Роутов `/clash/*` и `/state/clash` в Debug API больше **нет** — запрос вернёт `404 not_found`; справка по Clash API удалена вместе с ним (история — в git до 2026-09-29).
 
 ---
 

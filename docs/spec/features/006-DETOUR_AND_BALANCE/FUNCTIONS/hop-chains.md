@@ -1,6 +1,9 @@
 [English](hop-chains.md) · [Русский](hop-chains.ru.md)
 
-# Hop chains
+# Hop chains — multi-hop routes built by the core
+
+A hop chain sends traffic through several servers in a fixed order and
+appears in the rest of the app as an ordinary node.
 
 | Field | Value |
 |------|----------|

@@ -1,6 +1,9 @@
 [English](detour-directions.md) · [Русский](detour-directions.ru.md)
 
-# Direction as a detour layer
+# Direction as a detour layer — switching the upstream of many nodes at once
+
+A Direction marked "Use as detour" becomes a shared upstream: changing its
+node on the main screen moves every server that goes through it.
 
 | Field | Value |
 |------|----------|

@@ -1,6 +1,9 @@
 [English](ech.md) · [Русский](ech.ru.md)
 
-# ECH (Encrypted Client Hello)
+# ECH (Encrypted Client Hello) — passed through from JSON, never enabled from a link
+
+LxBox passes a node's `tls.ech` block to the core only when the node JSON
+contains it; the link parameter `ech=` is dropped with an explanation.
 
 | Field | Value |
 |-------|-------|

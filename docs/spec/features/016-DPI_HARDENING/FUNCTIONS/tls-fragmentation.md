@@ -1,6 +1,9 @@
 [English](tls-fragmentation.md) · [Русский](tls-fragmentation.ru.md)
 
-# TLS fragmentation
+# TLS fragmentation — splitting the ClientHello so DPI cannot read the SNI
+
+LxBox can split the TLS ClientHello of first-hop VPN nodes into several TCP
+segments or TLS records, so that DPI does not see the SNI in one packet.
 
 | Field | Value |
 |-------|-------|

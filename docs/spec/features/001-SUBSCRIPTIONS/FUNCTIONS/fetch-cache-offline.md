@@ -1,6 +1,9 @@
 [English](fetch-cache-offline.md) · [Русский](fetch-cache-offline.ru.md)
 
-# Request, cache and offline start
+# Request, cache and offline start — keeping the working node list through failures and restarts
+
+A subscription request is retried on errors, a failed or empty response keeps the previous nodes,
+and the last good response is cached so the nodes are available after a restart without network.
 
 | Field | Value |
 |------|----------|
@@ -49,7 +52,7 @@ updated, "Last success · Last attempt · N nodes", "Refresh now" button.
   summary ("N entries dropped") — both on success and on an empty response.
 - The cache is written atomically (temporary file → rename): a killed process will not
   leave a truncated body. A cache write failure does not break the update.
-- **Rehydration at start:** subscriptions without nodes are raised from the cache, with the same
+- **Rehydration at start:** subscriptions without nodes are restored from the cache, with the same
   import rules. A user edit made during rehydration
   (reordering, renaming, deleting) is not overwritten. Node marks
   are not cleaned on rehydration. A cache parsed into 0 nodes leaves the

@@ -1,6 +1,9 @@
 [English](file-subscription.md) · [Русский](file-subscription.ru.md)
 
-# File subscription and source change
+# File subscription and source change — nodes from a file, safe URL and mode switching
+
+A file with more than one node becomes a subscription, and any subscription can change its URL or
+move between online and file modes without losing its nodes.
 
 | Field | Value |
 |------|----------|
@@ -44,13 +47,13 @@ status OK; the snapshot of the previous source is deleted.
   internal key `file:<uuid>`.
 - On switching to a new URL its response is not written to the cache — the cache will appear on
   the next successful update; until then an offline start of this subscription will not
-  raise nodes — a known defect, a task candidate.
+  restore its nodes — a known defect, a task candidate.
 - On a URL change the subscription's Custom identity is kept — the new address
   is requested with it.
 - Marks of disabled nodes survive the source change (same entry).
 - A file subscription is created with interval `-1`; automatic and manual
   "update" do nothing for it and do not change the status.
-- After a restart the file subscription's nodes are raised from its snapshot.
+- After a restart the file subscription's nodes are restored from its snapshot.
 - TTL cleanup of marks is not performed for a file subscription — there is no external
   signal that a node is gone.
 - The list shows a "file" badge instead of the interval; "Share URL…" is hidden;

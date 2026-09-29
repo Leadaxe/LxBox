@@ -1,6 +1,9 @@
 [English](full-backup-export.md) · [Русский](full-backup-export.ru.md)
 
-# Full backup export
+# Full backup export — saving all app settings to a JSON snapshot
+
+LxBox writes the settings of this installation, by category, to a JSON file that
+restores them after a reset or on a new phone.
 
 | Field | Value |
 |-------|-------|

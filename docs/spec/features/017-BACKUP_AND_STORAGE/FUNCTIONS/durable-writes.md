@@ -1,6 +1,9 @@
 [English](durable-writes.md) · [Русский](durable-writes.ru.md)
 
-# Durable settings writes
+# Durable settings writes — atomic saves, crash recovery and no lost edits
+
+LxBox writes the settings document atomically, recovers a corrupted file from
+the previous copy and never lets a stale controller overwrite newer settings.
 
 | Field | Value |
 |-------|-------|

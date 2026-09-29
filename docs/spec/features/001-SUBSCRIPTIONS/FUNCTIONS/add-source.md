@@ -1,6 +1,9 @@
 [English](add-source.md) · [Русский](add-source.ru.md)
 
-# Adding a source
+# Adding a source — subscription URLs, links, QR codes and files
+
+A URL, pasted text, a QR code or a file becomes a subscription, a single server, a folder or a file
+subscription in the list of sources.
 
 | Field | Value |
 |------|----------|

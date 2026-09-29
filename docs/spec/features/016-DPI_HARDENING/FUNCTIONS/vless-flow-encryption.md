@@ -1,6 +1,10 @@
 [English](vless-flow-encryption.md) · [Русский](vless-flow-encryption.ru.md)
 
-# VLESS flow and encryption
+# VLESS flow and encryption — XTLS Vision and VLESS Encryption as the provider set them
+
+LxBox takes the VLESS `flow` (XTLS Vision) and `encryption` settings from the
+subscription without adding defaults and rejects a node whose `encryption`
+string is invalid.
 
 | Field | Value |
 |-------|-------|
