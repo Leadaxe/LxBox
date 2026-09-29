@@ -50,7 +50,8 @@ route, traffic, time, app), a tap copies the value, "Copy JSON", "Close".
   separately and are not glued together. An empty chain — the selected node is
   taken.
 - A "selector + its choice" pair collapses into `selector (choice)`.
-- The same line is used in the profiler log ([traffic-profiler](traffic-profiler.md)).
+- The same line is used in the profiler log
+  ([028-TRAFFIC_PROFILER](../../028-TRAFFIC_PROFILER/FUNCTIONS/attribution.md)).
 
 ## Rules and invariants
 

@@ -58,7 +58,7 @@ chain under a card).
 ## Boundaries
 
 - There is no per-app breakdown on Stats — it is in the profiler
-  ([traffic-profiler](traffic-profiler.md)).
+  ([028-TRAFFIC_PROFILER](../../028-TRAFFIC_PROFILER/FEATURE.md)).
 - Speed is not shown — only volume and number of connections.
 - Rules and their texts — 004-ROUTING.
 

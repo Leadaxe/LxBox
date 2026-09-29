@@ -56,7 +56,7 @@
 ## Границы
 
 - Разбивки по приложениям на Stats нет — она в профайлере
-  ([traffic-profiler](traffic-profiler.ru.md)).
+  ([028-TRAFFIC_PROFILER](../../028-TRAFFIC_PROFILER/FEATURE.ru.md)).
 - Скорость не показывается — только объём и число соединений.
 - Правила и их тексты — 004-ROUTING.
 

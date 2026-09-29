@@ -7,9 +7,9 @@ on.
 
 | Field | Value |
 |-------|-------|
-| Feature | [012-LIVE_STATE](../FEATURE.md) |
-| Promises | P15, P16, P17, P18 |
-| State | ✅ written from code, 2026-09-28 |
+| Feature | [028-TRAFFIC_PROFILER](../FEATURE.md) |
+| Promises | P13, P14, P15, P16 |
+| State | ✅ written from code, 2026-09-29 |
 
 ## What it does
 
@@ -22,7 +22,7 @@ to resolve en masse while the link is alive, and suggests what to do.
 ## Parameters
 
 No settings of its own; works while the profiler is recording
-([traffic-profiler](traffic-profiler.md)).
+([recording](recording.md)).
 
 ## Inputs / Outputs
 
@@ -53,7 +53,7 @@ the buttons "Open DNS settings", "Enable FakeIP", "Close".
 - The server channel is the selected node (the selector is unrolled by the
   core); empty — direct or an answer from the cache.
 - Owner — from the core; no owner — "no owner", only a failure counts as an
-  alarm (see [traffic-profiler](traffic-profiler.md)).
+  alarm (see [attribution](attribution.md)).
 - The group trace is written only for queries through a DNS group, the fan-out
   and survival flags — only when true; on a cache hit there are no probes; late
   fan-out answers do not enter the trace.
@@ -67,8 +67,8 @@ the buttons "Open DNS settings", "Enable FakeIP", "Close".
 - DNS queries hijacked by the core do not get into connections — only here.
 - Without profiler recording DNS events are not collected and the detector is
   silent.
-- The full state of DNS groups, DNS and FakeIP settings — 005-DNS; the sheet
-  only leads there.
+- The full state of DNS groups, DNS and FakeIP settings —
+  [005-DNS](../../005-DNS/FEATURE.md); the sheet only leads there.
 - The core keeps no history: the stream starts from the moment of subscription.
 
 ## Revisions
