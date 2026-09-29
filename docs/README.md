@@ -15,8 +15,8 @@ depends on who is in control and from where:
 
 > **The Clash API is gone (§122).** The UI and diagnostics go through the libbox
 > CommandClient (push streams out of the core); the core is built without
-> `with_clash_api`, and `experimental.clash_api` in a config kills the start. See
-> the historical note in [api/clash-api-reference.md](api/clash-api-reference.md).
+> `with_clash_api`, and `experimental.clash_api` in a config kills the start
+> (see [task 122F](spec/tasks/122F-commandclient-migration/spec.md)).
 
 The difference in one line: **Public Intent** is “the phone automates itself” from
 events; **Debug API** is “I drive the phone from outside with a script or by
@@ -68,7 +68,6 @@ hand”. Both describe the same operations from opposite sides.
 | Document | Description |
 |---|---|
 | [api/debug-api-reference.md](api/debug-api-reference.md) | Debug API — the full endpoint list (mirrors the live `GET /help`) |
-| [api/clash-api-reference.md](api/clash-api-reference.md) | Clash API — **removed in §122**, kept as a historical note on the sing-box clash-api |
 
 ## Specifications
 
@@ -84,7 +83,5 @@ hand”. Both describe the same operations from opposite sides.
 | Directory | Contents |
 |---|---|
 | [releases/](releases/) | Per-version release notes (EN + RU) |
-| [features/](features/) | Deep-dive notes on individual features (per-app-trace, wifi-aware-routing) |
 | [research/](research/) | Research (code audit, audience, 4pda feedback) |
-| [examples/](examples/) | Example configs (`minimal_local_test.json`) |
 | [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | A historical chronicle of development (up to v1.9.0) — no longer maintained |

@@ -1,22 +1,20 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 022 — ARCHITECTURE — how the code is organised
+# Architecture — code layers, domain facades and structural audits
+
+LxBox keeps each behaviour in one place: the code is split into four layers, every domain exposes one facade,
+and data has one source of truth. The app grows task by task, and every task has its own local "quicker to
+put it here"; the rules on this page counter that, and audits find structural debt before it turns into a
+class of bugs. Unlike the product features, this page makes no promises to the user: it lists the rules that
+keep the product cheap to change and a registry of checks of those rules.
 
 | Field | Value |
 |------|----------|
+| Feature | 022-ARCHITECTURE |
 | Type | Process feature (ongoing work on the structure of the code) |
 | Absorbed | `§291F` |
 | Sources | [ARCHITECTURE.md](../../../ARCHITECTURE.md) (the principles; the source tree is not carried over), [DEVELOPMENT_GUIDE.md](../../../DEVELOPMENT_GUIDE.md), `AGENTS.md` |
 | State | ✅ written from code, 2026-09-29 · living registry |
-
-The app grows task by task, and every task has its own local "quicker to put it
-here". This feature is about keeping behaviour in **one** place: a domain
-invariant is checked once, data has one source of truth, and structural debt is
-found by an audit before it turns into a class of bugs.
-
-The difference from the product features: there are no promises to the user
-here. There are rules that protect the ability to change the product cheaply,
-and a registry of checks of those rules.
 
 ## Principles it protects
 
@@ -71,6 +69,7 @@ prioritised registry → remediation in separate commits.
 | 2026-07-02 | [219](../../tasks/219-deep-audit-2026-07.md) | 69 units (16 shards × 4 dimensions + 5 doc auditors) | 352 claimed → 190 confirmed + 96 partial, 66 refuted | audit Done, findings in progress |
 | 2026-07-15 | [273](../../tasks/273-energy-audit-client.md) | client energy audit, 5 axes | 6 findings on the config-generator axis | partial (4 axes not run) |
 | 2026-07-20 | [291F](../../tasks/291F-layered-architecture-facades/spec.md) | domain health map | worst — DNS (raw lists, dual-write); VPN mode and probe without a facade | ✅ mostly achieved |
+| 2026-09-28 | [591](../../tasks/591-spec-kit-revision-audit.md) | every feature of the catalogue, code and tests against the legacy `F` specs | ~200 code-vs-spec mismatches, ~25 promises without a witness | Open — waiting for the owner's triage |
 
 The sibling cycle in the core is the audit of the fork's delta (SPEC 022
 LX_DEEP_AUDIT in sing-box-lx); its findings on the client boundary are
@@ -122,14 +121,18 @@ tracked by [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the template as the source of defaults, building without the network.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the template as the
+  source of defaults, building without the network.
 - [005-DNS](../005-DNS/FEATURE.md) — the worst domain of the §291 map, typed model and facade.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the reliable tunnel status channel.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — the ephemeral screen data channel.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md), [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — external adapters (Debug API, Intent API) on top of facades.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md),
+  [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — external adapters (Debug
+  API, Intent API) on top of facades.
 - [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — English as the UI source language.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the boundary with the core and the contract, the core audit.
-- [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.md) — where the rules are checked automatically (analyze, checkers, tests on CI).
+- [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.md) — where the rules
+  are checked automatically (analyze, checkers, tests on CI).
 
 ## Maintenance notes
 

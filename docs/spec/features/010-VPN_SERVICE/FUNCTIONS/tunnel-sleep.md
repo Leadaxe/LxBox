@@ -1,9 +1,12 @@
 [English](tunnel-sleep.md) · [Русский](tunnel-sleep.ru.md)
 
-# Tunnel sleep (background mode)
+# Tunnel sleep (background mode) — pausing the VPN to save battery
+
+The tunnel can be paused while the device sleeps or the screen is off and
+resumed afterwards; by default it never sleeps.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P16 |
 | State | ✅ written from code, 2026-09-28 |
@@ -53,7 +56,8 @@ up marks "restart needed".
 
 - Selective sleep of individual WG/AWG tunnels — [core-resources](core-resources.md);
   it is orthogonal to the sleep of the whole tunnel.
-- Sleep of data streams for the app screen in the background — 012-LIVE_STATE.
+- Sleep of data streams for the app screen in the background —
+  [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
 - Depends on OS capabilities: the presence and moment of deep sleep (usually
   tens of minutes of stillness with the screen off), delivery of screen events.
 

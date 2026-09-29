@@ -178,6 +178,24 @@ Future<void> applyCustomDns(
     }
   }
 
+  // §588 (контракт 1.1.101) — теги наборов, попавших в конфиг: итоговый
+  // `route.rule_set` плюс наборы srs-правил этого шага (включённых, с
+  // сервером и скачанным файлом). По ним чистятся ссылки `rule_set` своих
+  // DNS-правил.
+  final liveRuleSetTags = <String>{
+    for (final rs in ((config['route'] as Map<String, dynamic>?)?['rule_set']
+            as List<dynamic>? ??
+        const []))
+      if (rs is Map && rs['tag'] is String) rs['tag'] as String,
+    for (final e in resolved)
+      if (e is DnsRuleSrs &&
+          e.enabled &&
+          dnsSrsCachedPaths[e.id] != null &&
+          ((e.server ?? e.body?['server']) is String) &&
+          ((e.server ?? e.body?['server']) as String).isNotEmpty)
+        e.name.isNotEmpty ? e.name : 'dns_srs_${e.id}',
+  };
+
   for (final entry in resolved) {
     if (entry is DnsRulePreset) {
       if (dnsMirrors.isNotEmpty) {
@@ -203,8 +221,18 @@ Future<void> applyCustomDns(
     }
     if (!entry.enabled) continue;
     switch (entry) {
-      case DnsRuleInline(:final rule):
-        outRules.add(rule);
+      case DnsRuleInline(:final rule, :final name):
+        // §588 (контракт 1.1.101) — висячие ссылки `rule_set` (набор
+        // выключен, не скачан, нет в конфиге): имя рядом с живыми убирается;
+        // не осталось ни одного — правило выпадает с кодом, а не остаётся
+        // «весь DNS на server».
+        final kept = cleanDanglingDnsRuleSet(rule, liveRuleSetTags);
+        if (kept == null) {
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'rule_set');
+          continue;
+        }
+        outRules.add(kept);
       case DnsRuleTemplate(:final name):
         final t = templateRulesByName[name];
         if (t != null) {
@@ -229,7 +257,13 @@ Future<void> applyCustomDns(
         final rule = legacyRule ?? body;
         if (server == null || server.isEmpty) continue;
         final path = dnsSrsCachedPaths[id];
-        if (path == null) continue; // no cache → skip silently
+        if (path == null) {
+          // §588 (контракт 1.1.101) — файл набора не скачан: набор не попал
+          // в конфиг, правило выпадает с кодом (раньше — молча).
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'rule_set');
+          continue;
+        }
         final tag = name.isNotEmpty ? name : 'dns_srs_$id';
         extraDnsSrsRuleSets.add({
           'type': 'local',
@@ -287,6 +321,35 @@ Future<void> applyCustomDns(
   }
 
   config['dns'] = dns;
+}
+
+/// §588 (контракт 1.1.101, TEMPLATE_LANG §5.1) — ссылки `rule_set` своего
+/// DNS-правила против тегов наборов [live], попавших в конфиг.
+///
+/// - ссылок нет (ключа нет, пустая строка, пустой список, не строка/список)
+///   или все живые → [rule] как есть;
+/// - часть висячих → копия правила со списком уцелевших (форма списка
+///   сохраняется);
+/// - висячие ВСЕ → `null`: правило выпадает целиком, ссылку не снимаем с
+///   сохранением правила по `server`.
+///
+/// Живой считается и локальный тег, однозначно принадлежащий одному
+/// префиксованному `<preset_id>:<tag>`: его позже перепишет
+/// [healPresetTagPrefix] (§103 C7).
+Map<String, dynamic>? cleanDanglingDnsRuleSet(
+    Map<String, dynamic> rule, Set<String> live) {
+  bool isLive(String ref) {
+    if (live.contains(ref)) return true;
+    var matches = 0;
+    for (final t in live) {
+      final sep = t.indexOf(':');
+      if (sep > 0 && t.substring(sep + 1) == ref) matches++;
+    }
+    return matches == 1;
+  }
+
+  // §104 (контракт 1.1.107) — то же в под-правилах логического правила.
+  return cleanRuleSetRefsDeep(rule, isLive);
 }
 
 /// §061 + §033: разрешает текущий список DNS-правил из storage.

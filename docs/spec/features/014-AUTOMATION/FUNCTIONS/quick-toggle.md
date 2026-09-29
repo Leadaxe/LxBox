@@ -1,6 +1,8 @@
 [English](quick-toggle.md) · [Русский](quick-toggle.ru.md)
 
-# Quick toggle
+# Quick toggle — one-touch VPN from the Quick Settings tile and icon menu
+
+These entry points work without enabling automation.
 
 | Field | Value |
 |-------|-------|

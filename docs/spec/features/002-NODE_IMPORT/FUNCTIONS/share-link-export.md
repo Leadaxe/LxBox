@@ -1,6 +1,9 @@
 [English](share-link-export.md) · [Русский](share-link-export.ru.md)
 
-# Export to a share link
+# Export to a share link — copying a node as a link for another device or client
+
+Any node can be turned back into a share link of its scheme; a link that carries a private key is
+copied only after confirmation.
 
 | Field | Value |
 |------|----------|
@@ -45,9 +48,9 @@ be built.
   (WireGuard with several `peers`) yields an empty link, not a link to the
   first peer. Copying an empty link does nothing.
 - **Private key.** If the body has a field with the `private_key` role per the registry
-  (WireGuard/AWG, SSH with a key, MASQUE), a confirmation "Link contains a private key"
-  with the buttons "Cancel" and "Copy
-  anyway" is asked before copying. Cancel does not touch the clipboard. The key is not cut from the link — otherwise
+  (WireGuard/AWG, SSH with a key, MASQUE), the app asks for confirmation before copying:
+  "Link contains a private key" with the buttons "Cancel" and "Copy anyway".
+  Cancel does not touch the clipboard. The key is not cut from the link — otherwise
   the own link would stop restoring the node. A VLESS UUID and an SSH password
   do not count as a key.
 - After copying — "URI copied"; node not found — "No source URI for this

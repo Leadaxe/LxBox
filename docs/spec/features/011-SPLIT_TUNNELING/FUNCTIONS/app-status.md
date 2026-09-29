@@ -1,6 +1,9 @@
 [English](app-status.md) · [Русский](app-status.ru.md)
 
-# App status: name, icon, "uninstalled"
+# App status — name, icon and an honest "uninstalled" label
+
+Each row of the app list shows which app the package belongs to and whether it
+is still installed.
 
 | Field | Value |
 |-------|-------|

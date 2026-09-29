@@ -1,6 +1,9 @@
 [English](automation-plugin.md) · [Русский](automation-plugin.ru.md)
 
-# Automation plugin
+# Automation plugin — Tasker and Locale actions and conditions
+
+The plugin obeys the same "Accept automation commands" toggle as direct
+commands.
 
 | Field | Value |
 |-------|-------|

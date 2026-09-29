@@ -1,6 +1,8 @@
 [English](outbound-events.md) · [Русский](outbound-events.ru.md)
 
-# Outbound events
+# Outbound events — broadcasts about the tunnel, nodes and subscriptions
+
+Each event category is off until the user enables it.
 
 | Field | Value |
 |-------|-------|
@@ -54,6 +56,9 @@ subscription update results; the update check; command failures.
 - A stop on error yields the pair `VPN_ERROR(tunnel_error)` +
   `VPN_DISCONNECTED(error)`; a slot takeover — `VPN_REVOKED` +
   `VPN_DISCONNECTED(revoked)`; a normal stop — `VPN_DISCONNECTED(user)`.
+- `message` of `VPN_ERROR(tunnel_error)` is the raw core error text, not
+  masked: the automation app gets what the log gets (owner's decision
+  2026-09-29).
 - Request-response: a command's success arrives in State
   (`ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE` / `ACTIVE_GROUP_CHANGED`), a
   failure — `VPN_ERROR` in Lifecycle. The settings explicitly suggest enabling
@@ -62,7 +67,8 @@ subscription update results; the update check; command failures.
   the same one.
 - `old_tag` / `old_group` are absent if there is no previous value (the first
   switch after launch); empty values are not sent.
-- `reason` for a node and group change is currently always `user`.
+- `reason` for a node and group change is always `user`; `urltest` /
+  `automation` from `047F` are not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
 - `SUB_REFRESH_FAILED` — no more than once a minute per subscription; other
   events have no rate limit.
 - `sub_id` — the masked subscription address, without the token; the

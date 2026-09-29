@@ -1,0 +1,12 @@
+{
+  "dropped": [
+    {
+      "code": "field_missing",
+      "index": 0,
+      "reason": "parse_error",
+      "ref": "vless://"
+    }
+  ],
+  "nodes": [],
+  "v": 1
+}

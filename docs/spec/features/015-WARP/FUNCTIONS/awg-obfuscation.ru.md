@@ -1,6 +1,8 @@
 [English](awg-obfuscation.md) · [Русский](awg-obfuscation.ru.md)
 
-# Обфускация AmneziaWG
+# Обфускация AmneziaWG — скрытие WireGuard WARP от DPI
+
+Обфускация — настройка на стороне клиента и не требует новой регистрации.
 
 | Поле | Значение |
 |------|----------|

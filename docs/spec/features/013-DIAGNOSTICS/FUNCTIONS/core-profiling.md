@@ -1,6 +1,8 @@
 [English](core-profiling.md) · [Русский](core-profiling.ru.md)
 
-# Core profiling
+# Core profiling — pprof snapshots of the live sing-box core
+
+Snapshots are taken only while the tunnel is up.
 
 | Field | Value |
 |-------|-------|

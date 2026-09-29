@@ -1,6 +1,10 @@
 [English](resolvers-and-strategy.md) · [Русский](resolvers-and-strategy.ru.md)
 
-# Default resolvers and strategy
+# Default resolvers and strategy — dns.final, the core resolver and IPv4/IPv6 preference
+
+Three global settings decide where unmatched app queries go, which server the core itself uses for
+node and rule domains, and which IP version is preferred; the build heals references to vanished
+servers.
 
 | Field | Value |
 |------|----------|

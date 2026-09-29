@@ -1,6 +1,9 @@
 [English](json-and-schema.md) · [Русский](json-and-schema.ru.md)
 
-# JSON and protocol schema
+# JSON and protocol schema — viewing and hand-editing the sing-box body
+
+The JSON tab shows the sing-box body the core will receive; hand edits go
+through the Source tab, and the schema-aware editor is only partly built.
 
 | Field | Value |
 |------|----------|
@@ -15,7 +18,7 @@ Knowledge about protocol fields (which exist, of what type, what is allowed)
 lives in the contract registry with the core; today the editor **does not
 use** this knowledge — it only highlights JSON syntax. What is written is
 checked by the core on save ([source-editing.md](source-editing.md)) and by
-parse warnings (002).
+parse warnings ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
 
 ## Parameters
 
@@ -53,7 +56,7 @@ The function has no settings of its own.
   Any future schema-based node form must merge the field into the existing
   `tls`, not replace the object.
 - A node from a link, rebuilt by the model, carries over as is the TLS fields
-  the model does not reason about (parsing — 002).
+  the model does not reason about (parsing — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
 
 ## What is not done (the §554F direction)
 
@@ -74,7 +77,8 @@ The place of the schema-based editor in navigation is not decided.
 ## Boundaries
 
 - The field schema, warning codes and texts — the contract registry
-  ([021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.md), parsing — 002).
+  ([021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.md), parsing —
+  [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
 - The whole resulting config — [019-CONFIG_EDITOR](../../019-CONFIG_EDITOR/FEATURE.md).
 - DPI bypass settings (fragmentation, ECH) — [016-DPI_HARDENING](../../016-DPI_HARDENING/FEATURE.md).
 

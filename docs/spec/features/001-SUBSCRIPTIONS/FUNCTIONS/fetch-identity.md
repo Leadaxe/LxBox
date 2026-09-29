@@ -1,6 +1,9 @@
 [English](fetch-identity.md) · [Русский](fetch-identity.ru.md)
 
-# Subscription request identity
+# Subscription request identity — User-Agent and HWID headers for provider panels
+
+Sets the User-Agent and HWID headers the app sends with a subscription request, globally or per
+subscription.
 
 | Field | Value |
 |------|----------|

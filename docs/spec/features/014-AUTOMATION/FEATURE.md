@@ -1,9 +1,15 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 014 — AUTOMATION — controlling the app from outside
+# Automation — Quick Settings tile, Tasker commands and VPN events
+
+LxBox can start and stop the VPN without opening the app: from a Quick
+Settings tile, the app icon menu, or Tasker and MacroDroid commands. It also
+broadcasts events about the tunnel, nodes and subscriptions; command intake
+and events stay off until the user enables them.
 
 | Field | Value |
 |-------|-------|
+| Feature | 014-AUTOMATION |
 | Type | Product feature |
 | Absorbed | `§032F` `§047F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -57,21 +63,21 @@ The feature protects three principles:
 - **P6. Command preconditions are checked before the action.** An empty
   `tag`/`group` → `bad_request`; no group selected, the tunnel down or the app
   not ready → `conflict`; a non-existent group → `not_found` and no
-  `ACTIVE_GROUP_CHANGED`. **Witness:** units "пустой tag → BadRequest", "без
-  home → Conflict", "группа выбрана, туннель опущен → Conflict",
-  "несуществующая группа → NotFound (без ложного события)". **Mutation:**
-  `SET_GROUP` on a non-existent group emits a group change.
+  `ACTIVE_GROUP_CHANGED`. **Witness:** units "empty tag → BadRequest", "no
+  home → Conflict", "group selected, tunnel down → Conflict", "non-existent
+  group → NotFound (no false event)". **Mutation:** `SET_GROUP` on a
+  non-existent group emits a group change.
 - **P7. A command failure answers with an event, without leaks.** A command
   refusal yields `VPN_ERROR` with `code`/`message`; an internal error is
   returned as `error`/`internal error`, details go only to the log.
-  **Witness:** units "DebugError → его code/message", "произвольное исключение
-  → generic (детали не утекают)". **Mutation:** the exception text goes into
+  **Witness:** units "DebugError → its code/message", "arbitrary exception →
+  generic (details do not leak)". **Mutation:** the exception text goes into
   `message`.
 - **P8. Re-selecting the active node is a confirmation, not a switch.**
   `SWITCH_NODE` on the already active node does not drop connections and
-  answers `NODE_ALREADY_ACTIVE`. **Witness:** unit "switchNode на уже активную
-  ноду — no-op + NODE_ALREADY_ACTIVE". **Mutation:** re-selecting the node
-  again.
+  answers `NODE_ALREADY_ACTIVE`. **Witness:** unit "switchNode on the already
+  active node — no-op + NODE_ALREADY_ACTIVE". **Mutation:** re-selecting the
+  node again.
 - **P9. Events go out only for enabled categories.** Lifecycle, State,
   Subscription, Health are enabled independently; all are off by default.
   **Witness:** units "all OFF — emit no-op", "lifecycle gate independent of
@@ -84,8 +90,8 @@ The feature protects three principles:
   subscriptions.
 - **P11. "Stop" from outside is final.** Stopping from the tile, the icon
   menu, a command or the plugin shuts down the running node safeguard cycle —
-  the tunnel does not come back up. **Witness:** unit "нативный Stop
-  (vpn-stop-requested) в фазе checking → старта нет". **Mutation:** the
+  the tunnel does not come back up. **Witness:** unit "native Stop
+  (vpn-stop-requested) in the checking phase → no start". **Mutation:** the
   external stop is not reported to the app.
 - **P12. An automation condition answers right away.** The checks "VPN is
   up", "Active node =", "Active group =" answer without launching the UI; no
@@ -158,8 +164,12 @@ tile touch / menu item / command / plugin
   Health category exists in the settings but sends nothing.
 - Commands other than start/stop/toggle, and all events, require a live app;
   with the UI unloaded the command is skipped without an answer.
+- `ACTIVE_NODE_CHANGED` comes only on an explicit node choice, `reason` is
+  always `user`; changes by auto-select and automation with `reason` `urltest` /
+  `automation` (`047F`) are not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
 - The service notification with Stop / Reconnect buttons — 010-VPN_SERVICE.
-- Remote control over HTTP with a token — Debug API, 013-DIAGNOSTICS.
+- Remote control over HTTP with a token — Debug API,
+  [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 - **Depends on OS capabilities:** the shade tile, the dynamic icon menu, the
   system request to add the tile (Android 13+), the one-time VPN permission
   dialog, delivery of broadcast commands and events, firmwares that forbid
@@ -171,15 +181,19 @@ tile touch / menu item / command / plugin
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Quick toggle | Shade tile and icon menu: one touch turns the tunnel on/off | P1–P4, P11 | [quick-toggle.md](FUNCTIONS/quick-toggle.md) |
-| Command intake | Public `com.leadaxe.lxbox.*` commands: main toggle, preconditions, answer on failure | P5–P8, P11 | [command-intake.md](FUNCTIONS/command-intake.md) |
-| Outbound events | `com.leadaxe.lxbox.event.*` events by category, rate limiting, request-response | P7–P10, P13 | [outbound-events.md](FUNCTIONS/outbound-events.md) |
-| Automation plugin | Actions and conditions per the Locale/Tasker standard with node and group selection | P5, P12 | [automation-plugin.md](FUNCTIONS/automation-plugin.md) |
+| Quick toggle | Turns the tunnel on or off with one touch from the Quick Settings tile or the app icon menu; both show the current state. | P1–P4, P11 | [quick-toggle.md](FUNCTIONS/quick-toggle.md) |
+| Command intake | Executes public `com.leadaxe.lxbox.*` commands behind one main toggle, checks preconditions and answers a failure with an error event. | P5–P8, P11 | [command-intake.md](FUNCTIONS/command-intake.md) |
+| Outbound events | Sends `com.leadaxe.lxbox.event.*` broadcasts for enabled categories with rate limiting, and confirms or rejects commands in request-response scenarios. | P7–P10, P13 | [outbound-events.md](FUNCTIONS/outbound-events.md) |
+| Automation plugin | Adds LxBox actions and conditions to Tasker-compatible apps, with node and group pick lists and condition answers without starting the UI. | P5, P12 | [automation-plugin.md](FUNCTIONS/automation-plugin.md) |
 
 ## Related features
 
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that external start/stop drives directly; owns the service notification with Stop / Reconnect.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the Debug API, whose handlers and error codes the commands reuse; remote control over HTTP.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
+  external start/stop drives directly; owns the service notification with Stop
+  / Reconnect.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API, whose
+  handlers and error codes the commands reuse; remote control over HTTP
+  ([automation-recipes](../027-DEBUG_API/FUNCTIONS/automation-recipes.md)).
 
 ## Maintenance notes
 

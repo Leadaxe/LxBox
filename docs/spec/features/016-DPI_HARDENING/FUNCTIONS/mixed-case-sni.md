@@ -1,6 +1,9 @@
 [English](mixed-case-sni.md) · [Русский](mixed-case-sni.ru.md)
 
-# Mixed-case SNI
+# Mixed-case SNI — random letter case in the server name against exact-match DPI
+
+With one checkbox LxBox writes the TLS server name of each direct node in random
+letter case, which servers accept and exact-match DPI filters miss.
 
 | Field | Value |
 |-------|-------|

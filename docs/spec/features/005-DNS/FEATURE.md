@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 005 — DNS — servers, rules, strategy, groups, FakeIP, cache
+# DNS — encrypted DNS servers, DNS rules, failover groups, FakeIP and cache
+
+LxBox manages the DNS section of the sing-box config: which servers resolve names, over which
+channel, in which order and with what fallback. Out of the box, queries go to `dns_shield`, a race
+of encrypted DoH and DoT providers, and Russian domains get their own `dns_ru` group. Without
+writing JSON you can add servers of any core type, DNS rules, failover groups, FakeIP and cache
+settings; a DNS setup the core would reject is never built, and a server that loses its channel
+refuses queries instead of leaking them to a direct resolver.
 
 | Field | Value |
 |------|----------|
+| Feature | 005-DNS |
 | Type | Product feature |
 | Absorbed | `§014F` (DNS Settings screen), `§117F` (DNS rework: server variables, DNS on a rule, server editor, lifecycle), `§312F` (DNS groups) |
 | State | ✅ written from code, 2026-09-28 |
@@ -17,10 +25,10 @@ without hand-written JSON: a server catalog with channel selection, custom
 servers of any core type, DNS rules, strategy, groups with failover,
 FakeIP, cache.
 
-The principle the feature protects: **a config built from the DNS settings
-is either accepted by the core or not built at all — with a clear reason.**
-The second one is **fail-closed**: a server dropped because of its channel —
-its domains get a refusal instead of leaking to a direct resolver.
+The feature protects two principles. First, **a config built from the DNS
+settings is either accepted by the core or not built at all — with a clear
+reason.** Second, **fail-closed**: when a server is dropped because of its
+channel, its domains are refused instead of leaking to a direct resolver.
 
 DNS works out of the box without configuration: `dns.final` and the core
 resolver are the `dns_shield` group (a race of encrypted providers); Russian
@@ -40,8 +48,10 @@ domains (with the `ru-direct` preset, enabled by default) get their own
   `action: reject`; `dns.final` pointing to it is removed and
   `{"action":"reject"}` is added as the last rule; resolvers
   (`route.default_domain_resolver`, `domain_resolver` of nodes and servers)
-  switch to the template default. The user's choice in storage is not
-  touched. **Witness:** units "detour to a vanished Direction → server not
+  switch to the template default. The build does not touch the user's choice
+  in storage; only deleting or disabling the Direction itself heals it, by
+  rewriting the channel to `vpn-1` (owner's decision 2026-09-29, §441).
+  **Witness:** units "detour to a vanished Direction → server not
   emitted, warning", "rules → reject, final removed + reject stub, resolvers —
   template default". **Mutation:** remove only the `detour` key, keeping the
   server (queries go direct).
@@ -151,7 +161,7 @@ domains (with the `ru-direct` preset, enabled by default) get their own
 | Keep DNS cache after restart | on/off | on | `experimental.cache_file.store_dns` |
 | Clear DNS cache | action | — | deletes `cache.db` |
 
-Adjacent knobs of other features: "Hijack DNS", "Resolve destination IP"
+Related settings of other features: "Hijack DNS", "Resolve destination IP"
 (the Traffic Processing preset, [004-ROUTING](../004-ROUTING/FEATURE.md)),
 DNS on a preset (`dns_enable`) and on a rule, the IPv6 toggle (it changes
 Strategy).
@@ -225,16 +235,19 @@ template (servers, presets)   user records   routing rules
 - Routing rules, presets as such, Hijack DNS, "Resolve destination IP", the
   DNS option in the rule editor — [004-ROUTING](../004-ROUTING/FEATURE.md);
   here — only their DNS trace.
-- The core's DNS query stream (`subscribeDNSQueries`), the group trace in the
-  profiler, the "DNS failing en masse while the link is alive" detector —
-  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) and
-  [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md); the Debug API
-  `/settings/dns_options/*` — there too.
+- The core's DNS query stream (`subscribeDNSQueries`) —
+  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md); the group trace in the
+  profiler and the "DNS failing en masse while the link is alive" detector —
+  [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FUNCTIONS/dns-trace.md); the
+  Debug API `/settings/dns_options/*` —
+  [027-DEBUG_API](../027-DEBUG_API/FUNCTIONS/write-operations.md).
 - Carrying DNS records in a backup and merging — [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).
 - Tailscale nodes and their preset — not here; the feature only provides
-  the `tailscale` server type in the form.
+  the `tailscale` server type in the form. In detail —
+  [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - There are no regional DNS sets: `ru-direct` is enabled by default for
-  everyone, the usage region does not affect DNS.
+  everyone, the usage region does not affect DNS. Regional DNS presets
+  (`014F`) are not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
 - There is no one-off "test DNS servers" button and there will not be one
   (§365).
 - Deleting `cache.db` and reloading the core depend on OS capabilities.
@@ -243,29 +256,34 @@ template (servers, presets)   user records   routing rules
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| DNS server catalog | Template, preset and custom servers; form by type, channel, name resolver, rename, override | P1 P2 P3 P4 P10 | [dns-servers.md](FUNCTIONS/dns-servers.md) |
-| DNS groups | `group` server with `stable`/`fastest`/`parallel` modes, member filter, live state | P5 P6 P15 | [dns-groups.md](FUNCTIONS/dns-groups.md) |
-| DNS rules | Custom, template, by rule-set, mirrors of presets and routing rules; order | P4 P9 P11 | [dns-rules.md](FUNCTIONS/dns-rules.md) |
-| Resolvers and strategy | `dns.final`, core resolver, IP strategy, healing broken references | P6 P7 P8 | [resolvers-and-strategy.md](FUNCTIONS/resolvers-and-strategy.md) |
-| Built-in DNS sets | `dns_shield` by default, `dns_ru` and Force IPv4 in `ru-direct` | P16 P17 | [builtin-dns-sets.md](FUNCTIONS/builtin-dns-sets.md) |
-| FakeIP | Preset that hands out substitute addresses | P6 P11 P12 | [fakeip.md](FUNCTIONS/fakeip.md) |
-| DNS cache | Size, stale answers, persistence, reset | P13 P14 | [dns-cache.md](FUNCTIONS/dns-cache.md) |
+| DNS server catalog | Lists template, preset and custom DNS servers with a form by type, channel choice, name resolver, safe rename and override. | P1 P2 P3 P4 P10 | [dns-servers.md](FUNCTIONS/dns-servers.md) |
+| DNS groups | Combines servers into a `group` with `stable`/`fastest`/`parallel` mode, filters out unavailable members and shows live state. | P5 P6 P15 | [dns-groups.md](FUNCTIONS/dns-groups.md) |
+| DNS rules | Builds one ordered `dns.rules` list from custom, template and rule set rules plus mirrors of presets and routing rules. | P4 P9 P11 | [dns-rules.md](FUNCTIONS/dns-rules.md) |
+| Default resolvers and strategy | Sets `dns.final`, the core resolver and the IP strategy, and heals references to vanished servers. | P6 P7 P8 | [resolvers-and-strategy.md](FUNCTIONS/resolvers-and-strategy.md) |
+| Built-in DNS sets | Provides the encrypted `dns_shield` group by default and the `dns_ru` group with Force IPv4 in the `ru-direct` preset. | P16 P17 | [builtin-dns-sets.md](FUNCTIONS/builtin-dns-sets.md) |
+| FakeIP | Answers name queries with substitute addresses from a reserved pool and turns off destination IP resolving. | P6 P11 P12 | [fakeip.md](FUNCTIONS/fakeip.md) |
+| DNS cache | Sets cache size, stale answers and persistence across restarts, and clears the whole cache on request. | P13 P14 | [dns-cache.md](FUNCTIONS/dns-cache.md) |
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the DNS section is assembled, variables resolved and the "Settings changed" banner shown by the general config build.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — presets, routing rules with a DNS option, Hijack DNS and "Resolve destination IP" leave their DNS trace here.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the DNS section is assembled, variables
+  resolved and the "Settings changed" banner shown by the general config build.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — presets, routing rules with a DNS option, Hijack DNS
+  and "Resolve destination IP" leave their DNS trace here.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — the core's DNS query stream and group trace live there.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the mass DNS failure detector, the Debug API `/settings/dns_options/*`, core cache reset on a failure.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — core cache reset on a failure.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — DNS records are carried and merged in a backup.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API `/settings/dns_options/*` routes.
+- [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.md) — the DNS query trace, the group trace and the mass DNS failure detector.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — Tailscale nodes, the MagicDNS server per node and the tailnet DNS preset.
 
 ## Maintenance notes
 
-- A template server's tag lives inside the wrapper's `server.tag`; change the
-  wrapper format without the build — and all template servers silently
-  disappear (§117 task 1).
-- An empty group must not be "healed" by throwing it out — the user will not
-  see that the choice died; only a group emptied because of its channel is
+- A template server's tag lives inside the wrapper's `server.tag`; changing the
+  wrapper format without updating the build makes all template servers
+  silently disappear (§117 task 1).
+- An empty group must not be "healed" by throwing it out — the user would not
+  see that their choice stopped working; only a group emptied because of its channel is
   thrown out (P2).
 - The core treats `detour` on a group and on `tailscale` as an extra key and
   crashes; it is cleaned at build time, not only in the form, because old

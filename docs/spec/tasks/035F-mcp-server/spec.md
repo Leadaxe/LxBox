@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | 🚫 Отменено (не актуально) — не реализуется |
 | Дата | 2026-04-23 |
-| Зависимости | [`031 debug api`](../031F-debug-api/spec.md), [`docs/api/clash-api-reference.md`](../../../api/clash-api-reference.md) |
+| Зависимости | [`031 debug api`](../031F-debug-api/spec.md), `docs/api/clash-api-reference.md` (удалён 2026-09-29 вместе с Clash API, §122) |
 | Лэндинг | ~~v1.5.0 (отдельный artifact, не Flutter-app)~~ — не выпускается |
 
 > **Отменено.** MCP-обёртка над Debug API признана неактуальной и снята из плана.

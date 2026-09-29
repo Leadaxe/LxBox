@@ -1,0 +1,12 @@
+{
+  "dropped": [
+    {
+      "code": "field_missing",
+      "index": 0,
+      "reason": "parse_error",
+      "ref": "socks5://user:pass@:1080"
+    }
+  ],
+  "nodes": [],
+  "v": 1
+}

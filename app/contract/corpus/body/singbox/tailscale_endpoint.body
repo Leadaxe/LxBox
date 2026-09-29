@@ -1,0 +1,14 @@
+# sing-box: endpoint типа tailscale БЕЗ адреса (NODE_SECTIONS.md §2).
+# У tailnet-узла нет ни server, ни server_port — адрес даёт сама сеть, — и
+# сторона обязана принять запись такой: узел со scheme tailscale, kind endpoint
+# (contract/registry/protocols/tailscale.json).
+#
+# В entry НЕТ state_directory: путь каталога состояния локален для машины и
+# подставляется ПРИ ЭМИССИИ, а в хранимое тело не пишется. Появление его
+# в ожидании означало бы, что путь чужой машины уехал в контракт.
+#
+# В ожидании НЕТ sections: секции узла упразднены (контракт 1.1.85), и
+# связку tailnet (MagicDNS, маршрут) узел не несёт — её даёт пресет шаблона.
+# Сторона, которая по-прежнему подставляет связку узлу, отдаст `sections` и
+# на кейсе упадёт.
+{"endpoints":[{"type":"tailscale","tag":"ts-home","exit_node":"exit-1","accept_routes":true}]}

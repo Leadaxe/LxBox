@@ -1,6 +1,9 @@
 [English](auto-update.md) · [Русский](auto-update.ru.md)
 
-# Subscription auto-update
+# Subscription auto-update — refreshing subscriptions on a schedule and on events
+
+Subscriptions are refreshed on app start, return from background, VPN connect and stop, and an
+hourly tick, within each subscription's interval and the anti-spam limits.
 
 | Field | Value |
 |------|----------|

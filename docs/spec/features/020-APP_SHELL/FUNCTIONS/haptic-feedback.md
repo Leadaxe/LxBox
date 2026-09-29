@@ -1,6 +1,9 @@
 [English](haptic-feedback.md) · [Русский](haptic-feedback.ru.md)
 
-# Haptic feedback
+# Haptic feedback — vibration on tunnel and subscription events
+
+LxBox vibrates on significant tunnel and subscription events, so the user can
+tell whether the VPN connected without looking at the screen.
 
 | Field | Value |
 |-------|-------|

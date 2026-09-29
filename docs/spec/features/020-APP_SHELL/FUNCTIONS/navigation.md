@@ -1,6 +1,9 @@
 [English](navigation.md) · [Русский](navigation.ru.md)
 
-# Navigation and exit
+# Navigation and exit — side menu, About screen and double back to exit
+
+Every LxBox screen is reached from the home screen and its side menu; on the
+home screen the app closes only on a second "back" press within 2 seconds.
 
 | Field | Value |
 |-------|-------|

@@ -1,6 +1,10 @@
 [English](support-feed.md) · [Русский](support-feed.ru.md)
 
-# Support feed
+# Support feed — the author's messages for active VPN users
+
+LxBox shows the author's full-screen messages (support requests, news, tips) one
+at a time and only to people who actively use the VPN; the author changes them
+without an app release.
 
 | Field | Value |
 |-------|-------|

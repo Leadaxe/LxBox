@@ -1,8 +1,12 @@
 [English](README.md) · [Русский](README.ru.md)
 
-# FEATURES — L×Box features
+# L×Box features — what the Android VPN client can do
 
-A feature catalog modeled on the core's Spec Kit
+L×Box is an Android VPN client built on the sing-box-lx core. This catalogue
+lists every capability of the app — subscriptions and node import, routing and
+DNS, hop chains, split tunneling, Cloudflare WARP, DPI bypass, diagnostics,
+backup — as black-box specifications: what each feature promises, how it is
+controlled and where it stops. The structure follows the core's Spec Kit
 ([sing-box-lx/SPECS/FEATURES](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS/FEATURES)).
 
 A feature describes **the current state** of a whole domain area as a
@@ -52,15 +56,22 @@ a screen. One task may be listed as a revision of several functions.
 | [009-NODE_HEALTH](009-NODE_HEALTH/FEATURE.md) | Ping and URLTest, node diagnostics, auto-disabling core-rejected nodes, speed test | 008 015 392 478 | ✅ 2026-09-28 |
 | [010-VPN_SERVICE](010-VPN_SERVICE/FEATURE.md) | Tunnel: start/stop, VPN/Proxy modes, auto-start, watchdog, background sleep, idle-suspend, reaction to network changes | 012 042 119 124 128 | ✅ 2026-09-28 |
 | [011-SPLIT_TUNNELING](011-SPLIT_TUNNELING/FEATURE.md) | Which apps go through the tunnel and which bypass it | 046 | ✅ 2026-09-28 |
-| [012-LIVE_STATE](012-LIVE_STATE/FEATURE.md) | Live core state: status, connections, statistics, per-app traffic | 016 044 122 123 | ✅ 2026-09-28 |
-| [013-DIAGNOSTICS](013-DIAGNOSTICS/FEATURE.md) | Diagnostics: app log, core log, crash report, Debug API, live events | 023 031 038 043 | ✅ 2026-09-28 |
+| [012-LIVE_STATE](012-LIVE_STATE/FEATURE.md) | Live core state: status, connections, statistics, per-app traffic | 016 122 123 | ✅ 2026-09-28 |
+| [013-DIAGNOSTICS](013-DIAGNOSTICS/FEATURE.md) | Diagnostics: app log, core log, crash report, Debug API, live events | 023 038 043 | ✅ 2026-09-28 |
 | [014-AUTOMATION](014-AUTOMATION/FEATURE.md) | External control: quick connect, public Intent API, integration with automation apps | 032 047 | ✅ 2026-09-28 |
 | [015-WARP](015-WARP/FEATURE.md) | Cloudflare WARP: one-tap registration, MASQUE transport | 025 130 | ✅ 2026-09-28 |
 | [016-DPI_HARDENING](016-DPI_HARDENING/FEATURE.md) | DPI circumvention: TLS fragmentation, SNI obfuscation, ECH, XHTTP parameters | 020 028 045 127 | ✅ 2026-09-28 |
 | [017-BACKUP_AND_STORAGE](017-BACKUP_AND_STORAGE/FEATURE.md) | Backup and restore, storage contract, migrations | 040 439 | ✅ 2026-09-29 |
 | [018-WORKSPACES](018-WORKSPACES/FEATURE.md) | Named settings sets | 417 | ✅ 2026-09-28 |
 | [019-CONFIG_EDITOR](019-CONFIG_EDITOR/FEATURE.md) | Viewing and editing the final config | 007 | ✅ 2026-09-28 |
-| [020-APP_SHELL](020-APP_SHELL/FEATURE.md) | App shell: settings, theme, haptic feedback, icon, localization, first launch, support, update check | 009 022 029 034 036 105 126 279 | ✅ 2026-09-28 |
+| [020-APP_SHELL](020-APP_SHELL/FEATURE.md) | App shell: settings, theme, haptic feedback, icon, localization, first launch, support, update check | 009 022 029 034 036 105 126 | ✅ 2026-09-28 |
+| [024-TEMPLATE](024-TEMPLATE/FEATURE.md) | The config template, its language (`#if`, `for_each`, `#tpl`, typed variables) and the preset language; how the client is extended through the template | 120 (functions) 033 (language) | ✅ 2026-09-29 |
+| [025-CONTRACT_REGISTRY](025-CONTRACT_REGISTRY/FEATURE.md) | The contract registry: protocol schemas, the mapper → sanitizer → model pipeline, the build gate for the pinned core, warning codes, sync and guards | 460 472 480 (registry parts) | ✅ 2026-09-29 |
+| [026-DIRECTIONS](026-DIRECTIONS/FEATURE.md) | Directions — the routing targets `vpn-N`, `direct-out`, `block`: model, groups in the config, selection, detour role, health | 125 248 393 (direction parts) | ✅ 2026-09-29 |
+| [027-DEBUG_API](027-DEBUG_API/FEATURE.md) | Debug API — the local HTTP control surface: access and security, route map, `/help`, write operations, automation recipes | 031 | ✅ 2026-09-29 |
+| [028-TRAFFIC_PROFILER](028-TRAFFIC_PROFILER/FEATURE.md) | Traffic profiler — per-app connection log, attribution, filters and views, DNS trace | 044 | ✅ 2026-09-29 |
+| [029-LOCALIZATION](029-LOCALIZATION/FEATURE.md) | Localization — languages, the English-as-key model, translation workflow, native and core strings | 279 | ✅ 2026-09-29 |
+| [030-TAILSCALE](030-TAILSCALE/FEATURE.md) | Tailscale — the phone as a node of your tailnet: node, device identity and state, tailnet DNS and routes, Network tab | 435 (former feature) | ✅ 2026-09-29 |
 
 ## Process
 

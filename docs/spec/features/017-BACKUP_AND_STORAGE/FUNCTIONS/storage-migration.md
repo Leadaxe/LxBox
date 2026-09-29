@@ -1,6 +1,10 @@
 [English](storage-migration.md) · [Русский](storage-migration.ru.md)
 
-# Storage migration
+# Storage migration — a one-time upgrade of settings from the 2.23.2 form
+
+On the first launch of v2.24.0 or later, LxBox converts old-form settings to
+storage contract 1.0 once, keeps the original as a copy and builds the same
+config as before.
 
 | Field | Value |
 |-------|-------|

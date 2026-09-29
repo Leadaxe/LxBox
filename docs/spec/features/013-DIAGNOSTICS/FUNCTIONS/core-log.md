@@ -1,6 +1,8 @@
 [English](core-log.md) · [Русский](core-log.ru.md)
 
-# Core log
+# Core log — the sing-box log inside the app, without adb
+
+Forwarding is off by default and takes effect only after a process restart.
 
 | Field | Value |
 |-------|-------|

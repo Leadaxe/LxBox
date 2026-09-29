@@ -1,6 +1,9 @@
 [English](config-validation.md) · [Русский](config-validation.ru.md)
 
-# Final config check
+# Final config check — stopping configs the core would refuse to start
+
+Before saving, the built config is checked for dangling references, empty groups and detour rings; a
+config that fails is neither written to disk nor passed to the core.
 
 | Field | Value |
 |------|----------|
@@ -44,7 +47,7 @@ last build error.
 ## Rules and invariants
 
 - A fatal config is not saved: the previous config stays on disk and in the core,
-  the "config is stale" flag stays raised, the blue banner is lit.
+  the "config is stale" flag stays set, the blue banner is shown.
 - What the user sees:
   - a detour ring — a sheet with the list of culprit nodes (no more than three
     are shown: fix the first ones and rebuild); a tap on a culprit opens
@@ -52,7 +55,7 @@ last build error.
   - other fatals — the snackbar "Config rebuild failed: <reasons>" on a build triggered by a
     user action; on a silent build (background, launch) there is no snackbar;
   - Start with other fatals proceeds to start on the previously saved
-    config (the snackbar is shown, the banner is lit).
+    config (the snackbar is shown, the banner stays).
 - The ring culprits are the minimal set of edges whose removal breaks
   the ring; structural "group → member" edges are never culprits.
 - The check works only on a built config: JSON written by hand

@@ -1,9 +1,13 @@
 [English](recovery.md) · [Русский](recovery.ru.md)
 
-# Tunnel recovery
+# Tunnel recovery — coming back after process death and core crashes
+
+The tunnel restarts after the app process dies, the next start clears caches
+after a core crash, and the app stops showing "Connected" when the core no
+longer answers.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P12, P13, P14 |
 | State | ✅ written from code, 2026-09-28 |
@@ -64,7 +68,8 @@ responding".
 
 - An active watchdog based on URL tests and absence of traffic (§042F) —
   rejected, won't-fix; escalating "healing after sleep" (§088) — postponed.
-- The "core crashed" banner and the crash report — 013-DIAGNOSTICS.
+- The "core crashed" banner and the crash report —
+  [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FEATURE.md).
 - Depends on OS capabilities: the system restarting the service, delivery of
   the postponed alarm, aggressive background cleanup by the firmware.
 

@@ -1,6 +1,9 @@
 [English](node-settings.md) · [Русский](node-settings.ru.md)
 
-# Настройки узла
+# Настройки узла — тег, detour и пресеты своего узла
+
+Экран узла показывает протокол и адрес своего сервера и позволяет сменить
+тег, detour-сервер, участие в пресетах и источник.
 
 | Поле | Значение |
 |------|----------|
@@ -24,7 +27,7 @@
 | Source | текст источника, редактируемый; подпись о виде источника |
 | JSON | тело, которое получит ядро, только чтение, подсветка; Copy JSON; Edit JSON |
 | Network | только у узла Tailscale — устройства tailnet, выбор Exit node |
-| Diagnostics | диагностика и уведомления узла (009); метка на ярлыке при предупреждениях |
+| Diagnostics | диагностика и уведомления узла ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.ru.md)); метка на ярлыке при предупреждениях |
 
 - **Protocol**: протокол узла; у AmneziaWG — «AmneziaWG (wireguard)».
 - **Server**: `host:port`; у Tailscale — «No address (Tailscale)», у безадресного
@@ -62,9 +65,11 @@
 
 - Узел подписки открывает не этот экран, а осмотр только для чтения —
   [subscription-node.md](subscription-node.ru.md).
-- Экран «View details» узла в собранном конфиге (цепочка, зависимые) — 007/006.
+- Экран «View details» узла в собранном конфиге (цепочка, зависимые) —
+  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.ru.md)/[006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
 - Вкладка Diagnostics — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.ru.md).
-- Переименование, удаление, перенос в папку записи — 007 и
+- Переименование, удаление, перенос в папку записи —
+  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.ru.md) и
   [delete-and-duplicate.md](delete-and-duplicate.ru.md).
 
 ## Ревизии

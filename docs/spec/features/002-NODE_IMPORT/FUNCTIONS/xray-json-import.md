@@ -1,6 +1,9 @@
 [English](xray-json-import.md) · [Русский](xray-json-import.ru.md)
 
-# Xray JSON import
+# Xray JSON import — nodes, balancer groups and chains from Xray configs
+
+Xray configs from panel subscriptions, in any of four JSON forms, become sing-box nodes, auto-select
+groups and `detour` chains.
 
 | Field | Value |
 |------|----------|
@@ -54,7 +57,7 @@ with neighbouring sections.
   `dialer_proxy_unusable`.
 - **`finalmask.tcp` with `type: fragment`** → `tls.fragment`.
 - **Rejecting an entry:** an unsupported `protocol` → `protocol_unsupported`
-  in the rejects (the element neighbour is clean); a `network` the core does not have, and
+  in the rejects (neighbouring elements are unaffected); a `network` the core does not have, and
   header obfuscation `header.type: http` → no node, the code is named.
 - Unknown keys inside declared containers → an info code with the full path;
   the `sockopt` subtree stays silent.
@@ -64,7 +67,8 @@ with neighbouring sections.
 
 - Xray routing, DNS, `inbounds` are not carried over.
 - Dedup does not cross subscription boundaries.
-- Balancer strategies and their translation into group modes — [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
+- Balancer strategies and their translation into group modes —
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 
 ## Revisions
 

@@ -47,6 +47,41 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 
 ## Возможности
 
+Каждая возможность ниже описана как спецификация «чёрного ящика» в
+**[каталоге фич](docs/spec/features/README.ru.md)**: что она обещает
+пользователю, что принимает и отдаёт, где заканчивается. За точным
+поведением — туда; разделы ниже — обзор.
+
+| Область | Спецификация |
+|---------|--------------|
+| Подписки, файловые и вставленные источники, автообновление, отключение узлов | [001-SUBSCRIPTIONS](docs/spec/features/001-SUBSCRIPTIONS/FEATURE.ru.md) |
+| Импорт ссылок и конфигов: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, AnyTLS, NaïveProxy, SSH, SOCKS, HTTP, WireGuard, AmneziaWG, MASQUE, Tailscale, Xray и sing-box JSON | [002-NODE_IMPORT](docs/spec/features/002-NODE_IMPORT/FEATURE.ru.md) |
+| Сборка конфига sing-box: шаблон, переменные, жизненный цикл настроек | [003-CONFIG_BUILD](docs/spec/features/003-CONFIG_BUILD/FEATURE.ru.md) |
+| Правила маршрутизации, пресеты, кэш rule-set, Направления | [004-ROUTING](docs/spec/features/004-ROUTING/FEATURE.ru.md) |
+| DNS: серверы, правила, группы, FakeIP, кэш | [005-DNS](docs/spec/features/005-DNS/FEATURE.ru.md) |
+| Detour, цепочки хопов, балансировка | [006-DETOUR_AND_BALANCE](docs/spec/features/006-DETOUR_AND_BALANCE/FEATURE.ru.md) |
+| Главный экран: список узлов, фильтры, сортировка, папки, активный узел | [007-NODE_LIST](docs/spec/features/007-NODE_LIST/FEATURE.ru.md) |
+| Свои узлы, настройки узла, мастер добавления сервера | [008-NODE_EDITOR](docs/spec/features/008-NODE_EDITOR/FEATURE.ru.md) |
+| Пинг, URLTest, диагностика узла, автоотключение, тест скорости | [009-NODE_HEALTH](docs/spec/features/009-NODE_HEALTH/FEATURE.ru.md) |
+| Туннель: запуск и остановка, режимы VPN и Proxy, автозапуск, сон, восстановление | [010-VPN_SERVICE](docs/spec/features/010-VPN_SERVICE/FEATURE.ru.md) |
+| Раздельное туннелирование по приложениям | [011-SPLIT_TUNNELING](docs/spec/features/011-SPLIT_TUNNELING/FEATURE.ru.md) |
+| Живой статус, соединения, статистика, трафик по приложениям, трасса DNS | [012-LIVE_STATE](docs/spec/features/012-LIVE_STATE/FEATURE.ru.md) |
+| Журналы, отчёты о сбоях, дамп диагностики, Debug API | [013-DIAGNOSTICS](docs/spec/features/013-DIAGNOSTICS/FEATURE.ru.md) |
+| Quick Connect, Intent API, интеграция с Tasker | [014-AUTOMATION](docs/spec/features/014-AUTOMATION/FEATURE.ru.md) |
+| Cloudflare WARP: регистрация в один тап, узлы WireGuard и MASQUE | [015-WARP](docs/spec/features/015-WARP/FEATURE.ru.md) |
+| Обход DPI: фрагментация TLS, приёмы с SNI, ECH, REALITY, XHTTP | [016-DPI_HARDENING](docs/spec/features/016-DPI_HARDENING/FEATURE.ru.md) |
+| Резервная копия, восстановление, перенос на десктоп, контракт хранения | [017-BACKUP_AND_STORAGE](docs/spec/features/017-BACKUP_AND_STORAGE/FEATURE.ru.md) |
+| Наборы настроек (workspaces) | [018-WORKSPACES](docs/spec/features/018-WORKSPACES/FEATURE.ru.md) |
+| Редактор конфига и закрепление конфига | [019-CONFIG_EDITOR](docs/spec/features/019-CONFIG_EDITOR/FEATURE.ru.md) |
+| Настройки приложения, тема, локализация, первый запуск, проверка обновлений | [020-APP_SHELL](docs/spec/features/020-APP_SHELL/FEATURE.ru.md) |
+| Шаблон конфига, его язык и язык пресетов; расширение клиента через шаблон | [024-TEMPLATE](docs/spec/features/024-TEMPLATE/FEATURE.ru.md) |
+| Реестр контракта: схемы протоколов, санитайзинг узлов, гейт сборки, коды предупреждений | [025-CONTRACT_REGISTRY](docs/spec/features/025-CONTRACT_REGISTRY/FEATURE.ru.md) |
+| Направления: адресаты маршрутизации vpn-N, direct-out, block | [026-DIRECTIONS](docs/spec/features/026-DIRECTIONS/FEATURE.ru.md) |
+| Debug API: локальный HTTP-интерфейс для автоматизации и диагностики | [027-DEBUG_API](docs/spec/features/027-DEBUG_API/FEATURE.ru.md) |
+| Профайлер трафика: журнал соединений по приложениям, атрибуция, трасса DNS | [028-TRAFFIC_PROFILER](docs/spec/features/028-TRAFFIC_PROFILER/FEATURE.ru.md) |
+| Локализация: языки, модель «английский как ключ», процесс перевода | [029-LOCALIZATION](docs/spec/features/029-LOCALIZATION/FEATURE.ru.md) |
+| Tailscale: телефон как узел вашей сети tailnet внутри VPN | [030-TAILSCALE](docs/spec/features/030-TAILSCALE/FEATURE.ru.md) |
+
 <details>
 <summary><strong>Серверы и подписки</strong> — все источники прокси в одном месте</summary>
 
@@ -175,7 +210,7 @@ Auto-группа Направления умеет не только выбир
 
 В редакторе — чипы **Add current** (текущая сеть), **Pick saved** (история посещённых), **Manual**; гейты разрешений Android учтены. История сетей пишется только при явном opt-in (App Settings → Diagnostics), сеть попадает в неё после ≥5 минут на ней, максимум 50 записей.
 
-- См. [спека 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [обзор фичи](docs/features/wifi-aware-routing.md)
+- См. [спека 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [обзор фичи](docs/spec/tasks/051-wifi-aware-routing-guide.md)
 </details>
 
 <details>
@@ -343,6 +378,8 @@ Auto-группа Направления умеет не только выбир
 ---
 
 ## Архитектура
+
+Спецификации лежат в [`docs/spec/`](docs/spec/README.ru.md): фичи как чёрные ящики в `features/`, история реализации в `tasks/`.
 
 L×Box построен вокруг **3-слойного parser/builder pipeline** (спека 026):
 

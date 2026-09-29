@@ -1,6 +1,9 @@
 [English](build-pipeline.md) · [Русский](build-pipeline.ru.md)
 
-# Build pipeline
+# Build pipeline — fixed stages from settings to the final sing-box JSON
+
+Every rebuild runs the same fixed sequence of stages: variables, skeleton, nodes, groups, rules,
+post-steps, healing and the check.
 
 | Field | Value |
 |------|----------|
@@ -38,6 +41,13 @@ No knobs of its own. Stage order:
 | 13 | Graph sanitizer | A dangling detour removed (one line per target), ghost group members excluded, a `default` outside the members fixed, rings broken at the minimal edge; urltest timings corrected |
 | 14 | Check | [Final config check](config-validation.md) |
 
+## The role of the contract registry
+
+Stage 5 is the registry gate: every body is checked against the contract schema for the pinned
+core version and its build tags, an authored JSON body is only commented on. The gate, the parse
+pipeline that produced the bodies and the warning codes are described in
+[025-CONTRACT_REGISTRY](../../025-CONTRACT_REGISTRY/FEATURE.md) ([registry gate](../../025-CONTRACT_REGISTRY/FUNCTIONS/registry-gate.md)).
+
 ## Inputs / Outputs
 
 **Inputs:** see the feature. The core version and its build tags affect the gates of stages
@@ -69,7 +79,7 @@ lines); values fixed by the build, to be saved; the
   DNS in stages 11–12 — [005-DNS](../../005-DNS/FEATURE.md); TLS transformations —
   [016-DPI_HARDENING](../../016-DPI_HARDENING/FEATURE.md); `lx.wg.*` —
   [010-VPN_SERVICE](../../010-VPN_SERVICE/FEATURE.md).
-- Body schema and registry codes — [021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.md).
+- Body schema and registry codes — [025-CONTRACT_REGISTRY](../../025-CONTRACT_REGISTRY/FEATURE.md).
 
 ## Revisions
 

@@ -1,6 +1,10 @@
 [English](source-detour-policy.md) · [Русский](source-detour-policy.ru.md)
 
-# Source detour and jump servers
+# Source detour and jump servers — one detour policy for a whole subscription or folder
+
+All nodes of a subscription or folder follow one choice: the provider's jump
+servers, an outbound added on top of them or instead of them, or a direct
+connection.
 
 | Field | Value |
 |------|----------|

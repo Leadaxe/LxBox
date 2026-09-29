@@ -1,6 +1,9 @@
 [English](wifi-conditions.md) · [Русский](wifi-conditions.ru.md)
 
-# Wi-Fi conditions
+# Wi-Fi conditions — rules that apply only on chosen Wi-Fi networks
+
+A rule can be limited to specific Wi-Fi networks by SSID and, optionally, BSSID — for example,
+direct at home and through the VPN elsewhere.
 
 | Field | Value |
 |------|----------|
@@ -40,7 +43,7 @@ Wi-Fi.
   by name). Repeats are not written.
 - Several chips with different pairs give independent SSID and BSSID lists —
   a cross match is possible (the SSID of one pair + the BSSID of another);
-  a conscious risk, in practice a BSSID is unique.
+  an accepted risk: in practice a BSSID is unique.
 - Reading the current network names the specific reason for a failure: no permission
   for nearby Wi-Fi devices, no precise location, location
   is off, no background location; "Not connected to Wi-Fi" if there is

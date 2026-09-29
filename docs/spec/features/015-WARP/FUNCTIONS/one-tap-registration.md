@@ -1,6 +1,8 @@
 [English](one-tap-registration.md) · [Русский](one-tap-registration.ru.md)
 
-# One-tap registration
+# One-tap registration — a WARP account with the key kept on the device
+
+Registration runs from the "Get WARP" wizard in the Servers screen menu.
 
 | Field | Value |
 |-------|-------|
@@ -72,11 +74,11 @@ registration cache; a log line with secrets masked.
 
 - Registration is a direct request from the app; choosing a node or detour
   for it is not possible.
-- WARP+ for MASQUE is not supported.
+- WARP+ for MASQUE is not supported and is not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
 - There is no device deletion at Cloudflare: Re-register leaves the old device
   in the Cloudflare account.
-- Registration without the UI (`POST /warp`, WireGuard only) —
-  013-DIAGNOSTICS, Debug API.
+- Registration without the UI (`POST /warp`, WireGuard only) — Debug API,
+  [027-DEBUG_API](../../027-DEBUG_API/FUNCTIONS/route-map.md).
 
 ## Revisions
 

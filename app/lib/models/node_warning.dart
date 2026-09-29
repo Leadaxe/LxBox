@@ -570,41 +570,12 @@ final class GroupMemberMissingWarning extends NodeWarning {
 // `extra-headers` пропускается, остальные живут, код ставится ОДИН раз на
 // узел. Собственный `headers` у http/https-прокси под код не попадает.
 
-/// §538 — запись подписки повторяет узел, который в этой же подписке уже
-/// разобран (тот же [nodeDedupSignature]: содержимое узла без `tag`/`detour`
-/// плюс путь дозвона). Живой случай — подписка присылает один AWG-узел дважды,
-/// строкой `amneziawg://` и сжатым `vpn://`: формы разные, узел один.
-///
-/// Первая запись остаётся, каждая следующая уходит в `dropped[]`. [winner] —
-/// имя выжившего; пусто, если имена совпали и называть нечего.
-///
-/// Кода контракта нет — код `duplicate` НАШ, per-app (`kWarningCodes`):
-/// схлопывание записей подписки лаунчер не делает, и запись в
-/// `registry/warnings.json` была бы объявлением чужой нормы.
-final class DuplicateNodeWarning extends NodeWarning {
-  /// Имя выжившего узла; пусто — имена совпали.
-  final String winner;
-
-  const DuplicateNodeWarning({this.winner = ''});
-
-  @override
-  List<Object?> get props => [winner];
-
-  @override
-  String messageWith(GetLocalText t) => winner.isEmpty
-      ? t.s("Duplicate entry: the same node is already in this subscription.")
-      : t.s("Duplicate of %s", winner);
-
-  @override
-  WarningSeverity get severity => WarningSeverity.info;
-}
-
 /// §585 — узел своего источника с типом, которого приложение не знает
 /// (`openvpn-client` и прочие типы ядра вне модели). Узел принят, тело
 /// уходит в ядро как написано, приложение его не проверяет.
 ///
 /// Кода контракта нет — код `unknown_node_type` НАШ, per-app
-/// (`kWarningCodes`), как у [DuplicateNodeWarning]: ближайший код реестра
+/// (`kWarningCodes`): ближайший код реестра
 /// `protocol_unsupported` — уровня `error` и говорит «узел отброшен».
 final class UnknownNodeTypeWarning extends NodeWarning {
   /// Значение поля `type` записи.

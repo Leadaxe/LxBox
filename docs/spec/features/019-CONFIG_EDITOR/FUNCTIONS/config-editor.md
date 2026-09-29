@@ -1,6 +1,9 @@
 [English](config-editor.md) · [Русский](config-editor.ru.md)
 
-# Final config editor
+# Final config editor — the core config as editable, highlighted JSON
+
+The Config Editor screen shows the saved sing-box config with line numbers and
+syntax highlighting and saves an edited, pasted or loaded config to the core.
 
 | Field | Value |
 |-------|-------|

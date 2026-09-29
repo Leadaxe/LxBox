@@ -1,19 +1,27 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 016 — DPI_HARDENING — обход DPI и защитные настройки TLS-транспорта
+# Защита от DPI — фрагментация TLS, mixed-case SNI, uTLS, REALITY, ECH и XHTTP
+
+LxBox защищает TLS-узлы VPN (VLESS, Trojan, AnyTLS и другие) от DPI
+фрагментацией ClientHello и SNI в смешанном регистре. Та же фича приводит к
+норме то, что приходит из подписок, — отпечатки uTLS, ключи REALITY, ECH,
+параметры транспорта XHTTP, VLESS flow и encryption, — чтобы плохое значение
+портило один узел, а не весь конфиг sing-box. Проверка сертификата сервера
+остаётся под контролем пользователя и не ослабляется молча.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 016-DPI_HARDENING |
 | Тип | Продуктовая фича |
 | Поглотила | `§020F` (security & DPI bypass — жива только часть про фрагментацию; Clash API из неё снят вместе с `clash_api`), `§028F` (mixed-case SNI), `§045F` (ECH — Draft не реализован как задуман: вместо переключателя на узле — сквозной `tls.ech` из JSON и отказ от `ech=` ссылки), `§127F` (полный набор XHTTP-параметров ссылки) |
 | Состояние | ✅ написана по коду, 2026-09-28 |
 
 ## Назначение
 
-Отвечает за то, как ClientHello и транспорт узла выглядят на проводе и
-как проверяется сервер. Пользователь включает глобальные приёмы одной
-галкой; всё, что пришло из подписки (отпечаток, REALITY, XHTTP, `flow`,
-фрагментация провайдера), доезжает до ядра в форме, которую ядро примет.
+Определяет, как ClientHello и транспорт узла выглядят на проводе и как
+проверяется сервер. Пользователь включает глобальные приёмы одной галкой; всё,
+что пришло из подписки (отпечаток, REALITY, XHTTP, `flow`, фрагментация
+провайдера), доезжает до ядра в форме, которую ядро примет.
 
 Принципы, которые фича защищает:
 
@@ -85,8 +93,8 @@
 - **P9. Битый REALITY деградирует, а не валит конфиг.** Невалидный
   `public_key` (не 32 байта) → узел идёт обычным TLS; `short_id`
   нечётный, длиннее 16 или не строка → пустой; `key_share` вне
-  `hybrid`/`classical` → снят. Свидетель: юниты «БОЕВОЙ КЕЙС: security=tls
-  + pbk=enabled → plain TLS», «нечётный short_id → очищен, нода и конфиг
+  `hybrid`/`classical` → снят. Свидетель: юниты «БОЕВОЙ КЕЙС:
+  security=tls + pbk=enabled → plain TLS», «нечётный short_id → очищен, нода и конфиг
   живы», «key_share вне enum — поле отброшено молча, узел жив». Мутация:
   обрезать `short_id` до 16.
 - **P10. ECH из ссылки не включается никогда.** `ech=` → код
@@ -224,6 +232,9 @@ removed…»).
   (ядро включает `record_fragment` само).
 - Снято с плана (§020F): шифрованное хранение секретов, pinning
   приложения, маскировка ссылок в UI и логах.
+- Не планируется (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)): ECH по замыслу `§045F` — галка
+  ECH на узле и параметр ссылки `?ech=`. ECH доезжает до ядра только из JSON
+  узла и `echConfigList` Xray ([ECH](FUNCTIONS/ech.ru.md)).
 - Проверка сертификата выполняется ядром; хранилище `system` зависит от
   возможностей ОС (устаревшее на старых версиях Android).
 
@@ -231,24 +242,32 @@ removed…»).
 
 | Функция | Что делает | Обещания | Файл |
 |---|---|---|---|
-| Фрагментация TLS | Глобальные галки, first-hop, несовместимые узлы, уступка `detour`, перенос фрагментации Xray | P1 P2 P3 P4 | [tls-fragmentation.md](FUNCTIONS/tls-fragmentation.ru.md) |
-| Mixed-case SNI | Случайный регистр `server_name`, пропуск REALITY | P5 P6 | [mixed-case-sni.md](FUNCTIONS/mixed-case-sni.ru.md) |
-| Отпечаток uTLS | Дефолты, канонизация, мусор → `chrome`, QUIC, гибридный key share | P7 P8 | [utls-fingerprint.md](FUNCTIONS/utls-fingerprint.ru.md) |
-| Параметры REALITY | `public_key`, `short_id`, `key_share`, деградация битого блока | P9 | [reality-params.md](FUNCTIONS/reality-params.ru.md) |
-| ECH | Сквозной `tls.ech` из JSON, отказ от `ech=` ссылки | P10 | [ech.md](FUNCTIONS/ech.ru.md) |
-| Параметры XHTTP | Полный набор полей, `extra`, `xmux`, enum-гейт, пара режим/placement | P11 P12 P13 | [xhttp-params.md](FUNCTIONS/xhttp-params.ru.md) |
-| VLESS flow и encryption | Vision по ссылке, конфликт с транспортом, грамматика `encryption` | P14 P15 | [vless-flow-encryption.md](FUNCTIONS/vless-flow-encryption.ru.md) |
-| Проверка сертификата сервера | Хранилище CA, `insecure`, пин ключа, свой CA | P16 P17 | [server-certificate.md](FUNCTIONS/server-certificate.ru.md) |
+| Фрагментация TLS | Делит ClientHello на части, чтобы DPI не прочитал SNI: глобальные галки для первого хопа, пропуск несовместимых узлов, уступка `detour`, перенос фрагментации Xray. | P1 P2 P3 P4 | [tls-fragmentation.md](FUNCTIONS/tls-fragmentation.ru.md) |
+| Mixed-case SNI | Меняет регистр букв `server_name` против DPI с точным сравнением и пропускает узлы REALITY. | P5 P6 | [mixed-case-sni.md](FUNCTIONS/mixed-case-sni.ru.md) |
+| Отпечаток uTLS | Держит отпечаток ClientHello в пределах словаря ядра: дефолты, канонизация, мусор → `chrome`, QUIC, гибридный key share. | P7 P8 | [utls-fingerprint.md](FUNCTIONS/utls-fingerprint.ru.md) |
+| Параметры REALITY | Проверяет `public_key`, `short_id` и `key_share`, чтобы битый блок REALITY портил один узел, а не конфиг. | P9 | [reality-params.md](FUNCTIONS/reality-params.ru.md) |
+| ECH | Пропускает `tls.ech` только из JSON узла и снимает `ech=` ссылки с объяснением. | P10 | [ech.md](FUNCTIONS/ech.ru.md) |
+| Параметры XHTTP | Доносит транспорт XHTTP из подписки до ядра целиком: все поля, `extra`, `xmux`, enum-гейт, пара режим/placement. | P11 P12 P13 | [xhttp-params.md](FUNCTIONS/xhttp-params.ru.md) |
+| VLESS flow и encryption | Сохраняет XTLS Vision и VLESS Encryption такими, как их задал провайдер: Vision по ссылке, конфликт с транспортом, грамматика `encryption`. | P14 P15 | [vless-flow-encryption.md](FUNCTIONS/vless-flow-encryption.ru.md) |
+| Проверка сертификата сервера | Держит проверку TLS-сервера такой строгой, как обещала подписка: хранилище CA, `insecure`, пин ключа, свой CA. | P16 P17 | [server-certificate.md](FUNCTIONS/server-certificate.ru.md) |
 
 ## Связанные фичи
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — фильтр узлов по `tls.utls.fingerprint`.
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор ссылок и форматов в целом, включая `packet_encoding`; здесь только поля TLS и транспорта.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — порядок шагов сборки, в который встроены глобальные приёмы; настройки ядра и их переносимость в бэкап.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — цепочки, detour и `strip_evasion`, от которых зависит, что считается первым хопом.
-- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — ручная правка TLS-полей и отпечатка узла через его JSON.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — локальный прокси режима Proxy и его авторизация.
-- [015-WARP](../015-WARP/FEATURE.ru.md) — обфускация AmneziaWG/WARP и фрагментация QUIC Initial, отдельный не-TLS слой.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — фильтр узлов по
+  `tls.utls.fingerprint`.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор ссылок и форматов
+  в целом, включая `packet_encoding`; здесь только поля TLS и транспорта.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — порядок шагов сборки,
+  в который встроены глобальные приёмы; настройки ядра и их переносимость в
+  бэкап.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — цепочки,
+  detour и `strip_evasion`, от которых зависит, что считается первым хопом.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — ручная правка TLS-полей
+  и отпечатка узла через его JSON.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — локальный прокси режима
+  Proxy и его авторизация.
+- [015-WARP](../015-WARP/FEATURE.ru.md) — обфускация AmneziaWG/WARP и
+  фрагментация QUIC Initial, отдельный не-TLS слой.
 
 ## Особенности сопровождения
 

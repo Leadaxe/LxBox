@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 005 — DNS — серверы, правила, стратегия, группы, FakeIP, кэш
+# DNS — шифрованные DNS-серверы, DNS-правила, группы с резервированием, FakeIP и кэш
+
+LxBox управляет DNS-секцией конфига sing-box: какие серверы резолвят имена, через какой канал, в
+каком порядке и с каким резервом. Из коробки запросы идут в `dns_shield` — гонку шифрованных DoH- и
+DoT-провайдеров, а российские домены получают свою группу `dns_ru`. Без ручного JSON можно добавить
+серверы любых типов ядра, DNS-правила, группы с резервированием, FakeIP и настройки кэша;
+DNS-настройку, которую ядро отвергло бы, приложение не собирает, а сервер, потерявший канал,
+отказывает в запросах, а не сливает их в прямой резолвер.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 005-DNS |
 | Тип | Продуктовая фича |
 | Поглотила | `§014F` (экран DNS Settings), `§117F` (переработка DNS: переменные серверов, DNS у правила, редактор сервера, жизненный цикл), `§312F` (DNS-группы) |
 | Состояние | ✅ написана по коду, 2026-09-28 |
@@ -16,9 +24,9 @@
 с выбором канала, свои серверы любых типов ядра, DNS-правила, стратегия,
 группы с резервированием, FakeIP, кэш.
 
-Принцип, который фича защищает: **конфиг, собранный из DNS-настроек, либо
-принимается ядром, либо не собирается вовсе — с понятной причиной.**
-Второй — **fail-closed**: сервер выпал из-за канала — его домены получают
+Фича защищает два принципа. Первый: **конфиг, собранный из DNS-настроек,
+либо принимается ядром, либо не собирается вовсе — с понятной причиной.**
+Второй — **fail-closed**: если сервер выпал из-за канала, его домены получают
 отказ, а не утекают в прямой резолвер.
 
 Из коробки DNS работает без настройки: `dns.final` и резолвер ядра —
@@ -37,7 +45,9 @@
   `action: reject`; `dns.final` на него снимается и последним правилом
   встаёт `{"action":"reject"}`; резолверы (`route.default_domain_resolver`,
   `domain_resolver` узлов и серверов) переключаются на умолчание шаблона.
-  Выбор пользователя в хранении не трогается. Свидетель: юниты «detour на
+  Сборка выбор пользователя в хранении не трогает; лечит его только удаление или
+  выключение самого Направления — тогда канал переписывается на `vpn-1`
+  (решение владельца 2026-09-29, §441). Свидетель: юниты «detour на
   исчезнувшее Направление → сервер не эмитится, warning», «правила → reject,
   final снят + заглушка reject, резолверы — умолчание шаблона». Мутация:
   снять только ключ `detour`, оставив сервер (запросы пойдут напрямую).
@@ -214,16 +224,18 @@ Traffic Processing, [004-ROUTING](../004-ROUTING/FEATURE.ru.md)), DNS у
 - Правила маршрутизации, пресеты как таковые, Hijack DNS, «Resolve
   destination IP», DNS-опция в редакторе правила —
   [004-ROUTING](../004-ROUTING/FEATURE.ru.md); здесь — только их DNS-след.
-- Поток DNS-запросов ядра (`subscribeDNSQueries`), трасса групп в
-  профайлере, детектор «DNS массово падает при живой связи» —
-  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) и
-  [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md); Debug API
-  `/settings/dns_options/*` — там же.
+- Поток DNS-запросов ядра (`subscribeDNSQueries`) —
+  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md); трасса групп в
+  профайлере и детектор «DNS массово падает при живой связи» —
+  [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FUNCTIONS/dns-trace.ru.md);
+  Debug API `/settings/dns_options/*` —
+  [027-DEBUG_API](../027-DEBUG_API/FUNCTIONS/write-operations.ru.md).
 - Перенос DNS-записей в резервной копии и слияние — [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
 - Узлы Tailscale и их пресет — не здесь; фича лишь даёт тип сервера
-  `tailscale` в форме.
+  `tailscale` в форме. Подробно — [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md).
 - Региональных DNS-наборов нет: `ru-direct` включён по умолчанию для всех,
-  регион использования на DNS не влияет.
+  регион использования на DNS не влияет. DNS-пресеты по региону (`014F`) —
+  не планируются (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)).
 - Разовой кнопки «протестировать DNS-серверы» нет и не будет (§365).
 - Удаление `cache.db` и перезагрузка ядра зависят от возможностей ОС.
 
@@ -231,21 +243,26 @@ Traffic Processing, [004-ROUTING](../004-ROUTING/FEATURE.ru.md)), DNS у
 
 | Функция | Что делает | Обещания | Файл |
 |---|---|---|---|
-| Каталог DNS-серверов | Серверы шаблона, пресетов и свои; форма по типу, канал, резолвер имени, переименование, переопределение | P1 P2 P3 P4 P10 | [dns-servers.md](FUNCTIONS/dns-servers.ru.md) |
-| DNS-группы | Сервер `group` с режимами `stable`/`fastest`/`parallel`, фильтр членов, живое состояние | P5 P6 P15 | [dns-groups.md](FUNCTIONS/dns-groups.ru.md) |
-| DNS-правила | Свои, шаблонные, по rule-set, зеркала пресетов и правил маршрутизации; порядок | P4 P9 P11 | [dns-rules.md](FUNCTIONS/dns-rules.ru.md) |
-| Резолверы и стратегия | `dns.final`, резолвер ядра, стратегия IP, лечение битых ссылок | P6 P7 P8 | [resolvers-and-strategy.md](FUNCTIONS/resolvers-and-strategy.ru.md) |
-| Встроенные DNS-наборы | `dns_shield` по умолчанию, `dns_ru` и Force IPv4 у `ru-direct` | P16 P17 | [builtin-dns-sets.md](FUNCTIONS/builtin-dns-sets.ru.md) |
-| FakeIP | Пресет с выдачей подставных адресов | P6 P11 P12 | [fakeip.md](FUNCTIONS/fakeip.ru.md) |
-| Кэш DNS | Размер, устаревшие ответы, хранение, сброс | P13 P14 | [dns-cache.md](FUNCTIONS/dns-cache.ru.md) |
+| Каталог DNS-серверов | Показывает серверы шаблона, пресетов и свои с формой по типу, выбором канала, резолвером имени, безопасным переименованием и переопределением. | P1 P2 P3 P4 P10 | [dns-servers.md](FUNCTIONS/dns-servers.ru.md) |
+| DNS-группы | Объединяет серверы в `group` с режимом `stable`/`fastest`/`parallel`, отсеивает недоступных членов и показывает живое состояние. | P5 P6 P15 | [dns-groups.md](FUNCTIONS/dns-groups.ru.md) |
+| DNS-правила | Собирает один упорядоченный список `dns.rules` из своих, шаблонных и rule-set правил плюс зеркал пресетов и правил маршрутизации. | P4 P9 P11 | [dns-rules.md](FUNCTIONS/dns-rules.ru.md) |
+| Резолверы по умолчанию и стратегия | Задаёт `dns.final`, резолвер ядра и стратегию IP и лечит ссылки на исчезнувшие серверы. | P6 P7 P8 | [resolvers-and-strategy.md](FUNCTIONS/resolvers-and-strategy.ru.md) |
+| Встроенные DNS-наборы | Даёт шифрованную группу `dns_shield` по умолчанию и группу `dns_ru` с Force IPv4 в пресете `ru-direct`. | P16 P17 | [builtin-dns-sets.md](FUNCTIONS/builtin-dns-sets.ru.md) |
+| FakeIP | Отвечает на запросы имён подставными адресами из служебного пула и отключает резолвинг IP назначения. | P6 P11 P12 | [fakeip.md](FUNCTIONS/fakeip.ru.md) |
+| Кэш DNS | Задаёт размер кэша, устаревшие ответы и хранение между перезапусками и по запросу очищает кэш целиком. | P13 P14 | [dns-cache.md](FUNCTIONS/dns-cache.ru.md) |
 
 ## Связанные фичи
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — DNS-секцию собирает, переменные подставляет и плашку «Settings changed» показывает общая сборка конфига.
-- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — пресеты, правила маршрутизации с DNS-опцией, Hijack DNS и «Resolve destination IP» оставляют здесь свой DNS-след.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — DNS-секцию собирает, переменные
+  подставляет и плашку «Settings changed» показывает общая сборка конфига.
+- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — пресеты, правила маршрутизации с DNS-опцией, Hijack
+  DNS и «Resolve destination IP» оставляют здесь свой DNS-след.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — поток DNS-запросов ядра и трасса групп живут там.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — детектор массовых сбоев DNS, Debug API `/settings/dns_options/*`, сброс кэша ядра при сбое.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — сброс кэша ядра при сбое.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — перенос и слияние DNS-записей в резервной копии.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — маршруты Debug API `/settings/dns_options/*`.
+- [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.ru.md) — трасса DNS-запросов, трасса групп и детектор массовых сбоев DNS.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md) — узлы Tailscale, сервер MagicDNS на узел и DNS-пресет tailnet.
 
 ## Особенности сопровождения
 

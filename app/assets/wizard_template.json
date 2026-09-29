@@ -23,6 +23,7 @@
             "name": "outbound",
             "type": "outbound",
             "default_value": "direct-out",
+            "required": true,
             "title": "Outbound",
             "tooltip": "Which direction carries DNS queries to this server"
           },
@@ -32,6 +33,7 @@
             "title": "UDP server IP",
             "tooltip": "Google Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
             "default_value": "8.8.8.8",
+            "required": true,
             "options": [
               {
                 "title": "8.8.8.8 · Primary v4",
@@ -68,6 +70,7 @@
             "name": "outbound",
             "type": "outbound",
             "default_value": "vpn-1",
+            "required": true,
             "title": "Outbound",
             "tooltip": "Which direction carries DNS queries to this server"
           },
@@ -77,6 +80,7 @@
             "title": "DoT server IP",
             "tooltip": "Google Public DNS address for DNS-over-TLS (port 853).",
             "default_value": "8.8.8.8",
+            "required": true,
             "options": [
               {
                 "title": "8.8.8.8 · Primary v4",
@@ -113,6 +117,7 @@
             "name": "outbound",
             "type": "outbound",
             "default_value": "direct-out",
+            "required": true,
             "title": "Outbound",
             "tooltip": "Which direction carries DNS queries to this server"
           },
@@ -122,6 +127,7 @@
             "title": "DoH server IP",
             "tooltip": "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.",
             "default_value": "8.8.8.8",
+            "required": true,
             "options": [
               {
                 "title": "8.8.8.8 · Primary v4",
@@ -163,6 +169,7 @@
             "name": "outbound",
             "type": "outbound",
             "default_value": "direct-out",
+            "required": true,
             "title": "Outbound",
             "tooltip": "Which direction carries DNS queries to this server"
           },
@@ -172,6 +179,7 @@
             "title": "UDP server IP",
             "tooltip": "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.",
             "default_value": "1.1.1.1",
+            "required": true,
             "options": [
               {
                 "title": "1.1.1.1 · Primary v4",
@@ -208,6 +216,7 @@
             "name": "outbound",
             "type": "outbound",
             "default_value": "vpn-1",
+            "required": true,
             "title": "Outbound",
             "tooltip": "Which direction carries DNS queries to this server"
           },
@@ -217,6 +226,7 @@
             "title": "DoT server IP",
             "tooltip": "Cloudflare Public DNS address for DNS-over-TLS (port 853).",
             "default_value": "1.1.1.1",
+            "required": true,
             "options": [
               {
                 "title": "1.1.1.1 · Primary v4",
@@ -253,6 +263,7 @@
             "name": "outbound",
             "type": "outbound",
             "default_value": "direct-out",
+            "required": true,
             "title": "Outbound",
             "tooltip": "Which direction carries DNS queries to this server"
           },
@@ -262,6 +273,7 @@
             "title": "Safe profile",
             "tooltip": "DNS-over-TLS with built-in blocking: malware (Quad9), ads (AdGuard), or ads + adult (AdGuard Family).",
             "default_value": "9.9.9.9",
+            "required": true,
             "options": [
               {
                 "title": "Quad9 · anti-malware",
@@ -281,6 +293,7 @@
             "name": "dom_resolver",
             "type": "dns_servers",
             "default_value": "google_udp",
+            "required": true,
             "title": "Domain resolver",
             "tooltip": "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address)."
           }
@@ -539,6 +552,7 @@
           "title": "Log level",
           "tooltip": "Verbosity of sing-box logs",
           "default_value": "warn",
+          "required": true,
           "options": [
             "trace",
             "debug",
@@ -556,6 +570,7 @@
           "title": "Certificate store",
           "tooltip": "Root certificates used to verify TLS servers. On Android 7.x and older the system store is outdated — Let's Encrypt and other modern authorities are missing, so TLS nodes fail to connect. Switch to Mozilla or Chrome to use an up-to-date bundle shipped inside the app.",
           "default_value": "system",
+          "required": true,
           "options": [
             "system",
             "mozilla",
@@ -574,6 +589,7 @@
           "name": "auto_detect_interface",
           "type": "bool",
           "default_value": "true",
+          "required": true,
           "wizard_ui": "edit",
           "title": "Auto-detect interface",
           "tooltip": "Automatically detect the default network interface"
@@ -590,6 +606,7 @@
           "name": "resolve_enabled",
           "type": "bool",
           "default_value": "true",
+          "required": true,
           "wizard_ui": "edit",
           "title": "Resolve destination IP",
           "tooltip": "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver."
@@ -601,6 +618,7 @@
           "title": "Resolve strategy",
           "tooltip": "IP version preference for DNS resolution",
           "default_value": "ipv4_only",
+          "required": true,
           "options": [
             "prefer_ipv4",
             "prefer_ipv6",
@@ -624,6 +642,7 @@
           "title": "Test URL",
           "tooltip": "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best.",
           "default_value": "https://cp.cloudflare.com/generate_204",
+          "required": true,
           "options": [
             "https://cp.cloudflare.com/generate_204",
             "https://www.gstatic.com/generate_204",
@@ -638,6 +657,7 @@
           "title": "Test interval",
           "tooltip": "How often sing-box re-tests and re-picks. Lower → faster switching, but more background traffic and battery: each cycle dials the servers (waking suspended tunnels). 15m is the battery-friendly default.",
           "default_value": "15m",
+          "required": true,
           "options": [
             "30s",
             "1m",
@@ -656,6 +676,7 @@
           "title": "Tolerance (ms)",
           "tooltip": "Only switch proxy if latency difference exceeds this",
           "default_value": "30",
+          "required": true,
           "options": [
             "10",
             "30",
@@ -679,6 +700,7 @@
           "title": "Preferred IP version",
           "tooltip": "DNS resolution strategy",
           "default_value": "ipv4_only",
+          "required": true,
           "options": [
             "prefer_ipv4",
             "prefer_ipv6",
@@ -708,6 +730,7 @@
           "name": "dns_cache_capacity",
           "type": "int",
           "default_value": "4000",
+          "required": true,
           "wizard_ui": "fix",
           "title": "DNS cache size",
           "tooltip": "Number of cached answers (1024..65535)."
@@ -716,6 +739,7 @@
           "name": "dns_optimistic",
           "type": "bool",
           "default_value": "true",
+          "required": true,
           "wizard_ui": "fix",
           "title": "Serve stale answers",
           "tooltip": "Answer from cache at once and refresh in the background."
@@ -724,6 +748,7 @@
           "name": "dns_store_cache",
           "type": "bool",
           "default_value": "true",
+          "required": true,
           "wizard_ui": "fix",
           "title": "Keep DNS cache after restart",
           "tooltip": "Store the DNS cache in cache.db so it survives a restart."
@@ -740,6 +765,7 @@
           "name": "tun_address",
           "type": "text",
           "default_value": "172.16.0.1/30",
+          "required": true,
           "wizard_ui": "edit",
           "title": "IPv4 address",
           "tooltip": "TUN interface address (CIDR)"
@@ -751,6 +777,7 @@
           "title": "Enable IPv6",
           "tooltip": "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.",
           "default_value": "false",
+          "required": true,
           "#on_change": {
             "#set": {
               "@dns_strategy": {
@@ -778,6 +805,7 @@
           "name": "tun_address6",
           "type": "text",
           "default_value": "fdfe:dcba:9876::1/126",
+          "required": true,
           "wizard_ui": "edit",
           "title": "IPv6 address",
           "tooltip": "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on."
@@ -786,6 +814,7 @@
           "name": "route_address_enable",
           "type": "bool",
           "default_value": "false",
+          "required": true,
           "wizard_ui": "edit",
           "title": "Custom tunnel routes",
           "tooltip": "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves."
@@ -794,6 +823,7 @@
           "name": "tun_name",
           "type": "text",
           "default_value": "lxbox",
+          "required": true,
           "wizard_ui": "edit",
           "title": "TUN interface",
           "tooltip": "system name"
@@ -802,6 +832,7 @@
           "name": "tun_mtu",
           "type": "int",
           "default_value": "1492",
+          "required": true,
           "wizard_ui": "edit",
           "title": "MTU",
           "tooltip": "1492 recommended for mobile/WiFi"
@@ -810,6 +841,7 @@
           "name": "tun_auto_route",
           "type": "bool",
           "default_value": "true",
+          "required": true,
           "wizard_ui": "edit",
           "title": "Auto route",
           "tooltip": "Let sing-box manage routing table"
@@ -818,6 +850,7 @@
           "name": "tun_strict_route",
           "type": "bool",
           "default_value": "false",
+          "required": true,
           "wizard_ui": "edit",
           "title": "Strict route",
           "tooltip": "May break connectivity on some devices"
@@ -829,6 +862,7 @@
           "title": "Stack",
           "tooltip": "system (default), gvisor (userspace), mixed",
           "default_value": "system",
+          "required": true,
           "options": [
             "system",
             "gvisor",
@@ -850,6 +884,7 @@
           "title": "VPN mode",
           "tooltip": "How the core captures traffic. Set from VPN Settings → Mode.",
           "default_value": "vpn",
+          "required": true,
           "options": [
             {
               "title": "VPN — system-wide tunnel",
@@ -872,6 +907,7 @@
           "title": "Local proxy protocol",
           "tooltip": "Inbound type for the local proxy port.",
           "default_value": "mixed",
+          "required": true,
           "options": [
             {
               "title": "Mixed — HTTP + SOCKS5 on one port",
@@ -895,6 +931,7 @@
           "title": "Listen address",
           "tooltip": "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on.",
           "default_value": "127.0.0.1",
+          "required": true,
           "options": [
             {
               "title": "127.0.0.1 — this device only",
@@ -910,6 +947,7 @@
           "name": "proxy_port",
           "type": "int",
           "default_value": "2080",
+          "required": true,
           "wizard_ui": "hidden",
           "title": "Listen port",
           "tooltip": "Local proxy port (1024..65535)."
@@ -918,6 +956,7 @@
           "name": "proxy_user",
           "type": "text",
           "default_value": "user",
+          "required": true,
           "wizard_ui": "hidden",
           "title": "Proxy username",
           "tooltip": "Username for proxy auth (when auth is on)."
@@ -934,6 +973,7 @@
           "name": "proxy_auth",
           "type": "bool",
           "default_value": "false",
+          "required": true,
           "wizard_ui": "hidden",
           "title": "Require auth",
           "tooltip": "Whether the local proxy requires username/password. Forced on for non-loopback listen."
@@ -950,6 +990,7 @@
           "name": "tls_fragment",
           "type": "bool",
           "default_value": "false",
+          "required": true,
           "wizard_ui": "edit",
           "title": "TLS Fragment",
           "tooltip": "Split TLS ClientHello into small TCP segments"
@@ -958,6 +999,7 @@
           "name": "tls_record_fragment",
           "type": "bool",
           "default_value": "false",
+          "required": true,
           "wizard_ui": "edit",
           "title": "TLS Record Fragment",
           "tooltip": "Split handshake into multiple TLS records (try this first)"
@@ -966,6 +1008,7 @@
           "name": "tls_fragment_fallback_delay",
           "type": "text",
           "default_value": "500ms",
+          "required": true,
           "wizard_ui": "edit",
           "title": "Fallback delay",
           "tooltip": "Wait time when automatic detection fails"
@@ -974,6 +1017,7 @@
           "name": "tls_mixed_case_sni",
           "type": "bool",
           "default_value": "false",
+          "required": true,
           "wizard_ui": "edit",
           "title": "Mixed-case SNI",
           "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Per RFC 6066 the field is case-insensitive, so servers accept either form; defeats naive exact-match matching only. Skipped on REALITY nodes — their SNI must stay byte-exact"
@@ -1138,6 +1182,7 @@
           "title": "Sniff timeout",
           "tooltip": "How long to wait for the domain to appear in the packet before giving up.",
           "default_value": "300ms",
+          "required": true,
           "options": [
             "100ms",
             "300ms",
@@ -1298,6 +1343,7 @@
           "name": "outbound",
           "type": "outbound",
           "default_value": "direct-out",
+          "required": true,
           "title": "Outbound",
           "tooltip": "Where to route traffic for Russian domains and IPs"
         },
@@ -1314,6 +1360,7 @@
           "title": "UDP server IP",
           "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.",
           "default_value": "77.88.8.8",
+          "required": true,
           "options": [
             {
               "title": "77.88.8.8 · Base",
@@ -1609,6 +1656,7 @@
           "name": "dns_server",
           "type": "dns_servers",
           "default_value": "fakeip",
+          "required": true,
           "wizard_ui": "hidden",
           "title": "FakeIP server",
           "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."
@@ -1668,6 +1716,7 @@
           "name": "outbound",
           "type": "outbound",
           "default_value": "direct-out",
+          "required": true,
           "title": "Outbound",
           "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian direction to reach them from abroad."
         },
@@ -1721,6 +1770,7 @@
           "name": "outbound",
           "type": "outbound",
           "default_value": "direct-out",
+          "required": true,
           "title": "Outbound",
           "tooltip": "Where to route BitTorrent. Direct to keep it off the VPN, or pick a direction to tunnel it."
         }
@@ -1831,6 +1881,7 @@
           "name": "outbound",
           "type": "outbound",
           "default_value": "direct-out",
+          "required": true,
           "title": "Outbound",
           "tooltip": "Where to route private/LAN IPs. Direct for local access, or a direction to reach a remote LAN over VPN."
         }
@@ -1854,6 +1905,7 @@
           "name": "outbound",
           "type": "outbound",
           "default_value": "reject",
+          "required": true,
           "title": "outbound",
           "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."
         }
@@ -1891,6 +1943,7 @@
           "name": "outbound",
           "type": "outbound",
           "default_value": "direct-out",
+          "required": true,
           "title": "Outbound",
           "tooltip": "Where to send VoWiFi traffic. Direct keeps it off the VPN — that is the point of this preset."
         },
@@ -1955,6 +2008,7 @@
           "name": "outbound",
           "type": "outbound",
           "default_value": "direct-out",
+          "required": true,
           "title": "Outbound",
           "tooltip": "Where to send push traffic. Direct keeps it off the VPN — that is the point of this preset."
         },

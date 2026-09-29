@@ -1,6 +1,9 @@
 [English](remote-rule-sets.md) · [Русский](remote-rule-sets.ru.md)
 
-# External rule-sets and the local cache
+# External rule sets and the local cache — geosite, geoip and ad lists in .srs format
+
+Rules and presets can route by ready-made `.srs` lists from the network; the app downloads and
+refreshes them itself, and the core reads only local files.
 
 | Field | Value |
 |------|----------|

@@ -1,6 +1,9 @@
 [English](live-events.md) · [Русский](live-events.ru.md)
 
-# Live events
+# Live events — recording network events of all apps for analysis
+
+It is the same recording as the [028-TRAFFIC_PROFILER](../../028-TRAFFIC_PROFILER/FEATURE.md),
+described here as a diagnostic tool.
 
 | Field | Value |
 |-------|-------|
@@ -10,12 +13,12 @@
 
 ## What it does
 
-On an explicit command records all network events of the device — opening
-and closing of TCP/UDP connections, DNS answers and failures — with the owner
-app and the routing chain of each event. Answers the question "what is going
-on on the device right now at all" when it is unknown which app is to blame.
-The **Profiler** tab of the Stats screen and the `/profiler/live*` routes of
-the Debug API.
+On an explicit command records all network events of the device — opening and
+closing of TCP/UDP connections, DNS answers and failures — with the owner app
+and the routing chain of each event. Answers the question "what is happening
+on the device right now" when it is unknown which app is to blame. The
+**Profiler** tab of the Stats screen and the `/profiler/live*` routes of the
+Debug API.
 
 ## Parameters
 

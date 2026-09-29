@@ -9,7 +9,7 @@
 | Связанные spec'ы | [`043 applog per-source quotas`](../043F-applog-per-source-quotas/spec.md) — переиспользует core-log stream; [`030 custom routing rules`](../030F-custom-routing-rules/spec.md) — feedback loop "trace → make rule"; [`031 debug api`](../031F-debug-api/spec.md) — экспонирует API для внешних клиентов; [`040 per-group ping settings`](../../tasks/040-per-group-ping-test-settings.md) — паттерн in-memory state via ChangeNotifier |
 | Затронутые файлы | `app/lib/services/traffic_profiler.dart` (новый), `app/lib/screens/per_app_trace_tab.dart` (новый), `app/lib/screens/stats_screen.dart`, `app/lib/screens/home_screen.dart`, `app/lib/services/debug/handlers/profiler.dart` (новый), `app/lib/services/debug/transport/response.dart` (`SseResponse`), `app/lib/services/app_info_cache.dart` (`loadAllApps()` + smart `ensure`), тесты `app/test/services/traffic_profiler_test.dart` |
 | Целевой релиз | v1.7.0 (тема: «Observability») |
-| User guide | [`docs/features/per-app-trace.md`](../../../features/per-app-trace.md) |
+| User guide | [`docs/spec/tasks/044F-per-app-traffic-profiler/per-app-trace.md`](per-app-trace.md) |
 
 > **Важно**: всё state in-memory, никакого persist. Никакого `App Settings` integration — все controls (verbose toggle / wipe / export) в overflow menu Per-app tab'а. Recording-indicator (⚡) chip в `_buildTrafficBar` на HomeScreen + Per-app tab title.
 

@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 009 — NODE_HEALTH — node health as the user sees it
+# Node health — VPN server ping, URLTest, diagnostics and auto-disabling broken nodes
+
+LxBox shows which VPN nodes are alive and fast by measuring latency through
+the running sing-box core, without switching the active node or breaking
+connections. The feature covers ping and mass ping, `urltest` auto-select
+groups, a server test with the VPN off, an HTTP diagnostic request through a
+single node and a speed test. A node the core rejects at start is disabled
+with the core's reason, and the VPN comes up on the remaining nodes.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
+| Feature | 009-NODE_HEALTH |
 | Type | Product feature |
 | Absorbed | `§008F` `§015F` `§392F` `§478F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -213,16 +221,21 @@ rejection:   Start → core start → rejection names the node → disable + ver
 
 ## Boundaries
 
-- The node list, sort by ping, endpoint state badges — 007-NODE_LIST.
-- Group composition and balancing, detour, the dependency graph of dead nodes —
-  006-DETOUR_AND_BALANCE; this feature only feeds it fresh measurements.
-- Texts and grouping of node notifications by code — 013-DIAGNOSTICS.
-- Live statistics and a group's node selection in real time — 012-LIVE_STATE.
-- The WARP endpoint scanner uses the same test session — 015-WARP.
-- Layered chain probe — 006-DETOUR_AND_BALANCE.
+- The node list, sort by ping, endpoint state badges — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
+- Group composition and balancing, detour, the dependency graph of dead nodes
+  — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md); this
+  feature only feeds it fresh measurements.
+- Texts and grouping of node notifications by code —
+  [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md).
+- Live statistics and a group's node selection in real time —
+  [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
+- The WARP endpoint scanner uses the same test session — [015-WARP](../015-WARP/FEATURE.md).
+- Layered chain probe — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md).
 - The speed test does not address a node: it measures the device's current
   path (through the tunnel if the VPN is up) and cannot be cancelled before
   the run ends.
+- The speed test stays at its current scope; warm-up, cancelling a run and
+  an own server from `015F` are not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)).
 - Depends on OS capabilities: starting the VPN from the background without UI
   (no auto-disable there), the process memory limit that determines the test
   batch size.
@@ -231,13 +244,13 @@ rejection:   Start → core start → rejection names the node → disable + ver
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Node ping | single and mass measurement, cancellation, auto-ping, isolation by Direction, color | P1–P4, P6 | [node-ping.md](FUNCTIONS/node-ping.md) |
-| Ping settings | global URL/timeout, presets, Direction override | P5 | [ping-settings.md](FUNCTIONS/ping-settings.md) |
-| URLTest group | core group parameters, reselection, reconciling the timing pair | P6–P8 | [urltest-group.md](FUNCTIONS/urltest-group.md) |
-| List server test | Test servers in a subscription and folder, thresholds, bulk actions | P3, P9–P12 | [server-list-test.md](FUNCTIONS/server-list-test.md) |
-| Node diagnostics | HTTP request through a node, raw reply | P13 | [node-diagnostics.md](FUNCTIONS/node-diagnostics.md) |
-| Auto-disable of core-rejected nodes | disabling nodes on core rejection, verdict, banner | P14–P16 | [core-reject-auto-disable.md](FUNCTIONS/core-reject-auto-disable.md) |
-| Speed test | ping / download / upload of the current path | P17 | [speed-test.md](FUNCTIONS/speed-test.md) |
+| Node ping | Measures one node or all visible nodes through the running core, cancels on a second tap, pings automatically after connecting and keeps results separate per Direction. | P1–P4, P6 | [node-ping.md](FUNCTIONS/node-ping.md) |
+| Ping settings | Sets the global ping URL and timeout with presets, and lets a Direction override them. | P5 | [ping-settings.md](FUNCTIONS/ping-settings.md) |
+| URLTest group | Passes measurement and switching parameters to the core's `urltest` group, forces a re-test with reselection and keeps `interval` and `idle_timeout` consistent. | P6–P8 | [urltest-group.md](FUNCTIONS/urltest-group.md) |
+| List server test | Tests every node of a subscription or folder without the VPN, colours badges by thresholds and applies bulk actions to the results. | P3, P9–P12 | [server-list-test.md](FUNCTIONS/server-list-test.md) |
+| Node diagnostics | Sends one HTTP request through a node to a chosen service and shows the raw reply, without switching the active node. | P13 | [node-diagnostics.md](FUNCTIONS/node-diagnostics.md) |
+| Auto-disable of nodes rejected by the core | Disables nodes the core rejects at start, keeps the core's verbatim reason as a verdict and reports them in a banner. | P14–P16 | [core-reject-auto-disable.md](FUNCTIONS/core-reject-auto-disable.md) |
+| Speed test | Measures ping, download and upload of the device's current path, through the tunnel when the VPN is up. | P17 | [speed-test.md](FUNCTIONS/speed-test.md) |
 
 ## Related features
 
@@ -245,6 +258,7 @@ rejection:   Start → core start → rejection names the node → disable + ver
 - [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — registry checks at parse time; core-rejection auto-disable is the second line behind them.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — group composition, balancing, detour, the dead-node dependency graph and the layered chain probe; fed by this feature's measurements.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — the node list, sort by ping, endpoint state badges and node/folder toggles.
+- [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) — the Direction whose nodes are measured: per-Direction ping maps and overrides, the `<tag>-auto` twin's parameters.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — live statistics, the group's current selection and speed on the home screen.
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — texts and grouping of node notifications by code (including `core_rejected`).
 - [015-WARP](../015-WARP/FEATURE.md) — the WARP endpoint scanner reuses the same test session and sets a folder's own test URL/timeout.

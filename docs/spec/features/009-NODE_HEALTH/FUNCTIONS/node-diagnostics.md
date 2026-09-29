@@ -1,9 +1,13 @@
 [English](node-diagnostics.md) · [Русский](node-diagnostics.ru.md)
 
-# Node diagnostics
+# Node diagnostics — an HTTP request through one node to see what sites see
+
+The Diagnostics tab sends one HTTP request through a chosen node and shows
+the raw reply, which explains cases like "ping works but sites don't open"
+or a wrong exit country.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [009-NODE_HEALTH](../FEATURE.md) |
 | Promises | P13 |
 | State | ✅ written from code, 2026-09-28 |
@@ -84,8 +88,8 @@ address, exchange time or error text.
 - Does not answer "what am I going through right now": the live route with
   rules and group selection is checked by an ordinary request from the device.
 - Layered chain probe (the block above the check on the chain screen) —
-  006-DETOUR_AND_BALANCE.
-- Notification texts and grouping — 013-DIAGNOSTICS.
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
+- Notification texts and grouping — [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FEATURE.md).
 
 ## Revisions
 

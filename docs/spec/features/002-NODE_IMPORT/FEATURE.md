@@ -1,12 +1,20 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 002 — NODE_IMPORT — parsing links and configs into a single node model
+# Node import — share links, Xray and sing-box JSON, WireGuard and AmneziaWG configs in one node model
+
+LxBox parses proxy share links, Xray and sing-box JSON, WireGuard and AmneziaWG configs and Amnezia
+`vpn://` profiles into sing-box nodes. Supported link schemes include VLESS with REALITY, VMess,
+Trojan, Shadowsocks, Hysteria2, TUIC, AnyTLS, SOCKS, HTTP, SSH, NaiveProxy, WireGuard and MASQUE.
+Every entry that does not become a node is reported with a reason code, and any node can be exported
+back to a share link. The parsing rules come from a contract registry shared with the launcher, so
+both apps turn the same input into the same node.
 
 | Field | Value |
 |------|----------|
+| Feature | 002-NODE_IMPORT |
 | Type | Product feature |
 | Absorbed | `§019F` `§026F` `§037F` `§097F` `§321F` `§368F` `§460F` `§472F` `§480F` `§584F` |
-| Contract | contract registry `1.1.99` (protocols, source kinds, warnings, limits); documentation mirror — `docs/contract/` |
+| Contract | contract registry `1.1.99` (protocols, source kinds, warnings, limits) — [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md) |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
@@ -18,13 +26,13 @@ turns any of them into **one** node form — a body in the sing-box core form
 (outbound or endpoint) with a name, a source and a list of warnings — and
 can do the reverse: build a share link from a node.
 
-Protected principles:
+Principles the feature protects:
 
 - **One rule — one place.** What counts as an allowed field value,
   which link schemes exist and how they are spelled, what text a warning has —
   is decided by the contract registry, shared with the launcher. The app executes it rather than
   keeping its own copy.
-- **Not a single silent loss.** An entry that did not become a node is named by
+- **No silent losses.** An entry that did not become a node is named by
   a code with a reason; one broken entry does not bring down its neighbours.
 - **A node the core will not accept does not survive until start.** It is removed at
   parse time instead of bringing down the whole config later.
@@ -59,16 +67,8 @@ Protected principles:
   body — `core_rejected` with the decoder's reason. Exception: a line with no
   `://` at all is dropped silently. **Witness:** unit tests of the group "§506 item 2 — a reason instead
   of silence". **Mutation:** a rejection branch returns "no node" without a code.
-- **P6. A node the core would reject is removed at parse time.** A registry rule
-  with the "remove node" verdict (severity `error`) removes the entry from the list and puts
-  the code into the rejects. **Witness:** unit test "a method outside the core set removes the node
-  entirely"; unit test "URI `headerType=http` → no node, code
-  `transport_header_unsupported`". **Mutation:** the `drop_node` verdict turned into a
-  warning on a live node.
-- **P7. Parsing does not depend on the running core.** Core-version checks
-  (`min_core`) are off at parse time — they are judged at build. **Witness:** unit test
-  "core gates at parse time are off: min_core yields no code". **Mutation:** parsing
-  passes the real core version to the sanitizer.
+- **P6.** moved to [025-CONTRACT_REGISTRY · P2](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
+- **P7.** moved to [025-CONTRACT_REGISTRY · P3](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P8. A repeat within one body collapses; across sources it does not.**
   The key is the node content without the tag and `detour`, plus the dial path. **Witness:** unit test
   "`amneziawg://` and `vpn://` of one node — one node and `duplicate`"; unit test "dedup
@@ -84,16 +84,8 @@ Protected principles:
   **Witness:** unit test "`$scheme`: hash, tag and body of every case in place"; unit test
   "wireguard: INI cases give the same hash, tag and body". **Mutation:** the tag fallback
   of a nameless link changed.
-- **P11. Warnings survive a restart.** A node is stored as the source text
-  and re-parsed on every load — warnings are
-  recomputed, not serialized. **Witness:** unit test "warnings
-  survive storage: the node is re-parsed". **Mutation:** warnings
-  are read from storage.
-- **P12. Secrets do not leak into reasons.** The value of a field marked by the registry as
-  `secret` is `***` in warning text and in the rejects. **Witness:** unit tests
-  "a broken secret uuid leaks neither into the text nor into AppLog", "a secret
-  private_key in dropped.value — ***". **Mutation:** masking only in the text,
-  not in `value`.
+- **P11.** moved to [025-CONTRACT_REGISTRY · P4](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
+- **P12.** moved to [025-CONTRACT_REGISTRY · P5](../025-CONTRACT_REGISTRY/FEATURE.md#promises).
 - **P13. A link with a private key is copied only after confirmation.**
   **Witness:** widget test "private_key role" and the `copyNodeUri` group (dialog
   "Link contains a private key", cancel does not touch the clipboard). **Mutation:** detecting a
@@ -120,7 +112,7 @@ limits.
 
 | Parameter | Value | Source |
 |----------|----------|----------|
-| Contract registry version | `1.1.99`, shipped in the app build | sync with the launcher |
+| Contract registry version | `1.1.99`, shipped in the app build | [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md) |
 | Length of one link | ≤ 65536 characters, otherwise `uri_too_long` | registry limit |
 | Length of a `vpn://` link | ≤ 524288 characters | registry limit |
 | Amnezia profile decompression | ≤ 4 MiB (anti-bomb) | registry limit |
@@ -196,35 +188,47 @@ node ─► emit by the registry emit section ─► share link (or rejection)
 - The meaning of groups and chains after import — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md).
 - Showing warnings in the node list — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md);
   editing a node by schema — [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md).
-- Registry sync and contract version — [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
+- The registry itself, the sanitizer, the build gate and the warning-code dictionary —
+  [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md); the core pin —
+  [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md).
 - Does not do: `.ovpn`, Clash YAML (recognized, yields no nodes), hysteria v1
   as a node, Amnezia containers other than WG/AWG, network checks of a node.
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): recognizing the format by the file
+  extension (`584F`) — the format is recognized by text only.
 
 ## Functions
 
 | Function | What it does | Promises | File |
 |---------|-----------|----------|------|
-| Share link parsing | One link of any scheme → a node or a named reason | P1 P4 P5 P10 P15 | [share-link-parse.md](FUNCTIONS/share-link-parse.md) |
-| Body recognition | Source kind, base64 removal, slicing into entries | P3 P5 | [body-recognition.md](FUNCTIONS/body-recognition.md) |
-| Xray JSON import | Xray elements → nodes, groups, chains | P4 P8 P9 | [xray-json-import.md](FUNCTIONS/xray-json-import.md) |
-| sing-box JSON import | Outbound/array/config → nodes, groups, `detour`, foreign types | P4 P8 P9 P16 | [singbox-json-import.md](FUNCTIONS/singbox-json-import.md) |
-| WireGuard / AmneziaWG import | `.conf`, `awg://`, `vpn://` → endpoint | P8 P14 | [wireguard-amnezia-import.md](FUNCTIONS/wireguard-amnezia-import.md) |
-| Registry pipeline | Mapper → sanitizer → model, dedup, identity | P2 P6 P7 P8 P10 P11 | [registry-pipeline.md](FUNCTIONS/registry-pipeline.md) |
-| Parse warnings | Codes on the node and in the rejects, texts from the registry | P5 P6 P11 P12 | [parse-warnings.md](FUNCTIONS/parse-warnings.md) |
-| Export to a share link | Node → link by the registry, confirmation for a key | P2 P13 | [share-link-export.md](FUNCTIONS/share-link-export.md) |
+| Share link parsing | Turns one link of any supported scheme into a node or names the reason it was rejected. | P1 P4 P5 P10 P15 | [share-link-parse.md](FUNCTIONS/share-link-parse.md) |
+| Body recognition | Classifies a body as exactly one source kind, removes base64 wrappers and splits it into entries. | P3 P5 | [body-recognition.md](FUNCTIONS/body-recognition.md) |
+| Xray JSON import | Turns Xray configs in any of four JSON forms into sing-box nodes, auto-select groups and chains. | P4 P8 P9 | [xray-json-import.md](FUNCTIONS/xray-json-import.md) |
+| sing-box JSON import | Takes nodes, groups and `detour` chains from a sing-box outbound, array or config, including types outside the registry. | P4 P8 P9 P16 | [singbox-json-import.md](FUNCTIONS/singbox-json-import.md) |
+| WireGuard / AmneziaWG import | Turns a wg-quick `.conf`, a `wg://`/`awg://` link or an Amnezia `vpn://` profile into a `wireguard` endpoint. | P8 P14 | [wireguard-amnezia-import.md](FUNCTIONS/wireguard-amnezia-import.md) |
+| Export to a share link | Builds a share link from a node by the registry and asks for confirmation before copying a private key. | P2 P13 | [share-link-export.md](FUNCTIONS/share-link-export.md) |
+
+Registry-driven parse pipeline and Parse warnings moved to [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md).
 
 ## Related features
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — supplies the text (URL, file, paste, QR) and decides where the nodes go.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — builds the final config and judges core gates (build tags, `min_core`) that are off at parse time.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — gives meaning to the groups and chains that import produces.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — supplies the text (URL, file, paste, QR)
+  and decides where the nodes go.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — builds the final config and judges core gates
+  (build tags, `min_core`) that are off at parse time.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — gives meaning to the groups and
+  chains that import produces.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — shows node warnings and rejects in the list.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — edits a node by the same registry body schema.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — core rejections and toggling/probing WireGuard nodes on the fly.
 - [015-WARP](../015-WARP/FEATURE.md) — generates WARP nodes; `masque` links are WARP nodes.
 - [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — details of TLS obfuscation and XHTTP carried by imported nodes.
-- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — the node storage form (own link / source text) and backup.
-- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — registry sync and the contract version the feature executes.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — the node storage form (own link /
+  source text) and backup.
+- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the core pin whose version and build tags the build gate judges.
+- [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md) — the registry pipeline, sanitizer, build gate and
+  warning codes the feature executes.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — what the `tailscale` endpoint parsed here becomes:
+  the node, its identity, the tailnet DNS and routes.
 
 ## Maintenance notes
 

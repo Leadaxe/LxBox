@@ -1,6 +1,8 @@
 [English](coded-notifications.md) · [Русский](coded-notifications.ru.md)
 
-# Coded notifications
+# Coded notifications — grouped messages with a code, cause and fix
+
+Codes come from the contract registry and stay stable between versions.
 
 | Field | Value |
 |-------|-------|

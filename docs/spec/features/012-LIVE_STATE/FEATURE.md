@@ -1,21 +1,26 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 012 — LIVE_STATE — live state of the running core
+# Live state — VPN traffic statistics, connections and running config
+
+LxBox shows live traffic, open connections and the running config of the
+sing-box core, with the owner app, rule and node of each connection. The data
+appears in the home-screen traffic bar and on the Statistics screen with the
+Stats and Conns tabs; the Profiler tab is described in 028-TRAFFIC_PROFILER.
 
 | Field | Value |
 |-------|-------|
+| Feature | 012-LIVE_STATE |
 | Type | Product feature |
-| Absorbed | `§016F` `§044F` `§122F` `§123F` |
+| Absorbed | `§016F` `§122F` `§123F` |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
 
 With the tunnel up, the user wants to see what is going on inside: how much has
 been transferred, how many connections are open, where a particular app goes,
-through which rule and which node it went out, which DNS queries fail to
-resolve, which config the core is actually running. The feature turns the
-core's internal state into observable screens and numbers — without open
-ports, manual dumps or external tools.
+through which rule and which node it went out, which config the core is
+actually running. The feature turns the core's internal state into observable
+screens and numbers — without open ports, manual dumps or external tools.
 
 The feature protects four principles:
 
@@ -27,11 +32,10 @@ The feature protects four principles:
   zero. In the background only what the user explicitly started lives (profiler
   recording).
 - **The truth about a packet's path comes from the core.** The chain "rule →
-  groups → node → detour → target", the owner of a connection and of a DNS
-  query are taken from the core, not guessed by the client.
+  groups → node → detour → target" and the owner of a connection are taken
+  from the core, not guessed by the client.
 - **An honest "don't know".** The verdict "config is stale" has a third value —
-  "cannot answer"; an event without an owner is shown as "no owner", not
-  hidden.
+  "cannot answer"; a failed comparison is not reported as a match.
 
 ## Promises
 
@@ -77,62 +81,23 @@ The feature protects four principles:
   domain — the host from the address. **Witness**: units "§204 routingLineOf
   1:1 Conn ↔ Event", "chains and detours are carried SEPARATELY".
   **Mutation**: detour glued into the group chain.
-- **P9. A short connection is seen whole and once.** A connection opened and
-  closed between ticks gives both phases; a closed one that keeps arriving in
-  snapshots for another 5 min is closed exactly once. **Witness**: units
-  "short conn with closedAt>0 at once → both phases", "the same closed conn for
-  2 ticks → ONE close". **Mutation**: the consumer receives only live
-  connections.
-- **P10. Connection time is by the core's clock.** Duration is computed from
-  the core's timestamps; a "probable RST" is a close in under 1 s with no bytes.
-  **Witness**: units "kernel timestamps: duration from createdAt/closedAt",
-  "TCP RST early flagged on close". **Mutation**: duration from the moment the
-  snapshot arrived.
-- **P11. The owner comes from the core; no owner is visible.** The app package
-  is taken from the core's data (the UID suffix is stripped); an event without
-  an owner is marked "no owner". The unattributed warning is lit only by
-  failures (DNS failure, TCP/UDP without an owner), more than 5 within 30 s.
-  **Witness**: units "UID-suffixed package name → verified", "successful
-  unattributed DNS resolves do NOT light the banner". **Mutation**: a
-  successful DNS without an owner counts as an alarm.
-- **P12. Recording — only on an explicit START.** Without recording, events do
-  not accumulate. **Witness**: unit "recording off → events ignored".
-  **Mutation**: auto-start of recording.
-- **P13. The log retention window is selectable and remembered.** 1 min / 10 min
-  / 1 h, default 10 min, survives a restart. **Witness**: unit "profiler
-  retention — default + round-trip + persist". **Mutation**: the window is a
-  hard-coded constant.
-- **P14. The profiler filter lives for the whole app session.** Switching tabs
-  and leaving statistics do not reset the filter; reset — "Reset all" or a
-  restart. **Witness**: units §244 "the filter survives unmount/remount".
-  **Mutation**: the filter is a field of the screen.
-- **P15. DNS is attributed to what was asked.** The event carries the original
-  domain, the CNAME chain separately and the first answer address as the IP.
-  **Witness**: units "DNS chain attribution: CNAME hops in answers, ip = final
-  A", "rdata as a FULL RR string → take the value". **Mutation**: the event
-  domain = the final CNAME target.
-- **P16. A DNS failure is an event with a reason.** The core's failure flag
-  decides, not the response code; `-1` — "there was no reply". **Witness**:
-  unit "DNS fail produces dnsTimeout issue". **Mutation**: failure by the
-  response code.
-- **P17. DNS group trace — only on group queries.** The group path, member
-  probes, fan-out and survival mode are visible in the event details; ordinary
-  queries have none of these fields. **Witness**: units §315 "fan-out: path,
-  probes and the fanned flag", "NOT a group query → no trace keys".
-  **Mutation**: empty trace fields on every event.
-- **P18. DNS degradation is recognized while the link is alive.** The banner "N%
-  of DNS queries failing" — at a failure share ≥ 20 % and at least 3 failures
-  within 30 s, and only if there were connections in the same window.
-  **Witness**: units §262 "3 fails of 10 + activity → unhealthy", "5 fails
-  100%, but NO conn activity → healthy". **Mutation**: the activity gate
-  removed.
+- **P9.** moved to [028-TRAFFIC_PROFILER · P5](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P10.** moved to [028-TRAFFIC_PROFILER · P6](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P11.** moved to [028-TRAFFIC_PROFILER · P7](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P12.** moved to [028-TRAFFIC_PROFILER · P1](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P13.** moved to [028-TRAFFIC_PROFILER · P3](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P14.** moved to [028-TRAFFIC_PROFILER · P11](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P15.** moved to [028-TRAFFIC_PROFILER · P13](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P16.** moved to [028-TRAFFIC_PROFILER · P14](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P17.** moved to [028-TRAFFIC_PROFILER · P15](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
+- **P18.** moved to [028-TRAFFIC_PROFILER · P16](../028-TRAFFIC_PROFILER/FEATURE.md#promises).
 - **P19. NETWORKS shows nodes outside the selection lists.** Tailscale nodes
   from `endpoints[]` without `exit_node` are visible as a separate
   pseudo-direction with the VPN up, with a state instead of latency; such a
   node cannot be chosen as the exit. **Witness**: units "NETWORKS
   composition", "VPN off — NETWORKS is not shown", "a state in place of
   latency, a tap does not select the node". **Mutation**: NETWORKS is written
-  to the config as a group.
+  to the config as a group. In detail — [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
 - **P20. The freshness verdict is three-valued.** "Matches / stale / don't
   know"; "don't know" does not clear the "restart needed" banner. **Witness**:
   units §324 "no canonical form → unknown (NOT fresh)", "no snapshot of the
@@ -153,41 +118,35 @@ The feature protects four principles:
 
 | Setting | Values | Default | Where |
 |---------|--------|---------|-------|
-| Profiler log retention window | 1 min / 10 min / 1 h | 10 min | the `⏱` button in the profiler control row; part of the backup |
-| Profiler recording | START / STOP | stopped | Profiler tab header; only until the app restarts |
 | Showing closed connections | 30 s / all until turned off | 30 s | a toggle in the Conns tab; only while the screen is open |
-| Log grouping | stream / by domain / by IP | stream | the "Grouping" menu |
-| Log filter | axes Protocol (DNS/TCP/UDP), App (packages + "no owner"), Rule, Outbound; search by domain/IP/app | empty | the "Filter" window; the whole app session |
 | Interrupt connections on switch | on/off | off | belongs to 010-VPN_SERVICE; here — the observable effect |
 
 Fixed values (not configurable): status tick 0.5 s / 0.1 s / 0 in the
-background; home-screen counters redrawn at most once per 1 s; statistics,
-connections and log lists recomputed at most once per 0.7 s; log ceiling
-20,000 events; ring of unowned events — 50; the core keeps closed connections
-for 5 min; status channel reconnect — from 0.5 s to 8 s.
+background; home-screen counters redrawn at most once per 1 s; statistics
+and connection lists recomputed at most once per 0.7 s; the core keeps closed
+connections for 5 min; status channel reconnect — from 0.5 s to 8 s. The
+profiler's knobs and quotas — 028-TRAFFIC_PROFILER.
 
 **Contract with the core.** The feature emits no config keys. Consumed core
 calls and subscriptions: `CommandStatus` (volume, memory, goroutines,
 `connectionsIn` / `connectionsOut`, the interval is set by the subscriber),
 `CommandGroup`, `CommandOutbounds`, `CommandConnections` (deltas; the `chain`,
 the `detour` tail, owner, `createdAt`/`closedAt`), `CommandDNS` (stream of DNS
-queries: domain, type, rcode, answer source, failure flag and reason, owner,
-server and its type, channel, answers, group path, probes, fan-out, survival),
+queries, consumed by 028-TRAFFIC_PROFILER),
 `GetGroups`, `GetOutbounds`, `GetRunningConfig`, `FormatConfig`,
 `closeConnection`, `closeConnections`, `SubscribeTailscaleStatus`
 (`BackendState`, `StateText`).
 
 ## Inputs / Outputs
 
-**Inputs:** the tunnel service status; core subscriptions and replies (above);
-the app lifecycle; gestures — Statistics, START/STOP, closing connections,
-filter, grouping, retention window, export; the saved config; the rule
-catalog.
+**Inputs:** the tunnel service status; core subscriptions and replies (see
+"Contract with the core"); the app lifecycle; gestures — Statistics,
+START/STOP of the profiler recording, closing connections; the saved config;
+the rule catalog.
 
 **Outputs:** the home-screen traffic bar (↑/↓ volume, app connections and
 connections to servers, the "Live" indicator, connection time); the Statistics
-screen with the Stats / Conns / Profiler tabs; connection and event details;
-log export to JSON; the "no owner" and "DNS degrading" banners; NETWORKS node
+screen with the Stats / Conns tabs; connection details; NETWORKS node
 rows; the running-config snapshot and the freshness verdict for the "restart
 needed" banner; `closeConnection` / `closeConnections` calls.
 
@@ -199,9 +158,8 @@ core ──CommandStatus──► status (0.5 / 0.1 / 0 s) ──► traffic bar
      ──Connections (deltas)──► per-client accumulator ──► snapshot
           ├─► Stats: live only → by rule
           ├─► Conns: live + closed (30 s / all)
-          └─► profiler (when recording): open/close events
-     ──CommandDNS──► profiler: resolve/fail events ──► log (window, 20,000)
-                                   └─► DNS health detector → banner
+          └─► profiler channel (when recording) ──► 028-TRAFFIC_PROFILER
+     ──CommandDNS──► profiler channel ────────────────► 028-TRAFFIC_PROFILER
      ──GetRunningConfig──► session snapshot ──► node model; comparison with
                               the canonical saved one (FormatConfig) → verdict
 tunnel service ──status──► Connected/Disconnected (independent of the channels)
@@ -221,8 +179,7 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
   are fetched with a one-off `GetGroups` (up to ~5 s in steps of 0.4 s).
 - Each connection consumer decides itself what to show: Stats — live only,
   Conns — live and closed, the profiler — everything as events.
-- On tunnel stop the channel caches are reset; the profiler log is in memory
-  only, an app restart erases it.
+- On tunnel stop the channel caches are reset.
 - One-off calls distinguish "unavailable" from "empty"; "unavailable" does not
   touch the screen.
 
@@ -230,15 +187,17 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
 
 - Start, stop, reconnect, recognizing a "silent core" by status silence —
   010-VPN_SERVICE.
-- The app and core log, Debug API (including exporting the profiler log
-  outward), crash reports — 013-DIAGNOSTICS.
+- The profiler and the DNS trace — 028-TRAFFIC_PROFILER: recording,
+  attribution, filters, DNS health, the `/profiler/*` routes.
+- The app and core log, crash reports — 013-DIAGNOSTICS; the Debug API —
+  027-DEBUG_API.
 - The "restart needed" banner and when to raise it — 003-CONFIG_BUILD; here
   only the verdict that can clear it.
-- Latency measurement, the probe, the Tailscale Network tab — 009 / 008; node
-  selection and the list of directions — 007-NODE_LIST (NETWORKS is only added
-  to it).
-- There is no per-app traffic breakdown on the Stats screen; per-app sessions
-  and a separate App tab were removed — only the shared log with an App filter.
+- Latency measurement, the probe — 009-NODE_HEALTH; the Tailscale Network tab
+  — 030-TAILSCALE; node selection and the list of directions — 007-NODE_LIST
+  (NETWORKS is only added).
+- There is no per-app traffic breakdown on the Stats screen, and it is not
+  planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)) — that is the profiler's log.
 - Depends on OS capabilities: "foreground / background" events, the traffic
   owner.
 
@@ -246,26 +205,40 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Status and traffic bar | Two worlds of status, home counters, connection time, bypass warning | P1, P4 | [connection-status.md](FUNCTIONS/connection-status.md) |
-| Data channels and energy model | Core subscriptions, frequency, sleep in the background, recovery after reopening | P2, P3, P5 | [data-channels.md](FUNCTIONS/data-channels.md) |
-| Traffic statistics | Summary, traffic by rules, process memory | P6 | [traffic-statistics.md](FUNCTIONS/traffic-statistics.md) |
-| Live connections | List, details, closing, hung ones, routing line, breaking on node switch | P7, P8, P22 | [live-connections.md](FUNCTIONS/live-connections.md) |
-| Traffic profiler | Recording, a log across all apps, attribution, grouping, filter, export | P9–P14 | [traffic-profiler.md](FUNCTIONS/traffic-profiler.md) |
-| DNS trace | DNS events with attribution, CNAME, failures, group trace, health detector | P15–P18 | [dns-trace.md](FUNCTIONS/dns-trace.md) |
-| NETWORKS pseudo-direction | Tailscale nodes outside the selection lists with their state | P19 | [networks-direction.md](FUNCTIONS/networks-direction.md) |
-| Running config and freshness | Config snapshot from the core, verdict "matches / stale / don't know" | P20, P21 | [running-config.md](FUNCTIONS/running-config.md) |
+| Status and traffic bar | Shows the tunnel state and the traffic bar on the home screen: volume, app and server connections, connection time and the VPN bypass warning. | P1, P4 | [connection-status.md](FUNCTIONS/connection-status.md) |
+| Core data channels and energy model | Delivers core subscriptions to the screens at the rate the user sees, sleeps in the background and recovers after the app is reopened. | P2, P3, P5 | [data-channels.md](FUNCTIONS/data-channels.md) |
+| Traffic statistics | Shows the session volume, the number of live connections, process memory and traffic per routing rule down to a single connection. | P6 | [traffic-statistics.md](FUNCTIONS/traffic-statistics.md) |
+| Live connections | Lists live and recently closed connections with the routing line, highlights one-way ones and closes one, all, or those of a switched group. | P7, P8, P22 | [live-connections.md](FUNCTIONS/live-connections.md) |
+| NETWORKS pseudo-direction | Shows Tailscale nodes without `exit_node` as a separate row on the home screen, with their live state instead of latency. | P19 | [networks-direction.md](FUNCTIONS/networks-direction.md) |
+| Running config and freshness verdict | Keeps a snapshot of the config the core runs and answers whether the saved config matches it: "matches", "stale" or "don't know". | P20, P21 | [running-config.md](FUNCTIONS/running-config.md) |
+
+Traffic profiler moved to [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.md).
+DNS query trace moved to [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.md).
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — owns the "restart needed" banner; this feature only supplies the freshness verdict that can clear it.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — the user rule catalog that names rules in statistics, connections and the profiler.
-- [005-DNS](../005-DNS/FEATURE.md) — DNS groups, DNS and FakeIP settings behind the DNS trace and the "DNS queries are failing" sheet.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — owns the "restart
+  needed" banner; this feature only supplies the freshness verdict that can
+  clear it.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — the user rule catalog that names
+  rules in statistics and connections.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — node selection and the list of directions, to which NETWORKS is added.
-- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — the Tailscale node's Network tab, sharing the state subscription with NETWORKS.
-- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — latency measurement and the node probe; the speed test defers home-screen speed to this feature.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that owns the status, "Connection lost" on status silence and the "Interrupt connections on switch" setting.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — app and core logs, the Debug API (including serving the profiler log), crash reports.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — the Tailscale node's
+  Network tab, sharing the state subscription with NETWORKS.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — latency measurement and
+  the node probe; the speed test defers home-screen speed to this feature.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
+  owns the status, "Connection lost" on status silence and the "Interrupt
+  connections on switch" setting.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — app and core logs,
+  crash reports.
 - [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md) — viewing the resulting config.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API: `/state/*`
+  and `/config/running` read what this feature shows.
+- [028-TRAFFIC_PROFILER](../028-TRAFFIC_PROFILER/FEATURE.md) — the profiler
+  and the DNS trace built on the profiler channel of this feature.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — the Tailscale node behind
+  the NETWORKS row: its identity, the Network tab and the tailnet route.
 
 ## Maintenance notes
 
@@ -276,13 +249,9 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
 - After swiping from recents the data channels are orphaned: on the first
   start of the new engine they must be resynced, but only on the first —
   otherwise every tunnel reconnect loses connections (§185, §193).
-- The core keeps closed connections for 5 min and sends them every tick: a
-  consumer that does not remember what it has already closed produces
-  duplicates (§176).
-- The `rdata` of a DNS answer is the full record string, not the value (§180).
 - The list of fields the core overlays on top of the config at start lives in
   two places (the freshness verdict and the service); a divergence gives an
   eternal "stale" or a missed change — held by an invariant test (§324).
 - After a reload the core keeps answering with the previous config for another
-  ~1 s without an error; one has to tell them apart by content, and accept an
-  identical config after ~5 s (§311, §384).
+  ~1 s without an error; the replies are told apart by content, and an
+  identical config is accepted after ~5 s (§311, §384).

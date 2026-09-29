@@ -1,6 +1,9 @@
 [English](xhttp-params.md) · [Русский](xhttp-params.ru.md)
 
-# XHTTP parameters
+# XHTTP parameters — the full Xray XHTTP transport carried over to sing-box
+
+LxBox reads every XHTTP (SplitHTTP) parameter from links, Xray JSON and sing-box
+JSON, including `extra` and `xmux`, and keeps invalid values away from the core.
 
 | Field | Value |
 |-------|-------|

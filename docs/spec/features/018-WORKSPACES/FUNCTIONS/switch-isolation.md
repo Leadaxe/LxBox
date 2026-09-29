@@ -1,6 +1,9 @@
 [English](switch-isolation.md) · [Русский](switch-isolation.ru.md)
 
-# Switch isolation
+# Switch isolation — no leftovers from the previous workspace
+
+After a workspace switch, pending operations of the previous set cannot write
+into the new one, and each set keeps its own Tailscale identities.
 
 | Field | Value |
 |-------|-------|
@@ -48,13 +51,14 @@ new set does not raise "config is stale" because of someone else's leftover.
   slot has its own set of "node → directory" entries. "Save as" copies the
   current slot's entries into the new slot, Rename moves them, Delete removes
   only directories not referenced by other slots. An index failure does not
-  stop the set operation.
+  stop the set operation. In detail —
+  [030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/device-identity-and-state.md).
 
 ## Boundaries
 
 - Slots already corrupted before the fix are not healed — only from a backup.
-- A storage-level barrier (a set epoch at every writer) is not done —
-  follow-up to 515.
+- A storage-level barrier (a set epoch at every writer, follow-up to 515) is
+  not done and is not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
 - Handing Tailscale state directories to nodes during the build —
   [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md); the feature only
   maintains the per-slot entry sets.

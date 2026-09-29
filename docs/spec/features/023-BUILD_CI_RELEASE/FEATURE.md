@@ -1,20 +1,22 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 023 — BUILD_CI_RELEASE — build, checks, release, stores
+# Build, CI and release — versioning, GitHub Releases, F-Droid and Google Play
+
+LxBox is built by one GitHub Actions workflow and ships each version to GitHub Releases, F-Droid and
+Google Play under three incompatible signatures. This page covers the build toolchain, the checks that run
+before a merge, how the version and build code are derived from the git tag, and the release ritual. It is a
+separate feature because mistakes here are invisible to tests: the version "jitters" in the branch, the build
+code overtakes the release, a store receives a candidate — and the one who finds out is a user whose update
+will not install.
 
 | Field | Value |
 |------|----------|
+| Feature | 023-BUILD_CI_RELEASE |
 | Type | Process feature (delivery infrastructure) |
 | Absorbed | `§021F` |
 | Layer | `.github/workflows/ci.yml` (the only workflow), `scripts/version-code.sh`, `scripts/fetch-libbox.sh`, `scripts/build-local-apk.sh` |
 | Procedure | [RELEASE_PROCESS.md](../../../RELEASE_PROCESS.md) — the canonical protocol; here the rules, not a copy |
 | State | ✅ written from code, 2026-09-29 · releases ship (latest — `v2.25.8`) |
-
-What the app is built with, what is checked before a merge, and how one version
-goes out to three delivery channels with three incompatible signatures. A
-separate feature because mistakes here are invisible to tests: the version
-"jitters" in the branch, the build code overtakes the release, a store receives
-a candidate — and the one who finds out is a user whose update will not install.
 
 ## Principles it protects
 
@@ -22,7 +24,7 @@ a candidate — and the one who finds out is a user whose update will not instal
    are computed from the git tag at build time; the code is never raised by hand.
 2. **One build-code formula** — only in `scripts/version-code.sh`; CI, the local
    build and the F-Droid recipe call it rather than repeat it. Diverging codes
-   break installing over in both directions.
+   break installing one build over another in both directions.
 3. **Green CI is the only test gate.** The full test suite is not run locally;
    the verdict is taken by `head_sha` through the API, not from "the latest run".
 4. **A candidate never reaches users.** `-rc.N` is only a GitHub pre-release for
@@ -123,7 +125,7 @@ Android TV is best-effort (§372): the manifest is compatible, there is no separ
 - **CHANGELOG** — the Keep a Changelog format, `[Unreleased]` on top, entries
   linking to tasks.
 - **The merge into `main` is two-step** (`--no-commit`, then `commit -m`); the
-  tag — as a separate command. `--no-ff -m` fails on "empty commit message", and
+  tag is set by a separate command. `--no-ff -m` fails on "empty commit message", and
   the tag lands on the old commit.
 - **Post-flight:** bring `main` back into `develop` at once, **reverting
   pubspec** before the commit; otherwise the `checks` guard goes red.
@@ -172,10 +174,16 @@ Android TV is best-effort (§372): the manifest is compatible, there is no separ
 
 ## Related features
 
-- [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — the update check reads Releases and `docs/latest.json`, the link leads to the store of its own channel, `-dev` is silent.
+- [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — the update check reads
+  Releases and `docs/latest.json`, the link leads to the store of its own
+  channel, `-dev` is silent.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.md) — the core pin, AAR fetch, contract check in `checks`.
-- [022-ARCHITECTURE](../022-ARCHITECTURE/FEATURE.md) — rules CI checks automatically (analyze, English UI, tests only on CI).
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the app and core version in the dump and `/device` as a check of the release APK.
+- [022-ARCHITECTURE](../022-ARCHITECTURE/FEATURE.md) — rules CI checks
+  automatically (analyze, English UI, tests only on CI).
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the app and core version
+  in the dump as a check of the release APK.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the app and core version in
+  `/device` as a check of the release APK.
 
 ## Maintenance notes
 

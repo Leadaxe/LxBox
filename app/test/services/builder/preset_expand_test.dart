@@ -9,7 +9,11 @@ import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/post_steps.dart'
     show resolveDnsServersBodies;
 import 'package:lxbox/services/builder/if_engine.dart'
-    show TemplateWarnings, collectTemplateWarnings, templateWarnFragmentDropped;
+    show
+        TemplateWarnings,
+        collectTemplateWarnings,
+        templateWarnFragmentDropped,
+        templateWarnRuleUnconditional;
 import 'package:lxbox/services/builder/preset_expand.dart';
 
 import '../../contract_paths.dart' show loadTestRegistry;
@@ -306,9 +310,9 @@ void main() {
           [(templateWarnFragmentDropped, 'rule_set')]);
     });
 
-    test('§571: правило без полей-условий реестра выпадает с кодом; '
-        'action условием не считается; логическое без условий в '
-        'под-правилах выпадает', () async {
+    test('§571/§588: правило без полей-условий реестра по замыслу автора '
+        'идёт в конфиг с template_rule_unconditional; action условием не '
+        'считается; логическое без условий в под-правилах — тоже', () async {
       await loadTestRegistry();
       final preset = SelectableRule(
         label: 'Conditions',
@@ -336,18 +340,136 @@ void main() {
       final tw = TemplateWarnings();
       final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
 
-      expect(f.routingRules,
-          [{'domain_suffix': ['example.com'], 'outbound': 'direct-out'}]);
-      expect(f.dnsRules, [
-        {'query_type': ['HTTPS'], 'action': 'predefined', 'rcode': 'NOERROR'}
+      expect(f.routingRules, hasLength(3));
+      expect(f.dnsRules, hasLength(2));
+      expect([for (final w in tw.items) (w.code, w.params['kind'])], [
+        (templateWarnRuleUnconditional, 'dns.rules'),
+        // Два route-правила без условий дают одинаковые параметры —
+        // накопитель схлопывает повтор в одну запись.
+        (templateWarnRuleUnconditional, 'route.rules'),
       ]);
-      expect([for (final w in tw.items) (w.params['kind'], w.params['reason'])], [
-        ('dns.rules', 'rule_set'),
-        // Два выпавших route-правила дают одинаковые параметры — накопитель
-        // схлопывает повтор в одну запись.
-        ('route.rules', 'rule_set'),
+    });
+
+    test('§104: логическое правило судится по под-правилам — пустое '
+        'под-правило при сбое снимает всё правило, по замыслу автора — '
+        'unconditional; висячий rule_set под-правила снимает правило, '
+        'висячее имя рядом с живым убирается', () async {
+      await loadTestRegistry();
+      final preset = SelectableRule(
+        label: 'Logical',
+        presetId: 'lg',
+        vars: [
+          WizardVar(name: 'd', type: 'text', defaultValue: '', required: false),
+        ],
+        ruleSets: const [
+          {
+            'tag': 'live',
+            'type': 'inline',
+            'rules': [
+              {'domain_suffix': ['a.example']}
+            ],
+          },
+        ],
+        rule: const [
+          {
+            'type': 'logical',
+            'mode': 'or',
+            'rules': [
+              {'domain_suffix': '@d'},
+              {'rule_set': ['live']},
+            ],
+            'outbound': 'direct-out',
+          },
+          {
+            'type': 'logical',
+            'mode': 'and',
+            'rules': [
+              {'network': 'udp'},
+              <String, dynamic>{},
+            ],
+            'outbound': 'direct-out',
+          },
+          {
+            'type': 'logical',
+            'mode': 'and',
+            'rules': [
+              {'network': 'udp'},
+              {'rule_set': ['ghost']},
+            ],
+            'outbound': 'direct-out',
+          },
+          {
+            'type': 'logical',
+            'mode': 'and',
+            'rules': [
+              {'network': 'udp'},
+              {
+                'type': 'logical',
+                'mode': 'or',
+                'rules': [
+                  {'rule_set': ['live', 'ghost']},
+                ],
+              },
+            ],
+            'outbound': 'direct-out',
+          },
+        ],
+      );
+      final rule = CustomRulePreset(name: 'Logical', presetId: 'lg');
+
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
+
+      expect(f.routingRules, hasLength(2));
+      expect(f.routingRules[0]['rules'], [
+        {'network': 'udp'},
+        <String, dynamic>{},
       ]);
-      expect(tw.items.map((w) => w.code).toSet(), {templateWarnFragmentDropped});
+      final nested = ((f.routingRules[1]['rules'] as List)[1] as Map)['rules']
+          as List;
+      // Ссылка под-правила на набор пресета префиксуется, как и ссылка
+      // верхнего уровня.
+      expect(nested.single, {
+        'rule_set': ['lg:live']
+      });
+      expect([for (final w in tw.items) (w.code, w.params['reason'])], [
+        (templateWarnFragmentDropped, 'rule_set'),
+        (templateWarnRuleUnconditional, null),
+      ]);
+    });
+
+    test('§588: условия сняла пустая переменная — правило выпадает с '
+        'template_fragment_dropped; литерал без значения — в конфиг', () async {
+      await loadTestRegistry();
+      final preset = SelectableRule(
+        label: 'Lost',
+        presetId: 'lost',
+        vars: [
+          WizardVar(
+              name: 'text_a', type: 'text', defaultValue: '', required: false),
+        ],
+        rule: const [
+          {'domain_suffix': '@text_a', 'outbound': 'direct-out'},
+          {'domain_suffix': <String>[], 'outbound': 'direct-out'},
+        ],
+        dnsRule: const [
+          {'domain_suffix': '@text_a', 'server': 'dns-a'},
+        ],
+      );
+      final rule = CustomRulePreset(name: 'Lost', presetId: 'lost');
+
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
+
+      expect(f.routingRules, [
+        {'domain_suffix': <String>[], 'outbound': 'direct-out'}
+      ]);
+      expect(f.dnsRules, isEmpty);
+      expect([for (final w in tw.items) (w.code, w.params['kind'])], [
+        (templateWarnFragmentDropped, 'dns.rules'),
+        (templateWarnFragmentDropped, 'route.rules'),
+        (templateWarnRuleUnconditional, 'route.rules'),
+      ]);
     });
 
     // ─── §045: GeoIP fallback layer ────────────────────────────────────
@@ -1283,13 +1405,20 @@ void main() {
     // `package_name: json: unknown field "package_name"`.
     // Сужение (И) в sing-box выражается ТОЛЬКО вложенностью — поэтому
     // `gms_only` добавляет ВЕТВЬ во внешний `and`, а не поле в правило.
-    test('fcm-push (дефолты) → and из одной ветви, без package_name', () {
-      final f = expandPreset(
-        CustomRulePreset(name: 'FCM', presetId: 'fcm-push'),
-        realPreset('fcm-push'),
-      );
+    test('fcm-push (дефолты) → and из одной ветви, без package_name', () async {
+      // §104 — гейт «без условий» судит под-правила (реестр загружен):
+      // выпавшая `#if`-ветвь пустого под-правила не оставляет.
+      await loadTestRegistry();
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+          tw,
+          () => expandPreset(
+                CustomRulePreset(name: 'FCM', presetId: 'fcm-push'),
+                realPreset('fcm-push'),
+              ));
 
       expect(f.warnings, isEmpty);
+      expect(tw.items, isEmpty);
       expect(f.routingRules.length, 1);
 
       final r = f.routingRules.single;
@@ -1327,15 +1456,20 @@ void main() {
     });
 
     test('fcm-push: gms_only=true → package_name отдельной ветвью and, '
-        'вложенный or не тронут', () {
-      final f = expandPreset(
-        CustomRulePreset(
-          name: 'FCM',
-          presetId: 'fcm-push',
-          varsValues: {'gms_only': 'true'},
-        ),
-        realPreset('fcm-push'),
-      );
+        'вложенный or не тронут', () async {
+      await loadTestRegistry();
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(
+          tw,
+          () => expandPreset(
+                CustomRulePreset(
+                  name: 'FCM',
+                  presetId: 'fcm-push',
+                  varsValues: {'gms_only': 'true'},
+                ),
+                realPreset('fcm-push'),
+              ));
+      expect(tw.items, isEmpty);
 
       final r = f.routingRules.single;
       expect(r['mode'], 'and', reason: 'сужение = И, а И = вложенность');

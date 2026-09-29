@@ -1,0 +1,12 @@
+{
+  "rules": [],
+  "vars": {
+    "log_level": "debug"
+  },
+  "warnings": [
+    "backup_var_skipped"
+  ],
+  "warning_reasons": {
+    "backup_var_skipped": ["not_portable"]
+  }
+}

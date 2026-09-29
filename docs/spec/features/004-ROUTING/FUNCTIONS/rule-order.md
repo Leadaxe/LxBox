@@ -1,6 +1,9 @@
 [English](rule-order.md) · [Русский](rule-order.ru.md)
 
-# Rule order and enabling
+# Rule order and enabling — one ordered list where the first match wins
+
+Own rules and presets share one list on the Rules tab; the core checks it top to bottom, so moving a
+rule changes what it catches.
 
 | Field | Value |
 |------|----------|
@@ -52,7 +55,7 @@ rules in the same order.
 - The head always stands at number 0: shifted by an import, it returns at
   load, build and after the import; lost — it is seeded.
 - A disabled rule stays in place and contributes nothing to the config; its
-  DNS aspect goes out too.
+  DNS aspect is dropped too.
 - Deleting a rule wipes the files of its external sets.
 - Saving a rule in the editor does not change its number (no false "Save
   changes?" and no jump up).

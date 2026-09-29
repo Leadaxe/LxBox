@@ -1,6 +1,9 @@
 [English](app-log.md) · [Русский](app-log.ru.md)
 
-# App log
+# App log — app and core messages, with warnings kept across restarts
+
+Both sources share one screen but have separate quotas and separate
+persistence.
 
 | Field | Value |
 |-------|-------|

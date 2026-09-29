@@ -1,6 +1,10 @@
 [English](chain-editor.md) · [Русский](chain-editor.ru.md)
 
-# Chain editor
+# Chain editor — building a hop chain and measuring each hop
+
+The chain screen assembles positions in packet order, refuses to save what
+the core would reject and, on a running tunnel, measures how much each hop
+costs.
 
 | Field | Value |
 |------|----------|

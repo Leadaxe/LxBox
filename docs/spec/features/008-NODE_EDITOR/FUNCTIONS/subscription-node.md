@@ -1,6 +1,9 @@
 [English](subscription-node.md) · [Русский](subscription-node.ru.md)
 
-# Subscription node
+# Subscription node — read-only inspection of a provider's node
+
+A node from a subscription can be inspected and copied but not edited,
+because the next update would replace it; changes go through import rules.
 
 | Field | Value |
 |------|----------|
@@ -28,7 +31,7 @@ tag", "Inspect node". The inspection screen, read-only:
 | Source | the original subscription fragment; for JSON bodies — Compact (the outbound itself) / Extended (the whole element as the provider sent it) |
 | Replacements | what the import rules changed; present only if they changed something |
 | Network | for Tailscale — view only, without Save choice |
-| Diagnostics | diagnostics and notifications (009) |
+| Diagnostics | diagnostics and notifications ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md)) |
 
 ## Inputs / Outputs
 
@@ -48,17 +51,18 @@ tag", "Inspect node". The inspection screen, read-only:
 |---|---|
 | the "node disabled" mark | yes, by node name; lost if the provider renames it |
 | import rules (Replace / Disable / Enable) | yes, applied to every new parse |
-| tag prefix, subscription detour policy | yes (006) |
-| member selection of a subscription's manual group | yes (006/007) |
+| tag prefix, subscription detour policy | yes ([006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md)) |
+| member selection of a subscription's manual group | yes ([006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md)/[007-NODE_LIST](../../007-NODE_LIST/FEATURE.md)) |
 | any individual body edit | does not exist |
 
 - To edit a subscription node as a custom one, it is moved by hand: copy the
-  link (007) and add it as a custom server — from then on it is an
-  independent record that updates do not touch.
+  link ([007-NODE_LIST](../../007-NODE_LIST/FEATURE.md)) and add it as a
+  custom server — from then on it is an independent record that updates do not
+  touch.
 
 ## Boundaries
 
-- Import rules and disable marks — 001-SUBSCRIPTIONS.
+- Import rules and disable marks — [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md).
 - Subscription prefix and detour — [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - The subscription's node list, copying a link — [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
 

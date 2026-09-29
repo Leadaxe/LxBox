@@ -1,6 +1,9 @@
 [English](storage-contract.md) · [Русский](storage-contract.ru.md)
 
-# Storage contract
+# Storage contract — one record form for disk, backup and transfer
+
+LxBox keeps the user's settings in one document with LX Backup 1.0 records and
+stores node links as addresses that follow the node.
 
 | Field | Value |
 |-------|-------|
@@ -28,7 +31,7 @@ address, not as a final-tag string, and follow the node on rename and move.
 | Rule-set cache | downloaded rule-sets | no | yes |
 | Built config | the build result | no | no |
 | Core cache database, logs, crash reports | service data | no | no |
-| Tailscale node state | node identities | no | per slot ([018](../../018-WORKSPACES/FEATURE.md)) |
+| Tailscale node state | node identities | no | per slot ([018](../../018-WORKSPACES/FEATURE.md), [030](../../030-TAILSCALE/FUNCTIONS/device-identity-and-state.md)) |
 | Device properties outside the document | theme; the OS working copy of VPN toggles | no | no |
 
 **Settings document, top level:** `storage_version: 1` (form marker),

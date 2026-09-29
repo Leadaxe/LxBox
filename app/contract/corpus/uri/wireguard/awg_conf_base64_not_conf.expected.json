@@ -1,0 +1,12 @@
+{
+  "dropped": [
+    {
+      "code": "field_missing",
+      "index": 0,
+      "reason": "parse_error",
+      "ref": "awg://aGVsbG8gd29ybGQsIG5vdCBhIGNvbmY=#junk"
+    }
+  ],
+  "nodes": [],
+  "v": 1
+}

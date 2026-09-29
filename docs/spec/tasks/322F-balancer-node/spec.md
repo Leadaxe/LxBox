@@ -273,7 +273,7 @@ REPLACE по адресу.
 |---|---|---|
 | `leastPing` | `least_test` | прямое соответствие |
 | `leastLoad`, `expected` > 1 | `round_robin`, pool = `expected` | ближайшее по смыслу |
-| `leastLoad`, `expected` ≤ 1 | **`least_test`** | «держи ОДНОГО живого» — это простой urltest |
+| `leastLoad`, `expected` ≤ 1 или нет | **`least_test`** | «держи ОДНОГО живого» — это простой urltest |
 | `roundRobin` | `round_robin`, pool = весь набор | размера пула у стратегии нет |
 | `random` (дефолт) или поля нет | `round_robin`, pool = весь набор | то же |
 
@@ -373,6 +373,7 @@ device-verified), значения выше клампим.
 |---|---|
 | `pingConfig.destination` | `url` |
 | `pingConfig.interval` | `interval` (`"2m"` → `2m`) |
+| нет `pingConfig`/поля | `https://www.gstatic.com/generate_204` / `3m` (умолчания лаунчера); член пула, схлопнутый владением §342, назван в группе узлом-выжившим |
 | `pingConfig.timeout` | — (нет поля; дефолт Xray 5s) |
 | `pingConfig.sampling` | — (размер буфера последних результатов) |
 | `subjectSelector` | — (членство уже в `memberKeys`) |

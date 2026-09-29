@@ -1,6 +1,9 @@
 [English](networks-direction.md) · [Русский](networks-direction.ru.md)
 
-# Псевдо-направление NETWORKS
+# Псевдо-направление NETWORKS — узлы Tailscale вне списков выхода
+
+Строка NETWORKS появляется в списке Направлений на главном экране только при
+поднятом VPN.
 
 | Поле | Значение |
 |------|----------|
@@ -60,7 +63,7 @@
 ## Границы
 
 - Вкладка Network узла Tailscale (устройства, exit node, проверка) —
-  008-NODE_EDITOR / 009-NODE_HEALTH.
+  [030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/networks-tab.ru.md).
 - Какие узлы попадают в обычные направления — 007-NODE_LIST.
 
 ## Ревизии

@@ -1,6 +1,8 @@
 [English](warp-generator.md) · [Русский](warp-generator.ru.md)
 
-# Experiment: WARP node generator
+# Experiment: WARP node generator — finding WARP nodes that work in your network
+
+The experiment only creates candidates; the standard node checks test them.
 
 | Field | Value |
 |-------|-------|
@@ -61,8 +63,8 @@ place of the wizard; "back" leads to Servers. Node tags:
 ## Boundaries
 
 - Testing and selecting nodes — 009-NODE_HEALTH (folder check).
-- "Variations around a live IP" (the scanner's second phase) are not invoked
-  from the UI.
+- There are no "variations around a live IP" (the scanner's second phase
+  from research 132), and they are not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
 - Re-register does not affect the experiment: it always uses the cache.
 
 ## Revisions

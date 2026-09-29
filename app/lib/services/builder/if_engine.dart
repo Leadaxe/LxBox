@@ -98,6 +98,35 @@ const String templateWarnVarUndeclared = 'template_var_undeclared';
 const String templateWarnIntClamped = 'template_int_clamped';
 const String templateWarnIntInvalid = 'template_int_invalid';
 const String templateWarnFragmentDropped = 'template_fragment_dropped';
+const String templateWarnRuleUnconditional = 'template_rule_unconditional';
+
+/// §588 — нулевое значение JSON (`null`, `""`, `[]`, `{}`, `false`, `0`) и
+/// [Dropped]: «значения нет» (TEMPLATE_LANG §5.1, контракт 1.1.82/1.1.100).
+/// Ключ-условие с таким значением условием не считается; ссылка, давшая
+/// такое значение, — ссылка без значения.
+bool isZeroJsonValue(dynamic v) {
+  if (v == null || identical(v, Dropped.instance)) return true;
+  if (v is String) return v.trim().isEmpty;
+  if (v is List) return v.isEmpty;
+  if (v is Map) return v.isEmpty;
+  if (v is bool) return !v;
+  if (v is num) return v == 0;
+  return false;
+}
+
+/// §588 — счётчик ссылок на переменную, не давших значения: `"@имя"` в
+/// позиции значения (вкл. элемент массива и сплайс) дало [Dropped] или
+/// нулевое значение JSON, либо вставка `@{имя}` в `#tpl` оборвала строку.
+/// Необъявленное имя тоже считается (плейсхолдер остаётся в выводе;
+/// контракт 1.1.103, §100). Имена в предикатах `#if`/`#enable` не
+/// считаются; невыбранные ветки не обходятся. Обход
+/// синхронный: вызывающий сравнивает значение до и после подстановки
+/// (`substituteVarsTracked` в `preset_expand.dart`). Паритет с Go
+/// `canonCtx.emptyRefs`.
+int _emptyRefs = 0;
+
+/// Текущее значение счётчика ссылок без значения (см. [_emptyRefs]).
+int get templateEmptyRefCount => _emptyRefs;
 
 /// Одно предупреждение движка шаблонов: код реестра и его параметры.
 class TemplateWarning {
@@ -264,8 +293,13 @@ dynamic walk(dynamic node, VarResolver resolve) {
     final v = _resolveRef(name, resolve);
     if (v == null) {
       // Имя не объявлено → оставить плейсхолдер как есть (build_config-контракт).
+      // §100 (1.1.103) — но это ссылка без значения: правило пресета без
+      // условий с такой ссылкой выпадает (гейт в preset_expand.dart).
+      _emptyRefs++;
       return node;
     }
+    // §588 — ссылка без значения (Dropped или нулевое значение JSON).
+    if (isZeroJsonValue(v)) _emptyRefs++;
     // Резолвер может вернуть Dropped (optional-var §033: имя известно, value
     // null) → элемент/ключ выпадает (preset_expand-контракт).
     if (identical(v, Dropped.instance)) return Dropped.instance;
@@ -314,7 +348,11 @@ dynamic evalTpl(Map<String, dynamic> node, VarResolver resolve) {
     if (text.isEmpty) dropped = true;
     return text;
   });
-  return dropped ? Dropped.instance : out;
+  if (dropped) {
+    _emptyRefs++; // §588 — вставка без значения
+    return Dropped.instance;
+  }
+  return out;
 }
 
 /// SPEC 107 — читает ключевое слово движка в КАНОНИЧЕСКОЙ помеченной форме

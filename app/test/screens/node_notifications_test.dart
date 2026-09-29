@@ -468,10 +468,10 @@ void main() {
 
     testWidgets('рукописное предупреждение без кода реестра — без блоков',
         (tester) async {
-      await pumpView(tester, const [DuplicateNodeWarning()]);
+      await pumpView(tester, const [UnknownNodeTypeWarning('openvpn-client')]);
 
       // Заголовок на месте — он свой, из словаря UI.
-      expect(find.textContaining('Duplicate entry'), findsOneWidget);
+      expect(find.textContaining('Unknown node type'), findsOneWidget);
       // А объяснять и вести некуда: кода в реестре нет.
       expect(find.text('Details'), findsNothing);
       expect(find.text('Why it happens'), findsNothing);
@@ -677,20 +677,23 @@ void main() {
 
     testWidgets('один код на разных уровнях в группу не сливается',
         (tester) async {
-      // `duplicate` — per-app код (§538): класс даёт info, а RegistryWarning
-      // того же кода вне реестра — warning по умолчанию.
-      const inReg = RegistryWarning(code: 'duplicate', path: 'x');
+      // `unknown_node_type` — per-app код (§585): класс даёт info, а
+      // RegistryWarning того же кода вне реестра — warning по умолчанию.
+      const inReg = RegistryWarning(code: 'unknown_node_type', path: 'x');
       expect(inReg.severity, WarningSeverity.warning);
       await pumpView(tester, const [
-        DuplicateNodeWarning(winner: 'a'),
+        UnknownNodeTypeWarning('openvpn-client'),
         inReg,
       ]);
 
       expect(find.byType(ExpansionTile), findsNWidgets(2));
-      expect(find.byKey(const ValueKey('notification-group-count-info-duplicate')),
+      expect(
+          find.byKey(
+              const ValueKey('notification-group-count-info-unknown_node_type')),
           findsNothing);
       expect(
-          find.byKey(const ValueKey('notification-group-count-warning-duplicate')),
+          find.byKey(const ValueKey(
+              'notification-group-count-warning-unknown_node_type')),
           findsNothing);
       expect(find.text('Warnings'), findsOneWidget);
       expect(find.text('Info'), findsOneWidget);

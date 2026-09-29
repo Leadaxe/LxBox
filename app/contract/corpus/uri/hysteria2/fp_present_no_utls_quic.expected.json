@@ -1,0 +1,27 @@
+{
+  "nodes": [
+    {
+      "entry": {
+        "password": "pass123",
+        "server": "example-1.com",
+        "server_port": 443,
+        "tls": {
+          "enabled": true,
+          "server_name": "x.example.com"
+        },
+        "type": "hysteria2"
+      },
+      "kind": "outbound",
+      "label": "hy2-fp",
+      "scheme": "hysteria2",
+      "warnings": [
+        {
+          "code": "tls_not_applicable_quic",
+          "path": "tls.utls",
+          "value": "map[enabled:true fingerprint:chrome]"
+        }
+      ]
+    }
+  ],
+  "v": 1
+}

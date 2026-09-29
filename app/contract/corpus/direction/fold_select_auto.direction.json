@@ -1,0 +1,10 @@
+{
+  "_": "Селектор с автогруппой (both): двойник AL:select-auto (tag + \"-auto\") идёт ПЕРЕД AL:select, стоит его первой опцией и умолчанием — ради него режим и выбирали",
+  "tag_prefix": "AL:",
+  "replace": { "mode": "both", "tag": "AL:select" },
+  "directions": [
+    { "tag": "vpn-1" }
+  ],
+  "node_tags": ["AL:tokyo", "AL:osaka"],
+  "magic": { "block": "block-out", "direct": "direct-out" }
+}

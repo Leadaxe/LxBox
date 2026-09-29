@@ -1,9 +1,12 @@
 [English](core-reject-auto-disable.md) · [Русский](core-reject-auto-disable.ru.md)
 
-# Auto-disable of nodes rejected by the core
+# Auto-disable of nodes rejected by the core — the VPN starts even with a broken node
+
+When the sing-box core refuses a config because of one invalid node, the app
+disables that node with the core's reason and starts the VPN on the rest.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [009-NODE_HEALTH](../FEATURE.md) |
 | Promises | P14, P15, P16 |
 | State | ✅ written from code, 2026-09-28 |
@@ -13,8 +16,8 @@
 The core refuses to start as a whole if even one node in the config is
 invalid. On a Start tap the app recognizes the node named in the rejection,
 disables it with the same toggle the user uses, with the core's verbatim
-reason, quietly finds the other invalid nodes and brings the VPN up on the
-remaining ones.
+reason, finds the other invalid nodes with silent config checks and brings
+the VPN up on the remaining ones.
 
 ## Parameters
 
@@ -83,9 +86,9 @@ and a counter on the subscription/folder row.
 ## Boundaries
 
 - Protocol grammars are not duplicated in the app: this is the second line
-  after the registry checks at parse time (002-NODE_IMPORT).
-- Notification texts and their grouping — 013-DIAGNOSTICS.
-- Node toggles — 001-SUBSCRIPTIONS.
+  after the registry checks at parse time ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
+- Notification texts and their grouping — [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FEATURE.md).
+- Node toggles — [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md).
 - Depends on OS capabilities: a tunnel start without a UI — there the limit
   question has nobody to be shown to.
 

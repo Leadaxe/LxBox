@@ -1,6 +1,9 @@
 [English](builtin-dns-sets.md) · [Русский](builtin-dns-sets.ru.md)
 
-# Built-in DNS sets
+# Built-in DNS sets — encrypted dns_shield and the dns_ru group for Russian domains
+
+DNS works without any setup: the encrypted `dns_shield` group handles everything by default, and the
+`ru-direct` preset gives Russian domains their own `dns_ru` group.
 
 | Field | Value |
 |------|----------|
@@ -72,12 +75,14 @@ preset servers live in the preset namespace (`ru-direct:dns_ru`,
 
 ## Boundaries
 
-- The set is not chosen by the user's region: `ru-direct` is enabled by
+- The set is not chosen by the user's region, and this is not planned
+  (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)): `ru-direct` is enabled by
   default for everyone, the region setting does not affect DNS.
 - `ru-direct` routing (rule-sets, GeoIP, applications) —
   [004-ROUTING](../../004-ROUTING/FEATURE.md).
 - The Tailscale preset gives one MagicDNS server per node — described with
-  Tailscale nodes, only the server type is here.
+  Tailscale nodes ([030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/tailnet-dns-and-routes.md)),
+  only the server type is here.
 
 ## Revisions
 

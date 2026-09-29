@@ -1,6 +1,9 @@
 [English](singbox-json-import.md) · [Русский](singbox-json-import.ru.md)
 
-# sing-box JSON import
+# sing-box JSON import — nodes, groups and detour chains from sing-box configs
+
+A sing-box outbound, an array of outbounds, a full config or an array of configs yields the nodes,
+groups and `detour` chains its author wrote.
 
 | Field | Value |
 |------|----------|
@@ -57,7 +60,8 @@ rejects with the entry tag.
 - **Authored body** (own server or folder member, a single outbound):
   the registry sets codes but does not change values — the body goes to the core as written.
   A body from a subscription is cleaned by the sanitizer.
-- The `tailscale` body is passed as is; exit via a node — by the registry flag.
+- The `tailscale` body is passed as is; exit via a node — by the registry flag
+  ([030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/tailscale-node.md)).
 
 ## Boundaries
 

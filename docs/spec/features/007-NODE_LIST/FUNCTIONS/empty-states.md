@@ -1,6 +1,9 @@
 [English](empty-states.md) · [Русский](empty-states.ru.md)
 
-# Main screen empty states
+# Main screen empty states — the next step instead of an empty list
+
+When there are no nodes to show, the main screen offers the next step: add a
+server, connect the VPN or pick another Direction.
 
 | Field | Value |
 |------|----------|
@@ -53,8 +56,11 @@ selected Direction.
 ## Boundaries
 
 - The sources screen and adding — [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FUNCTIONS/add-source.md).
-- Restore from backup — 017; first launch and the wizard — 020.
-- Start error banners and "Config changed — restart VPN" — 010/003.
+- Restore from backup —
+  [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md); first
+  launch and the wizard — [020-APP_SHELL](../../020-APP_SHELL/FEATURE.md).
+- Start error banners and "Config changed — restart VPN" —
+  [010-VPN_SERVICE](../../010-VPN_SERVICE/FEATURE.md)/[003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md).
 
 ## Revisions
 

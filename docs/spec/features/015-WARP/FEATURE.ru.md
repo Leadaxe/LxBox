@@ -1,9 +1,15 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 015 — WARP — Cloudflare WARP глазами пользователя
+# Cloudflare WARP — бесплатные узлы WireGuard, AmneziaWG и MASQUE в один тап
+
+LxBox регистрирует устройство в Cloudflare WARP напрямую и одним тапом
+добавляет в список серверов готовый узел WireGuard, WireGuard с обфускацией
+AmneziaWG или MASQUE. Приватный ключ создаётся на телефоне, сторонние
+генераторы конфигов не участвуют.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 015-WARP |
 | Тип | Продуктовая фича |
 | Поглотила | `§025F` `§130F` |
 | Состояние | ✅ написана по коду, 2026-09-28 |
@@ -218,32 +224,38 @@ WG и MASQUE; записи `warp[]` в резервной копии; снек �
   не удаляет).
 - Регистрация идёт прямым запросом приложения: выбрать для неё узел или
   detour нельзя; при глухих хостах подсказки «зарегистрируй через прокси» нет.
-- WARP+ для MASQUE не поддержан (поле лицензии в режиме MASQUE скрыто).
+- WARP+ для MASQUE не поддержан (поле лицензии в режиме MASQUE скрыто) и не
+  планируется (решение владельца 2026-09-29, аудит [591](../../tasks/591-spec-kit-revision-audit.md)).
 - Проверка формата `host:port` endpoint'а перед регистрацией не делается.
 - `tls.disable_sni` в мастере не выставляется — только через ссылку/импорт.
 - Автоопределение страны зависит от возможностей ОС (сеть оператора → локаль).
 - Секреты в Debug API не маскируются намеренно (root-доступ by design,
-  013-DIAGNOSTICS); регистрация без интерфейса — `POST /warp` там же.
+  [027-DEBUG_API](../027-DEBUG_API/FUNCTIONS/access-and-security.ru.md));
+  регистрация без интерфейса — `POST /warp` там же.
 
 ## Функции
 
 | Функция | Что делает | Обещания | Файл |
 |---------|------------|----------|------|
-| Регистрация в один тап | Ключ на устройстве, перебор хостов API, WARP+, кэш и Re-register, бэкап регистраций | P1–P4, P16, P17 | [one-tap-registration.md](FUNCTIONS/one-tap-registration.ru.md) |
-| WireGuard-узел WARP | Endpoint, reserved, keepalive, тег и накопление узлов | P5–P7, P14 | [wireguard-node.md](FUNCTIONS/wireguard-node.ru.md) |
-| Обфускация AmneziaWG | Пресет, маскировка `id`/`ip`/`ib`, junk, случайный endpoint | P8 | [awg-obfuscation.md](FUNCTIONS/awg-obfuscation.ru.md) |
-| MASQUE-узел | Выбор транспорта, версия HTTP, IP:порт, SNI, таймауты, схема ядра | P9–P12 | [masque-node.md](FUNCTIONS/masque-node.ru.md) |
-| Пул endpoint'ов и регион | Пресеты, h3/h2-хосты, SNI-пулы, хосты API, `loc.<cc>` | P12–P14 | [endpoint-pool.md](FUNCTIONS/endpoint-pool.ru.md) |
-| Эксперимент (генератор узлов) | Папка «WARP GENERATOR» из случайных кандидатов | P15 | [warp-generator.md](FUNCTIONS/warp-generator.ru.md) |
+| Регистрация в один тап | Регистрирует устройство в Cloudflare напрямую, оставляет ключ на устройстве, перебирает хосты API, привязывает WARP+, кэширует регистрацию до «Re-register» и сохраняет её в бэкапе. | P1–P4, P16, P17 | [one-tap-registration.md](FUNCTIONS/one-tap-registration.ru.md) |
+| WireGuard-узел WARP | Превращает WireGuard-регистрацию в новый узел с endpoint, `reserved` и keepalive, с тегом по виду узла, не заменяя прежние узлы WARP. | P5–P7, P14 | [wireguard-node.md](FUNCTIONS/wireguard-node.ru.md) |
+| Обфускация AmneziaWG | Добавляет junk-пакеты AmneziaWG под видом QUIC, DNS, STUN или SIP через `id`/`ip`/`ib`, сохраняя рукопожатие WireGuard, которое принимает Cloudflare. | P8 | [awg-obfuscation.md](FUNCTIONS/awg-obfuscation.ru.md) |
+| MASQUE-узел WARP | Собирает outbound `masque` поверх HTTP/3 или HTTP/2 с выбранными IP:портом, SNI и таймаутами, в текущей схеме ядра. | P9–P12 | [masque-node.md](FUNCTIONS/masque-node.ru.md) |
+| Пул endpoint'ов и регион | Хранит хосты API Cloudflare, адреса и порты WireGuard и MASQUE, SNI-пулы и региональные переопределения `loc.<cc>` в одном файле данных. | P12–P14 | [endpoint-pool.md](FUNCTIONS/endpoint-pool.ru.md) |
+| Эксперимент: генератор WARP-узлов | Создаёт папку «WARP GENERATOR» из случайных кандидатов AWG и MASQUE, чтобы пользователь проверил их и оставил то, что проходит. | P15 | [warp-generator.md](FUNCTIONS/warp-generator.ru.md) |
 
 ## Связанные фичи
 
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбирает ссылки `wireguard://` / `masque://` и WG INI, которые порождает эта фича.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбирает ссылки
+  `wireguard://` / `masque://` и WG INI, которые порождает эта фича.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — правка WARP-узла после добавления.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — пинг и проверка WARP-узлов и папки «WARP GENERATOR».
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — Debug API: регистрация `POST /warp` без интерфейса, секреты без маски by design.
-- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — глобальная фрагментация TLS доходит до MASQUE-узлов при `h2`/`auto`.
-- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — регистрации уезжают в резервную копию записями `warp[]`.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.ru.md) — Debug API: регистрация
+  `POST /warp` без интерфейса, секреты без маски by design.
+- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — глобальная
+  фрагментация TLS доходит до MASQUE-узлов при `h2`/`auto`.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) —
+  регистрации уезжают в резервную копию записями `warp[]`.
 
 ## Особенности сопровождения
 

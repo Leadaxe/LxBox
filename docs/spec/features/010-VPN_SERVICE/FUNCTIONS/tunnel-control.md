@@ -1,9 +1,13 @@
 [English](tunnel-control.md) · [Русский](tunnel-control.ru.md)
 
-# Tunnel control
+# Tunnel control — starting, stopping and reconnecting the VPN with an honest status
+
+Start, stop, core reload and reconnect are available from the app and from
+the service notification, and every transitional phase ends by a deadline
+with a stated reason.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P1, P2, P3, P4, P20 |
 | State | ✅ written from code, 2026-09-28 |
@@ -47,7 +51,7 @@ Stop / Reconnect buttons.
   the next start does not hit a busy port.
 - Expiry of the Connecting phase gives a reason with the threshold and the
   number of nodes; it also counts as the start verdict for the node safety net
-  (009-NODE_HEALTH).
+  ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md)).
 - Reconnect = confirmed stop → start; if the stop was not confirmed, the start
   is cancelled ("Stop timed out — reconnect aborted"). Reconnect from the
   notification works the same way, but without the app; a repeated tap during
@@ -65,9 +69,11 @@ Stop / Reconnect buttons.
 
 ## Boundaries
 
-- What exactly is re-read when settings are auto-applied — 003-CONFIG_BUILD.
-- Display of connection time and speed — 012-LIVE_STATE.
-- Starting without the screen (tile, Intent API) — 014-AUTOMATION.
+- What exactly is re-read when settings are auto-applied —
+  [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md).
+- Display of connection time and speed — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
+- Starting without the screen (tile, Intent API) —
+  [014-AUTOMATION](../../014-AUTOMATION/FEATURE.md).
 - Depends on OS capabilities: the persistent notification and its buttons.
 
 ## Revisions

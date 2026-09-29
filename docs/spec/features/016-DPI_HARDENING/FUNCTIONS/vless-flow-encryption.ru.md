@@ -1,6 +1,9 @@
 [English](vless-flow-encryption.md) · [Русский](vless-flow-encryption.ru.md)
 
-# VLESS flow и encryption
+# VLESS flow и encryption — XTLS Vision и VLESS Encryption так, как задал провайдер
+
+LxBox берёт VLESS `flow` (XTLS Vision) и `encryption` из подписки, ничего не
+добавляя от себя, и отбраковывает узел с негодной строкой `encryption`.
 
 | Поле | Значение |
 |------|----------|

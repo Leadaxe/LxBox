@@ -1,6 +1,9 @@
 [English](settings-lifecycle.md) · [Русский](settings-lifecycle.ru.md)
 
-# Settings lifecycle
+# Settings lifecycle — every setting change reaches the saved config
+
+A changed setting marks the config as stale, is visible to the next build at once and triggers a
+rebuild on return to the main screen, on Start or at launch.
 
 | Field | Value |
 |------|----------|
@@ -48,7 +51,7 @@ the snackbar "Config rebuilt: N nodes" on a build triggered by a user action.
 - **Staging.** An edit on a screen with a deferred write is visible to any reader
   (rebuild on return, Start, launch) immediately, without waiting for the disk
   write. The write on leaving the screen only awaits the last staging and
-  does not light the flag again.
+  does not set the flag again.
 - **Rebuild triggers** (all — one shared rebuild; a repeated trigger
   joins the running one):
   - return to the main screen by any means (back, gesture, leaving a

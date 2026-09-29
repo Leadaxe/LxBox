@@ -1,6 +1,10 @@
 [English](node-detour.md) · [Русский](node-detour.ru.md)
 
-# Detour узла
+# Detour узла — выход сервера через другой сервер
+
+Свой сервер или член папки может выходить в интернет через другой узел; путь
+показан в порядке пакета, а сломанная ссылка не превращается в прямое
+соединение.
 
 | Поле | Значение |
 |------|----------|
@@ -68,7 +72,7 @@ directly to this server.».
 ## Границы
 
 - Detour всей подписки/папки — [source-detour-policy.md](source-detour-policy.ru.md).
-- Цель-Направление и её лечение — [detour-directions.md](detour-directions.ru.md).
+- Цель-Направление и её лечение — [026-DIRECTIONS](../../026-DIRECTIONS/FUNCTIONS/direction-as-detour.ru.md).
 - Хранение ссылок, их обновление при переименовании и удалении узлов —
   [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.ru.md).
 - Прочие настройки узла — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.ru.md).

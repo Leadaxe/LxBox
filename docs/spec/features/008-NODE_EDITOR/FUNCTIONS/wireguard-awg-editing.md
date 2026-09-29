@@ -1,6 +1,9 @@
 [English](wireguard-awg-editing.md) · [Русский](wireguard-awg-editing.ru.md)
 
-# WireGuard / AmneziaWG editing
+# WireGuard / AmneziaWG editing — fixing keys, endpoint and obfuscation in the source text
+
+A custom WireGuard or AmneziaWG node is fixed by editing its INI, link or
+JSON source; there is no separate form with WireGuard fields.
 
 | Field | Value |
 |------|----------|
@@ -10,7 +13,7 @@
 
 ## What it does
 
-Lets the user fix a custom WireGuard or AmneziaWG node — the key, the
+Lets you fix a custom WireGuard or AmneziaWG node — the key, the
 address, `Endpoint`, obfuscation parameters — by editing its source. There is
 no separate form with WireGuard fields: the text in which the node arrived is
 edited.
@@ -37,35 +40,44 @@ Meaning and value rules — [002, WireGuard / AmneziaWG import](../../002-NODE_I
 
 ## Inputs / Outputs
 
-**Input:** the source text.
-**Output:** a new source; the node is re-read; on Settings — Protocol
-"AmneziaWG (wireguard)" if the node has obfuscation fields, otherwise
-`wireguard`. The AWG level (`awg`, `awg1.5`, `awg2`, the `+` suffix for
-masquerade) is visible in the node row on the main screen (007).
+**Input:** the source text. **Output:** a new source; the node is re-read; on
+Settings — Protocol "AmneziaWG (wireguard)" if the node has obfuscation
+fields, otherwise `wireguard`. The AWG level (`awg`, `awg1.5`, `awg2`, the `+`
+suffix for masquerade) is visible in the node row on the main screen
+([007-NODE_LIST](../../007-NODE_LIST/FEATURE.md)).
 
 ## Rules and invariants
 
 - The INI is saved as is; the `DNS` line from `[Interface]` does not go into
-  the body (002). The tag on Save — as a record field, not into the text.
+  the body ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)). The tag on
+  Save — as a record field, not into the text.
 - A link is saved with the tag in the fragment; parameters the link does not
-  carry are lost in the link → model transition (002).
+  carry are lost in the link → model transition
+  ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
 - A sing-box body is checked by the core on save and goes into the config
   verbatim: the AmneziaWG MTU cap of 1280 is not applied to it — only a
-  message (002, P14 there).
+  message ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md), P14 there).
 - "Edit JSON" on an INI or a link replaces the source with the model's
   endpoint body — irreversibly; from then on the node is edited as JSON.
 - Changing the body clears the core's verdict and enables a node disabled
   because of a core refusal (P9).
 - For the core check a WireGuard body is placed under `endpoints`.
 - The editor keeps no validator of its own for AWG fields (ranges, mutual
-  exclusion of `i1` and masquerade): parsing (002) and the core judge.
+  exclusion of `i1` and masquerade): parsing
+  ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)) and the core judge.
 
 ## Boundaries
 
-- Parsing INI, links, `vpn://`, the MTU clamp, codes — 002-NODE_IMPORT.
+- Parsing INI, links, `vpn://`, the MTU clamp, codes —
+  [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md).
 - Cloudflare WARP with its own obfuscation fields — [015-WARP](../../015-WARP/FEATURE.md).
-- Endpoint state (handshake, asleep) — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md) / 009.
-- AWG on top of WireGuard in a detour is allowed — 006.
+- Endpoint state (handshake, asleep) —
+  [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md) /
+  [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
+- AWG on top of WireGuard in a detour is allowed —
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
+- A separate WireGuard/AmneziaWG form with dedicated fields (`097F` Phase 2b)
+  is not planned (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
 
 ## Revisions
 

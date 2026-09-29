@@ -1,6 +1,10 @@
 [English](node-row-badges-and-menu.md) · [Русский](node-row-badges-and-menu.ru.md)
 
-# Node row: badges and context menu
+# Node row: badges and context menu — everything needed to pick a node at a glance
+
+Each row shows the node name, the ACTIVE mark, the protocol with transport
+and security, the last ping and the WireGuard state; a long press opens node
+actions.
 
 | Field | Value |
 |------|----------|
@@ -10,7 +14,7 @@
 
 ## What it does
 
-A single list row tells everything needed for a choice: the name, whether
+A single list row shows everything needed to choose a node: the name, whether
 the node is active, the protocol with transport and security, the last ping
 with its colour, the state of a WireGuard node, parse notifications. A long
 press opens the menu of actions on the node.
@@ -18,7 +22,8 @@ press opens the menu of actions on the node.
 ## Parameters
 
 No settings of its own. The pool badge regex is set on the auto-select group
-(by default — the first flag emoji of the name), see 006.
+(by default — the first flag emoji of the name), see
+[006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 
 ## Inputs / Outputs
 
@@ -26,7 +31,7 @@ No settings of its own. The pool badge regex is set on the auto-select group
 security, the latency measurement, the endpoint node state from the core,
 source and build notifications, the selected member of an auto-select
 group.
-**Output:** a row 56 high and a menu.
+**Output:** a row 56 dp high and a menu.
 
 ## Rules and invariants
 
@@ -74,10 +79,12 @@ ones.
 
 ## Boundaries
 
-- Measurement, group URLTest, dependency ⚠, the endpoint switch as a
-  mechanism — 009-NODE_HEALTH; node notifications as data — 001/002.
+- Measurement, group URLTest, dependency ⚠, the endpoint switch as a mechanism
+  — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md); node notifications as
+  data —
+  [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md)/[002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md).
 - The View details screen, Copy URI with confirmation for links containing a
-  key — 008.
+  key — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md).
 
 ## Revisions
 

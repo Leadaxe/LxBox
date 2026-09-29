@@ -1,6 +1,9 @@
 [English](wireguard-awg-editing.md) · [Русский](wireguard-awg-editing.ru.md)
 
-# Правка WireGuard / AmneziaWG
+# Правка WireGuard / AmneziaWG — ключи, endpoint и обфускация в тексте источника
+
+Свой узел WireGuard или AmneziaWG правится через его источник — INI, ссылку
+или JSON; отдельной формы с полями WireGuard нет.
 
 | Поле | Значение |
 |------|----------|
@@ -40,31 +43,39 @@ WireGuard нет: правится текст, в котором узел при
 **Выход:** новый источник; узел перечитывается; на Settings — Protocol
 «AmneziaWG (wireguard)», если у узла есть поля обфускации, иначе
 `wireguard`. Уровень AWG (`awg`, `awg1.5`, `awg2`, суффикс `+` за masquerade)
-виден в строке узла на главном экране (007).
+виден в строке узла на главном экране ([007-NODE_LIST](../../007-NODE_LIST/FEATURE.ru.md)).
 
 ## Правила и инварианты
 
 - INI сохраняется как есть; строка `DNS` из `[Interface]` в тело не едет
-  (002). Тег при Save — полем записи, не в текст.
-- Ссылка сохраняется с тегом во фрагменте; параметры, которые ссылка не
-  несёт, теряются при переходе ссылка → модель (002).
+  ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md)). Тег при Save — полем записи, не в текст.
+- Ссылка сохраняется с тегом во фрагменте; параметры, которые ссылка не несёт,
+  теряются при переходе ссылка → модель
+  ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md)).
 - Тело sing-box проверяется ядром при сохранении и уходит в конфиг
   дословно: потолок MTU AmneziaWG 1280 к нему не применяется — только
-  сообщение (002, P14 там).
+  сообщение ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md), P14 там).
 - «Edit JSON» у INI или ссылки заменяет источник телом endpoint'а модели —
   необратимо; дальше узел правится как JSON.
 - Изменение тела снимает вердикт ядра и включает узел, выключенный за отказ
   ядра (P9).
 - WireGuard-тело при проверке ядром кладётся под `endpoints`.
-- Своего валидатора полей AWG (диапазоны, взаимоисключение `i1` и
-  masquerade) редактор не держит: судят разбор (002) и ядро.
+- Своего валидатора полей AWG (диапазоны, взаимоисключение `i1` и masquerade)
+  редактор не держит: судят разбор
+  ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md)) и ядро.
 
 ## Границы
 
-- Разбор INI, ссылок, `vpn://`, кламп MTU, коды — 002-NODE_IMPORT.
+- Разбор INI, ссылок, `vpn://`, кламп MTU, коды —
+  [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md).
 - Cloudflare WARP со своими полями обфускации — [015-WARP](../../015-WARP/FEATURE.ru.md).
-- Состояние endpoint'а (handshake, asleep) — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.ru.md) / 009.
-- AWG поверх WireGuard в detour разрешён — 006.
+- Состояние endpoint'а (handshake, asleep) —
+  [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.ru.md) /
+  [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.ru.md).
+- AWG поверх WireGuard в detour разрешён —
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
+- Отдельная форма WireGuard/AmneziaWG с выделенными полями (`097F` Phase 2b)
+  не планируется (решение владельца 2026-09-29, аудит [591](../../../tasks/591-spec-kit-revision-audit.md)).
 
 ## Ревизии
 

@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 017 — BACKUP_AND_STORAGE — backup, transfer and storage of settings
+# Backup and storage — full settings backup, desktop transfer and durable storage
+
+LxBox backs up its VPN settings — subscriptions, servers, routing rules, DNS,
+split tunneling — to a JSON file and restores them by merge or replace. A
+separate LX Backup 1.0 file moves the shared part of the settings to and from
+the desktop launcher. Underneath, settings live in one document with atomic
+writes, recovery of a corrupted file and a one-time migration from the 2.23.2
+storage form.
 
 | Field | Value |
 |-------|-------|
+| Feature | 017-BACKUP_AND_STORAGE |
 | Type | Product feature |
 | Absorbed | `§040F` `§439F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -233,24 +241,38 @@ Start: document → old form? → migration → copy of the original → write
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Full backup export | Categories, snapshot format, save methods | P1–P3 | [full-backup-export.md](FUNCTIONS/full-backup-export.md) |
-| Full backup restore | Validation, preview, merge/replace, allowlist, what survives | P4–P9 | [full-backup-restore.md](FUNCTIONS/full-backup-restore.md) |
-| Transfer to desktop | LX Backup 1.0: write, read, merge, losses | P10–P16, P25 | [desktop-transfer.md](FUNCTIONS/desktop-transfer.md) |
-| Storage contract | Data sets, 1.0 records, node links | P17 | [storage-contract.md](FUNCTIONS/storage-contract.md) |
-| Storage migration | One-time conversion of the 2.23.2 form | P18–P20 | [storage-migration.md](FUNCTIONS/storage-migration.md) |
-| Durable writes | Atomicity, recovery, deferred writes, races | P21–P24 | [durable-writes.md](FUNCTIONS/durable-writes.md) |
+| Full backup export | Saves this installation's settings to a JSON snapshot: categories, snapshot format, save methods. | P1–P3 | [full-backup-export.md](FUNCTIONS/full-backup-export.md) |
+| Full backup restore | Brings settings back from a backup file: validation, preview, merge or replace, allowlist, what survives. | P4–P9 | [full-backup-restore.md](FUNCTIONS/full-backup-restore.md) |
+| Transfer to desktop | Exchanges the shared part of settings with the desktop launcher in LX Backup 1.0: write, read, merge, named losses. | P10–P16, P25 | [desktop-transfer.md](FUNCTIONS/desktop-transfer.md) |
+| Storage contract | Defines what the app stores and in which form: data sets, 1.0 records, node links. | P17 | [storage-contract.md](FUNCTIONS/storage-contract.md) |
+| Storage migration | Converts settings in the 2.23.2 form to storage contract 1.0 once, with the same built config. | P18–P20 | [storage-migration.md](FUNCTIONS/storage-migration.md) |
+| Durable writes | Keeps settings intact through kills and switches: atomic writes, recovery, deferred writes, races. | P21–P24 | [durable-writes.md](FUNCTIONS/durable-writes.md) |
 
 ## Related features
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — subscription records in storage and in the backup; subscription bodies are not copied but re-fetched.
-- [003-CONFIG_BUILD · P11](../003-CONFIG_BUILD/FEATURE.md#promises) — the "config is stale" flag and aligning the config time on settings writes; the config is built from the restored settings.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — rules and Directions in the backup; a separate rules file.
-- [005-DNS](../005-DNS/FEATURE.md) — DNS records in the backup and their merge on transfer.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — detour links and chain positions are stored as a node address; their renaming and deletion is handled by this feature's link registry.
-- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping settings in the backup; the core rejection verdict is not transferred.
-- [015-WARP](../015-WARP/FEATURE.md) — registrations travel as `warp[]` records; a live registration is not overwritten.
-- [018-WORKSPACES](../018-WORKSPACES/FEATURE.md) — the backup sees only the scene; slots in the old form are loaded by the storage migration; the write barrier against stale controllers.
-- [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — language and preferences are in the backup, the theme is not; startup prompt flags survive replace.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md) — subscription records in
+  storage and in the backup; subscription bodies are not copied but re-fetched.
+- [003-CONFIG_BUILD · P11](../003-CONFIG_BUILD/FEATURE.md#promises) — the
+  "config is stale" flag and aligning the config time on settings writes; the
+  config is built from the restored settings.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — rules and Directions in the backup;
+  a separate rules file.
+- [005-DNS](../005-DNS/FEATURE.md) — DNS records in the backup and their merge
+  on transfer.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — detour links
+  and chain positions are stored as a node address; their renaming and deletion
+  is handled by this feature's link registry.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping settings in the
+  backup; the core rejection verdict is not transferred.
+- [015-WARP](../015-WARP/FEATURE.md) — registrations travel as `warp[]` records;
+  a live registration is not overwritten.
+- [018-WORKSPACES](../018-WORKSPACES/FEATURE.md) — the backup sees only the
+  scene; slots in the old form are loaded by the storage migration; the write
+  barrier against stale controllers.
+- [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — language and preferences are in
+  the backup, the theme is not; startup prompt flags survive replace.
+- [030-TAILSCALE](../030-TAILSCALE/FEATURE.md) — Tailscale node state (device
+  identities) is not in the backup and lives per slot.
 
 ## Maintenance notes
 

@@ -1,6 +1,9 @@
 [English](import-rules.md) · [Русский](import-rules.ru.md)
 
-# Subscription import rules
+# Subscription import rules — disable, enable or rewrite nodes on every update
+
+Import rules match subscription nodes by fields of their JSON and disable, enable or edit them each
+time the subscription body is parsed.
 
 | Field | Value |
 |------|----------|

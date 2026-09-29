@@ -1,16 +1,25 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 006 — DETOUR_AND_BALANCE — detour, hop chains, balancing
+# Detour and balancing — detour servers, hop chains and load balancing for VPN nodes
+
+LxBox sends a VPN node's traffic through another server, a multi-hop chain
+or a pool with auto-select and load balancing, all set up without editing
+JSON. The feature covers personal detours, provider jump servers (Xray
+`dialerProxy`, sing-box `detour`), Directions used as a switchable upstream,
+hop chains built by the sing-box-lx core and `urltest` groups in Fastest or
+round-robin mode. The config build checks every link, so the core accepts
+the result and a broken reference never becomes a direct connection.
 
 | Field | Value |
 |------|----------|
+| Feature | 006-DETOUR_AND_BALANCE |
 | Type | Product feature |
 | Absorbed | `§018F` (detour servers, jump servers, chains), `§024F` (Load Balance — implemented as the `round_robin` mode of auto-select, there is no separate outbound), `§248F` (Direction as a detour layer), `§322F` (auto-select node in a folder/subscription) |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
 
-Answers the question "what does a node go out to the network through":
+Answers the question "how does a node reach the network":
 directly, through another server (detour), through a switchable
 Direction layer, through a chain of several hops, through a pool of nodes
 with auto-select or balancing. The user assembles multi-hop routes without
@@ -53,31 +62,10 @@ are hidden from node selection.
   main.detour = override (1-hop)", "replace (explicit toggle)",
   "useDetourServers=false + override → no detour". **Mutation:** the
   override is written into `main`, wiping out the native link.
-- **P3. A detour Direction is a permission, not a role.** In the detour
-  picker the Directions section contains only enabled Directions with "Use
-  as detour"; they also remain a legitimate target of rules and
-  `route.final`; `vpn-1` is never a detour Direction, neither via the UI nor
-  via a backup. **Witness:** units "ordinary Direction hidden, detour one
-  visible, disabled detour hidden", "vpn-1 + detour:true → isDetour coerced
-  to false", "custom rule to a detour Direction → config valid",
-  "route_final = detour Direction stays". **Mutation:** subtract detour
-  Directions from rule targets.
-- **P4. A retired layer leaves no dangling detour references.** Disabling or
-  deleting a Direction or clearing "Use as detour" resets references to it
-  and to `<tag>-auto` to "None", irreversibly; setting the flag heals
-  nothing. The result — in a single notification. **Witness:** units
-  "flag-unset: all four kinds of detour references", "flag-unset is
-  irreversible", "disable/delete of a detour Direction heals detour
-  references", "resync mirrors the storage heal; saving does not resurrect
-  the reference". **Mutation:** heal only storage without the in-memory
-  mirror.
-- **P5. The ⚙ marker lives in the Direction's name.** The "Use as detour"
-  flag adds `⚙ ` to the name, clearing it removes it; the marker cannot be
-  removed by hand and is not doubled on repeat. **Witness:** units
-  "copyWith(isDetour:true) renames the label", "user erased ⚙ with the box
-  checked → it comes back", "storage roundtrip: label with ⚙ is stable".
-  **Mutation:** ⚙ only in the display.
-- **P6. Rings are fixed by the build, fatal is the last line.** A node with a
+- **P3.** moved to [026-DIRECTIONS · P18](../026-DIRECTIONS/FEATURE.md#promises)
+- **P4.** moved to [026-DIRECTIONS · P19](../026-DIRECTIONS/FEATURE.md#promises)
+- **P5.** moved to [026-DIRECTIONS · P20](../026-DIRECTIONS/FEATURE.md#promises)
+- **P6. Rings are fixed by the build, fatal is the last resort.** A node with a
   detour to a group it belongs to is excluded from the group's membership
   (detour kept); any other ring is broken at the closing edge with a
   warning. An untangled ring — fatal "Routing loop — VPN not started" with
@@ -224,9 +212,10 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
 
 ## Boundaries
 
-- Directions as rule targets, the membership filter, `route.final`, healing
-  rule references — [004-ROUTING](../004-ROUTING/FEATURE.md); here a
-  Direction is only an exit for detour and an auto-select pool.
+- The Direction model — tags, membership filter, `route.final`, healing of
+  rule references, the detour layer itself — [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md);
+  rules that target a Direction — [004-ROUTING](../004-ROUTING/FEATURE.md).
+  Here a Direction is only an exit for detour and an auto-select pool.
 - Node settings in general (protocol, tag, JSON) — [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md).
 - A DNS server's channel through a Direction — [005-DNS](../005-DNS/FEATURE.md).
 - The main screen filter "Hide detour servers / Show only detour servers",
@@ -237,24 +226,28 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
   application.
 - There is no separate `loadbalance` outbound; the "consistent hashing" and
   "sticky sessions" strategies are expressed by the `sticky_hash` set.
+- Not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the "AWG → channel with WireGuard"
+  warning (`248F`) — a detour through WireGuard/AmneziaWG is allowed without it.
 
 ## Functions
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Node detour | Personal detour of a server and a folder member, target picker, path preview, fail-closed | P1 P12 | [node-detour.md](FUNCTIONS/node-detour.md) |
-| Source detour and jump servers | Use / Add detour (Fill missing · Replace all) / Don't use, register, provider chain links | P2 | [source-detour-policy.md](FUNCTIONS/source-detour-policy.md) |
-| Direction as a detour layer | "Use as detour", ⚙, reference healing | P3 P4 P5 | [detour-directions.md](FUNCTIONS/detour-directions.md) |
-| Hop chains | Chain source → `type: chain`, degradations, position healing | P7 P8 P9 P10 | [hop-chains.md](FUNCTIONS/hop-chains.md) |
-| Chain editor | Form, position picker, checks, per-layer probe | P11 P16 | [chain-editor.md](FUNCTIONS/chain-editor.md) |
-| Detour dependency graph | Rings, dangling references, fatal with culprits, ⚠ of dead supports, live path | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.md) |
-| Auto-select and balancing | `<tag>-auto`, auto-select node, "Replace with a group", Load balance | P13 P14 | [balancing.md](FUNCTIONS/balancing.md) |
+| Node detour | Routes a server or folder member through another server first, with a target picker, a path preview and fail-closed handling of broken references. | P1 P12 | [node-detour.md](FUNCTIONS/node-detour.md) |
+| Source detour and jump servers | Sets one detour policy for a whole subscription or folder (Use, Add detour with Fill missing or Replace all, Don't use) and decides whether provider chain links are shown as nodes. | P2 | [source-detour-policy.md](FUNCTIONS/source-detour-policy.md) |
+| Hop chains | Builds a multi-hop route as a `type: chain` outbound in packet order, drops an invalid chain whole and shortens a chain when one of its sources is deleted. | P7 P8 P9 P10 | [hop-chains.md](FUNCTIONS/hop-chains.md) |
+| Chain editor | Edits a hop chain in a form with a position picker and save-blocking checks, and measures each hop with a per-layer probe. | P11 P16 | [chain-editor.md](FUNCTIONS/chain-editor.md) |
+| Detour dependency graph | Repairs loops and dangling references before start, cancels the start with named culprits when a loop cannot be broken, and flags dead nodes that others route through. | P6 P15 | [detour-graph.md](FUNCTIONS/detour-graph.md) |
+| Auto-select and balancing | Adds auto-select groups (`<tag>-auto`, an auto-select node, "Replace with a group") that keep the fastest node or balance load across a pool. | P13 P14 | [balancing.md](FUNCTIONS/balancing.md) |
+
+Direction as a detour layer moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) (as "Direction as a detour layer").
 
 ## Related features
 
 - [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parsing native detour links (`dialerProxy`, `detour`) from a subscription.
 - [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the pre-start check and the "Settings changed" banner that the graph sanitizer is built into.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — Directions as rule targets, the membership filter, `route.final`; here a Direction is a detour exit and an auto-select pool.
+- [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) — the Direction model and the detour layer (⚙, healing of detour references); here a Direction is a detour exit and an auto-select pool.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — rules that send traffic to a Direction.
 - [005-DNS](../005-DNS/FEATURE.md) — a DNS server's channel through a Direction, DNS group rings, DNS victims of dead supports.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — the detour server filter on the main screen, node selection in a group, pool badges.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — the other node settings that host the Detour block.
@@ -264,12 +257,12 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
 
 ## Maintenance notes
 
-- The arrows are opposite: for `detour` it is "node through whom", for a
-  chain — "in what order the packet travels". A mixed-up order gives a
+- The arrows point in opposite directions: `detour` reads "the node goes
+  through whom", a chain reads "in what order the packet travels". A mixed-up order gives a
   working but wrong route — noticeable only by the exit country.
 - Healing references to a Direction must be mirrored in the in-memory source
   list, otherwise the next save resurrects the healed reference.
-- Two failure modes for a dangling detour: a user reference — fail-closed
-  (the node drops out); a dangling `detour` in the node body and a ring
-  broken by the sanitizer — fail-open (the node goes direct). See the
-  discrepancy report.
+- Owner's decision 2026-09-29 (audit 591 · 36): one failure mode for a
+  dangling detour — fail-closed. Today a `detour` in a node body pointing at a
+  missing tag and a loop broken by the sanitizer send the node direct
+  (fail-open); that is a divergence from P1, closed by a task (audit 591).

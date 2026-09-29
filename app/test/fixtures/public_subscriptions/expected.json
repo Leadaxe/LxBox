@@ -1,13 +1,12 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.76",
+  "contract_version": "1.1.102",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 95,
-      "dropped": {
-        "duplicate": 2
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 2,
         "field_conflict": 1,
         "reality_fp_not_chrome": 5
       }
@@ -15,10 +14,10 @@
     "02-github-vless-lite": {
       "nodes_total": 95,
       "dropped": {
-        "duplicate": 2,
         "provider_banner_link": 4
       },
       "warnings": {
+        "duplicates_collapsed": 2,
         "field_conflict": 1,
         "reality_fp_not_chrome": 5
       }
@@ -32,10 +31,9 @@
     },
     "04-github-vless-reality-white-lists-rus-mobile": {
       "nodes_total": 25,
-      "dropped": {
-        "duplicate": 2
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 2,
         "reality_fp_not_chrome": 7,
         "reality_fp_random_pinned": 1,
         "tls_not_applicable_quic": 1
@@ -48,10 +46,9 @@
     },
     "06-github-black-vless-rus-mobile": {
       "nodes_total": 132,
-      "dropped": {
-        "duplicate": 10
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 10,
         "reality_fp_not_chrome": 14,
         "reality_fp_random_pinned": 4,
         "tls_insecure": 5,
@@ -62,20 +59,18 @@
     },
     "07-github-byewhitelists2": {
       "nodes_total": 485,
-      "dropped": {
-        "duplicate": 546
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 134,
         "reality_fp_not_chrome": 215,
         "reality_fp_random_pinned": 50
       }
     },
     "08-github-whitelist": {
       "nodes_total": 24,
-      "dropped": {
-        "duplicate": 21
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 13,
         "reality_fp_random_pinned": 1,
         "tls_insecure": 1,
         "uri_param_unknown": 1
@@ -103,10 +98,9 @@
     },
     "10-github-whitelist": {
       "nodes_total": 56,
-      "dropped": {
-        "duplicate": 7
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 7,
         "reality_fp_random_pinned": 26,
         "tls_insecure": 14,
         "tls_not_applicable_quic": 2
@@ -115,10 +109,10 @@
     "11-github-blacklist": {
       "nodes_total": 2865,
       "dropped": {
-        "duplicate": 187,
         "form_unrecognized": 12
       },
       "warnings": {
+        "duplicates_collapsed": 183,
         "ech_ignored": 3,
         "reality_fp_random_pinned": 119,
         "tls_insecure": 27,
@@ -128,10 +122,10 @@
     "12-github-kizyakbeta7": {
       "nodes_total": 73,
       "dropped": {
-        "duplicate": 21,
         "service_record_ignored": 1
       },
       "warnings": {
+        "duplicates_collapsed": 18,
         "field_conflict": 1,
         "reality_fp_not_chrome": 8,
         "tls_insecure": 5,
@@ -140,10 +134,9 @@
     },
     "13-github-kizyakbeta6": {
       "nodes_total": 30,
-      "dropped": {
-        "duplicate": 1
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 1,
         "reality_fp_not_chrome": 13,
         "reality_fp_random_pinned": 3,
         "tls_not_applicable_quic": 1
@@ -151,10 +144,9 @@
     },
     "14-github-kizyakbeta6bl": {
       "nodes_total": 33,
-      "dropped": {
-        "duplicate": 1
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 1,
         "tls_insecure": 16,
         "tls_not_applicable_quic": 5,
         "unknown_key": 2,
@@ -163,10 +155,9 @@
     },
     "15-github-rkn-white-list": {
       "nodes_total": 97,
-      "dropped": {
-        "duplicate": 4
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 4,
         "field_conflict": 1,
         "reality_fp_not_chrome": 6,
         "reality_fp_random_pinned": 1
@@ -187,10 +178,9 @@
     },
     "17-github-configs": {
       "nodes_total": 206,
-      "dropped": {
-        "duplicate": 11
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 11,
         "reality_fp_not_chrome": 6,
         "reality_fp_random_pinned": 5,
         "tls_insecure": 3,
@@ -202,10 +192,10 @@
     "18-github-whitelist-all": {
       "nodes_total": 188,
       "dropped": {
-        "duplicate": 128,
         "vless_encryption_invalid": 2
       },
       "warnings": {
+        "duplicates_collapsed": 47,
         "reality_fp_not_chrome": 25,
         "reality_fp_random_pinned": 22,
         "tls_alpn_item_invalid": 4,
@@ -214,10 +204,9 @@
     },
     "19-github-bypass-all": {
       "nodes_total": 621,
-      "dropped": {
-        "duplicate": 81
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 66,
         "reality_fp_not_chrome": 42,
         "reality_fp_random_pinned": 17,
         "tls_insecure": 1,
@@ -229,10 +218,9 @@
     },
     "20-github-bypass-1": {
       "nodes_total": 286,
-      "dropped": {
-        "duplicate": 14
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 13,
         "reality_fp_not_chrome": 10,
         "reality_fp_random_pinned": 6,
         "unknown_key": 5,
@@ -243,10 +231,9 @@
     },
     "21-github-bypass-2": {
       "nodes_total": 262,
-      "dropped": {
-        "duplicate": 38
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 32,
         "reality_fp_not_chrome": 28,
         "reality_fp_random_pinned": 10,
         "tls_insecure": 1,
@@ -259,10 +246,10 @@
     "22-github-bypass-3": {
       "nodes_total": 277,
       "dropped": {
-        "duplicate": 22,
         "form_unrecognized": 1
       },
       "warnings": {
+        "duplicates_collapsed": 19,
         "reality_fp_not_chrome": 31,
         "reality_fp_random_pinned": 6,
         "unknown_key": 34,
@@ -273,10 +260,9 @@
     },
     "23-github-bypass-4": {
       "nodes_total": 281,
-      "dropped": {
-        "duplicate": 19
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 19,
         "reality_fp_not_chrome": 14,
         "reality_fp_random_pinned": 5,
         "tls_insecure": 1,
@@ -288,20 +274,18 @@
     },
     "24-github-bypass-5": {
       "nodes_total": 25,
-      "dropped": {
-        "duplicate": 275
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 10,
         "reality_fp_not_chrome": 6,
         "uri_param_unknown": 23
       }
     },
     "25-github-bypass-6": {
       "nodes_total": 279,
-      "dropped": {
-        "duplicate": 21
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 13,
         "reality_fp_not_chrome": 30,
         "reality_fp_random_pinned": 6,
         "tls_insecure": 4,
@@ -331,13 +315,13 @@
     "27-github-ru-white-all-white": {
       "nodes_total": 4025,
       "dropped": {
-        "duplicate": 2023,
         "field_missing": 2,
         "ss_method_invalid": 1,
         "transport_header_unsupported": 56,
         "vless_encryption_invalid": 2
       },
       "warnings": {
+        "duplicates_collapsed": 1007,
         "field_missing": 22,
         "reality_fp_not_chrome": 399,
         "reality_fp_random_pinned": 219,
@@ -352,10 +336,9 @@
     },
     "28-github-whitelist": {
       "nodes_total": 191,
-      "dropped": {
-        "duplicate": 163
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 76,
         "reality_fp_not_chrome": 18,
         "reality_fp_random_pinned": 15,
         "unknown_key": 7,
@@ -364,10 +347,10 @@
     },
     "29-github-blacklist": {
       "nodes_total": 106,
-      "dropped": {
-        "duplicate": 3
-      },
-      "warnings": {}
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 3
+      }
     },
     "30-github-non-ru": {
       "nodes_total": 45,
@@ -393,10 +376,9 @@
     },
     "33-github-229": {
       "nodes_total": 70,
-      "dropped": {
-        "duplicate": 159
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 42,
         "reality_fp_not_chrome": 11,
         "ss_method_legacy": 3,
         "unknown_key": 28,
@@ -406,13 +388,13 @@
     "34-github-antinet": {
       "nodes_total": 642,
       "dropped": {
-        "duplicate": 467,
         "form_unrecognized": 7,
         "scheme_unsupported": 14,
         "transport_header_unsupported": 1
       },
       "warnings": {
         "awg_mtu_clamped": 1,
+        "duplicates_collapsed": 225,
         "reality_fp_not_chrome": 38,
         "reality_fp_random_pinned": 9,
         "ss_method_legacy": 2,
@@ -425,10 +407,9 @@
     },
     "35-github-premium": {
       "nodes_total": 153,
-      "dropped": {
-        "duplicate": 47
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 28,
         "reality_fp_not_chrome": 14,
         "reality_fp_random_pinned": 11,
         "ss_method_legacy": 3,
@@ -440,10 +421,10 @@
     "36-github-alive-full": {
       "nodes_total": 595,
       "dropped": {
-        "duplicate": 125,
         "transport_header_unsupported": 9
       },
       "warnings": {
+        "duplicates_collapsed": 118,
         "field_missing": 3,
         "reality_fp_not_chrome": 35,
         "reality_fp_random_pinned": 53,
@@ -456,7 +437,6 @@
     "37-github-sub": {
       "nodes_total": 2891,
       "dropped": {
-        "duplicate": 1075,
         "field_missing": 103,
         "form_unrecognized": 2,
         "provider_banner_link": 2,
@@ -464,6 +444,7 @@
         "transport_header_unsupported": 59
       },
       "warnings": {
+        "duplicates_collapsed": 575,
         "ech_ignored": 10,
         "field_missing": 59,
         "reality_fp_not_chrome": 144,
@@ -479,40 +460,36 @@
     },
     "38-codeberg-vless-universal": {
       "nodes_total": 95,
-      "dropped": {
-        "duplicate": 2
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 2,
         "field_conflict": 1,
         "reality_fp_not_chrome": 5
       }
     },
     "39-moshub-list-universal": {
       "nodes_total": 95,
-      "dropped": {
-        "duplicate": 2
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 2,
         "field_conflict": 1,
         "reality_fp_not_chrome": 5
       }
     },
     "40-gitverse-list-universal": {
       "nodes_total": 95,
-      "dropped": {
-        "duplicate": 2
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 2,
         "field_conflict": 1,
         "reality_fp_not_chrome": 5
       }
     },
     "41-gitlab-vless-reality-white-lists-rus-mobile": {
       "nodes_total": 25,
-      "dropped": {
-        "duplicate": 2
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 2,
         "reality_fp_not_chrome": 7,
         "reality_fp_random_pinned": 1,
         "tls_not_applicable_quic": 1
@@ -520,10 +497,9 @@
     },
     "42-bitbucket-vless-reality-white-lists-rus-mobile": {
       "nodes_total": 25,
-      "dropped": {
-        "duplicate": 2
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 2,
         "reality_fp_not_chrome": 7,
         "reality_fp_random_pinned": 1,
         "tls_not_applicable_quic": 1
@@ -532,10 +508,10 @@
     "47-domain-whitelist": {
       "nodes_total": 95,
       "dropped": {
-        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
+        "duplicates_collapsed": 31,
         "reality_fp_not_chrome": 4,
         "reality_fp_random_pinned": 1,
         "tls_insecure": 3
@@ -544,13 +520,13 @@
     "48-domain-1": {
       "nodes_total": 3678,
       "dropped": {
-        "duplicate": 778,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 623,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 71,
         "reality_fp_random_pinned": 32,
@@ -565,13 +541,13 @@
     "49-domain-2": {
       "nodes_total": 3678,
       "dropped": {
-        "duplicate": 778,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 623,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 71,
         "reality_fp_random_pinned": 32,
@@ -586,10 +562,10 @@
     "50-domain-whitelist": {
       "nodes_total": 95,
       "dropped": {
-        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
+        "duplicates_collapsed": 31,
         "reality_fp_not_chrome": 4,
         "reality_fp_random_pinned": 1,
         "tls_insecure": 3
@@ -598,13 +574,13 @@
     "51-domain-other": {
       "nodes_total": 3583,
       "dropped": {
-        "duplicate": 742,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 592,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 67,
         "reality_fp_random_pinned": 31,
@@ -619,13 +595,13 @@
     "52-domain-1": {
       "nodes_total": 3678,
       "dropped": {
-        "duplicate": 778,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 623,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 71,
         "reality_fp_random_pinned": 32,
@@ -640,13 +616,13 @@
     "53-domain-2": {
       "nodes_total": 3678,
       "dropped": {
-        "duplicate": 778,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 623,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 71,
         "reality_fp_random_pinned": 32,
@@ -661,11 +637,11 @@
     "54-gitverse-whitelist": {
       "nodes_total": 112,
       "dropped": {
-        "duplicate": 23,
         "provider_banner_link": 1,
         "transport_header_unsupported": 7
       },
       "warnings": {
+        "duplicates_collapsed": 10,
         "reality_fp_not_chrome": 15,
         "reality_fp_random_pinned": 10,
         "uri_param_unknown": 1
@@ -674,11 +650,11 @@
     "55-gitverse-other": {
       "nodes_total": 818,
       "dropped": {
-        "duplicate": 430,
         "provider_banner_link": 1,
         "transport_header_unsupported": 13
       },
       "warnings": {
+        "duplicates_collapsed": 201,
         "field_missing": 12,
         "reality_fp_not_chrome": 21,
         "reality_fp_random_pinned": 58,
@@ -690,11 +666,11 @@
     "56-gitverse-1": {
       "nodes_total": 922,
       "dropped": {
-        "duplicate": 461,
         "provider_banner_link": 1,
         "transport_header_unsupported": 20
       },
       "warnings": {
+        "duplicates_collapsed": 208,
         "field_missing": 12,
         "reality_fp_not_chrome": 36,
         "reality_fp_random_pinned": 67,
@@ -706,11 +682,11 @@
     "57-gitverse-2": {
       "nodes_total": 922,
       "dropped": {
-        "duplicate": 461,
         "provider_banner_link": 1,
         "transport_header_unsupported": 20
       },
       "warnings": {
+        "duplicates_collapsed": 208,
         "field_missing": 12,
         "reality_fp_not_chrome": 36,
         "reality_fp_random_pinned": 67,
@@ -722,10 +698,10 @@
     "58-domain-whitelist": {
       "nodes_total": 95,
       "dropped": {
-        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
+        "duplicates_collapsed": 31,
         "reality_fp_not_chrome": 4,
         "reality_fp_random_pinned": 1,
         "tls_insecure": 3
@@ -734,13 +710,13 @@
     "59-domain-other": {
       "nodes_total": 3583,
       "dropped": {
-        "duplicate": 742,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 592,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 67,
         "reality_fp_random_pinned": 31,
@@ -755,13 +731,13 @@
     "60-domain-1": {
       "nodes_total": 3678,
       "dropped": {
-        "duplicate": 778,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 623,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 71,
         "reality_fp_random_pinned": 32,
@@ -776,13 +752,13 @@
     "61-domain-2": {
       "nodes_total": 3678,
       "dropped": {
-        "duplicate": 778,
         "form_unrecognized": 431,
         "provider_banner_link": 2,
         "scheme_unsupported": 1,
         "transport_header_unsupported": 1
       },
       "warnings": {
+        "duplicates_collapsed": 623,
         "ech_ignored": 5,
         "reality_fp_not_chrome": 71,
         "reality_fp_random_pinned": 32,
@@ -797,10 +773,10 @@
     "62-domain-whitelist-etoneya-baby": {
       "nodes_total": 95,
       "dropped": {
-        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
+        "duplicates_collapsed": 31,
         "reality_fp_not_chrome": 4,
         "reality_fp_random_pinned": 1,
         "tls_insecure": 3
@@ -809,10 +785,10 @@
     "63-domain-whitelist": {
       "nodes_total": 95,
       "dropped": {
-        "duplicate": 36,
         "provider_banner_link": 1
       },
       "warnings": {
+        "duplicates_collapsed": 31,
         "reality_fp_not_chrome": 4,
         "reality_fp_random_pinned": 1,
         "tls_insecure": 3
@@ -821,10 +797,10 @@
     "64-domain-gen": {
       "nodes_total": 193,
       "dropped": {
-        "duplicate": 62,
         "provider_banner_link": 1
       },
       "warnings": {
+        "duplicates_collapsed": 46,
         "reality_fp_not_chrome": 17,
         "reality_fp_random_pinned": 16,
         "tls_insecure": 1,
@@ -833,21 +809,20 @@
     },
     "65-codeberg-sub": {
       "nodes_total": 28,
-      "dropped": {
-        "duplicate": 22
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 15,
         "reality_fp_not_chrome": 7
       }
     },
     "66-gitverse-wl": {
       "nodes_total": 1588,
       "dropped": {
-        "duplicate": 90,
         "field_missing": 9,
         "ss_method_invalid": 2
       },
       "warnings": {
+        "duplicates_collapsed": 71,
         "field_missing": 12,
         "reality_fp_not_chrome": 274,
         "reality_fp_random_pinned": 370,
@@ -874,10 +849,9 @@
     },
     "68-gitverse-outlinevpn-outlinevpn": {
       "nodes_total": 165,
-      "dropped": {
-        "duplicate": 110
-      },
+      "dropped": {},
       "warnings": {
+        "duplicates_collapsed": 60,
         "ech_ignored": 2,
         "reality_fp_not_chrome": 17,
         "reality_fp_random_pinned": 2,
@@ -925,10 +899,10 @@
     "72-gitverse-alive-full": {
       "nodes_total": 595,
       "dropped": {
-        "duplicate": 125,
         "transport_header_unsupported": 9
       },
       "warnings": {
+        "duplicates_collapsed": 118,
         "field_missing": 3,
         "reality_fp_not_chrome": 35,
         "reality_fp_random_pinned": 53,

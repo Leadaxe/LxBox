@@ -96,14 +96,17 @@ void reportFragmentDropped(String owner, String kind, String reason) =>
 const _kRouteRuleConditions = 'route_rule_conditions';
 const _kDnsRuleConditions = 'dns_rule_conditions';
 
-/// §571 — в правиле после Dropped-каскада осталось хоть одно поле-условие
+/// §571/§104 — в правиле после Dropped-каскада осталось хоть одно поле-условие
 /// из списка реестра [list]. Правило без условий матчило бы весь трафик
 /// (все запросы), поэтому выпадает; `action` в списки не входит.
 ///
 /// Значение-условие считается, если оно не `null` и не пустой список (ядро
 /// пустой список условием не считает). Список объектов — под-правила
-/// логического правила: условие есть, если оно есть хоть у одного из них
-/// (по тому же списку, рекурсивно). Реестр не загружен или списка нет —
+/// логического правила (контракт 1.1.107, TEMPLATE_LANG §5.1): условие есть,
+/// только если оно есть у КАЖДОГО из них (по тому же списку, рекурсивно, при
+/// `and` и `or` одинаково) — под-правило без условий делает «без условий» всё
+/// правило (у `or` оно ловило бы весь трафик, у `and` молча ослабляло бы
+/// условие). Прежняя норма §571 («хоть у одного») заменена. Реестр не загружен или списка нет —
 /// гейт не срабатывает (правило остаётся как написано), как у Go
 /// `hasRuleCondition`.
 bool hasRuleCondition(Map<String, dynamic> rule, String list) {
@@ -116,17 +119,110 @@ bool _hasCondition(Map<dynamic, dynamic> rule, Set<String> conds) {
   for (final e in rule.entries) {
     if (!conds.contains(e.key)) continue;
     final v = e.value;
-    if (v == null) continue;
+    // §588 — нулевое значение JSON (`null`, `""`, `[]`, `{}`, `false`, `0`)
+    // условием не считается (TEMPLATE_LANG §5.1, контракт 1.1.82).
+    if (isZeroJsonValue(v)) continue;
     if (v is List) {
-      if (v.isEmpty) continue;
       final subRules = v.whereType<Map>().toList();
       if (subRules.isEmpty) return true;
-      if (subRules.any((m) => _hasCondition(m, conds))) return true;
-      continue;
+      if (subRules.every((m) => _hasCondition(m, conds))) return true;
+      return false;
     }
     return true;
   }
   return false;
+}
+
+/// §104 (контракт 1.1.101/1.1.107, TEMPLATE_LANG §5.1) — ссылки `rule_set`
+/// правила и его под-правил (`type: logical`, `rules`, на любой глубине)
+/// против живых тегов ([isLive]).
+///
+/// - висячие ВСЕ ссылки правила или любого под-правила → `null`: выпадает
+///   всё правило (ссылку не снимаем с сохранением остальных полей);
+/// - висячее имя рядом с живыми убирается из списка (форма списка
+///   сохраняется);
+/// - ссылок нет / все живые → [rule] как есть (тот же объект).
+///
+/// [self] = false — ссылки верхнего уровня не трогать (у вызывающего свой
+/// гейт), только под-правила.
+Map<String, dynamic>? cleanRuleSetRefsDeep(
+    Map<String, dynamic> rule, bool Function(String) isLive,
+    {bool self = true}) {
+  var out = rule;
+  if (self) {
+    final ref = rule['rule_set'];
+    if (ref is String) {
+      if (ref.isNotEmpty && !isLive(ref)) return null;
+    } else if (ref is List) {
+      final refs = ref.whereType<String>().where((r) => r.isNotEmpty).toList();
+      if (refs.isNotEmpty) {
+        final present = refs.where(isLive).toList();
+        if (present.isEmpty) return null;
+        if (present.length != ref.length) out = {...out, 'rule_set': present};
+      }
+    }
+  }
+  final subs = rule['rules'];
+  if (rule['type'] == 'logical' && subs is List) {
+    final next = <dynamic>[];
+    var changed = false;
+    for (final s in subs) {
+      if (s is! Map) {
+        next.add(s);
+        continue;
+      }
+      final m = s is Map<String, dynamic> ? s : Map<String, dynamic>.from(s);
+      final c = cleanRuleSetRefsDeep(m, isLive);
+      if (c == null) return null;
+      if (!identical(c, s)) changed = true;
+      next.add(c);
+    }
+    if (changed) out = {...out, 'rules': next};
+  }
+  return out;
+}
+
+/// §588 — подстановка списка правил пресета с признаком «ссылка без
+/// значения» на каждое правило (контракт 1.1.100, TEMPLATE_LANG §5.1).
+///
+/// Обход поэлементный, но каждый элемент идёт через тот же List-обход, что и
+/// массив целиком (`[элемент]`): array-element `#if` и сплайс работают как
+/// раньше (§246), а элементы массива `_walkList` и так обходит независимо.
+/// Признак ставится на всё, что дал исходный элемент.
+List<({Map<String, dynamic> rule, bool emptyRef})> substituteRulesTracked(
+  List<dynamic> rules,
+  Map<String, dynamic> vars, {
+  VarResolver? extra,
+}) {
+  final out = <({Map<String, dynamic> rule, bool emptyRef})>[];
+  for (final r in rules) {
+    final before = templateEmptyRefCount;
+    final walked =
+        substituteVars(<dynamic>[deepCopyJson(r)], vars, extra: extra);
+    final emptyRef = templateEmptyRefCount != before;
+    for (final item in (walked is List ? walked : const [])) {
+      if (item is Map<String, dynamic>) {
+        out.add((rule: item, emptyRef: emptyRef));
+      }
+    }
+  }
+  return out;
+}
+
+/// §588 — гейт «правило без условий» (контракт 1.1.100): условия снял сбой
+/// (хоть одна ссылка без значения) → выпадение с `template_fragment_dropped`
+/// и `false`; так написал автор → `template_rule_unconditional` и `true`
+/// (правило идёт в конфиг). Правило с условием → `true` без кода.
+bool _unconditionalGate(Map<String, dynamic> rule, bool emptyRef,
+    {required String list, required String owner, required String kind}) {
+  if (hasRuleCondition(rule, list)) return true;
+  if (emptyRef) {
+    reportFragmentDropped(owner, kind, 'rule_set');
+    return false;
+  }
+  reportTemplateWarning(
+      templateWarnRuleUnconditional, {'owner': owner, 'kind': kind});
+  return true;
 }
 
 /// Результат merge всех preset-фрагментов от разных CustomRule'ов.
@@ -380,12 +476,13 @@ PresetFragments _expandPresetBody(
   // else → элемент выпадает из массива).
   final dnsRules = <Map<String, dynamic>>[];
   {
-    final copy = <dynamic>[for (final r in preset.dnsRules) deepCopyJson(r)];
-    final substituted = substituteVars(copy, varsMap, extra: nodeVars);
-    final items = substituted is List ? substituted : const [];
-    for (final item in items) {
-      if (item is! Map<String, dynamic>) continue;
-      final result = item;
+    // §588 — поэлементно, с признаком «ссылка без значения» на правило.
+    for (final t in substituteRulesTracked(preset.dnsRules, varsMap,
+        extra: nodeVars)) {
+      final result = t.rule;
+      // §588 — правило целиком снято ложным `#if` (map-spread): выключил
+      // автор, не деградация — без кода (паритет с Go `len(m) == 0`).
+      if (result.isEmpty) continue;
       // Валидность элемента: `server` (route-семантика) ИЛИ serverless
       // action из закрытого списка. Ни того ни другого (optional-var
       // выпал / кривой шаблон / опечатка в action) → drop silently
@@ -402,6 +499,19 @@ PresetFragments _expandPresetBody(
       // DNS-правило со ссылкой на незарегистрированный tag уронило бы ядро
       // на старте (у legacy single-формы guard'а не было — повезло, что
       // ru-direct ссылается только на inline-set'ы).
+      // §104 (контракт 1.1.107) — ссылки `rule_set` под-правил логического
+      // правила: висячие все у любого под-правила (набор не объявлен или
+      // remote `.srs` не скачан) → выпадает всё правило; висячее имя рядом
+      // с живыми убирается.
+      {
+        final deep = cleanRuleSetRefsDeep(result, expandedTags.contains,
+            self: false);
+        if (deep == null) {
+          reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
+          continue;
+        }
+        if (!identical(deep, result)) result['rules'] = deep['rules'];
+      }
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
@@ -432,10 +542,13 @@ PresetFragments _expandPresetBody(
           'value (${refTag.runtimeType}) — reference dropped',
         );
       }
-      // §571 — ни одного поля-условия (реестр, dns_rule_conditions): правило
-      // перехватывало бы все запросы. reason — как у Go (`isDNSRuleEmpty`).
-      if (!hasRuleCondition(result, _kDnsRuleConditions)) {
-        reportFragmentDropped(preset.presetId, 'dns.rules', 'rule_set');
+      // §571/§588 — ни одного поля-условия (реестр, dns_rule_conditions):
+      // правило перехватывало бы все запросы. Сбой (ссылка без значения) →
+      // выпадает; так написал автор → в конфиг с предупреждением.
+      if (!_unconditionalGate(result, t.emptyRef,
+          list: _kDnsRuleConditions,
+          owner: preset.presetId,
+          kind: 'dns.rules')) {
         continue;
       }
       dnsRules.add(result);
@@ -451,12 +564,14 @@ PresetFragments _expandPresetBody(
     // мержится map-spread'ом (false → пустой Map), а не выпадает.
     // <dynamic>: if_engine._walkList мутирует список in-place через
     // addAll(List<dynamic>) — типизированный List<Map> тут упадёт на cast.
-    final copy = <dynamic>[for (final r in preset.rules) deepCopyJson(r)];
-    final substituted = substituteVars(copy, varsMap, extra: nodeVars);
-    final items = substituted is List ? substituted : const [];
-    for (final item in items) {
-      if (item is! Map<String, dynamic>) continue;
-      final result = item;
+    //
+    // §588 — поэлементно ([substituteRulesTracked]): каждый элемент идёт тем
+    // же List-обходом, семантика `#if` элемента прежняя.
+    for (final t in substituteRulesTracked(preset.rules, varsMap,
+        extra: nodeVars)) {
+      final result = t.rule;
+      // §588 — правило целиком снято ложным `#if` (map-spread): без кода.
+      if (result.isEmpty) continue;
       if (result['outbound'] is! String && result['action'] is! String) {
         // После substitute нет ни outbound, ни action (optional-var
         // выпал / кривой шаблон) → элемент выпадает с кодом (§033, §555).
@@ -532,6 +647,19 @@ PresetFragments _expandPresetBody(
       // Поддерживаются обе формы: String (один tag) и List<String> (массив,
       // OR-семантика sing-box'а). Из массива выживший один tag даунгрейдим
       // до String — идиоматичнее.
+      // §104 (контракт 1.1.107) — ссылки `rule_set` под-правил логического
+      // правила: висячие все у любого под-правила (набор не объявлен или
+      // remote `.srs` не скачан) → выпадает всё правило; висячее имя рядом
+      // с живыми убирается.
+      {
+        final deep = cleanRuleSetRefsDeep(result, expandedTags.contains,
+            self: false);
+        if (deep == null) {
+          reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+          continue;
+        }
+        if (!identical(deep, result)) result['rules'] = deep['rules'];
+      }
       final refTag = result['rule_set'];
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
@@ -565,11 +693,13 @@ PresetFragments _expandPresetBody(
         );
       }
       // Без `rule_set` правило матчит по другим полям (domain/protocol/
-      // port/…). §571 — если не осталось ни одного поля-условия (реестр,
-      // route_rule_conditions), правило матчило бы весь трафик и выпадает;
-      // reason — как у Go (`isRuleEmpty`).
-      if (!hasRuleCondition(result, _kRouteRuleConditions)) {
-        reportFragmentDropped(preset.presetId, 'route.rules', 'rule_set');
+      // port/…). §571/§588 — если не осталось ни одного поля-условия (реестр,
+      // route_rule_conditions), правило матчит весь трафик: сбой (ссылка без
+      // значения) → выпадает; так написал автор → в конфиг с предупреждением.
+      if (!_unconditionalGate(result, t.emptyRef,
+          list: _kRouteRuleConditions,
+          owner: preset.presetId,
+          kind: 'route.rules')) {
         continue;
       }
       routingRules.add(result);
@@ -687,10 +817,30 @@ PresetFragments namespacePresetTags(String presetId, PresetFragments f) {
     for (final rs in f.ruleSets) {...rs, 'tag': qualify(rs['tag'] as String)},
   ];
 
+  // §104 — ссылки `rule_set` под-правил логического правила (любая
+  // глубина) префиксуются так же, как ссылки верхнего уровня.
+  Object? mapSubRules(Object? rules) {
+    if (rules is! List) return rules;
+    return [
+      for (final s in rules)
+        if (s is Map)
+          {
+            ...s,
+            if (s['rule_set'] != null)
+              'rule_set': mapRef(s['rule_set'], localRuleSetTags),
+            if (s['rules'] != null) 'rules': mapSubRules(s['rules']),
+          }
+        else
+          s,
+    ];
+  }
+
   final dnsRules = [
     for (final r in f.dnsRules)
       {
         ...r,
+        if (r['type'] == 'logical' && r['rules'] != null)
+          'rules': mapSubRules(r['rules']),
         if (r['server'] != null) 'server': mapRef(r['server'], localDnsTags),
         if (r['rule_set'] != null)
           'rule_set': mapRef(r['rule_set'], localRuleSetTags),
@@ -701,6 +851,8 @@ PresetFragments namespacePresetTags(String presetId, PresetFragments f) {
     for (final r in f.routingRules)
       {
         ...r,
+        if (r['type'] == 'logical' && r['rules'] != null)
+          'rules': mapSubRules(r['rules']),
         if (r['rule_set'] != null)
           'rule_set': mapRef(r['rule_set'], localRuleSetTags),
         // Route-правило с `action: resolve` несёт `server` — ссылку на

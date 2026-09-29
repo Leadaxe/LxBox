@@ -1,6 +1,9 @@
 [English](xhttp-params.md) · [Русский](xhttp-params.ru.md)
 
-# Параметры XHTTP
+# Параметры XHTTP — транспорт Xray XHTTP целиком в sing-box
+
+LxBox читает все параметры XHTTP (SplitHTTP) из ссылок, Xray JSON и sing-box
+JSON, включая `extra` и `xmux`, и не пропускает недопустимые значения в ядро.
 
 | Поле | Значение |
 |------|----------|

@@ -1,6 +1,9 @@
 [English](connection-status.md) · [Русский](connection-status.ru.md)
 
-# Status and traffic bar
+# Status and traffic bar — tunnel state and counters on the home screen
+
+The home screen shows the tunnel phase from the VPN service and the traffic
+numbers from the core side by side.
 
 | Field | Value |
 |-------|-------|
@@ -46,8 +49,8 @@ gives the hint "App connections" / "Outbound connections to servers".
 - **Two worlds of status.** The tunnel phase comes only from the service; the
   core's data channels (section [data-channels](data-channels.md)) give only
   numbers. Their connect/disconnect is not displayed as the tunnel status.
-  Hence channel sleep in the background does not blind the app to the tunnel
-  being turned off.
+  Because of this, channel sleep in the background does not blind the app to
+  the tunnel being turned off.
 - A repeated or late terminal status ("Stopped" on top of an already stopped
   one) does not break the live state of a new session.
 - On return from the background the service status is re-read once; a

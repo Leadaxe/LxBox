@@ -1,6 +1,9 @@
 [English](dns-cache.md) · [Русский](dns-cache.ru.md)
 
-# DNS cache
+# DNS cache — size, stale answers, persistence and reset
+
+The user sets how many DNS answers the core keeps, whether it serves stale answers while refreshing
+and whether the cache survives a restart, and can clear the cache.
 
 | Field | Value |
 |------|----------|

@@ -533,8 +533,9 @@ class WizardVar {
   final String section;
   final String chapter;
 
-  /// Optional-флаг (spec §033). `true` (default) — значение обязательно,
-  /// null запрещён. `false` — в UI появляется пункт "—", юзер может не
+  /// Optional-флаг (spec §033). `true` — значение обязательно, null
+  /// запрещён. В JSON без ключа — `false` (§588, паритет с лаунчером);
+  /// дефолт конструктора остаётся `true` для программных объявлений. `false` — в UI появляется пункт "—", юзер может не
   /// выбирать, фрагменты с unresolved `@name` выкидываются целиком.
   final bool required;
 
@@ -625,7 +626,9 @@ class WizardVar {
       tooltip: json['tooltip'] as String? ?? '',
       section: section,
       chapter: chapter,
-      required: json['required'] as bool? ?? true,
+      // §588 — нет ключа `required` = false (паритет с лаунчером, решение
+      // владельца 29.09.2026); обязательность объявляется явно.
+      required: json['required'] as bool? ?? false,
       // SPEC 107: канон — помеченный `#on_change`; легаси `on_change`
       // читается бессрочно.
       onChange: (json['#on_change'] ?? json['on_change']) as Map<String, dynamic>?,

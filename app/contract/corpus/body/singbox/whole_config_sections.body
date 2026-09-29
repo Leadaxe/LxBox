@@ -1,0 +1,6 @@
+# sing-box: ЦЕЛЫЙ конфиг с одним узлом и записями dns/route, которые на него
+# ссылаются. С контракта 1.1.85 секций узла нет: из конфига берётся только
+# узел, `dns` и `route` отбрасываются, в ожидании у узла нет `sections`.
+# Сторона, которая по-прежнему извлекает связку в узел, на кейсе упадёт.
+# Схема wireguard, а не tailscale: кейс не должен зависеть от тега сборки ядра.
+{"log":{"level":"warn"},"endpoints":[{"type":"wireguard","tag":"home-wg","mtu":1280,"address":["10.10.0.2/32"],"private_key":"QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWY=","peers":[{"address":"192.0.2.10","port":51820,"public_key":"Z2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0w=","allowed_ips":["0.0.0.0/0"]}]}],"dns":{"servers":[{"type":"udp","tag":"home-dns","server":"10.10.0.1","detour":"home-wg"},{"type":"udp","tag":"local-dns","server":"192.0.2.53"}],"rules":[{"domain_suffix":[".home.example-1.com"],"server":"home-dns"}],"final":"local-dns"},"route":{"rules":[{"ip_cidr":["10.10.0.0/16"],"outbound":"home-wg"},{"name":"Home mail","domain":["mail.home.example-1.com"],"outbound":"home-wg"}],"final":"home-wg"}}

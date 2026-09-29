@@ -1,6 +1,9 @@
 [English](reality-params.md) · [Русский](reality-params.ru.md)
 
-# Параметры REALITY
+# Параметры REALITY — проверенные ключи и short ID для узлов VLESS REALITY
+
+LxBox собирает блок REALITY узлов VLESS и AnyTLS из ссылок и JSON и отбрасывает
+негодный ключ, short ID или key share только на этом узле.
 
 | Поле | Значение |
 |------|----------|

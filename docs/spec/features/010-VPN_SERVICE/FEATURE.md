@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 010 — VPN_SERVICE — the tunnel as behaviour
+# VPN service — starting, stopping and keeping the Android VPN tunnel alive
+
+LxBox runs the sing-box core as an Android VPN service and shows "Connected"
+or "Stopped" only after the core has confirmed the transition. The feature
+covers the VPN and local proxy modes, autostart after boot, recovery after
+process death or a core crash, reaction to Wi-Fi and mobile network changes,
+coexistence with another VPN app, and battery and memory savings for
+WireGuard and AmneziaWG nodes.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
+| Feature | 010-VPN_SERVICE |
 | Type | Product feature |
 | Absorbed | `§012F` `§042F` `§119F` `§124F` `§128F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -56,10 +64,14 @@ The feature protects three principles:
   way as to tunnel traffic. **Witness**: units "mode=proxy → tun removed, mixed
   added", "no dangling tun-in in rules", "mode=vpn_proxy → both inbounds".
   **Mutation**: a rule bound only to the tunnel input in Proxy mode.
-- **P6. A port visible outside the device is closed with a password.** A
-  listen address outside `127.x` forces authentication, and it cannot be
-  removed; when authentication is enabled with an empty password, a password
-  is generated. **Witness**: units "listen 0.0.0.0 → effectiveAuth is
+- **P6. A port visible outside the device is closed with a password unless
+  the user opens it on purpose.** A listen address outside `127.x` forces
+  authentication on the screen and in the Debug API, and it cannot be removed
+  there; when authentication is enabled with an empty password, a password is
+  generated. A record with an empty password that bypasses both entry points
+  (a restored backup, a hand-edited store) is honoured as the user's choice:
+  the build writes no `users` and the port is open (owner's decision,
+  2026-09-29). **Witness**: units "listen 0.0.0.0 → effectiveAuth is
   forced", "an arbitrary LAN IP forces auth", "non-loopback listen forces
   effectiveAuth → a password is generated". **Mutation**: authentication is
   read from the toggle regardless of the address.
@@ -218,13 +230,16 @@ gesture / OS event
 
 ## Boundaries
 
-- Live status, speed, connections, connection time — 012-LIVE_STATE.
-- Which apps go through the tunnel — 011-SPLIT_TUNNELING.
-- Quick settings tile, shortcuts, Intent API, automation apps — 014-AUTOMATION.
+- Live status, speed, connections, connection time — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
+- Which apps go through the tunnel — [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md).
+- Quick settings tile, shortcuts, Intent API, automation apps —
+  [014-AUTOMATION](../014-AUTOMATION/FEATURE.md).
 - Auto-applying settings changes to a live tunnel and the "restart needed"
-  banner — 003-CONFIG_BUILD; tunnel interface parameters (address, MTU,
-  stack, IPv6) — there as well, as template variables.
-- Logs, Debug API, the core crash report — 013-DIAGNOSTICS.
+  banner — [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md); tunnel
+  interface parameters (address, MTU, stack, IPv6) — there as well, as
+  template variables.
+- Logs, the core crash report — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md);
+  the Debug API — [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 - An active health watchdog with probes and escalation (§042F, §088) — not
   implemented on purpose (battery).
 - Depends on OS capabilities: autostart after boot, surviving in the
@@ -238,14 +253,14 @@ gesture / OS event
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Tunnel control | Start, stop, core reload, reconnect, transitional-phase deadlines, service notification | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
-| Operating modes | VPN / Proxy / VPN+Proxy, local port, authentication, tunnel bypass | P5, P6 | [operating-modes.md](FUNCTIONS/operating-modes.md) |
-| Coexisting with another VPN | Question before takeover, recognizing slot loss | P7–P9 | [foreign-vpn.md](FUNCTIONS/foreign-vpn.md) |
-| Autostart and exit | Coming up after boot, behaviour when the app is closed | P10, P11 | [autostart-and-exit.md](FUNCTIONS/autostart-and-exit.md) |
-| Recovery | Coming up after process death, healing after a core crash, recognizing a silent core | P12–P14 | [recovery.md](FUNCTIONS/recovery.md) |
-| Reacting to network and node changes | Reset on network change, network loss, rebind after screen sleep, breaking on node switch | P15, P19 | [network-changes.md](FUNCTIONS/network-changes.md) |
-| Tunnel sleep | Pausing the tunnel in the background by mode | P16 | [tunnel-sleep.md](FUNCTIONS/tunnel-sleep.md) |
-| Core resources | Suspending idle WG/AWG, lazy build, memory limit | P17, P18 | [core-resources.md](FUNCTIONS/core-resources.md) |
+| Tunnel control | Starts, stops, reloads and reconnects the tunnel from the app and the notification, with a deadline for every transitional phase. | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
+| Operating modes | Chooses the VPN, Proxy or VPN+Proxy mode, configures the local proxy port and its authentication, and decides whether apps may bypass the tunnel. | P5, P6 | [operating-modes.md](FUNCTIONS/operating-modes.md) |
+| Coexisting with another VPN | Asks before taking the system VPN slot from another VPN and recognizes when another VPN has taken it. | P7–P9 | [foreign-vpn.md](FUNCTIONS/foreign-vpn.md) |
+| Autostart and exiting the app | Starts the tunnel after the device boots and defines whether it survives closing the app. | P10, P11 | [autostart-and-exit.md](FUNCTIONS/autostart-and-exit.md) |
+| Tunnel recovery | Brings the tunnel back after process death, clears caches after a core crash and detects a core that has stopped responding. | P12–P14 | [recovery.md](FUNCTIONS/recovery.md) |
+| Reacting to network and node changes | Resets core connections on a real network change, handles network loss, rebinds WireGuard after screen sleep and optionally breaks connections on a node switch. | P15, P19 | [network-changes.md](FUNCTIONS/network-changes.md) |
+| Tunnel sleep (background mode) | Pauses the tunnel in the background according to the chosen mode and wakes it up again; it is off by default. | P16 | [tunnel-sleep.md](FUNCTIONS/tunnel-sleep.md) |
+| Core resources | Suspends idle WireGuard/AmneziaWG tunnels, builds them lazily with a limit on parallel builds and sets the core's memory limit. | P17, P18 | [core-resources.md](FUNCTIONS/core-resources.md) |
 
 ## Related features
 
@@ -257,9 +272,10 @@ gesture / OS event
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — the connecting-phase expiry is the start verdict for the node safety net; passive health check and URLTest intervals.
 - [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — which apps go through the tunnel this feature brings up.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — live status, speed, connections, connection time, WG/AWG endpoint state, sleep of data streams in the background.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — logs, Debug API, the core crash report and the "core crashed" banner.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — logs, the core crash report and the "core crashed" banner.
 - [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — quick settings tile, shortcuts, Intent API: starts without the screen and without the foreign-VPN question.
 - [020-APP_SHELL](../020-APP_SHELL/FEATURE.md) — the startup wizard asks for the battery optimization exception that autostart and survival depend on.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the Debug API: start, stop, reconnect, reload and network reset over HTTP (`/action/*`), the VPN mode and proxy settings (`/settings/*`).
 
 ## Maintenance notes
 

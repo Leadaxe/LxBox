@@ -1,6 +1,9 @@
 [English](self-in-allowlist.md) · [Русский](self-in-allowlist.ru.md)
 
-# Own app in the Allow-list
+# Own app in the Allow-list — keeping LxBox inside its own tunnel
+
+This is an automatic tweak at tunnel bring-up: the user does not see it and
+the saved config does not contain it.
 
 | Field | Value |
 |-------|-------|

@@ -1,6 +1,9 @@
 [English](tls-fragmentation.md) · [Русский](tls-fragmentation.ru.md)
 
-# Фрагментация TLS
+# Фрагментация TLS — ClientHello по частям, чтобы DPI не прочитал SNI
+
+LxBox может делить TLS ClientHello узлов первого хопа на несколько TCP-сегментов
+или TLS-записей, чтобы DPI не увидел SNI в одном пакете.
 
 | Поле | Значение |
 |------|----------|

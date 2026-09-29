@@ -1,6 +1,10 @@
 [English](update-check.md) · [Русский](update-check.ru.md)
 
-# Update check
+# Update check — a daily release check with consent and a link to the install source
+
+With the user's consent LxBox checks GitHub for a new release at most once a day
+and announces it on the next launch with a link to where the app was installed
+from.
 
 | Field | Value |
 |-------|-------|
@@ -10,9 +14,9 @@
 
 ## What it does
 
-Once a day (with consent) asks GitHub for the latest release number and, on
-the next launch, tactfully announces a new version with a link to where the
-app was installed from. There is no in-app installation.
+Once a day (with consent) asks GitHub for the latest release number and, on the
+next launch, unobtrusively announces a new version with a link to where the app
+was installed from. There is no in-app installation.
 
 ## Parameters
 

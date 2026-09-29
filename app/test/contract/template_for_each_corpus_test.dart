@@ -51,7 +51,6 @@ _ForEachCase _loadCase(String base) {
 
   final presetJson = Map<String, dynamic>.from(
       preset['preset'] as Map<String, dynamic>? ?? const {});
-
   final nodes = <PresetNode>[
     for (final n in (preset['nodes'] as List? ?? const []))
       if ((n as Map<String, dynamic>)['enabled'] != false &&
@@ -145,6 +144,9 @@ void main() {
     ..sort();
 
   group('contract corpus: template for_each', () {
+    // §588 — гейт «правило без условий» читает списки полей-условий из
+    // реестра; без реестра гейт не срабатывает (правило как написано).
+    setUpAll(loadTestRegistry);
     for (final base in bases) {
       final name = base.substring(root.path.length + 1);
       test(name, () {

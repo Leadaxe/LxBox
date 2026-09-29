@@ -1,6 +1,9 @@
 [English](full-backup-restore.md) · [Русский](full-backup-restore.ru.md)
 
-# Full backup restore
+# Full backup restore — merging or replacing settings from a backup file
+
+LxBox restores settings from a full backup file after a preview, either merging
+them with the current ones or replacing them.
 
 | Field | Value |
 |-------|-------|

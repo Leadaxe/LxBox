@@ -1,9 +1,12 @@
 [English](speed-test.md) · [Русский](speed-test.ru.md)
 
-# Speed test
+# Speed test — latency, download and upload of the current connection
+
+The Speed Test screen measures ping, download and upload speed of the
+device's current path, through the VPN tunnel when it is up.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [009-NODE_HEALTH](../FEATURE.md) |
 | Promises | P17 |
 | State | ✅ written from code, 2026-09-28 |
@@ -55,7 +58,9 @@ the "Session History".
 
 - The test does not address a node and does not switch it: the current path
   is measured.
-- Speed on the home screen — 012-LIVE_STATE.
+- Warm-up, cancelling a run and an own server from `015F` are not planned
+  (owner decision 2026-09-29, audit [591](../../../tasks/591-spec-kit-revision-audit.md)).
+- Speed on the home screen — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
 
 ## Revisions
 

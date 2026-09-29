@@ -1,6 +1,10 @@
 [English](folder-testing.md) · [Русский](folder-testing.ru.md)
 
-# Folder test
+# Folder test — checking servers without starting the VPN
+
+A folder or subscription is tested in a temporary core session with the VPN
+off; slow or unreachable servers can then be disabled, deleted or sorted by
+ping.
 
 | Field | Value |
 |------|----------|
@@ -78,7 +82,8 @@ deletion, order) are ordinary source edits with a config rebuild.
 
 ## Boundaries
 
-- Ping through the running core on the main screen, group URLTest — 009.
+- Ping through the running core on the main screen, group URLTest —
+  [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
 - Disabling subscription nodes as a mark — [001](../../001-SUBSCRIPTIONS/FUNCTIONS/node-disable.md).
 - The OS's ability to keep a second core session next to the VPN — not
   supported.

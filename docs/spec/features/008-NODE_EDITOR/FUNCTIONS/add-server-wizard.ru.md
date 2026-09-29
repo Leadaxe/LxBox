@@ -1,6 +1,9 @@
 [English](add-server-wizard.md) · [Русский](add-server-wizard.ru.md)
 
-# Мастер добавления сервера
+# Мастер добавления сервера — узел SOCKS5, HTTP или Tailscale из формы или вставленного текста
+
+Мастер создаёт один свой сервер из формы SOCKS5, HTTP или Tailscale либо из
+вставленной ссылки или sing-box JSON.
 
 | Поле | Значение |
 |------|----------|
@@ -40,7 +43,7 @@
 | SOCKS5 | outbound `socks`: `server`, `server_port`, `username`, `password`, `tag` |
 | HTTP | outbound `http`: то же; при HTTPS — `tls.enabled: true`, `tls.server_name` = Host |
 | Tailscale | endpoint `tailscale`: `auth_key` + только заполненные поля; булевы только `true` |
-| Paste URI / JSON | тем же путём, что вставка на экране источников (разбор — 002) |
+| Paste URI / JSON | тем же путём, что вставка на экране источников (разбор — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.ru.md)) |
 
 Формы хранят узел **телом sing-box с `tag`**, а не ссылкой: ссылка несёт имя
 во фрагменте, и тег после перечитывания стал бы другим (P1).
@@ -53,7 +56,8 @@
 - Поле Hostname открывается заполненным; стёртое — ключа `hostname` в теле
   нет, имя выбирает сам Tailscale.
 - Без Exit node узел Tailscale даёт доступ к tailnet, но не становится
-  кандидатом Направлений; маршрут и DNS tailnet даёт пресет шаблона, не узел.
+  кандидатом Направлений; маршрут и DNS tailnet даёт пресет шаблона, не узел
+  ([030-TAILSCALE](../../030-TAILSCALE/FUNCTIONS/tailnet-dns-and-routes.ru.md)).
 - Тег без эмодзи получает эмодзи по виду узла ([name-is-tag.md](name-is-tag.ru.md)).
 - Уникальность тега не проверяется: совпавший тег сборка суффиксует `-1`,
   `-2`; сообщение показывает введённый тег, а не итоговый.
@@ -70,7 +74,8 @@
   тест-серверы — «Добавление источника» в
   [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FUNCTIONS/add-source.ru.md).
 - Форм для VLESS, Trojan, WireGuard и прочих нет — только вставкой.
-- Мастер не собирает цепочку и не задаёт detour — это 006.
+- Мастер не собирает цепочку и не задаёт detour — это
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
 - Cloudflare WARP — отдельный мастер ([015-WARP](../../015-WARP/FEATURE.ru.md)).
 - Правка созданного узла — [node-settings.md](node-settings.ru.md).
 

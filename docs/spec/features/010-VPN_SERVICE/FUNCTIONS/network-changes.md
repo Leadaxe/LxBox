@@ -1,9 +1,12 @@
 [English](network-changes.md) · [Русский](network-changes.ru.md)
 
-# Reacting to network and node changes
+# Reacting to network and node changes — no hanging connections after a Wi-Fi or mobile switch
+
+When the network changes, the screen turns on or the node is switched, the
+core drops or rebinds stale connections so apps do not hang on dead sockets.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P15, P19 |
 | State | ✅ written from code, 2026-09-28 |
@@ -61,10 +64,11 @@ absence.
 ## Boundaries
 
 - Breaking connections by the core itself on a group selection change (the
-  Direction option `interrupt_exist_connections`) — 006-DETOUR_AND_BALANCE /
-  007-NODE_LIST.
+  Direction option `interrupt_exist_connections`) —
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md) /
+  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
 - Deep device sleep as a reason to pause — [tunnel-sleep](tunnel-sleep.md).
-- Rule conditions on the Wi-Fi network — 004-ROUTING.
+- Rule conditions on the Wi-Fi network — [004-ROUTING](../../004-ROUTING/FEATURE.md).
 - Depends on OS capabilities: default network events, their order and the
   delay before the interface appears, the screen-on event.
 

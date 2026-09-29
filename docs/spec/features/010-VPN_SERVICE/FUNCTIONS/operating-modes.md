@@ -1,9 +1,12 @@
 [English](operating-modes.md) · [Русский](operating-modes.ru.md)
 
-# Operating modes: VPN / Proxy / VPN+Proxy
+# Operating modes — system VPN, local proxy or both
+
+The core receives traffic through a device-wide VPN tunnel, a local
+HTTP/SOCKS5 proxy port, or both at once.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P5, P6 |
 | State | ✅ written from code, 2026-09-28 |
@@ -51,7 +54,8 @@ password. `route.final` does not depend on the mode.
 - An address outside `127.x` makes authentication mandatory, the toggle is
   locked; enabling authentication, choosing such an address or a mode with a
   port while the password is empty generates a password. The screen and the
-  Debug API hold the same invariant.
+  Debug API hold the same invariant; the build does not: an empty password
+  that reaches it by another route yields an open port, by design.
 - An invalid port (outside 1024..65535) or an invalid IPv4 — an error under the
   field, the value is not saved. The Debug API rejects an invalid port and
   protocol.
@@ -68,8 +72,8 @@ password. `route.final` does not depend on the mode.
 - Registering the port as the system proxy — not done.
 - Two protocols on two ports at once — not done.
 - Address, MTU, stack, IPv6 of the tunnel interface — template variables,
-  003-CONFIG_BUILD.
-- Which apps go through the tunnel — 011-SPLIT_TUNNELING.
+  [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md).
+- Which apps go through the tunnel — [011-SPLIT_TUNNELING](../../011-SPLIT_TUNNELING/FEATURE.md).
 - Depends on OS capabilities: the single system VPN slot, the mechanism for
   apps to bypass the tunnel.
 

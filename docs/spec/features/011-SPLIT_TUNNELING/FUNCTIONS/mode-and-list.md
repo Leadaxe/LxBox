@@ -1,6 +1,9 @@
 [English](mode-and-list.md) · [Русский](mode-and-list.ru.md)
 
-# Mode and app list
+# Mode and app list — Off, Allow-list and Deny-list for the tunnel
+
+The Off / Allow-list / Deny-list mode and the package list are stored as one
+setting and written into the tunnel input of the core config.
 
 | Field | Value |
 |-------|-------|

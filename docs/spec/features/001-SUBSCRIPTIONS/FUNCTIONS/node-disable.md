@@ -1,6 +1,9 @@
 [English](node-disable.md) · [Русский](node-disable.ru.md)
 
-# Disabling subscription nodes
+# Disabling subscription nodes — per-node on/off that survives updates
+
+Any node of a subscription can be switched off: it stays in the list but is left out of the config,
+and the mark survives updates and restarts.
 
 | Field | Value |
 |------|----------|

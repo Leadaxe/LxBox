@@ -1,6 +1,9 @@
 [English](rule-actions.md) · [Русский](rule-actions.ru.md)
 
-# Rule action
+# Rule action — route, block, reject or resolve matched traffic
+
+Each rule sends matched traffic to a Direction or `direct`, blocks or rejects it, or resolves the
+domain first — for example, to IPv4 only.
 
 | Field | Value |
 |------|----------|

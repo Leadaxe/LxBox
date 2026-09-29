@@ -14,6 +14,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/dns_ref.dart';
+import 'package:lxbox/services/builder/if_engine.dart'
+    show
+        TemplateWarnings,
+        collectTemplateWarnings,
+        templateWarnFragmentDropped;
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
@@ -379,7 +384,8 @@ void main() {
       ]);
     });
 
-    test('kind=srs без cached path: silently skip', () async {
+    test('kind=srs без cached path: правило выпадает с '
+        'template_fragment_dropped (§588)', () async {
       await SettingsStorage.saveDnsRulesList([
         const DnsRuleSrs(
           id: 'ds_test',
@@ -390,15 +396,117 @@ void main() {
       ]);
 
       final config = <String, dynamic>{};
-      await applyCustomDns(
-        config,
-        {'servers': [], 'rules': []},
-        // dnsSrsCachedPaths empty → skip
+      final tw = TemplateWarnings();
+      await collectTemplateWarnings(
+        tw,
+        () => applyCustomDns(
+          config,
+          {'servers': [], 'rules': []},
+          // dnsSrsCachedPaths empty → набор не в конфиге
+        ),
       );
 
       final dns = config['dns'] as Map<String, dynamic>?;
       // dns.rules должен либо отсутствовать, либо быть пустым
       expect(dns?['rules'], anyOf(isNull, isEmpty));
+      expect([for (final w in tw.items) [w.code, w.params]], [
+        [
+          templateWarnFragmentDropped,
+          {'owner': 'CN sites', 'kind': 'dns.rules', 'reason': 'rule_set'}
+        ],
+      ]);
+    });
+
+    group('§588: своё DNS-правило с висячим rule_set', () {
+      Map<String, dynamic> configWithSets(List<String> tags) => {
+            'route': {
+              'rule_set': [
+                for (final t in tags)
+                  {'type': 'inline', 'tag': t, 'rules': const []},
+              ],
+            },
+          };
+
+      test('все ссылки висячие → правила нет, код с owner = name', () async {
+        await SettingsStorage.saveDnsRulesList([
+          const DnsRuleInline(
+            name: 'X via Y',
+            rule: {'rule_set': 'x', 'server': 'y'},
+          ),
+        ]);
+        final config = configWithSets(const []);
+        final tw = TemplateWarnings();
+        await collectTemplateWarnings(tw,
+            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+
+        final dns = config['dns'] as Map<String, dynamic>;
+        expect(dns['rules'], anyOf(isNull, isEmpty));
+        expect([for (final w in tw.items) [w.code, w.params]], [
+          [
+            templateWarnFragmentDropped,
+            {'owner': 'X via Y', 'kind': 'dns.rules', 'reason': 'rule_set'}
+          ],
+        ]);
+      });
+
+      test('безымянное правило → owner dns_options', () async {
+        await SettingsStorage.saveDnsRulesList([
+          const DnsRuleInline(
+            name: '',
+            rule: {'rule_set': ['x'], 'server': 'y'},
+          ),
+        ]);
+        final config = configWithSets(const ['z']);
+        final tw = TemplateWarnings();
+        await collectTemplateWarnings(tw,
+            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+
+        expect((config['dns'] as Map)['rules'], anyOf(isNull, isEmpty));
+        expect(tw.items.single.params['owner'], 'dns_options');
+      });
+
+      test('висячее имя рядом с живым убирается, правило остаётся', () async {
+        await SettingsStorage.saveDnsRulesList([
+          const DnsRuleInline(
+            name: 'XZ',
+            rule: {
+              'rule_set': ['x', 'z'],
+              'server': 'y',
+            },
+          ),
+        ]);
+        final config = configWithSets(const ['z']);
+        final tw = TemplateWarnings();
+        await collectTemplateWarnings(tw,
+            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+
+        expect((config['dns'] as Map)['rules'], [
+          {
+            'rule_set': ['z'],
+            'server': 'y',
+          },
+        ]);
+        expect(tw.items, isEmpty);
+      });
+
+      test('локальный тег пресета жив: его перепишет healPresetTagPrefix',
+          () async {
+        await SettingsStorage.saveDnsRulesList([
+          const DnsRuleInline(
+            name: 'RU',
+            rule: {'rule_set': 'ru-domains', 'server': 'y'},
+          ),
+        ]);
+        final config = configWithSets(const ['ru-direct:ru-domains']);
+        final tw = TemplateWarnings();
+        await collectTemplateWarnings(tw,
+            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+
+        expect((config['dns'] as Map)['rules'], [
+          {'rule_set': 'ru-domains', 'server': 'y'},
+        ]);
+        expect(tw.items, isEmpty);
+      });
     });
 
     test('enabled=false: правило пропускается', () async {

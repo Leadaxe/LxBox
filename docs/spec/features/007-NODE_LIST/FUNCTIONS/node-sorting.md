@@ -1,6 +1,9 @@
 [English](node-sorting.md) · [Русский](node-sorting.ru.md)
 
-# Sorting and manual order
+# Sorting and manual order — arranging the node list
+
+The node list follows the config order, ping, name or a custom drag-and-drop
+order, and splits into two columns on a wide screen.
 
 | Field | Value |
 |------|----------|
@@ -67,7 +70,7 @@ mode and manual order (they do not mark the config as changed).
 ## Boundaries
 
 - The order of members inside a folder and the order of sources — [folders](server-folders.md).
-- Ping itself and mass ping — 009-NODE_HEALTH.
+- Ping itself and mass ping — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
 
 ## Revisions
 

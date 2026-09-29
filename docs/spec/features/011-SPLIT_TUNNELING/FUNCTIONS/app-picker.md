@@ -1,6 +1,9 @@
 [English](app-picker.md) · [Русский](app-picker.ru.md)
 
-# App selection
+# App selection — picking apps for the tunnel list
+
+The picker opens from "Add app" on the "Tunnel apps" tab and from the "by app"
+condition of a routing rule.
 
 | Field | Value |
 |-------|-------|

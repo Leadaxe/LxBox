@@ -1,6 +1,9 @@
 [English](apply-to-running-tunnel.md) · [Русский](apply-to-running-tunnel.ru.md)
 
-# Applying to a running tunnel
+# Applying to a running tunnel — honest restart banners, auto-restart and live changes
+
+The app compares the saved config with the one the core is running, shows a restart banner only when
+they differ, can restart the tunnel automatically and applies group selections live.
 
 | Field | Value |
 |------|----------|
@@ -51,7 +54,7 @@ VPN to apply".
 - **The "Config changed — restart VPN to apply" banner**: the tunnel is up, the "stale"
   flag is cleared, the "restart needed" flag is set, no auto-apply is running.
   Tap — stop the VPN (with >3 active connections — with the confirmation
-  "Stop VPN?"); the banner goes out on an actual change of the tunnel state.
+  "Stop VPN?"); the banner disappears when the tunnel state actually changes.
 - These two banners are never shown at the same time.
 - **The "restart needed" flag** is set by saving the config if the tunnel is
   up and the config changed in canonical form; it is cleared by saving a

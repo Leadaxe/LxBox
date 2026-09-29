@@ -45,13 +45,6 @@ const kWarningCodes = <Type, String>{
   // §404 / D-085 — недостижимый `dialerProxy` роняет владельца целиком;
   // причина уезжает в `dropped[]` результата разбора (corpus/README, D-088).
   DialerProxyUnusableWarning: 'dialer_proxy_unusable',
-  // §538 — код НАШ, per-app: в `registry/warnings.json` его нет и не будет.
-  // Схлопывание повторов внутри одной подписки делает только LxBox, и запись
-  // в нормативном реестре объявила бы обеим сторонам норму, которой у
-  // лаунчера нет. Таблица кодов реестром не гейтится (`registry_sync_test`
-  // сверяет allowlists и backup-коды, не её), так что per-app код здесь
-  // законен — текст живёт в классе, как у `Sections*Warning`.
-  DuplicateNodeWarning: 'duplicate',
   // §585 — код НАШ, per-app: узел незнакомого приложению типа принят без
   // проверок. `protocol_unsupported` реестра не подходит — он `error` и
   // говорит об отброшенном узле.
