@@ -235,6 +235,7 @@ List<NodeSpec> parseXrayElement(
         ob: ob,
         index: i,
         solo: soloNode,
+        pooled: hasBalancer,
         tagUses: tagUses,
       );
       // §477 — реестр вправе снять запись ЦЕЛИКОМ (`on_invalid: drop_node`):
@@ -587,6 +588,8 @@ NodeSpec? parseXrayOutbound(Map<String, dynamic> element) {
 /// «Лучший сервер» и «Лучший сервер-1» в списке).
 ///
 /// [solo] — элемент даёт ровно один узел и группы нет.
+/// [pooled] — у элемента есть балансировщик (контракт 1.1.105, §102):
+/// запись без `tag` подписана `remarks`.
 /// [index] — позиция в ИСХОДНОМ порядке элемента (§321 P3): при пропуске
 /// дубля имена не съезжают, второй выживший не занимает имя первого.
 /// [tagUses] — сколько раз тег встречается у выживших; при повторе `remarks
@@ -597,11 +600,15 @@ String _elementLabel({
   required Map<String, dynamic> ob,
   required int index,
   required bool solo,
+  required bool pooled,
   required Map<String, int> tagUses,
 }) {
   if (solo) return remarks;
   final tag = ob['tag']?.toString().trim() ?? '';
   if (remarks.isEmpty) return tag.isNotEmpty ? tag : '${index + 1}';
+  // Контракт 1.1.105 (§102) — в элементе с балансировщиком запись без `tag`
+  // подписана чистым `remarks`.
+  if (pooled && tag.isEmpty) return remarks;
   // Пустой или неуникальный тег именем не служит — индексный фолбэк §310.
   if (tag.isEmpty || (tagUses[tag] ?? 0) > 1) return '$remarks ${index + 1}';
   return '$remarks $tag';
