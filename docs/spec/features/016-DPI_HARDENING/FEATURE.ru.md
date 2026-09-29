@@ -240,6 +240,16 @@ removed…»).
 | VLESS flow и encryption | Vision по ссылке, конфликт с транспортом, грамматика `encryption` | P14 P15 | [vless-flow-encryption.md](FUNCTIONS/vless-flow-encryption.ru.md) |
 | Проверка сертификата сервера | Хранилище CA, `insecure`, пин ключа, свой CA | P16 P17 | [server-certificate.md](FUNCTIONS/server-certificate.ru.md) |
 
+## Связанные фичи
+
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — фильтр узлов по `tls.utls.fingerprint`.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбор ссылок и форматов в целом, включая `packet_encoding`; здесь только поля TLS и транспорта.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — порядок шагов сборки, в который встроены глобальные приёмы; настройки ядра и их переносимость в бэкап.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — цепочки, detour и `strip_evasion`, от которых зависит, что считается первым хопом.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — ручная правка TLS-полей и отпечатка узла через его JSON.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — локальный прокси режима Proxy и его авторизация.
+- [015-WARP](../015-WARP/FEATURE.ru.md) — обфускация AmneziaWG/WARP и фрагментация QUIC Initial, отдельный не-TLS слой.
+
 ## Особенности сопровождения
 
 - REALITY матчит SNI точной строкой: любая «безобидная» правка

@@ -236,6 +236,15 @@ WG и MASQUE; записи `warp[]` в резервной копии; снек �
 | Пул endpoint'ов и регион | Пресеты, h3/h2-хосты, SNI-пулы, хосты API, `loc.<cc>` | P12–P14 | [endpoint-pool.md](FUNCTIONS/endpoint-pool.ru.md) |
 | Эксперимент (генератор узлов) | Папка «WARP GENERATOR» из случайных кандидатов | P15 | [warp-generator.md](FUNCTIONS/warp-generator.ru.md) |
 
+## Связанные фичи
+
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — разбирает ссылки `wireguard://` / `masque://` и WG INI, которые порождает эта фича.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — правка WARP-узла после добавления.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — пинг и проверка WARP-узлов и папки «WARP GENERATOR».
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — Debug API: регистрация `POST /warp` без интерфейса, секреты без маски by design.
+- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — глобальная фрагментация TLS доходит до MASQUE-узлов при `h2`/`auto`.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — регистрации уезжают в резервную копию записями `warp[]`.
+
 ## Особенности сопровождения
 
 - **Версия API подвижна.** Путь `v0a2158` и заголовок клиента `a-7.21-0721`

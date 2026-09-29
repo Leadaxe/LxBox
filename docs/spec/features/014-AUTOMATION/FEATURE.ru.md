@@ -170,6 +170,11 @@
 | Исходящие события | События `com.leadaxe.lxbox.event.*` по категориям, ограничение частоты, «запрос-ответ» | P7–P10, P13 | [outbound-events.md](FUNCTIONS/outbound-events.ru.md) |
 | Плагин автоматизаторов | Действия и условия по стандарту Locale/Tasker с выбором узла и группы | P5, P12 | [automation-plugin.md](FUNCTIONS/automation-plugin.ru.md) |
 
+## Связанные фичи
+
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — служба туннеля, которой внешний старт/стоп управляет напрямую; её уведомление с кнопками Stop / Reconnect.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — Debug API, чьи обработчики и коды ошибок переиспользуют команды; удалённое управление по HTTP.
+
 ## Особенности сопровождения
 
 - Имена команд, событий, extras и формат настроек плагина — публичный API:
