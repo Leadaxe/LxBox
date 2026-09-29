@@ -4,7 +4,7 @@
 |------|----------|
 | Тип | B (баг) |
 | Статус | N (new) |
-| Фича | [013-DIAGNOSTICS](../features/013-DIAGNOSTICS/FEATURE.ru.md), функция [debug-api](../features/013-DIAGNOSTICS/FUNCTIONS/debug-api.ru.md) |
+| Фича | [027-DEBUG_API](../features/027-DEBUG_API/FEATURE.ru.md), функция [debug-api](../features/027-DEBUG_API/FUNCTIONS/self-documentation.ru.md) |
 | Дата | 2026-09-29 |
 | Связанные | [`docs/api/debug-api-reference.md`](../../api/debug-api-reference.md) → «Синхронизация с `/help`» |
 

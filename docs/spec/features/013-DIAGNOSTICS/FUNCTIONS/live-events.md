@@ -2,9 +2,8 @@
 
 # Live events — recording network events of all apps for analysis
 
-It is the same recording as the [traffic
-profiler](../../012-LIVE_STATE/FUNCTIONS/traffic-profiler.md) of
-012-LIVE_STATE, described here as a diagnostic tool.
+It is the same recording as the [028-TRAFFIC_PROFILER](../../028-TRAFFIC_PROFILER/FEATURE.md),
+described here as a diagnostic tool.
 
 | Field | Value |
 |-------|-------|

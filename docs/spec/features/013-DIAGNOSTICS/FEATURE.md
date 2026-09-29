@@ -1,17 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# Diagnostics — logs, crash reports, debug dump and Debug API
+# Diagnostics — logs, crash reports, debug dump and live events
 
 LxBox collects logs, sing-box core crash reports and memory snapshots on the
 device, so a VPN problem can be analysed from one shared file without `adb`.
-On a test device a developer reads the same evidence through a local Debug API
-over HTTP.
+On a test device the same evidence is readable over HTTP through the Debug API
+([027-DEBUG_API](../027-DEBUG_API/FEATURE.md)).
 
 | Field | Value |
 |-------|-------|
 | Feature | 013-DIAGNOSTICS |
 | Type | Product feature |
-| Absorbed | `§023F` `§031F` `§038F` `§043F` |
+| Absorbed | `§023F` `§038F` `§043F` |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
@@ -20,11 +20,12 @@ When "it doesn't work", the developer does not have the user's device, and the
 user does not have `adb`. The feature gives both of them the same body of
 evidence: the app log and the core log, core crash reports and its memory
 snapshots, the system reason for process death, a single "everything at once"
-dump file, profiler snapshots of the live core, recording of live network
-events and — for a developer on a test device — a local HTTP interface (Debug
-API) through which all of the same can be read and changed without the screen.
+dump file, profiler snapshots of the live core and recording of live network
+events. A developer on a test device reads all of the same through the Debug
+API routes `/logs`, `/files`, `/diag`, `/profiler` — the API itself is
+[027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 
-The feature protects three principles:
+The feature protects two principles:
 
 - **Evidence survives the failure.** Everything needed to analyse a crash is
   written so that it survives process death: log warnings, the core panic
@@ -34,9 +35,6 @@ The feature protects three principles:
   failure to read evidence does not break startup; noisy sources are off by
   default, archives are rotated, event recording runs only on an explicit
   command.
-- **Root access — only with explicit consent.** The Debug API behind a token
-  sees and changes everything, secrets included; so it is off by default,
-  listens only on the device's own address and rejects foreign host names.
 
 ## Promises
 
@@ -102,44 +100,14 @@ The feature protects three principles:
   files: text readable, binaries gzip+base64", "bodies only for kOomKeep
   freshest", "go.log over the limit keeps the tail and sets the flag".
   **Mutation:** bodies for all snapshots.
-- **P12. The Debug API is closed by default.** Off until explicitly enabled;
-  listens only on the device's own address; the token is 32 hex characters
-  (128 bits), generated on first enable. **Witness:** units "yields 32 hex
-  characters", "different tokens on consecutive calls"; loopback — manual
-  check (a request to the device's LAN address does not connect).
-  **Mutation:** an empty token allows startup.
-- **P13. Without a token — only /ping and /help.** Everything else without the
-  exact `Authorization: Bearer <token>` header returns 401. **Witness:** units
-  "GET /state without a token → 401", "/ping passes without auth", "the scheme
-  must be exactly `Bearer `". **Mutation:** a case-insensitive scheme.
-- **P14. A foreign host name is rejected.** A request whose Host is not
-  `127.0.0.1` / `localhost` gets 403 even with the correct token. **Witness:**
-  units "evil.com → InvalidHost", "GET /ping with Host: evil.com → 403".
-  **Mutation:** the host check after authorisation, only for protected paths.
-- **P15. Access to the Debug API cannot be lost via the API itself or a backup
-  import.** The enable, port and token keys cannot be written through
-  `/settings/vars` (409); a replace import that lacks them keeps the current
-  ones. **Witness:** units "replaceRaw merge=false keeps device Debug API keys
-  absent in snapshot", "Debug API keys from snapshot win"; the ban in
-  `/settings/vars` — `no witness`. **Mutation:** a replace import rewrites
-  `vars` entirely.
-- **P16. File routes do not leave their directories.** Names with path
-  traversal and names outside the whitelist are rejected (404/400).
-  **Witness:** units "traversal in &file= is rejected", "a non-whitelisted
-  name → 404 even if the file exists". **Mutation:** the file name is joined
-  to the directory without a check.
-- **P17. The API map does not lie.** `/help` lists every mounted prefix; error
-  codes are stable. **Witness:** units "every mounted router prefix is in
-  /help?format=json", "codes are stable (API contract)". **Mutation:** a route
-  without an entry in `/help`.
-- **P18. A hung handler does not hang the server.** After 30 s — 504.
-  **Witness:** unit "long handler → RequestTimeout". **Mutation:** waiting
-  without a deadline.
-- **P19. The secret does not leak into copyable API snapshots.** The token in
-  the storage snapshot is `***`; sensitive request parameters are masked in
-  the request log. **Witness:** unit "debug_token is masked, other vars pass
-  through"; the request log — `no witness`. **Mutation:** a storage snapshot
-  without the scrubber.
+- **P12.** moved to 027-DEBUG_API · P1
+- **P13.** moved to 027-DEBUG_API · P2
+- **P14.** moved to 027-DEBUG_API · P3
+- **P15.** moved to 027-DEBUG_API · P4
+- **P16.** moved to 027-DEBUG_API · P5
+- **P17.** moved to 027-DEBUG_API · P10
+- **P18.** moved to 027-DEBUG_API · P6
+- **P19.** moved to 027-DEBUG_API · P7
 - **P20. Live events are recorded only on an explicit command.** Without START
   events do not accumulate; recording continues when leaving the tab.
   **Witness:** unit "recording off → events ignored". **Mutation:** recording
@@ -172,11 +140,9 @@ The feature protects three principles:
 | Log level | core settings → General | `trace` / `debug` / `info` / `warn` / `error` / `fatal` / `panic` | `warn` | config rebuild and restart |
 | Forward sing-box logs | App Settings → Diagnostics | on/off | off | after a process restart |
 | Verbose (TRACE/DEBUG) | same place, active while forwarding is on | on/off | off | immediately |
-| Debug API | App Settings → Diagnostics → Developer | on/off | off | immediately |
-| Port | same place | 1024..49151 | 9269 | immediately (the server restarts) |
-| Token | same place, Copy / Regenerate | 32 hex | generated on first enable | immediately; the old one gets 401 |
-| Lock config (debug) | same place, visible only while the Debug API is on | on/off | off; cleared by turning the Debug API off | immediately |
 | Live retention window | Stats → Profiler | 1m / 10m / 1h | 10m | immediately |
+
+The Debug API toggle, port, token and Lock config — 027-DEBUG_API.
 
 Core config keys (contract): `log.level` = the selected Log level,
 `log.timestamp: true`. Core launch parameters: crash report source `lxbox`,
@@ -194,12 +160,12 @@ snapshots `oom_reports/<ISO-time>/` = `metadata.json`, `go.log`,
 **Inputs:** app entries; core log lines; core report and snapshot files; the
 system process exit history (Android 11+); the tail of the system log of the
 app's own process; the core's stream of connections and DNS queries;
-notifications sent by the core; HTTP requests to `127.0.0.1:<port>`.
+notifications sent by the core.
 
 **Outputs:** the Debug screen (Log / Crashes / OOM / Profiling tabs, Share
 dump); the "core crashed" banner on the home screen; the Profiler tab in
 Stats; the dump file and snapshots via the system share; core system
-notifications; Debug API JSON responses.
+notifications; the same data as JSON through the Debug API routes.
 
 ## Data flow
 
@@ -215,7 +181,6 @@ Share dump / GET /diag/dump → versions + settings + sources + config + log
      + goroutine stacks (if the tunnel is up) → one JSON
 START → core connection and DNS stream → buffer (retention window) → Profiler tab
      → banners (owner / DNS) · /profiler/live*
-HTTP → host check → token → 30 s deadline → route → JSON / error
 ```
 
 ## Rules and guarantees
@@ -229,8 +194,6 @@ HTTP → host check → token → 30 s deadline → route → JSON / error
   current session are written to the file, so the disk holds the last session
   that had warnings.
 - Archive rotation runs at app startup, not when the screen is opened.
-- The Debug API starts when the home screen opens and on every change of the
-  toggle, port or token; with an empty token the server does not start.
 
 ## Boundaries
 
@@ -241,8 +204,9 @@ HTTP → host check → token → 30 s deadline → route → JSON / error
   with codes are shown.
 - Resetting core caches after a crash and auto-raising the tunnel —
   [010-VPN_SERVICE](../010-VPN_SERVICE/FUNCTIONS/recovery.md).
-- An MCP wrapper over the Debug API (`§035F`) — spec only, not implemented
-  (cancelled by the owner).
+- Debug API — [027-DEBUG_API](../027-DEBUG_API/FEATURE.md): the gate,
+  the route map, `/help`, writes; here only the routes that read this
+  feature's evidence.
 - The built-in advanced log viewer (`§023F`) — dropped: its place was taken by
   Profiler and the Debug API.
 - The crash report covers only core panics; native failures outside the core
@@ -250,8 +214,7 @@ HTTP → host check → token → 30 s deadline → route → JSON / error
   reasons and the system log tail.
 - Depends on OS capabilities: process exit history (Android 11+), access to
   the system log of the app's own process only, showing notifications (the
-  notification permission), a loopback shared by all apps (protection — the
-  token).
+  notification permission).
 
 ## Functions
 
@@ -262,9 +225,10 @@ HTTP → host check → token → 30 s deadline → route → JSON / error
 | Crash reports | Collects core panic reports, memory snapshots and system exit reasons, keeps a bounded archive and offers to share the report once after a crash. | P7–P9 | [crash-reports.md](FUNCTIONS/crash-reports.md) |
 | Diagnostic dump | Collects versions, settings, config, logs, crash reports and memory snapshots into one JSON file and opens the system share. | P10, P11 | [diagnostic-dump.md](FUNCTIONS/diagnostic-dump.md) |
 | Core profiling | Captures goroutine, CPU, heap and allocation pprof snapshots of the running core and hands them over as a file. | P24 | [core-profiling.md](FUNCTIONS/core-profiling.md) |
-| Debug API | Runs a token-protected HTTP server on `127.0.0.1` that reads and changes the whole app state over `adb forward`. | P12–P19 | [debug-api.md](FUNCTIONS/debug-api.md) |
 | Live events | Records TCP/UDP and DNS events of the device on an explicit START within a retention window, exports them and raises the owner and DNS banners. | P20, P21 | [live-events.md](FUNCTIONS/live-events.md) |
 | Coded notifications | Groups same-code notifications into one entry with a count and opens the link of a notification sent by the core. | P22, P23 | [coded-notifications.md](FUNCTIONS/coded-notifications.md) |
+
+Debug API moved to [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).
 
 ## Related features
 
@@ -274,6 +238,9 @@ HTTP → host check → token → 30 s deadline → route → JSON / error
   restores the tunnel after the crash that this feature reports.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — owns live status, speed and
   connections; this feature only records events for analysis.
+- [027-DEBUG_API](../027-DEBUG_API/FEATURE.md) — the local HTTP interface
+  whose `/logs`, `/files`, `/diag` and `/profiler` routes read this feature's
+  evidence; the request log is written into the app log.
 
 ## Maintenance notes
 
@@ -285,5 +252,3 @@ HTTP → host check → token → 30 s deadline → route → JSON / error
   test device — 575 snapshots, 427 MB, §318): rotation is kept by the app.
 - In Verbose the core buffer (500 lines) lasts seconds on live traffic: enable
   it pointwise and grab the log right away.
-- The Debug API is root access by design: the audit checks the boundary
-  (token, bind, default-off, host), not the masking of secrets behind it.
