@@ -305,8 +305,9 @@ Delete node / Workspace delete → index record removed → directory removed wh
 - Editing `auth_key` or `control_url` of an existing node does not issue a new
   identity: a node that already signed in keeps its tailnet.
 - SSH to a peer, Taildrop, `*.ts.net` certificates, IPv6-only tailnets under
-  `prefer_ipv6` and per-device traffic are out of scope. The core's system
-  backup of `files/` (`android:allowBackup` is not set) is not governed here.
+  `prefer_ipv6` and per-device traffic are out of scope. The Android system
+  backup includes `files/` with the tailnet keys — stock behaviour, by design
+  (see [device identity](FUNCTIONS/device-identity-and-state.md)).
 - Sign-in with an interactive link, exit node switching, Log out and Ping have
   not been verified on a device with a live tailnet (tasks 445, 449, 578, 579,
   581: DEVICE-PENDING).

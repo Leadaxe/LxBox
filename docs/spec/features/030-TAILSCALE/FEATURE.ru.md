@@ -296,7 +296,8 @@ tailscale, tag, …тело, state_directory}`; от пресета — запи
   выдаёт: уже вошедший узел остаётся в прежней tailnet.
 - SSH к пиру, Taildrop, сертификаты `*.ts.net`, tailnet только по IPv6 при
   `prefer_ipv6` и трафик по устройствам — вне фичи. Системная резервная копия
-  `files/` (`android:allowBackup` не задан) здесь не регулируется.
+  Android включает `files/` с ключами tailnet — штатно, так задумано
+  (см. [личность устройства](FUNCTIONS/device-identity-and-state.ru.md)).
 - Вход по интерактивной ссылке, переключение exit node, Log out и Ping на
   устройстве с живой tailnet не проверены (задачи 445, 449, 578, 579, 581:
   DEVICE-PENDING).

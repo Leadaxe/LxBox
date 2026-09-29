@@ -93,8 +93,12 @@ warnings when the index is unreadable or a target key is already taken.
   list shifted the suffixes); such a node joins as a new device.
 - Editing `auth_key` or `control_url` does not issue a new directory: a node
   with a saved login ignores the new key.
-- The Android system backup of `files/` is not excluded (`android:allowBackup`
-  is unset).
+- The Android system backup includes `files/` together with the `tailscale/`
+  keys — stock behaviour (`android:allowBackup` at its default), by design: the
+  login credentials move to a new phone with the rest of the data (owner's
+  decision 2026-09-29, audit 588 · 80). Consequence: restoring onto a new
+  device while the old one is alive yields two copies of one tailnet identity;
+  the user resolves it by logging out on one of them.
 - No confirmation names the loss of the tailnet login when a Tailscale node
   or a slot is deleted.
 
