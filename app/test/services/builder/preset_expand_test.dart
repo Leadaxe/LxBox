@@ -9,7 +9,11 @@ import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/builder/post_steps.dart'
     show resolveDnsServersBodies;
 import 'package:lxbox/services/builder/if_engine.dart'
-    show TemplateWarnings, collectTemplateWarnings, templateWarnFragmentDropped;
+    show
+        TemplateWarnings,
+        collectTemplateWarnings,
+        templateWarnFragmentDropped,
+        templateWarnRuleUnconditional;
 import 'package:lxbox/services/builder/preset_expand.dart';
 
 import '../../contract_paths.dart' show loadTestRegistry;
@@ -306,9 +310,9 @@ void main() {
           [(templateWarnFragmentDropped, 'rule_set')]);
     });
 
-    test('§571: правило без полей-условий реестра выпадает с кодом; '
-        'action условием не считается; логическое без условий в '
-        'под-правилах выпадает', () async {
+    test('§571/§588: правило без полей-условий реестра по замыслу автора '
+        'идёт в конфиг с template_rule_unconditional; action условием не '
+        'считается; логическое без условий в под-правилах — тоже', () async {
       await loadTestRegistry();
       final preset = SelectableRule(
         label: 'Conditions',
@@ -336,18 +340,48 @@ void main() {
       final tw = TemplateWarnings();
       final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
 
-      expect(f.routingRules,
-          [{'domain_suffix': ['example.com'], 'outbound': 'direct-out'}]);
-      expect(f.dnsRules, [
-        {'query_type': ['HTTPS'], 'action': 'predefined', 'rcode': 'NOERROR'}
+      expect(f.routingRules, hasLength(3));
+      expect(f.dnsRules, hasLength(2));
+      expect([for (final w in tw.items) (w.code, w.params['kind'])], [
+        (templateWarnRuleUnconditional, 'dns.rules'),
+        // Два route-правила без условий дают одинаковые параметры —
+        // накопитель схлопывает повтор в одну запись.
+        (templateWarnRuleUnconditional, 'route.rules'),
       ]);
-      expect([for (final w in tw.items) (w.params['kind'], w.params['reason'])], [
-        ('dns.rules', 'rule_set'),
-        // Два выпавших route-правила дают одинаковые параметры — накопитель
-        // схлопывает повтор в одну запись.
-        ('route.rules', 'rule_set'),
+    });
+
+    test('§588: условия сняла пустая переменная — правило выпадает с '
+        'template_fragment_dropped; литерал без значения — в конфиг', () async {
+      await loadTestRegistry();
+      final preset = SelectableRule(
+        label: 'Lost',
+        presetId: 'lost',
+        vars: [
+          WizardVar(
+              name: 'text_a', type: 'text', defaultValue: '', required: false),
+        ],
+        rule: const [
+          {'domain_suffix': '@text_a', 'outbound': 'direct-out'},
+          {'domain_suffix': <String>[], 'outbound': 'direct-out'},
+        ],
+        dnsRule: const [
+          {'domain_suffix': '@text_a', 'server': 'dns-a'},
+        ],
+      );
+      final rule = CustomRulePreset(name: 'Lost', presetId: 'lost');
+
+      final tw = TemplateWarnings();
+      final f = collectTemplateWarnings(tw, () => expandPreset(rule, preset));
+
+      expect(f.routingRules, [
+        {'domain_suffix': <String>[], 'outbound': 'direct-out'}
       ]);
-      expect(tw.items.map((w) => w.code).toSet(), {templateWarnFragmentDropped});
+      expect(f.dnsRules, isEmpty);
+      expect([for (final w in tw.items) (w.code, w.params['kind'])], [
+        (templateWarnFragmentDropped, 'dns.rules'),
+        (templateWarnFragmentDropped, 'route.rules'),
+        (templateWarnRuleUnconditional, 'route.rules'),
+      ]);
     });
 
     // ─── §045: GeoIP fallback layer ────────────────────────────────────

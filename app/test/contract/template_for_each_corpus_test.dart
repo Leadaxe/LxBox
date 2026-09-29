@@ -51,6 +51,23 @@ _ForEachCase _loadCase(String base) {
 
   final presetJson = Map<String, dynamic>.from(
       preset['preset'] as Map<String, dynamic>? ?? const {});
+  // §588 — `required` не входит в поля ядра объявления (TEMPLATE_LANG §2.1):
+  // переменная корпуса без значения — «значения нет» (Dropped-каскад §5.1),
+  // как у Go (`required` по умолчанию false). У LxBox `WizardVar.required`
+  // по умолчанию true (модель глобалей: пустая required-переменная роняет
+  // пресет целиком), поэтому раннер проставляет ядерную семантику явно.
+  final rawVars = presetJson['vars'];
+  if (rawVars is List) {
+    presetJson['vars'] = [
+      for (final v in rawVars)
+        if (v is Map<String, dynamic> &&
+            !v.containsKey('required') &&
+            !v.containsKey('ref'))
+          {...v, 'required': false}
+        else
+          v,
+    ];
+  }
 
   final nodes = <PresetNode>[
     for (final n in (preset['nodes'] as List? ?? const []))
@@ -145,6 +162,9 @@ void main() {
     ..sort();
 
   group('contract corpus: template for_each', () {
+    // §588 — гейт «правило без условий» читает списки полей-условий из
+    // реестра; без реестра гейт не срабатывает (правило как написано).
+    setUpAll(loadTestRegistry);
     for (final base in bases) {
       final name = base.substring(root.path.length + 1);
       test(name, () {
