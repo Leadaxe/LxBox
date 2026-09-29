@@ -69,6 +69,9 @@ const kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
 /// за другим элементом или уже выпущен этим). Члены балансировщика СВОЕГО
 /// элемента схлопнутыми не сообщаются: пул ссылается на сервер, а не
 /// называет его (контракт §99 п. 3).
+/// [survivorTag] — §322: тег узла, выпущенного по подписи другим элементом
+/// (владельцем §342). Член пула, схлопнутый владением, в группе всё равно
+/// называется — тегом выжившего (как у лаунчера); `null` — не называется.
 List<NodeSpec> parseXrayElement(
   Map<String, dynamic> element, {
   Set<String>? seen,
@@ -77,6 +80,7 @@ List<NodeSpec> parseXrayElement(
   List<NodeWarning>? dropped,
   void Function(String signature, NodeSpec node, {required bool kept})?
       onCollapse,
+  String? Function(String signature)? survivorTag,
 }) {
   final outbounds = element['outbounds'];
   if (outbounds is! List) return const [];
@@ -201,6 +205,9 @@ List<NodeSpec> parseXrayElement(
   // §565 — тег outbound'а элемента → тег выпущенного узла: тело группы
   // называет членов сразу при разборе.
   final memberTagByObTag = <String, String>{};
+  // §322 — подпись → тег узла, выпущенного ЭТИМ элементом: член пула,
+  // схлопнутый дедупом внутри элемента, ссылается на выжившего.
+  final keptTagBySig = <String, String>{};
   // §561 — отбраковка записи элемента (протокол вне реестра, битая форма,
   // недостижимый релей, вердикт реестра) едет ТОЛЬКО в [dropped] — результат разбора
   // подписки (D-088). На соседа по элементу она больше не вешается: прежние
@@ -307,18 +314,31 @@ List<NodeSpec> parseXrayElement(
       final pooled = poolMember != null && poolMember(obTag);
       if (ownedBy != null && !ownedBy(signature)) {
         if (!pooled) onCollapse?.call(signature, node, kept: false);
+        // §322 — сервер выпустил владелец: группа называет его узел.
+        final t = pooled ? survivorTag?.call(signature) : null;
+        if (t != null && obTag.isNotEmpty) {
+          memberTagByObTag.putIfAbsent(obTag, () => t);
+        }
         continue;
       }
       if (seen != null) {
         if (seen.contains(signature)) {
           if (!pooled) onCollapse?.call(signature, node, kept: false);
+          final t = pooled ? keptTagBySig[signature] : null;
+          if (t != null && obTag.isNotEmpty) {
+            memberTagByObTag.putIfAbsent(obTag, () => t);
+          }
           continue;
         }
         seen.add(signature);
       }
       onCollapse?.call(signature, node, kept: true);
+      final memberRef = xrayGroupMemberRef(remarks, node.tag);
+      keptTagBySig.putIfAbsent(signature, () => memberRef);
 
-      if (obTag.isNotEmpty) memberTagByObTag.putIfAbsent(obTag, () => node.tag);
+      if (obTag.isNotEmpty) {
+        memberTagByObTag.putIfAbsent(obTag, () => memberRef);
+      }
       result.add(node..sourceExtended = extended == compact ? null : extended);
     } catch (_) {
       // §322 «битые формы не роняют парсинг целиком» на гранулярности УЗЛА:
@@ -346,6 +366,51 @@ List<NodeSpec> parseXrayElement(
 
   return result;
 }
+
+/// §322 — цель и период замера балансировщика Xray без `pingConfig` (как у
+/// лаунчера, `xray_balancer.go`).
+const kXrayBalancerDefaultUrl = 'https://www.gstatic.com/generate_204';
+const kXrayBalancerDefaultInterval = '3m';
+
+/// §322 — имя узла в составе группы Xray-массива, как его пишет лаунчер
+/// (эталон корпуса `body/xray/duplicates_collapsed_owner`): голова тега —
+/// слаг `remarks` элемента (буквы, цифры и флаги, прочее — одним дефисом,
+/// не длиннее 48 рун), хвост различителя — как у узла. [nodeTag] — тег
+/// выпущенного узла элемента с этими [remarks]. Слаг только в теле разбора:
+/// итоговый состав группы пишет сборка по своим тегам.
+String xrayGroupMemberRef(String remarks, String nodeTag) {
+  final head = remarks.trim().replaceAll('🇪🇳', '🇬🇧');
+  if (head.isEmpty) return nodeTag;
+  final String tail;
+  if (nodeTag == head) {
+    tail = '';
+  } else if (nodeTag.startsWith('$head ')) {
+    tail = nodeTag.substring(head.length);
+  } else {
+    return nodeTag;
+  }
+  final buf = StringBuffer();
+  var lastSep = false;
+  for (final r in head.runes) {
+    final keep = (r >= 0x1F1E6 && r <= 0x1F1FF) ||
+        _kSlugKeep.hasMatch(String.fromCharCode(r));
+    if (keep) {
+      buf.writeCharCode(r);
+      lastSep = false;
+    } else if (buf.isNotEmpty && !lastSep) {
+      buf.write('-');
+      lastSep = true;
+    }
+  }
+  var base = buf.toString().replaceAll(RegExp(r'^-+|-+$'), '');
+  final runes = base.runes.toList();
+  if (runes.length > 48) {
+    base = String.fromCharCodes(runes.take(48)).replaceAll(RegExp(r'-+$'), '');
+  }
+  return base.isEmpty ? nodeTag : '$base$tail';
+}
+
+final _kSlugKeep = RegExp(r'^[\p{L}\p{N}]$', unicode: true);
 
 /// §560/§561 — причина отбраковки непрочитанной записи для `dropped[]`.
 ///
@@ -423,7 +488,7 @@ AutoSelectSpec? _xrayAutoSelect(
   // | Xray | наш режим | pool |
   // |---|---|---|
   // | `leastPing` | least_test | — |
-  // | `leastLoad`, expected ≤ 1 | least_test | — |
+  // | `leastLoad`, expected ≤ 1 или нет | least_test | — |
   // | `leastLoad`, expected > 1 | round_robin | expected |
   // | `roundRobin` | round_robin | весь набор |
   // | `random` / нет поля | round_robin | весь набор |
@@ -445,14 +510,18 @@ AutoSelectSpec? _xrayAutoSelect(
   final spreadAll = type == null || type == 'random' || type == 'roundRobin';
   final mode = switch (type) {
     'leastPing' => UrltestMode.leastTest,
-    'leastLoad' when expected != null && expected <= 1 => UrltestMode.leastTest,
+    'leastLoad' when expected == null || expected <= 1 =>
+      UrltestMode.leastTest,
     _ => UrltestMode.roundRobin,
   };
 
   final d = const AutoSelectParams();
   final params = AutoSelectParams(
-    url: ping['destination']?.toString() ?? d.url,
-    interval: ping['interval']?.toString() ?? d.interval,
+    // §322 — умолчания балансировщика Xray — лаунчерные (gstatic, 3m), не
+    // общие LxBox: тело группы у сторон обязано совпасть (корпус
+    // `body/xray/duplicates_collapsed_owner`).
+    url: ping['destination']?.toString() ?? kXrayBalancerDefaultUrl,
+    interval: ping['interval']?.toString() ?? kXrayBalancerDefaultInterval,
     idleTimeout: d.idleTimeout,
     mode: mode,
     // §322 — у `random`/`roundRobin` размера пула нет: раскладка по всему
@@ -487,11 +556,12 @@ AutoSelectSpec? _xrayAutoSelect(
     // §565 — балансировщик рода не объявляет: `genus.by_source.xray`.
     genus: GroupGenus.forSource(kGenusSourceXray),
     sourceMemberTags: sourceMembers.toSet().toList(),
-    // Объявлены источником: адрес и период замера из `pingConfig`, режим
-    // пула — из стратегии, если она раскладывает по пулу.
+    // Адрес и период замера группа несёт всегда (из `pingConfig` или
+    // умолчание), как лаунчер; режим пула — из стратегии, если она
+    // раскладывает по пулу.
     sourceParamKeys: {
-      if (ping['destination'] != null) 'url',
-      if (ping['interval'] != null) 'interval',
+      'url',
+      'interval',
       if (mode == UrltestMode.roundRobin) ...{'mode', 'balancer'},
     },
   );

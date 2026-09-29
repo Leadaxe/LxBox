@@ -505,9 +505,18 @@ List<NodeSpec> _parseXrayDocument(
         });
       final priming = [for (final e in indexed) e.value];
       final owner = <String, Map<String, dynamic>>{};
+      // §322 — подпись → тег узла у владельца: группа, чей член схлопнут
+      // владением, ссылается на выжившего (паритет с лаунчером).
+      final ownerTagOf = <String, String>{};
       for (final e in priming) {
         final before = seen.toSet();
-        parseXrayElement(e, seen: seen, synonyms: synonyms);
+        parseXrayElement(e, seen: seen, synonyms: synonyms,
+            onCollapse: (sig, node, {required kept}) {
+          if (kept) {
+            ownerTagOf.putIfAbsent(sig,
+                () => xrayGroupMemberRef('${e['remarks'] ?? ''}', node.tag));
+          }
+        });
         for (final id in seen.difference(before)) {
           owner[id] = e;
         }
@@ -535,6 +544,7 @@ List<NodeSpec> _parseXrayDocument(
                 ownedBy: (sig) => identical(owner[sig], e),
                 dropped: dropped,
                 onCollapse: onCollapse,
+                survivorTag: (sig) => ownerTagOf[sig],
               ))
           .toList();
       // Узлы здесь несут только коды разбора: санитайзер идёт позже, в
