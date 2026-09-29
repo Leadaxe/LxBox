@@ -56,6 +56,9 @@ subscription update results; the update check; command failures.
 - A stop on error yields the pair `VPN_ERROR(tunnel_error)` +
   `VPN_DISCONNECTED(error)`; a slot takeover — `VPN_REVOKED` +
   `VPN_DISCONNECTED(revoked)`; a normal stop — `VPN_DISCONNECTED(user)`.
+- `message` of `VPN_ERROR(tunnel_error)` is the raw core error text, not
+  masked: the automation app gets what the log gets (owner's decision
+  2026-09-29).
 - Request-response: a command's success arrives in State
   (`ACTIVE_NODE_CHANGED` / `NODE_ALREADY_ACTIVE` / `ACTIVE_GROUP_CHANGED`), a
   failure — `VPN_ERROR` in Lifecycle. The settings explicitly suggest enabling

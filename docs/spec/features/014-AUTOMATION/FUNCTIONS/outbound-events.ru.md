@@ -56,6 +56,9 @@
 - Остановка по ошибке даёт пару `VPN_ERROR(tunnel_error)` + `VPN_DISCONNECTED(error)`;
   перехват слота — `VPN_REVOKED` + `VPN_DISCONNECTED(revoked)`; обычная
   остановка — `VPN_DISCONNECTED(user)`.
+- `message` у `VPN_ERROR(tunnel_error)` — сырой текст ошибки ядра, без
+  маскирования: автоматизатор получает то же, что журнал (решение владельца
+  2026-09-29).
 - «Запрос-ответ»: успех команды приходит в State (`ACTIVE_NODE_CHANGED` /
   `NODE_ALREADY_ACTIVE` / `ACTIVE_GROUP_CHANGED`), провал — `VPN_ERROR` в
   Lifecycle. Настройки прямо подсказывают включить обе.

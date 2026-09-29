@@ -48,8 +48,10 @@ domains (with the `ru-direct` preset, enabled by default) get their own
   `action: reject`; `dns.final` pointing to it is removed and
   `{"action":"reject"}` is added as the last rule; resolvers
   (`route.default_domain_resolver`, `domain_resolver` of nodes and servers)
-  switch to the template default. The user's choice in storage is not
-  touched. **Witness:** units "detour to a vanished Direction → server not
+  switch to the template default. The build does not touch the user's choice
+  in storage; only deleting or disabling the Direction itself heals it, by
+  rewriting the channel to `vpn-1` (owner's decision 2026-09-29, §441).
+  **Witness:** units "detour to a vanished Direction → server not
   emitted, warning", "rules → reject, final removed + reject stub, resolvers —
   template default". **Mutation:** remove only the `detour` key, keeping the
   server (queries go direct).
