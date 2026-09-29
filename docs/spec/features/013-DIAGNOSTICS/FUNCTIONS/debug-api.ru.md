@@ -14,7 +14,7 @@
 `adb forward`) читает всё состояние приложения и меняет его без экрана: для
 разбора жалоб, автотестов и экспериментов с конфигом. Полный перечень
 маршрутов — контракт в
-[`docs/api/debug-api-reference.md`](../../../../api/debug-api-reference.ru.md) и
+[`docs/api/debug-api-reference.md`](../../../../api/debug-api-reference.md) и
 в самом сервере (`GET /help`).
 
 ## Параметры
