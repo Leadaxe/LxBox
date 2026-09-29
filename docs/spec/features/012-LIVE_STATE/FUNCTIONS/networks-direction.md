@@ -1,6 +1,9 @@
 [English](networks-direction.md) · [Русский](networks-direction.ru.md)
 
-# NETWORKS pseudo-direction
+# NETWORKS pseudo-direction — Tailscale nodes outside the exit lists
+
+The NETWORKS row appears in the home-screen list of Directions only while the
+VPN is up.
 
 | Field | Value |
 |-------|-------|

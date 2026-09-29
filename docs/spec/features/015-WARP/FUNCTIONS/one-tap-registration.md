@@ -1,6 +1,8 @@
 [English](one-tap-registration.md) · [Русский](one-tap-registration.ru.md)
 
-# One-tap registration
+# One-tap registration — a WARP account with the key kept on the device
+
+Registration runs from the "Get WARP" wizard in the Servers screen menu.
 
 | Field | Value |
 |-------|-------|

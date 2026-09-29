@@ -1,6 +1,8 @@
 [English](command-intake.md) · [Русский](command-intake.ru.md)
 
-# Приём команд
+# Приём команд — управление LxBox из Tasker и shell
+
+Приём выключен, пока пользователь не включит «Accept automation commands».
 
 | Поле | Значение |
 |------|----------|

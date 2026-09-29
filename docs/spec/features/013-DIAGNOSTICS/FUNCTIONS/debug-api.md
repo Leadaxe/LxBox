@@ -1,6 +1,8 @@
 [English](debug-api.md) · [Русский](debug-api.ru.md)
 
-# Debug API
+# Debug API — local HTTP access to the app state for developers
+
+The server is off by default and is meant for a developer's test device.
 
 | Field | Value |
 |-------|-------|

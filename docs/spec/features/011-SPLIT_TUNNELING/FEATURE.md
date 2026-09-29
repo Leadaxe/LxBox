@@ -1,21 +1,27 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 011 — SPLIT_TUNNELING — which apps go through the tunnel
+# Split tunneling — choosing which Android apps use the VPN
+
+LxBox lets you choose which Android apps go through the VPN tunnel and which
+bypass it, with Off, Allow-list and Deny-list modes. Android applies the list
+when the tunnel is created, and the sing-box core config stores it as
+`include_package` or `exclude_package`.
 
 | Field | Value |
 |-------|-------|
+| Feature | 011-SPLIT_TUNNELING |
 | Type | Product feature |
 | Absorbed | `§046F` |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
 
-The user decides at the OS level which apps get into the tunnel at all: the
-bank and games — around the VPN directly over Wi-Fi/mobile data, or the other
-way round — "only Telegram through the VPN". This is a boundary **before** the
-core: packets of an app left outside the tunnel do not reach the core, routing
-rules do not see them. The setting lives on the "Tunnel apps" tab of the
-routing screen.
+The user decides at the OS level which apps enter the tunnel in the first
+place: the bank and games — around the VPN directly over Wi-Fi/mobile data, or
+the other way round — "only Telegram through the VPN". This is a boundary
+**before** the core: packets of an app left outside the tunnel do not reach
+the core, routing rules do not see them. The setting lives on the "Tunnel
+apps" tab of the routing screen.
 
 The feature protects two principles:
 
@@ -159,16 +165,22 @@ user choice / Debug API / backup
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Mode and list | Off/Allow/Deny, the list, reflection in the config, carrying it to the core | P1–P6, P11 | [mode-and-list.md](FUNCTIONS/mode-and-list.md) |
-| App selection | Picker: search, system apps, bulk actions, clipboard, returning the selection | P8, P9 | [app-picker.md](FUNCTIONS/app-picker.md) |
-| App status | Name, icon, an honest "uninstalled" label | P10 | [app-status.md](FUNCTIONS/app-status.md) |
-| Own app in allow | Self-appending to the tunnel channel only in Allow-list | P7 | [self-in-allowlist.md](FUNCTIONS/self-in-allowlist.md) |
+| Mode and app list | Stores the Off / Allow-list / Deny-list mode and the package list, writes them into the core config and carries every edit to the core. | P1–P6, P11 | [mode-and-list.md](FUNCTIONS/mode-and-list.md) |
+| App selection | Picker for the app list: search, system apps, bulk actions, clipboard import and export; the selection survives the back gesture. | P8, P9 | [app-picker.md](FUNCTIONS/app-picker.md) |
+| App status | Shows the app name and icon for each package and marks it "uninstalled" only when the OS confirms it. | P10 | [app-status.md](FUNCTIONS/app-status.md) |
+| Own app in the Allow-list | In Allow-list mode, adds LxBox itself to the tunnel on every bring-up without writing it to the saved config. | P7 | [self-in-allowlist.md](FUNCTIONS/self-in-allowlist.md) |
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the "rebuild needed" mark, the restart banner and auto-restart that carry a list edit to a live tunnel.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — per-package rules inside the core see only traffic already in the tunnel; the same app picker serves the "by app" rule condition.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — owns the tunnel whose creation applies the list, the VPN/Proxy modes (no list in Proxy) and "Allow VPN bypass".
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the "rebuild needed"
+  mark, the restart banner and auto-restart that carry a list edit to a live
+  tunnel.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — per-package rules inside the core
+  see only traffic already in the tunnel; the same app picker serves the "by
+  app" rule condition.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — owns the tunnel whose
+  creation applies the list, the VPN/Proxy modes (no list in Proxy) and "Allow
+  VPN bypass".
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — per-app traffic view.
 
 ## Maintenance notes

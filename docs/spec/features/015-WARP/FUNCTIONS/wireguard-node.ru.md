@@ -1,6 +1,8 @@
 [English](wireguard-node.md) · [Русский](wireguard-node.ru.md)
 
-# WireGuard-узел WARP
+# WireGuard-узел WARP — готовый узел из одной регистрации
+
+WireGuard — транспорт мастера «Get WARP» по умолчанию.
 
 | Поле | Значение |
 |------|----------|

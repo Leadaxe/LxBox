@@ -1,6 +1,8 @@
 [English](wireguard-node.md) · [Русский](wireguard-node.ru.md)
 
-# WARP WireGuard node
+# WARP WireGuard node — a ready node from one registration
+
+WireGuard is the default transport of the "Get WARP" wizard.
 
 | Field | Value |
 |-------|-------|

@@ -1,6 +1,9 @@
 [English](traffic-profiler.md) · [Русский](traffic-profiler.ru.md)
 
-# Traffic profiler (per app)
+# Traffic profiler — a network event log across all apps
+
+Recording starts only on an explicit START and keeps running in the
+background.
 
 | Field | Value |
 |-------|-------|
@@ -14,7 +17,7 @@ The Profiler tab of the Statistics screen: on an explicit command it records a
 log of all of the device's network events — opening and closing of TCP/UDP
 connections, DNS resolves and their failures — with the owner app, rule and
 route. Answers "where does this app go and how is it routed" and "what is
-going on in the network at all" without choosing an app in advance.
+happening on the network" without choosing an app in advance.
 
 ## Parameters
 

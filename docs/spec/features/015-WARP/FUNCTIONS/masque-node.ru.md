@@ -1,6 +1,8 @@
 [English](masque-node.md) · [Русский](masque-node.ru.md)
 
-# MASQUE-узел WARP
+# MASQUE-узел WARP — WARP поверх HTTP/3 или HTTP/2
+
+MASQUE-узлу нужна собственная MASQUE-регистрация, отдельная от WireGuard.
 
 | Поле | Значение |
 |------|----------|

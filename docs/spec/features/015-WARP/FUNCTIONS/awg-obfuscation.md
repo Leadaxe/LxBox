@@ -1,6 +1,8 @@
 [English](awg-obfuscation.md) · [Русский](awg-obfuscation.ru.md)
 
-# AmneziaWG obfuscation
+# AmneziaWG obfuscation — hiding WARP WireGuard from DPI
+
+Obfuscation is a client-side setting and does not need a new registration.
 
 | Field | Value |
 |-------|-------|

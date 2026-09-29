@@ -1,9 +1,15 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 012 — LIVE_STATE — live state of the running core
+# Live state — VPN traffic statistics, connections and DNS trace
+
+LxBox shows live traffic, open connections, DNS queries and the running config
+of the sing-box core, with the owner app, rule and node of each connection.
+The data appears in the home-screen traffic bar and on the Statistics screen
+with the Stats, Conns and Profiler tabs.
 
 | Field | Value |
 |-------|-------|
+| Feature | 012-LIVE_STATE |
 | Type | Product feature |
 | Absorbed | `§016F` `§044F` `§122F` `§123F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -179,10 +185,10 @@ server and its type, channel, answers, group path, probes, fan-out, survival),
 
 ## Inputs / Outputs
 
-**Inputs:** the tunnel service status; core subscriptions and replies (above);
-the app lifecycle; gestures — Statistics, START/STOP, closing connections,
-filter, grouping, retention window, export; the saved config; the rule
-catalog.
+**Inputs:** the tunnel service status; core subscriptions and replies (see
+"Contract with the core"); the app lifecycle; gestures — Statistics,
+START/STOP, closing connections, filter, grouping, retention window, export;
+the saved config; the rule catalog.
 
 **Outputs:** the home-screen traffic bar (↑/↓ volume, app connections and
 connections to servers, the "Live" indicator, connection time); the Statistics
@@ -246,25 +252,34 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Status and traffic bar | Two worlds of status, home counters, connection time, bypass warning | P1, P4 | [connection-status.md](FUNCTIONS/connection-status.md) |
-| Data channels and energy model | Core subscriptions, frequency, sleep in the background, recovery after reopening | P2, P3, P5 | [data-channels.md](FUNCTIONS/data-channels.md) |
-| Traffic statistics | Summary, traffic by rules, process memory | P6 | [traffic-statistics.md](FUNCTIONS/traffic-statistics.md) |
-| Live connections | List, details, closing, hung ones, routing line, breaking on node switch | P7, P8, P22 | [live-connections.md](FUNCTIONS/live-connections.md) |
-| Traffic profiler | Recording, a log across all apps, attribution, grouping, filter, export | P9–P14 | [traffic-profiler.md](FUNCTIONS/traffic-profiler.md) |
-| DNS trace | DNS events with attribution, CNAME, failures, group trace, health detector | P15–P18 | [dns-trace.md](FUNCTIONS/dns-trace.md) |
-| NETWORKS pseudo-direction | Tailscale nodes outside the selection lists with their state | P19 | [networks-direction.md](FUNCTIONS/networks-direction.md) |
-| Running config and freshness | Config snapshot from the core, verdict "matches / stale / don't know" | P20, P21 | [running-config.md](FUNCTIONS/running-config.md) |
+| Status and traffic bar | Shows the tunnel state and the traffic bar on the home screen: volume, app and server connections, connection time and the VPN bypass warning. | P1, P4 | [connection-status.md](FUNCTIONS/connection-status.md) |
+| Core data channels and energy model | Delivers core subscriptions to the screens at the rate the user sees, sleeps in the background and recovers after the app is reopened. | P2, P3, P5 | [data-channels.md](FUNCTIONS/data-channels.md) |
+| Traffic statistics | Shows the session volume, the number of live connections, process memory and traffic per routing rule down to a single connection. | P6 | [traffic-statistics.md](FUNCTIONS/traffic-statistics.md) |
+| Live connections | Lists live and recently closed connections with the routing line, highlights one-way ones and closes one, all, or those of a switched group. | P7, P8, P22 | [live-connections.md](FUNCTIONS/live-connections.md) |
+| Traffic profiler | Records TCP/UDP and DNS events of all apps with owner, rule and route; offers grouping, a filter, a retention window and JSON export. | P9–P14 | [traffic-profiler.md](FUNCTIONS/traffic-profiler.md) |
+| DNS query trace | Shows each DNS query with its owner app, CNAME chain, server and failure reason, traces DNS groups and warns when DNS degrades while the link is alive. | P15–P18 | [dns-trace.md](FUNCTIONS/dns-trace.md) |
+| NETWORKS pseudo-direction | Shows Tailscale nodes without `exit_node` as a separate row on the home screen, with their live state instead of latency. | P19 | [networks-direction.md](FUNCTIONS/networks-direction.md) |
+| Running config and freshness verdict | Keeps a snapshot of the config the core runs and answers whether the saved config matches it: "matches", "stale" or "don't know". | P20, P21 | [running-config.md](FUNCTIONS/running-config.md) |
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — owns the "restart needed" banner; this feature only supplies the freshness verdict that can clear it.
-- [004-ROUTING](../004-ROUTING/FEATURE.md) — the user rule catalog that names rules in statistics, connections and the profiler.
-- [005-DNS](../005-DNS/FEATURE.md) — DNS groups, DNS and FakeIP settings behind the DNS trace and the "DNS queries are failing" sheet.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — owns the "restart
+  needed" banner; this feature only supplies the freshness verdict that can
+  clear it.
+- [004-ROUTING](../004-ROUTING/FEATURE.md) — the user rule catalog that names
+  rules in statistics, connections and the profiler.
+- [005-DNS](../005-DNS/FEATURE.md) — DNS groups, DNS and FakeIP settings
+  behind the DNS trace and the "DNS queries are failing" sheet.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — node selection and the list of directions, to which NETWORKS is added.
-- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — the Tailscale node's Network tab, sharing the state subscription with NETWORKS.
-- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — latency measurement and the node probe; the speed test defers home-screen speed to this feature.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that owns the status, "Connection lost" on status silence and the "Interrupt connections on switch" setting.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — app and core logs, the Debug API (including serving the profiler log), crash reports.
+- [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — the Tailscale node's
+  Network tab, sharing the state subscription with NETWORKS.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — latency measurement and
+  the node probe; the speed test defers home-screen speed to this feature.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — the tunnel service that
+  owns the status, "Connection lost" on status silence and the "Interrupt
+  connections on switch" setting.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — app and core logs, the
+  Debug API (including serving the profiler log), crash reports.
 - [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.md) — viewing the resulting config.
 
 ## Maintenance notes
@@ -284,5 +299,5 @@ tunnel service ──status──► Connected/Disconnected (independent of the 
   two places (the freshness verdict and the service); a divergence gives an
   eternal "stale" or a missed change — held by an invariant test (§324).
 - After a reload the core keeps answering with the previous config for another
-  ~1 s without an error; one has to tell them apart by content, and accept an
-  identical config after ~5 s (§311, §384).
+  ~1 s without an error; the replies are told apart by content, and an
+  identical config is accepted after ~5 s (§311, §384).

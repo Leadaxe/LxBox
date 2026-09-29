@@ -1,6 +1,8 @@
 [English](command-intake.md) · [Русский](command-intake.ru.md)
 
-# Command intake
+# Command intake — controlling LxBox from Tasker and the shell
+
+Intake is off until the user turns on "Accept automation commands".
 
 | Field | Value |
 |-------|-------|

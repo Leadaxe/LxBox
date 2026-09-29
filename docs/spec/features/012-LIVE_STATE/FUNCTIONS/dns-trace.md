@@ -1,6 +1,9 @@
 [English](dns-trace.md) · [Русский](dns-trace.ru.md)
 
-# DNS query trace
+# DNS query trace — who asked, what was answered and why it failed
+
+The trace is part of the profiler log and is recorded only while recording is
+on.
 
 | Field | Value |
 |-------|-------|

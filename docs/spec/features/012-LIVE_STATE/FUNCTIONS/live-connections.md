@@ -1,6 +1,9 @@
 [English](live-connections.md) · [Русский](live-connections.ru.md)
 
-# Live connections
+# Live connections — each connection with its app, rule, node and detour
+
+The Conns tab lists connections straight from the core and lets the user close
+them.
 
 | Field | Value |
 |-------|-------|

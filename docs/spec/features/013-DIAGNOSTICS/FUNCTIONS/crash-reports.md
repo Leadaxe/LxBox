@@ -1,6 +1,9 @@
 [English](crash-reports.md) · [Русский](crash-reports.ru.md)
 
-# Crash reports
+# Crash reports — core panics, memory snapshots and process exit reasons
+
+Nothing has to be enabled in advance: the core and the OS write the evidence
+as the failure happens.
 
 | Field | Value |
 |-------|-------|

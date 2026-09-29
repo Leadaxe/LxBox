@@ -1,6 +1,8 @@
 [English](warp-generator.md) · [Русский](warp-generator.ru.md)
 
-# Experiment: WARP node generator
+# Experiment: WARP node generator — finding WARP nodes that work in your network
+
+The experiment only creates candidates; the standard node checks test them.
 
 | Field | Value |
 |-------|-------|

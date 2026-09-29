@@ -1,6 +1,9 @@
 [English](masque-node.md) · [Русский](masque-node.ru.md)
 
-# WARP MASQUE node
+# WARP MASQUE node — WARP over HTTP/3 or HTTP/2
+
+A MASQUE node needs its own MASQUE registration, separate from the WireGuard
+one.
 
 | Field | Value |
 |-------|-------|

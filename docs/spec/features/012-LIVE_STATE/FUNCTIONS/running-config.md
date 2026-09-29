@@ -1,6 +1,8 @@
 [English](running-config.md) · [Русский](running-config.ru.md)
 
-# Running config and freshness verdict
+# Running config and freshness verdict — is the core running the saved config
+
+The verdict feeds the "restart needed" banner owned by 003-CONFIG_BUILD.
 
 | Field | Value |
 |-------|-------|

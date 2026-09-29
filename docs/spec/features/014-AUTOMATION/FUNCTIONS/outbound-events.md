@@ -1,6 +1,8 @@
 [English](outbound-events.md) · [Русский](outbound-events.ru.md)
 
-# Outbound events
+# Outbound events — broadcasts about the tunnel, nodes and subscriptions
+
+Each event category is off until the user enables it.
 
 | Field | Value |
 |-------|-------|

@@ -1,9 +1,15 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 013 — DIAGNOSTICS — diagnostics for the user and the developer
+# Diagnostics — logs, crash reports, debug dump and Debug API
+
+LxBox collects logs, sing-box core crash reports and memory snapshots on the
+device, so a VPN problem can be analysed from one shared file without `adb`.
+On a test device a developer reads the same evidence through a local Debug API
+over HTTP.
 
 | Field | Value |
 |-------|-------|
+| Feature | 013-DIAGNOSTICS |
 | Type | Product feature |
 | Absorbed | `§023F` `§031F` `§038F` `§043F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -37,14 +43,14 @@ The feature protects three principles:
 - **P1. Log sources do not evict each other.** The app log and the core log
   have separate quotas (300 and 500 entries); a flood from one does not push
   out the other; overflow evicts the oldest entry of its own source.
-  **Witness:** units "app spam не вытесняет core entries", "core spam не
-  вытесняет app entries", "per-source cap drop oldest". **Mutation:** a shared
+  **Witness:** units "app spam does not evict core entries", "core spam does
+  not evict app entries", "per-source cap drop oldest". **Mutation:** a shared
   limit for both sources.
 - **P2. The combined view is strictly by time.** The mixed log is returned
   newest-first across both sources; clearing one source does not touch the
-  other. **Witness:** units "merged result отсортирован newest-first по обоим
-  source", "clearSource(app) очищает только app, core нетронут".
-  **Mutation:** concatenating the lists without a time merge.
+  other. **Witness:** units "merged result is sorted newest-first across both
+  sources", "clearSource(app) clears only app, core untouched". **Mutation:**
+  concatenating the lists without a time merge.
 - **P3. Warnings survive a restart.** Warning and error entries of each source
   are persisted (up to 200 lines and 64 KB per source) and after a restart are
   shown marked "↑ prev session"; debug and info live only in memory.
@@ -53,10 +59,10 @@ The feature protects three principles:
   **Mutation:** persisting without distinguishing levels.
 - **P4. A core line's level is determined from its text.** ERROR/FATAL/PANIC →
   error, WARN → warning, INFO → info, TRACE/DEBUG → debug, unrecognised →
-  info; with several markers the highest wins. **Witness:** units
-  "FATAL → error", "error приоритетнее warn в смешанной строке", "неизвестный
-  формат → fallback info", "default-formatter формат WARN[NNNN]".
-  **Mutation:** an unknown line gets the error level.
+  info; with several markers the highest wins. **Witness:** units "FATAL →
+  error", "error takes priority over warn in a mixed line", "unknown format →
+  fallback info", "default-formatter format WARN[NNNN]". **Mutation:** an
+  unknown line gets the error level.
 - **P5. Forwarding the core log is a deliberate step.** Off by default;
   enabling takes effect only after a process restart, which the screen says
   immediately and offers a "Quit & reopen app" button. **Witness:** manual
@@ -70,21 +76,21 @@ The feature protects three principles:
 - **P7. The core crash banner — once per specific failure.** After a core
   panic the home screen shows "The core crashed last session — tap to share
   the report" once; a tap or dismissal clears it for that failure, the next
-  failure raises it again. **Witness:** units "новый краш → показываем;
-  повторный старт → молчим", "следующий (более свежий) краш → снова
-  показываем". **Mutation:** a "shown" mark not tied to a specific report.
+  failure raises it again. **Witness:** units "new crash → show; repeated
+  start → stay silent", "next (newer) crash → show again". **Mutation:** a
+  "shown" mark not tied to a specific report.
 - **P8. The failure archive is bounded and intact.** The 10 freshest panic
   reports and the 5 freshest memory snapshots are kept; the excess is deleted
-  whole at startup; rotation does not touch the current report.
-  **Witness:** units "оставляет 10 свежих, лишние каталоги удаляет целиком",
-  "текущий репорт ротация не трогает", "оставляет keep свежих, удаляет
-  остальные". **Mutation:** deleting only the trace without the directory.
+  whole at startup; rotation does not touch the current report. **Witness:**
+  units "keeps the 10 newest, deletes extra directories whole", "rotation does
+  not touch the current report", "keeps the keep newest, deletes the rest".
+  **Mutation:** deleting only the trace without the directory.
 - **P9. "There were no failures" is an honest answer.** An empty current
   report means "there were no panics" and does not appear in the list; the
   Crashes tab is always present and itself says that the channel covers only
-  core panics. **Witness:** units "пустой файл = паник не было", "пустой
-  текущий в список не попадает". **Mutation:** the tab appears only when the
-  report is non-empty.
+  core panics. **Witness:** units "empty file = no panics", "an empty current
+  report is not listed". **Mutation:** the tab appears only when the report is
+  non-empty.
 - **P10. The dump says what it was taken on.** The dump root carries the app
   version, the build number and the core version. **Witness:** manual check of
   Share dump (§378, device-verified). **Mutation:** the core version only
@@ -98,19 +104,18 @@ The feature protects three principles:
   **Mutation:** bodies for all snapshots.
 - **P12. The Debug API is closed by default.** Off until explicitly enabled;
   listens only on the device's own address; the token is 32 hex characters
-  (128 bits), generated on first enable. **Witness:** units "даёт 32 hex
-  символа", "разные токены при последовательных вызовах"; loopback — manual
+  (128 bits), generated on first enable. **Witness:** units "yields 32 hex
+  characters", "different tokens on consecutive calls"; loopback — manual
   check (a request to the device's LAN address does not connect).
   **Mutation:** an empty token allows startup.
 - **P13. Without a token — only /ping and /help.** Everything else without the
   exact `Authorization: Bearer <token>` header returns 401. **Witness:** units
-  "GET /state без токена → 401", "/ping пропускает без auth", "схема должна
-  быть именно `Bearer `". **Mutation:** a case-insensitive scheme.
+  "GET /state without a token → 401", "/ping passes without auth", "the scheme
+  must be exactly `Bearer `". **Mutation:** a case-insensitive scheme.
 - **P14. A foreign host name is rejected.** A request whose Host is not
-  `127.0.0.1` / `localhost` gets 403 even with the correct token.
-  **Witness:** units "evil.com → InvalidHost", "GET /ping с Host: evil.com →
-  403". **Mutation:** the host check after authorisation, only for protected
-  paths.
+  `127.0.0.1` / `localhost` gets 403 even with the correct token. **Witness:**
+  units "evil.com → InvalidHost", "GET /ping with Host: evil.com → 403".
+  **Mutation:** the host check after authorisation, only for protected paths.
 - **P15. Access to the Debug API cannot be lost via the API itself or a backup
   import.** The enable, port and token keys cannot be written through
   `/settings/vars` (409); a replace import that lacks them keeps the current
@@ -120,37 +125,37 @@ The feature protects three principles:
   `vars` entirely.
 - **P16. File routes do not leave their directories.** Names with path
   traversal and names outside the whitelist are rejected (404/400).
-  **Witness:** units "traversal в &file= отвергается", "не-whitelist имя →
-  404, даже если файл существует". **Mutation:** the file name is joined to
-  the directory without a check.
+  **Witness:** units "traversal in &file= is rejected", "a non-whitelisted
+  name → 404 even if the file exists". **Mutation:** the file name is joined
+  to the directory without a check.
 - **P17. The API map does not lie.** `/help` lists every mounted prefix; error
-  codes are stable. **Witness:** units "каждый смонтированный префикс роутера
-  есть в /help?format=json", "коды стабильные (API contract)".
-  **Mutation:** a route without an entry in `/help`.
+  codes are stable. **Witness:** units "every mounted router prefix is in
+  /help?format=json", "codes are stable (API contract)". **Mutation:** a route
+  without an entry in `/help`.
 - **P18. A hung handler does not hang the server.** After 30 s — 504.
-  **Witness:** unit "долгий handler → RequestTimeout". **Mutation:** waiting
+  **Witness:** unit "long handler → RequestTimeout". **Mutation:** waiting
   without a deadline.
 - **P19. The secret does not leak into copyable API snapshots.** The token in
   the storage snapshot is `***`; sensitive request parameters are masked in
-  the request log. **Witness:** unit "debug_token маскируется, остальные vars
-  pass-through"; the request log — `no witness`. **Mutation:** a storage
-  snapshot without the scrubber.
+  the request log. **Witness:** unit "debug_token is masked, other vars pass
+  through"; the request log — `no witness`. **Mutation:** a storage snapshot
+  without the scrubber.
 - **P20. Live events are recorded only on an explicit command.** Without START
   events do not accumulate; recording continues when leaving the tab.
   **Witness:** unit "recording off → events ignored". **Mutation:** recording
   starts on opening the tab.
-- **P21. Live event banners are not noisy.** "Owner not determined" — more than
-  5 unattributed events in 30 s, successful DNS does not count; "DNS failing"
-  — at least 3 failures and 20 % in 30 s, and only while the connection is
-  alive. **Witness:** units "§177-A successful unattributed DNS resolves do
-  NOT light the banner", "2 fail (< минимума 3) → healthy", "5 fail 100%, но
-  НЕТ conn-активности → healthy". **Mutation:** a threshold on the absolute
-  number of failures without the activity gate.
+- **P21. Live event banners are not noisy.** "Owner not determined" — more
+  than 5 unattributed events in 30 s, successful DNS does not count; "DNS
+  failing" — at least 3 failures and 20 % in 30 s, and only while the
+  connection is alive. **Witness:** units "§177-A successful unattributed DNS
+  resolves do NOT light the banner", "2 fails (< minimum of 3) → healthy", "5
+  fails 100%, but NO conn activity → healthy". **Mutation:** a threshold on
+  the absolute number of failures without the activity gate.
 - **P22. Same-kind notifications collapse.** Notifications of one code at one
   level form one group with a count and a list of entries; the header counters
-  count entries. **Witness:** widget tests "семь записей одного кода → одна
-  плитка", "счётчик шапки считает записи, а не группы". **Mutation:** grouping
-  across levels.
+  count entries. **Witness:** widget tests "seven entries of one code → one
+  tile", "the header counter counts entries, not groups". **Mutation:**
+  grouping across levels.
 - **P23. A core notification with a link leads to the link.** Tapping a system
   notification that came from the core opens its address; the address is
   duplicated into the core log. **Witness:** manual check with an
@@ -252,20 +257,23 @@ HTTP → host check → token → 30 s deadline → route → JSON / error
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| App log | Sources, quotas, persisting warn/error, viewing and filters | P1–P3 | [app-log.md](FUNCTIONS/app-log.md) |
-| Core log | Log level, forwarding, Verbose, level parsing | P4–P6 | [core-log.md](FUNCTIONS/core-log.md) |
-| Crash reports | Core panics, memory snapshots, exit reasons, banner | P7–P9 | [crash-reports.md](FUNCTIONS/crash-reports.md) |
-| Diagnostic dump | One JSON with all channels | P10, P11 | [diagnostic-dump.md](FUNCTIONS/diagnostic-dump.md) |
-| Core profiling | pprof snapshots of the live core | P24 | [core-profiling.md](FUNCTIONS/core-profiling.md) |
-| Debug API | Local HTTP: reading, writing, protection | P12–P19 | [debug-api.md](FUNCTIONS/debug-api.md) |
-| Live events | Recording system events, window, export, banners | P20, P21 | [live-events.md](FUNCTIONS/live-events.md) |
-| Coded notifications | Grouping by code; core notifications with a link | P22, P23 | [coded-notifications.md](FUNCTIONS/coded-notifications.md) |
+| App log | Keeps app and core messages in one log with separate quotas, persists warnings and errors across restarts and shows them with filters. | P1–P3 | [app-log.md](FUNCTIONS/app-log.md) |
+| Core log | Shows the sing-box core log in the app, with a configurable log level, forwarding, on-the-fly Verbose mode and level parsing of each line. | P4–P6 | [core-log.md](FUNCTIONS/core-log.md) |
+| Crash reports | Collects core panic reports, memory snapshots and system exit reasons, keeps a bounded archive and offers to share the report once after a crash. | P7–P9 | [crash-reports.md](FUNCTIONS/crash-reports.md) |
+| Diagnostic dump | Collects versions, settings, config, logs, crash reports and memory snapshots into one JSON file and opens the system share. | P10, P11 | [diagnostic-dump.md](FUNCTIONS/diagnostic-dump.md) |
+| Core profiling | Captures goroutine, CPU, heap and allocation pprof snapshots of the running core and hands them over as a file. | P24 | [core-profiling.md](FUNCTIONS/core-profiling.md) |
+| Debug API | Runs a token-protected HTTP server on `127.0.0.1` that reads and changes the whole app state over `adb forward`. | P12–P19 | [debug-api.md](FUNCTIONS/debug-api.md) |
+| Live events | Records TCP/UDP and DNS events of the device on an explicit START within a retention window, exports them and raises the owner and DNS banners. | P20, P21 | [live-events.md](FUNCTIONS/live-events.md) |
+| Coded notifications | Groups same-code notifications into one entry with a count and opens the link of a notification sent by the core. | P22, P23 | [coded-notifications.md](FUNCTIONS/coded-notifications.md) |
 
 ## Related features
 
-- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — produces the node check results and codes; here they are shown as coded notifications.
-- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — resets core caches and restores the tunnel after the crash that this feature reports.
-- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — owns live status, speed and connections; this feature only records events for analysis.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — produces the node check
+  results and codes; here they are shown as coded notifications.
+- [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — resets core caches and
+  restores the tunnel after the crash that this feature reports.
+- [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — owns live status, speed and
+  connections; this feature only records events for analysis.
 
 ## Maintenance notes
 

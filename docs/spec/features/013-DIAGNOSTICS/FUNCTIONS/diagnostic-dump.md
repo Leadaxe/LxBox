@@ -1,6 +1,9 @@
 [English](diagnostic-dump.md) · [Русский](diagnostic-dump.ru.md)
 
-# Diagnostic dump
+# Diagnostic dump — everything for a bug report in one JSON file
+
+The dump is taken with "Share dump" on the Debug screen or with `GET
+/diag/dump`.
 
 | Field | Value |
 |-------|-------|

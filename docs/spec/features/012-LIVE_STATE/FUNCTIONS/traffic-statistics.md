@@ -1,6 +1,9 @@
 [English](traffic-statistics.md) · [Русский](traffic-statistics.ru.md)
 
-# Traffic statistics
+# Traffic statistics — volume, active connections and traffic by routing rule
+
+The Stats tab answers "how much and by which rule" for the current core
+session.
 
 | Field | Value |
 |-------|-------|
@@ -40,7 +43,7 @@ chain under a card).
 - Closed connections are not included in the statistics: otherwise the number
   and the distribution would be inflated by history.
 - Rule name: the core's raw rule string is matched against the user rule
-  catalog (whitespace normalization, robust to the core truncating long
+  catalog (whitespace normalization, tolerant of the core truncating long
   lists); not found or empty — `final`; the result is cached.
 - The connection host is the domain if there is one, otherwise the host from
   the destination address.

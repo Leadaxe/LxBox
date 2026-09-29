@@ -1,6 +1,8 @@
 [English](data-channels.md) · [Русский](data-channels.ru.md)
 
-# Core data channels and energy model
+# Core data channels and energy model — live data without draining the battery
+
+Every live screen of this feature reads the core through these channels.
 
 | Field | Value |
 |-------|-------|

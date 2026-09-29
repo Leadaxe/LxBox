@@ -1,6 +1,9 @@
 [English](endpoint-pool.md) · [Русский](endpoint-pool.ru.md)
 
-# Endpoint pool and region
+# Endpoint pool and region — Cloudflare addresses, ports and SNI as data
+
+The pool is one built-in JSON file; the experiment screen also accepts an
+edited copy.
 
 | Field | Value |
 |-------|-------|

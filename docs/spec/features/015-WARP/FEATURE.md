@@ -1,9 +1,15 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 015 — WARP — Cloudflare WARP from the user's point of view
+# Cloudflare WARP — free WireGuard, AmneziaWG and MASQUE nodes in one tap
+
+LxBox registers the device with Cloudflare WARP directly and adds a ready
+WireGuard, AmneziaWG-obfuscated or MASQUE node to the server list in one tap.
+The private key is generated on the phone, and no third-party config generator
+is involved.
 
 | Field | Value |
 |-------|-------|
+| Feature | 015-WARP |
 | Type | Product feature |
 | Absorbed | `§025F` `§130F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -40,21 +46,21 @@ The feature protects five principles:
 - **P1. The private key does not leave the device.** WireGuard: the
   registration request carries the public X25519 key. MASQUE: the first
   request carries a one-time public X25519 key, the second — a public ECDSA
-  P-256 key in DER. **Witness:** units "register: в /reg уходит pub, не priv",
-  "registerMasque: … в POST — 32-байтный ключ", "PKIX public key:
-  SPKI-структура". **Mutation:** the private key gets into the request body.
+  P-256 key in DER. **Witness:** units "register: /reg receives pub, not
+  priv", "registerMasque: … the POST carries a 32-byte key", "PKIX public key:
+  SPKI structure". **Mutation:** the private key gets into the request body.
 - **P2. A dead API host does not break registration.** Hosts are tried in
   order; a network error or timeout (5 s per request) — the next host; any
   HTTP response, including 4xx/5xx, is final; all hosts dead — an error
   listing the hosts. Subsequent requests of the flow go to the host that
-  answered. **Witness:** units "первый хост недоступен → регистрация через
-  второй; license туда же", "таймаут первого хоста → второй", "HTTP-ошибка
-  первого хоста — итог", "все хосты недоступны → WarpException с перечнем
-  хостов", "registerMasque: PATCH туда же". **Mutation:** 4xx switches the
-  host; PATCH goes to the first host.
+  answered. **Witness:** units "first host unreachable → registration via the
+  second; license goes there too", "first host timeout → second", "an HTTP
+  error from the first host is final", "all hosts unreachable → WarpException
+  listing the hosts", "registerMasque: PATCH goes to the same host".
+  **Mutation:** 4xx switches the host; PATCH goes to the first host.
 - **P3. An invalid WARP+ license does not prevent getting a node.** A failure
   to bind the license leaves a free account, the node is added. **Witness:**
-  unit "license: PATCH 4xx → free-аккаунт сохраняется". **Mutation:** a
+  unit "license: PATCH 4xx → the free account is kept". **Mutation:** a
   license error brings down the registration.
 - **P4. A repeated "Register" does not register again.** Without
   "Re-register" the registration cache of its own transport is used; with
@@ -64,80 +70,78 @@ The feature protects five principles:
   `WARP registered` line in the log, both nodes have the same interface
   address. **Mutation:** the cache is ignored.
 - **P5. Each "Register" adds a new node.** Previous WARP nodes are not
-  deleted; a taken tag gets the suffix ` 2`, ` 3`… The tag by kind:
-  `🔥☁️ WARP`, `🔥⛈️ WARP (AWG 1.5)`, `🔥🎭 WARP (MASQUE)`, `+` for WARP+.
-  **Witness:** unit "§137 nodeTag: облако/гроза, +, AWG-суффикс";
-  accumulation — manual check. **Mutation:** the new node replaces the
-  previous one.
+  deleted; a taken tag gets the suffix ` 2`, ` 3`… The tag by kind: `🔥☁️
+  WARP`, `🔥⛈️ WARP (AWG 1.5)`, `🔥🎭 WARP (MASQUE)`, `+` for WARP+. **Witness:**
+  unit "§137 nodeTag: cloud/storm, +, AWG suffix"; accumulation — manual
+  check. **Mutation:** the new node replaces the previous one.
 - **P6. A custom WireGuard endpoint is not overwritten.** A non-default
   endpoint goes into the node both on a fresh registration (the Cloudflare
   response is ignored) and from the cache; a default one is replaced by the
-  host from the response. **Witness:** units "§135 register: кастомный
-  endpoint НЕ затирается", "§135 дефолтный endpoint → fallback на host из
-  ответа", "§138 copyWith(endpoint)". **Mutation:** the endpoint from the
+  host from the response. **Witness:** units "§135 register: a custom endpoint
+  is NOT overwritten", "§135 default endpoint → fallback to the host from the
+  response", "§138 copyWith(endpoint)". **Mutation:** the endpoint from the
   cache beats the input.
 - **P7. A plain WARP node carries the binding to the device.** `reserved` from
-  `client_id` (3 bytes), MTU 1280, all traffic in `allowed_ips`, keepalive
-  25 s by default; with obfuscation `reserved` is not written by default;
-  keepalive 0 — not written. **Witness:** units "toWireguardUri несёт reserved
-  и парсится", "keepalive=25 → query keepalive", "keepalive=0 → не пишется",
-  "§142 includeReserved=false → НЕТ Reserved". **Mutation:** a node without
-  `reserved` with obfuscation off.
+  `client_id` (3 bytes), MTU 1280, all traffic in `allowed_ips`, keepalive 25
+  s by default; with obfuscation `reserved` is not written by default;
+  keepalive 0 — not written. **Witness:** units "toWireguardUri carries
+  reserved and parses back", "keepalive=25 → query keepalive", "keepalive=0 →
+  not written", "§142 includeReserved=false → NO Reserved". **Mutation:** a
+  node without `reserved` with obfuscation off.
 - **P8. Obfuscation does not break the WARP handshake.** Preset: `s1=s2=0`,
   `h1..h4=1,2,3,4`, `jc/jmin/jmax` (default 4/40/70) plus the masquerade keys
   `ip`/`id`/`ib` (`ib` — only with `ip=quic`); the app does not write `i1`.
   **Witness:** units "preset: s1=s2=0, h1..h4=1,2,3,4", "§143
-  buildAmneziaAwg(quic): id/ip/ib, БЕЗ i1", "buildAmneziaAwg(dns): ib НЕ
-  пишется", "§143 obfuscated: AWG + id/ip/ib + reserved доходят до spec".
+  buildAmneziaAwg(quic): id/ip/ib, WITHOUT i1", "buildAmneziaAwg(dns): ib is
+  NOT written", "§143 obfuscated: AWG + id/ip/ib + reserved reach the spec".
   **Mutation:** `i1` next to `id`/`ip`/`ib` (the core rejects both).
 - **P9. MASQUE goes into the config only in the new schema.** Outbound
   `masque`: `vhttp`, SNI and SNI disabling — in the nested `tls{}`; there are
   no `network`/`sni` keys at the root; an empty SNI — no `tls` block.
-  **Witness:** units "emitMasque даёт Outbound со схемой ядра", "SNI и
-  disable_sni уезжают во вложенный tls{}", "пустой SNI не создаёт пустой
-  tls{}". **Mutation:** writing the old and the new name side by side (the
-  core fails on a mismatch).
+  **Witness:** units "emitMasque yields an Outbound in the core schema", "SNI
+  and disable_sni move into the nested tls{}", "an empty SNI does not create
+  an empty tls{}". **Mutation:** writing the old and the new name side by side
+  (the core fails on a mismatch).
 - **P10. The HTTP version is a property of the node, not of the
   registration.** One MASQUE registration yields `h3`, `h2`, `auto` nodes; the
   WARP node's identity does not shift on any version. **Witness:** units "§393
-  — версия HTTP задаётся при сборке URI, а не хранится в аккаунте", "узел
-  фабрики WARP не сдвинулся ни на одной версии HTTP". **Mutation:** the HTTP
-  version in the registration cache.
+  — the HTTP version is set when building the URI, not stored in the account",
+  "the WARP factory node did not shift on any HTTP version". **Mutation:** the
+  HTTP version in the registration cache.
 - **P11. A manual MASQUE IP:port — only into the node.** The cache keeps the
   server from the registration; an empty IP field — the registration server.
   **Witness:** `no witness`. **Mutation:** the override is written to the cache
   and goes into all future nodes.
-- **P12. h3 is not offered where it is dead.** Randomisation and the host
-  list for `h3` — only the pool's h3 hosts; for `h2`/`auto` — the common hosts
-  and the block minus exclusions. **Witness:** units "§420 randomMasqueIp: h3
-  — только из h3-хостов; h2 — блок минус exclude", "§420 masqueHostsFor: h3 —
-  общие + h3-only; h2 и auto — только общие". **Mutation:** h3 randomisation
-  over the whole block.
+- **P12. h3 is not offered where it is dead.** Randomisation and the host list
+  for `h3` — only the pool's h3 hosts; for `h2`/`auto` — the common hosts and
+  the block minus exclusions. **Witness:** units "§420 randomMasqueIp: h3 —
+  only from h3 hosts; h2 — the block minus exclude", "§420 masqueHostsFor: h3
+  — common + h3-only; h2 and auto — common only". **Mutation:** h3
+  randomisation over the whole block.
 - **P13. The region edits the pool, not the logic.** The pool's
   `loc.<country>` section is overlaid on the root: objects are merged, lists
   are replaced whole, `alias` — one hop; an unknown region — the root.
-  **Witness:** units "override по ключу; … список целиком", "alias — один
-  переход", "пустой/неизвестный/битый регион = корень", "кэш пикера привязан
-  к региону". **Mutation:** region lists are appended to the root.
-- **P14. The "(recommended)" mark does not leak into the value.**
-  **Witness:** unit "§424 label = чистое значение". **Mutation:** the preset
-  suffix in the endpoint.
+  **Witness:** units "override by key; … a list replaced whole", "alias — one
+  hop", "empty/unknown/broken region = root", "the picker cache is bound to
+  the region". **Mutation:** region lists are appended to the root.
+- **P14. The "(recommended)" mark does not leak into the value.** **Witness:**
+  unit "§424 label = clean value". **Mutation:** the preset suffix in the
+  endpoint.
 - **P15. The experiment does not privilege a protocol.** Candidates are
   equally likely AWG / MASQUE h3 / MASQUE h2 among those available in the
   pool; the port — from its own transport's set; a protocol without a source
-  is not seeded. **Witness:** units "покрывает все три протокола при полном
-  пуле", "§305 — порт согласован с протоколом", "wg-диапазон, но БЕЗ
-  wg-портов → только masque, без краша". **Mutation:** AWG with an empty port
-  set.
+  is not seeded. **Witness:** units "covers all three protocols with a full
+  pool", "§305 — the port matches the protocol", "wg range but NO wg ports →
+  masque only, no crash". **Mutation:** AWG with an empty port set.
 - **P16. Registration secrets are not written to the log.** The log gets a
-  representation with the private key, token and license masked.
-  **Witness:** units "WarpAccount.redacted маскирует priv_key/token/license",
-  "redacted маскирует приватник и токен". **Mutation:** the full registration
-  in a log line.
-- **P17. Registrations survive a backup.** **Witness:** units "warp: круг
-  сохраняет регистрацию и мобильные добавки", "§219 — warp_account/
-  masque_account переживают restore". **Mutation:** a restore without
-  registrations — a new "Register" spawns another device.
+  representation with the private key, token and license masked. **Witness:**
+  units "WarpAccount.redacted masks priv_key/token/license", "redacted masks
+  the private key and token". **Mutation:** the full registration in a log
+  line.
+- **P17. Registrations survive a backup.** **Witness:** units "warp:
+  round-trip keeps the registration and mobile extras", "§219 —
+  warp_account/masque_account survive restore". **Mutation:** a restore
+  without registrations — a new "Register" spawns another device.
 
 ## Controlled parameters
 
@@ -250,21 +254,24 @@ transports → N random candidates → links → the "WARP GENERATOR" folder.
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| One-tap registration | Key on the device, trying API hosts, WARP+, cache and Re-register, backup of registrations | P1–P4, P16, P17 | [one-tap-registration.md](FUNCTIONS/one-tap-registration.md) |
-| WARP WireGuard node | Endpoint, reserved, keepalive, tag and accumulation of nodes | P5–P7, P14 | [wireguard-node.md](FUNCTIONS/wireguard-node.md) |
-| AmneziaWG obfuscation | Preset, `id`/`ip`/`ib` masquerade, junk, random endpoint | P8 | [awg-obfuscation.md](FUNCTIONS/awg-obfuscation.md) |
-| MASQUE node | Transport choice, HTTP version, IP:port, SNI, timeouts, core schema | P9–P12 | [masque-node.md](FUNCTIONS/masque-node.md) |
-| Endpoint pool and region | Presets, h3/h2 hosts, SNI pools, API hosts, `loc.<cc>` | P12–P14 | [endpoint-pool.md](FUNCTIONS/endpoint-pool.md) |
-| Experiment (node generator) | The "WARP GENERATOR" folder of random candidates | P15 | [warp-generator.md](FUNCTIONS/warp-generator.md) |
+| One-tap registration | Registers the device with Cloudflare directly, keeps the key on the device, tries API hosts in turn, binds WARP+, caches the registration until "Re-register" and saves it in the backup. | P1–P4, P16, P17 | [one-tap-registration.md](FUNCTIONS/one-tap-registration.md) |
+| WARP WireGuard node | Turns a WireGuard registration into a new node with endpoint, `reserved` and keepalive, tagged by kind, without replacing earlier WARP nodes. | P5–P7, P14 | [wireguard-node.md](FUNCTIONS/wireguard-node.md) |
+| AmneziaWG obfuscation | Adds AmneziaWG junk packets disguised as QUIC, DNS, STUN or SIP through `id`/`ip`/`ib`, keeping the WireGuard handshake that Cloudflare accepts. | P8 | [awg-obfuscation.md](FUNCTIONS/awg-obfuscation.md) |
+| WARP MASQUE node | Builds a `masque` outbound over HTTP/3 or HTTP/2 with the chosen IP:port, SNI and timeouts, in the core's current schema. | P9–P12 | [masque-node.md](FUNCTIONS/masque-node.md) |
+| Endpoint pool and region | Keeps Cloudflare API hosts, WireGuard and MASQUE addresses and ports, SNI pools and `loc.<cc>` region overrides in one data file. | P12–P14 | [endpoint-pool.md](FUNCTIONS/endpoint-pool.md) |
+| Experiment: WARP node generator | Creates the "WARP GENERATOR" folder of random AWG and MASQUE candidates, so the user can test them and keep what gets through. | P15 | [warp-generator.md](FUNCTIONS/warp-generator.md) |
 
 ## Related features
 
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parses the `wireguard://` / `masque://` links and WG INI that this feature produces.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — parses the `wireguard://`
+  / `masque://` links and WG INI that this feature produces.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — editing a WARP node after it is added.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — ping and checking of WARP nodes and the "WARP GENERATOR" folder.
-- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — Debug API: `POST /warp` registration without the UI, unmasked secrets by design.
+- [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — Debug API: `POST /warp`
+  registration without the UI, unmasked secrets by design.
 - [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — global TLS fragmentation reaches MASQUE nodes over `h2`/`auto`.
-- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — registrations travel in the backup as `warp[]` entries.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) —
+  registrations travel in the backup as `warp[]` entries.
 
 ## Maintenance notes
 
