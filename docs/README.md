@@ -84,7 +84,6 @@ hand”. Both describe the same operations from opposite sides.
 | Directory | Contents |
 |---|---|
 | [releases/](releases/) | Per-version release notes (EN + RU) |
-| [features/](features/) | Deep-dive notes on individual features (per-app-trace, wifi-aware-routing) |
 | [research/](research/) | Research (code audit, audience, 4pda feedback) |
 | [examples/](examples/) | Example configs (`minimal_local_test.json`) |
 | [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | A historical chronicle of development (up to v1.9.0) — no longer maintained |

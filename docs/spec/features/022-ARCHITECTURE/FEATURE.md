@@ -1,22 +1,20 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 022 — ARCHITECTURE — how the code is organised
+# Architecture — code layers, domain facades and structural audits
+
+LxBox keeps each behaviour in one place: the code is split into four layers, every domain exposes one facade,
+and data has one source of truth. The app grows task by task, and every task has its own local "quicker to
+put it here"; the rules on this page counter that, and audits find structural debt before it turns into a
+class of bugs. Unlike the product features, this page makes no promises to the user: it lists the rules that
+keep the product cheap to change and a registry of checks of those rules.
 
 | Field | Value |
 |------|----------|
+| Feature | 022-ARCHITECTURE |
 | Type | Process feature (ongoing work on the structure of the code) |
 | Absorbed | `§291F` |
 | Sources | [ARCHITECTURE.md](../../../ARCHITECTURE.md) (the principles; the source tree is not carried over), [DEVELOPMENT_GUIDE.md](../../../DEVELOPMENT_GUIDE.md), `AGENTS.md` |
 | State | ✅ written from code, 2026-09-29 · living registry |
-
-The app grows task by task, and every task has its own local "quicker to put it
-here". This feature is about keeping behaviour in **one** place: a domain
-invariant is checked once, data has one source of truth, and structural debt is
-found by an audit before it turns into a class of bugs.
-
-The difference from the product features: there are no promises to the user
-here. There are rules that protect the ability to change the product cheaply,
-and a registry of checks of those rules.
 
 ## Principles it protects
 

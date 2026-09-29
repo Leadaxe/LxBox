@@ -1605,7 +1605,7 @@ Traffic profiler — **system-wide** rolling buffer (§048, вкладка Profi
 > `404`. Живые роуты профайлера — только `/profiler/live*` (ниже). Разбор
 > трафика конкретного приложения делается фильтром по приложениям на вкладке
 > Profiler. Историческая справка по атрибуции §168/§180 —
-> [`../features/per-app-trace.md`](../features/per-app-trace.md).
+> [`../spec/tasks/044F-per-app-traffic-profiler/per-app-trace.md`](../spec/tasks/044F-per-app-traffic-profiler/per-app-trace.md).
 
 **Confidence levels** в каждом event: `verified` (router-package matched target) / `secondary` (matched secondary_packages) / `inferred` (post-DNS process inference, 10s window) / `unattributed` (нет owner). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
 

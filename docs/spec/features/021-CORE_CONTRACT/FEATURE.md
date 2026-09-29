@@ -1,21 +1,21 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 021 — CORE_CONTRACT — the boundary with the core and the shared contract
+# Core and contract — sing-box-lx core pinning and the contract shared with the launcher
+
+LxBox has no VPN engine of its own: every tunnel, from VLESS and WireGuard to AmneziaWG and WARP over MASQUE,
+runs in the sing-box-lx core, a fork of sing-box. How the app reads links and node bodies is defined by a
+contract shared with the desktop launcher. This feature keeps both boundaries moving **explicitly**: the core
+is bumped by a ritual, the contract arrives by sync, and divergence is caught by a test, not by a user. It is
+written for contributors who bump the core or sync the contract.
 
 | Field | Value |
 |------|----------|
+| Feature | 021-CORE_CONTRACT |
 | Type | Process feature (ongoing work on the boundary with the core and the launcher) |
 | Absorbed | `§121F` (+ `§122F` as the explanation of the Clash API removal) |
 | Core | [Leadaxe/sing-box-lx](https://github.com/Leadaxe/sing-box-lx), branch `lx`; pin **`v1.14.2-lx.8`** (base — sing-box `1.14.2` + 15 commits of `stable`) |
 | Contract | launcher contract registry **`1.1.99`**, copy verified by hash `388251fc…` (synced 2026-09-27) |
 | State | ✅ written from code, 2026-09-29 · living watchlist |
-
-L×Box carries no VPN engine of its own: everything that goes into the tunnel is
-executed by the sing-box-lx core, and everything the app understands in links
-and node bodies is described in a contract shared with the desktop launcher.
-This feature is about keeping both boundaries moving **explicitly**: the core
-is bumped by a ritual, the contract arrives by sync, and divergence is caught
-by a test, not by a user.
 
 ## Principles it protects
 
@@ -36,7 +36,7 @@ by a test, not by a user.
 4. **The core is not patched from the app.** A core bug is feedback to the core
    team, not a patch in the client; a local workaround in the client is allowed
    only as visible protection (dropping a field with a code), not as a silent
-   "fixed it for the core".
+   fix on the core's behalf.
 
 ## Registry: versions and where they live
 
@@ -100,15 +100,15 @@ A new schema, subscription body shape or template-language construct is added
    sanitiser strips the new fields as `unknown_key`: the node works, but
    quietly without them.
 3. **Build tags.** Reconcile the AAR tag set, move the pin of the tag mirror.
-4. **Bump gotchas** (in detail — [KERNEL.md](../../../KERNEL.md)):
+4. **Bump gotchas** (details in [KERNEL.md](../../../KERNEL.md)):
    `with_lx_idle_suspend` and `lx.wg.*`; an unknown field kills the whole
    config; the order of crash-report archiving and file truncation (detection
-   of the previous crash stands on it); the VLESS `encryption` method name in
+   of the previous crash depends on it); the VLESS `encryption` method name in
    a registry rule.
 5. **Raise the pin → fetch → smoke on a device**: start/stop, CommandClient
    streams, AWG/XHTTP/MASQUE nodes. Check the core version only by
    `core_version` from the Debug API `/device` or the dump — a gomobile binary
-   does not show it through `strings`.
+   does not expose it to `strings`.
 6. **CHANGELOG + version history in KERNEL.md.** Rolling back below
    `v1.14.2-lx.1` first requires reverting the emit to `route.lx_idle_*`.
 
@@ -119,7 +119,7 @@ byte-reproducible, and the hash from `SHA256SUMS` will not match it.
 
 A core problem is filed as a feedback task: the symptom, what was confirmed on
 the client side (the binding is present, the call is regular), the core version
-and the device, logcat/dump. The client does not patch the core's behaviour meanwhile.
+and the device, logcat/dump. Meanwhile the client does not patch the core's behaviour.
 
 | Feedback | Gist | Outcome |
 |--------|------|------|
@@ -128,7 +128,7 @@ and the device, logcat/dump. The client does not patch the core's behaviour mean
 | [376-FEEDBACK](../../tasks/376-FEEDBACK-kernel-urltest-goroutines-survive-restart.md) | a URLTest run survives a core restart and leaks goroutines | — |
 | [120](../../tasks/120-upstream-bugreport-default-network-vpn.md) | the `defaultNetwork` seed can be our own VPN (upstream client) | PR to SagerNet/sing-box-for-android#61; here — §119 |
 
-The counter-channel goes to the launcher: missing corpus expectations and
+Feedback also flows the other way, to the launcher: missing corpus expectations and
 registry divergences (for example, [529](../../tasks/529-contract-corpus-local-reds-triage.md)).
 
 ## Forbidden
@@ -171,22 +171,27 @@ registry divergences (for example, [529](../../tasks/529-contract-corpus-local-r
   (529: URI −6, bodies −27); green registry tests on CI do not cancel that.
 - **The build-tag mirror** in the app is a manual copy; the guard checks only
   the version pin, not the set itself.
-- **Double readings of the tags in KERNEL.md:** `with_openvpn`/`with_openconnect`
+- **Contradictory tag lists in KERNEL.md:** `with_openvpn`/`with_openconnect`
   are in the AAR tag list and at the same time called "deliberately omitted".
-- **Upstream strictness changes** (like `format` in an inline rule_set on 1.14):
+- **Upstream strictness changes** (like `format` in an inline rule set on 1.14):
   every "the core became stricter" is a candidate for an import sanitiser.
 
 ## Related features
 
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — executes the contract registry at parse time; `min_core` is off at parse time.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the core registry gate at build time, body schema and registry codes.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — executes the contract
+  registry at parse time; `min_core` is off at parse time.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the core registry gate
+  at build time, body schema and registry codes.
 - [005-DNS](../005-DNS/FEATURE.md) — the fork's DNS groups.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — balancer and chains, the minimum core version.
-- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — measurement RPCs and endpoint on/off; auto-disabling nodes rejected by the core.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — measurement RPCs and
+  endpoint on/off; auto-disabling nodes rejected by the core.
 - [010-VPN_SERVICE · P17](../010-VPN_SERVICE/FEATURE.md#promises) — the `lx.wg.*` keys.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — CommandClient subscriptions.
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — the core version in `/device` and the dump, core crash reports.
-- [015-WARP](../015-WARP/FEATURE.md), [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — AWG, MASQUE, XHTTP, VLESS encryption fields.
+- [015-WARP](../015-WARP/FEATURE.md),
+  [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.md) — AWG, MASQUE, XHTTP,
+  VLESS encryption fields.
 - [023-BUILD_CI_RELEASE](../023-BUILD_CI_RELEASE/FEATURE.md) — core fetch in CI, core version check in the release APK.
 
 ## Maintenance notes

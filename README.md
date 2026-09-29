@@ -203,7 +203,7 @@ Declare rules like *"on this Wi-Fi → direct"* persistently — no temporary ha
 
 The rule editor offers chips with **Add current** (read the live SSID), **Pick saved** (history of visited networks) and **Manual**; Android permission gates are wired in. Network history is recorded only if you opt in (App Settings → Diagnostics), a network is stored after ≥5 minutes on it, and the history is capped at 50 entries.
 
-- See [spec 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [feature highlight](docs/features/wifi-aware-routing.md)
+- See [spec 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [feature highlight](docs/spec/tasks/051-wifi-aware-routing-guide.md)
 </details>
 
 <details>

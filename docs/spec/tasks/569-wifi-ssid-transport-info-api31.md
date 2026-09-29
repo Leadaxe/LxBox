@@ -6,7 +6,7 @@
 | Дата старта | 2026-09-26 |
 | Дата завершения | 2026-09-26 |
 | Коммиты | aead1935, d8c29dc3, 8f31adc0, + коммит закрытия ТЗ |
-| Связанные spec'ы | tasks/567 (preflight и диагностика), tasks/050, tasks/051, docs/features/wifi-aware-routing.md, docs/DIAGNOSTICS.md |
+| Связанные spec'ы | tasks/567 (preflight и диагностика), tasks/050, tasks/051, docs/spec/tasks/051-wifi-aware-routing-guide.md, docs/DIAGNOSTICS.md |
 
 ## Проблема
 
@@ -106,7 +106,7 @@ API < 31: поведение без изменений (только `getConnect
 
 ### 5. Документация
 
-- `docs/features/wifi-aware-routing.md`: абзац «Как читается SSID»: два пути
+- `docs/spec/tasks/051-wifi-aware-routing-guide.md`: абзац «Как читается SSID»: два пути
   (кэш колбэка на 31+, `getConnectionInfo()` как fallback и на < 31), требования
   к разрешениям те же.
 - `docs/DIAGNOSTICS.md`, раздел про `<unknown ssid>`: строки лога с `source=`.
@@ -156,7 +156,7 @@ API < 31: поведение без изменений (только `getConnect
   `MainActivity` — без изменений. Колбэки `WifiNetworkObserver` и `WifiStateCache` —
   разные объекты с разным lifecycle; observer через `read()` на 31+ получает данные
   из кэша.
-- Документация: `docs/features/wifi-aware-routing.md` (раздел «Как читается SSID»),
+- Документация: `docs/spec/tasks/051-wifi-aware-routing-guide.md` (раздел «Как читается SSID»),
   `docs/DIAGNOSTICS.md` (строки `source=`, лог `WifiStateCache`, grep с новым тегом),
   `docs/ARCHITECTURE.md` (дерево файлов и блок синглтонов `BoxApplication`).
   Запись в `CHANGELOG.md` → Unreleased → Fixed.

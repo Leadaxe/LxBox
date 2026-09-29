@@ -203,7 +203,7 @@ Auto-группа Направления умеет не только выбир
 
 В редакторе — чипы **Add current** (текущая сеть), **Pick saved** (история посещённых), **Manual**; гейты разрешений Android учтены. История сетей пишется только при явном opt-in (App Settings → Diagnostics), сеть попадает в неё после ≥5 минут на ней, максимум 50 записей.
 
-- См. [спека 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [обзор фичи](docs/features/wifi-aware-routing.md)
+- См. [спека 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [обзор фичи](docs/spec/tasks/051-wifi-aware-routing-guide.md)
 </details>
 
 <details>
