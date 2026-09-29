@@ -10,6 +10,51 @@
 
 ---
 
+## [2.25.9] — 2026-09-29
+
+### Changed
+
+- **Core `v1.14.2-lx.11`.** Tailscale: a node with a direct UDP path to a peer
+  passes traffic to it again (before, TCP connections to the peer timed out;
+  SPEC 112, lx.10); the channel to the coordination server always uses HTTPS
+  on port 443, so DPI that freezes port 80 no longer cuts the node off the
+  coordination server for ~15 minutes after start (SPEC 111, lx.9).
+  Sync with sing-box `stable` (lx.11): stricter bounds checks of incoming
+  protocol data, UDP checksum 0 written as `0xffff` by the TUN stack.
+
+- **Repeated servers in a subscription ([task 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
+  Merged repeats of one server no longer go to `dropped[]` with the per-app
+  code `duplicate`: the node that stays gets the registry code
+  `duplicates_collapsed` (info, `count`, `names`), both for body dedup and for
+  server ownership in an Xray array. The subscription summary shows
+  «M duplicates merged into K nodes» separately from «entries dropped».
+  Contract 1.1.102.
+
+- **Preset rules without conditions ([task 588](docs/spec/tasks/588-preset-rule-unconditional-and-dangling-dns-rule-set.md)).**
+  A preset rule written without conditions goes into the config with
+  `template_rule_unconditional`; a rule whose conditions were removed by a
+  failure (a variable without a value or an undeclared name, all `rule_set`
+  references dangling) is dropped with `template_fragment_dropped`. Sub-rules
+  of a logical rule are judged the same way at any depth. Your own DNS rule
+  with every `rule_set` dangling is dropped with `template_fragment_dropped`;
+  an `.srs` DNS rule without a cached file is reported instead of skipped.
+  Contract 1.1.100, 1.1.101, 1.1.103, 1.1.107.
+
+- **`required` of a preset variable defaults to `false`**, as in the launcher;
+  the template's 54 required variables say `true` explicitly.
+
+- **Xray JSON arrays with a balancer (§322).** Servers of a pool are named
+  `remarks tag`, a taken name gets the server's number in the pool; pool
+  members are chosen by the balancer's `selector` (tag prefix), servers it does
+  not pick stay separate nodes; group members in the parse result are labels;
+  `leastLoad` without `expected` maps to fastest selection; a group points to
+  the surviving node after ownership merge. Contract 1.1.104–1.1.107.
+
+- **The contract copy `app/contract/` is committed**, so CI runs the parsing
+  corpus and the schema checks.
+
+---
+
 ## [2.25.8] — 2026-09-28
 
 ### Added
