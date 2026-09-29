@@ -5,7 +5,7 @@
 | Статус | Done |
 | Дата старта | 2026-09-30 |
 | Дата завершения | 2026-09-30 |
-| Коммиты | — |
+| Коммиты | c2b37fae |
 | Связанные spec'ы | [tasks/402](402-direction-chain-label-removed.md), [tasks/405](405-direction-chain-label-mobile-only.md) |
 
 ## Проблема
