@@ -262,7 +262,7 @@ Direction as a detour layer moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.
   working but wrong route — noticeable only by the exit country.
 - Healing references to a Direction must be mirrored in the in-memory source
   list, otherwise the next save resurrects the healed reference.
-- Two failure modes for a dangling detour: a user reference — fail-closed
-  (the node drops out); a dangling `detour` in the node body and a ring
-  broken by the sanitizer — fail-open (the node goes direct). See the
-  discrepancy report.
+- Owner's decision 2026-09-29 (audit 588 · 36): one failure mode for a
+  dangling detour — fail-closed. Today a `detour` in a node body pointing at a
+  missing tag and a loop broken by the sanitizer send the node direct
+  (fail-open); that is a divergence from P1, closed by a task (audit 588).

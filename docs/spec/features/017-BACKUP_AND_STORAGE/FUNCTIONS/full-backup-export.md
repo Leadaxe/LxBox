@@ -84,6 +84,13 @@ Result — "Saved as … (N bytes)", "Saved to Downloads: … (N bytes)" or
   [transfer to desktop](desktop-transfer.md).
 - Saving to file, to Downloads and "Share" depend on OS capabilities.
 
+## Owner's decisions
+
+- The subscription device identifier (HWID) travels with the backup, so a
+  restored phone presents the same identity to the provider — by design
+  (2026-09-29, audit 588 · 75). Planned: an export toggle "carry the device
+  identifier", on by default, for the case of a genuinely new device.
+
 ## Revisions
 
 | # | Revision | Status | Summary |
