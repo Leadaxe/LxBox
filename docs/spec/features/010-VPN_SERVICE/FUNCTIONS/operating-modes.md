@@ -54,7 +54,8 @@ password. `route.final` does not depend on the mode.
 - An address outside `127.x` makes authentication mandatory, the toggle is
   locked; enabling authentication, choosing such an address or a mode with a
   port while the password is empty generates a password. The screen and the
-  Debug API hold the same invariant.
+  Debug API hold the same invariant; the build does not: an empty password
+  that reaches it by another route yields an open port, by design.
 - An invalid port (outside 1024..65535) or an invalid IPv4 — an error under the
   field, the value is not saved. The Debug API rejects an invalid port and
   protocol.

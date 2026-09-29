@@ -72,8 +72,10 @@ the app's own process; goroutine stacks of the live core.
 
 - The CPU profile is not part of the dump — it is captured separately, see
   [profiling](core-profiling.md).
-- The dump does not mask content: the config with keys, subscription
-  addresses and variables go as is (see the discrepancy report).
+- The dump is deliberately unmasked: the config with keys, subscription
+  addresses, the Debug API token and variables go as is. A masked dump is
+  useless for diagnosis; the user decides whom to hand the file to (owner's
+  decision, 2026-09-29).
 - Depends on OS capabilities: access to the system log of the app's own
   process, exit history (Android 11+), the system share.
 

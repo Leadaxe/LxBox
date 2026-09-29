@@ -64,10 +64,14 @@ The feature protects three principles:
   way as to tunnel traffic. **Witness**: units "mode=proxy → tun removed, mixed
   added", "no dangling tun-in in rules", "mode=vpn_proxy → both inbounds".
   **Mutation**: a rule bound only to the tunnel input in Proxy mode.
-- **P6. A port visible outside the device is closed with a password.** A
-  listen address outside `127.x` forces authentication, and it cannot be
-  removed; when authentication is enabled with an empty password, a password
-  is generated. **Witness**: units "listen 0.0.0.0 → effectiveAuth is
+- **P6. A port visible outside the device is closed with a password unless
+  the user opens it on purpose.** A listen address outside `127.x` forces
+  authentication on the screen and in the Debug API, and it cannot be removed
+  there; when authentication is enabled with an empty password, a password is
+  generated. A record with an empty password that bypasses both entry points
+  (a restored backup, a hand-edited store) is honoured as the user's choice:
+  the build writes no `users` and the port is open (owner's decision,
+  2026-09-29). **Witness**: units "listen 0.0.0.0 → effectiveAuth is
   forced", "an arbitrary LAN IP forces auth", "non-loopback listen forces
   effectiveAuth → a password is generated". **Mutation**: authentication is
   read from the toggle regardless of the address.
