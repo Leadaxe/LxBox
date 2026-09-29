@@ -1,6 +1,9 @@
 [English](wireguard-amnezia-import.md) · [Русский](wireguard-amnezia-import.ru.md)
 
-# Импорт WireGuard / AmneziaWG
+# Импорт WireGuard / AmneziaWG — файлы .conf, ссылки wg/awg и профили Amnezia vpn://
+
+Конфиг WireGuard или AmneziaWG в любой форме распространения становится endpoint `wireguard`
+sing-box, а MTU AmneziaWG ограничивается 1280.
 
 | Поле | Значение |
 |------|----------|

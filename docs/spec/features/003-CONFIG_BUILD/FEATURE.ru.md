@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 003 — CONFIG_BUILD — сборка конфига ядра из узлов и настроек
+# Сборка конфига — узлы и настройки в проверенный конфиг sing-box
+
+LxBox собирает конфиг ядра sing-box из ваших узлов, пресетов маршрутизации, настроек DNS и VPN, так
+что писать JSON вручную не нужно. Структуру задаёт встроенный в приложение шаблон с типизированными
+переменными и условиями; фиксированный конвейер стадий добавляет узлы, группы, правила и DNS, чинит
+то, что можно починить, и отклоняет конфиг, с которым ядро не запустится. Приложение отслеживает,
+когда конфиг устарел, пересобирает его само и показывает плашку перезапуска, только когда работающий
+VPN действительно использует другой конфиг.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 003-CONFIG_BUILD |
 | Тип | Продуктовая фича |
 | Поглотила | `§076F` (жизненный цикл настроек и конфига: флаг устаревания, плашки, пересборка на возврате), `§120F` (движок шаблона: типизированные переменные, `#if`, ref-переменные) |
 | Состояние | ✅ написана по коду, 2026-09-28 |
@@ -228,28 +236,34 @@ split tunneling, параметры сна туннелей; версия ядр
 
 | Функция | Что делает | Обещания | Файл |
 |---|---|---|---|
-| Шаблон конфига | Секции переменных, каркас, каталог пресетов, загрузка и проверка, локализация текстов | P4 | [config-template.md](FUNCTIONS/config-template.ru.md) |
-| Язык шаблона | Типы переменных, `@var`, `#if`/`#enable`, предикаты, `for_each`/`#tpl`, ref, `on_change`, предупреждения | P1 P2 P3 P5 P6 P7 | [template-language.md](FUNCTIONS/template-language.ru.md) |
-| Конвейер сборки | Стадии от переменных до итогового JSON, post-steps и лечения | P8 P13 | [build-pipeline.md](FUNCTIONS/build-pipeline.ru.md) |
-| Проверка итогового конфига | Ссылки на теги, пустые группы, кольца, реакция на fatal | P9 | [config-validation.md](FUNCTIONS/config-validation.ru.md) |
-| Жизненный цикл настроек | Флаг «устарел», staging, запись на диск, триггеры пересборки, восстановление после убийства | P10 P11 P12 P13 | [settings-lifecycle.md](FUNCTIONS/settings-lifecycle.ru.md) |
-| Применение к работающему туннелю | Плашки, сравнение с работающим, автоперезапуск, что применяется на лету | P14 P15 P16 P17 | [apply-to-running-tunnel.md](FUNCTIONS/apply-to-running-tunnel.ru.md) |
+| Шаблон конфига | Объявляет секции переменных, каркас конфига и каталог пресетов; загружается и проверяется один раз, с локализованными текстами. | P4 | [config-template.md](FUNCTIONS/config-template.ru.md) |
+| Язык шаблона | Приводит переменные по объявленному типу и вычисляет `@var`, `#if`/`#enable`, предикаты, `for_each`/`#tpl`, ref-переменные и `on_change`. | P1 P2 P3 P5 P6 P7 | [template-language.md](FUNCTIONS/template-language.ru.md) |
+| Конвейер сборки | Проходит фиксированные стадии от переменных до итогового JSON, включая post-steps и лечение битых ссылок. | P8 P13 | [build-pipeline.md](FUNCTIONS/build-pipeline.ru.md) |
+| Проверка итогового конфига | Отклоняет конфиг с висячими ссылками на теги, пустыми группами или кольцами detour и оставляет прежний. | P9 | [config-validation.md](FUNCTIONS/config-validation.ru.md) |
+| Жизненный цикл настроек | Ведёт флаг «устарел», держит правки в памяти, пишет их на диск и пересобирает по триггерам, в том числе после убийства процесса. | P10 P11 P12 P13 | [settings-lifecycle.md](FUNCTIONS/settings-lifecycle.ru.md) |
+| Применение к работающему туннелю | Сравнивает сохранённый конфиг с работающим, показывает нужную плашку, по желанию перезапускается сам и применяет выбор в группе на лету. | P14 P15 P16 P17 | [apply-to-running-tunnel.md](FUNCTIONS/apply-to-running-tunnel.ru.md) |
 
 ## Связанные фичи
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — реакция на обновление подписки (rebuild/reload) идёт через эту сборку.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — реакция на обновление подписки
+  (rebuild/reload) идёт через эту сборку.
 - [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md) — поставляет разобранные узлы, из которых собирается конфиг.
-- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — содержимое пресетов, пользовательские правила и порядок правил, которые идут в сборку.
+- [004-ROUTING](../004-ROUTING/FEATURE.ru.md) — содержимое пресетов, пользовательские правила и
+  порядок правил, которые идут в сборку.
 - [005-DNS](../005-DNS/FEATURE.ru.md) — DNS-часть шаблона и сборки.
 - [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — detour, цепочки, группы Направлений, Auto Proxy.
-- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — детали эмиссии узлов (стадии сборки 3–7) и живой выбор узла в Направлении.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — детали эмиссии узлов (стадии сборки 3–7) и живой
+  выбор узла в Направлении.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — отключение узлов, отвергнутых ядром на старте.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.ru.md) — режимы VPN/Proxy, `lx.wg.*`, перезагрузка ядра и её кулдаун.
 - [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.ru.md) — пакеты split tunneling, применяемые в post-steps.
-- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — TLS Fragmentation и mixed-case SNI, применяемые в post-steps.
-- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — атомарная запись файлов, резервная копия и импорт, питающие жизненный цикл настроек.
+- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — TLS Fragmentation и mixed-case SNI,
+  применяемые в post-steps.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — атомарная запись файлов,
+  резервная копия и импорт, питающие жизненный цикл настроек.
 - [018-WORKSPACES](../018-WORKSPACES/FEATURE.ru.md) — загрузка набора настроек.
-- [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.ru.md) — ручная правка итогового JSON; конфиг, закреплённый через `PUT /config`, останавливает пересборки.
+- [019-CONFIG_EDITOR](../019-CONFIG_EDITOR/FEATURE.ru.md) — ручная правка итогового JSON; конфиг,
+  закреплённый через `PUT /config`, останавливает пересборки.
 - [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — схема тел узлов и коды реестра за гейтом реестра ядра.
 
 ## Особенности сопровождения

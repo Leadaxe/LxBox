@@ -1,9 +1,16 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 004 — ROUTING — routing rules, presets, rule-set cache, Directions
+# Routing — rules by domain, IP, app and Wi-Fi, preset bundles, rule sets and Directions
+
+LxBox decides where each connection goes — through the VPN, direct or blocked — with one ordered
+list of routing rules for the sing-box core. Rules match by domain, IP, port, protocol, app, Wi-Fi
+network or an external `.srs` rule set such as geosite, geoip or ad lists, and preset bundles cover
+common cases like the Russian internet segment, BitTorrent and ad blocking. Directions are named
+exits with their own node selectors, so different traffic can leave through different servers.
 
 | Field | Value |
 |------|----------|
+| Feature | 004-ROUTING |
 | Type | Product feature |
 | Absorbed | `§011F` (local rule-set cache), `§030F` (unified user rules), `§033F` (bundle presets), `§393F` (Directions) |
 | State | ✅ written from code, 2026-09-28 |
@@ -225,24 +232,29 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Rule by conditions | Inline: domains, IPs, ports, apps, protocol, network, source, inbound | P4 P5 | [inline-rules.md](FUNCTIONS/inline-rules.md) |
-| Wi-Fi conditions | SSID/BSSID, "Add current", permission diagnostics | P20 | [wifi-conditions.md](FUNCTIONS/wifi-conditions.md) |
-| External rule-sets and cache | A rule by `.srs`, preset sets, download, TTL, auto-update | P8 P9 P10 P11 | [remote-rule-sets.md](FUNCTIONS/remote-rule-sets.md) |
-| Raw JSON rule | Any core action as a rule body | P12 | [raw-json-rules.md](FUNCTIONS/raw-json-rules.md) |
-| Bundle presets | Catalog, variables, Traffic Processing, seeding, target override | P2 P13 P14 | [preset-bundles.md](FUNCTIONS/preset-bundles.md) |
-| Order and enabling | Number axis, drag, on/off, deletion | P1 P2 P3 P4 | [rule-order.md](FUNCTIONS/rule-order.md) |
-| Rule action | Route / Reject / block / Resolve; hijack-dns and the rest via JSON | P6 P7 | [rule-actions.md](FUNCTIONS/rule-actions.md) |
-| Directions | Rule addressees, Default traffic, members, healing references | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.md) |
-| Rule exchange | Export/import of selected rules via a file | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.md) |
+| Rule by conditions (Inline) | Matches traffic by domains, IPs, ports, apps, protocol, network, source and inbound written in the rule's own fields. | P4 P5 | [inline-rules.md](FUNCTIONS/inline-rules.md) |
+| Wi-Fi conditions | Limits a rule to listed Wi-Fi networks by SSID/BSSID, with "Add current" and a named reason when the network cannot be read. | P20 | [wifi-conditions.md](FUNCTIONS/wifi-conditions.md) |
+| External rule sets and the local cache | Routes by `.srs` lists that the app downloads, caches and refreshes by TTL; the core gets only local files. | P8 P9 P10 P11 | [remote-rule-sets.md](FUNCTIONS/remote-rule-sets.md) |
+| Raw JSON rule | Puts a hand-written sing-box route rule into the config, with any condition or action the form does not expose. | P12 | [raw-json-rules.md](FUNCTIONS/raw-json-rules.md) |
+| Preset bundles | Adds ready-made rules from the template catalog, configured by variables, with the pinned Traffic Processing preset and a replaceable target. | P2 P13 P14 | [preset-bundles.md](FUNCTIONS/preset-bundles.md) |
+| Rule order and enabling | Keeps one rule list ordered by a number axis, with drag, on/off and deletion; the first match wins. | P1 P2 P3 P4 | [rule-order.md](FUNCTIONS/rule-order.md) |
+| Rule action | Sends matched traffic to a Direction, `direct`, `block` or Reject, optionally resolving the domain first; other actions go through raw JSON. | P6 P7 | [rule-actions.md](FUNCTIONS/rule-actions.md) |
+| Directions | Defines named exits for rules and Default traffic and their node members; references to a removed Direction move to `vpn-1`. | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.md) |
+| Rule exchange via a file | Exports selected own rules to a file and imports them safely on another device; presets are not transferred. | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.md) |
 
 ## Related features
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the template language, variables, the pre-start check and the "Settings changed" banner.
-- [005-DNS](../005-DNS/FEATURE.md) — a rule's DNS option, preset DNS parts, FakeIP and its link with "Resolve destination IP".
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — a Direction as a detour target, `<tag>-auto`, balancing, chains, group folds.
-- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — selecting a node within a Direction on the main screen, the NETWORKS pseudo-direction.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — the template language, variables, the
+  pre-start check and the "Settings changed" banner.
+- [005-DNS](../005-DNS/FEATURE.md) — a rule's DNS option, preset DNS parts, FakeIP and its link with
+  "Resolve destination IP".
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — a Direction as a detour target,
+  `<tag>-auto`, balancing, chains, group folds.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — selecting a node within a Direction on the main
+  screen, the NETWORKS pseudo-direction.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — latency measurement settings per Direction.
-- [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — which apps enter the tunnel at all; package rules here only see tunnelled traffic.
+- [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md) — which apps enter the tunnel at all;
+  package rules here only see tunnelled traffic.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — shows which rule a connection went by.
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md) — Debug API `/rules`, `/directions`.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md) — backup of rules and Directions.
@@ -257,7 +269,7 @@ rule list ─► NORMALIZATION: seeding the head, numbers, sorting, preset dedup
   conditions are combined by OR. A "domain + Private IP" rule matches both
   one and the other, not the intersection.
 - Several Wi-Fi pairs in a rule give `wifi_ssid:[A,B] AND wifi_bssid:[X,Y]` —
-  a cross match is possible; a conscious risk.
+  a cross match is possible; an accepted risk.
 - An own `.srs` rule requires all files, a preset does not (a gate set only
   widens the match). But the screen disables a preset entirely until the needed set is
   downloaded — for Ru internet segment, enabled by default, this is a race with the

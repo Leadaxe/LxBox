@@ -1,6 +1,9 @@
 [English](singbox-json-import.md) · [Русский](singbox-json-import.ru.md)
 
-# Импорт sing-box JSON
+# Импорт sing-box JSON — узлы, группы и цепочки detour из конфигов sing-box
+
+Outbound sing-box, массив outbound, полный конфиг или массив конфигов дают те узлы, группы и цепочки
+`detour`, которые написал автор.
 
 | Поле | Значение |
 |------|----------|

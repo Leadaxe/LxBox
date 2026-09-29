@@ -1,6 +1,9 @@
 [English](preset-bundles.md) · [Русский](preset-bundles.ru.md)
 
-# Bundle presets
+# Preset bundles — ready-made routing rules from the app template
+
+A preset bundle adds ready-made rules, rule sets and DNS parts from the app template — for example
+the Russian internet segment, BitTorrent or ad blocking — configured with a few variables.
 
 | Field | Value |
 |------|----------|
@@ -12,8 +15,8 @@
 
 Provides ready-made rules from the app template: a catalog on the **Presets** tab,
 the "Add to Rules" button (after adding — "In Rules"). A preset in the rule
-list is a reference to the template plus the values of its variables: the app
-updated — the behaviour updated for everyone. A preset can carry
+list is a reference to the template plus the values of its variables: when the app
+is updated, the preset behaviour changes for everyone. A preset can carry
 rule_sets, several route rules, DNS servers and DNS rules at once.
 
 ## Parameters

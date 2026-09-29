@@ -236,12 +236,16 @@ app start: read sources → "updating" → failed
 
 ## Related features
 
-- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — turns a subscription body, a paste or a file into nodes; recognizes the input format.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — disabled subscriptions and nodes are left out of the build; "On update" triggers a rebuild.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — tag prefix, detour settings and folding a subscription into a group.
+- [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md) — turns a subscription body, a paste or a file
+  into nodes; recognizes the input format.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) — disabled subscriptions and nodes are left out
+  of the build; "On update" triggers a rebuild.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) — tag prefix, detour settings and
+  folding a subscription into a group.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.md) — shows and selects subscription nodes; manual server folders.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md) — single servers created here from a paste/file are edited there.
-- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — availability checks, bulk disabling and auto-disabling core-rejected nodes on top of the shared mark map.
+- [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md) — availability checks, bulk disabling and
+  auto-disabling core-rejected nodes on top of the shared mark map.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — reloads the core when "On update" = Reload.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md) — took over the core channel model (`§123F`).
 - [014-AUTOMATION](../014-AUTOMATION/FEATURE.md) — receives "subscription updated / failed to update" events.

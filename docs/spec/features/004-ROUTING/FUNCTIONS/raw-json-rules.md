@@ -1,6 +1,9 @@
 [English](raw-json-rules.md) · [Русский](raw-json-rules.ru.md)
 
-# Raw JSON rule
+# Raw JSON rule — any sing-box route rule written by hand
+
+A rule body can be written as raw sing-box JSON, which gives access to every condition and action
+the Inline form does not expose.
 
 | Field | Value |
 |------|----------|

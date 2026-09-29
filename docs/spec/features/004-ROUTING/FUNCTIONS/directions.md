@@ -1,6 +1,9 @@
 [English](directions.md) · [Русский](directions.ru.md)
 
-# Directions
+# Directions — named exits with their own node selectors
+
+A Direction is a named exit — `vpn-1`, `vpn-2` or your own — with its own set of nodes; rules and
+Default traffic send traffic to Directions.
 
 | Field | Value |
 |------|----------|
@@ -10,8 +13,8 @@
 
 ## What it does
 
-A Direction is a named route choice point to which rules send
-traffic: `vpn-1` ("VPN ①"), `vpn-2`, own ones (`ru-exit`)… Each is a separate
+A Direction is a named exit that rules send
+traffic to: `vpn-1` ("VPN ①"), `vpn-2`, own ones (`ru-exit`)… Each is a separate
 node selector with its own members, in which the active node is chosen on the main
 screen. The **Directions** tab of the Routing screen: the list of Directions,
 "Add direction", the **Default traffic** tile (where everything that did not match goes).

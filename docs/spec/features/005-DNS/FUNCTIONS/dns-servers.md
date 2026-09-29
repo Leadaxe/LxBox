@@ -1,6 +1,9 @@
 [English](dns-servers.md) · [Русский](dns-servers.ru.md)
 
-# DNS server catalog
+# DNS server catalog — template, preset and custom DNS servers over UDP, DoT, DoH and DoQ
+
+All DNS servers that can reach the config are in one list, where the user enables them, picks their
+channel, adds custom servers by form or JSON and overrides template ones.
 
 | Field | Value |
 |------|----------|

@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 004 — ROUTING — правила маршрутизации, пресеты, кэш rule-set, Направления
+# Маршрутизация — правила по домену, IP, приложению и Wi-Fi, пресеты-бандлы, rule set и Направления
+
+LxBox решает, куда идёт каждое соединение — через VPN, напрямую или в блок, — одним упорядоченным
+списком правил маршрутизации для ядра sing-box. Правила срабатывают по домену, IP, порту, протоколу,
+приложению, сети Wi-Fi или внешнему rule set `.srs` вроде geosite, geoip или рекламных списков, а
+пресеты-бандлы покрывают типовые случаи: российский сегмент интернета, BitTorrent, блокировку
+рекламы. Направления — именованные выходы со своими селекторами узлов, поэтому разный трафик может
+уходить через разные серверы.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 004-ROUTING |
 | Тип | Продуктовая фича |
 | Поглотила | `§011F` (локальный кэш rule-set), `§030F` (единые пользовательские правила), `§033F` (пресеты-бандлы), `§393F` (Направления) |
 | Состояние | ✅ написана по коду, 2026-09-28 |
@@ -225,24 +233,29 @@ num, isSortable}`, `vars`, `rule`/`rules`, `rule_set`, DNS-части);
 
 | Функция | Что делает | Обещания | Файл |
 |---|---|---|---|
-| Правило по условиям | Inline: домены, IP, порты, приложения, протокол, сеть, источник, вход | P4 P5 | [inline-rules.md](FUNCTIONS/inline-rules.ru.md) |
-| Условия Wi-Fi | SSID/BSSID, «Add current», диагностика разрешений | P20 | [wifi-conditions.md](FUNCTIONS/wifi-conditions.ru.md) |
-| Внешние rule-set и кэш | Правило по `.srs`, пресетные наборы, загрузка, TTL, автообновление | P8 P9 P10 P11 | [remote-rule-sets.md](FUNCTIONS/remote-rule-sets.ru.md) |
-| Правило сырым JSON | Любое действие ядра телом правила | P12 | [raw-json-rules.md](FUNCTIONS/raw-json-rules.ru.md) |
-| Пресеты-бандлы | Каталог, переменные, Traffic Processing, засев, override цели | P2 P13 P14 | [preset-bundles.md](FUNCTIONS/preset-bundles.ru.md) |
-| Порядок и включение | Ось номеров, drag, вкл/выкл, удаление | P1 P2 P3 P4 | [rule-order.md](FUNCTIONS/rule-order.ru.md) |
-| Действие правила | Route / Reject / block / Resolve; hijack-dns и прочее через JSON | P6 P7 | [rule-actions.md](FUNCTIONS/rule-actions.ru.md) |
-| Направления | Адресаты правил, Default traffic, состав, лечение ссылок | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.ru.md) |
-| Обмен правилами | Экспорт/импорт выбранных правил файлом | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.ru.md) |
+| Правило по условиям (Inline) | Ловит трафик по доменам, IP, портам, приложениям, протоколу, сети, источнику и входу, заданным в полях самого правила. | P4 P5 | [inline-rules.md](FUNCTIONS/inline-rules.ru.md) |
+| Условия Wi-Fi | Ограничивает правило перечисленными сетями Wi-Fi по SSID/BSSID, с «Add current» и названной причиной, если сеть не читается. | P20 | [wifi-conditions.md](FUNCTIONS/wifi-conditions.ru.md) |
+| Внешние rule-set и локальный кэш | Маршрутизирует по спискам `.srs`, которые приложение скачивает, кэширует и обновляет по TTL; ядро получает только локальные файлы. | P8 P9 P10 P11 | [remote-rule-sets.md](FUNCTIONS/remote-rule-sets.ru.md) |
+| Правило сырым JSON | Кладёт в конфиг написанное вручную правило маршрутизации sing-box с любыми условиями и действиями, которых нет в форме. | P12 | [raw-json-rules.md](FUNCTIONS/raw-json-rules.ru.md) |
+| Пресеты-бандлы | Добавляет готовые правила из каталога шаблона, настраиваемые переменными, с закреплённым пресетом Traffic Processing и заменяемой целью. | P2 P13 P14 | [preset-bundles.md](FUNCTIONS/preset-bundles.ru.md) |
+| Порядок и включение правил | Держит один список правил, упорядоченный осью номеров, с перетаскиванием, вкл/выкл и удалением; побеждает первое совпадение. | P1 P2 P3 P4 | [rule-order.md](FUNCTIONS/rule-order.ru.md) |
+| Действие правила | Отправляет совпавший трафик в Направление, `direct`, `block` или Reject, при желании сначала разрешив домен; прочие действия — через сырой JSON. | P6 P7 | [rule-actions.md](FUNCTIONS/rule-actions.ru.md) |
+| Направления | Задаёт именованные выходы для правил и Default traffic и их состав узлов; ссылки на убранное Направление переходят на `vpn-1`. | P15 P16 P17 P18 | [directions.md](FUNCTIONS/directions.ru.md) |
+| Обмен правилами файлом | Выгружает выбранные свои правила в файл и безопасно загружает их на другом устройстве; пресеты не переносятся. | P19 | [rule-transfer.md](FUNCTIONS/rule-transfer.ru.md) |
 
 ## Связанные фичи
 
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — язык шаблона, переменные, проверка перед стартом и плашка «Settings changed».
-- [005-DNS](../005-DNS/FEATURE.ru.md) — DNS-опция правила, DNS-части пресетов, FakeIP и его связь с «Resolve destination IP».
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — Направление как detour-цель, `<tag>-auto`, балансировка, цепочки, свёртки групп.
-- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — выбор узла внутри Направления на главном экране, псевдо-направление NETWORKS.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — язык шаблона, переменные, проверка перед
+  стартом и плашка «Settings changed».
+- [005-DNS](../005-DNS/FEATURE.ru.md) — DNS-опция правила, DNS-части пресетов, FakeIP и его связь с
+  «Resolve destination IP».
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — Направление как detour-цель,
+  `<tag>-auto`, балансировка, цепочки, свёртки групп.
+- [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — выбор узла внутри Направления на главном экране,
+  псевдо-направление NETWORKS.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — настройки замера задержки на Направление.
-- [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.ru.md) — какие приложения вообще идут в туннель; правило по пакету здесь видит только туннелированный трафик.
+- [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.ru.md) — какие приложения вообще идут в
+  туннель; правило по пакету здесь видит только туннелированный трафик.
 - [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.ru.md) — показывает, каким правилом ушло соединение.
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — Debug API `/rules`, `/directions`.
 - [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — бэкап правил и Направлений.

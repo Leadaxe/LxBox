@@ -1,6 +1,9 @@
 [English](parse-warnings.md) · [Русский](parse-warnings.ru.md)
 
-# Parse warnings
+# Parse warnings — reason codes for removed fields and dropped entries
+
+Every field that parsing removed or replaced and every entry it dropped gets a code with a text from
+the registry, shared with the launcher.
 
 | Field | Value |
 |------|----------|

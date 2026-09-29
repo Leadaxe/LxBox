@@ -1,6 +1,9 @@
 [English](config-template.md) · [Русский](config-template.ru.md)
 
-# Config template
+# Config template — the shipped template that defines settings, skeleton and presets
+
+One template file shipped with the app declares every config setting with its type and screen, the
+core config skeleton and the preset catalog.
 
 | Field | Value |
 |------|----------|

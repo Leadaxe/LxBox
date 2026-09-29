@@ -1,6 +1,9 @@
 [English](registry-pipeline.md) · [Русский](registry-pipeline.ru.md)
 
-# Registry-driven parse pipeline
+# Registry-driven parse pipeline — one path from any input to a validated node
+
+Every input goes through the same mapper → sanitizer → model stages driven by the contract registry,
+so the app and the launcher produce the same node from the same link.
 
 | Field | Value |
 |------|----------|

@@ -1,6 +1,9 @@
 [English](template-language.md) · [Русский](template-language.ru.md)
 
-# Template language
+# Template language — typed variables, conditions and per-node repetition
+
+The template language turns variables, `#if` conditions and `for_each` repetition over nodes into
+concrete sing-box JSON; the declared type decides how each value is written.
 
 | Field | Value |
 |------|----------|
@@ -89,7 +92,8 @@ without duplicates by the "code + parameters" pair.
 
 ## Boundaries
 
-- What exactly is gated by variables in presets and DNS — [004-ROUTING](../../004-ROUTING/FEATURE.md), [005-DNS](../../005-DNS/FEATURE.md).
+- What exactly is gated by variables in presets and DNS —
+  [004-ROUTING](../../004-ROUTING/FEATURE.md), [005-DNS](../../005-DNS/FEATURE.md).
 - The UI for multi-select and free input for `options_open` — not finished (§555 follow-up).
 
 ## Revisions

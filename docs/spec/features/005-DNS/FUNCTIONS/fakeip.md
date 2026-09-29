@@ -1,6 +1,9 @@
 [English](fakeip.md) · [Русский](fakeip.ru.md)
 
-# FakeIP
+# FakeIP — instant DNS answers with substitute addresses
+
+The FakeIP preset answers app name queries at once with an address from a reserved pool, and the
+core resolves the real name inside the tunnel.
 
 | Field | Value |
 |------|----------|
@@ -13,7 +16,7 @@
 Answers an application's name query instantly — with a substitute address
 from a service pool, without going to the network; the core recalls the real
 name by that address and resolves it inside the tunnel along the route.
-Gives DNS speed and removes DNS queries before the tunnel. It is not a DPI
+This makes DNS faster and removes DNS queries sent before the tunnel. It is not a DPI
 bypass — the preset description says so.
 
 ## Parameters

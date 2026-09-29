@@ -1,6 +1,9 @@
 [English](singbox-json-import.md) · [Русский](singbox-json-import.ru.md)
 
-# sing-box JSON import
+# sing-box JSON import — nodes, groups and detour chains from sing-box configs
+
+A sing-box outbound, an array of outbounds, a full config or an array of configs yields the nodes,
+groups and `detour` chains its author wrote.
 
 | Field | Value |
 |------|----------|

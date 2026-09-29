@@ -1,6 +1,9 @@
 [English](dns-rules.md) · [Русский](dns-rules.ru.md)
 
-# DNS rules
+# DNS rules — which server resolves which domains
+
+DNS rules send specific queries to specific servers before `dns.final`; custom, template and rule
+set rules and mirrors of routing rules form one ordered list.
 
 | Field | Value |
 |------|----------|

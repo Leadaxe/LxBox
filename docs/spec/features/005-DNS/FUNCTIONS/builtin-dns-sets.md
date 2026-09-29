@@ -1,6 +1,9 @@
 [English](builtin-dns-sets.md) · [Русский](builtin-dns-sets.ru.md)
 
-# Built-in DNS sets
+# Built-in DNS sets — encrypted dns_shield and the dns_ru group for Russian domains
+
+DNS works without any setup: the encrypted `dns_shield` group handles everything by default, and the
+`ru-direct` preset gives Russian domains their own `dns_ru` group.
 
 | Field | Value |
 |------|----------|

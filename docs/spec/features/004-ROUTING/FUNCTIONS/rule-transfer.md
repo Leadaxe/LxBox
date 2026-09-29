@@ -1,6 +1,9 @@
 [English](rule-transfer.md) · [Русский](rule-transfer.ru.md)
 
-# Rule exchange via a file
+# Rule exchange via a file — moving selected rules between devices
+
+Selected own rules, optionally with their DNS servers and DNS rules, can be exported to a file and
+imported into another LxBox installation without a full backup.
 
 | Field | Value |
 |------|----------|

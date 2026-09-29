@@ -1,6 +1,9 @@
 [English](build-pipeline.md) · [Русский](build-pipeline.ru.md)
 
-# Build pipeline
+# Build pipeline — fixed stages from settings to the final sing-box JSON
+
+Every rebuild runs the same fixed sequence of stages: variables, skeleton, nodes, groups, rules,
+post-steps, healing and the check.
 
 | Field | Value |
 |------|----------|

@@ -1,6 +1,9 @@
 [English](share-link-parse.md) · [Русский](share-link-parse.ru.md)
 
-# Share link parsing
+# Share link parsing — VLESS, VMess, Trojan, Shadowsocks, Hysteria2 and other links into nodes
+
+One `scheme://` link — typed, scanned or read from a subscription list — becomes a node, or the
+reason it was rejected is named with a code.
 
 | Field | Value |
 |------|----------|
@@ -11,8 +14,8 @@
 ## What it does
 
 Accepts one string of the form `scheme://…` — pasted by hand, scanned
-or a line of a subscription list — and turns it into a node. If no node came out,
-it names the reason with a code.
+or a line of a subscription list — and turns it into a node. If no node results,
+the reason is named with a code.
 
 ## Parameters
 

@@ -1,6 +1,9 @@
 [English](body-recognition.md) · [Русский](body-recognition.ru.md)
 
-# Body recognition
+# Body recognition — detecting link lists, base64, Xray/sing-box JSON and WireGuard configs
+
+A subscription body, file or paste is classified as exactly one source kind, unwrapped from base64
+and split into entries for the matching parser.
 
 | Field | Value |
 |------|----------|
@@ -16,7 +19,7 @@ profile. Then it slices it into entries and hands each one to its parser.
 
 ## Parameters
 
-Source kinds are a registry table; they are tried by priority, the lower one wins.
+Source kinds are a registry table; they are tried by priority, the lowest number wins.
 
 | Priority | Kind | Marker | Entries |
 |-----------|-----|---------|--------|
@@ -58,7 +61,7 @@ with a declared path to entries, or "not decoded" with a reason.
 - An empty body, only comments, only whitespace → "not decoded";
   the decoder's reason goes to the rejects with code `core_rejected`.
 - Without a loaded registry, a fallback order with the same content works;
-  the fallback branches matching the registry is checked by a test.
+  a test checks that the fallback branches match the registry.
 
 ## Boundaries
 

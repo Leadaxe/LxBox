@@ -1,6 +1,9 @@
 [English](dns-groups.md) · [Русский](dns-groups.ru.md)
 
-# DNS groups
+# DNS groups — failover and fastest-server selection across several DNS servers
+
+A DNS group puts several servers under one tag so that one failing server does not stop name
+resolution; the core picks the target in `stable`, `fastest` or `parallel` mode.
 
 | Field | Value |
 |------|----------|
@@ -14,7 +17,7 @@ Combines several DNS servers under one tag so that a failure of one does not
 bring resolving down. A group can be placed anywhere a server tag is
 expected: in `dns.final`, in the core resolver, in a DNS rule, in another
 group. The core picks the target by mode on its own; the client assembles
-the group, cuts off unavailable members and shows whom the core has picked
+the group, cuts off unavailable members and shows which member the core has picked
 right now.
 
 ## Parameters
@@ -55,7 +58,7 @@ live state line under the group.
   (including self-inclusion bypassing the form) — fatal, one per ring; a
   nested group without a ring is allowed.
 - An invalid duration — a hint under the field, saving is not blocked, the
-  key is simply not written.
+  key is not written.
 - Changing the mode does not materialize the default: `stable` removes the
   `mode` key.
 - In the list the group is labelled `group · <mode> · <member count>`.
@@ -67,7 +70,8 @@ live state line under the group.
 ## Boundaries
 
 - Target selection behaviour (TTL records, survival mode, amnesty on network
-  change) — the core, [sing-box-lx FEATURE 013-DNS_GROUP](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS/FEATURES/013-DNS_GROUP).
+  change) — the core, [sing-box-lx FEATURE
+  013-DNS_GROUP](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS/FEATURES/013-DNS_GROUP).
 - The group query trace (path, probes, fan-out) — in the profiler,
   [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
 - There is no separate Debug endpoint for group state.

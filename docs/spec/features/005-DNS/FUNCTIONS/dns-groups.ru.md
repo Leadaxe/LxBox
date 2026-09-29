@@ -1,6 +1,9 @@
 [English](dns-groups.md) · [Русский](dns-groups.ru.md)
 
-# DNS-группы
+# DNS-группы — резервирование и выбор самого быстрого из нескольких DNS-серверов
+
+DNS-группа объединяет несколько серверов под одним тегом, чтобы отказ одного не останавливал
+резолвинг; ядро выбирает цель в режиме `stable`, `fastest` или `parallel`.
 
 | Поле | Значение |
 |------|----------|
@@ -64,7 +67,8 @@
 ## Границы
 
 - Поведение выбора цели (TTL-записи, режим выживания, амнистия при смене
-  сети) — ядро, [sing-box-lx FEATURE 013-DNS_GROUP](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS/FEATURES/013-DNS_GROUP).
+  сети) — ядро, [sing-box-lx FEATURE
+  013-DNS_GROUP](https://github.com/Leadaxe/sing-box-lx/tree/lx/SPECS/FEATURES/013-DNS_GROUP).
 - Трасса группового запроса (путь, пробы, веер) — в профайлере,
   [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.ru.md).
 - Отдельного Debug-endpoint'а состояния групп нет.

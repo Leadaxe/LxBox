@@ -1,6 +1,9 @@
 [English](wireguard-amnezia-import.md) · [Русский](wireguard-amnezia-import.ru.md)
 
-# WireGuard / AmneziaWG import
+# WireGuard / AmneziaWG import — .conf files, wg/awg links and Amnezia vpn:// profiles
+
+A WireGuard or AmneziaWG config in any distribution form becomes a sing-box `wireguard` endpoint,
+with the AmneziaWG MTU capped at 1280.
 
 | Field | Value |
 |------|----------|
@@ -37,7 +40,7 @@ protocol but obfuscation fields on the same endpoint.
 
 - **Name:** a comment under `[Peer]` is stronger than the file name, the file name is stronger than the
   fallback; for a link — the fragment, without it — the `Endpoint` host. A file name with
-  spaces, Cyrillic and brackets is kept without percent-encoding mess.
+  spaces, Cyrillic letters and brackets is kept as is, without percent-encoding.
 - **Without `Endpoint`, `PrivateKey` or `PublicKey` there is no node** (`field_missing`).
   A broken `PresharedKey` rejects the node.
 - **The AmneziaWG MTU ceiling is 1280.** A node with any AWG field: without MTU → 1280
@@ -45,7 +48,7 @@ protocol but obfuscation fields on the same endpoint.
   `value`); below — as is. Plain WireGuard is not touched. An authored sing-box
   body keeps its value, the info code `awg_mtu_high` is set.
   For a `vpn://` profile an explicit `MTU` in `[Interface]` is stronger than `last_config.mtu`.
-- **An unusable AWG field is removed factor by factor**, the node lives; overlapping
+- **An unusable AWG field is removed field by field**, the node lives; overlapping
   headers, a broken protection key or short padding with a key remove the node.
 - **`vpn://` profile:** all `awg`/`wireguard` containers are unpacked;
   others (xray, openvpn, …) are skipped; a profile without WG/AWG containers —

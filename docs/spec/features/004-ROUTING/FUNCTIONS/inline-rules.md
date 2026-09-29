@@ -1,6 +1,9 @@
 [English](inline-rules.md) · [Русский](inline-rules.ru.md)
 
-# Rule by conditions (Inline)
+# Rule by conditions (Inline) — matching by domain, IP, port, app, protocol and network
+
+An Inline rule lists the traffic to catch in its own fields — domains, IP networks, ports, apps,
+protocol, network, source, inbound, Wi-Fi — and the target to send it to.
 
 | Field | Value |
 |------|----------|

@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 002 — NODE_IMPORT — разбор ссылок и конфигов в единую модель узла
+# Импорт узлов — ссылки, Xray и sing-box JSON, конфиги WireGuard и AmneziaWG в единой модели узла
+
+LxBox разбирает share-ссылки прокси, JSON Xray и sing-box, конфиги WireGuard и AmneziaWG и профили
+Amnezia `vpn://` в узлы sing-box. Поддерживаются схемы VLESS с REALITY, VMess, Trojan, Shadowsocks,
+Hysteria2, TUIC, AnyTLS, SOCKS, HTTP, SSH, NaiveProxy, WireGuard и MASQUE. Каждая запись, не ставшая
+узлом, получает код причины, а любой узел можно выгрузить обратно в share-ссылку. Правила разбора
+берутся из реестра контракта, общего с лаунчером, поэтому оба приложения превращают один и тот же
+ввод в один и тот же узел.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 002-NODE_IMPORT |
 | Тип | Продуктовая фича |
 | Поглотила | `§019F` `§026F` `§037F` `§097F` `§321F` `§368F` `§460F` `§472F` `§480F` `§584F` |
 | Контракт | реестр контракта `1.1.99` (протоколы, виды источника, предупреждения, лимиты); зеркало документации — `docs/contract/` |
@@ -204,27 +212,33 @@
 
 | Функция | Что делает | Обещания | Файл |
 |---------|-----------|----------|------|
-| Разбор share-ссылки | Одна ссылка любой схемы → узел или названная причина | P1 P4 P5 P10 P15 | [share-link-parse.md](FUNCTIONS/share-link-parse.ru.md) |
-| Опознание тела | Вид источника, снятие base64, нарезка на записи | P3 P5 | [body-recognition.md](FUNCTIONS/body-recognition.ru.md) |
-| Импорт Xray JSON | Элементы Xray → узлы, группы, цепочки | P4 P8 P9 | [xray-json-import.md](FUNCTIONS/xray-json-import.ru.md) |
-| Импорт sing-box JSON | Outbound/массив/конфиг → узлы, группы, `detour`, чужие типы | P4 P8 P9 P16 | [singbox-json-import.md](FUNCTIONS/singbox-json-import.ru.md) |
-| Импорт WireGuard / AmneziaWG | `.conf`, `awg://`, `vpn://` → endpoint | P8 P14 | [wireguard-amnezia-import.md](FUNCTIONS/wireguard-amnezia-import.ru.md) |
-| Конвейер по реестру | Маппер → санитайзер → модель, дедуп, идентичность | P2 P6 P7 P8 P10 P11 | [registry-pipeline.md](FUNCTIONS/registry-pipeline.ru.md) |
-| Предупреждения разбора | Коды на узле и в отбраковке, тексты из реестра | P5 P6 P11 P12 | [parse-warnings.md](FUNCTIONS/parse-warnings.ru.md) |
-| Экспорт в share-ссылку | Узел → ссылка по реестру, подтверждение для ключа | P2 P13 | [share-link-export.md](FUNCTIONS/share-link-export.ru.md) |
+| Разбор share-ссылки | Превращает одну ссылку любой поддерживаемой схемы в узел или называет причину отказа. | P1 P4 P5 P10 P15 | [share-link-parse.md](FUNCTIONS/share-link-parse.ru.md) |
+| Опознание тела | Относит тело ровно к одному виду источника, снимает base64-обёртки и режет его на записи. | P3 P5 | [body-recognition.md](FUNCTIONS/body-recognition.ru.md) |
+| Импорт Xray JSON | Превращает конфиги Xray в любой из четырёх JSON-форм в узлы sing-box, группы автовыбора и цепочки. | P4 P8 P9 | [xray-json-import.md](FUNCTIONS/xray-json-import.ru.md) |
+| Импорт sing-box JSON | Берёт узлы, группы и цепочки `detour` из outbound, массива или конфига sing-box, включая типы вне реестра. | P4 P8 P9 P16 | [singbox-json-import.md](FUNCTIONS/singbox-json-import.ru.md) |
+| Импорт WireGuard / AmneziaWG | Превращает `.conf` wg-quick, ссылку `wg://`/`awg://` или профиль Amnezia `vpn://` в endpoint `wireguard`. | P8 P14 | [wireguard-amnezia-import.md](FUNCTIONS/wireguard-amnezia-import.ru.md) |
+| Конвейер разбора по реестру | Проводит любой ввод через маппер, санитайзер и модель по реестру контракта, убирает повторы внутри тела и сохраняет идентичность узла. | P2 P6 P7 P8 P10 P11 | [registry-pipeline.md](FUNCTIONS/registry-pipeline.ru.md) |
+| Предупреждения разбора | Вешает коды причин с текстами из реестра на узлы и в список отбраковки; секреты маскируются. | P5 P6 P11 P12 | [parse-warnings.md](FUNCTIONS/parse-warnings.ru.md) |
+| Экспорт в share-ссылку | Строит share-ссылку из узла по реестру и спрашивает подтверждение перед копированием приватного ключа. | P2 P13 | [share-link-export.md](FUNCTIONS/share-link-export.ru.md) |
 
 ## Связанные фичи
 
-- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — поставляет текст (URL, файл, вставка, QR) и решает, куда кладутся узлы.
-- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — собирает итоговый конфиг и судит гейты ядра (теги сборки, `min_core`), выключенные при разборе.
-- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — придаёт смысл группам и цепочкам, которые даёт импорт.
+- [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — поставляет текст (URL, файл, вставка,
+  QR) и решает, куда кладутся узлы.
+- [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.ru.md) — собирает итоговый конфиг и судит гейты
+  ядра (теги сборки, `min_core`), выключенные при разборе.
+- [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) — придаёт смысл группам и
+  цепочкам, которые даёт импорт.
 - [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md) — показывает предупреждения и отбраковку узлов в списке.
 - [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.ru.md) — редактирует узел по той же схеме тела реестра.
 - [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md) — отказы ядра и включение/проба WireGuard-узлов на лету.
 - [015-WARP](../015-WARP/FEATURE.ru.md) — генерирует WARP-узлы; ссылки `masque` — узлы WARP.
-- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — детали TLS-обфускации и XHTTP, которые несут импортированные узлы.
-- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — форма хранения узлов (своя ссылка / исходный текст) и бэкап.
-- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — синхронизация реестра и версия контракта, которые исполняет фича.
+- [016-DPI_HARDENING](../016-DPI_HARDENING/FEATURE.ru.md) — детали TLS-обфускации и XHTTP, которые
+  несут импортированные узлы.
+- [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.ru.md) — форма хранения узлов (своя
+  ссылка / исходный текст) и бэкап.
+- [021-CORE_CONTRACT](../021-CORE_CONTRACT/FEATURE.ru.md) — синхронизация реестра и версия
+  контракта, которые исполняет фича.
 
 ## Особенности сопровождения
 
