@@ -164,6 +164,9 @@ tile touch / menu item / command / plugin
   Health category exists in the settings but sends nothing.
 - Commands other than start/stop/toggle, and all events, require a live app;
   with the UI unloaded the command is skipped without an answer.
+- `ACTIVE_NODE_CHANGED` comes only on an explicit node choice, `reason` is
+  always `user`; changes by auto-select and automation with `reason` `urltest` /
+  `automation` (`047F`) are not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)).
 - The service notification with Stop / Reconnect buttons — 010-VPN_SERVICE.
 - Remote control over HTTP with a token — Debug API,
   [027-DEBUG_API](../027-DEBUG_API/FEATURE.md).

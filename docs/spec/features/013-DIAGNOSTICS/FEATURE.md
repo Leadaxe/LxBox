@@ -209,6 +209,9 @@ START → core connection and DNS stream → buffer (retention window) → Profi
   feature's evidence.
 - The built-in advanced log viewer (`§023F`) — dropped: its place was taken by
   Profiler and the Debug API.
+- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): an accumulating on-disk log across
+  several sessions (`043F` B.5) — after a restart only the previous session is
+  available ([app log](FUNCTIONS/app-log.md)).
 - The crash report covers only core panics; native failures outside the core
   and the process being killed by the system are visible only in the exit
   reasons and the system log tail.

@@ -152,6 +152,10 @@ Save as Y: flush to disk → scene → slot Y → current = Y (tunnel not touche
 - Connections dropping during a switch is expected: there is no hot swap by
   construction (core cache database, inbounds, tunnel apps).
 - Slots overwritten before race 515 was fixed are not restored by the feature.
+- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): a "set epoch" barrier at every
+  storage writer (follow-up to 515) — protection against race 515 stays at the
+  subscription owner level; a separate chain-order migration on loading a set
+  (`417F` §2.6).
 
 ## Functions
 

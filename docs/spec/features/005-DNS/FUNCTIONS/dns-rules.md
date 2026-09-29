@@ -59,7 +59,8 @@ actually emitted servers.
   emitted (no warning). A server dropped because of its channel — the
   opposite: a rule pointing to it becomes `action: reject`.
 - A disabled preset (routing off) gives no DNS rules; the preset's record in
-  the list stays as an anchor, its own `enabled` is not read by the build.
+  the list is only the group's position anchor and has no on/off of its own
+  (a preset's DNS is switched by its DNS toggle).
 - A rule-set rule without a downloaded file or without `server` is skipped
   silently.
 - Custom rule: empty name — "Name is required"; body is not a JSON object —

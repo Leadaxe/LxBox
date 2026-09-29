@@ -206,6 +206,8 @@ STOP ──► unsubscribe; the log is frozen until the next START
 - Per-app sessions, the App tab and saved sessions were removed (§288); one
   app is analysed with the App filter.
 - L4 only: domain, IP, port; no HTTP headers, URLs or per-domain latency.
+- There is no "record only while the tab is open" mode, and it is not
+  planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): recording runs from START to STOP.
 - Depends on OS capabilities: the traffic owner; the OS may not name it for
   part of the connections.
 

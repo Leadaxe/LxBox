@@ -18,7 +18,8 @@ only the front's outer name. The app **does not enable ECH itself** and
 provides no toggle for it: the `tls.ech` block reaches the core only if the
 node JSON explicitly brought it, while the Xray link parameter `ech=` is
 dropped with an explanation. The per-node "Enable ECH" checkbox planned in
-§045F and parsing of `?ech=1`/`?ech=<base64>` are not implemented.
+§045F and parsing of `?ech=1`/`?ech=<base64>` are not implemented and are not
+planned (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)).
 
 ## Parameters
 

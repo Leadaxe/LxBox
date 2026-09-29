@@ -234,6 +234,8 @@ rejection:   Start → core start → rejection names the node → disable + ver
 - The speed test does not address a node: it measures the device's current
   path (through the tunnel if the VPN is up) and cannot be cancelled before
   the run ends.
+- The speed test stays at its current scope; warm-up, cancelling a run and
+  an own server from `015F` are not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)).
 - Depends on OS capabilities: starting the VPN from the background without UI
   (no auto-disable there), the process memory limit that determines the test
   batch size.

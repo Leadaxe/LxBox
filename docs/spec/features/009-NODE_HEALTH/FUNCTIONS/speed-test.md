@@ -58,6 +58,8 @@ the "Session History".
 
 - The test does not address a node and does not switch it: the current path
   is measured.
+- Warm-up, cancelling a run and an own server from `015F` are not planned
+  (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)).
 - Speed on the home screen — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
 
 ## Revisions

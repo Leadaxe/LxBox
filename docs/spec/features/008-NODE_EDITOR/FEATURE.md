@@ -215,8 +215,10 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
   Cloudflare WARP — [015-WARP](../015-WARP/FEATURE.md); the Tailscale preset —
   [004-ROUTING](../004-ROUTING/FEATURE.md); the Tailscale node itself, its
   identity and the Network tab — [030-TAILSCALE](../030-TAILSCALE/FEATURE.md).
-- Does not do: overrides of a subscription node, node duplication, a form by
-  protocol schema, a separate WireGuard/AmneziaWG form, a TLS form.
+- Does not do: overrides of a subscription node, a form by protocol schema,
+  a TLS form.
+- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): node duplication; a separate
+  WireGuard/AmneziaWG form (`097F` Phase 2b) — such nodes are edited as text.
 - Camera and file picking — depend on OS capabilities
   ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md)).
 

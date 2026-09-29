@@ -202,8 +202,10 @@ kept.», «Comments were removed.», «The core rejected the node: …».
   Cloudflare WARP — [015-WARP](../015-WARP/FEATURE.ru.md); пресет Tailscale —
   [004-ROUTING](../004-ROUTING/FEATURE.ru.md); сам узел Tailscale, его
   личность и вкладка Network — [030-TAILSCALE](../030-TAILSCALE/FEATURE.ru.md).
-- Не делает: переопределения (overrides) узла подписки, дублирование узла,
-  форму по схеме протокола, отдельную форму WireGuard/AmneziaWG, форму TLS.
+- Не делает: переопределения (overrides) узла подписки, форму по схеме
+  протокола, форму TLS.
+- Не планируется (решение владельца 2026-09-29, аудит [588](../../tasks/588-spec-kit-revision-audit.md)): дублирование узла; отдельная
+  форма WireGuard/AmneziaWG (`097F` Phase 2b) — такие узлы правятся текстом.
 - Камера и выбор файла — зависят от возможностей ОС
   ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md)).
 

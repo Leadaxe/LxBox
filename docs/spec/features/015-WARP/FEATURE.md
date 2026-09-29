@@ -240,7 +240,7 @@ transports → N random candidates → links → the "WARP GENERATOR" folder.
 - Registration is a direct request from the app: choosing a node or detour for
   it is not possible; with dead hosts there is no "register via a proxy" hint.
 - WARP+ for MASQUE is not supported (the license field is hidden in MASQUE
-  mode).
+  mode) and is not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)).
 - The `host:port` format of the endpoint is not validated before
   registration.
 - `tls.disable_sni` is not set in the wizard — only via a link/import.

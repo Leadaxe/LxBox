@@ -216,6 +216,8 @@ fatal «Routing loop»; ⚠ у мёртвых опор и баннер для DN
   (`SetChainPositionEnabled`, `GetChainCloneConfig`) приложение не использует.
 - Отдельного outbound'а `loadbalance` нет; стратегии «consistent hashing»
   и «sticky sessions» выражаются составом `sticky_hash`.
+- Не планируется (решение владельца 2026-09-29, аудит [588](../../tasks/588-spec-kit-revision-audit.md)): предупреждение «AWG → канал с
+  WireGuard» (`248F`) — detour через WireGuard/AmneziaWG разрешён без него.
 
 ## Функции
 

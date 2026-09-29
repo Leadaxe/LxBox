@@ -30,9 +30,9 @@ At runtime the builder (`app/lib/services/builder/build_config.dart`) merges:
 wizard_template.json
 │
 ├─ parser_config                   object{2 keys}
-│   ├─ version                     int           the parser pipeline's schema (§026)
+│   ├─ version                     int           read, nothing depends on it (no template migrations)
 │   └─ parser                      object{1 keys}
-│       └─ reload                  duration      auto-refresh subscriptions interval (Go-style "12h")
+│       └─ reload                  duration      not used by the app (Go-style "12h")
 │
 ├─ dns_options                     object{2 keys}       the default DNS shape for the builder
 │   ├─ servers[]                   list          template-level DNS servers (7 defaults)
@@ -213,8 +213,8 @@ Every key is described in detail in the sections below.
 
 | Key | Type | Purpose |
 |---|---|---|
-| `version` | int | The parser pipeline's version ([§026]). It is bumped on breaking parser changes. |
-| `parser.reload` | a duration string | The periodic auto-refresh interval for subscriptions ([§027]). Go style: `12h`, `30m`, and so on. It is overridden per subscription. |
+| `version` | int | Read into the model, but nothing depends on it: the template has no migration mechanism of its own, its version is the app build; a breaking change of the template form is served by the storage form (owner decision 2026-09-29, audit [588](spec/tasks/588-spec-kit-revision-audit.md)). |
+| `parser.reload` | a duration string | Not used by the app. Subscriptions refresh by their own per-subscription interval and the auto-update triggers; refreshing by this interval on Start (§010F) is not planned (audit [588](spec/tasks/588-spec-kit-revision-audit.md)). |
 
 ---
 

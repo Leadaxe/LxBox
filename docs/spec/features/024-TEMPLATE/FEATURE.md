@@ -327,8 +327,9 @@ app update ─► new template ─► load: overlay → construct check → mode
   DNS server body placeholders) are checked at load against the declared
   variables; a violation rejects the template, except an incomplete
   `for_each`, which removes only its preset.
-- Variable metadata (type, default, options, bounds) comes only from the
-  template; storage holds only the value. The `internal` section is not
+- Variable metadata (type, default, options) comes only from the template;
+  the bounds of an `int` variable (today `dns_cache_capacity`) are set by the
+  app; storage holds only the value. The `internal` section is not
   rendered, its variables are reachable by `ref` from presets.
 - The template has no version of its own: its version is the app build. The
   `parser_config.version` field (5) is read into the model, but no migration
@@ -353,6 +354,10 @@ app update ─► new template ─► load: overlay → construct check → mode
 - There is no user template and no preset created by the user.
 - The UI for multi-select and free input for `options_open` is not finished
   (§555 follow-up).
+- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): migrations by `parser_config.version`
+  (the template's version is the app build); moving the bounds of `int`
+  variables into the template declaration; bringing back the one-off remap of
+  old `preset_id`s (§229) — such records show "Preset not found — tap to fix".
 
 ## Functions
 

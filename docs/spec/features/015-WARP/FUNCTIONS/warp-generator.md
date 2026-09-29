@@ -63,8 +63,8 @@ place of the wizard; "back" leads to Servers. Node tags:
 ## Boundaries
 
 - Testing and selecting nodes — 009-NODE_HEALTH (folder check).
-- "Variations around a live IP" (the scanner's second phase) are not invoked
-  from the UI.
+- There are no "variations around a live IP" (the scanner's second phase
+  from research 132), and they are not planned (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)).
 - Re-register does not affect the experiment: it always uses the cache.
 
 ## Revisions

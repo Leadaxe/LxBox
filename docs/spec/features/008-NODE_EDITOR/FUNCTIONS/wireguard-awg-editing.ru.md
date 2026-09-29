@@ -74,6 +74,8 @@ WireGuard нет: правится текст, в котором узел при
   [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.ru.md).
 - AWG поверх WireGuard в detour разрешён —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
+- Отдельная форма WireGuard/AmneziaWG с выделенными полями (`097F` Phase 2b)
+  не планируется (решение владельца 2026-09-29, аудит [588](../../../tasks/588-spec-kit-revision-audit.md)).
 
 ## Ревизии
 

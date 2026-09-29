@@ -66,7 +66,8 @@ with a declared path to entries, or "not decoded" with a reason.
 ## Boundaries
 
 - Loading the body by URL, the response size limit — [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md).
-- Format by file extension (needed for `.ovpn`) is not applied: recognition
+- Format by file extension (`584F`) is not determined and is not planned
+  (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)): recognition
   goes by text only.
 - Clash YAML is not parsed.
 

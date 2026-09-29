@@ -57,8 +57,8 @@ new set does not raise "config is stale" because of someone else's leftover.
 ## Boundaries
 
 - Slots already corrupted before the fix are not healed — only from a backup.
-- A storage-level barrier (a set epoch at every writer) is not done —
-  follow-up to 515.
+- A storage-level barrier (a set epoch at every writer, follow-up to 515) is
+  not done and is not planned (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)).
 - Handing Tailscale state directories to nodes during the build —
   [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md); the feature only
   maintains the per-slot entry sets.

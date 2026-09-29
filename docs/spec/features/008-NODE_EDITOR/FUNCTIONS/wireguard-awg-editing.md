@@ -76,6 +76,8 @@ suffix for masquerade) is visible in the node row on the main screen
   [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
 - AWG on top of WireGuard in a detour is allowed —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
+- A separate WireGuard/AmneziaWG form with dedicated fields (`097F` Phase 2b)
+  is not planned (owner decision 2026-09-29, audit [588](../../../tasks/588-spec-kit-revision-audit.md)).
 
 ## Revisions
 

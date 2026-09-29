@@ -226,6 +226,8 @@ core ─► group selections + measurements ─► dependency graph ─► ⚠ /
   application.
 - There is no separate `loadbalance` outbound; the "consistent hashing" and
   "sticky sessions" strategies are expressed by the `sticky_hash` set.
+- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): the "AWG → channel with WireGuard"
+  warning (`248F`) — a detour through WireGuard/AmneziaWG is allowed without it.
 
 ## Functions
 

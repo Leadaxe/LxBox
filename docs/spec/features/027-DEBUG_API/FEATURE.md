@@ -220,6 +220,8 @@ handler → owning service (the same as the screen) → storage
 - An MCP wrapper over the API (`§035F`) — cancelled, not implemented. Clash
   API routes (`/clash/*`, `/state/clash`) — removed (§122), 404. No log
   streaming; the only stream is `/profiler/live/stream`.
+- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): raising the server on a VPN autostart
+  without the UI (`043F` A.2) — the server is raised by opening the main screen.
 - The full route reference is
   [`docs/api/debug-api-reference.md`](../../../api/debug-api-reference.md);
   the feature does not duplicate it.

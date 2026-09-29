@@ -236,6 +236,9 @@ snapshot.
   between VPN restarts.
 - The folder test requires the VPN to be off: one core session runs at a
   time (depends on OS and core capabilities).
+- Not planned (owner decision 2026-09-29, audit [588](../../tasks/588-spec-kit-revision-audit.md)): a QR code when adding to a folder
+  (`234F`) and a folder ping URL field in the UI (§284) — the folder test uses
+  the global ping settings.
 
 ## Functions
 
