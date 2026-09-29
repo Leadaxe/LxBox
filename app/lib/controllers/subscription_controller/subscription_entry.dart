@@ -85,6 +85,16 @@ class SubscriptionEntry extends ChangeNotifier {
       ? (_list as SubscriptionServers).dropped
       : const [];
 
+  /// §589 — схлопнутые повторы тела подписки: [merged] — сколько записей
+  /// схлопнуто, [into] — в сколько узлов. Считается по коду
+  /// `duplicates_collapsed` на узлах; нули — повторов не было или это не
+  /// подписка. Сводка показывает строку отдельно от `dropped` — схлопнутое
+  /// не отброшено, подробности на самих узлах.
+  ({int merged, int into}) get duplicatesMerged {
+    if (_list is! SubscriptionServers) return (merged: 0, into: 0);
+    return duplicatesMergedOf(_list.nodes);
+  }
+
   /// §289 — per-subscription слепок идентичности фетча. `null` = режим Default
   /// (глобальная идентичность). Пусто для не-подписок.
   SubscriptionIdentityOverride? get identity => _list is SubscriptionServers

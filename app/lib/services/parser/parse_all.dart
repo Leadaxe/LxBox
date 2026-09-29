@@ -95,6 +95,13 @@ List<NodeSpec> _parseAllAnnotated(
   List<NodeWarning>? dropped,
 ) {
   final nodes = _parseAll(decoded, nameHint: nameHint, dropped: dropped);
+  // §589 — где кончаются коды РАЗБОРА у каждого узла: код схлопывания встаёт
+  // в их конец, перед кодами санитайзера (контракт §99 п. 4), а санитайзер по
+  // дословной карте дописывает свои раньше, чем дойдёт до дедупа.
+  final parseEnd = Map<NodeSpec, int>.identity();
+  for (final n in nodes) {
+    parseEnd[n] = n.warnings.length;
+  }
 
   // §477 — проход по дословной карте выносит и ВЕРДИКТ О ЗАПИСИ, а не только
   // коды полей: `on_invalid: drop_node` значит, что ядро эту запись не примет
@@ -119,7 +126,7 @@ List<NodeSpec> _parseAllAnnotated(
   // форм одного узла разные (`amneziawg://` и `vpn://`), и отбраковка могла
   // задеть только одну. Дедуп раньше неё оставил бы первую форму и потерял
   // годную вторую.
-  _dropDuplicates(nodes, dropped);
+  _collapseDuplicates(nodes, parseEnd);
 
   annotateAllWithRegistry(nodes);
   return nodes;
@@ -142,10 +149,11 @@ List<NodeSpec> _parseAllAnnotated(
 /// намеренно.
 ///
 /// Первая запись остаётся (порядок разбора = порядок тела: автор ставит
-/// осмысленную форму раньше), каждая следующая с тем же ключом уходит в
-/// `dropped[]` кодом `duplicate`. Имя выжившего узел сохраняет своё; у
-/// дубликата имя отличалось — оно уезжает в `winner` предупреждения, и
-/// пользователь читает «duplicate of <имя>» вместо безымянного «минус узел».
+/// осмысленную форму раньше), каждая следующая с тем же ключом схлопывается
+/// в неё. §589 (контракт 1.1.102, §99) — след схлопывания живёт на ВЫЖИВШЕМ
+/// узле кодом реестра `duplicates_collapsed` ([duplicatesCollapsedWarning]):
+/// человек видит, какие имена слились в этот узел. В `dropped[]` схлопнутые
+/// записи не попадают — они не отвергнуты, их сервер в списке есть.
 ///
 /// Область — ОДНО ТЕЛО, один импорт: `parseAll` дальше своего входа не видит
 /// по построению. Между подписками и с ручными узлами повторы не схлопываются
@@ -155,10 +163,13 @@ List<NodeSpec> _parseAllAnnotated(
 /// Узлы без подписи (группы §322 — у них нет тела) в дедупе не участвуют:
 /// `emit()` группы описывает состав, а не сервер, и две группы с одинаковым
 /// составом это две разные группы.
-void _dropDuplicates(List<NodeSpec> nodes, List<NodeWarning>? dropped) {
+void _collapseDuplicates(
+    List<NodeSpec> nodes, Map<NodeSpec, int> parseEnd) {
   if (nodes.length < 2) return;
   final seen = <String, NodeSpec>{};
   final dupes = <NodeSpec>[];
+  // Выживший → имена схлопнутых в него записей, в порядке тела.
+  final collapsed = Map<NodeSpec, List<String>>.identity();
   for (final node in nodes) {
     if (node.isGroup) continue;
     final String sig;
@@ -175,9 +186,7 @@ void _dropDuplicates(List<NodeSpec> nodes, List<NodeWarning>? dropped) {
       continue;
     }
     dupes.add(node);
-    dropped?.add(DuplicateNodeWarning(
-      winner: winner.tag.trim() == node.tag.trim() ? '' : winner.tag.trim(),
-    ));
+    (collapsed[winner] ??= <String>[]).add(node.tag);
   }
   // Снятие ПО ССЫЛКЕ: `NodeSpec.==` сравнивает `id`+`tag`, а у дубля с
   // выжившим совпадает ровно это — `removeWhere(dupes.contains)` снёс бы
@@ -185,6 +194,72 @@ void _dropDuplicates(List<NodeSpec> nodes, List<NodeWarning>? dropped) {
   // `Map.identity`).
   if (dupes.isEmpty) return;
   nodes.removeWhere((n) => dupes.any((d) => identical(d, n)));
+  collapsed.forEach((survivor, names) {
+    markDuplicatesCollapsed(survivor, names, at: parseEnd[survivor]);
+  });
+}
+
+/// §589 — код реестра, которым узел помнит схлопнутые в него записи.
+const kDuplicatesCollapsedCode = 'duplicates_collapsed';
+
+/// §589 — сколько имён схлопнутых записей называет код; дальше `", …"`,
+/// полное число — в `count` (контракт §99 п. 2).
+const kMaxCollapsedNames = 10;
+
+/// §589 (контракт 1.1.102, §99) — код `duplicates_collapsed` для выжившего
+/// узла с именем [ownName], в который схлопнуты записи [collapsed] (их имена
+/// в порядке тела).
+///
+/// `count` — сколько записей схлопнуто; `names` — их имена через `", "`: без
+/// пустых, без повторов, без имени выжившего, не больше
+/// [kMaxCollapsedNames], дальше `", …"`. Если называть некого (все повторы
+/// под тем же именем) — имя выжившего.
+RegistryWarning duplicatesCollapsedWarning(
+    String ownName, List<String> collapsed) {
+  final own = ownName.trim();
+  final seen = <String>{own};
+  final names = <String>[];
+  for (final raw in collapsed) {
+    final name = raw.trim();
+    if (name.isEmpty || !seen.add(name)) continue;
+    names.add(name);
+  }
+  if (names.isEmpty) names.add(own);
+  var joined = names.take(kMaxCollapsedNames).join(', ');
+  if (names.length > kMaxCollapsedNames) joined += ', …';
+  return RegistryWarning(
+    code: kDuplicatesCollapsedCode,
+    params: {'count': '${collapsed.length}', 'names': joined},
+  );
+}
+
+/// §589 — итог схлопывания по узлам источника для сводки: [merged] —
+/// сумма `count` кодов `duplicates_collapsed`, [into] — число узлов с кодом.
+({int merged, int into}) duplicatesMergedOf(Iterable<NodeSpec> nodes) {
+  var merged = 0;
+  var into = 0;
+  for (final n in nodes) {
+    for (final w in n.warnings) {
+      if (w is! RegistryWarning || w.code != kDuplicatesCollapsedCode) continue;
+      merged += int.tryParse(w.params['count'] ?? '') ?? 0;
+      into++;
+      break;
+    }
+  }
+  return (merged: merged, into: into);
+}
+
+/// §589 — поставить [survivor] код схлопывания. [at] — конец кодов разбора
+/// (перед кодами санитайзера); `null` — в конец списка. Прежний код с узла
+/// снимается: свежий разбор источника его заменяет.
+void markDuplicatesCollapsed(NodeSpec survivor, List<String> collapsed,
+    {int? at}) {
+  if (collapsed.isEmpty) return;
+  final w = duplicatesCollapsedWarning(survivor.tag, collapsed);
+  final ws = survivor.warnings;
+  ws.removeWhere((x) => x is RegistryWarning && x.code == w.code);
+  final i = at == null ? ws.length : at.clamp(0, ws.length);
+  ws.insert(i, w);
 }
 
 /// §477 — причина отбраковки узла реестром: код `error`, который проход по
@@ -437,6 +512,18 @@ List<NodeSpec> _parseXrayDocument(
           owner[id] = e;
         }
       }
+      // §589 — схлопнутые правилом владения записи: выживший по подписи и
+      // имена выброшенных в порядке файла (боевой проход идёт по нему).
+      final survivorOf = <String, NodeSpec>{};
+      final collapsed = <String, List<String>>{};
+      void onCollapse(String sig, NodeSpec node, {required bool kept}) {
+        if (kept) {
+          survivorOf.putIfAbsent(sig, () => node);
+        } else {
+          (collapsed[sig] ??= <String>[]).add(node.tag);
+        }
+      }
+
       final nodes = elements
           .expand((e) => parseXrayElement(
                 e,
@@ -447,8 +534,15 @@ List<NodeSpec> _parseXrayDocument(
                 synonyms: synonyms,
                 ownedBy: (sig) => identical(owner[sig], e),
                 dropped: dropped,
+                onCollapse: onCollapse,
               ))
           .toList();
+      // Узлы здесь несут только коды разбора: санитайзер идёт позже, в
+      // `_parseAllAnnotated`, — код встаёт в конец, как велит контракт §99.
+      collapsed.forEach((sig, names) {
+        final survivor = survivorOf[sig];
+        if (survivor != null) markDuplicatesCollapsed(survivor, names);
+      });
       // D-088 / §561 — отбраковка едет наружу ЦЕЛИКОМ: результат разбора контракта
       // различает «запись отвергли» и «тело не распознано». Прежний перенос
       // остатка на первый узел подписки (§404 P3) снят — чужая ошибка на

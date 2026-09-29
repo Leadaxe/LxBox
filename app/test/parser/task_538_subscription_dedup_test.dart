@@ -1,4 +1,5 @@
-/// §538 — повтор узла внутри одной подписки схлопывается по подписи §480.
+/// §538 — повтор узла внутри одной подписки схлопывается по подписи §480;
+/// §589 — выживший несёт код `duplicates_collapsed`.
 ///
 /// Живой вход — подписка D: один AWG-узел строкой `amneziawg://` и тем же
 /// узлом в сжатом контейнере `vpn://`. Значения ниже замаскированы: ключи —
@@ -9,9 +10,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
-import 'package:lxbox/services/contract/warning_codes.dart';
-import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
@@ -81,7 +81,15 @@ String _vpnLink(String name) {
 void main() {
   setUpAll(loadEngineSections);
 
-  test('`amneziawg://` и `vpn://` одного узла — один узел и `duplicate`', () {
+  RegistryWarning? collapsedOf(NodeSpec n) {
+    for (final w in n.warnings) {
+      if (w is RegistryWarning && w.code == 'duplicates_collapsed') return w;
+    }
+    return null;
+  }
+
+  // §589 — след схлопывания на выжившем узле, а не в `dropped[]`.
+  test('`amneziawg://` и `vpn://` одного узла — один узел, код на выжившем', () {
     const name = 'CH-example-awg3 AWG';
     final dropped = <NodeWarning>[];
     final nodes = parseAll(
@@ -90,22 +98,22 @@ void main() {
 
     expect(nodes, hasLength(1));
     expect(nodes.single.tag, name, reason: 'выживает первая запись');
-    final dupes = dropped.whereType<DuplicateNodeWarning>().toList();
-    expect(dupes, hasLength(1));
-    expect(warningCodeOf(dupes.single), 'duplicate');
-    expect(dupes.single.winner, isEmpty, reason: 'имена совпали');
+    expect(dropped, isEmpty, reason: 'схлопнутое не отброшено');
+    final w = collapsedOf(nodes.single)!;
+    expect(w.params, {'count': '1', 'names': name},
+        reason: 'имена совпали — называется выживший');
   });
 
-  test('имя дубликата другое — предупреждение называет выжившего', () {
+  test('имя дубликата другое — код называет схлопнутое имя', () {
     final dropped = <NodeWarning>[];
     final nodes = parseAll(
         decode('${_awgLink('first')}\n${_vpnLink('second')}'),
         dropped: dropped);
 
     expect(nodes.map((n) => n.tag), ['first']);
-    final dupe = dropped.whereType<DuplicateNodeWarning>().single;
-    expect(dupe.winner, 'first');
-    expect(dupe.messageWith(getLocalText), contains('first'));
+    expect(dropped, isEmpty);
+    expect(collapsedOf(nodes.single)!.params,
+        {'count': '1', 'names': 'second'});
   });
 
   test('разные ключи — два узла, дедупа нет', () {
@@ -116,6 +124,7 @@ void main() {
         dropped: dropped);
 
     expect(nodes, hasLength(2));
-    expect(dropped.whereType<DuplicateNodeWarning>(), isEmpty);
+    expect(dropped, isEmpty);
+    expect(nodes.map(collapsedOf), everyElement(isNull));
   });
 }

@@ -118,8 +118,6 @@ void main() {
         // §404 — импорт Xray JSON: недостижимый dialerProxy
         DialerProxyUnusableWarning() => 'dialer_proxy_unusable',
         GroupMemberMissingWarning() => 'group_member_missing',
-        // §538 — повтор узла в одной подписке, код per-app.
-        DuplicateNodeWarning() => 'duplicate',
         // §585 — узел незнакомого приложению типа, код per-app.
         UnknownNodeTypeWarning() => 'unknown_node_type',
         Awg3HeaderKeyInvalidWarning() => 'awg3_header_key_invalid',

@@ -100,6 +100,12 @@ class SubscriptionMeta extends StatelessWidget {
             const SizedBox(height: 4),
             _DroppedRow(entry: entry),
           ],
+          // §589 — повторы одного сервера схлопнуты в узлы: строка отдельно
+          // от «dropped» (ничего не отброшено), имена — на самих узлах.
+          if (entry.duplicatesMerged.merged > 0) ...[
+            const SizedBox(height: 4),
+            _MergedRow(merged: entry.duplicatesMerged),
+          ],
           // Traffic quota
           if (entry.totalBytes > 0) ...[
             const SizedBox(height: 8),
@@ -199,6 +205,36 @@ class _DroppedRow extends StatelessWidget {
             Icon(Icons.chevron_right, size: 16, color: color),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// §589 — строка сводки «M duplicates merged into K nodes». Справочная
+/// (info): какие имена слились в узел, видно на самом узле.
+class _MergedRow extends StatelessWidget {
+  const _MergedRow({required this.merged});
+
+  final ({int merged, int into}) merged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(Icons.merge_type, size: 14, color: color),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              getLocalText.plural("%1\$d duplicates merged into %2\$d nodes",
+                  merged.merged, merged.into),
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
       ),
     );
   }

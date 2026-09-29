@@ -64,12 +64,19 @@ const kXrayServiceProtocols = {'freedom', 'blackhole', 'dns', 'loopback'};
 /// [dropped] — §404 / D-085: причины отбраковки ЦЕЛЫХ узлов, которым не
 /// нашлось носителя внутри элемента. `parse_all` вешает их на первый узел
 /// подписки, чтобы недостижимый релей не превращался в тихую пропажу.
+/// [onCollapse] — §589: сервер записи по подписи дедупа. `kept: true` —
+/// узел выпущен этим элементом; `false` — запись схлопнута (сервер закреплён
+/// за другим элементом или уже выпущен этим). Члены балансировщика СВОЕГО
+/// элемента схлопнутыми не сообщаются: пул ссылается на сервер, а не
+/// называет его (контракт §99 п. 3).
 List<NodeSpec> parseXrayElement(
   Map<String, dynamic> element, {
   Set<String>? seen,
   Map<String, String>? synonyms,
   bool Function(String signature)? ownedBy,
   List<NodeWarning>? dropped,
+  void Function(String signature, NodeSpec node, {required bool kept})?
+      onCollapse,
 }) {
   final outbounds = element['outbounds'];
   if (outbounds is! List) return const [];
@@ -186,6 +193,10 @@ List<NodeSpec> parseXrayElement(
     if (t.isNotEmpty) tagUses[t] = (tagUses[t] ?? 0) + 1;
   }
 
+  // §589 — члены балансировщика элемента (тот же `selector`, что у
+  // [_xrayAutoSelect]): их выброс правилом владения не называет имён.
+  final poolMember = onCollapse == null ? null : _xrayPoolMemberTest(element);
+
   final result = <NodeSpec>[];
   // §565 — тег outbound'а элемента → тег выпущенного узла: тело группы
   // называет членов сразу при разборе.
@@ -293,11 +304,19 @@ List<NodeSpec> parseXrayElement(
       // §342 — чужая запись: право на неё получил другой элемент (тот, чьё имя
       // осмысленнее). Пропускаем ДО дедупа, чтобы `seen` этого прохода не
       // «застолбил» подпись за нами.
-      if (ownedBy != null && !ownedBy(signature)) continue;
+      final pooled = poolMember != null && poolMember(obTag);
+      if (ownedBy != null && !ownedBy(signature)) {
+        if (!pooled) onCollapse?.call(signature, node, kept: false);
+        continue;
+      }
       if (seen != null) {
-        if (seen.contains(signature)) continue;
+        if (seen.contains(signature)) {
+          if (!pooled) onCollapse?.call(signature, node, kept: false);
+          continue;
+        }
         seen.add(signature);
       }
+      onCollapse?.call(signature, node, kept: true);
 
       if (obTag.isNotEmpty) memberTagByObTag.putIfAbsent(obTag, () => node.tag);
       result.add(node..sourceExtended = extended == compact ? null : extended);
@@ -345,6 +364,23 @@ RegistryWarning _unreadEntry(
     params['scheme'] = proto;
   }
   return RegistryWarning(code: code, params: params, ownerTag: obTag);
+}
+
+/// §589 — «тег outbound'а — член балансировщика элемента»: `selector`
+/// первого балансировщика тем же правилом, что и состав группы
+/// ([_xrayAutoSelect]). `null` — балансировщика нет.
+bool Function(String obTag)? _xrayPoolMemberTest(
+    Map<String, dynamic> element) {
+  final routing = element['routing'];
+  final balancers = routing is Map ? routing['balancers'] : null;
+  if (balancers is! List || balancers.isEmpty) return null;
+  final b = balancers.first;
+  if (b is! Map) return null;
+  final rawSel = b['selector'];
+  final selector =
+      rawSel is List ? rawSel.map((e) => '$e').toList() : const <String>[];
+  final inc = tryCompileRegex(RuleMembers.fromXraySelector(selector).include);
+  return (tag) => tag.isNotEmpty && (inc == null || inc.hasMatch(tag));
 }
 
 /// §322 — `routing.balancers[0]` + `burstObservatory` → узел автовыбора.

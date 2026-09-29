@@ -2,8 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Implemented |
 | Дата старта | 2026-09-29 |
+| Дата завершения | 2026-09-29 |
+| Коммит | `feat(589): duplicates_collapsed на выжившем узле` (develop) |
 | Контракт | 1.1.102 (лаунчер 2c7af64a; `TASKS_LXBOX.md` §99; SPEC 154 лаунчера) |
 | Связанные spec'ы | tasks §342 (владение сервером в Xray-массиве) |
 
@@ -62,3 +64,47 @@ SPEC 112-B).
 - Юнит: пересчёт кодов по телу сохраняет `duplicates_collapsed`.
 - Вручную (эмулятор): подписка с повторами — у выжившего узла пометка со
   списком имён, в сводке строка про слияние, дубли не в «dropped».
+
+## Реализация
+
+- `lib/services/parser/parse_all.dart`: `_collapseDuplicates` (бывший
+  `_dropDuplicates`) копит имена схлопнутых записей по выжившему и ставит
+  код `markDuplicatesCollapsed`; форма `count`/`names` —
+  `duplicatesCollapsedWarning`. Позиция кода — конец кодов разбора: длина
+  списка кодов каждого узла снимается до прохода санитайзера по дословной
+  карте, код вставляется туда.
+- Xray-массив (§342) идёт своим путём: `parseXrayElement` сообщает
+  `onCollapse` о выпущенном и выброшенном сервере (правило владения и повтор
+  внутри элемента); члены балансировщика своего элемента (`selector` первого
+  балансировщика, то же правило, что у состава группы) не сообщаются.
+  `_parseXrayDocument` ставит код выжившему.
+- `DuplicateNodeWarning` и per-app код `duplicate` удалены; строки
+  «Duplicate entry…»/«Duplicate of %s» ушли из каталогов ru/zh.
+- Сохранение: предупреждения узла подписки в LxBox не хранятся — пересчёт
+  узла подписки есть разбор всего тела (регидрация кэша, обновление), и код
+  воспроизводится по построению. Штампы вердикта ядра
+  (`stampNodeWarnings`, `unstampCoreRejected`) трогают только свой код.
+  Повторная постановка заменяет прежний код.
+- UI: на узле — `ⓘ` в строке списка и карточка в Notifications по тексту
+  реестра (`title`: «Repeats of this server in the subscription: {count}»,
+  `text` с `{names}`); в сводке подписки — строка
+  «%1$d duplicates merged into %2$d nodes» (`SubscriptionEntry.duplicatesMerged`,
+  значок `merge_type`), «entries dropped» дублей больше не считает.
+
+## Проверка
+
+- `test/parser/task_589_duplicates_collapsed_test.dart` — форма
+  `count`/`names`, оба пути, сохранение, итог сводки, узлы с кодом по
+  эталонам корпуса (гейт `existsSync`).
+- `test/parser/task_538_subscription_dedup_test.dart` переведён на код.
+- Корпус `body/uri_list/duplicates_collapsed` — зелёный.
+  `body/xray/duplicates_collapsed_owner` — код стоит на нужных узлах, но
+  кейс красный на ТЕЛЕ группы «Авто», не на коде: (1) `leastLoad` без
+  `expected` LxBox сводит к `round_robin` с пулом (§322), лаунчер
+  стратегию не читает и даёт простой `urltest`; (2) состав группы, чьи
+  члены закреплены за другими элементами (§342), LxBox при разборе не
+  называет (`outbounds: []`), лаунчер резолвит их в теги выживших.
+  Расхождение §322/§565, а не §99, — вынесено владельцу.
+- Эталон публичного корпуса (`test/fixtures/public_subscriptions/expected.json`,
+  отдельный шаг `LX_CORPUS_PUBLIC=1`) держит `dropped.duplicate`; обновить
+  отдельным коммитом по регламенту корпуса.
