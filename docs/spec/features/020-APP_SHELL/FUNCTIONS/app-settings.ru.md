@@ -29,7 +29,7 @@
 | | Updates: автопроверка, Check now | эта ([update-check](update-check.ru.md)) |
 | | Feedback: автопинг после подключения · Haptic feedback | 009 · эта ([haptic](haptic-feedback.ru.md)) |
 | | Backup & restore | 017 |
-| Appearance | тема, Layout, Language | эта ([appearance](appearance.ru.md), [localization](localization.ru.md)) |
+| Appearance | тема, Layout, Language | эта ([appearance](appearance.ru.md)); механизм языка — [029-LOCALIZATION](../../029-LOCALIZATION/FUNCTIONS/language-selection.ru.md) |
 | Subscriptions | автообновление, идентичность запроса | 001 |
 | Diagnostics | System setup, журналы, Developer | 013 |
 | Automation | Intent API | 014 |

@@ -29,7 +29,7 @@ Tabs (centered, scrollable on a narrow screen):
 | | Updates: auto-check, Check now | this one ([update-check](update-check.md)) |
 | | Feedback: auto-ping after connecting · Haptic feedback | 009 · this one ([haptic](haptic-feedback.md)) |
 | | Backup & restore | 017 |
-| Appearance | theme, Layout, Language | this one ([appearance](appearance.md), [localization](localization.md)) |
+| Appearance | theme, Layout, Language | this one ([appearance](appearance.md)); the language mechanism — [029-LOCALIZATION](../../029-LOCALIZATION/FUNCTIONS/language-selection.md) |
 | Subscriptions | auto-update, request identity | 001 |
 | Diagnostics | System setup, logs, Developer | 013 |
 | Automation | Intent API | 014 |

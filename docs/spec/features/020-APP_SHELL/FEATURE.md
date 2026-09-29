@@ -4,16 +4,15 @@
 
 The LxBox app shell covers everything around the VPN tunnel: theme, interface
 language, navigation, first-launch prompts, vibration and update notices. The
-interface is available in English, Russian and Simplified Chinese and switches
-language without a restart, while logs and the Debug API stay in English.
-Neither the update check nor the author's support feed contacts GitHub until the
-user agrees on first launch.
+Language row lives here; the localization mechanism itself is a feature of its
+own (029). Neither the update check nor the author's support feed contacts
+GitHub until the user agrees on first launch.
 
 | Field | Value |
 |-------|-------|
 | Feature | 020-APP_SHELL |
 | Type | Product feature |
-| Absorbed | `§009F` `§022F` `§029F` `§034F` `§036F` `§105F` `§126F` `§279F` |
+| Absorbed | `§009F` `§022F` `§029F` `§034F` `§036F` `§105F` `§126F` |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
@@ -25,7 +24,7 @@ Domain settings (tunnel, subscriptions, diagnostics, automation) are not
 described here — the feature gives them a home (the App Settings screen, the
 side menu) and shared conventions.
 
-The feature protects four principles:
+The feature protects three principles:
 
 - **No consent — not a single "phone home" request.** The update check and the
   message feed go to the network only after an explicit "yes" on first launch
@@ -34,9 +33,6 @@ The feature protects four principles:
   launch, the support request — at most once per launch and only to someone who
   has been using the VPN for a long time; vibration — only on significant
   events; an accidental "back" does not throw the user out of the app.
-- **Language is for humans, English is for machines.** The interface, system
-  surfaces and template texts are translated; logs, the Debug API, automation
-  events and config values are always English.
 - **A setting applies immediately.** Shell toggles are saved at the moment of
   change and take effect without a restart; there is no "Save" button.
 
@@ -61,34 +57,12 @@ The feature protects four principles:
   units "enabled=false → no platform calls", "throttle blocks rapid duplicate
   fires", "toggling enabled mid-flight applies immediately". **Mutation:**
   throttling removed.
-- **P5. The language is chosen from System / English / Русский / 中文; an unknown
-  value is System.** System takes the device language, and if it is not
-  supported — English. **Witness:** units "set() with unknown value falls back to
-  system", "invalid stored value resolves to system". **Mutation:** an unknown
-  device language gives an empty locale.
-- **P6. Changing the language — without a restart; the first frame is already in
-  the right language.** **Witness:** units "a language change saves the choice,
-  warms up the template, swaps the dictionary and redraws", "a cold start warms
-  up the dictionary — the first frame is localized". **Mutation:** the
-  dictionary is loaded after the first frame.
-- **P7. Untranslated means English, not empty and not a format string.** No
-  dictionary, key or form — the English text is shown with the values
-  substituted; a missing argument is an empty spot, not `%s`. **Witness:** units
-  "missing key → key itself substituted", "missing arg → empty placeholder",
-  ".s never throws on plural-object value → key fallback". **Mutation:** a
-  missing argument prints `%s`.
-- **P8. Machine surfaces are English in any language.** **Witness:** unit
-  "renderWith(ru) turns Russian, renderEn() is unchanged". **Mutation:** the log
-  writes a message in the interface language.
-- **P9. The language from Android system settings and the in-app language do not
-  conflict.** A change in the app's system settings wins; a change in storage
-  (restoring a backup, Debug API) also wins if the system did not change.
-  **Witness:** reconciliation branch units "system Settings changed the language
-  → the system wins", "restore/Debug API changed storage → storage wins".
-  **Mutation:** a one-sided "the system is always right".
-- **P10. The language survives a backup.** **Witness:** unit "app_language
-  export → import round-trip preserves value". **Mutation:** the language key
-  dropped from the import allowlist.
+- **P5.** moved to [029-LOCALIZATION · P1](../029-LOCALIZATION/FEATURE.md#promises).
+- **P6.** moved to [029-LOCALIZATION · P2](../029-LOCALIZATION/FEATURE.md#promises).
+- **P7.** moved to [029-LOCALIZATION · P7](../029-LOCALIZATION/FEATURE.md#promises).
+- **P8.** moved to [029-LOCALIZATION · P11](../029-LOCALIZATION/FEATURE.md#promises).
+- **P9.** moved to [029-LOCALIZATION · P3](../029-LOCALIZATION/FEATURE.md#promises).
+- **P10.** moved to [029-LOCALIZATION · P4](../029-LOCALIZATION/FEATURE.md#promises).
 - **P11. First launch — questions one at a time and once each.** Notification
   permission → background activity → Quick Settings tile → update check; the
   next question appears after the previous one is answered; the answer is
@@ -160,7 +134,7 @@ The feature protects four principles:
 | Theme | App Settings → Appearance | System / Light / Dark | System | immediately |
 | Allow rotation | same place, Layout | on/off | off (portrait) | immediately |
 | Two columns on wide screens | same place, Layout | on/off | on | immediately |
-| Language | same place | System default / English / Русский / 中文（简体） | System default | immediately |
+| Language | same place | System default / English / Русский / 中文（简体） | System default | immediately; mechanism — [029-LOCALIZATION](../029-LOCALIZATION/FEATURE.md) |
 | Haptic feedback | App Settings → General → Feedback | on/off | on | immediately |
 | Check for updates on launch | App Settings → General → Updates | on/off | off until the first-launch question is answered | from the next launch |
 | Check now | same place and About | button | — | immediately |
@@ -176,25 +150,22 @@ Formats: the latest version manifest (`tag`, `name`, `html_url`,
 `since_version`, `skip`, `min_active_hours`, `min_session_minutes`,
 `read_delay_seconds`, `i18n.<language>.{title, message, links[]}`); links
 `lxbox://route:<screen>[/<tab>]`, `lxbox://add:<link>`,
-`lxbox://share:<text>`; translation dictionaries — English text → translation.
+`lxbox://share:<text>`.
 
 ## Inputs / Outputs
 
-**Inputs:** touches and "back"; the device language and theme; the app language
-from system settings (Android 13+); the install channel; GitHub responses about
+**Inputs:** touches and "back"; the device theme; the language chosen in
+029; the install channel; GitHub responses about
 the latest release and the message feed; tunnel uptime and the current session
 duration; tunnel events and subscription updates (for vibration).
 
-**Outputs:** interface theme and layout; the language of the interface, system
-notifications, the tile and shortcuts; vibration; first-launch questions; the
+**Outputs:** interface theme and layout; vibration; first-launch questions; the
 new version popup and the block in About; the full-screen feed message; the
 "new version available" automation event (if enabled in 014).
 
 ## Data flow
 
 ```
-language: setting | device language | system settings → reconciliation → dictionary
-      → interface · template · system surfaces; machine surfaces → English
 first launch: notifications → background activity → tile → update consent
 updates: [consent] 5 s after home → releases API ─ failure → own manifest
       → version cache → (next launch) popup Later / Ignore / tap → channel's store
@@ -224,15 +195,14 @@ tunnel and subscription events → toggle → throttling → vibration
   the Diagnostics tab — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md);
   the Subscriptions tab — [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md);
   usage region — [015-WARP](../015-WARP/FEATURE.md); backup —
-  017; settings sets — 018.
+  017; settings sets — 018; the localization mechanism —
+  [029-LOCALIZATION](../029-LOCALIZATION/FEATURE.md).
 - There is no in-app update installation: only a link.
 - The message feed cannot be turned off entirely; it can be snoozed or read.
 - Donations — About → "Support the project"; the addresses come as a separate
   list on an explicit action (public document `docs/DONATE.md`).
-- RTL languages are not supported.
 - Depends on OS capabilities: the vibration motor and the system "Touch
-  feedback"; choosing the app language in system settings (Android 13+);
-  requesting the tile through a system dialog (Android 13+); notification
+  feedback"; requesting the tile through a system dialog (Android 13+); notification
   permission (Android 13+); battery optimization exemption and third-party
   vendor restrictors; the predictive "back" gesture.
 
@@ -244,13 +214,17 @@ tunnel and subscription events → toggle → throttling → vibration
 | App settings | Groups the settings outside the core config on one screen and saves each at once. | P23 | [app-settings.md](FUNCTIONS/app-settings.md) |
 | Appearance | Sets the theme, rotation, two-column layout, pull-to-refresh and app icon. | P1–P3 | [appearance.md](FUNCTIONS/appearance.md) |
 | Haptic feedback | Vibrates on significant tunnel and subscription events. | P4 | [haptic-feedback.md](FUNCTIONS/haptic-feedback.md) |
-| Localization | Shows the app in English, Russian or Simplified Chinese and keeps machine surfaces in English. | P5–P10 | [localization.md](FUNCTIONS/localization.md) |
 | First launch | Asks the permission and consent questions one at a time, once each. | P11, P12 | [first-run.md](FUNCTIONS/first-run.md) |
 | Update check | Checks for a new release with consent, at most daily, and links to the install source. | P12–P17 | [update-check.md](FUNCTIONS/update-check.md) |
 | Support feed | Shows the author's messages to active VPN users: source, gates, buttons. | P12, P18–P21 | [support-feed.md](FUNCTIONS/support-feed.md) |
 
+Localization moved to [029-LOCALIZATION](../029-LOCALIZATION/FEATURE.md).
+
 ## Related features
 
+- [029-LOCALIZATION](../029-LOCALIZATION/FEATURE.md) — the localization
+  mechanism behind the Language row: dictionaries, switching on the fly,
+  English machine surfaces.
 - [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md) — tunnel settings, auto-start
   and modes live there; the VPN permission is requested on the first connection;
   tunnel events drive vibration and the support feed gates.
@@ -285,8 +259,6 @@ tunnel and subscription events → toggle → throttling → vibration
 - The anonymous GitHub API limit (60 requests per hour per address) is
   exhausted by the shared VPN exit address: without our own manifest the check
   would silently fail.
-- A new language is added with an interface dictionary, a template dictionary
-  and system surface strings; the CI translation checks are strict — an
-  untranslated or orphaned string breaks the build (procedure — `docs/l10n.md`).
-- A string rendered outside the localizer stays English in any language and is
-  not caught by the check if it reaches the text through a variable.
+- Theme option labels, the update check result lines in About and the "Add
+  tile" messages are rendered outside the localizer and stay English (audit
+  588; the mechanism — 029).
