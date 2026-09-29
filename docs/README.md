@@ -84,5 +84,4 @@ hand”. Both describe the same operations from opposite sides.
 |---|---|
 | [releases/](releases/) | Per-version release notes (EN + RU) |
 | [research/](research/) | Research (code audit, audience, 4pda feedback) |
-| [examples/](examples/) | Example configs (`minimal_local_test.json`) |
 | [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | A historical chronicle of development (up to v1.9.0) — no longer maintained |

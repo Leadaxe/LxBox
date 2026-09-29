@@ -1,6 +1,9 @@
 [English](switch-isolation.md) · [Русский](switch-isolation.ru.md)
 
-# Switch isolation
+# Switch isolation — no leftovers from the previous workspace
+
+After a workspace switch, pending operations of the previous set cannot write
+into the new one, and each set keeps its own Tailscale identities.
 
 | Field | Value |
 |-------|-------|

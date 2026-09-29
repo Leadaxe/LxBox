@@ -1,19 +1,27 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 018 — WORKSPACES — named settings sets
+# Workspaces — named VPN settings sets with one-tap switching
+
+LxBox Workspaces keep several named sets of VPN settings, such as "home", "work"
+and "experiment", and switch between them in one tap. A set holds everything the
+sing-box config is built from: subscriptions, Directions, routing rules, DNS,
+tunnel apps, VPN mode and language. On a switch the app saves the current set,
+rebuilds the config and brings the tunnel back up if it was running.
 
 | Field | Value |
 |-------|-------|
+| Feature | 018-WORKSPACES |
 | Type | Product feature |
 | Absorbed | `§417F` |
 | State | ✅ written from code, 2026-09-28 |
 
 ## Purpose
 
-Several worlds — "home", "work", "experiment" — with switching and no manual
-config surgery. A set (workspace) is a named copy of **the entire state the
-config is built from**: subscriptions and their bodies, Directions, rules,
-DNS, variables, tunnel apps, VPN mode, language, Debug API.
+The user keeps several worlds — "home", "work", "experiment" — and switches
+between them without editing the config by hand. A set (workspace) is a named
+copy of **the entire state the config is built from**: subscriptions and their
+bodies, Directions, rules, DNS, variables, tunnel apps, VPN mode, language,
+Debug API.
 
 The model is save slots. The **scene** is the app's working state; there is
 exactly one. A **slot** is a saved copy of the scene under a name. **Current**
@@ -29,61 +37,63 @@ the scene** — leftovers of the previous set do not write into the new one;
 ## Promises
 
 - **P1. Slot contents are fixed.** A slot contains the settings file, the
-  downloaded rule-sets and the subscription body cache; it does not contain
-  the built config, the core cache database, the theme, logs, crash reports or
-  service copies. **Witness:** unit "saveAs копирует все три позиции,
-  current = имя, дата записана". **Mutation:** the core config inside the slot
-  (the core would not see a config swapped on disk).
-- **P2. No use — no traces.** No directory — current is "Default", there are
-  no slots, the disk is not touched. **Witness:** unit "дефолт:
-  current=Default, слотов нет, диск не трогается". **Mutation:** the directory
-  is created at startup.
+  downloaded rule-sets and the subscription body cache; it does not contain the
+  built config, the core cache database, the theme, logs, crash reports or
+  service copies. **Witness:** unit "saveAs copies all three items, current =
+  name, date recorded". **Mutation:** the core config inside the slot (the core
+  would not see a config swapped on disk).
+- **P2. No use — no traces.** No directory — current is "Default", there are no
+  slots, the disk is not touched. **Witness:** unit "default: current=Default,
+  no slots, the disk is not touched". **Mutation:** the directory is created at
+  startup.
 - **P3. Loading saves the scene before replacing it.** The scene goes into the
   current slot ("Default" gets its copy on the first load), then the target
-  comes onto the scene whole. **Witness:** units "сцена уходит в current, цель
-  приходит на сцену, .bak снят", "первая загрузка без папки у current
-  создаёт «Default»". **Mutation:** loading without saving the current one.
+  comes onto the scene whole. **Witness:** units "the scene goes to current, the
+  target comes onto the scene, .bak removed", "the first load without a folder
+  for current creates “Default”". **Mutation:** loading without saving the
+  current one.
 - **P4. Loading the current slot does nothing** (the tunnel is not touched).
-  **Witness:** units "load current → alreadyCurrent: стоп не зовётся",
-  "load current → no-op, файлы не трогаются". **Mutation:** tunnel stop.
+  **Witness:** units "load current → alreadyCurrent: stop is not called", "load
+  current → no-op, files are not touched". **Mutation:** tunnel stop.
 - **P5. The tunnel survives a switch.** If it was up, it goes down, the config
   is rebuilt from the new set and the tunnel comes up again; if it was not up,
-  it is not started. **Witness:** units "load другого: стоп → файлы → … флаг
-  автозапуска один раз", "VPN был опущен → автозапуска нет". **Mutation:**
+  it is not started. **Witness:** units "load of another slot: stop → files → …
+  auto-start flag once", "VPN was down → no auto-start". **Mutation:**
   auto-start with the tunnel down.
 - **P6. After loading, the config comes from the new set.** **Witness:** units
-  "загрузка слота → configDirty → сборка из настроек нового слота", "init не
-  опускает флаг процесса при выровненном mtime". **Mutation:** the "config is
+  "slot load → configDirty → build from the new slot's settings", "init does not
+  clear the process flag when mtime is aligned". **Mutation:** the "config is
   stale" flag derived only from file modification times.
 - **P7. An interrupted load is completed.** Process killed in the middle of
-  copying → on the next start, before any settings read, the steps are
-  repeated; if the target has disappeared, the journal is cleared and the
-  scene stays as it is. **Witness:** units "pending load → повтор шагов",
-  "pending с исчезнувшей целью → журнал снят", contract "recover before any
-  settings read". **Mutation:** completion after the first settings read.
+  copying → on the next start, before any settings read, the steps are repeated;
+  if the target has disappeared, the journal is cleared and the scene stays as
+  it is. **Witness:** units "pending load → steps repeated", "pending with a
+  vanished target → journal cleared", contract "recover before any settings
+  read". **Mutation:** completion after the first settings read.
 - **P8. A leftover of the previous set does not write into the new one.**
-  **Witness:** units "РЕГРЕСС (а)…(в)", "контроллер ТЕКУЩЕГО поколения пишет как
-  обычно". **Mutation:** remove the write barrier — one set's subscriptions end
-  up in all of them.
-- **P9. A slot name is a safe folder name.** **Witness:** units "правила
-  имени = имени папки", "saveAs с плохим именем → invalidName, ничего не
-  создано". **Mutation:** the name `..` passes.
+  **Witness:** units "REGRESSION (a)…(c)", "a controller of the CURRENT
+  generation writes as usual". **Mutation:** remove the write barrier — one
+  set's subscriptions end up in all of them.
+- **P9. A slot name is a safe folder name.** **Witness:** units "name rules =
+  folder name rules", "saveAs with a bad name → invalidName, nothing created".
+  **Mutation:** the name `..` passes.
 - **P10. The current slot cannot be deleted; a name cannot be taken twice.**
-  **Witness:** units "delete current → isCurrent…", "rename в занятое имя →
-  exists", "rename current переименовывает папку и current". **Mutation:**
+  **Witness:** units "delete current → isCurrent…", "rename to a taken name →
+  exists", "rename current renames the folder and current". **Mutation:**
   deleting the current slot.
 - **P11. "Save as" into an existing name replaces the slot entirely** — after
-  the "Overwrite" confirmation. **Witness:** unit "повторный saveAs в то же имя
-  перезаписывает слот целиком"; the dialog — manual check. **Mutation:** merge.
+  the "Overwrite" confirmation. **Witness:** unit "a repeated saveAs into the
+  same name overwrites the slot entirely"; the dialog — manual check.
+  **Mutation:** merge.
 - **P12. Each slot has its own Tailscale identities.** **Witness:** units "Save
-  as → сборка другого слота → Load → Rename → Delete", "без индекса Tailscale
-  операции Workspaces файлов не создают". **Mutation:** state directories are
-  copied into the slot.
-- **P13. A slot in the old storage form loads.** **Witness:** units "загрузка
-  слота 2.23.2: сцена мигрирует, исходник слота — копией…", "слот текущей
-  формы копии не получает". **Mutation:** the original is lost.
-- **P14. A corrupt directory = a missing one.** **Witness:** unit "битый
-  справочник читается как отсутствующий". **Mutation:** startup crash.
+  as → build of another slot → Load → Rename → Delete", "without a Tailscale
+  index Workspaces operations create no files". **Mutation:** state directories
+  are copied into the slot.
+- **P13. A slot in the old storage form loads.** **Witness:** units "loading a
+  2.23.2 slot: the scene migrates, the slot original is kept as a copy…", "a
+  slot in the current form gets no copy". **Mutation:** the original is lost.
+- **P14. A corrupt directory = a missing one.** **Witness:** unit "a corrupt
+  directory is read as missing". **Mutation:** startup crash.
 
 ## Controlled parameters
 
@@ -146,9 +156,9 @@ Save as Y: flush to disk → scene → slot Y → current = Y (tunnel not touche
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Saving and loading a set | Save as, Load, slot contents, tunnel, completion journal | P1–P7, P11, P13, P14 | [save-and-load.md](FUNCTIONS/save-and-load.md) |
-| Slot management | List, names, renaming, deletion | P9, P10 | [slot-management.md](FUNCTIONS/slot-management.md) |
-| Switch isolation | Leftovers of the previous set do not write into the new one; Tailscale identities per slot | P8, P12 | [switch-isolation.md](FUNCTIONS/switch-isolation.md) |
+| Saving and loading a set | Saves the state under a name and loads another set with the tunnel kept in place: Save as, Load, slot contents, completion journal. | P1–P7, P11, P13, P14 | [save-and-load.md](FUNCTIONS/save-and-load.md) |
+| Slot management | Lists saved sets and lets the user rename or delete them under safe folder-name rules. | P9, P10 | [slot-management.md](FUNCTIONS/slot-management.md) |
+| Switch isolation | Keeps leftovers of the previous set from writing into the new one and gives each slot its own Tailscale identities. | P8, P12 | [switch-isolation.md](FUNCTIONS/switch-isolation.md) |
 
 ## Related features
 

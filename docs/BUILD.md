@@ -169,9 +169,11 @@ Rejected alternatives for delivering the core to CI:
 
 - ⚠ Updating the core means raising the pin in `app/android/libbox.version`, rebuilding locally (fetch re-downloads the AAR on its own), running the smoke tests (Start/Stop, vless + wg + awg regression) and updating the [“Versions”](#versions) section.
 
-## A minimal config for testing on a phone
+## Testing on a phone
 
-The file **[`docs/examples/minimal_local_test.json`](examples/minimal_local_test.json)** is valid sing-box JSON: just **tun** plus **direct/block** in the selector, with no paid or third-party proxy. It is enough to confirm that **Read → Start** brings the tunnel up and that the **proxy** group with the **direct** / **block** nodes appears in the UI. The internet keeps working as usual through direct — this is not a bypass.
+Smoke test after a core bump: **Start → Stop**, then a VLESS, a WireGuard and an
+AmneziaWG node. The config is built from the template; there is no hand-written
+test config to keep in sync.
 
 ⚠ The core is controlled through the **libbox CommandClient**, not Clash HTTP (the Clash API was removed in §122). An `experimental.clash_api` block in a config is a **fatal startup failure** on our core (built without `with_clash_api`): `clash api is not included in this build`. Do not put it in a config you intend to test.
 

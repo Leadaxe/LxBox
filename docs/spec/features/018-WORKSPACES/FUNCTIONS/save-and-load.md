@@ -1,6 +1,10 @@
 [English](save-and-load.md) · [Русский](save-and-load.ru.md)
 
-# Saving and loading a set
+# Saving and loading a set — Save as and Load with the tunnel kept in place
+
+LxBox stores the current state under a name with "Save as…"; loading another
+slot first saves the current one, then rebuilds the config and returns the
+tunnel to its previous state.
 
 | Field | Value |
 |-------|-------|

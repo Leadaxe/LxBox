@@ -1,6 +1,9 @@
 [English](slot-management.md) · [Русский](slot-management.ru.md)
 
-# Slot management
+# Slot management — listing, renaming and deleting workspaces
+
+The workspace popup on the home screen lists saved sets with their save date and
+size and lets the user rename or delete them.
 
 | Field | Value |
 |-------|-------|
