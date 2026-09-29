@@ -1,9 +1,12 @@
 [English](node-ping.md) · [Русский](node-ping.ru.md)
 
-# Node ping
+# Node ping — measuring VPN server latency in the running core
+
+Ping measures the latency of one node or of every visible node through the
+running sing-box core, without switching the active node.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [009-NODE_HEALTH](../FEATURE.md) |
 | Promises | P1, P2, P3, P4, P6 |
 | State | ✅ written from code, 2026-09-28 |
@@ -73,9 +76,9 @@ URLTest groups ([urltest-group](urltest-group.md)); recalculation of the
 
 ## Boundaries
 
-- Sort by ping and "Re-sort on manual ping" — 007-NODE_LIST.
+- Sort by ping and "Re-sort on manual ping" — [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
 - The ⚠ warning on a dead node that others depend on —
-  006-DETOUR_AND_BALANCE.
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - Ping measures the node by tag in the live core; the node's detour and chain
   enter the measurement as part of its path.
 

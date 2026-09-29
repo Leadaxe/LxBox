@@ -1,9 +1,13 @@
 [English](urltest-group.md) · [Русский](urltest-group.ru.md)
 
-# URLTest group
+# URLTest group — how the core's auto-select group measures and picks a node
+
+An auto-select `urltest` group measures its members on a schedule and
+switches to the best one; the app sets its parameters and can force a
+re-test.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [009-NODE_HEALTH](../FEATURE.md) |
 | Promises | P6, P7, P8 |
 | State | ✅ written from code, 2026-09-28 |
@@ -83,9 +87,9 @@ stream.
 ## Boundaries
 
 - Group composition, rollups, Direction twins and pool view —
-  006-DETOUR_AND_BALANCE.
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - Group latency numbers and the current selection in real time —
-  012-LIVE_STATE.
+  [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
 - Passive health check lowers the probe frequency at the cost of fresher
   numbers; the logic itself lives in the core.
 

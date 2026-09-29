@@ -1,6 +1,9 @@
 [English](name-is-tag.md) · [Русский](name-is-tag.ru.md)
 
-# The name is the tag
+# The name is the tag — one name for a custom server, kept in sync everywhere
+
+A custom server has a single name, its node tag: it gets a default and an
+emoji on creation, and a rename rewrites every reference to the node.
 
 | Field | Value |
 |------|----------|
@@ -21,9 +24,9 @@ changes.
 | Where the tag comes from | Rule |
 |---|---|
 | wizard form | the Tag field; empty → `local-socks5-out` / `local-http-out` / `tailscale` |
-| link | the `#…` fragment; parsing — 002 |
+| link | the `#…` fragment; parsing — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md) |
 | sing-box JSON | the `tag` field |
-| WireGuard `.conf` from a file | the file name without the extension, if the INI has no name of its own (002) |
+| WireGuard `.conf` from a file | the file name without the extension, if the INI has no name of its own ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)) |
 | the node screen's Tag field | on Save it is written into the source according to its kind |
 
 Auto emoji on record creation, if the tag has no emoji:

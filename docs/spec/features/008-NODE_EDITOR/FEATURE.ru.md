@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 008 — NODE_EDITOR — свои узлы, настройки узла, мастер добавления
+# Редактор узлов — добавление и правка своих VPN-серверов: SOCKS5, HTTP, Tailscale, ссылки и JSON
+
+LxBox добавляет VPN-серверы, которых нет ни в одной подписке (SOCKS5, HTTP,
+Tailscale, ссылка, WireGuard INI или sing-box JSON), и позволяет потом их
+править. Узел хранится тем текстом, который вы ввели, поэтому написанное
+вручную sing-box-тело доходит до ядра без изменений, пройдя проверку ядром.
+Узлы подписок показываются только для чтения; меняются они лишь правилами
+импорта подписки.
 
 | Поле | Значение |
 |------|----------|
+| Фича | 008-NODE_EDITOR |
 | Тип | Продуктовая фича |
 | Поглотила | `§017F` `§074F` `§554F` |
 | Состояние | ✅ написана по коду, 2026-09-28 |
@@ -74,12 +82,14 @@ detour и цепочки — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/
   «голое тело → outbounds без detour», «wireguard → endpoints»; отказ ядра —
   ручная проверка: вписать в тело незнакомый ядру ключ `"foo": 1`, Save →
   «The core rejected the node: …», источник прежний. Мутация: писать до ответа ядра.
-- **P8. Своё JSON-тело уходит в конфиг дословно.** Ключи вне модели живы;
-  ключ `detour` тела снимается, detour решает запись (006). Узел подписки и
-  ссылка — через модель. Свидетель: юниты «одиночный сервер из JSON: тело
-  дословно, ключи вне модели живы», «JSON-источник → объект без detour»,
-  «личный detour члена применяется поверх дословного тела», «контейнер: узел
-  подписки идёт через модель». Мутация: эмитить модель для всех.
+- **P8. Своё JSON-тело уходит в конфиг дословно.** Ключи вне модели живы; ключ
+  `detour` тела снимается, detour решает запись
+  ([006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md)). Узел
+  подписки и ссылка — через модель. Свидетель: юниты «одиночный сервер из
+  JSON: тело дословно, ключи вне модели живы», «JSON-источник → объект без
+  detour», «личный detour члена применяется поверх дословного тела»,
+  «контейнер: узел подписки идёт через модель». Мутация: эмитить модель для
+  всех.
 - **P9. Правка тела снимает вердикт ядра.** Узел, выключенный за отказ ядра,
   после изменения тела включается обратно; пересохранение без изменения
   вердикт держит; выключенный человеком узел правкой не оживает. Свидетель:
@@ -126,7 +136,7 @@ detour и цепочки — [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/
 | Tag · Auth key · Control URL · Hostname · Ephemeral · Accept routes · Exit node | Мастер → Tailscale | строки, тумблеры | `tailscale` · обязателен · пусто · `LxBox-<модель>` · выкл · выкл · пусто |
 | Paste URI / Paste JSON | Мастер | текст | — |
 | Tag | Узел → Settings | строка + палитра из 14 эмодзи | тег узла |
-| Detour server | Узел → Settings | см. 006 | None (direct) |
+| Detour server | Узел → Settings | см. [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md) | None (direct) |
 | Skip presets | Узел → Settings; виден, если в шаблоне есть пресет `for_each` под тип узла | вкл/выкл | выкл |
 | Source | Узел → Source | текст источника | как сохранён |
 | Exit node | Узел Tailscale → Network → Save choice | узел tailnet / None | из тела |
@@ -179,30 +189,34 @@ kept.», «Comments were removed.», «The core rejected the node: …».
 
 ## Границы
 
-- Разбор ссылок, форм JSON, INI и `vpn://` — 002-NODE_IMPORT; добавление по
-  ссылке, QR, файлу, публичные тест-серверы — функция «Добавление источника»
-  в 001-SUBSCRIPTIONS.
-- Выбор detour, политика папки, цепочки — 006; здесь только место на экране.
-- Папки, перенос в папку, порядок, главный экран — 007.
+- Разбор ссылок, форм JSON, INI и `vpn://` —
+  [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.ru.md); добавление по ссылке,
+  QR, файлу, публичные тест-серверы — функция «Добавление источника» в
+  [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md).
+- Выбор detour, политика папки, цепочки —
+  [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.ru.md); здесь
+  только место на экране.
+- Папки, перенос в папку, порядок, главный экран — [007-NODE_LIST](../007-NODE_LIST/FEATURE.ru.md).
 - Диагностика узла и уведомления — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.ru.md);
   Cloudflare WARP — [015-WARP](../015-WARP/FEATURE.ru.md); пресет Tailscale —
   [004-ROUTING](../004-ROUTING/FEATURE.ru.md).
 - Не делает: переопределения (overrides) узла подписки, дублирование узла,
   форму по схеме протокола, отдельную форму WireGuard/AmneziaWG, форму TLS.
-- Камера и выбор файла — зависят от возможностей ОС (001).
+- Камера и выбор файла — зависят от возможностей ОС
+  ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md)).
 
 ## Функции
 
 | Функция | Что делает | Обещания | Файл |
 |---|---|---|---|
-| Мастер добавления сервера | SOCKS5, HTTP, Paste URI, Paste JSON, Tailscale | P1 P2 P13 P15 | [add-server-wizard.md](FUNCTIONS/add-server-wizard.ru.md) |
-| Настройки узла | Вкладки, тег с эмодзи, detour, Skip presets | P3 P4 | [node-settings.md](FUNCTIONS/node-settings.ru.md) |
-| Правка источника | Save по виду текста, только тело, проверка ядром, Edit JSON | P5 P6 P7 P8 P9 P10 P12 | [source-editing.md](FUNCTIONS/source-editing.ru.md) |
-| Имя — это тег | Заголовок = тег, дефолты, эмодзи, коллизии, переименование | P2 P3 P4 P11 | [name-is-tag.md](FUNCTIONS/name-is-tag.ru.md) |
-| JSON и схема протокола | Что есть от редактора по схеме, TLS/SNI, ловушка «замены tls» | P6 P8 | [json-and-schema.md](FUNCTIONS/json-and-schema.ru.md) |
-| Правка WireGuard / AmneziaWG | INI как источник, поля AWG только текстом | P9 | [wireguard-awg-editing.md](FUNCTIONS/wireguard-awg-editing.ru.md) |
-| Узел подписки | Только осмотр; нет overrides; что переживает обновление | P14 | [subscription-node.md](FUNCTIONS/subscription-node.ru.md) |
-| Удаление и дублирование | Удаление своего сервера, судьба ссылок; дублирования нет | P11 | [delete-and-duplicate.md](FUNCTIONS/delete-and-duplicate.ru.md) |
+| Мастер добавления сервера | Создаёт свой узел SOCKS5, HTTP или Tailscale из формы либо любой узел из вставленной ссылки или sing-box JSON. | P1 P2 P13 P15 | [add-server-wizard.ru.md](FUNCTIONS/add-server-wizard.ru.md) |
+| Настройки узла | Показывает вкладки своего узла и позволяет сменить тег с эмодзи, detour-сервер и переключатель Skip presets. | P3 P4 | [node-settings.ru.md](FUNCTIONS/node-settings.ru.md) |
+| Правка источника | Сохраняет источник по его виду (ссылка, INI или JSON), оставляет только тело узла, проверяет JSON ядром и по запросу превращает ссылку в JSON. | P5 P6 P7 P8 P9 P10 P12 | [source-editing.ru.md](FUNCTIONS/source-editing.ru.md) |
+| Имя равно тегу | Делает тег узла единственным именем своего сервера: умолчания, автоматический эмодзи, суффиксы при коллизии и перезапись ссылок при переименовании. | P2 P3 P4 P11 | [name-is-tag.ru.md](FUNCTIONS/name-is-tag.ru.md) |
+| JSON и схема протокола | Показывает sing-box JSON узла с подсветкой, сохраняет неизвестные приложению поля и фиксирует, чего не хватает редактору по схеме, включая ловушку «замены всего `tls`». | P6 P8 | [json-and-schema.ru.md](FUNCTIONS/json-and-schema.ru.md) |
+| Правка WireGuard / AmneziaWG | Правит узлы WireGuard и AmneziaWG через их источник (INI, ссылка или JSON), поля обфускации AWG — простым текстом. | P9 | [wireguard-awg-editing.ru.md](FUNCTIONS/wireguard-awg-editing.ru.md) |
+| Узел подписки | Показывает узел подписки только для чтения, без индивидуальных overrides, и перечисляет, что переживает обновление подписки. | P14 | [subscription-node.ru.md](FUNCTIONS/subscription-node.ru.md) |
+| Удаление и дублирование узла | Удаляет свой сервер, очищает ссылки на него из detour, групп и цепочек и считает затронутых; дублирования нет. | P11 | [delete-and-duplicate.ru.md](FUNCTIONS/delete-and-duplicate.ru.md) |
 
 ## Связанные фичи
 
@@ -234,5 +248,6 @@ kept.», «Comments were removed.», «The core rejected the node: …».
   гейты; если мост к ядру недоступен, сохранение не блокируется.
 - **SNI HTTP-прокси = Host.** HTTPS-переключатель кладёт в `tls.server_name`
   значение Host; тонкая настройка TLS — только текстом тела.
-- **Узел подписки правится только правилами импорта** (001): правка
-  поштучно была бы стёрта следующим обновлением — поэтому её нет.
+- **Узел подписки правится только правилами импорта**
+  ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md)): правка поштучно
+  была бы стёрта следующим обновлением — поэтому её нет.

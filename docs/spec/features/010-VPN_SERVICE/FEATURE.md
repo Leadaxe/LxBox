@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 010 — VPN_SERVICE — the tunnel as behaviour
+# VPN service — starting, stopping and keeping the Android VPN tunnel alive
+
+LxBox runs the sing-box core as an Android VPN service and shows "Connected"
+or "Stopped" only after the core has confirmed the transition. The feature
+covers the VPN and local proxy modes, autostart after boot, recovery after
+process death or a core crash, reaction to Wi-Fi and mobile network changes,
+coexistence with another VPN app, and battery and memory savings for
+WireGuard and AmneziaWG nodes.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
+| Feature | 010-VPN_SERVICE |
 | Type | Product feature |
 | Absorbed | `§012F` `§042F` `§119F` `§124F` `§128F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -218,13 +226,15 @@ gesture / OS event
 
 ## Boundaries
 
-- Live status, speed, connections, connection time — 012-LIVE_STATE.
-- Which apps go through the tunnel — 011-SPLIT_TUNNELING.
-- Quick settings tile, shortcuts, Intent API, automation apps — 014-AUTOMATION.
+- Live status, speed, connections, connection time — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
+- Which apps go through the tunnel — [011-SPLIT_TUNNELING](../011-SPLIT_TUNNELING/FEATURE.md).
+- Quick settings tile, shortcuts, Intent API, automation apps —
+  [014-AUTOMATION](../014-AUTOMATION/FEATURE.md).
 - Auto-applying settings changes to a live tunnel and the "restart needed"
-  banner — 003-CONFIG_BUILD; tunnel interface parameters (address, MTU,
-  stack, IPv6) — there as well, as template variables.
-- Logs, Debug API, the core crash report — 013-DIAGNOSTICS.
+  banner — [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md); tunnel
+  interface parameters (address, MTU, stack, IPv6) — there as well, as
+  template variables.
+- Logs, Debug API, the core crash report — [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.md).
 - An active health watchdog with probes and escalation (§042F, §088) — not
   implemented on purpose (battery).
 - Depends on OS capabilities: autostart after boot, surviving in the
@@ -238,14 +248,14 @@ gesture / OS event
 
 | Function | What it does | Promises | File |
 |----------|--------------|----------|------|
-| Tunnel control | Start, stop, core reload, reconnect, transitional-phase deadlines, service notification | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
-| Operating modes | VPN / Proxy / VPN+Proxy, local port, authentication, tunnel bypass | P5, P6 | [operating-modes.md](FUNCTIONS/operating-modes.md) |
-| Coexisting with another VPN | Question before takeover, recognizing slot loss | P7–P9 | [foreign-vpn.md](FUNCTIONS/foreign-vpn.md) |
-| Autostart and exit | Coming up after boot, behaviour when the app is closed | P10, P11 | [autostart-and-exit.md](FUNCTIONS/autostart-and-exit.md) |
-| Recovery | Coming up after process death, healing after a core crash, recognizing a silent core | P12–P14 | [recovery.md](FUNCTIONS/recovery.md) |
-| Reacting to network and node changes | Reset on network change, network loss, rebind after screen sleep, breaking on node switch | P15, P19 | [network-changes.md](FUNCTIONS/network-changes.md) |
-| Tunnel sleep | Pausing the tunnel in the background by mode | P16 | [tunnel-sleep.md](FUNCTIONS/tunnel-sleep.md) |
-| Core resources | Suspending idle WG/AWG, lazy build, memory limit | P17, P18 | [core-resources.md](FUNCTIONS/core-resources.md) |
+| Tunnel control | Starts, stops, reloads and reconnects the tunnel from the app and the notification, with a deadline for every transitional phase. | P1–P4, P20 | [tunnel-control.md](FUNCTIONS/tunnel-control.md) |
+| Operating modes | Chooses the VPN, Proxy or VPN+Proxy mode, configures the local proxy port and its authentication, and decides whether apps may bypass the tunnel. | P5, P6 | [operating-modes.md](FUNCTIONS/operating-modes.md) |
+| Coexisting with another VPN | Asks before taking the system VPN slot from another VPN and recognizes when another VPN has taken it. | P7–P9 | [foreign-vpn.md](FUNCTIONS/foreign-vpn.md) |
+| Autostart and exiting the app | Starts the tunnel after the device boots and defines whether it survives closing the app. | P10, P11 | [autostart-and-exit.md](FUNCTIONS/autostart-and-exit.md) |
+| Tunnel recovery | Brings the tunnel back after process death, clears caches after a core crash and detects a core that has stopped responding. | P12–P14 | [recovery.md](FUNCTIONS/recovery.md) |
+| Reacting to network and node changes | Resets core connections on a real network change, handles network loss, rebinds WireGuard after screen sleep and optionally breaks connections on a node switch. | P15, P19 | [network-changes.md](FUNCTIONS/network-changes.md) |
+| Tunnel sleep (background mode) | Pauses the tunnel in the background according to the chosen mode and wakes it up again; it is off by default. | P16 | [tunnel-sleep.md](FUNCTIONS/tunnel-sleep.md) |
+| Core resources | Suspends idle WireGuard/AmneziaWG tunnels, builds them lazily with a limit on parallel builds and sets the core's memory limit. | P17, P18 | [core-resources.md](FUNCTIONS/core-resources.md) |
 
 ## Related features
 

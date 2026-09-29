@@ -1,9 +1,12 @@
 [English](ping-settings.md) · [Русский](ping-settings.ru.md)
 
-# Ping settings
+# Ping settings — test URL and timeout, global or per Direction
+
+The ping settings choose the URL and timeout used to measure nodes, either
+shared by all Directions or overridden for one Direction.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [009-NODE_HEALTH](../FEATURE.md) |
 | Promises | P5 |
 | State | ✅ written from code, 2026-09-28 |
@@ -62,7 +65,7 @@ the global values.
 - The test address of a core URLTest group (the group's `url`) is a separate
   group setting, see [urltest-group](urltest-group.md); ping settings do not
   affect the group test.
-- Export and import — 017-BACKUP_AND_STORAGE.
+- Export and import — [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md).
 
 ## Revisions
 

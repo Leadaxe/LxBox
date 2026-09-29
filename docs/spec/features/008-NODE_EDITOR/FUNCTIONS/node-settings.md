@@ -1,6 +1,9 @@
 [English](node-settings.md) · [Русский](node-settings.ru.md)
 
-# Node settings
+# Node settings — tag, detour and presets of a custom node
+
+The node screen shows a custom server's protocol and address and lets you
+change its tag, detour server, preset participation and source.
 
 | Field | Value |
 |------|----------|
@@ -25,7 +28,7 @@ while typing.
 | Source | the source text, editable; a caption about the source kind |
 | JSON | the body the core will receive, read-only, highlighted; Copy JSON; Edit JSON |
 | Network | only for a Tailscale node — tailnet devices, Exit node choice |
-| Diagnostics | node diagnostics and notifications (009); a mark on the tab label when there are warnings |
+| Diagnostics | node diagnostics and notifications ([009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md)); a mark on the tab label when there are warnings |
 
 - **Protocol**: the node's protocol; for AmneziaWG — "AmneziaWG (wireguard)".
 - **Server**: `host:port`; for Tailscale — "No address (Tailscale)", for an
@@ -66,9 +69,10 @@ while typing.
 - A subscription node opens not this screen but a read-only inspection —
   [subscription-node.md](subscription-node.md).
 - The node's "View details" screen in the built config (chain, dependents) —
-  007/006.
+  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md)/[006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - The Diagnostics tab — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
-- Renaming, deleting, moving the record to a folder — 007 and
+- Renaming, deleting, moving the record to a folder —
+  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md) and
   [delete-and-duplicate.md](delete-and-duplicate.md).
 
 ## Revisions

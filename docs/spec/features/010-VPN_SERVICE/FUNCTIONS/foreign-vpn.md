@@ -1,9 +1,12 @@
 [English](foreign-vpn.md) · [Русский](foreign-vpn.ru.md)
 
-# Coexisting with another VPN
+# Coexisting with another VPN — sharing the single system VPN slot
+
+The device has one active VPN at a time, so L×Box asks before replacing
+another VPN and reports when another VPN has taken its place.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P7, P8, P9 |
 | State | ✅ written from code, 2026-09-28 |
@@ -11,7 +14,7 @@
 ## What it does
 
 There is one system VPN slot on the device. The function keeps L×Box from
-silently displacing another VPN on start and honestly reports when another VPN
+silently displacing another VPN on start and reports when another VPN
 has displaced L×Box.
 
 ## Parameters

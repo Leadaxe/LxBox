@@ -1,6 +1,9 @@
 [English](source-editing.md) · [Русский](source-editing.ru.md)
 
-# Source editing
+# Source editing — changing the link, WireGuard INI or sing-box JSON behind a node
+
+A custom node is edited through its source text, and what you save is
+exactly what reaches the core; a JSON body is checked by the core first.
 
 | Field | Value |
 |------|----------|
@@ -10,7 +13,7 @@
 
 ## What it does
 
-Lets the user change the very text a custom node is derived from — a link, a
+Lets the user change the text a custom node is derived from — a link, a
 WireGuard INI or a sing-box body — and save it so that exactly what was
 written goes into the config. The node's truth is the source; the body the
 core sees is derived from it and is not stored.

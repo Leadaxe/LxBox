@@ -82,6 +82,13 @@ on a malformed construct.
 - There is no user template: the template comes only with an app
   update.
 
+## Documentation
+
+The full schema of `wizard_template.json` — every section, preset, variable
+and DNS catalogue entry — is [`docs/TEMPLATE.md`](../../../../TEMPLATE.md).
+The language the template is written in is described in
+[Template language](template-language.md).
+
 ## Revisions
 
 | # | Revision | Status | Summary |

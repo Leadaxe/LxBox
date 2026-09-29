@@ -1,6 +1,9 @@
 [English](empty-states.md) · [Русский](empty-states.ru.md)
 
-# Пустые состояния главного экрана
+# Пустые состояния главного экрана — следующий шаг вместо пустого списка
+
+Когда показывать нечего, главный экран предлагает следующий шаг: добавить
+сервер, подключить VPN или выбрать другое Направление.
 
 | Поле | Значение |
 |------|----------|
@@ -52,8 +55,11 @@
 ## Границы
 
 - Экран источников и добавление — [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FUNCTIONS/add-source.ru.md).
-- Восстановление из бэкапа — 017; первый запуск и мастер — 020.
-- Плашки ошибок старта и «Config changed — restart VPN» — 010/003.
+- Восстановление из бэкапа —
+  [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.ru.md); первый
+  запуск и мастер — [020-APP_SHELL](../../020-APP_SHELL/FEATURE.ru.md).
+- Плашки ошибок старта и «Config changed — restart VPN» —
+  [010-VPN_SERVICE](../../010-VPN_SERVICE/FEATURE.ru.md)/[003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.ru.md).
 
 ## Ревизии
 

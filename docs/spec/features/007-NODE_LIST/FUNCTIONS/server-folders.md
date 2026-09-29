@@ -1,6 +1,10 @@
 [English](server-folders.md) · [Русский](server-folders.ru.md)
 
-# Server folders and the single source list
+# Server folders and the single source list — grouping standalone servers
+
+Folders gather standalone servers (VLESS links, WireGuard and AmneziaWG
+configs) under one name, switch and tag prefix, and share one ordered list
+with subscriptions and chains.
 
 | Field | Value |
 |------|----------|
@@ -73,8 +77,11 @@ the folder record in the single source list.
 
 ## Boundaries
 
-- Subscriptions and their update, adding a source — 001.
-- Editing a member's node — 008; chains and detour policy — 006.
+- Subscriptions and their update, adding a source —
+  [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md).
+- Editing a member's node —
+  [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md); chains and detour
+  policy — [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - Folding a folder into a group — [genus and fold](selector-genus-and-fold.md).
 - Chains are not a filter source on the main screen.
 

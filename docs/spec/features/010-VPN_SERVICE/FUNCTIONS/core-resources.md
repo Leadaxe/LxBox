@@ -1,9 +1,12 @@
 [English](core-resources.md) · [Русский](core-resources.ru.md)
 
-# Core resources: WireGuard tunnel sleep and memory limit
+# Core resources — sleeping idle WireGuard tunnels and limiting core memory
+
+With many WireGuard and AmneziaWG nodes, idle tunnels are suspended and
+built only on first use, and the core gets a memory ceiling.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P17, P18 |
 | State | ✅ written from code, 2026-09-28 |
@@ -62,8 +65,9 @@ core parameters.
 ## Boundaries
 
 - Disabling/enabling an individual WG/AWG node on the fly and its state
-  (sleeping/built) — 012-LIVE_STATE / 008-NODE_EDITOR.
-- Passive health check and URLTest intervals — 009-NODE_HEALTH.
+  (sleeping/built) — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md) /
+  [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md).
+- Passive health check and URLTest intervals — [009-NODE_HEALTH](../../009-NODE_HEALTH/FEATURE.md).
 - Sleep of the whole tunnel — [tunnel-sleep](tunnel-sleep.md).
 - Depends on OS capabilities: the device's memory size, the policy of
   unloading processes on low memory.

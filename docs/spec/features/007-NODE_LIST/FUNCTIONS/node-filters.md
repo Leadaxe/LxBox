@@ -1,6 +1,10 @@
 [English](node-filters.md) · [Русский](node-filters.ru.md)
 
-# Node filters
+# Node filters — finding the right server among hundreds
+
+The filter panel narrows a Direction's node list by name, emoji flag,
+protocol, transport, source, ping and detour role without touching the
+config.
 
 | Field | Value |
 |------|----------|
@@ -76,8 +80,9 @@ ones at 0.4 opacity; mass ping gets the same order.
 
 ## Boundaries
 
-- Direction filters in the config (`node_filter`, inversion) — 006; here
-  only moving the regex into the editor.
+- Direction filters in the config (`node_filter`, inversion) —
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md); here only
+  moving the regex into the editor.
 - The filter on the folder screen (regex + protocols) — [folder test](folder-testing.md).
 
 ## Revisions

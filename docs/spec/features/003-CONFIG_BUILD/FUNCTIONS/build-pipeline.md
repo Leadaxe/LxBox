@@ -41,6 +41,20 @@ No knobs of its own. Stage order:
 | 13 | Graph sanitizer | A dangling detour removed (one line per target), ghost group members excluded, a `default` outside the members fixed, rings broken at the minimal edge; urltest timings corrected |
 | 14 | Check | [Final config check](config-validation.md) |
 
+## The role of the contract registry
+
+The protocol registry of the contract shared with the launcher takes part in
+the build twice. Before the build: the node bodies the build receives were
+already produced by the registry pipeline (mapper → sanitizer → model) at
+import and on every load — see
+[Registry pipeline](../../002-NODE_IMPORT/FUNCTIONS/registry-pipeline.md).
+Inside the build: stage 5, the core registry gate, checks every body against
+the registry schema for the pinned core version and its build tags; a field
+the core does not know is removed with a warning, an unacceptable entry is
+dropped whole. A node's authored JSON is only commented on. The registry
+itself, its version and the warning codes are in
+[021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.md).
+
 ## Inputs / Outputs
 
 **Inputs:** see the feature. The core version and its build tags affect the gates of stages

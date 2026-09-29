@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 007 — NODE_LIST — main screen: node list, selection, filters, order, folders
+# Node list — choosing a VPN server on the main screen: filters, sorting and folders
+
+The LxBox main screen lists the nodes of the selected Direction and switches
+the active VPN server in the running sing-box core with one tap, without a
+tunnel restart. Filters by name, emoji flag, protocol (VLESS, WireGuard,
+AmneziaWG, Hysteria2 and others), transport and ping, four sort modes and a
+drag-and-drop order help find a node among hundreds. Standalone servers are
+grouped into folders that can be tested without starting the VPN.
 
 | Field | Value |
 |------|----------|
+| Feature | 007-NODE_LIST |
 | Type | Product feature |
 | Absorbed | `§003F` `§048F` `§070F` `§071F` `§234F` `§236F` `§565F` (phase B of `§565F` — task 568) |
 | State | ✅ written from code, 2026-09-28 |
@@ -216,13 +224,17 @@ snapshot.
 
 ## Boundaries
 
-- Sources and their update — 001; parsing group forms — 002; building groups,
-  Directions and the template — [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md)
-  and [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md).
+- Sources and their update —
+  [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md); parsing group forms —
+  [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md); building groups,
+  Directions and the template —
+  [003-CONFIG_BUILD](../003-CONFIG_BUILD/FEATURE.md) and
+  [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md).
 - Ping, mass ping, group URLTest, ping settings, ⚠ "root of trouble" —
-  009-NODE_HEALTH. Here only the badge's place and the mass ping order.
+  [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md). Here only the badge's
+  place and the mass ping order.
 - The node screen (View details), Copy URI, emoji tags in the name —
-  008-NODE_EDITOR.
+  [008-NODE_EDITOR](../008-NODE_EDITOR/FEATURE.md).
 - The traffic bar above the list (speed, connections, time) and navigation to
   statistics — [012-LIVE_STATE](../012-LIVE_STATE/FEATURE.md).
 - The application itself does not store the selection in a Direction's
@@ -234,14 +246,14 @@ snapshot.
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Direction and active node | selecting a Direction, a node, pinning, NETWORKS, swipe | P1 P2 P3 P17 | [directions-and-active-node.md](FUNCTIONS/directions-and-active-node.md) |
-| Group genus and source fold | selector/urltest, `default`, selection memory, `replace` | P12 P13 | [selector-genus-and-fold.md](FUNCTIONS/selector-genus-and-fold.md) |
-| Node filters | regex/emoji, protocol, variant, source, ping, detour, memory | P5 P6 P7 P8 | [node-filters.md](FUNCTIONS/node-filters.md) |
-| Sorting and manual order | modes, pinning, drag-and-drop, columns | P3 P4 P9 P10 | [node-sorting.md](FUNCTIONS/node-sorting.md) |
-| Node row: badges and menu | ACTIVE, ping, protocol·transport·security, icons, menu | P2 | [node-row-badges-and-menu.md](FUNCTIONS/node-row-badges-and-menu.md) |
-| Empty states | "Add a server", "Tap to connect", empty Direction | P11 | [empty-states.md](FUNCTIONS/empty-states.md) |
-| Folders and the source list | server folders, the single source list, order | P14 | [server-folders.md](FUNCTIONS/server-folders.md) |
-| Folder test | batch measurement without the VPN, thresholds, bulk actions | P15 P16 | [folder-testing.md](FUNCTIONS/folder-testing.md) |
+| Direction and active node | Selects a Direction and a node in the running core, pins the active node at the top and handles `NETWORKS` and swipe-to-refresh. | P1 P2 P3 P17 | [directions-and-active-node.md](FUNCTIONS/directions-and-active-node.md) |
+| Group genus and folding a source into a group | Keeps the manual or automatic genus of a source group together with its selected member, and folds a whole subscription or folder into one group. | P12 P13 | [selector-genus-and-fold.md](FUNCTIONS/selector-genus-and-fold.md) |
+| Node filters | Filters a Direction's nodes by regex or emoji, protocol, transport/security, source, ping threshold and detour role, and remembers the filter per Direction. | P5 P6 P7 P8 | [node-filters.md](FUNCTIONS/node-filters.md) |
+| Sorting and manual order | Orders the list by config, ping, name or a custom drag-and-drop order, keeps service nodes and the active node pinned, and uses two columns on wide screens. | P3 P4 P9 P10 | [node-sorting.md](FUNCTIONS/node-sorting.md) |
+| Node row: badges and context menu | Shows the ACTIVE mark, protocol·transport·security, ping, WireGuard state and notification icons in the row, and opens node actions on a long press. | P2 | [node-row-badges-and-menu.md](FUNCTIONS/node-row-badges-and-menu.md) |
+| Main screen empty states | Replaces an empty list with the next step: "Add a server", "Tap to connect" or a hint to pick another Direction. | P11 | [empty-states.md](FUNCTIONS/empty-states.md) |
+| Server folders and the single source list | Groups standalone servers into folders with a shared switch, tag prefix and detour policy, and keeps subscriptions, servers, folders and chains in one ordered list. | P14 | [server-folders.md](FUNCTIONS/server-folders.md) |
+| Folder test | Measures a folder's servers in a separate core session without the VPN, colours results by thresholds and offers bulk actions on slow and unreachable servers. | P15 P16 | [folder-testing.md](FUNCTIONS/folder-testing.md) |
 
 ## Related features
 

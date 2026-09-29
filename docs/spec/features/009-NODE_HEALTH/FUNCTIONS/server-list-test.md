@@ -1,9 +1,13 @@
 [English](server-list-test.md) · [Русский](server-list-test.ru.md)
 
-# List server test
+# List server test — checking a subscription or folder without connecting the VPN
+
+All nodes of a subscription or folder can be tested with the VPN off, and
+the results drive bulk actions: disable slow nodes, disable or delete dead
+ones.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [009-NODE_HEALTH](../FEATURE.md) |
 | Promises | P3, P9, P10, P11, P12 |
 | State | ✅ written from code, 2026-09-28 |
@@ -86,8 +90,10 @@ Summary: `Test servers` → `Testing… N done` → `N ok · N err · N broken`.
 ## Boundaries
 
 - Measuring through the live core — [node-ping](node-ping.md).
-- The WARP endpoint scanner uses the same test session — 015-WARP.
-- Node and folder toggles — 001-SUBSCRIPTIONS / 007-NODE_LIST.
+- The WARP endpoint scanner uses the same test session — [015-WARP](../../015-WARP/FEATURE.md).
+- Node and folder toggles —
+  [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FEATURE.md) /
+  [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
 - Depends on OS capabilities: the process memory limit.
 
 ## Revisions

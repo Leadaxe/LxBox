@@ -1,6 +1,9 @@
 [English](add-server-wizard.md) · [Русский](add-server-wizard.ru.md)
 
-# Add server wizard
+# Add server wizard — a SOCKS5, HTTP or Tailscale node from a form or pasted text
+
+The wizard creates one custom server from a SOCKS5, HTTP or Tailscale form,
+or from a pasted link or sing-box JSON.
 
 | Field | Value |
 |------|----------|
@@ -41,7 +44,7 @@ source list, a config rebuild, the message "Added: <tag>" (forms) or "Added"
 | SOCKS5 | `socks` outbound: `server`, `server_port`, `username`, `password`, `tag` |
 | HTTP | `http` outbound: the same; with HTTPS — `tls.enabled: true`, `tls.server_name` = Host |
 | Tailscale | `tailscale` endpoint: `auth_key` + only the filled fields; booleans only `true` |
-| Paste URI / JSON | the same path as pasting on the sources screen (parsing — 002) |
+| Paste URI / JSON | the same path as pasting on the sources screen (parsing — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)) |
 
 The forms store the node **as a sing-box body with `tag`**, not as a link: a
 link carries the name in the fragment, and the tag would be different after
@@ -73,7 +76,8 @@ re-reading (P1).
   test servers — "Adding a source" in
   [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FUNCTIONS/add-source.md).
 - There are no forms for VLESS, Trojan, WireGuard and others — paste only.
-- The wizard does not build a chain and does not set a detour — that is 006.
+- The wizard does not build a chain and does not set a detour — that is
+  [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
 - Cloudflare WARP — a separate wizard ([015-WARP](../../015-WARP/FEATURE.md)).
 - Editing the created node — [node-settings.md](node-settings.md).
 

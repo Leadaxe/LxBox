@@ -1,9 +1,17 @@
 [English](FEATURE.md) · [Русский](FEATURE.ru.md)
 
-# FEATURE 008 — NODE_EDITOR — custom nodes, node settings, add wizard
+# Node editor — adding and editing custom VPN servers: SOCKS5, HTTP, Tailscale, links and JSON
+
+LxBox adds VPN servers that are not in any subscription (SOCKS5, HTTP,
+Tailscale, a link, a WireGuard INI or sing-box JSON) and lets you edit them
+later. The node is stored as the text you entered, so a hand-written
+sing-box body reaches the core unchanged once the core has checked it.
+Subscription nodes are shown read-only; they change only through the
+subscription's import rules.
 
 | Field | Value |
 |------|----------|
+| Feature | 008-NODE_EDITOR |
 | Type | Product feature |
 | Absorbed | `§017F` `§074F` `§554F` |
 | State | ✅ written from code, 2026-09-28 |
@@ -82,12 +90,12 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   is unchanged. **Mutation:** write before the core's answer.
 - **P8. A custom JSON body goes into the config verbatim.** Keys outside the
   model survive; the body's `detour` key is removed, the detour is decided by
-  the record (006). A subscription node and a link go through the model.
-  **Witness:** units "standalone server from JSON: body verbatim, keys outside
-  the model survive", "JSON source → object without detour", "a member's
-  personal detour is applied on top of the verbatim body", "container: a
-  subscription node goes through the model". **Mutation:** emit the model for
-  all.
+  the record ([006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md)).
+  A subscription node and a link go through the model. **Witness:** units
+  "standalone server from JSON: body verbatim, keys outside the model
+  survive", "JSON source → object without detour", "a member's personal detour
+  is applied on top of the verbatim body", "container: a subscription node
+  goes through the model". **Mutation:** emit the model for all.
 - **P9. Editing the body clears the core's verdict.** A node disabled because
   of a core refusal is re-enabled after its body changes; re-saving without
   changes keeps the verdict; a node disabled by the person is not revived by
@@ -136,7 +144,7 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
 | Tag · Auth key · Control URL · Hostname · Ephemeral · Accept routes · Exit node | Wizard → Tailscale | strings, toggles | `tailscale` · required · empty · `LxBox-<model>` · off · off · empty |
 | Paste URI / Paste JSON | Wizard | text | — |
 | Tag | Node → Settings | string + a palette of 14 emoji | node tag |
-| Detour server | Node → Settings | see 006 | None (direct) |
+| Detour server | Node → Settings | see [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md) | None (direct) |
 | Skip presets | Node → Settings; visible if the template has a `for_each` preset for the node type | on/off | off |
 | Source | Node → Source | source text | as saved |
 | Exit node | Tailscale node → Network → Save choice | tailnet node / None | from the body |
@@ -183,7 +191,7 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
   immediately on selection.
 - "Edit JSON" on a link or INI, after a warning, replaces the source with the
   model's body — irreversibly, there is no way back to the link; on a JSON
-  source it simply opens Source.
+  source it opens Source.
 - The tag in the wizard is not checked for uniqueness: on a collision the
   build gives the node a suffix `-1`, `-2`…; the message shows the entered
   tag.
@@ -193,31 +201,35 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
 
 ## Boundaries
 
-- Parsing links, JSON forms, INI and `vpn://` — 002-NODE_IMPORT; adding by
-  link, QR, file, public test servers — the "Adding a source" function in
-  001-SUBSCRIPTIONS.
-- Detour selection, folder policy, chains — 006; here only the place on the
-  screen.
-- Folders, moving to a folder, order, the main screen — 007.
+- Parsing links, JSON forms, INI and `vpn://` —
+  [002-NODE_IMPORT](../002-NODE_IMPORT/FEATURE.md); adding by link, QR, file,
+  public test servers — the "Adding a source" function in
+  [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md).
+- Detour selection, folder policy, chains —
+  [006-DETOUR_AND_BALANCE](../006-DETOUR_AND_BALANCE/FEATURE.md); here only
+  the place on the screen.
+- Folders, moving to a folder, order, the main screen —
+  [007-NODE_LIST](../007-NODE_LIST/FEATURE.md).
 - Node diagnostics and notifications — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md);
   Cloudflare WARP — [015-WARP](../015-WARP/FEATURE.md); the Tailscale preset —
   [004-ROUTING](../004-ROUTING/FEATURE.md).
 - Does not do: overrides of a subscription node, node duplication, a form by
   protocol schema, a separate WireGuard/AmneziaWG form, a TLS form.
-- Camera and file picking — depend on OS capabilities (001).
+- Camera and file picking — depend on OS capabilities
+  ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md)).
 
 ## Functions
 
 | Function | What it does | Promises | File |
 |---|---|---|---|
-| Add server wizard | SOCKS5, HTTP, Paste URI, Paste JSON, Tailscale | P1 P2 P13 P15 | [add-server-wizard.md](FUNCTIONS/add-server-wizard.md) |
-| Node settings | Tabs, tag with emoji, detour, Skip presets | P3 P4 | [node-settings.md](FUNCTIONS/node-settings.md) |
-| Source editing | Save by text kind, body only, core check, Edit JSON | P5 P6 P7 P8 P9 P10 P12 | [source-editing.md](FUNCTIONS/source-editing.md) |
-| The name is the tag | Title = tag, defaults, emoji, collisions, renaming | P2 P3 P4 P11 | [name-is-tag.md](FUNCTIONS/name-is-tag.md) |
-| JSON and protocol schema | What exists of the schema-based editor, TLS/SNI, the "tls replacement" trap | P6 P8 | [json-and-schema.md](FUNCTIONS/json-and-schema.md) |
-| WireGuard / AmneziaWG editing | INI as the source, AWG fields only as text | P9 | [wireguard-awg-editing.md](FUNCTIONS/wireguard-awg-editing.md) |
-| Subscription node | Inspection only; no overrides; what survives an update | P14 | [subscription-node.md](FUNCTIONS/subscription-node.md) |
-| Deletion and duplication | Deleting a custom server, fate of references; no duplication | P11 | [delete-and-duplicate.md](FUNCTIONS/delete-and-duplicate.md) |
+| Add server wizard | Creates a custom SOCKS5, HTTP or Tailscale node from a form, or any node from a pasted link or sing-box JSON. | P1 P2 P13 P15 | [add-server-wizard.md](FUNCTIONS/add-server-wizard.md) |
+| Node settings | Shows the tabs of a custom node and lets you change its tag with an emoji, its detour server and the Skip presets switch. | P3 P4 | [node-settings.md](FUNCTIONS/node-settings.md) |
+| Source editing | Saves the source by its kind (link, INI or JSON), keeps only the node body, checks JSON with the core and converts a link to JSON on request. | P5 P6 P7 P8 P9 P10 P12 | [source-editing.md](FUNCTIONS/source-editing.md) |
+| The name is the tag | Makes the node tag the only name of a custom server, with defaults, an automatic emoji, collision suffixes and reference rewriting on rename. | P2 P3 P4 P11 | [name-is-tag.md](FUNCTIONS/name-is-tag.md) |
+| JSON and protocol schema | Shows the node's sing-box JSON with highlighting, keeps fields unknown to the app and records what the schema-aware editor still lacks, including the "replace the whole `tls`" trap. | P6 P8 | [json-and-schema.md](FUNCTIONS/json-and-schema.md) |
+| WireGuard / AmneziaWG editing | Edits WireGuard and AmneziaWG nodes through their INI, link or JSON source, with AWG obfuscation fields as plain text. | P9 | [wireguard-awg-editing.md](FUNCTIONS/wireguard-awg-editing.md) |
+| Subscription node | Shows a subscription node read-only, without individual overrides, and lists what survives a subscription update. | P14 | [subscription-node.md](FUNCTIONS/subscription-node.md) |
+| Node deletion and duplication | Deletes a custom server, clears detour, group and chain references to it and counts the affected ones; there is no duplication. | P11 | [delete-and-duplicate.md](FUNCTIONS/delete-and-duplicate.md) |
 
 ## Related features
 
@@ -251,6 +263,6 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
   blocked.
 - **The HTTP proxy's SNI = Host.** The HTTPS switch puts the Host value into
   `tls.server_name`; fine-tuning TLS — only via the body text.
-- **A subscription node is edited only via import rules** (001): an
-  individual edit would be wiped by the next update — that is why there is
-  none.
+- **A subscription node is edited only via import rules**
+  ([001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.md)): an individual edit
+  would be wiped by the next update — that is why there is none.

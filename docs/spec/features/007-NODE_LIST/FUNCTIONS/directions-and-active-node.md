@@ -1,6 +1,9 @@
 [English](directions-and-active-node.md) · [Русский](directions-and-active-node.ru.md)
 
-# Direction and active node
+# Direction and active node — seeing and switching the node that carries traffic
+
+The main screen shows the selected Direction and its active node and
+switches either one in the running core without restarting the VPN tunnel.
 
 | Field | Value |
 |------|----------|
@@ -41,8 +44,8 @@ for a subscription or folder group — the saved member selection.
   Direction list and the ▷ buttons are inactive while the VPN is off or an
   operation is in progress.
 - **Tapping a row only highlights the node** (a stripe on the left, the
-  background) — no selection happens. Selection — the ▷ button or "Use this
-  node".
+  background) — no selection happens. A node is selected with the ▷ button or "Use
+  this node".
 - Selecting the active node is a no-op: the core is not called, connections
   are not broken; an external automation tool receives "already active".
 - After selection the list immediately highlights the new node, then pulls a
@@ -74,12 +77,12 @@ for a subscription or folder group — the saved member selection.
 
 - Selecting a member of a group that is not a Direction, from the node
   screen — same place ([group genus](selector-genus-and-fold.md)); the node
-  screen itself — 008.
+  screen itself — [008-NODE_EDITOR](../../008-NODE_EDITOR/FEATURE.md).
 - Automation tools (switching a node/Direction from outside) —
   [014-AUTOMATION](../../014-AUTOMATION/FEATURE.md).
 - The application does not store the selection in a Direction's selector
   between VPN starts.
-- The traffic bar above the list — 012-LIVE_STATE.
+- The traffic bar above the list — [012-LIVE_STATE](../../012-LIVE_STATE/FEATURE.md).
 
 ## Revisions
 

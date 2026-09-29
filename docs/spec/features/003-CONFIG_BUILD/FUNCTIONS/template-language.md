@@ -16,7 +16,7 @@ concrete sing-box JSON; the declared type decides how each value is written.
 Turns a declarative template with variables and conditions into concrete
 JSON. There is one markup rule: `#` is an engine keyword, `@` is a reference to a
 variable, everything else is data. The language standard is shared with the launcher
-(`contract/docs/TEMPLATE_LANG.md`, corpus `contract/corpus/template/`).
+(see Documentation below).
 
 ## Parameters
 
@@ -95,6 +95,18 @@ without duplicates by the "code + parameters" pair.
 - What exactly is gated by variables in presets and DNS —
   [004-ROUTING](../../004-ROUTING/FEATURE.md), [005-DNS](../../005-DNS/FEATURE.md).
 - The UI for multi-select and free input for `options_open` — not finished (§555 follow-up).
+
+## Documentation
+
+- The normative description of the template language (keywords, variable
+  types, coercion rules, `#if` / `for_each` / `#tpl` semantics) is
+  `contract/docs/TEMPLATE_LANG.md` in the launcher repository
+  ([Leadaxe/singbox-launcher](https://github.com/Leadaxe/singbox-launcher)),
+  together with the shared corpus `contract/corpus/template/`. The app pulls a
+  copy into `app/contract/` with `app/tool/sync_contract.sh`; that copy is not
+  committed, so there is no in-repo link.
+- The full schema of the shipped template (`wizard_template.json`: sections,
+  presets, variables, DNS catalogue) is [`docs/TEMPLATE.md`](../../../../TEMPLATE.md).
 
 ## Revisions
 

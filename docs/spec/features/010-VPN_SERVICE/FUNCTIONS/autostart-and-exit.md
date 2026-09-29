@@ -1,9 +1,12 @@
 [English](autostart-and-exit.md) · [Русский](autostart-and-exit.ru.md)
 
-# Autostart and exiting the app
+# Autostart and exiting the app — the VPN after a reboot and after closing the app
+
+The tunnel can start by itself after the device boots and can keep running
+after the app is closed.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P10, P11 |
 | State | ✅ written from code, 2026-09-28 |
@@ -50,8 +53,8 @@ Both settings are part of the backup and are restored with it.
 ## Boundaries
 
 - Requesting exclusion from battery optimization — in the startup wizard
-  (020-APP_SHELL); without it autostart and survival are unreliable on some
-  firmware.
+  ([020-APP_SHELL](../../020-APP_SHELL/FEATURE.md)); without it autostart and
+  survival are unreliable on some firmware.
 - Bringing the tunnel up after process death — [recovery](recovery.md).
 - Depends on OS capabilities: when the boot event is delivered (on some
   devices — only after the first unlock), background work permission, the

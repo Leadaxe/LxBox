@@ -1,9 +1,12 @@
 [English](operating-modes.md) · [Русский](operating-modes.ru.md)
 
-# Operating modes: VPN / Proxy / VPN+Proxy
+# Operating modes — system VPN, local proxy or both
+
+The core receives traffic through a device-wide VPN tunnel, a local
+HTTP/SOCKS5 proxy port, or both at once.
 
 | Field | Value |
-|-------|-------|
+|------|----------|
 | Feature | [010-VPN_SERVICE](../FEATURE.md) |
 | Promises | P5, P6 |
 | State | ✅ written from code, 2026-09-28 |
@@ -68,8 +71,8 @@ password. `route.final` does not depend on the mode.
 - Registering the port as the system proxy — not done.
 - Two protocols on two ports at once — not done.
 - Address, MTU, stack, IPv6 of the tunnel interface — template variables,
-  003-CONFIG_BUILD.
-- Which apps go through the tunnel — 011-SPLIT_TUNNELING.
+  [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FEATURE.md).
+- Which apps go through the tunnel — [011-SPLIT_TUNNELING](../../011-SPLIT_TUNNELING/FEATURE.md).
 - Depends on OS capabilities: the single system VPN slot, the mechanism for
   apps to bypass the tunnel.
 

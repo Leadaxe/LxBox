@@ -267,6 +267,7 @@ banners on the main screen, the snackbar "Config rebuilt: N nodes".
 
 ## Maintenance notes
 
+- **Two documents to keep in step with the template.** `docs/TEMPLATE.md` (schema of the shipped file) and the language norm `TEMPLATE_LANG.md` in the launcher repository; a template change that touches either is not done until they match (audit 588 lists the current drift).
 - A screen that saves on leaving must put the edit into memory immediately:
   return to main fires at the moment of pop, and the screen's leave — ~300 ms
   later; otherwise the config lags one visit behind (§107).

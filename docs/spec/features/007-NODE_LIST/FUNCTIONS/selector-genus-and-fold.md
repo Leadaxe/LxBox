@@ -1,6 +1,10 @@
 [English](selector-genus-and-fold.md) · [Русский](selector-genus-and-fold.ru.md)
 
-# Group genus and folding a source into a group
+# Group genus and folding a source into a group — manual or automatic node choice
+
+A group from a subscription or folder keeps its genus (manual `selector` or
+automatic `urltest`) all the way to the core, and a whole source can be
+folded into one group.
 
 | Field | Value |
 |------|----------|
