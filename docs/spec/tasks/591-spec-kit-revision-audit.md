@@ -33,15 +33,15 @@
 
 | Корзина | Пунктов |
 |---|---|
-| [bug] | 43 |
-| [doc] | 60 |
+| [bug] | 48 |
+| [doc] | 7 |
 | [doc-legacy] | 27 |
 | [owner] | 57 |
 | [decided] | 27 |
-| [test] | 28 |
-| [moved] | 17 |
-| [done] | 9 |
-| **Всего** | **264** |
+| [test] | 22 |
+| [moved] | 18 |
+| [done] | 75 |
+| **Всего** | **281** |
 
 ### Вопросы владельцу
 
@@ -412,7 +412,6 @@
 - [done] Бампы ядра lx.5…lx.8 без задач в `tasks/`. — **исправлено 2026-09-30:** 021 FEATURE (EN+RU) — строки ревизий 12 (lx.5…lx.8, v2.25.8) и 13 (lx.9…lx.11, v2.25.9) со ссылками на KERNEL.md и CHANGELOG; правило «бамп без изменения клиента задачи не получает» записано в «Watch for».
 - [owner] 4 импорта из сервисов в `screens/` (нарушение слоёв). → Вопрос: 4 импорта из сервисов в `screens/` — чинить или внести в исключения ARCHITECTURE.md? (варианты: A чинить / B исключения)
 - [done] Таблица «крупных исключений» ARCHITECTURE.md устарела: 24 файла > 1000 строк, крупнейшие не перечислены. — **исправлено 2026-09-30:** ARCHITECTURE.md — таблица пересчитана (traffic_profiler 873 + вынесенные части, custom_rule 1232, VpnPlugin.kt 1561) и явно отделена от списка крупных файлов: 23 файла > 1000 строк, шесть крупнейших названы как долг, не исключения.
-- [test] Тесты границ §291 в `app/test` не найдены.
 - [done] ARCHITECTURE.md: NDK захардкожен, targetSdk размыт. — **исправлено 2026-09-30:** ARCHITECTURE.md → «Supported platforms»: targetSdk/compileSdk = `flutter.targetSdkVersion`/`compileSdkVersion` пина Flutter 3.47.1 (API 36), NDK = `flutter.ndkVersion`; в `build.gradle.kts` ничего не переопределено.
 - [done] §436: статус и доки про `PLAY_RELEASE_STATUS` расходятся. — **исправлено 2026-09-30:** 436 → Done (job `google-play` зелёный на v2.25.9, run 36618100571); RELEASE_PROCESS.md §2 и чек-лист — в репозитории `completed`, `draft` только fallback YAML; 023 FEATURE (EN+RU) строка 9 и «Watch for».
 - [done] `check_contract_lock` на CI ничего не сверяет (копии контракта нет); корпус 529 краснеет только локально. — **проверено 2026-09-30:** НЕ ПОДТВЕРЖДЁН: копия контракта закоммичена (решение владельца 29.09.2026, `app/.gitignore:50-52`, `git ls-files app/contract`; синк 1.1.107 = 75fe214b), шаг «Contract lock» в `.github/workflows/ci.yml:244-247` сверяет реально.
