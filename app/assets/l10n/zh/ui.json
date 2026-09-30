@@ -1720,6 +1720,9 @@
   "Endpoint IP": {
     "value": "Endpoint IP"
   },
+  "Endpoint must be host:port": {
+    "value": "Endpoint 必须为 host:port 格式"
+  },
   "Endpoint pool (JSON) — IP blocks, ports and SNI the generator draws from. Edit to test your own ranges.": {
     "value": "Endpoint 池（JSON）—— 生成器取用的 IP 段、端口与 SNI。可编辑以测试自己的范围。"
   },

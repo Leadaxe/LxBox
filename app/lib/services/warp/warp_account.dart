@@ -66,6 +66,19 @@ class WarpAccount {
 
   static const String defaultEndpoint = 'engage.cloudflareclient.com:2408';
 
+  /// §606 (обещание 025F) — форма `host:port` своего endpoint'а до запроса
+  /// регистрации: host — имя/IPv4 или IPv6 в скобках (`[2606:4700::1]:2408`,
+  /// так пишет пул), port — 1…65535. Опечатка иначе молча уезжала в узел.
+  static bool isValidEndpoint(String s) {
+    final m = _endpointRe.firstMatch(s);
+    if (m == null) return false;
+    final port = int.tryParse(m.group(2)!);
+    return port != null && port >= 1 && port <= 65535;
+  }
+
+  static final _endpointRe = RegExp(
+      r'^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?):(\d{1,5})$');
+
   /// §137 — тег WARP-узла с эмодзи внутри. Облако ☁️ для plain, гроза ⛈️ для
   /// AWG-обфускации (визуальный сигнал «маскируется от DPI»). `+` для WARP+.
   /// Коллизия-суффикс (` 2`/` 3`) накидывает caller (контроллер знает соседей).

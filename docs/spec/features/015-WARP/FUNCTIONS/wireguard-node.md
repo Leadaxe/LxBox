@@ -44,7 +44,10 @@ Node tag: `🔥☁️ WARP`, `🔥☁️ WARP+`, `🔥⛈️ WARP (AWG 1.5)`,
   response (which always returns `engage…:2408`) and the endpoint from the
   registration cache. The default without obfuscation — the host from the
   Cloudflare response; the default with obfuscation — a random `ip:port` (see
-  obfuscation). The applied endpoint is written to the cache.
+  obfuscation). The applied endpoint is written to the cache. A non-empty
+  field is checked before the request: `host:port` (a name, IPv4 or IPv6 in
+  brackets; port 1–65535), otherwise the snack "Endpoint must be host:port"
+  and no registration.
 - **Presets.** The Endpoint list is taken from the pool's
   `wireguard.endpoints_preset`; the item equal to `recommended_endpoint` is
   marked "(recommended)" only in the menu — the clean value goes into the
@@ -64,7 +67,6 @@ Node tag: `🔥☁️ WARP`, `🔥☁️ WARP+`, `🔥⛈️ WARP (AWG 1.5)`,
 
 - Parsing the link and INI — 002-NODE_IMPORT; editing the node later —
   008-NODE_EDITOR.
-- The `host:port` format is not validated before registration.
 - A v6 endpoint is substituted only by randomisation and only with IPv6
   enabled.
 
@@ -80,3 +82,4 @@ Node tag: `🔥☁️ WARP`, `🔥☁️ WARP+`, `🔥⛈️ WARP (AWG 1.5)`,
 | 6 | [304](../../../tasks/304-warp-persistent-keepalive.md) | — | Keepalive 25 s on manual registration |
 | 7 | [386](../../../tasks/386-warp-endpoint-preset-combobox.md) | — | Preset list at the Endpoint field |
 | 8 | [424](../../../tasks/424-warp-preset-recommended-mark-leak.md) | Implemented (unit + widget test) | The "(recommended)" mark does not leak into the value |
+| 9 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | The own endpoint is checked for `host:port` before registration |

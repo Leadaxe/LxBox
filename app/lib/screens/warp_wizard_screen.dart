@@ -345,6 +345,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
       final endpoint = _endpoint.text.trim().isEmpty
           ? WarpAccount.defaultEndpoint
           : _endpoint.text.trim();
+      // §606 — форма host:port проверяется до запроса (обещание 025F).
+      if (!WarpAccount.isValidEndpoint(endpoint)) {
+        showSnack(getLocalText.s("Endpoint must be host:port"));
+        return;
+      }
       final license = _license.text.trim();
 
       final account = await widget.subController.addWarp(
