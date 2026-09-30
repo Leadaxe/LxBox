@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Tailscale in the node row ([task 608](docs/spec/tasks/608-tailscale-exit-node-in-node-row.md)).**
+  With the VPN on, a node with an exit node reads `tailscale·via <device>`;
+  an offline exit device shows `exit offline` in orange instead of the
+  endpoint state. Less than 7 days before the device key expires, the row
+  warns `key expires Nd` / `key expired` (on a NETWORKS row — instead of
+  `running`). Direct vs relay stays in the Network tab: the core's status
+  carries no path ([#155](https://github.com/Leadaxe/LxBox/issues/155)).
+
 ---
 
 ## [2.25.9] — 2026-09-29
