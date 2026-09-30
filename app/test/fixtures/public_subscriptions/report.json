@@ -22,7 +22,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 560
+      "parse_ms": 986
     },
     {
       "id": "02-github-vless-lite",
@@ -47,7 +47,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 217
+      "parse_ms": 260
     },
     {
       "id": "03-github-vless",
@@ -91,7 +91,7 @@
         "vless|ws|tls": 5,
         "vless|xhttp|reality": 8
       },
-      "parse_ms": 44
+      "parse_ms": 57
     },
     {
       "id": "05-github-white-cidr-ru-checked",
@@ -107,7 +107,7 @@
       "coverage": {
         "vless|ws|tls": 5
       },
-      "parse_ms": 3
+      "parse_ms": 6
     },
     {
       "id": "06-github-black-vless-rus-mobile",
@@ -141,7 +141,7 @@
         "vless|ws|tls": 15,
         "vmess|ws|tls": 7
       },
-      "parse_ms": 103
+      "parse_ms": 179
     },
     {
       "id": "07-github-byewhitelists2",
@@ -166,7 +166,7 @@
         "vless|ws|tls": 2,
         "vless|xhttp|reality": 22
       },
-      "parse_ms": 462
+      "parse_ms": 707
     },
     {
       "id": "08-github-whitelist",
@@ -191,7 +191,7 @@
         "vless|xhttp|none": 1,
         "vless|xhttp|reality": 1
       },
-      "parse_ms": 19
+      "parse_ms": 20
     },
     {
       "id": "09-github-26",
@@ -240,7 +240,7 @@
         "vless|xhttp|tls": 13,
         "vmess|none|none": 1
       },
-      "parse_ms": 1557
+      "parse_ms": 2054
     },
     {
       "id": "10-github-whitelist",
@@ -267,7 +267,7 @@
         "vless|xhttp|reality": 3,
         "vless|xhttp|tls": 4
       },
-      "parse_ms": 29
+      "parse_ms": 31
     },
     {
       "id": "11-github-blacklist",
@@ -305,7 +305,7 @@
         "vless|xhttp|none": 5,
         "vless|xhttp|reality": 10
       },
-      "parse_ms": 988
+      "parse_ms": 1136
     },
     {
       "id": "12-github-kizyakbeta7",
@@ -334,7 +334,7 @@
         "vless|ws|tls": 9,
         "vless|xhttp|reality": 17
       },
-      "parse_ms": 44
+      "parse_ms": 64
     },
     {
       "id": "13-github-kizyakbeta6",
@@ -358,7 +358,7 @@
         "vless|grpc|reality": 15,
         "vless|xhttp|reality": 9
       },
-      "parse_ms": 12
+      "parse_ms": 31
     },
     {
       "id": "14-github-kizyakbeta6bl",
@@ -383,7 +383,7 @@
         "trojan|none|tls": 10,
         "vmess|ws|tls": 7
       },
-      "parse_ms": 10
+      "parse_ms": 20
     },
     {
       "id": "15-github-rkn-white-list",
@@ -407,7 +407,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 47
+      "parse_ms": 59
     },
     {
       "id": "16-github-aetrisvpn",
@@ -436,7 +436,7 @@
         "vless|xhttp|tls": 7,
         "vmess|none|none": 4
       },
-      "parse_ms": 33
+      "parse_ms": 42
     },
     {
       "id": "17-github-configs",
@@ -473,7 +473,7 @@
         "vmess|ws|none": 2,
         "vmess|ws|tls": 3
       },
-      "parse_ms": 60
+      "parse_ms": 81
     },
     {
       "id": "18-github-whitelist-all",
@@ -498,7 +498,7 @@
         "vless|grpc|reality": 5,
         "vless|none|reality": 183
       },
-      "parse_ms": 92
+      "parse_ms": 116
     },
     {
       "id": "19-github-bypass-all",
@@ -535,7 +535,7 @@
         "vmess|ws|none": 3,
         "vmess|ws|tls": 5
       },
-      "parse_ms": 203
+      "parse_ms": 251
     },
     {
       "id": "20-github-bypass-1",
@@ -568,7 +568,7 @@
         "vmess|none|none": 1,
         "vmess|ws|tls": 3
       },
-      "parse_ms": 76
+      "parse_ms": 89
     },
     {
       "id": "21-github-bypass-2",
@@ -604,7 +604,7 @@
         "vmess|ws|none": 3,
         "vmess|ws|tls": 2
       },
-      "parse_ms": 78
+      "parse_ms": 93
     },
     {
       "id": "22-github-bypass-3",
@@ -639,7 +639,7 @@
         "vmess|none|none": 4,
         "vmess|ws|none": 2
       },
-      "parse_ms": 91
+      "parse_ms": 105
     },
     {
       "id": "23-github-bypass-4",
@@ -673,7 +673,7 @@
         "vmess|none|none": 1,
         "vmess|ws|tls": 2
       },
-      "parse_ms": 91
+      "parse_ms": 111
     },
     {
       "id": "24-github-bypass-5",
@@ -698,7 +698,7 @@
         "vless|ws|reality": 1,
         "vless|ws|tls": 3
       },
-      "parse_ms": 95
+      "parse_ms": 122
     },
     {
       "id": "25-github-bypass-6",
@@ -735,7 +735,7 @@
         "vmess|ws|none": 3,
         "vmess|ws|tls": 4
       },
-      "parse_ms": 74
+      "parse_ms": 100
     },
     {
       "id": "26-github-russia-whitelist",
@@ -783,7 +783,7 @@
         "vless|xhttp|reality": 36,
         "vless|xhttp|tls": 51
       },
-      "parse_ms": 605
+      "parse_ms": 889
     },
     {
       "id": "27-github-ru-white-all-white",
@@ -841,7 +841,7 @@
         "vless|ws|tls": 156,
         "vless|xhttp|tls": 1
       },
-      "parse_ms": 1640
+      "parse_ms": 3009
     },
     {
       "id": "28-github-whitelist",
@@ -868,7 +868,7 @@
         "vless|xhttp|reality": 3,
         "vmess|none|none": 1
       },
-      "parse_ms": 98
+      "parse_ms": 279
     },
     {
       "id": "29-github-blacklist",
@@ -888,7 +888,7 @@
         "vless|none|reality": 82,
         "vless|xhttp|reality": 3
       },
-      "parse_ms": 29
+      "parse_ms": 50
     },
     {
       "id": "30-github-non-ru",
@@ -908,7 +908,7 @@
         "vless|none|tls": 1,
         "vless|xhttp|reality": 4
       },
-      "parse_ms": 12
+      "parse_ms": 18
     },
     {
       "id": "31-github-ping-tested",
@@ -931,7 +931,7 @@
         "vless|xhttp|reality": 5,
         "vless|xhttp|tls": 3
       },
-      "parse_ms": 29
+      "parse_ms": 48
     },
     {
       "id": "32-github-top-600",
@@ -951,7 +951,7 @@
         "vless|none|tls": 1,
         "vless|xhttp|reality": 5
       },
-      "parse_ms": 13
+      "parse_ms": 42
     },
     {
       "id": "33-github-229",
@@ -981,7 +981,7 @@
         "vless|xhttp|tls": 15,
         "vmess|none|none": 4
       },
-      "parse_ms": 101
+      "parse_ms": 158
     },
     {
       "id": "34-github-antinet",
@@ -1034,7 +1034,7 @@
         "vmess|ws|tls": 42,
         "wireguard|none|none": 1
       },
-      "parse_ms": 503
+      "parse_ms": 739
     },
     {
       "id": "35-github-premium",
@@ -1069,7 +1069,7 @@
         "vless|xhttp|reality": 1,
         "vless|xhttp|tls": 1
       },
-      "parse_ms": 52
+      "parse_ms": 76
     },
     {
       "id": "36-github-alive-full",
@@ -1103,7 +1103,7 @@
         "vless|none|tls": 26,
         "vmess|none|none": 13
       },
-      "parse_ms": 266
+      "parse_ms": 456
     },
     {
       "id": "37-github-sub",
@@ -1157,7 +1157,7 @@
         "vmess|ws|tls": 41,
         "vmess|xhttp|tls": 1
       },
-      "parse_ms": 984
+      "parse_ms": 1688
     },
     {
       "id": "38-codeberg-vless-universal",
@@ -1180,7 +1180,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 40
+      "parse_ms": 59
     },
     {
       "id": "39-moshub-list-universal",
@@ -1203,7 +1203,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 38
+      "parse_ms": 72
     },
     {
       "id": "40-gitverse-list-universal",
@@ -1226,7 +1226,7 @@
         "vless|xhttp|reality": 13,
         "vless|xhttp|tls": 15
       },
-      "parse_ms": 36
+      "parse_ms": 62
     },
     {
       "id": "41-gitlab-vless-reality-white-lists-rus-mobile",
@@ -1251,7 +1251,7 @@
         "vless|ws|tls": 5,
         "vless|xhttp|reality": 8
       },
-      "parse_ms": 10
+      "parse_ms": 15
     },
     {
       "id": "42-bitbucket-vless-reality-white-lists-rus-mobile",
@@ -1276,7 +1276,7 @@
         "vless|ws|tls": 5,
         "vless|xhttp|reality": 8
       },
-      "parse_ms": 8
+      "parse_ms": 10
     },
     {
       "id": "47-domain-whitelist",
@@ -1306,7 +1306,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 36
+      "parse_ms": 60
     },
     {
       "id": "48-domain-1",
@@ -1357,7 +1357,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1201
+      "parse_ms": 2144
     },
     {
       "id": "49-domain-2",
@@ -1408,7 +1408,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1093
+      "parse_ms": 1696
     },
     {
       "id": "50-domain-whitelist",
@@ -1438,7 +1438,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 36
+      "parse_ms": 48
     },
     {
       "id": "51-domain-other",
@@ -1489,7 +1489,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1183
       },
-      "parse_ms": 1132
+      "parse_ms": 2727
     },
     {
       "id": "52-domain-1",
@@ -1540,7 +1540,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1102
+      "parse_ms": 2160
     },
     {
       "id": "53-domain-2",
@@ -1591,7 +1591,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1144
+      "parse_ms": 1899
     },
     {
       "id": "54-gitverse-whitelist",
@@ -1616,7 +1616,7 @@
         "vless|grpc|reality": 3,
         "vless|none|reality": 109
       },
-      "parse_ms": 56
+      "parse_ms": 124
     },
     {
       "id": "55-gitverse-other",
@@ -1653,7 +1653,7 @@
         "vless|none|tls": 32,
         "vless|xhttp|tls": 2
       },
-      "parse_ms": 450
+      "parse_ms": 1404
     },
     {
       "id": "56-gitverse-1",
@@ -1690,7 +1690,7 @@
         "vless|none|tls": 32,
         "vless|xhttp|tls": 2
       },
-      "parse_ms": 443
+      "parse_ms": 737
     },
     {
       "id": "57-gitverse-2",
@@ -1727,7 +1727,7 @@
         "vless|none|tls": 32,
         "vless|xhttp|tls": 2
       },
-      "parse_ms": 510
+      "parse_ms": 923
     },
     {
       "id": "58-domain-whitelist",
@@ -1757,7 +1757,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 37
+      "parse_ms": 51
     },
     {
       "id": "59-domain-other",
@@ -1808,7 +1808,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1183
       },
-      "parse_ms": 1188
+      "parse_ms": 1609
     },
     {
       "id": "60-domain-1",
@@ -1859,7 +1859,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1096
+      "parse_ms": 1276
     },
     {
       "id": "61-domain-2",
@@ -1910,7 +1910,7 @@
         "vless|ws|none": 477,
         "vless|ws|tls": 1191
       },
-      "parse_ms": 1164
+      "parse_ms": 1407
     },
     {
       "id": "62-domain-whitelist-etoneya-baby",
@@ -1940,7 +1940,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 36
+      "parse_ms": 40
     },
     {
       "id": "63-domain-whitelist",
@@ -1970,7 +1970,7 @@
         "vless|none|reality": 73,
         "vless|ws|tls": 8
       },
-      "parse_ms": 36
+      "parse_ms": 38
     },
     {
       "id": "64-domain-gen",
@@ -2003,7 +2003,7 @@
         "vless|xhttp|reality": 6,
         "vless|xhttp|tls": 3
       },
-      "parse_ms": 104
+      "parse_ms": 110
     },
     {
       "id": "65-codeberg-sub",
@@ -2072,7 +2072,7 @@
         "vless|xhttp|tls": 14,
         "vmess|none|none": 1
       },
-      "parse_ms": 577
+      "parse_ms": 652
     },
     {
       "id": "67-domain-working-configs",
@@ -2107,7 +2107,7 @@
         "vless|xhttp|tls": 21,
         "vmess|ws|tls": 6
       },
-      "parse_ms": 49
+      "parse_ms": 60
     },
     {
       "id": "68-gitverse-outlinevpn-outlinevpn",
@@ -2139,7 +2139,7 @@
         "vless|ws|tls": 29,
         "vless|xhttp|reality": 5
       },
-      "parse_ms": 67
+      "parse_ms": 76
     },
     {
       "id": "69-domain-api-php",
@@ -2191,7 +2191,7 @@
         "vless|xhttp|reality": 87,
         "vless|xhttp|tls": 24
       },
-      "parse_ms": 358
+      "parse_ms": 501
     },
     {
       "id": "71-domain-bypass-all",
@@ -2228,7 +2228,7 @@
         "vless|xhttp|reality": 87,
         "vless|xhttp|tls": 24
       },
-      "parse_ms": 421
+      "parse_ms": 400
     },
     {
       "id": "72-gitverse-alive-full",
@@ -2262,7 +2262,7 @@
         "vless|none|tls": 26,
         "vmess|none|none": 13
       },
-      "parse_ms": 277
+      "parse_ms": 284
     },
     {
       "id": "73-github-full",
@@ -2294,12 +2294,56 @@
         "vless|xhttp|tls": 19,
         "vmess|none|none": 2
       },
-      "parse_ms": 81
+      "parse_ms": 85
+    },
+    {
+      "id": "74-github-sub-html",
+      "url": "https://raw.githubusercontent.com/arshiacomplus/v2rayExtractor/refs/heads/main/mix/sub.html",
+      "source": "github",
+      "decoded_kind": "uri_lines",
+      "nodes_total": 331,
+      "by_type": {
+        "hysteria2": 73,
+        "shadowsocks": 64,
+        "trojan": 5,
+        "vless": 177,
+        "vmess": 12
+      },
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 1,
+        "ech_ignored": 1,
+        "reality_fp_not_chrome": 2,
+        "reality_fp_random_pinned": 28,
+        "tls_insecure": 61,
+        "uri_param_unknown": 12,
+        "utls_fp_unknown": 1,
+        "ws_early_data_converted": 5
+      },
+      "coverage": {
+        "hysteria2|none|tls": 73,
+        "shadowsocks|none|none": 64,
+        "trojan|ws|tls": 5,
+        "vless|grpc|reality": 5,
+        "vless|grpc|tls": 4,
+        "vless|none|none": 5,
+        "vless|none|reality": 46,
+        "vless|none|tls": 8,
+        "vless|ws|none": 63,
+        "vless|ws|tls": 39,
+        "vless|xhttp|reality": 3,
+        "vless|xhttp|tls": 4,
+        "vmess|none|none": 8,
+        "vmess|none|tls": 2,
+        "vmess|ws|none": 1,
+        "vmess|ws|tls": 1
+      },
+      "parse_ms": 66
     }
   ],
   "summary": {
-    "subscriptions": 69,
-    "nodes_total": 60588,
+    "subscriptions": 70,
+    "nodes_total": 60919,
     "zero_node_subscriptions": [
       {
         "id": "03-github-vless",
@@ -2323,7 +2367,7 @@
       }
     ],
     "decoded_kinds": {
-      "uri_lines": 69
+      "uri_lines": 70
     },
     "dropped_codes": {
       "form_unrecognized": 3470,
@@ -2336,17 +2380,17 @@
       "service_record_ignored": 2
     },
     "warning_codes": {
-      "duplicates_collapsed": 8728,
-      "uri_param_unknown": 4840,
-      "reality_fp_not_chrome": 2931,
-      "reality_fp_random_pinned": 2491,
-      "tls_insecure": 1299,
+      "duplicates_collapsed": 8729,
+      "uri_param_unknown": 4852,
+      "reality_fp_not_chrome": 2933,
+      "reality_fp_random_pinned": 2519,
+      "tls_insecure": 1360,
       "ss_method_legacy": 779,
-      "utls_fp_unknown": 359,
-      "ws_early_data_converted": 318,
+      "utls_fp_unknown": 360,
+      "ws_early_data_converted": 323,
       "field_missing": 306,
       "tls_not_applicable_quic": 82,
-      "ech_ignored": 69,
+      "ech_ignored": 70,
       "tls_alpn_item_invalid": 26,
       "tuic_udp_relay_mode_invalid": 16,
       "reality_short_id_invalid": 4,
@@ -2356,50 +2400,50 @@
       "xhttp_param_reset": 1
     },
     "node_types": {
-      "vless": 50925,
-      "shadowsocks": 4824,
-      "trojan": 2676,
-      "hysteria2": 1789,
-      "vmess": 290,
+      "vless": 51102,
+      "shadowsocks": 4888,
+      "trojan": 2681,
+      "hysteria2": 1862,
+      "vmess": 302,
       "anytls": 42,
       "tuic": 40,
       "socks": 1,
       "wireguard": 1
     },
     "coverage": {
-      "vless|none|reality": 23980,
-      "vless|ws|tls": 14616,
-      "shadowsocks|none|none": 4824,
-      "vless|ws|none": 4544,
-      "vless|grpc|reality": 3310,
-      "trojan|ws|tls": 2154,
-      "hysteria2|none|tls": 1789,
-      "vless|none|tls": 1570,
-      "vless|xhttp|reality": 878,
-      "vless|grpc|tls": 579,
+      "vless|none|reality": 24026,
+      "vless|ws|tls": 14655,
+      "shadowsocks|none|none": 4888,
+      "vless|ws|none": 4607,
+      "vless|grpc|reality": 3315,
+      "trojan|ws|tls": 2159,
+      "hysteria2|none|tls": 1862,
+      "vless|none|tls": 1578,
+      "vless|xhttp|reality": 881,
+      "vless|grpc|tls": 583,
       "trojan|none|tls": 500,
-      "vless|xhttp|tls": 393,
-      "vless|none|none": 323,
+      "vless|xhttp|tls": 397,
+      "vless|none|none": 328,
       "vless|http|tls": 264,
-      "vmess|none|none": 134,
+      "vmess|none|none": 142,
       "vless|grpc|none": 129,
       "vless|http|reality": 128,
-      "vmess|ws|tls": 122,
+      "vmess|ws|tls": 123,
       "vless|httpupgrade|none": 73,
       "vless|httpupgrade|tls": 56,
       "vless|http|none": 48,
       "anytls|none|tls": 42,
       "tuic|none|tls": 40,
-      "vmess|ws|none": 31,
+      "vmess|ws|none": 32,
       "vless|xhttp|none": 29,
       "trojan|httpupgrade|tls": 12,
       "trojan|xhttp|tls": 8,
       "vless|ws|reality": 5,
+      "vmess|none|tls": 3,
       "socks|none|none": 1,
       "trojan|grpc|tls": 1,
       "trojan|none|none": 1,
       "vmess|httpupgrade|tls": 1,
-      "vmess|none|tls": 1,
       "vmess|xhttp|tls": 1,
       "wireguard|none|none": 1
     }

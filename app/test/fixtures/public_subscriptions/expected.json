@@ -891,6 +891,20 @@
         "tls_insecure": 10,
         "uri_param_unknown": 3
       }
+    },
+    "74-github-sub-html": {
+      "nodes_total": 331,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 1,
+        "ech_ignored": 1,
+        "reality_fp_not_chrome": 2,
+        "reality_fp_random_pinned": 28,
+        "tls_insecure": 61,
+        "uri_param_unknown": 12,
+        "utls_fp_unknown": 1,
+        "ws_early_data_converted": 5
+      }
     }
   }
 }

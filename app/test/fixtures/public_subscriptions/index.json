@@ -1192,6 +1192,23 @@
       "body_file": "bodies/73-github-full.txt.gz",
       "body_bytes": 93915,
       "body_kind_hint": "uri_lines"
+    },
+    {
+      "id": "74-github-sub-html",
+      "url": "https://raw.githubusercontent.com/arshiacomplus/v2rayExtractor/refs/heads/main/mix/sub.html",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-30T17:11:19.516162Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "fefafbc4d400c9542741181932e336ac04b3b1bf82518601b90d2812e3dae1f9",
+      "body_file": "bodies/74-github-sub-html.txt.gz",
+      "body_bytes": 63633,
+      "body_kind_hint": "uri_lines"
     }
   ]
 }
