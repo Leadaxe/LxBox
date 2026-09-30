@@ -42,7 +42,10 @@ The feature keeps four principles:
   not accumulate. **Witness:** unit "recording off → events ignored".
   **Mutation:** auto-start of recording.
 - **P2. START clears the previous log, STOP freezes it.** After STOP the list
-  stays until the next START, which begins from zero. `no witness`.
+  stays until the next START, which begins from zero: a connection of the
+  previous session gives no event in the new log. **Witness:** unit
+  "после STOP→START в буфере только новая сессия" (605). **Mutation:** START
+  keeps the connection snapshots.
 - **P3. The retention window is selectable and remembered.** 1 min / 10 min /
   1 h, default 10 min, survives a restart. **Witness:** unit "profiler
   retention — default + round-trip + persist". **Mutation:** the window is a
@@ -252,8 +255,5 @@ STOP ──► unsubscribe; the log is frozen until the next START
   2000-01-01 are "no data" sentinels, not dates (§353).
 - The event's `extra` must serialise to JSON, otherwise the Debug API loses the
   server, the source and the group trace that the screen shows (§315).
-- The "DNS / router events off" hint above the log is a leftover of core log
-  parsing; since §180 DNS comes as a structured stream and does not depend on
-  "Forward sing-box logs" (task candidate, 591).
 - Export uploads the whole log, not the filtered list, although the serialiser
   is meant for the filtered one (task candidate, 591).

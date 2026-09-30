@@ -850,4 +850,37 @@ void main() {
       expect(ev.detourChain, isEmpty);
     });
   });
+
+  // §605 / 028 P2 — START начинает с нуля: сессия до STOP не даёт ложный
+  // tcpClose в новом буфере.
+  group('TrafficProfiler — STOP→START', () {
+    CcConnection conn(String id, String domain) => CcConnection(
+          id: id,
+          network: 'tcp',
+          domain: domain,
+          destination: '1.2.3.4:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct',
+          packageName: 'com.example',
+          createdAt: 0,
+          closedAt: 0,
+        );
+
+    test('после STOP→START в буфере только новая сессия', () {
+      final p = TrafficProfiler.I;
+      p.startGlobalRecording();
+      p.ingestForTest([conn('p2-a', 'a.example')]);
+      p.stopGlobalRecording();
+      p.startGlobalRecording();
+
+      p.ingestForTest([conn('p2-b', 'b.example')]);
+
+      final buf = p.globalRollingBuffer;
+      expect(buf.map((e) => e.domain), ['b.example']);
+      expect(buf.where((e) => e.kind == TrafficEventKind.tcpClose), isEmpty);
+      p.stopGlobalRecording();
+    });
+  });
 }
