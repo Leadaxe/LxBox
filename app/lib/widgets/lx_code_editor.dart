@@ -85,7 +85,7 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
   @override
   void initState() {
     super.initState();
-    _toolbar = LxSelectionToolbarController();
+    _toolbar = LxSelectionToolbarController()..readOnly = widget.readOnly;
     _focusNode = FocusNode(debugLabel: 'LxCodeEditor');
     widget.controller.addListener(_onSelectionChanged);
   }
@@ -93,6 +93,7 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
   @override
   void didUpdateWidget(LxCodeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _toolbar.readOnly = widget.readOnly;
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onSelectionChanged);
       widget.controller.addListener(_onSelectionChanged);
@@ -209,6 +210,11 @@ class _LxCodeEditorState extends State<LxCodeEditor> {
 class LxSelectionToolbarController implements SelectionToolbarController {
   LxSelectionToolbarController();
 
+  /// §607 — read-only редактор: в меню только Copy и Select all.
+  /// `cut()`/`paste()` пакета безусловны (его `readOnly` держит лишь
+  /// клавиатурный ввод), поэтому правящие пункты сюда просто не кладём.
+  bool readOnly = false;
+
   OverlayEntry? _entry;
   bool _disposed = false;
 
@@ -267,9 +273,11 @@ class LxSelectionToolbarController implements SelectionToolbarController {
         layerLink: layerLink,
         offset: anchors.primaryAnchor - origin,
         items: [
-          _LxToolbarItem(getLocalText.s("Cut"), controller.cut),
+          if (!readOnly)
+            _LxToolbarItem(getLocalText.s("Cut"), controller.cut),
           _LxToolbarItem(getLocalText.s("Copy"), controller.copy),
-          _LxToolbarItem(getLocalText.s("Paste"), controller.paste),
+          if (!readOnly)
+            _LxToolbarItem(getLocalText.s("Paste"), controller.paste),
           _LxToolbarItem(getLocalText.s("Select all"), controller.selectAll),
         ],
         onDismiss: () => hide(context),
