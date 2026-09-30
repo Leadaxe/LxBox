@@ -1220,6 +1220,9 @@ class HomeController extends ChangeNotifier
     }
     // §2.8 — теперь sink'и стоят + refcount чист → поднимаем screenClient.
     unawaited(_cc.connectScreen());
+    // §605 — profilerClient (запись Live, dns-детектор) пережил остановку
+    // туннеля только в Dart-счётчике: native его порвал. Переподнимаем.
+    unawaited(_cc.restartProfiler());
     // §122/SPEC015 — детерминированный pull стартового снапшота групп. Раньше
     // тут был watchdog, пересоздававший весь screenClient (`refreshScreen`) —
     // он НЕ заставлял ядро переслать снапшот (device-факт: 2 ретрая впустую).
