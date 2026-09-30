@@ -479,7 +479,7 @@ An asset template read once through `TemplateLoader.load()` (a singleton, deep-c
 
 | Section | Role | Example / where it is used |
 |---|---|---|
-| `parser_config` | The sing-box `version` plus the reload interval | Emitted straight into the root |
+| `parser_config` | A legacy block (`version`, `parser.reload`); the app does not read it (§593) | Stays in the template for its shape only |
 | `dns_options.servers` | The canonical DNS servers (system/google/cloudflare/quad9/adguard). Storage keeps `dns.servers[]` records (§439). | Resolved into bodies by `resolveDnsServersBodies` |
 | `dns_options.rules` | The default DNS rules. Storage keeps `dns.rules[]` records (§061 dns-rules-refactor, formerly feature §041; §439). | Resolved by `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI features (HomeScreen, SpeedTest) | Never reach the sing-box config |
@@ -1186,7 +1186,7 @@ L×Box's state lives in two places with different semantics:
 
 ```
 app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.dart
-├── parser_config           # §026 — version + reload interval
+├── parser_config           # §026 — legacy, not read by the app (§593)
 ├── dns_options             # §043+§044 — default DNS servers + rules
 ├── ping_options            # §040 — default URL + presets
 ├── speed_test_options      # §015 — speed-test endpoints

@@ -33,7 +33,6 @@ void main() {
   // фикстура описывала бы конфиг, которого билдер не собирает. Граф-санитайзер
   // (§393 A4) считает живость по ФАКТУ записи — как `validator.dart`.
   WizardTemplate template() => WizardTemplate(
-        parserConfig: ParserConfigBlock(),
         groupTemplates: GroupTemplates(),
         vars: const [],
         varSections: const [],

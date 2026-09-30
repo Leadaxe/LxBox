@@ -232,7 +232,6 @@ void main() {
     });
 
     final template = WizardTemplate(
-      parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(
         direction: DirectionTemplate(
           include: const ['direct', 'auto'],

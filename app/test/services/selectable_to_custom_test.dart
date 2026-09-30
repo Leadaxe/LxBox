@@ -5,7 +5,6 @@ import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/services/selectable_to_custom.dart';
 
 WizardTemplate _templateWith(Map<String, dynamic> config) => WizardTemplate(
-      parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(),
       vars: const <WizardVar>[],
       varSections: const <VarSection>[],

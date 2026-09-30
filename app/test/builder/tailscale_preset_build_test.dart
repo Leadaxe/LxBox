@@ -45,7 +45,6 @@ void main() {
       .singleWhere((r) => r['preset_id'] == 'tailscale'));
 
   final template = WizardTemplate(
-    parserConfig: ParserConfigBlock(),
     groupTemplates: GroupTemplates(
       direction: DirectionTemplate(
         include: const ['direct', 'auto'],

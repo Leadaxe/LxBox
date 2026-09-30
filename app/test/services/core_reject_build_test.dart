@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/models/parser_config.dart' show WizardTemplate, ParserConfigBlock, GroupTemplates, DirectionTemplate, AutoTemplate, DefaultDirection;
+import 'package:lxbox/models/parser_config.dart' show WizardTemplate, GroupTemplates, DirectionTemplate, AutoTemplate, DefaultDirection;
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/contract/registry.dart';
@@ -21,7 +21,6 @@ void main() {
   });
 
   final template = WizardTemplate(
-    parserConfig: ParserConfigBlock(),
     groupTemplates: GroupTemplates(
       direction: DirectionTemplate(
         include: const ['direct', 'auto'],

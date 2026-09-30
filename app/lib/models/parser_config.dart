@@ -1,7 +1,6 @@
 /// Full wizard template loaded from asset.
 class WizardTemplate {
   WizardTemplate({
-    required this.parserConfig,
     required this.groupTemplates,
     required this.vars,
     required this.varSections,
@@ -20,7 +19,6 @@ class WizardTemplate {
         speedTestOptionsModel = speedTestOptionsModel ??
             SpeedTestOptionsModel.fromJson(speedTestOptions);
 
-  final ParserConfigBlock parserConfig;
   final GroupTemplates groupTemplates; // §267 (было: List<PresetGroup> presetGroups)
   final List<WizardVar> vars;
   final Map<String, dynamic> config;
@@ -63,7 +61,7 @@ class WizardTemplate {
   }
 
   factory WizardTemplate.fromJson(Map<String, dynamic> json) {
-    final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
+    // §593 — секция `parser_config` шаблона приложением не читается.
     final rulesJson = json['selectable_rules'] as List<dynamic>? ?? [];
     // §267 — group_templates + top-level default_directions (было preset_groups).
     final groupTemplatesJson =
@@ -94,7 +92,6 @@ class WizardTemplate {
     }
 
     return WizardTemplate(
-      parserConfig: ParserConfigBlock.fromJson(pcJson),
       groupTemplates:
           GroupTemplates.fromJson(groupTemplatesJson, defaultDirectionsJson),
       vars: allVars,
@@ -106,25 +103,6 @@ class WizardTemplate {
       dnsOptions: json['dns_options'] as Map<String, dynamic>? ?? {},
       pingOptions: json['ping_options'] as Map<String, dynamic>? ?? {},
       speedTestOptions: json['speed_test_options'] as Map<String, dynamic>? ?? {},
-    );
-  }
-}
-
-/// The `parser_config` block from wizard template.
-class ParserConfigBlock {
-  ParserConfigBlock({
-    this.version = 5,
-    this.reload = '12h',
-  });
-
-  final int version;
-  final String reload;
-
-  factory ParserConfigBlock.fromJson(Map<String, dynamic> json) {
-    final parser = json['parser'] as Map<String, dynamic>? ?? {};
-    return ParserConfigBlock(
-      version: json['version'] as int? ?? 5,
-      reload: parser['reload'] as String? ?? '12h',
     );
   }
 }

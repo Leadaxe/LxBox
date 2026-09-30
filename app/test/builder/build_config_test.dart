@@ -16,7 +16,6 @@ void main() {
 
   group('buildConfig — smoke', () {
     final template = WizardTemplate(
-      parserConfig: ParserConfigBlock(),
       // §267 — group_templates: vpn-1 Направление (direct+auto), auto-подгруппа.
       groupTemplates: GroupTemplates(
         direction: DirectionTemplate(
@@ -426,7 +425,6 @@ void main() {
   group('buildConfig — §161 empty required-var → default backstop', () {
     // Template с required int-var `tol` (default "30"), плейсхолдер в config.
     WizardTemplate templateWithTol() => WizardTemplate(
-          parserConfig: ParserConfigBlock(),
           groupTemplates: GroupTemplates(),
           vars: [
             WizardVar(name: 'tol', type: 'int', defaultValue: '30'),

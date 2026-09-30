@@ -377,7 +377,6 @@ DirectionAuto _toAuto(Map<String, dynamic> a) {
 /// граф-санитайзера (§393 A4) призрак, ровно как и для `validator.dart`,
 /// который строит `allTags` по фактическим outbounds/endpoints.
 WizardTemplate _template() => WizardTemplate(
-      parserConfig: ParserConfigBlock(),
       groupTemplates: GroupTemplates(),
       // Переменные автовыбора шаблона лаунчера: кейс
       // `fold_auto_inherits_template_vars` проверяет, что `@urltest_*` в
