@@ -263,4 +263,174 @@ void main() {
       expect(find.text('View details'), findsOneWidget);
     });
   });
+
+  group('§608 exit node и срок ключа', () {
+    final now = DateTime.utc(2026, 9, 30, 12);
+    int at(Duration d) => now.add(d).millisecondsSinceEpoch ~/ 1000;
+
+    CcTailscaleStatus status({
+      CcTailscalePeer? exit,
+      int keyExpiry = 0,
+      String state = 'Running',
+    }) => CcTailscaleStatus(
+      tag: 'ts',
+      backendState: state,
+      stateText: '',
+      self: CcTailscalePeer(hostName: 'me', keyExpiry: keyExpiry),
+      exitNode: exit,
+    );
+
+    TailnetNote? note(CcTailscaleStatus? s, {bool withExit = true}) =>
+        tailnetRowNote(tunnelUp: true, s: s, now: now, withExit: withExit);
+
+    test('подписка: узлы с exit и NETWORKS, без WireGuard', () {
+      final m = ParsedConfig.parse(config(endpoints: [wg, tsExit, tsLan]));
+      expect(tailscaleNodeTags(m), ['ts-exit', 'ts-lan']);
+      final s = HomeState(
+        tunnel: TunnelStatus.connected,
+        configRaw: config(endpoints: [tsExit]),
+      );
+      expect(s.networksNodes, isEmpty);
+      expect(s.tailscaleNodes, ['ts-exit']);
+    });
+
+    test('имя exit node: hostName → метка DNS → IP', () {
+      expect(tailnetExitName(null), isNull);
+      expect(tailnetExitName(status()), isNull);
+      expect(
+        tailnetExitName(status(exit: const CcTailscalePeer(hostName: 'nas'))),
+        'nas',
+      );
+      expect(
+        tailnetExitName(
+          status(exit: const CcTailscalePeer(dnsName: 'box.tail1.ts.net.')),
+        ),
+        'box',
+      );
+      expect(
+        tailnetExitName(status(exit: const CcTailscalePeer(ips: ['100.1.2.3']))),
+        '100.1.2.3',
+      );
+    });
+
+    test('exit node офлайн важнее срока ключа; у NETWORKS не бывает', () {
+      final s = status(
+        exit: const CcTailscalePeer(hostName: 'nas'),
+        keyExpiry: at(const Duration(days: 2)),
+      );
+      expect(note(s), const TailnetNote(TailnetNoteKind.exitOffline));
+      expect(
+        note(s, withExit: false),
+        const TailnetNote(TailnetNoteKind.keyExpires, 2),
+      );
+      final online = status(
+        exit: const CcTailscalePeer(hostName: 'nas', online: true),
+      );
+      expect(note(online), isNull);
+    });
+
+    test('срок ключа: отключён, далеко, дни, меньше суток, истёк', () {
+      expect(note(status()), isNull);
+      expect(note(status(keyExpiry: at(const Duration(days: 8)))), isNull);
+      expect(
+        note(status(keyExpiry: at(const Duration(days: 3, hours: 12)))),
+        const TailnetNote(TailnetNoteKind.keyExpires, 3),
+      );
+      expect(
+        note(status(keyExpiry: at(const Duration(hours: 5)))),
+        const TailnetNote(TailnetNoteKind.keyExpires, 0),
+      );
+      expect(
+        note(status(keyExpiry: at(const Duration(hours: -1)))),
+        const TailnetNote(TailnetNoteKind.keyExpired),
+      );
+    });
+
+    test('VPN выключен или записи нет — метки нет', () {
+      final s = status(keyExpiry: at(const Duration(hours: 5)));
+      expect(
+        tailnetRowNote(tunnelUp: false, s: s, now: now, withExit: true),
+        isNull,
+      );
+      expect(note(null), isNull);
+    });
+
+    NodeViewItem row({
+      TailnetRowState? tailnetState,
+      String endpointState = '',
+      required TailnetNote note,
+    }) => NodeViewItem(
+      tag: 'ts',
+      active: false,
+      highlighted: false,
+      delay: null,
+      pingBusy: false,
+      tunnelUp: true,
+      busy: false,
+      urltestNow: null,
+      hasDetour: false,
+      protocolLabel: 'Tailscale·via nas',
+      endpointState: endpointState,
+      tailnetState: tailnetState,
+      tailnetNote: note,
+    );
+
+    Future<void> pump(WidgetTester tester, NodeViewItem item) =>
+        tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: NodeRow(
+                item: item,
+                onHighlight: () {},
+                onActivate: () {},
+                onPing: () {},
+              ),
+            ),
+          ),
+        );
+
+    testWidgets('узел с exit: метка на месте up, но не off', (tester) async {
+      await pump(
+        tester,
+        row(
+          endpointState: CcEndpointState.up,
+          note: const TailnetNote(TailnetNoteKind.exitOffline),
+        ),
+      );
+      expect(find.text('exit offline'), findsOneWidget);
+      expect(find.text('up'), findsNothing);
+      await pump(
+        tester,
+        row(
+          endpointState: CcEndpointState.disabled,
+          note: const TailnetNote(TailnetNoteKind.keyExpires, 3),
+        ),
+      );
+      expect(find.text('off'), findsOneWidget);
+      expect(find.text('key expires 3d'), findsNothing);
+    });
+
+    testWidgets('NETWORKS: ключ вместо running, sign-in важнее', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        row(
+          tailnetState: const TailnetRowState(TailnetStateKind.running),
+          note: const TailnetNote(TailnetNoteKind.keyExpires, 0),
+        ),
+      );
+      expect(find.text('key expires <1d'), findsOneWidget);
+      expect(find.text('running'), findsNothing);
+      await pump(
+        tester,
+        row(
+          tailnetState: const TailnetRowState(TailnetStateKind.signInNeeded),
+          note: const TailnetNote(TailnetNoteKind.keyExpired),
+        ),
+      );
+      expect(find.text('sign-in needed'), findsOneWidget);
+      expect(find.text('key expired'), findsNothing);
+    });
+  });
 }

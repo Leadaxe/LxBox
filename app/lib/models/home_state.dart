@@ -300,6 +300,10 @@ class HomeState {
   /// ([activeModel]; при выключенном VPN — последний собранный).
   List<String> get networksNodes => networksNodeTags(activeModel);
 
+  /// §608 — все Tailscale-endpoint'ы работающего конфига (NETWORKS и узлы с
+  /// exit node): по ним держится подписка на поток статуса.
+  List<String> get tailscaleNodes => tailscaleNodeTags(activeModel);
+
   /// Задача 579 — список узлов показывает NETWORKS вместо узлов направления:
   /// VPN включён, узлы есть, и выбран NETWORKS либо настоящих направлений нет.
   /// Узлы пропали (узел удалён или стал выходом) — снова видно выбранное

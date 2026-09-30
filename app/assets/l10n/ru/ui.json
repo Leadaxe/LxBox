@@ -5756,5 +5756,17 @@
   },
   "Comments were removed.": {
     "value": "Комментарии убраны."
+  },
+  "via %s": {
+    "value": "через %s"
+  },
+  "exit offline": {
+    "value": "выход офлайн"
+  },
+  "key expires <1d": {
+    "value": "ключ истекает <1 д"
+  },
+  "key expires %sd": {
+    "value": "ключ истекает через %s д"
   }
 }

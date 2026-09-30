@@ -346,12 +346,13 @@ class HomeController extends ChangeNotifier
   }
 
   /// Задача 579 — подписка ядра `SubscribeTailscaleStatus` живёт, пока VPN
-  /// включён и в конфиге есть узел NETWORKS. Смена состава узлов или снапшота
+  /// включён и в конфиге есть Tailscale-узел (§608: NETWORKS или с exit
+  /// node). Смена состава узлов или снапшота
   /// конфига ядра (перезагрузка) переподнимает её: после reload ядра прежний
   /// стрим может закончиться молча.
   void _syncTailnetStatus() {
     final s = _state;
-    final nodes = s.tunnelUp ? s.networksNodes : const <String>[];
+    final nodes = s.tunnelUp ? s.tailscaleNodes : const <String>[];
     final key = nodes.isEmpty
         ? null
         : '${nodes.join('\n')}|${s.runningConfigRaw?.hashCode}';
@@ -372,12 +373,20 @@ class HomeController extends ChangeNotifier
       if (_tailnetKey == null) return;
       // §581 — поток несёт и устройства сети; главному экрану нужны состояние
       // узла и число устройств (Debug API), перерисовка — только при их смене.
+      // §608 — плюс exit node (имя, доступность) и срок ключа для строки узла.
       final prev = _state.tailscaleStatus;
       final same = prev.length == list.length &&
-          list.every((e) =>
-              prev[e.tag]?.backendState == e.backendState &&
-              prev[e.tag]?.stateText == e.stateText &&
-              prev[e.tag]?.peers.length == e.peers.length);
+          list.every((e) {
+            final p = prev[e.tag];
+            return p != null &&
+                p.backendState == e.backendState &&
+                p.stateText == e.stateText &&
+                p.peers.length == e.peers.length &&
+                p.exitNode?.stableId == e.exitNode?.stableId &&
+                p.exitNode?.hostName == e.exitNode?.hostName &&
+                p.exitNode?.online == e.exitNode?.online &&
+                p.self?.keyExpiry == e.self?.keyExpiry;
+          });
       if (same) return;
       _emit(_state.copyWith(tailscaleStatus: {for (final e in list) e.tag: e}));
     }, onError: (Object e) {

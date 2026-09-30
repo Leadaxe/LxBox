@@ -74,6 +74,16 @@ Direction to route the internet through it).
   by editing the body: the identity lives in the state directory.
 - Node rows and pickers show the type only, without `:0`; the node screen says
   "No address (Tailscale)"; the node is not probed and the row shows "—".
+- With the VPN on, the row of a node with an exit node reads
+  `tailscale·via <device>`. When that device is offline, `exit offline`
+  (orange) takes the place of the endpoint state; a node turned off by hand
+  keeps `off`. Direct vs relay is not shown: the core's status has no path,
+  only the device check in the Network tab knows it.
+- Less than 7 days before the device key expires, the row warns
+  `key expires Nd` / `key expires <1d` / `key expired` (orange): on a node
+  with an exit — in the endpoint-state slot, below `exit offline`; on a
+  NETWORKS row — instead of `running` only. `keyExpiry == 0` (expiry off in
+  the admin console) — no label.
 - Editing a subscription node is not possible; a Tailscale node inside a URL
   subscription is served by the preset like any other.
 
@@ -97,3 +107,4 @@ Direction to route the internet through it).
 | 5 | [575](../../../tasks/575-remove-node-sections.md) | Implemented (phases 1–3) | Node sections abolished: the wizard and import give a bare body |
 | 6 | [585](../../../tasks/585-unknown-node-type-accepted.md) | Implemented | Unknown node types accepted; endpoint list in code |
 | 7 | [586](../../../tasks/586-endpoint-types-from-registry.md) | Implemented | The endpoint section comes from the registry's `kind`, not from code |
+| 8 | [608](../../../tasks/608-tailscale-exit-node-in-node-row.md) | Implemented | Node row: exit node name, `exit offline`, key expiry |

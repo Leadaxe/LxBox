@@ -1,5 +1,5 @@
 import '../models/node_warning.dart';
-import '../services/networks_direction.dart' show TailnetRowState;
+import '../services/networks_direction.dart' show TailnetNote, TailnetRowState;
 
 /// Immutable view-model для одной node row на главной (или другом screen'е
 /// который захочет переиспользовать `NodeRow`).
@@ -33,6 +33,7 @@ class NodeViewItem {
     this.notificationWarnings,
     this.endpointState = '',
     this.tailnetState,
+    this.tailnetNote,
   });
 
   /// Tag ноды или group selector (например `vpn-1`, `✨auto`).
@@ -122,4 +123,9 @@ class NodeViewItem {
   /// состояние узла Tailscale, без выбора узла и замера. `null` — обычная
   /// строка.
   final TailnetRowState? tailnetState;
+
+  /// §608 — предупреждение Tailscale-узла (exit node офлайн, срок ключа).
+  /// В строке узла с exit — на месте подписи состояния endpoint'а, в строке
+  /// NETWORKS — на месте `running`. `null` — предупреждать не о чем.
+  final TailnetNote? tailnetNote;
 }

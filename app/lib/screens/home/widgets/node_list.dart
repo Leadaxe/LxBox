@@ -332,6 +332,13 @@ class HomeNodeList extends StatelessWidget {
                     tag: tag,
                     byTag: state.tailscaleStatus,
                   ),
+                  // §608 — срок ключа на месте `running`.
+                  tailnetNote: tailnetRowNote(
+                    tunnelUp: state.tunnelUp,
+                    s: state.tailscaleStatus[tag],
+                    now: DateTime.now(),
+                    withExit: false,
+                  ),
                 ),
                 onHighlight: () => openDetails(tag),
                 // Выбора узла нет: пункт и кнопка скрыты в NodeRow.
@@ -571,6 +578,12 @@ class HomeNodeList extends StatelessWidget {
     final transport = protoSrcNode?.transportLabel;
     final security = protoSrcNode?.securityLabel;
     final outboundType = cache[tag]?.type;
+    // §608 — Tailscale-узел с exit node: через какое устройство идёт трафик,
+    // живо ли оно и не истекает ли ключ. Записи ядра нет — строка как была.
+    final tailnet = outboundType == 'tailscale' && state.tunnelUp
+        ? state.tailscaleStatus[tag]
+        : null;
+    final exitName = tailnetExitName(tailnet);
     final notificationWarnings = _notificationWarningsForRow(
       outboundType: outboundType,
       isDirectionAuto: isDirectionAuto,
@@ -619,7 +632,14 @@ class HomeNodeList extends StatelessWidget {
                   protoLabel(protoType),
                   ?transport,
                   ?security,
+                  if (exitName != null) getLocalText.s("via %s", exitName),
                 ].join('·'),
+          tailnetNote: tailnetRowNote(
+            tunnelUp: state.tunnelUp,
+            s: tailnet,
+            now: DateTime.now(),
+            withExit: true,
+          ),
           matches: matchingSet.contains(tag),
           // §355 — мёртвая нода с зависимыми (DNS/ноды через detour):
           // ⚠-метка, тап по ней — sheet со списком пострадавших.

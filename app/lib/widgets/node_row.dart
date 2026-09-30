@@ -78,6 +78,7 @@ class NodeRow extends StatelessWidget {
   String get _tailnetLabel {
     final st = item.tailnetState;
     if (st == null) return '';
+    if (_tailnetNoteShown) return _tailnetNoteLabel;
     switch (st.kind) {
       case TailnetStateKind.none:
         return '';
@@ -94,8 +95,30 @@ class NodeRow extends StatelessWidget {
     }
   }
 
+  /// §608 — подпись предупреждения [NodeViewItem.tailnetNote]; пусто — нет.
+  String get _tailnetNoteLabel {
+    final n = item.tailnetNote;
+    if (n == null) return '';
+    switch (n.kind) {
+      case TailnetNoteKind.exitOffline:
+        return getLocalText.s("exit offline");
+      case TailnetNoteKind.keyExpired:
+        return getLocalText.s("key expired");
+      case TailnetNoteKind.keyExpires:
+        return n.days < 1
+            ? getLocalText.s("key expires <1d")
+            : getLocalText.s("key expires %sd", n.days);
+    }
+  }
+
+  /// §608 — строка NETWORKS: метка ключа подменяет только `running`.
+  bool get _tailnetNoteShown =>
+      item.tailnetNote != null &&
+      item.tailnetState?.kind == TailnetStateKind.running;
+
   Color _tailnetColor(ColorScheme cs) {
     final st = item.tailnetState;
+    if (_tailnetNoteShown) return Colors.orange;
     if (st?.kind == TailnetStateKind.running) return Colors.green;
     if (st != null && st.isWarning) return Colors.orange;
     return cs.onSurfaceVariant;
@@ -121,7 +144,16 @@ class NodeRow extends StatelessWidget {
   /// состояние неизвестно или идёт сборка (`building`).
   bool get _isDisabled => item.endpointState == CcEndpointState.disabled;
 
+  /// §608 — узел с exit node: предупреждение подменяет up/sleep/down, но не
+  /// `off` (выключен вручную) и не сборку.
+  bool get _endpointNoteShown =>
+      !_isTailnet &&
+      item.tailnetNote != null &&
+      item.endpointState != CcEndpointState.disabled &&
+      item.endpointState != CcEndpointState.building;
+
   String get _endpointStateLabel {
+    if (_endpointNoteShown) return _tailnetNoteLabel;
     final st = item.endpointState;
     // §557 — выключен вручную: отдельная подпись, не сон и не «down».
     if (st == CcEndpointState.disabled) return getLocalText.s("off");
@@ -236,7 +268,10 @@ class NodeRow extends StatelessWidget {
         ? null
         : Flexible(
             child: _endpointStateLabelText(
-                stateLabel, _isDisabled ? Colors.orange : cs.onSurfaceVariant),
+                stateLabel,
+                _isDisabled || _endpointNoteShown
+                    ? Colors.orange
+                    : cs.onSurfaceVariant),
           );
 
     final Widget? proto = (hasProto || hasNotificationBadge)

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | F (доработка) |
-| Статус | P (planned) |
+| Статус | D (done), device-verify не проводился |
 | Фича | [030-TAILSCALE](../features/030-TAILSCALE/FEATURE.md), [007-NODE_LIST](../features/007-NODE_LIST/FEATURE.md) |
 | Дата | 2026-09-30 |
 | Связанные | issue #155 (direct/relay в строке — отказ), задача 579 (NETWORKS), §581 (поток статуса, вкладка Network) |

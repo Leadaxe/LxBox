@@ -5477,5 +5477,17 @@
   },
   "Comments were removed.": {
     "value": "注释已移除。"
+  },
+  "via %s": {
+    "value": "经 %s"
+  },
+  "exit offline": {
+    "value": "出口节点离线"
+  },
+  "key expires <1d": {
+    "value": "密钥 1 天内过期"
+  },
+  "key expires %sd": {
+    "value": "密钥 %s 天后过期"
   }
 }
