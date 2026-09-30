@@ -133,16 +133,12 @@ void main() {
       expect(SettingsStorage.configDirty, isTrue);
     });
 
-    test('не-config сейверы (sort/ping/timestamp) НЕ поднимают флаг',
+    test('не-config сейверы (sort/ping) НЕ поднимают флаг',
         () async {
       await SettingsStorage.setNodeSort('latency', const ['a', 'b']);
       expect(SettingsStorage.configDirty, isFalse);
 
       await SettingsStorage.savePingOptions({'url': 'https://x'});
-      expect(SettingsStorage.configDirty, isFalse);
-
-      await SettingsStorage.setLastGlobalUpdate(
-          DateTime.utc(2026, 1, 1));
       expect(SettingsStorage.configDirty, isFalse);
     });
 

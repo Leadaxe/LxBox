@@ -1250,7 +1250,7 @@ the README names the version that ships in the APK.
 │                           #   storage_version (§439) / vars / sources[] (subscriptions, servers,
 │                           #   folders, then chains) / rules[] / dns{} / ping_options /
 │                           #   route_final / directions[] (§125/§393, replaces enabled_groups) /
-│                           #   last_global_update / presets_migrated / directions_migrated
+│                           #   last_global_update (legacy, §593) / presets_migrated / directions_migrated
 ├── lxbox_settings.json.v0.bak  # §439 — the 2.23.2-form original, copied once before the migration
 ├── rule_sets/              # §011 — the cache of binary .srs files (+ §366 .meta.json sidecars)
 │   └── <ruleId>.srs

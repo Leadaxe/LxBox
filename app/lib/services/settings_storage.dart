@@ -194,7 +194,8 @@ class SettingsStorage {
     'warp_account',
     'masque_account', // §130/§219 — MASQUE-WARP аккаунт; был в бэкапе, но не в
     //                   allowlist → терялся при restore (default-deny)
-    'last_global_update',
+    'last_global_update', // §593 — LEGACY (§010F снят): не пишется и не читается;
+    //                        известен, чтобы старый бэкап не дал «unknown keys»
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
     'late_presets_seeded', // §578 — guard разового seed поздних дефолтных пресетов
     'interrupt_connections_on_switch',
@@ -516,23 +517,6 @@ class SettingsStorage {
   /// Обновление подписки сюда НЕ входит — см. `_healChainHops`.
   static Future<ChainHealResult> healChainHops(String tag, {bool flush = true}) =>
       _healChainHops(tag, flush: flush);
-
-  // ---------------------------------------------------------------------------
-  // Last global update timestamp
-  // ---------------------------------------------------------------------------
-
-  static Future<DateTime?> getLastGlobalUpdate() => _getLastGlobalUpdate();
-
-  static Future<void> setLastGlobalUpdate(DateTime dt) =>
-      _setLastGlobalUpdate(dt);
-
-  /// Parses a Go-style duration string like "4h", "12h", "30m" into a [Duration].
-  static Duration? parseReloadInterval(String reload) =>
-      _parseReloadInterval(reload);
-
-  /// Returns true if subscriptions should be refreshed based on the reload interval.
-  static Future<bool> shouldRefreshSubscriptions(String reloadInterval) =>
-      _shouldRefreshSubscriptions(reloadInterval);
 
   // §159 — getRuleOutbounds/saveRuleOutbounds удалены (legacy-миграция снята).
 

@@ -103,7 +103,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
-├─ last_global_update            ISO-8601      the timestamp of the last auto-refresh
+├─ last_global_update            ISO-8601      LEGACY (§593) — neither written nor read; kept known for old files
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
 ├─ interrupt_connections_on_switch  bool       §143 — tear down the switched group's connections when the node changes (default false, NOT config-significant)
@@ -205,7 +205,7 @@ Android SharedPreferences:
   "enabled_groups":     [ … ],     // §125 DEPRECATED (read only by the directions[] migration)
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
-  "last_global_update": "ISO-8601",// the last auto-refresh of subscriptions
+  "last_global_update": "ISO-8601",// LEGACY (§593) — present only in old files
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
   "interrupt_connections_on_switch": false, // §143 — tear down the group's conns on a node switch (NOT config-significant)
@@ -1648,7 +1648,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `route_final` | `String` | An override of `route.final` on top of the template (the chosen default outbound). `''` means the template default. A dangling reference (a deleted direction, or the legacy ✨auto) becomes `vpn-1` at build time (§125). |
 | `route_idle_suspend` | `String` | §215/§128 — the idle-suspend threshold (`lx.wg.idle_suspend`, kernel SPEC 020; the key lived at `route.lx_idle_suspend` until the `v1.14.2-lx.1` pin — §535). A duration string (`'30s'` / `'5m'`), **default `'30s'`** (enabled since v2.8.2); `''` means off (the `lx` block is not emitted at all). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend` / `saveIdleSuspend`. |
 | `enabled_groups` | `List<String>` | §125, **DEPRECATED** — replaced by `directions[]`. Read only by the one-shot migration; on disk it is harmless debris. |
-| `last_global_update` | `String` (ISO-8601) | The timestamp of the last successful auto-refresh of all subscriptions. |
+| `last_global_update` | `String` (ISO-8601) | **LEGACY** (§593) — once the timestamp of the last global subscription refresh (§010F). The app neither writes nor reads it any more; it stays in the import allowlist so that an old storage file or backup carrying it is accepted without an “unknown keys” warning. |
 | `presets_migrated` | `bool` | §159 — the “default presets have been seeded” guard (the fresh-install seed). The key's name is historical (it used to drive a legacy migration) and was reused so that users who had already migrated would not be seeded twice. `RoutingScreen._seedDefaultPresets` sets it to true. |
 | `late_presets_seeded` | `List<String>` | §578 — the ids from `kLateDefaultPresetIds` (today `tailscale`) for which the one-time step `SettingsStorage.seedLateDefaultPresets` has run. The step adds a preset the template declares `default: true` to an install that already had its defaults seeded (`presets_migrated`), enabled and with the template's `num`, then records the id here: a preset the user deleted does not come back. A fresh install marks every late id as done in its first seed. The step runs before the build reads the rules and on the Routing screen. |
 | `interrupt_connections_on_switch` | `bool` | §143 — tear down the switched group's active connections when the node changes (default `false`, NOT config-significant). See `getInterruptOnSwitch` / `setInterruptOnSwitch`. |

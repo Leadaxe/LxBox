@@ -67,7 +67,7 @@ const _topLevelRoutingKeys = {
 /// UI-предпочтения, ping options, WARP-аккаунт).
 const _topLevelAppKeys = {
   'ping_options',
-  'last_global_update',
+  'last_global_update', // §593 — LEGACY: не пишется; едет в старых бэкапах
   'presets_migrated',
   'late_presets_seeded', // §578 — guard разового seed поздних пресетов
   'warp_account',
