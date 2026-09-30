@@ -1020,7 +1020,7 @@ class SettingsStorage {
       _subscriptionBodiesForMigration(doc);
 
   /// §413 — подключи `vars` Debug API: секрет и адрес сервера конкретного
-  /// устройства. Экспорт их по умолчанию не включает; полная замена
+  /// устройства. Экспорт их по умолчанию не включает; замена
   /// ([replaceRaw], `merge=false`) переносит их из текущего стораджа, если
   /// во входящем снимке их нет.
   static const Set<String> debugApiVarKeys = {
@@ -1055,11 +1055,18 @@ class SettingsStorage {
   /// §159 — применяет default-deny allowlist (см. [allowedTopLevelKeys] /
   /// [allowedVarKeys]). Возвращает список **отброшенных** ключей (top-level имена
   /// + `vars.<key>` для подключей) — caller логирует в applog и показывает юзеру.
+  ///
+  /// §599 — [keepTopLevel] / [keepVar] (только при `merge=false`): ключи
+  /// верхнего уровня и подключи `vars`, которые замена оставляет получателю
+  /// (неотмеченные категории бэкапа). null — замена всего документа.
   static Future<List<String>> replaceRaw(
     Map<String, dynamic> snapshot, {
     bool merge = false,
+    bool Function(String key)? keepTopLevel,
+    bool Function(String varKey)? keepVar,
   }) =>
-      _replaceRaw(snapshot, merge: merge);
+      _replaceRaw(snapshot,
+          merge: merge, keepTopLevel: keepTopLevel, keepVar: keepVar);
 
   // ---------------------------------------------------------------------------
   // Tunnel apps — OS-level split-tunneling (§046)

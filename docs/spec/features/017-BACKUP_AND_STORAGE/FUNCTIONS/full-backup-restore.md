@@ -46,8 +46,9 @@ the home screen — "… · fetching subscriptions…".
   the preview and the filter; the migration result and losses go to the log.
 - **Replace** is confirmed separately: "Replace all data?" — "This will
   overwrite your current data in the selected categories. This cannot be
-  undone." In fact the whole settings document is replaced: unselected
-  categories are not kept (P7).
+  undone." A selected category is replaced wholesale by the file's content
+  (a key of the category absent in the file is removed); an unselected
+  category keeps the receiver's values (P7, §599).
 - **What survives replace** if the file is silent about it: enabling, port
   and token of the Debug API (§413); "already asked" flags of startup
   prompts (battery, tile, update check, notifications). A Debug API key
@@ -97,3 +98,4 @@ the home screen — "… · fetching subscriptions…".
 | 9 | [447](../../../tasks/447-v2-24-0-avd-findings.md) | Fixed | Replace does not reset startup prompt flags |
 | 10 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Old archives with chains are read with the Server lists checkbox |
 | 11 | [600](../../../tasks/600-backup-startup-prompt-flags-not-unknown.md) | Done | Startup prompt flags in a backup are not "unknown keys" |
+| 12 | [599](../../../tasks/599-backup-replace-per-category.md) | Done | Replace replaces only the selected categories |

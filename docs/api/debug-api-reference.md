@@ -1549,7 +1549,7 @@ curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox
 
 ⚠ Источники в памяти приложения (экран Servers) после `POST /backup/import` не перечитываются до холодного рестарта. Так и в 2.23.2, к §439 не относится.
 
-`merge=false` (default) — replace; `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+`merge=false` (default) — replace всего документа (категорий у запроса нет; замена по категориям §599 — только у UI-импорта); `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
 
 ---
 

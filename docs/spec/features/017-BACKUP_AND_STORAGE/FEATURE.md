@@ -70,11 +70,15 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   whatever is absent in the file stays. **Witness:** unit tests "merge keeps
   untouched keys", "sources are appended by id". **Mutation:** merging
   sources by replacing the list.
-- **P7. Replace replaces the whole settings document.** "Replace all" writes
-  only the selected categories of the file; unselected categories of the
-  current settings are not kept. **Witness:** unit test "replace only
-  Routing: rules and DNS; neither sources nor chains". **Mutation:** replace
-  per category.
+- **P7. Replace replaces the selected categories; unselected categories keep
+  the receiver's values.** A selected category is replaced wholesale by the
+  file's content: a key of the category absent in the file is removed. An
+  unselected category is not touched. All categories selected — the whole
+  document is replaced. **Witness:** unit tests "replace only Routing: rules
+  and DNS from the file; sources and chains of the receiver stay", "only
+  Server lists: sources[] from the file, receiver's rules stay", "all
+  categories: the same document as a whole replace" (§599). **Mutation:**
+  replace of the whole document.
 - **P8. Device properties survive replace.** If the file is silent about the
   Debug API and about the "already asked" flags of startup prompts, the
   current values stay; a Debug API key from the file wins; startup prompt
@@ -285,8 +289,6 @@ Start: document → old form? → migration → copy of the original → write
   MASQUE (§219). The guard is P2. The reverse asymmetry is not caught by a
   test. Startup prompt flags travel in the backup on purpose and are
   skipped silently on import (§600).
-- The replace caption "Wipes existing data in selected categories" does not
-  match P7: unselected categories go too.
 - After a restore from "Backup & restore" the screens keep the old snapshot
   until restart — hence "Restart now"; from the home screen the sources are
   re-read automatically.

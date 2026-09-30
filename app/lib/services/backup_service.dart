@@ -385,7 +385,8 @@ class BackupService {
 
   /// Apply import согласно [include] (юзер мог снять галочки в preview-dialog'е).
   /// `merge=true` — top-level merge (vars upsert, источники append-by-id);
-  /// `merge=false` — replace (overwrite целиком в указанных категориях).
+  /// `merge=false` — replace (§599): отмеченная категория заменяется целиком
+  /// содержимым файла, неотмеченная не трогается.
   Future<BackupApplyResult> applyImport(
     BackupContents contents, {
     required bool merge,
@@ -463,7 +464,17 @@ class BackupService {
         // §159 — replaceRaw применяет allowlist (default-deny) и возвращает
         // отброшенные ключи. Для нашего бэкапа пусто; для чужого/устаревшего —
         // непусто (логируем + покажем юзеру).
-        final dropped = await SettingsStorage.replaceRaw(filtered, merge: merge);
+        // §599 — replace заменяет только отмеченные категории: ключи
+        // неотмеченных остаются у получателя.
+        final dropped = await SettingsStorage.replaceRaw(
+          filtered,
+          merge: merge,
+          keepTopLevel: (k) {
+            final cat = categoryOfTopLevelKey(k);
+            return cat != null && !include.contains(cat);
+          },
+          keepVar: (vk) => !include.contains(categoryOfVarKey(vk)),
+        );
         droppedKeys.addAll(dropped);
         if (dropped.isNotEmpty) {
           AppLog.I.warning(
@@ -540,6 +551,23 @@ class BackupService {
         '${now.year}${pad(now.month)}${pad(now.day)}-${pad(now.hour)}${pad(now.minute)}';
     return 'lxbox-backup-v$appVersion-$date.json';
   }
+
+  /// §599 — категория ключа верхнего уровня документа настроек; null — ключ
+  /// вне категорий (`storage_version`, `vars` — у `vars` категория по
+  /// подключу, см. [categoryOfVarKey]; неизвестные ключи).
+  static BackupCategory? categoryOfTopLevelKey(String key) {
+    if (key == kSourcesKey) return BackupCategory.serverLists;
+    if (_topLevelRoutingKeys.contains(key)) return BackupCategory.routing;
+    if (_topLevelAppKeys.contains(key)) return BackupCategory.appSettings;
+    return null;
+  }
+
+  /// §599 — категория подключа `vars`: Debug API — Debug config, прочие —
+  /// App settings (как в [_filterStorage]).
+  static BackupCategory categoryOfVarKey(String varKey) =>
+      _varDebugKeys.contains(varKey)
+          ? BackupCategory.debugConfig
+          : BackupCategory.appSettings;
 
   /// Filter storage map по category-toggles для ЗАПИСИ в архив. Visible for tests.
   @visibleForTesting
