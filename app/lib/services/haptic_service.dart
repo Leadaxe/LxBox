@@ -39,15 +39,15 @@ class HapticService {
   static const String prefsKey = 'haptic_enabled';
 
   // ─── Event-based API ───
+  // §605 — выбор узла и применение пресета отклика не дают (граница спеки 020
+  // haptic-feedback); прежние объявления без вызовов удалены.
   // Tap-events (UI-подтверждение нажатия)
   void onConnectTap() => _fire(HapticFeedback.selectionClick);
-  void onNodeSelect() => _fire(HapticFeedback.selectionClick);
 
   // Success/готовность
   void onVpnConnected() => _fire(HapticFeedback.mediumImpact);
   void onVpnDisconnected() => _fire(HapticFeedback.lightImpact);
   void onFetchSuccess() => _fire(HapticFeedback.lightImpact);
-  void onPresetApply() => _fire(HapticFeedback.mediumImpact);
 
   // Внимание / ошибки
   void onVpnCrashed() => _fire(HapticFeedback.heavyImpact);
