@@ -19,6 +19,7 @@ import '../node_actions.dart';
 import '../node_filter_view_model.dart';
 import '../../../models/auto_select.dart';
 import '../../../models/node_spec.dart';
+import '../manual_reorder.dart';
 import '../node_list_presenter.dart';
 import '../special_node_display.dart';
 import 'add_server_cta.dart';
@@ -398,7 +399,18 @@ class HomeNodeList extends StatelessWidget {
         final restNew = newIndex - pinnedCount;
         final moved = restOnly.removeAt(restOld);
         restOnly.insert(restNew, moved);
-        controller.commitManualReorder(restOnly);
+        // §606 — видимый список неполон (фильтр, скрытые detour): порядок
+        // собирается из ПОЛНОГО, двигается только перетащенный узел — иначе
+        // скрытые выпадали из ручного порядка и уезжали в хвост.
+        final fullOrder = presenter
+            .viewSortedNodes(state)
+            .where((t) => !pinnedTags.contains(t))
+            .toList();
+        controller.commitManualReorder(mergeManualReorder(
+          fullOrder: fullOrder,
+          visibleReordered: restOnly,
+          moved: moved,
+        ));
       },
       itemBuilder: (ctx, i) {
         final tag = displayList[i];
