@@ -80,9 +80,10 @@ the node's notifications; a build warning line.
 
 ## Boundaries
 
-- Node ping and probe build their own config: the global checkboxes are not
-  applied to it (the node's `tls.fragment` under the probe's `detour` is
-  removed the same way, but without a code).
+- Node ping and probe build their own config, but apply the same global
+  checkboxes and the same delay as the tunnel, so the ping checks the path the
+  traffic takes; the node's `tls.fragment` under the probe's `detour` is
+  removed the same way, but without a code.
 
 - Skipping chain links and `strip_evasion` —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
@@ -103,3 +104,4 @@ the node's notifications; a build warning line.
 | 5 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `finalmask.tcp` fragment → `tls.fragment` |
 | 6 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` yields to the build's `detour` and to the system engine |
 | 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | An invalid fallback delay is replaced with `500ms` |
+| 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Ping and probe apply the global fragmentation like the tunnel |

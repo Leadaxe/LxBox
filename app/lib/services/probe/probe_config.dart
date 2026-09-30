@@ -4,8 +4,11 @@ import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../models/singbox_entry.dart';
+import '../app_log.dart';
 import '../builder/detour_yields.dart' show yieldToBuildDetour;
+import '../builder/post_steps.dart' show applyMixedCaseSni, applyTlsFragment;
 import '../builder/registry_gate.dart';
+import '../settings_storage.dart' show SettingsStorage;
 
 /// §236/§296 — probe-конфиг для headless-сессии: ВСЕ переданные ноды (включая
 /// null-слоты для выключенных/битых) как outbounds/endpoints, БЕЗ inbound'ов
@@ -37,6 +40,18 @@ class ProbeConfig {
   /// не тестируется) | 'invalid: …' (emit бросил либо гард реестра снял
   /// запись узла или его детура, §546).
   final Map<int, String> brokenByIndex;
+}
+
+/// §606 — переменные шаблона для [buildProbeConfig]/[buildProbeBatches]:
+/// из них probe берёт anti-DPI-настройки туннеля. Сбой чтения хранилища
+/// пробу не валит: без переменных она идёт без фрагментации и mixed-case SNI.
+Future<Map<String, String>> loadProbeVars() async {
+  try {
+    return await SettingsStorage.getAllVars();
+  } catch (e) {
+    AppLog.I.warning('Probe: template vars unavailable ($e)');
+    return const {};
+  }
 }
 
 /// Тег локального DNS-резолвера в probe-конфиге.
@@ -109,11 +124,17 @@ const _wireguardEndpointType = 'wireguard';
 ///
 /// [coreVersion] — версия ядра для гейтов реестра (`min_core`), та же, что у
 /// боевой сборки (`BuildSettings.coreVersion` ← `CoreVersionCache`).
+///
+/// [vars] — переменные шаблона (`SettingsStorage.getAllVars()`): §606 — из них
+/// берутся глобальные anti-DPI-настройки туннеля (`tls_fragment*`,
+/// `tls_mixed_case_sni`), чтобы проба шла тем же путём, что трафик.
 ProbeConfig buildProbeConfig(
   List<NodeSpec?> nodes, {
   String coreVersion = '',
+  Map<String, String> vars = const {},
 }) =>
-    buildProbeBatches(nodes, coreVersion: coreVersion).firstOrNull ??
+    buildProbeBatches(nodes, coreVersion: coreVersion, vars: vars)
+        .firstOrNull ??
     ProbeConfig(
       configJson: null,
       tagByIndex: const {},
@@ -138,6 +159,7 @@ ProbeConfig buildProbeConfig(
 List<ProbeConfig> buildProbeBatches(
   List<NodeSpec?> nodes, {
   String coreVersion = '',
+  Map<String, String> vars = const {},
 }) {
   final built = <int, _Built>{};
   final broken = <int, String>{};
@@ -196,7 +218,8 @@ List<ProbeConfig> buildProbeBatches(
   // Первый батч несёт вердикты битых/групп — чтобы вызывающий отдал их один раз.
   return [
     for (var g = 0; g < groups.length; g++)
-      _assemble(groups[g], built, brokenByIndex: g == 0 ? broken : const {}),
+      _assemble(groups[g], built,
+          brokenByIndex: g == 0 ? broken : const {}, vars: vars),
   ];
 }
 
@@ -310,6 +333,7 @@ ProbeConfig _assemble(
   List<int> indexes,
   Map<int, _Built> built, {
   required Map<int, String> brokenByIndex,
+  Map<String, String> vars = const {},
 }) {
   final outbounds = <Map<String, dynamic>>[
     {'type': 'direct', 'tag': kDirectOutboundTag},
@@ -376,6 +400,12 @@ ProbeConfig _assemble(
       'default_domain_resolver': kProbeDnsTag,
     },
   };
+  // §606 (решение владельца) — те же post-steps, что у туннеля
+  // (`build_config.dart`, после уступок detour): иначе «пинг есть, VPN нет»
+  // (§363). Уступка §574 сохраняется — detour у main назначен и уступки сняты
+  // выше, а оба шага сами пропускают outbound с `detour`.
+  applyTlsFragment(config, vars);
+  applyMixedCaseSni(config, vars);
   return ProbeConfig(
     configJson: jsonEncode(config),
     tagByIndex: tagByIndex,

@@ -77,9 +77,9 @@ Xray-JSON узла (`streamSettings.sockopt.dialerProxy` → `freedom` с
 
 ## Границы
 
-- Пинг и проба узла собирают свой конфиг: глобальные галки к нему не
-  применяются (узловой `tls.fragment` под `detour` пробы снимается так же,
-  но без кода).
+- Пинг и проба узла собирают свой конфиг, но применяют те же глобальные
+  галки и ту же паузу, что туннель, — пинг проверяет путь трафика; узловой
+  `tls.fragment` под `detour` пробы снимается так же, но без кода.
 
 - Пропуск звеньев цепочки и `strip_evasion` —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.ru.md).
@@ -100,3 +100,4 @@ Xray-JSON узла (`streamSettings.sockopt.dialerProxy` → `freedom` с
 | 5 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `finalmask.tcp` fragment → `tls.fragment` |
 | 6 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` уступает `detour` сборки и системному движку |
 | 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Невалидная пауза заменяется на `500ms` |
+| 8 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Пинг и проба применяют глобальную фрагментацию, как туннель |

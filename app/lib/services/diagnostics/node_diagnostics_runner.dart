@@ -120,7 +120,9 @@ class NodeDiagnosticsRunner {
   }) async {
     // §546 — версия ядра для гарда реестра — та же, что у боевой сборки.
     final coreVersion = await CoreVersionCache.ensure(_vpn.getCoreVersion);
-    final cfg = buildProbeConfig([node], coreVersion: coreVersion);
+    // §606 — anti-DPI туннеля (фрагментация, mixed-case SNI) и в пробе.
+    final cfg = buildProbeConfig([node],
+        coreVersion: coreVersion, vars: await loadProbeVars());
     final tag = cfg.tagByIndex[0];
     if (cfg.configJson == null || tag == null) {
       // Узел-группа (§322/§336) или несобираемый emit — ядро на таком конфиге
