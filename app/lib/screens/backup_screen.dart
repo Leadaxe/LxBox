@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/automation/automation_sync.dart';
 import '../services/backup_service.dart';
 import '../services/dns/dns_backup.dart';
 import '../services/lx_backup.dart';
@@ -227,6 +228,8 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       // §279 — restore мог привезти другой app_language: применить через
       // владеющий пайплайн (LocaleController), не дожидаясь рестарта.
       await LocaleController.I.reloadFromStorage();
+      // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
+      await syncAutomationFromStorage();
       if (!mounted) return;
       final summary = StringBuffer('Imported');
       final parts = <String>[];

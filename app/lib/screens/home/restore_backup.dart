@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/subscription_controller.dart';
 import '../../services/app_log.dart';
+import '../../services/automation/automation_sync.dart';
 import '../../services/backup_service.dart';
 import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
@@ -82,6 +83,8 @@ Future<void> restoreFromBackup(
       merge: false,
       include: include,
     );
+    // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
+    await syncAutomationFromStorage();
     if (!context.mounted) return;
 
     // Re-read storage в in-memory state controller'ов: `applyImport` записал
