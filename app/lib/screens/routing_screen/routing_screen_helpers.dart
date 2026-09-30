@@ -101,7 +101,7 @@ class RoutingHelpers {
   ///   галку, качать заново не придётся; свежесть при возврате обеспечит
   ///   автообновление по TTL. Так же держатся файлы выключенного правила.
   /// - `required` — только включённые гейтом наборы: без их файлов правило
-  ///   гаснет (task 011), иконка ☁ считается по ним же.
+  ///   «ждёт скачивания» (§601), иконка ☁ считается по ним же.
   static ({Set<String> keepCacheIds, List<PresetRemoteRuleSet> required})
       presetCachePlan(
     CustomRulePreset rule,
@@ -115,6 +115,77 @@ class RoutingHelpers {
             },
             required: remoteRuleSetsOf(preset, rule, globalVars),
           );
+
+  /// §601 — снимок кэша наборов для экрана Routing: какие правила скачаны
+  /// (`cached`: `rule.id` у srs-правила, [presetSrsKey] у пресета) и какие
+  /// файлы не сироты для `pruneOrphans` (`activeDiskIds`).
+  ///
+  /// Правила не меняет: `enabled` — только намерение пользователя. Правило
+  /// без файла остаётся включённым («ждёт скачивания»): набора без файла в
+  /// конфиге нет (билдер его пропускает), автообновление его скачивает.
+  ///
+  /// - `CustomRuleSrs` — «скачано», когда есть файлы ВСЕХ наборов (## 12).
+  /// - `CustomRulePreset` — наборы, включённые гейтом (§534, [presetCachePlan]).
+  ///
+  /// [isCached] / [isPresetCached] — для тестов; по умолчанию дисковый кэш.
+  static Future<({Set<String> cached, Set<String> activeDiskIds})>
+      scanSrsCache(
+    List<CustomRule> rules, {
+    required SelectableRule? Function(String presetId) presetFor,
+    Map<String, String> globalVars = const {},
+    Future<bool> Function(String cacheId)? isCached,
+    Future<bool> Function(String presetId, String tag)? isPresetCached,
+  }) async {
+    final fileCached = isCached ?? RuleSetDownloader.isCached;
+    final presetCached = isPresetCached ??
+        (String presetId, String tag) async =>
+            await RuleSetDownloader.cachedPathForPreset(presetId, tag) != null;
+    final cached = <String>{};
+    final activeDiskIds = <String>{};
+    for (final r in rules) {
+      if (r is CustomRuleSrs) {
+        // Srs-правило резервирует свой id в disk-namespace'е независимо от
+        // того, скачан файл или нет — чтобы prune не удалил ещё-не-скачанный.
+        activeDiskIds
+          ..add(r.id)
+          ..addAll(r.cacheIds);
+        var all = r.cacheIds.isNotEmpty;
+        for (final cacheId in r.cacheIds) {
+          if (!await fileCached(cacheId)) all = false;
+        }
+        if (all) cached.add(r.id);
+      } else if (r is CustomRulePreset) {
+        final preset = presetFor(r.presetId);
+        if (preset == null) continue;
+        final plan = presetCachePlan(r, preset, globalVars: globalVars);
+        activeDiskIds.addAll(plan.keepCacheIds);
+        for (final rs in plan.required) {
+          if (await presetCached(r.presetId, rs.tag)) {
+            cached.add(presetSrsKey(r, rs.tag));
+          }
+        }
+      }
+    }
+    return (cached: cached, activeDiskIds: activeDiskIds);
+  }
+
+  /// §601 — состояние 2 строки правила: включено, но файлов наборов нет
+  /// (приглушённый свич, ☁, подпись «ждёт скачивания»). Выключенное правило
+  /// без файла (состояние 3) — обычный выключенный свич.
+  static bool waitingForDownload(
+    CustomRule rule,
+    SelectableRule? preset,
+    Set<String> srsCached, {
+    Map<String, String> globalVars = const {},
+  }) {
+    if (!rule.enabled) return false;
+    if (rule is CustomRuleSrs) return !srsCached.contains(rule.id);
+    if (rule is CustomRulePreset && preset != null) {
+      return presetNeedsDownload(rule, preset, srsCached,
+          globalVars: globalVars);
+    }
+    return false;
+  }
 
   /// `true` если у preset-правила есть remote rule_set'ы и хотя бы один из
   /// них НЕ закэширован. Используется для disabled-switch (switch auto-

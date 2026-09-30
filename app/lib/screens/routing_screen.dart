@@ -147,11 +147,22 @@ class _RoutingScreenState extends State<RoutingScreen>
     // §578 — правка узла при открытом Routing (редактор узла, Debug API,
     // toggle источника) меняет подпись пресета с `for_each`.
     widget.subController.addListener(_onSubControllerChanged);
+    // §601 — файл набора скачало автообновление при открытом экране: строка
+    // «ждёт скачивания» становится рабочей без переоткрытия.
+    _ruleSetCacheSub = RuleSetDownloader.changes.listen((_) {
+      if (!mounted || _loading) return;
+      unawaited(_refreshSrsCache().then((_) {
+        if (mounted) setState(() {});
+      }));
+    });
   }
+
+  StreamSubscription<String>? _ruleSetCacheSub;
 
   @override
   void dispose() {
     widget.subController.removeListener(_onSubControllerChanged);
+    unawaited(_ruleSetCacheSub?.cancel());
     _directionHighlightTimer?.cancel();
     super.dispose();
   }
@@ -1009,6 +1020,10 @@ class _RoutingScreenState extends State<RoutingScreen>
       touchesDns: touchesDns,
       locked: preset?.locked ?? false,
       sortable: _isSortable(rule),
+      // §601 — состояние 2: включено, файла набора нет.
+      waitingForDownload: RoutingHelpers.waitingForDownload(
+          rule, preset, _srsCached,
+          globalVars: _userVars),
       statusButton: statusButton,
       onTap: () => _openCustomRuleEditor(index),
       onLongPressStart: (pos) => _showRuleContextMenu(index, pos),

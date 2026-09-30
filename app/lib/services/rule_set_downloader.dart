@@ -108,6 +108,13 @@ class RuleSetDownloader {
   /// (уже снесённую его `tearDown`) — источник flaky при параллельном suite.
   static void resetCacheForTesting() => _cacheDir = null;
 
+  static final _changes = StreamController<String>.broadcast();
+
+  /// §601 — `cacheId` набора, файл которого только что лёг в кэш (новое
+  /// содержимое, 200). Открытый экран Routing по нему переводит строку
+  /// «ждёт скачивания» в рабочую, когда файл скачало автообновление.
+  static Stream<String> get changes => _changes.stream;
+
   static Future<Directory> _dir() async {
     // Закэшированный путь мог исчезнуть (tearDown теста, очистка стораджа) —
     // не доверяем закэшу слепо, гарантируем существование на каждом вызове.
@@ -211,8 +218,8 @@ class RuleSetDownloader {
   /// должно перекачивать, даже если сервер считает копию свежей.
   ///
   /// **Файл при неудаче не трогается.** Устаревший, но рабочий rule-set лучше
-  /// выключенного правила: `_refreshSrsCache` force-disable'ит правило только
-  /// когда файла нет вовсе, и терять его на сетевом сбое или 404 нельзя.
+  /// выключенного правила: без файла правило не работает («ждёт скачивания»,
+  /// §601), и терять файл на сетевом сбое или 404 нельзя.
   static Future<DownloadResult> fetch(
     String id,
     String url, {
@@ -283,8 +290,10 @@ class RuleSetDownloader {
         await tmp.writeAsBytes(resp.bodyBytes, flush: true);
         if (await f.exists()) await f.delete();
         await tmp.rename(f.path);
-        return await finish(DownloadOutcome.downloaded,
+        final done = await finish(DownloadOutcome.downloaded,
             etag: resp.headers['etag']);
+        _changes.add(id);
+        return done;
       } catch (e) {
         if (attempt < backoffs.length) {
           await Future<void>.delayed(backoffs[attempt]);

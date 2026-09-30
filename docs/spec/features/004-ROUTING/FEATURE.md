@@ -92,10 +92,25 @@ Ru internet segment, BitTorrent, VoWiFi, Tailscale networks are enabled.
   **Witness:** unit tests "TTL 0 = Never", "a fresh cache within the TTL →
   skip", "If-None-Match goes into the request"; the schedule — `no
   witness`. **Mutation:** a background timer.
-- **P11. A rule without a file is shown as disabled.** Opening Routing disables
-  such a rule; the switch in the list first downloads and enables on full success.
-  **Witness:** manual check — "Clear cached files", open Routing: OFF
-  with ☁; switch → download → ON. **Mutation:** switch "on", rule skipped.
+- **P11. The Routing screen never turns a rule off by itself.** `enabled` is only the
+  user's intent; a missing file is a separate state of the row:
+
+  | # | enabled | file | switch | icon / caption | in the config |
+  |---|---|---|---|---|---|
+  | 1 | on | yes | on | ✅ | yes |
+  | 2 | on | no | on, dimmed | ☁, "Waiting for download"; a spinner while downloading | no |
+  | 3 | off | no | off | ☁ | no |
+  | 4 | off | yes | off | ✅ | no |
+
+  2 → 1 by itself: auto-update (or a tap on ☁) downloads the file, an open screen
+  updates the row; a download failure keeps 2. Switch in 2 → 3; switch in 3 →
+  download, enabled on full success. "In the config — no" is about the set: an own
+  `.srs` rule is skipped whole, a preset drops the missing set (P8).
+  **Witness:** unit tests "включённые правила без файлов остаются включёнными",
+  "включённое правило без файла берётся в работу, выключенное — нет",
+  "§601 — включённые правила без скачанного файла: сборка без ошибки", widget
+  "§601 «ждёт скачивания»: свич включён, приглушён, ☁". **Mutation:** the screen
+  writes `enabled=false` for a rule without a file — auto-update skips it forever.
 - **P12. Raw JSON does not break the build:** a broken/empty body — skipped with
   a warning, `//…` keys are removed; the editor does not save invalid JSON or
   an array. **Witness:** unit tests "broken JSON → skip + warning", "§350: //-keys
@@ -258,6 +273,6 @@ Directions moved to [026-DIRECTIONS](../026-DIRECTIONS/FEATURE.md) (as "Directio
 - Several Wi-Fi pairs in a rule give `wifi_ssid:[A,B] AND wifi_bssid:[X,Y]` —
   a cross match is possible; an accepted risk.
 - An own `.srs` rule requires all files, a preset does not (a gate set only
-  widens the match). But the screen disables a preset entirely until the needed set is
-  downloaded — for Ru internet segment, enabled by default, this is a race with the
-  first auto-update.
+  widens the match). Before §601 the screen disabled a rule without a file, and the
+  default Ru internet segment went off for good if Routing was opened before the
+  first auto-update; now such a rule waits for the download (P11).

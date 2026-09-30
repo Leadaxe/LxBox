@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
+import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import '../routing_screen_helpers.dart';
@@ -23,6 +24,7 @@ class CustomRuleTile extends StatelessWidget {
     this.touchesDns = false,
     this.locked = false,
     this.sortable = true,
+    this.waitingForDownload = false,
     required this.statusButton,
     required this.onTap,
     required this.onLongPressStart,
@@ -64,6 +66,11 @@ class CustomRuleTile extends StatelessWidget {
   /// «нельзя двигать». У traffic-processing false оба, но флага два.
   final bool sortable;
 
+  /// §601 — правило включено, но файла набора ещё нет: свич включён и
+  /// приглушён, подпись — «ждёт скачивания». Набор в конфиг не идёт, файл
+  /// скачает автообновление (или тап по ☁); тап по свичу — выключить.
+  final bool waitingForDownload;
+
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
   ///
   /// §366 — время последнего обновления в тайле намеренно НЕ показывается:
@@ -80,8 +87,15 @@ class CustomRuleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final active = rule.enabled;
+    // §601 — «ждёт скачивания» рисуется как неактивное (правило не работает),
+    // но свич остаётся включённым: намерение пользователя не меняется.
+    final active = rule.enabled && !waitingForDownload;
     final subtitleColor = active ? cs.primary : cs.onSurfaceVariant;
+    final Widget toggle = Switch(
+      value: rule.enabled,
+      // §264 — locked-пресет нельзя выключить (disabled свич).
+      onChanged: locked ? null : onSwitchChanged,
+    );
 
     final content = GestureDetector(
       onTap: onTap,
@@ -97,11 +111,10 @@ class CustomRuleTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                Switch(
-                  value: rule.enabled,
-                  // §264 — locked-пресет нельзя выключить (disabled свич).
-                  onChanged: locked ? null : onSwitchChanged,
-                ),
+                if (waitingForDownload)
+                  Opacity(opacity: 0.5, child: toggle)
+                else
+                  toggle,
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(displayName,
@@ -137,7 +150,10 @@ class CustomRuleTile extends StatelessWidget {
                     const SizedBox(width: 4),
                   ],
                   Expanded(
-                    child: Text(subtitle,
+                    child: Text(
+                        waitingForDownload
+                            ? getLocalText.s("Waiting for download")
+                            : subtitle,
                         style:
                             TextStyle(fontSize: 12, color: subtitleColor),
                         overflow: TextOverflow.ellipsis),

@@ -4655,6 +4655,9 @@
   "WARP+ adds Argo Smart Routing (lower latency). Privacy is the same as free. Leave empty for free WARP.": {
     "value": "WARP+ 会启用 Argo 智能路由（延迟更低）。隐私性与免费版相同。留空则使用免费 WARP。"
   },
+  "Waiting for download": {
+    "value": "等待下载"
+  },
   "Warnings": {
     "value": "警告"
   },

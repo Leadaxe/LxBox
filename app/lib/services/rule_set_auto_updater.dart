@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
+
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../models/preset_rule_set.dart';
@@ -207,18 +210,37 @@ class RuleSetAutoUpdater {
     }
   }
 
+  Future<List<_Candidate>> _collectCandidates() async =>
+      _candidatesFor(await SettingsStorage.getCustomRules());
+
+  /// §601 — `cacheId` наборов, которые проход взял бы в работу для [rules].
+  /// Включённое правило без файла («ждёт скачивания» на экране Routing) —
+  /// кандидат: файла нет → метаданных нет → «пора».
+  @visibleForTesting
+  static Future<List<String>> candidateCacheIdsFor(
+    List<CustomRule> rules, {
+    WizardTemplate? template,
+    Map<String, String>? userVars,
+  }) async =>
+      [
+        for (final c in await _candidatesFor(rules,
+            template: template, userVars: userVars))
+          c.cacheId,
+      ];
+
   /// Собрать протухшие рулсеты: свои `CustomRuleSrs` + remote-рулсеты
   /// пресетов. Выключенные правила пропускаем — их `.srs` в конфиг не идёт,
-  /// качать его незачем.
-  Future<List<_Candidate>> _collectCandidates() async {
-    final rules = await SettingsStorage.getCustomRules();
+  /// качать его незачем. Включённое правило без файла берём (§601).
+  static Future<List<_Candidate>> _candidatesFor(
+    List<CustomRule> rules, {
+    WizardTemplate? template,
+    Map<String, String>? userVars,
+  }) async {
     final now = DateTime.now();
     final out = <_Candidate>[];
 
-    WizardTemplate? template;
-    // §534 — userVars для гейта наборов на ref-переменной (§265); читаем
-    // лениво вместе с шаблоном, один раз на проход.
-    Map<String, String>? userVars;
+    // Шаблон и §534 userVars (гейт наборов на ref-переменной, §265) читаем
+    // лениво, один раз на проход.
     for (final r in rules) {
       if (!r.enabled) continue;
 

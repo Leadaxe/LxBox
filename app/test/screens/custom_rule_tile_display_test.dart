@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/screens/routing_screen/widgets/custom_rule_tile.dart';
+import 'package:lxbox/screens/routing_screen/widgets/srs_status_button.dart';
 import 'package:lxbox/services/rule_display_names.dart';
 
 /// §279 Phase 2 (§3.5.1) — тайлы двух копий одного пресета рендерятся
@@ -83,5 +84,61 @@ void main() {
 
     expect(find.text('Block Ads'), findsOneWidget);
     expect(find.text('Stale Snapshot'), findsNothing);
+  });
+
+  // §601 — состояние 2: включено, файла набора нет.
+  Future<void> pumpWaiting(WidgetTester tester, {required bool waiting}) async {
+    final rule = CustomRulePreset(name: 'Block Ads', presetId: 'block-ads');
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: CustomRuleTile(
+          index: 0,
+          rule: rule,
+          displayName: 'Block Ads',
+          options: const [],
+          subtitle: 'Tap to edit',
+          pickerValue: '',
+          pickerDisabled: false,
+          showOutbound: false,
+          sortable: false,
+          waitingForDownload: waiting,
+          statusButton: SrsStatusButton(
+            rule: rule,
+            downloading: false,
+            cached: !waiting,
+            onPressed: () {},
+          ),
+          onTap: () {},
+          onLongPressStart: (_) {},
+          onSwitchChanged: (_) {},
+          onOutboundChanged: (_) {},
+        ),
+      ),
+    ));
+  }
+
+  testWidgets('§601 «ждёт скачивания»: свич включён, приглушён, ☁',
+      (tester) async {
+    await pumpWaiting(tester, waiting: true);
+
+    final sw = tester.widget<Switch>(find.byType(Switch));
+    expect(sw.value, isTrue);
+    expect(sw.onChanged, isNotNull, reason: 'тап по свичу выключает правило');
+    final dim = tester.widget<Opacity>(
+        find.ancestor(of: find.byType(Switch), matching: find.byType(Opacity)));
+    expect(dim.opacity, lessThan(1));
+    expect(find.byIcon(Icons.cloud_download_outlined), findsOneWidget);
+    expect(find.text('Tap to edit'), findsNothing,
+        reason: 'подпись строки заменена на «ждёт скачивания»');
+  });
+
+  testWidgets('§601 скачано: свич обычный, ✅', (tester) async {
+    await pumpWaiting(tester, waiting: false);
+
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(
+        find.ancestor(of: find.byType(Switch), matching: find.byType(Opacity)),
+        findsNothing);
+    expect(find.byIcon(Icons.cloud_done_outlined), findsOneWidget);
   });
 }

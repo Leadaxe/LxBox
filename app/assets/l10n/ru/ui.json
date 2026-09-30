@@ -4862,6 +4862,9 @@
   "WARP+ adds Argo Smart Routing (lower latency). Privacy is the same as free. Leave empty for free WARP.": {
     "value": "WARP+ добавляет Argo Smart Routing (меньше задержка). Приватность та же, что и у бесплатного. Оставьте пустым для бесплатного WARP."
   },
+  "Waiting for download": {
+    "value": "Ожидает скачивания"
+  },
   "Warnings": {
     "value": "Предупреждения"
   },
