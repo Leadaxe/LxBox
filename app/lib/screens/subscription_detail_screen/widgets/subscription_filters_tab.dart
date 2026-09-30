@@ -7,6 +7,7 @@ import '../../../models/import_rule.dart';
 import '../../../models/node_spec.dart';
 import '../../../models/server_list.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../services/node_hash.dart' show disabledNodeCount;
 import '../../../services/subscription/import_rules.dart';
 import '../../../widgets/safe_bottom.dart';
 
@@ -85,7 +86,7 @@ class _SubscriptionFiltersTabState extends State<SubscriptionFiltersTab> {
     final sub = _sub;
     if (sub == null) return;
     final total = sub.nodes.length;
-    final disabled = sub.disabledHashes.length;
+    final disabled = disabledNodeCount(sub.nodes, sub.disabledHashes); // §603
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
     messenger.showSnackBar(

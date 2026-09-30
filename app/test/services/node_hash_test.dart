@@ -46,6 +46,17 @@ void main() {
   // (критерий 7 спеки 480).
   setUpAll(loadEngineSections);
 
+  group('§603 disabledNodeCount', () {
+    test('отметка ушедшего узла не считается', () {
+      final nodes = [_node('A'), _node('B')];
+      final ids = sourceNodeIdentities(nodes);
+      final now = DateTime(2026, 9, 30);
+      final disabled = {ids[nodes[0]]!: now, 'Gone': now};
+      expect(disabledNodeCount(nodes, disabled), 1);
+      expect(disabledNodeCount(nodes, const {}), 0);
+    });
+  });
+
   group('nodeIdentityHash', () {
     const uri = 'vless://0aa41f0a-6d92-4f74-8b13-4d0d5b6cbb6c@h.example:443'
         '?type=ws&security=tls&sni=x.com&fp=chrome#Label';
