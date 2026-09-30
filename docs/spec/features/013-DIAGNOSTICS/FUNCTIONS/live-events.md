@@ -48,8 +48,7 @@ the core's connection stream and DNS query stream.
 - export "Share N events (JSON)" / "Copy JSON to clipboard";
 - banners "N unattributed events / 30s …", "N% of DNS queries failing while
   the connection is alive — tap to fix" (a hint sheet with "Open DNS settings"
-  and "Enable FakeIP"), "DNS / router events off" while core log forwarding is
-  off;
+  and "Enable FakeIP");
 - Debug API: `/profiler/live?seconds=N` (default 60), `/profiler/live/state`,
   `/profiler/live/stream` (SSE), `/profiler/live/unattributed`.
 

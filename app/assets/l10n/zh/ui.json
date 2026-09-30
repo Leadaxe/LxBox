@@ -1297,9 +1297,6 @@
   "Cut": {
     "value": "剪切"
   },
-  "DNS / router events off": {
-    "value": "DNS 与路由事件已关闭"
-  },
   "DNS Final": {
     "value": "最终 DNS"
   },
@@ -5061,9 +5058,6 @@
   },
   "— (none)": {
     "value": "—（无）"
-  },
-  "— turn on 'Forward sing-box logs'": {
-    "value": "— 请开启「转发 sing-box 日志」"
   },
   "→ in: %s": {
     "value": "→ 入：%s"

@@ -33,9 +33,8 @@ known before the UI starts).
 ## Inputs / Outputs
 
 **Inputs:** core log lines.
-**Outputs:** `core` source entries in the [app log](app-log.md); the "DNS /
-router events off" hint on the Profiler tab while forwarding is off (a tap on
-the right leads to the toggle and highlights it).
+**Outputs:** `core` source entries in the [app log](app-log.md). The Profiler
+does not read the core log.
 
 ## Rules and invariants
 

@@ -1493,9 +1493,6 @@
   "Cut": {
     "value": "Вырезать"
   },
-  "DNS / router events off": {
-    "value": "События DNS и роутера выключены"
-  },
   "DNS Final": {
     "value": "Финальный DNS"
   },
@@ -5267,9 +5264,6 @@
   },
   "— (none)": {
     "value": "— (нет)"
-  },
-  "— turn on 'Forward sing-box logs'": {
-    "value": "— включите пересылку логов sing-box"
   },
   "→ in: %s": {
     "value": "→ в: %s"

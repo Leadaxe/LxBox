@@ -46,8 +46,7 @@
 - экспорт «Share N events (JSON)» / «Copy JSON to clipboard»;
 - плашки «N unattributed events / 30s …», «N% of DNS queries failing while the
   connection is alive — tap to fix» (лист-подсказка с «Open DNS settings» и
-  «Enable FakeIP»), «DNS / router events off» при выключенной пересылке журнала
-  ядра;
+  «Enable FakeIP»);
 - Debug API: `/profiler/live?seconds=N` (по умолчанию 60), `/profiler/live/state`,
   `/profiler/live/stream` (SSE), `/profiler/live/unattributed`.
 
