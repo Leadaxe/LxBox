@@ -24,7 +24,7 @@ the results.
 
 | Parameter | Values | Default |
 |-----------|--------|---------|
-| URL / timeout | global ping settings; a folder's own, if set | timeout 3000 ms if not set globally |
+| URL / timeout | global ping settings; a folder's own, if set | the template's ping URL and timeout 3000 ms if not set globally |
 | Color thresholds | Green up to / Yellow up to / Orange up to, ms | 250 / 500 / 700 |
 | Parallelism | up to 6 measurements per session | — |
 | naive nodes per session | 1 | — |
@@ -111,3 +111,4 @@ Summary: `Test servers` → `Testing… N done` → `N ok · N err · N broken`.
 | 9 | [518](../../../tasks/518-naive-probe-batch-oom.md) | Released v2.25.2 | naive — one per session, no OOM |
 | 10 | [523](../../../tasks/523-wireguard-probe-batch-memory.md) | Released v2.25.3 | WireGuard/AmneziaWG — up to 4 per session |
 | 11 | [546](../../../tasks/546-emitters-drop-registry-rule-copies.md) | — | Registry check in the test session — by the core version of the live build |
+| 12 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | No global URL — the template's ping URL, not the core default |

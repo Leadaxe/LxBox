@@ -76,3 +76,4 @@ the group's selected node in the home-screen row ("→ node").
 | 4 | [408](../../../tasks/408-ping-options-groups-heal.md) | Done | Orphaned per-Direction ping overrides removed |
 | 5 | [409](../../../tasks/409-direction-ping-options-backup.md) | Done | Per-Direction overrides in the backup |
 | 6 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | `interval`/`idle_timeout` pair |
+| 7 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | One default for an empty or missing value: URL `generate_204`, interval `15m` |

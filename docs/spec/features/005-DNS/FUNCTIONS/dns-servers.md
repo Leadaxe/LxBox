@@ -85,7 +85,8 @@ active Directions, Tailscale nodes, references from routing rules.
 - Preset server variables and the preset itself — [004-ROUTING](../../004-ROUTING/FEATURE.md).
 - Tailscale nodes — outside the feature ([030-TAILSCALE](../../030-TAILSCALE/FEATURE.md)); only the server type is here.
 - `tls` fields other than SNI (ALPN, certificates, `insecure`) — JSON only;
-  SNI from the form overwrites the whole `tls` (defect §530).
+  editing SNI in the form changes only `tls.server_name`, the other fields
+  are kept.
 - There is no one-off server latency test (§365).
 
 ## Revisions
@@ -108,6 +109,6 @@ active Directions, Tailscale nodes, references from routing rules.
 | 14 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released | Variable values in the server record; an undeclared name is dropped |
 | 15 | [443](../../../tasks/443-contract-1-0-2-spec129.md) | Released | Dangling detour → server dropped, refusal policy |
 | 16 | [458](../../../tasks/458-dns-server-json-tab-storage-record.md) | Ready for release | JSON tab of a template/preset server does not crash |
-| 17 | [530](../../../tasks/530-dns-server-raw-json-tls-preserved.md) | Spec | SNI from the form must not wipe the rest of `tls` |
+| 17 | [530](../../../tasks/530-dns-server-raw-json-tls-preserved.md) | Done (604) | SNI from the form must not wipe the rest of `tls` |
 | 18 | [555](../../../tasks/555-template-lang-spec143-parity.md) | Done | Template server bodies see template variables; without an address — dropped |
 | 19 | [578](../../../tasks/578-tailscale-preset-template-for-each.md) | Spec | Preset servers per node (`for_each`) without the preset namespace |

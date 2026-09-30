@@ -61,8 +61,11 @@ actually emitted servers.
 - A disabled preset (routing off) gives no DNS rules; the preset's record in
   the list is only the group's position anchor and has no on/off of its own
   (a preset's DNS is switched by its DNS toggle).
-- A rule-set rule without a downloaded file or without `server` is skipped
-  silently.
+- A rule-set rule without a downloaded file, and a custom or rule-set rule
+  without `server` or pointing to a server absent from the built list, is
+  left out of the config with the build warning `template_fragment_dropped`
+  (`reason` — `rule_set` or `server`). Rules without a server (`reject`,
+  `predefined`) are not checked.
 - Custom rule: empty name — "Name is required"; body is not a JSON object —
   "Invalid JSON: …"; the client does not check the body's contents.
 - If the config contains `query_type` or `ip_version`, the legacy `strategy`
@@ -76,8 +79,8 @@ actually emitted servers.
   [004-ROUTING](../../004-ROUTING/FEATURE.md).
 - Import/export and merging of rules in a backup —
   [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FEATURE.md).
-- A custom rule's reference to a non-existent server is not caught by the
-  client.
+- The rule editor does not check the server reference: the server may be
+  removed after the rule is saved, so the check is at build time.
 
 ## Revisions
 
@@ -98,3 +101,4 @@ actually emitted servers.
 | 13 | [294](../../../tasks/294-dns-typed-model.md) | — | Typed rule model |
 | 14 | [306](../../../tasks/306-dns-rule-delete-confirm.md) | ✅ | Confirmation for deleting a custom rule |
 | 15 | [434](../../../tasks/434-srs-rule-multiple-rule-sets.md) | Done | Several `.srs` sets in one rule |
+| 16 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | A rule pointing to a missing server, or a rule-set rule without `server`, is left out with a warning |

@@ -101,8 +101,8 @@ counters; the tag conflict reason in the dialog.
 - Membership, `-auto` twin and `route.final` in the config —
   [direction-groups-in-config.md](direction-groups-in-config.md); the home-screen
   selection — [direction-selection.md](direction-selection.md).
-- The row's node count ignores "Exclude matching": it counts matches even when the
-  Direction takes the rest. Reordering Directions is available only through the Debug API.
+- The row's node count uses the same filter as the build, "Exclude matching" included.
+  Reordering Directions is available only through the Debug API.
 - The DNS side of a healed server (fail-closed on a channel that vanished at build time,
   419) — [005-DNS · P2](../../005-DNS/FEATURE.md#promises).
 - Rule import healing a dangling target — [004-ROUTING · P19](../../004-ROUTING/FEATURE.md#promises).
@@ -124,3 +124,4 @@ counters; the tag conflict reason in the dialog.
 | 11 | [408](../../../tasks/408-ping-options-groups-heal.md) | Done | The ping override is removed together with the Direction |
 | 12 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | Storage in contract form; `channels` renamed to `directions` on read |
 | 13 | [441](../../../tasks/441-template-preset-vars-in-record.md) | Released v2.24.0 | Healing the target in preset and DNS server variables → `vpn-1` |
+| 14 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | The row's node count honours "Exclude matching" |
