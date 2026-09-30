@@ -1,9 +1,14 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/auto_select.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/probe/probe_controller.dart';
 import 'package:lxbox/services/probe/probe_runner.dart';
+import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/services/template_loader.dart';
 
 import '../../parser/engine_test_setup.dart';
 
@@ -181,6 +186,57 @@ void main() {
         nodes: <NodeSpec>[],
       );
       expect(ProbeController.probeNodesOf(sub), sub.nodes);
+    });
+  });
+
+  group('§604 resolvePingOptions: пустой URL → URL шаблона', () {
+    late Directory tmp;
+    const channel = MethodChannel('plugins.flutter.io/path_provider');
+
+    setUp(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      tmp = await Directory.systemTemp.createTemp('lxbox_probe_ping_');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'getApplicationDocumentsDirectory' ||
+            call.method == 'getApplicationDocumentsPath') {
+          return tmp.path;
+        }
+        return null;
+      });
+      SettingsStorage.resetCacheForTesting();
+    });
+
+    tearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+      try {
+        if (tmp.existsSync()) await tmp.delete(recursive: true);
+      } on FileSystemException {
+        /* ignore */
+      }
+    });
+
+    test('глобальный не задан → ping_options.url шаблона', () async {
+      final tplUrl =
+          (await TemplateLoader.load()).pingOptionsModel.defaultUrl;
+      expect(tplUrl, isNotEmpty);
+      final r = await ProbeController.resolvePingOptions();
+      expect(r.url, tplUrl);
+      final empty = await ProbeController.resolvePingOptions(overrideUrl: ' ');
+      expect(empty.url, tplUrl, reason: 'пустой override — не override');
+    });
+
+    test('глобальный выигрывает у шаблона, override папки — у глобального',
+        () async {
+      await SettingsStorage.setGlobalPingUrl('https://global.example/204');
+      expect((await ProbeController.resolvePingOptions()).url,
+          'https://global.example/204');
+      expect(
+          (await ProbeController.resolvePingOptions(
+                  overrideUrl: 'https://folder.example/204'))
+              .url,
+          'https://folder.example/204');
     });
   });
 }
