@@ -32,7 +32,11 @@ Future<VpnModeConfig> _getVpnMode() async {
         }.contains(proto)
             ? proto as String
             : VpnModeConfig.protoMixed,
-        proxyPort: (port is int) ? port : VpnModeConfig.defaultPort,
+        // §604 — тот же инвариант, что на входах (§292): порт из бэкапа или
+        // правленого файла вне 1024..65535 уронил бы ядро на reload.
+        proxyPort: (port is int && VpnModeConfig.isValidPort(port))
+            ? port
+            : VpnModeConfig.defaultPort,
         // Любой валидный IPv4 (UI валидирует ввод). Невалид/пусто → loopback.
         proxyListen: (listen is String && VpnModeConfig.isValidListenAddr(listen))
             ? listen
@@ -55,6 +59,10 @@ Future<void> _setVpnMode(VpnModeConfig cfg, {bool flush = true}) async {
     SettingsStorage._vpnModeVpnProxy,
   ].contains(cfg.mode)) {
     throw ArgumentError('vpn_mode.mode must be vpn|proxy|vpn_proxy: ${cfg.mode}');
+  }
+  if (!VpnModeConfig.isValidPort(cfg.proxyPort)) {
+    throw ArgumentError(
+        'vpn_mode.proxy_port must be 1024..65535: ${cfg.proxyPort}');
   }
   final data = await _load();
   data['vpn_mode'] = cfg.toJson();

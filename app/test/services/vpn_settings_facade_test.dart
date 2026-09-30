@@ -43,6 +43,27 @@ void main() {
         .setMockMethodCallHandler(methodsChannel, null);
   });
 
+  test('§604: порт вне 1024..65535 в файле хранения → дефолт при чтении',
+      () async {
+    for (final bad in const [0, 80, 70000]) {
+      File('${tmp.path}/lxbox_settings.json').writeAsStringSync(
+          '{"storage_version":1,"vpn_mode":{"mode":"proxy",'
+          '"proxy_port":$bad}}');
+      SettingsStorage.resetCacheForTesting();
+      final m = await SettingsStorage.getVpnMode();
+      expect(m.mode, 'proxy');
+      expect(m.proxyPort, VpnModeConfig.defaultPort, reason: 'порт $bad');
+    }
+  });
+
+  test('§604: setVpnMode с невалидным портом бросает ArgumentError', () async {
+    expect(
+      () => SettingsStorage.setVpnMode(
+          const VpnModeConfig.defaults().copyWith(proxyPort: 80)),
+      throwsArgumentError,
+    );
+  });
+
   test('mode → proxy: зеркалит setHasTun(false) (ЧИНИТ дивергенцию Debug)', () async {
     // vpn (hasTun=true) → proxy (hasTun=false): native has_tun обязан флипнуть.
     final result = await VpnSettingsFacade.applyVpnMode(
