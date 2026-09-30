@@ -3021,6 +3021,9 @@
   "No valid outbounds in JSON": {
     "value": "В JSON нет валидных outbound-объектов"
   },
+  "This node cannot be shared as a link.": {
+    "value": "Этим узлом нельзя поделиться ссылкой."
+  },
   "down": {
     "value": "down"
   },

@@ -221,6 +221,41 @@ void main() {
       expect(clipboard, node.toUri());
     });
 
+    // §606 — реестр отказывает ссылке WireGuard с несколькими peers: раньше
+    // был вопрос про ключ, а затем тишина.
+    testWidgets('WG с двумя peers — сообщение, без диалога, буфер пуст',
+        (tester) async {
+      final base = wg();
+      final node = WireguardSpec(
+        id: base.id,
+        tag: base.tag,
+        label: base.label,
+        server: base.server,
+        port: base.port,
+        rawSource: '',
+        privateKey: base.privateKey,
+        localAddresses: base.localAddresses,
+        peers: const [
+          WireguardPeer(
+            publicKey: 'cHVibGljS2V5QmFzZTY0',
+            endpointHost: '10.0.0.2',
+            endpointPort: 51820,
+          ),
+          WireguardPeer(
+            publicKey: 'c2Vjb25kUGVlcktleTY0',
+            endpointHost: '10.0.0.5',
+            endpointPort: 51820,
+          ),
+        ],
+      );
+      expect(node.toUri(), isEmpty);
+      await pumpAndTap(tester, controllerWith(node), 'wg-1');
+
+      expect(find.text('Link contains a private key'), findsNothing);
+      expect(find.text('This node cannot be shared as a link.'), findsOneWidget);
+      expect(clipboard, isNull);
+    });
+
     testWidgets('тег без узла — сообщение, буфер не трогаем', (tester) async {
       await pumpAndTap(tester, controllerWith(vless()), 'no-such-tag');
 

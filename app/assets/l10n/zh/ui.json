@@ -2819,6 +2819,9 @@
   "No valid outbounds in JSON": {
     "value": "JSON 中没有有效的 outbound"
   },
+  "This node cannot be shared as a link.": {
+    "value": "此节点无法以链接形式分享。"
+  },
   "down": {
     "value": "down"
   },

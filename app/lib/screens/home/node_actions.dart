@@ -205,13 +205,24 @@ Future<void> copyNodeUri(BuildContext context, String tag,
   // молча вырезать ключ из неё нельзя — он потерялся бы при перезагрузке
   // узла. Отказ же ломал перенос своего узла между своими устройствами и был
   // непоследователен: у SSH ключ не отдавался вовсе, у WireGuard уезжал молча.
+  //
+  // §606 — ссылка строится ДО диалога: реестр отказывает формату (WireGuard с
+  // несколькими `peers`) пустой строкой, и без сообщения «Copy link» молчал —
+  // да ещё после вопроса про ключ, которого в буфер всё равно не отдать.
+  final uri = node.toUri();
+  if (uri.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text(getLocalText.s("This node cannot be shared as a link."))));
+    }
+    return;
+  }
   if (carriesPrivateKeyByRegistry(node.emit(TemplateVars.empty).map)) {
     if (!context.mounted) return;
     final ok = await _confirmPrivateKeyInLink(context);
     if (!ok) return;
   }
-  final uri = node.toUri();
-  if (uri.isEmpty) return;
   await Clipboard.setData(ClipboardData(text: uri));
   if (context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(

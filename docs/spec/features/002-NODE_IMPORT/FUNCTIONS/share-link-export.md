@@ -46,7 +46,8 @@ be built.
   emit are read the same way.
 - **Rejection instead of distortion.** A body that cannot be expressed as a link
   (WireGuard with several `peers`) yields an empty link, not a link to the
-  first peer. Copying an empty link does nothing.
+  first peer. "Copy link" on such a node says the node cannot be shared as a
+  link and leaves the clipboard alone, without asking about the private key.
 - **Private key.** If the body has a field with the `private_key` role per the registry
   (WireGuard/AWG, SSH with a key, MASQUE), the app asks for confirmation before copying:
   "Link contains a private key" with the buttons "Cancel" and "Copy anyway".
@@ -77,3 +78,4 @@ be built.
 | 6 | [480F](../../../tasks/480F-registry-driven-mapper/spec.md) | Released v2.25.0 | Building a link by the registry `emit` section (W7) |
 | 7 | [495](../../../tasks/495-emitter-section33-launcher-parity.md) | Released v2.25.0 | Emitter checked against the launcher's findings |
 | 8 | [514](../../../tasks/514-contract-sync-11152.md) | Released v2.25.2 | Empty socks4 password — the separator is kept |
+| 9 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | "Copy link" reports a node without a link instead of staying silent |
