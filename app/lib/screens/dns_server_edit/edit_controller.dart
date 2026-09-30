@@ -613,13 +613,26 @@ class DnsServerEditController extends ChangeNotifier {
   }
 
   /// TLS SNI (DoT/DoH с IP-адресом — каким именем проверять сертификат).
-  /// Пусто → tls-блок уходит.
+  /// §604 — меняется только `tls.server_name`: прочие поля `tls` (`insecure`,
+  /// `alpn`, `utls`… с JSON-вкладки) живут. Пусто → снимается `server_name`;
+  /// tls-блок уходит, только если в нём не осталось ничего, кроме `enabled`.
   void onSniChanged(String raw) {
     final sni = raw.trim();
+    final cur = _body['tls'];
+    final tls = cur is Map
+        ? Map<String, dynamic>.from(cur)
+        : <String, dynamic>{};
     if (sni.isEmpty) {
-      _body.remove('tls');
+      tls.remove('server_name');
+      if (tls.keys.every((k) => k == 'enabled')) {
+        _body.remove('tls');
+      } else {
+        _body['tls'] = tls;
+      }
     } else {
-      _body['tls'] = {'enabled': true, 'server_name': sni};
+      tls.putIfAbsent('enabled', () => true);
+      tls['server_name'] = sni;
+      _body['tls'] = tls;
     }
     _syncJsonFromBody();
     notifyListeners();
