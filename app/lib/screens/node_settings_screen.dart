@@ -405,19 +405,17 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       {String? nameHint, required String Function() savedMessage}) async {
     try {
       final mi = widget.memberIndex;
-      if (mi != null) {
-        // §237 — член папки: транзакционная правка raw (битый → откат).
-        final err = await widget.subController
-            .updateMemberAt(widget.index, mi, raw, nameHint: nameHint);
-        if (!mounted) return;
-        if (err != null) {
-          _snack(err.render());
-          return;
-        }
-      } else {
-        await widget.subController
-            .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
-        if (!mounted) return;
+      // §237 — член папки: транзакционная правка raw (битый → откат).
+      // §603 — одиночный сервер так же: битый источник не пишется.
+      final err = mi != null
+          ? await widget.subController
+              .updateMemberAt(widget.index, mi, raw, nameHint: nameHint)
+          : await widget.subController
+              .updateConnectionAt(widget.index, [raw], nameHint: nameHint);
+      if (!mounted) return;
+      if (err != null) {
+        _snack(err.render());
+        return;
       }
       // Перечитать узел: Source показывает записанный текст, JSON — тело,
       // предупреждения — свежие.

@@ -3377,11 +3377,17 @@ class SubscriptionController extends ChangeNotifier {
   /// Обновляет inline-узлы `UserServer` из нового списка URI/JSON строк.
   /// §456 — [nameHint]: имя для INI-текста (тег из поля Tag редактора);
   /// ссылка и JSON несут имя сами, им hint не нужен.
-  Future<void> updateConnectionAt(int index, List<String> connections,
+  ///
+  /// §603 — источник, из которого не разобрался ни один узел, не пишется:
+  /// запись остаётся прежней, возвращается ошибка (как у члена папки,
+  /// [updateMemberAt]). `null` — записано.
+  Future<UiMsg?> updateConnectionAt(int index, List<String> connections,
       {String? nameHint}) async {
-    if (index < 0 || index >= _entries.length) return;
+    if (index < 0 || index >= _entries.length) {
+      return const ErrMsg(ErrKey.serverNotFound);
+    }
     final list = _entries[index].list;
-    if (list is! UserServer) return;
+    if (list is! UserServer) return const ErrMsg(ErrKey.serverNotFound);
 
     // §576 п.1 — источник своего сервера: только тело узла. Документ и
     // массив (форма ввода, а не хранения) сводятся к телу первого узла.
@@ -3391,6 +3397,7 @@ class SubscriptionController extends ChangeNotifier {
       final decoded = decode(c);
       nodes.addAll(parseAll(decoded, nameHint: nameHint, own: true));
     }
+    if (nodes.isEmpty) return const ErrMsg(ErrKey.memberParseKeepCurrent);
     final before = _lists();
     // Фича 478 / PARSING_PRINCIPLES §9.4 п. 1 — человек правил тело ручного сервера:
     // вердикт ядра привязан к ТЕЛУ и на изменённом теле недействителен.
@@ -3424,6 +3431,7 @@ class SubscriptionController extends ChangeNotifier {
     });
     await _persist();
     notifyListeners();
+    return null;
   }
 
   /// §331 — отпечаток «состава» подписки: то и только то, от чего зависит

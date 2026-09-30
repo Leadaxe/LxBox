@@ -179,5 +179,18 @@ void main() {
       await c.updateConnectionAt(0, [uriABody]);
       expect((c.entries.single.list as UserServer).enabled, isFalse);
     });
+
+    test('§603 битый источник не пишется: ошибка, запись прежняя', () async {
+      final c = await serverEntry();
+      final before = c.entries.single.list as UserServer;
+
+      final err = await c.updateConnectionAt(0, ['not a node at all']);
+
+      expect(err, isNotNull);
+      final after = c.entries.single.list as UserServer;
+      expect(after.rawBody, before.rawBody);
+      expect(after.nodes, hasLength(before.nodes.length));
+      expect(after.nodes, isNotEmpty);
+    });
   });
 }
