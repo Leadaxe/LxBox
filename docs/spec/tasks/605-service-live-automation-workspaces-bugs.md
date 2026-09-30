@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (баг) |
-| Статус | P (в работе) |
+| Статус | D (done) |
 | Фича | [010-VPN_SERVICE](../features/010-VPN_SERVICE/FEATURE.md), [012-LIVE_STATE](../features/012-LIVE_STATE/FEATURE.md), [014-AUTOMATION](../features/014-AUTOMATION/FEATURE.md), [018-WORKSPACES](../features/018-WORKSPACES/FEATURE.md), [020-APP_SHELL](../features/020-APP_SHELL/FEATURE.md) |
 | Дата | 2026-09-30 |
 | Связанные | аудит [591](591-spec-kit-revision-audit.md) (разделы 010, 012, 014, 018, 020), §048, §168, §259, §290, §395, §417, §478, 029F, 042F |
