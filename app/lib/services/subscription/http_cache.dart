@@ -127,6 +127,17 @@ class HttpCache {
     }
   }
 
+  /// §603 — скопировать кэш [from] под [to] (смена адреса подписки без
+  /// фетча: прежние узлы живут до первого успешного обновления по новому
+  /// адресу). Кэша [from] нет или у [to] уже свой — ничего не делаем.
+  static Future<void> copy(String from, String to) async {
+    if (from == to) return;
+    if (await loadBody(to) != null) return;
+    final body = await loadBody(from);
+    if (body == null) return;
+    await save(to, body, await loadHeaders(from) ?? const {});
+  }
+
   /// §129 — удалить кэш (тело + headers) осиротевшего ключа. Используется при
   /// смене источника подписки: старый url больше не адресуется, его снапшот
   /// не нужен. Best-effort: отсутствие файлов — не ошибка.

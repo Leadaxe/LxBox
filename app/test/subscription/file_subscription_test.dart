@@ -229,6 +229,37 @@ void main() {
       expect(list.nodes, hasLength(3));
       // старый file-кэш вычищен.
       expect(await HttpCache.loadBody(oldUrl), isNull);
+      // §603 — снапшот нового онлайн-ответа записан: офлайн-старт не даст 0.
+      expect(await HttpCache.loadBody('https://new.example/sub'), threeNodes);
+    });
+
+    test('§603 смена url без фетча (replaceList): после перезапуска прежние '
+        'узлы', () async {
+      await SettingsStorage.saveServerLists([
+        SubscriptionServers(
+          id: 's1',
+          name: 'orig',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: 'https://orig.example/sub',
+          lastNodeCount: 2,
+        ),
+      ]);
+      await HttpCache.save('https://orig.example/sub', twoNodes, const {});
+      final c = SubscriptionController();
+      await c.init();
+      await c.rehydrationDone;
+      final list = c.entries.single.list as SubscriptionServers;
+      await c.replaceList(0, list.copyWith(url: 'https://moved.example/sub'));
+
+      final c2 = SubscriptionController();
+      await c2.init();
+      await c2.rehydrationDone;
+      final after = c2.entries.single.list as SubscriptionServers;
+      expect(after.url, 'https://moved.example/sub');
+      expect(after.nodes, hasLength(2));
+      expect(await HttpCache.loadBody('https://orig.example/sub'), isNull);
     });
 
     test('online → online (fetch fail): полный откат, старое живёт', () async {

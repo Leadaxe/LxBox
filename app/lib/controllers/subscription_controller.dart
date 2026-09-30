@@ -1429,11 +1429,15 @@ class SubscriptionController extends ChangeNotifier {
       }
 
       // 3. Коммит: снапшот нового + чистка старого кэша + подмена url/nodes.
+      // §603 — онлайн-источник тоже: без снапшота нового ответа офлайн-старт
+      // давал 0 узлов до следующего успешного обновления.
       if (isFileSubscription(newUrl)) {
         await HttpCache.save(newUrl, fileBody!, const {});
+      } else {
+        await HttpCache.save(newUrl, result.rawBody, result.headers);
       }
       if (old.url != newUrl) {
-        await HttpCache.remove(old.url); // осиротевший ключ старого источника
+        await _removeCacheIfOrphan(old.url, except: entry);
       }
       // §129 — file → interval -1 (никогда авто, сервера нет); online → если был
       // ≤0 (пришли с файла / «не обновлять»), вернуть дефолт 24, иначе текущий.
@@ -2727,9 +2731,31 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> replaceList(int index, ServerList next) async {
     if (index < 0 || index >= _entries.length) return;
+    final prev = _entries[index].list;
+    // §603 (вопрос 5 аудита §591, решение A) — смена адреса без фетча (Debug
+    // API `PUT /subs/{id}`): прежние узлы и кэш живут до первого успешного
+    // обновления по новому адресу. Кэш адресован URL — переносим его под
+    // новый, иначе после перезапуска регидрации не из чего поднять узлы.
+    if (prev is SubscriptionServers &&
+        next is SubscriptionServers &&
+        prev.url != next.url) {
+      await HttpCache.copy(prev.url, next.url);
+      await _removeCacheIfOrphan(prev.url, except: _entries[index]);
+    }
     _entries[index]._replaceList(next);
     await _persist();
     notifyListeners();
+  }
+
+  /// §603 — кэш адресован URL, и две записи с одним URL делят его: удаляем,
+  /// только если адрес больше никому не нужен.
+  Future<void> _removeCacheIfOrphan(String url,
+      {required SubscriptionEntry except}) async {
+    final used = _entries.any((e) =>
+        !identical(e, except) &&
+        e.list is SubscriptionServers &&
+        (e.list as SubscriptionServers).url == url);
+    if (!used) await HttpCache.remove(url);
   }
 
   Future<String?> generateConfig() async {
