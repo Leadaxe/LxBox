@@ -194,6 +194,21 @@ void main() {
       expect(after.disabledHashes.containsKey(ids[a2]), isFalse);
       expect(after.updateIntervalHours, -1);
     });
+
+    test('§603 вкладка Source файловой — снапшот из кэша, без HTTP', () async {
+      final c = SubscriptionController();
+      await c.init();
+      await c.addFileSubscription(twoNodes, 'f.txt');
+      final url = (c.entries.single.list as SubscriptionServers).url;
+      var hits = 0;
+      final r = await fetchSourceSnapshot(url,
+          client: MockClient((req) async {
+            hits++;
+            return http.Response('boom', 500);
+          }));
+      expect(hits, 0);
+      expect(r.body, twoNodes);
+    });
   });
 
   group('§129 updateSourceAt — транзакционная смена источника', () {

@@ -10,6 +10,8 @@ import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/engine/decoders.dart' show decodeUtf8Lenient;
 import '../parser/parse_all.dart';
+import 'http_cache.dart';
+import 'input_helpers.dart' show isFileSubscription;
 import 'subscription_identity.dart';
 import 'user_agent.dart';
 
@@ -199,6 +201,18 @@ Future<FetchResult> fetchRaw(SubscriptionSource source,
   } finally {
     if (owned) c.close();
   }
+}
+
+/// §603 — ответ источника подписки для вкладки Source. Онлайн — живой GET
+/// ([fetchRaw]); файловая (`file:`) — снапшот из [HttpCache]: адреса для
+/// запроса у неё нет. Снапшота нет → пустое тело.
+Future<FetchResult> fetchSourceSnapshot(String url,
+    {SubscriptionIdentityOverride? identity, http.Client? client}) async {
+  if (isFileSubscription(url)) {
+    return FetchResult(await HttpCache.loadBody(url) ?? '', null,
+        await HttpCache.loadHeaders(url) ?? const {});
+  }
+  return fetchRaw(UrlSource(url, identity: identity), client: client);
 }
 
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {

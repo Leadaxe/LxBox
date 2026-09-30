@@ -610,8 +610,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
     });
     try {
       // §289 — сырой ответ отражает реальную идентичность фетча (per-sub/глоб.).
-      final r = await fetchRaw(
-          UrlSource(widget.entry.url, identity: widget.entry.identity));
+      // §603 — файловая: снапшот из кэша, без HTTP к `file:…`.
+      final r = await fetchSourceSnapshot(widget.entry.url,
+          identity: widget.entry.identity);
       if (!mounted) return;
       setState(() {
         _rawSource = r.body;
