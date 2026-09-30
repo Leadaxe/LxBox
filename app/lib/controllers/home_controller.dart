@@ -655,6 +655,13 @@ class HomeController extends ChangeNotifier
   /// на котором демо поднималось стабильно через Debug-override (240000мс).
   static const _connectingTimeoutCap = Duration(minutes: 4);
 
+  /// §596 — надбавка к базе за КАЖДЫЙ узел сохранённого конфига (outbounds и
+  /// endpoints узлов). Ядро инициализирует каждый узел на старте, и на
+  /// подписке в ~230 узлов на слабом устройстве `Started` приходил ровно на
+  /// 15с — таймаут убивал уже поднятый туннель. Решение владельца 30.09.2026:
+  /// 0,1с на узел, 240 узлов → 24с; до 150 узлов действует база 15с.
+  static const _connectingTimeoutPerNode = Duration(milliseconds: 100);
+
   /// §519 — сколько wireguard/AWG-endpoint'ов ядру придётся поднять на этом
   /// старте. Считаем по сохранённому конфигу (`kind == 'endpoint'`): это ровно
   /// та секция, которую перебирает endpoint-manager ядра. Прочие протоколы
@@ -662,25 +669,48 @@ class HomeController extends ChangeNotifier
   int get _configEndpointCount =>
       _state.configModel.nodes.where((n) => n.kind == 'endpoint').length;
 
-  /// §519 — порог для фазы `connecting`: база (защита от «ядро молчит») плюс
-  /// надбавка за каждый endpoint, но не выше потолка. Debug-override
-  /// (`set-transient-timeout`) СОХРАНЯЕТ приоритет и отменяет масштабирование:
-  /// он задаёт точное значение для on-device теста force-stop'а (§140).
+  /// §596 — сколько узлов ядру придётся инициализировать: все узлы
+  /// сохранённого конфига (`configModel.nodes`, outbounds и endpoints).
+  int get _configNodeCount => _state.configModel.nodes.length;
+
+  /// §519/§596 — порог для фазы `connecting`:
+  /// `max(15с, 0,1с × узлы) + 10с × endpoint'ы`, но не выше потолка 4 мин.
+  /// База 15с — защита от «ядро молчит»; узловая часть растёт с размером
+  /// подписки (§596), endpoint'ная — с последовательным пост-стартом WG/AWG
+  /// (§519). Debug-override (`set-transient-timeout`) СОХРАНЯЕТ приоритет и
+  /// отменяет масштабирование: он задаёт точное значение для on-device теста
+  /// force-stop'а (§140).
   Duration get _effectiveConnectingTimeout {
     if (_connectingTimeout != _defaultConnectingTimeout) {
       return _connectingTimeout; // §140 — debug-override берём дословно
     }
-    final scaled = _connectingTimeout +
-        _connectingTimeoutPerEndpoint * _configEndpointCount;
+    final byNodes = _connectingTimeoutPerNode * _configNodeCount;
+    final base = byNodes > _connectingTimeout ? byNodes : _connectingTimeout;
+    final scaled =
+        base + _connectingTimeoutPerEndpoint * _configEndpointCount;
     return scaled > _connectingTimeoutCap ? _connectingTimeoutCap : scaled;
   }
 
-  /// §519 — visible for testing / Debug API: действующий порог `connecting` в мс
-  /// вместе с числом endpoint'ов, из которого он выведен.
-  ({int connectingMs, int endpoints}) get debugEffectiveConnectingTimeout => (
-        connectingMs: _effectiveConnectingTimeout.inMilliseconds,
-        endpoints: _configEndpointCount,
-      );
+  /// §519/§596 — visible for testing / Debug API: действующий порог
+  /// `connecting` в мс вместе с числом узлов и endpoint'ов, из которых он
+  /// выведен.
+  ({int connectingMs, int nodes, int endpoints})
+      get debugEffectiveConnectingTimeout => (
+            connectingMs: _effectiveConnectingTimeout.inMilliseconds,
+            nodes: _configNodeCount,
+            endpoints: _configEndpointCount,
+          );
+
+  /// §596 — ожидание вердикта страховки (фича 478) не короче порога
+  /// `connecting`: иначе на большой подписке страховка бросила бы ждать
+  /// ('' = «ответить нечем») раньше, чем safety-timer вынесет свой вердикт.
+  /// 45с — прежнее значение, запас 5с — на доставку события Stopped.
+  Duration get _startVerdictTimeout {
+    final byConnecting =
+        _effectiveConnectingTimeout + const Duration(seconds: 5);
+    const floor = Duration(seconds: 45);
+    return byConnecting > floor ? byConnecting : floor;
+  }
 
   /// §519 — visible for testing: положить `configRaw` в state напрямую, минуя
   /// `saveParsedConfig` (тот идёт через native `saveConfig` и парс в изоляте —
@@ -708,7 +738,7 @@ class HomeController extends ChangeNotifier
       _addDebug(
           DebugSource.app,
           '[vpn] connecting timeout armed: ${timeout.inMilliseconds}ms '
-          '(endpoints=$endpointsAtArm)');
+          '(nodes=$_configNodeCount endpoints=$endpointsAtArm)');
     }
     _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
@@ -875,11 +905,12 @@ class HomeController extends ChangeNotifier
   /// строка — текст отказа ядра (её разбирает PARSING_PRINCIPLES §9). Таймаут отдаёт
   /// пустую строку: ответить нечем, страховка деградирует консервативно.
   Future<String?> startAndAwaitVerdict({
-    Duration timeout = const Duration(seconds: 45),
+    Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? _startVerdictTimeout;
     final existing = _startOutcome;
     if (existing != null && !existing.isCompleted) {
-      return existing.future.timeout(timeout, onTimeout: () => '');
+      return existing.future.timeout(effectiveTimeout, onTimeout: () => '');
     }
     final c = Completer<String?>();
     _startOutcome = c;
@@ -888,14 +919,14 @@ class HomeController extends ChangeNotifier
       _settleStartOutcome(null);
       return null;
     }
-    // Старт не дошёл до ядра (startVPN отказал / нет Activity) — не ждём 45 с.
+    // Старт не дошёл до ядра (startVPN отказал / нет Activity) — вердикта не ждём.
     if (!c.isCompleted &&
         _state.tunnel == TunnelStatus.disconnected &&
         _state.lastError != null) {
       _settleStartOutcome(_state.lastError!.renderEn());
       return c.future;
     }
-    return c.future.timeout(timeout, onTimeout: () {
+    return c.future.timeout(effectiveTimeout, onTimeout: () {
       // Завершаем ИМЕННО этот completer: иначе join-ожидающий висит, а
       // поздний Stopped не выключит узел; чужой (новый) _startOutcome не трогаем.
       if (!c.isCompleted) {
@@ -910,11 +941,12 @@ class HomeController extends ChangeNotifier
   /// completer, что [startAndAwaitVerdict], но без Activity: для
   /// `POST /action/start-vpn-headless?guard=true`.
   Future<String?> startAndAwaitVerdictHeadless({
-    Duration timeout = const Duration(seconds: 45),
+    Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? _startVerdictTimeout;
     final existing = _startOutcome;
     if (existing != null && !existing.isCompleted) {
-      return existing.future.timeout(timeout, onTimeout: () => '');
+      return existing.future.timeout(effectiveTimeout, onTimeout: () => '');
     }
     final c = Completer<String?>();
     _startOutcome = c;
@@ -929,7 +961,7 @@ class HomeController extends ChangeNotifier
       _settleStartOutcome(null);
       return null;
     }
-    return c.future.timeout(timeout, onTimeout: () {
+    return c.future.timeout(effectiveTimeout, onTimeout: () {
       if (!c.isCompleted) {
         if (_startOutcome == c) _startOutcome = null;
         c.complete('');

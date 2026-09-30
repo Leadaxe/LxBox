@@ -138,6 +138,52 @@ void main() {
     expect(controller.debugEffectiveConnectingTimeout.connectingMs, 500);
   });
 
+  // §596 — узловая часть порога: max(15с, 0,1с × узлы).
+  test('240 узлов без endpoint\'ов — 24с (§596)', () {
+    controller.debugSetConfigRaw(configWith(endpoints: 0, outbounds: 240));
+
+    final t = controller.debugEffectiveConnectingTimeout;
+    expect(t.nodes, 240);
+    expect(t.endpoints, 0);
+    expect(t.connectingMs, 24000);
+  });
+
+  test('100 узлов — база 15с не уменьшается (§596)', () {
+    controller.debugSetConfigRaw(configWith(endpoints: 0, outbounds: 100));
+
+    final t = controller.debugEffectiveConnectingTimeout;
+    expect(t.nodes, 100);
+    expect(t.connectingMs, 15000);
+  });
+
+  test('240 узлов + 2 endpoint\'а — 24с + 2 × надбавка §519 (§596)', () {
+    // Надбавку за endpoint берём из поведения, а не из константы.
+    controller.debugSetConfigRaw(configWith(endpoints: 1));
+    final perEndpoint =
+        controller.debugEffectiveConnectingTimeout.connectingMs - 15000;
+
+    controller.debugSetConfigRaw(configWith(endpoints: 2, outbounds: 238));
+    final t = controller.debugEffectiveConnectingTimeout;
+    expect(t.nodes, 240, reason: 'узлы = outbounds + endpoints узлов');
+    expect(t.endpoints, 2);
+    expect(t.connectingMs, 24000 + 2 * perEndpoint);
+  });
+
+  test('огромное число узлов упирается в потолок (§596)', () {
+    controller.debugSetConfigRaw(configWith(endpoints: 0, outbounds: 5000));
+
+    final t = controller.debugEffectiveConnectingTimeout;
+    expect(t.nodes, 5000);
+    expect(t.connectingMs, const Duration(minutes: 4).inMilliseconds);
+  });
+
+  test('Debug-override не масштабируется числом узлов (§596)', () {
+    controller.debugSetConfigRaw(configWith(endpoints: 0, outbounds: 240));
+    controller.debugSetTransientTimeouts(connectingMs: 500);
+
+    expect(controller.debugEffectiveConnectingTimeout.connectingMs, 500);
+  });
+
   test('таймаут connecting оставляет причину, а не молчит', () async {
     controller.debugSetConfigRaw(configWith(endpoints: 1));
     // Override даёт короткий порог, чтобы не ждать реальный бюджет. Причина

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (баг) |
-| Статус | P (в работе) |
+| Статус | D (сделано) |
 | Фича | — |
 | Дата | 2026-09-30 |
 | Связанные | §519 (надбавка за endpoint'ы), §140 (debug-override), §595, фича 478 (страховка) |
@@ -59,4 +59,19 @@ max(15 с, 0,1 с × N) + надбавка §519 × E, не выше потол�
 
 ## Проверка
 
-Юнит-тест; эмулятор по п. 4.
+Коммит `fix(596)` (этот же коммит, хеш — в истории ветки).
+
+- Формула — `HomeController._effectiveConnectingTimeout`
+  (`app/lib/controllers/home_controller.dart`), константа
+  `_connectingTimeoutPerNode = 100 мс`; `debugEffectiveConnectingTimeout`
+  отдаёт `nodes`. Отдельного поля Debug API с действующим порогом нет —
+  `nodes` видно в строке лога `connecting timeout armed: …ms (nodes=N endpoints=E)`.
+- Страховка (фича 478) своего порога 15 с не имеет: её старты идут через
+  `start()` и тот же safety-timer. Ожидание вердикта
+  (`startAndAwaitVerdict[Headless]`) было жёстко 45 с — теперь
+  `max(45 с, порог connecting + 5 с)`, чтобы на большой подписке не бросать
+  ожидание раньше safety-timer'а.
+- `test/controllers/connecting_timeout_endpoints_test.dart` — 10/10 зелёные
+  (5 новых кейсов §596); `home_core_reject_test.dart` — зелёный;
+  `flutter analyze` — чисто.
+- Эмулятор (п. 4) — не проверялся исполнителем.
