@@ -66,7 +66,10 @@ The feature protects three principles:
   (409); a replace import that lacks them keeps the current ones. **Witness:**
   units "replaceRaw merge=false keeps device Debug API keys absent in
   snapshot", "Debug API keys from snapshot win"; the ban in `/settings/vars` —
-  `no witness`. **Mutation:** a replace import rewrites `vars` entirely.
+  units "PUT debug_token/debug_enabled/debug_port → 409, value unchanged",
+  "DELETE debug_token/debug_enabled/debug_port → 409, value unchanged"
+  (`test/services/debug/vars_blocklist_and_access_log_mask_test.dart`).
+  **Mutation:** a replace import rewrites `vars` entirely.
 - **P5. File routes do not leave their directories.** Names with path
   traversal and names outside the whitelist are rejected (404/400).
   **Witness:** units "traversal in &file= is rejected", "a non-whitelisted
@@ -80,8 +83,11 @@ The feature protects three principles:
   until `?reveal=true`; sensitive request parameters are masked in the request
   log. **Witness:** units "debug_token is masked, other vars pass through",
   "an empty debug_token stays an empty string", "without reveal — uri is not
-  returned"; the request log — `no witness`. **Mutation:** a storage snapshot
-  without the scrubber.
+  returned"; the request log — units "token in query is masked in the access
+  log line, raw value absent", "secret/auth/key masked, non-sensitive params
+  pass through"
+  (`test/services/debug/vars_blocklist_and_access_log_mask_test.dart`).
+  **Mutation:** a storage snapshot without the scrubber.
 - **P8. Stopping the server closes the port.** After stop (toggle off, port or
   token change) a new connection is refused; the server comes back on the new
   values. **Witness:** unit "stop() interrupts listen — connect refused
