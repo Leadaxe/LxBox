@@ -115,16 +115,37 @@ class SettingsStorage {
   /// (`wizard_template.json`), минус машинно-генерируемые `clash_api`/
   /// `clash_secret` (выходы сборки, не пользовательский ввод). Запись любого
   /// из этих var через `setVar` → авто-dirty.
+  ///
+  /// §604 — ВСЕ переменные секций шаблона (`sections[].vars[].name`), не только
+  /// подставляемые в `config` через `@var`: `tls_fragment*`, `urltest_*` и
+  /// прочие сборка читает сама. Гард `settings_storage_config_vars_test`
+  /// сверяет список с шаблоном.
+  @visibleForTesting
+  static const configVarKeys = _configVarKeys;
   static const _configVarKeys = <String>{
     'auto_detect_interface',
+    'certificate_store',
     'dns_cache_capacity',
     'dns_default_domain_resolver',
     'dns_final',
     'dns_optimistic',
     'dns_store_cache',
     'dns_strategy',
+    'ipv6_enabled',
     'log_level',
+    'proxy_auth',
+    'proxy_listen',
+    'proxy_pass',
+    'proxy_port',
+    'proxy_type',
+    'proxy_user',
+    'resolve_enabled',
     'resolve_strategy',
+    'route_address_enable',
+    'tls_fragment',
+    'tls_fragment_fallback_delay',
+    'tls_mixed_case_sni',
+    'tls_record_fragment',
     'tun_address',
     'tun_address6',
     'tun_auto_route',
@@ -132,6 +153,10 @@ class SettingsStorage {
     'tun_name',
     'tun_stack',
     'tun_strict_route',
+    'urltest_interval',
+    'urltest_tolerance',
+    'urltest_url',
+    'vpn_mode',
   };
 
   // ---------------------------------------------------------------------------
