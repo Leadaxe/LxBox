@@ -48,7 +48,9 @@ the node's notifications; a build warning line.
 ## Rules and invariants
 
 - The global checkboxes write flags only to outbounds without `detour` and
-  with `tls.enabled: true`. The delay is written when any checkbox is on.
+  with `tls.enabled: true`. The delay is written when any checkbox is on; a
+  value the core cannot parse as a duration (`500`, `fast`) is replaced with
+  `500ms`.
 - Whether the field suits the node is asked of the registry by the body:
   naive — forbidden (the core fails with "fragment is not supported on naive
   outbound"); MASQUE `vhttp: h3` — a conflict, skipped silently; MASQUE
@@ -100,3 +102,4 @@ the node's notifications; a build warning line.
 | 4 | [488](../../../tasks/488-xray-dialer-proxy-freedom-fragment.md) | Released v2.25.0 | `dialerProxy` → `freedom` with fragment → `tls.fragment` |
 | 5 | [573](../../../tasks/573-xray-finalmask-tcp-fragment.md) | Released v2.25.7 | `finalmask.tcp` fragment → `tls.fragment` |
 | 6 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` yields to the build's `detour` and to the system engine |
+| 7 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | An invalid fallback delay is replaced with `500ms` |

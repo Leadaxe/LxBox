@@ -65,7 +65,11 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
   final recordFragment = vars['tls_record_fragment'] == 'true';
   if (!fragment && !recordFragment) return;
 
-  final fallbackDelay = vars['tls_fragment_fallback_delay'] ?? '500ms';
+  // §606 — значение, которое ядро не разберёт как duration (`500`, `fast`,
+  // `1 s`), отвергло бы конфиг целиком: подставляется умолчание шаблона.
+  final rawDelay = vars['tls_fragment_fallback_delay'] ?? '';
+  final fallbackDelay =
+      parseCoreDurationNanos(rawDelay) == null ? '500ms' : rawDelay;
   final outbounds = config['outbounds'] as List<dynamic>? ?? const [];
   for (final ob in outbounds) {
     if (ob is! Map<String, dynamic>) continue;
