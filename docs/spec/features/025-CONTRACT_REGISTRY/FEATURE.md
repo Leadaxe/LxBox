@@ -248,9 +248,14 @@ The same flow in text:
 - Core rejections after start and auto-disabling — [009-NODE_HEALTH](../009-NODE_HEALTH/FEATURE.md).
 - Backup warning codes are a separate dictionary (`backup_warnings.json`) — [017-BACKUP_AND_STORAGE](../017-BACKUP_AND_STORAGE/FEATURE.md).
 - The registry does not decide node identity (tag), dedup across sources, or network checks.
-- The dictionary and the app diverge in two codes: `unknown_node_type` is
-  app-only; `amnezia_container_choice` is in the dictionary with no producer in the app
-  (audit [591](../../tasks/591-spec-kit-revision-audit.md)).
+- The dictionary is shared with the launcher, so a code is not required to have
+  a producer in this app: `amnezia_container_choice` and `max_nodes_exceeded` are
+  dictionary codes LxBox never emits (the launcher's import path does; the
+  `max_nodes_per_subscription = 3000` limit is not enforced here — audit
+  [591](../../tasks/591-spec-kit-revision-audit.md), owner's item). The one code
+  outside the dictionary is `unknown_node_type`: an app-own code by design
+  (`kWarningCodes`, its text lives in the app), see
+  [parse-warnings](FUNCTIONS/parse-warnings.md).
 
 ## Functions
 
@@ -279,12 +284,11 @@ The same flow in text:
 
 - **The dictionary mirror is byte for byte.** `docs/contract/warnings.md` is copied from the
   launcher's generated pages; a hand edit is caught by the lock check and lost on the next sync.
-- **Two codes diverge from the dictionary.** `unknown_node_type` exists only in
-  the app (its text lives in the app, not in the registry); `amnezia_container_choice` is in the
-  dictionary but the app never produces it. Both directions are audit items in
-  [591](../../tasks/591-spec-kit-revision-audit.md).
-- **`max_nodes_exceeded` has no producer.** The limit `max_nodes_per_subscription = 3000` is
-  declared; the app does not enforce it (audit 591).
+- **App-own codes stay outside the dictionary.** `unknown_node_type` is the only
+  one (`kWarningCodes`, `node_warning.dart`); a new app-own code needs the same
+  explicit decision, not a silent addition — the launcher will never render it.
+- **`max_nodes_exceeded` has no producer here.** The limit `max_nodes_per_subscription = 3000`
+  is declared by the dictionary; whether LxBox enforces it is an open owner's item (audit 591).
 - **The corpus does not run on CI.** Red corpus cases are visible locally only
   ([529](../../tasks/529-contract-corpus-local-reds-triage.md)); green registry tests on CI do not
   cancel that.
