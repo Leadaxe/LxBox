@@ -645,7 +645,7 @@ codec/                       # §439 — model ↔ record, pure functions, toler
 node_link.dart               # §439 (D-112) NodeLink {folderId, tag} — a reference to a node; empty folderId = root
 node_entries.dart            # NodeEntries{main, detours} — the result of getEntries
 emit_context.dart            # the abstract EmitContext: allocateTag/addEntry plus selector and auto registration
-template_vars.dart           # TemplateVars — the global emit flags (tls_fragment/mux/sniOverride)
+template_vars.dart           # TemplateVars — the emit parameter, no fields since §593
 tls_spec.dart                # TlsSpec + RealitySpec (utls/reality/alpn) → toSingbox()
 transport_spec.dart          # the sealed TransportSpec (Ws/Grpc/Http/HttpUpgrade/Xhttp); XHTTP is a native
                              #   emit (§097, the core's with_xhttp: mode/x_padding_bytes/no_grpc_header)

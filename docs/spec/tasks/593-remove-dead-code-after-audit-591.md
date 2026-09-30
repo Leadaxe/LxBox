@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | R (рефакторинг) |
-| Статус | N (new) |
+| Статус | D (done) |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/FEATURE.ru.md), [005-DNS](../features/005-DNS/FEATURE.ru.md), [015-WARP](../features/015-WARP/FEATURE.ru.md), [016-DPI_HARDENING](../features/016-DPI_HARDENING/FEATURE.ru.md), [020-APP_SHELL](../features/020-APP_SHELL/FEATURE.ru.md), [017-BACKUP_AND_STORAGE](../features/017-BACKUP_AND_STORAGE/FEATURE.ru.md) (ключи хранения), [024-TEMPLATE](../features/024-TEMPLATE/FEATURE.ru.md) (`parser_config`) |
 | Дата | 2026-09-29 |
 | Связанные | [591](591-spec-kit-revision-audit.md) — вопросы 2, 4, 7, 58, 62, 70 |
@@ -234,3 +234,41 @@ null`»: `_maybeShowSupport` зовётся примерно раз в секу�
   записи пресета импортируются без новых предупреждений.
 - Документы из пунктов 1, 1b, 2 поправлены.
 - CI: `flutter analyze`, `flutter test`.
+
+## Итог
+
+2026-09-30. Перед каждым пунктом `grep` по `app/lib` и `app/test` повторён после
+задач 599–607: все шесть пунктов и 1b оставались мёртвыми, ни один не ожил и не
+был удалён раньше.
+
+1. Снято: `getLastGlobalUpdate` / `setLastGlobalUpdate` / `parseReloadInterval` /
+   `shouldRefreshSubscriptions` и их реализации в `sources_rules.dart`. Ключ
+   `last_global_update` — вариант (а): остался в `allowedTopLevelKeys` и в
+   `_topLevelAppKeys` бэкапа с пометкой legacy (не пишется и не читается), чтобы
+   старый файл хранения и старый бэкап не давали «unknown keys». STORAGE.md и
+   ARCHITECTURE.md помечают ключ legacy. Из `config_dirty_flag_test` убран шаг
+   с `setLastGlobalUpdate`.
+1b. Снят `ParserConfigBlock` и поле `WizardTemplate.parserConfig`; аргумент
+   убран в 26 тестах, конструирующих `WizardTemplate` (не только в двух из
+   спеки). Ключ `parser_config` в шаблоне не тронут; ARCHITECTURE.md поправлен.
+2. У `DnsRulePreset` своего `enabled` нет: геттер базы отдаёт `true`,
+   `withEnabled` возвращает ту же запись. Кодек пишет `"enabled": true` и не
+   читает значение (запись 1.0, читатель 0.x бэкапа, читатель формы 2.23.2).
+   Legacy-ветка сборки без `dnsMirrors` недостижима с телами: в
+   `custom_rules.dart` `dnsRulesByPresetId` заполняется только вместе с
+   `dnsMirrors`, поэтому снятие `if (!entry.enabled) continue;` поведение не
+   меняет. В фикстурах и корпусе нет DNS-записи пресета с `enabled: false`,
+   golden-тесты хранения, бэкапа и конфига зелёные без правки фикстур. Новые
+   тесты: кодек читает `enabled: false` как якорь и пишет `true`; старая запись
+   с `false` не гасит mirror-группу. Тест читателя 2.23.2 «preset без ключа →
+   выключено» переписан на «enabled не читается».
+3. Снят `UrlSource.userAgent`; UA режима Default — глобальный override, иначе
+   брендированный.
+4. Снята фаза `variations` / `_variationOne` сканера WARP и группа тестов.
+5. `TemplateVars` без полей, сборка передаёт `TemplateVars.empty`.
+6. Лента поддержки: вместо бэкоффа 30 с — флаг `_supportFetched`, одна загрузка
+   за процесс.
+
+В 591 у вопросов 2, 4, 7, 58, 62, 70 и соответствующих пунктов дописано
+«→ 593 (удалено)».
+
