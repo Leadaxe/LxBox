@@ -1175,6 +1175,23 @@
       "body_file": "bodies/72-gitverse-alive-full.txt.gz",
       "body_bytes": 292892,
       "body_kind_hint": "base64"
+    },
+    {
+      "id": "73-github-full",
+      "url": "https://raw.githubusercontent.com/OVI-vpn/bs/refs/heads/main/full.txt",
+      "source": "github",
+      "title": "",
+      "fetched_at": "2026-09-30T12:10:58.075180Z",
+      "http_status": 200,
+      "content_type": "text/plain; charset=utf-8",
+      "headers": {
+        "content-encoding": "gzip",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body_sha256": "9d92b7e8bb145de1dbac837ae99fb7fe03e0a44696a72088e47a4f7ae1898bfe",
+      "body_file": "bodies/73-github-full.txt.gz",
+      "body_bytes": 93915,
+      "body_kind_hint": "uri_lines"
     }
   ]
 }

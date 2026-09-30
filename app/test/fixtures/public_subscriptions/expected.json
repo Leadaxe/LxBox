@@ -1,6 +1,6 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.102",
+  "contract_version": "1.1.107",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 95,
@@ -910,6 +910,20 @@
         "tls_insecure": 4,
         "unknown_key": 69,
         "uri_param_unknown": 98
+      }
+    },
+    "73-github-full": {
+      "nodes_total": 252,
+      "dropped": {},
+      "warnings": {
+        "duplicates_collapsed": 22,
+        "field_conflict": 2,
+        "reality_fp_not_chrome": 12,
+        "reality_fp_random_pinned": 47,
+        "ss_method_legacy": 2,
+        "tls_insecure": 10,
+        "unknown_key": 14,
+        "uri_param_unknown": 19
       }
     }
   }
