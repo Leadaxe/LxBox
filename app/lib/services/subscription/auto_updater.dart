@@ -7,6 +7,7 @@ import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
 import '../app_log.dart';
 import '../settings_storage.dart';
+import 'sources.dart' show FetchResult;
 
 /// Триггеры, по которым зовётся `maybeUpdateAll`. Нужны только для
 /// телеметрии/логов — логика решения «пора?» одинаковая.
@@ -144,18 +145,23 @@ class AutoUpdater {
 
   /// Пройтись по всем подпискам и обновить те, которым пора.
   /// Последовательно, с задержкой 10с между подписками.
-  Future<void> maybeUpdateAll(UpdateTrigger trigger,
+  ///
+  /// §603 — `true`: проход состоялся (в том числе без кандидатов); `false`:
+  /// пропущен (уже идёт другой проход, апдейтер остановлен, автообновление
+  /// выключено) или прерван [halt]. Ручной «Update all» по `false` не
+  /// пересобирает конфиг и не рапортует об успехе.
+  Future<bool> maybeUpdateAll(UpdateTrigger trigger,
       {bool force = false}) async {
     if (_running) {
       AppLog.I.debug('AutoUpdater: skip ${trigger.name} — already running');
-      return;
+      return false;
     }
     // §515 — после `halt`/`dispose` новых проходов не начинаем: экран уже
     // отдаёт сцену другому слоту, а `unawaited(maybeUpdateAll(...))` летит из
     // `resumed`/`vpnStopped` и легко попадает в это окно.
     if (_halted) {
       AppLog.I.debug('AutoUpdater: skip ${trigger.name} — halted');
-      return;
+      return false;
     }
     // Global toggle: `auto_update_subs` в App Settings → Subscriptions.
     // Manual refresh (юзер нажал ⟳) и любой force обходят флаг — юзер
@@ -164,7 +170,7 @@ class AutoUpdater {
       final enabled = await SettingsStorage.getAutoUpdateSubs();
       if (!enabled) {
         AppLog.I.debug('AutoUpdater: skip ${trigger.name} — auto-update disabled');
-        return;
+        return false;
       }
     }
     // §337 — глобальная галка «обновлять выключенные подписки». Читаем один
@@ -186,7 +192,7 @@ class AutoUpdater {
       }
       if (candidates.isEmpty) {
         AppLog.I.debug('AutoUpdater: no candidates');
-        return;
+        return true;
       }
       AppLog.I.info('AutoUpdater: ${candidates.length} to refresh');
 
@@ -198,6 +204,13 @@ class AutoUpdater {
       var needRebuild = false;
       var needReload = false;
 
+      // §603 (§027F) — один URL за проход запрашивается один раз. Ответ
+      // первого успешного фетча отдаём остальным записям того же URL (разбор
+      // локально, каждая своими правилами); неудачный фетч — остальные записи
+      // этого URL в проходе пропускаем.
+      final fetchedThisPass = <String, FetchResult>{};
+      final attemptedThisPass = <String>{};
+
       for (var i = 0; i < candidates.length; i++) {
         // §515 — проверка ПЕРЕД подпиской: `halt` мог прийти во время фетча
         // предыдущей или во время паузы между ними. Реакцию (пересборку) при
@@ -205,15 +218,24 @@ class AutoUpdater {
         if (_halted) {
           AppLog.I.info('AutoUpdater: run halted after $i of '
               '${candidates.length} subscriptions');
-          return;
+          return false;
         }
         final entry = candidates[i];
         final url = (entry.list as SubscriptionServers).url;
+        final reuse = fetchedThisPass[url];
+        if (reuse == null && attemptedThisPass.contains(url)) {
+          AppLog.I.debug('AutoUpdater: skip ${entry.displayName} — '
+              'same URL failed earlier in this pass');
+          continue;
+        }
         if (_inFlight.contains(url)) continue;
+        attemptedThisPass.add(url);
         _inFlight.add(url);
         try {
-          final compositionChanged =
-              await _subController.refreshEntry(entry, trigger: trigger);
+          final compositionChanged = await _subController.refreshEntry(entry,
+              trigger: trigger,
+              prefetched: reuse,
+              onFetched: (f) => fetchedThisPass[url] = f);
           final fresh = entry.list;
           if (fresh is SubscriptionServers &&
               fresh.lastUpdateStatus == UpdateStatus.ok) {
@@ -246,7 +268,12 @@ class AutoUpdater {
           _inFlight.remove(url);
         }
 
-        if (i < candidates.length - 1) {
+        // §603 — перед записью, которая возьмёт готовый ответ того же URL (или
+        // будет пропущена), пауза не нужна: к провайдеру она не идёт.
+        final nextUrl = i < candidates.length - 1
+            ? (candidates[i + 1].list as SubscriptionServers).url
+            : null;
+        if (nextUrl != null && !attemptedThisPass.contains(nextUrl)) {
           // 10с ± джиттер ±2с — чтобы два app'а не стучали в одну миллисекунду.
           final jitter = Random().nextInt(4000) - 2000;
           await _sleepInterruptibly(
@@ -259,6 +286,7 @@ class AutoUpdater {
       // выбрал «пересобрать и перезагрузить», нажал ⟳ — ничего. Настройка
       // называется «При обновлении», а не «При автообновлении».
       if (needRebuild) await applyReaction(reload: needReload);
+      return true;
     } finally {
       _running = false;
     }

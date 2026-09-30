@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
+import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/services/node_hash.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/subscription/http_cache.dart';
 import 'package:lxbox/services/subscription/input_helpers.dart';
@@ -153,6 +155,44 @@ void main() {
 
       await c.updateAt(0); // file: → skip fetch, keep-previous
       expect(c.entries.single.list.nodes, hasLength(before));
+    });
+
+    test('§603 updateAt файловой применяет import-правила к снапшоту, '
+        'без сети', () async {
+      final c = SubscriptionController();
+      var hits = 0;
+      c.httpClientForTesting = MockClient((req) async {
+        hits++;
+        return http.Response('boom', 500);
+      });
+      await c.init();
+      await c.addFileSubscription(twoNodes, 'f.txt');
+      final sub = c.entries.single.list as SubscriptionServers;
+      await c.replaceList(
+          0,
+          sub.copyWith(importRules: const [
+            ImportRule(
+              conditions: [
+                ImportRuleCondition(
+                    path: 'tag',
+                    op: ImportRuleOperator.equals,
+                    pattern: 'A1'),
+              ],
+              action: ImportRuleAction.disable,
+            ),
+          ]));
+
+      await c.updateAt(0);
+
+      final after = c.entries.single.list as SubscriptionServers;
+      expect(hits, 0, reason: 'файловая в сеть не ходит');
+      expect(after.nodes, hasLength(2));
+      final ids = sourceNodeIdentities(after.nodes);
+      final a1 = after.nodes.firstWhere((n) => n.tag == 'A1');
+      final a2 = after.nodes.firstWhere((n) => n.tag == 'A2');
+      expect(after.disabledHashes.containsKey(ids[a1]), isTrue);
+      expect(after.disabledHashes.containsKey(ids[a2]), isFalse);
+      expect(after.updateIntervalHours, -1);
     });
   });
 

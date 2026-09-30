@@ -2408,8 +2408,11 @@ class SubscriptionController extends ChangeNotifier {
   /// часовом тике. Ручной путь (⟳ → `_fetchEntryByRef`) гейтится тем же
   /// `sameComposition` внутри.
   Future<bool> refreshEntry(SubscriptionEntry entry,
-      {UpdateTrigger? trigger}) =>
-      _fetchEntryByRef(entry, trigger: trigger);
+          {UpdateTrigger? trigger,
+          FetchResult? prefetched,
+          void Function(FetchResult fetched)? onFetched}) =>
+      _fetchEntryByRef(entry,
+          trigger: trigger, prefetched: prefetched, onFetched: onFetched);
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
@@ -3018,20 +3021,36 @@ class SubscriptionController extends ChangeNotifier {
   /// §331 (ревью) — возвращает «состав узлов изменился»: true ТОЛЬКО при
   /// успешном фетче с новым составом (см. `_compositionKey`). Скипы, фейлы и
   /// «тот же список» → false. Контракт для гейта реакции в AutoUpdater.
+  ///
+  /// §603 — [prefetched]: готовый ответ (тело + заголовки) вместо сетевого
+  /// запроса; кэш тела тогда не перезаписывается. [onFetched] получает ответ
+  /// успешного сетевого фетча (> 0 узлов) — AutoUpdater отдаёт его записям с
+  /// тем же URL в том же проходе.
   Future<bool> _fetchEntryByRef(SubscriptionEntry entry,
-      {UpdateTrigger? trigger}) async {
+      {UpdateTrigger? trigger,
+      FetchResult? prefetched,
+      void Function(FetchResult fetched)? onFetched}) async {
     final list = entry.list;
     if (list is! SubscriptionServers) return false;
 
     // §129 — файловая подписка: источник локальный, снапшот живёт в HttpCache.
     // Автоматически перечитать файл нельзя (Вариант Б: доступ между сессиями не
-    // храним). Поэтому fetch/auto-update = keep-previous: ноды остаются из кэша,
-    // подписка НЕ слетает при массовом апдейте онлайн-подписок. Обновление
-    // файловой — только вручную через Edit source → Choose file (updateSourceAt).
-    if (isFileSubscription(list.url)) {
-      AppLog.I.debug('Skip fetch (file subscription): keeping cached nodes');
-      return false;
+    // храним). Обновление файловой — повторный разбор снапшота (§603: иначе
+    // import-правила, изменённые на вкладке Filters, до перезапуска не
+    // применялись); файл не перечитывается, снапшота нет → keep-previous.
+    // Новый файл — только через Edit source → Choose file (updateSourceAt).
+    final isFile = isFileSubscription(list.url);
+    if (isFile && prefetched == null) {
+      final body = await HttpCache.loadBody(list.url);
+      if (body == null || body.isEmpty) {
+        AppLog.I.debug('Skip fetch (file subscription): no cached snapshot');
+        return false;
+      }
+      prefetched =
+          FetchResult(body, null, await HttpCache.loadHeaders(list.url) ?? {});
     }
+    final pre = prefetched;
+    final local = pre != null;
 
     // Дедупликация: если предыдущий fetch этой же подписки ещё идёт
     // (ручной refresh нажали 2 раза подряд, или manual + триггер совпали),
@@ -3073,9 +3092,11 @@ class SubscriptionController extends ChangeNotifier {
       // §289 — per-subscription идентичность (null → глобальная).
       // §302 — import-rules здесь не участвуют: применяются ниже, к уже
       // разобранным узлам.
-      final result = await parseFromSource(
-          UrlSource(list.url, identity: list.identity),
-          client: httpClientForTesting);
+      final result = pre != null
+          ? parseFetched(pre)
+          : await parseFromSource(
+              UrlSource(list.url, identity: list.identity),
+              client: httpClientForTesting);
       // §515 — сетевые секунды это окно, в котором пользователь успевает
       // переключить пространство. Выходим до разбора результата: писать в
       // чужую сцену нечего (барьер в `_persist` поймал бы и так, но тогда
@@ -3136,9 +3157,15 @@ class SubscriptionController extends ChangeNotifier {
       // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
       // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
       // §219 — трекаем future для детерминированного await в тестах.
-      final saveFuture = HttpCache.save(list.url, result.rawBody, result.headers);
-      lastCacheSaveForTesting = saveFuture;
-      unawaited(saveFuture);
+      // §603 — готовый ответ (снапшот файловой / ответ того же URL в проходе)
+      // уже лежит в кэше под этим URL: перезаписывать нечем.
+      if (!local) {
+        final saveFuture =
+            HttpCache.save(list.url, result.rawBody, result.headers);
+        lastCacheSaveForTesting = saveFuture;
+        unawaited(saveFuture);
+        onFetched?.call(FetchResult(result.rawBody, null, result.headers));
+      }
       final warnNodes = result.nodes.where((n) => n.warnings.isNotEmpty).length;
       if (warnNodes > 0) {
         AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');
@@ -3184,11 +3211,12 @@ class SubscriptionController extends ChangeNotifier {
 
       // §283 — GC отметок disable ТОЛЬКО здесь (успешный сетевой fetch =
       // единственный сигнал «нода ушла из подписки»; failed fetch и
-      // регидрация из кэша состав не проясняют, file:-подписки сюда не
-      // доходят — guard выше). Хеш свежих нод считаем лишь когда есть что
-      // чистить.
+      // регидрация из кэша состав не проясняют; §603 — повторный разбор
+      // снапшота file:-подписки тоже, GC для неё пропускаем). Хеш свежих нод
+      // считаем лишь когда есть что чистить.
       final freshIdentities = sourceNodeIdentities(result.nodes).values.toSet();
-      final baseDisabled = migrated.isEmpty && ruleMarks.disable.isEmpty
+      final baseDisabled =
+          isFile || (migrated.isEmpty && ruleMarks.disable.isEmpty)
           ? migrated
           : gcDisabledHashes(
               migrated,
@@ -3225,7 +3253,8 @@ class SubscriptionController extends ChangeNotifier {
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
-        lastUpdated: DateTime.now(),
+        // §603 — файловая: источник не перечитывался, «обновлено» не сдвигаем.
+        lastUpdated: isFile ? current.lastUpdated : DateTime.now(),
         lastUpdateAttempt: attemptAt,
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: result.nodes.length,

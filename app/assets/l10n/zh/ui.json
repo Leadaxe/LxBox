@@ -4111,6 +4111,9 @@
   "Subscriptions and custom servers": {
     "value": "订阅与自定义服务器"
   },
+  "Subscriptions are already updating. Try again later.": {
+    "value": "订阅正在更新中，请稍后再试。"
+  },
   "Subscriptions: %d": {
     "value": "订阅：%d"
   },

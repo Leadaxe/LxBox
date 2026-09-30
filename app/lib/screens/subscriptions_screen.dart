@@ -844,8 +844,21 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     // AutoUpdater — так получаем `_running` guard от дубль-кликов и общий
     // логирующий путь. После fetch'а — локальный generateConfig (без HTTP).
     widget.autoUpdater.resetAllFailCounts();
-    await widget.autoUpdater.maybeUpdateAll(UpdateTrigger.manual, force: true);
+    final ran = await widget.autoUpdater
+        .maybeUpdateAll(UpdateTrigger.manual, force: true);
     if (!mounted) return;
+    // §603 — проход уже идёт (автообновление или прошлое нажатие): этот вызов
+    // ничего не обновил. Пересборка и «Config generated» выдавали бы его за
+    // успешное обновление; идущий проход сам применит реакцию подписок.
+    if (!ran) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(getLocalText
+              .s("Subscriptions are already updating. Try again later.")),
+        ),
+      );
+      return;
+    }
     final config = await widget.subController.generateConfig();
     if (!mounted) return;
     if (config != null) {

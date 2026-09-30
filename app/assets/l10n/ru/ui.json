@@ -4315,6 +4315,9 @@
   "Subscriptions and custom servers": {
     "value": "Подписки и собственные серверы"
   },
+  "Subscriptions are already updating. Try again later.": {
+    "value": "Подписки уже обновляются. Попробуйте позже."
+  },
   "Subscriptions: %d": {
     "value": "Подписок: %d"
   },
