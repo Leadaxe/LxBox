@@ -1,19 +1,77 @@
-# L×Box
+# L×Box — sing-box VPN client for Android
 
 [![GitHub](https://img.shields.io/badge/GitHub-Leadaxe%2FLxBox-blue)](https://github.com/Leadaxe/LxBox)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/github/v/release/Leadaxe/LxBox?label=version)](https://github.com/Leadaxe/LxBox/releases)
 [![Dart](https://img.shields.io/badge/Dart-3.11%2B-blue)](https://dart.dev/)
 
-Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — a [sing-box](https://sing-box.sagernet.org/) fork with AmneziaWG 2.0 and native XHTTP. Multi-subscription, smart routing, built-in speed test. English and Russian UI.
+**L×Box** (also written *LxBox*) is a free, open-source **VPN and proxy client for Android**,
+powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — a [sing-box](https://sing-box.sagernet.org/)
+fork with AmneziaWG 2.0, native XHTTP and a MASQUE outbound.
+
+It runs **VLESS (REALITY, XHTTP, post-quantum ML-KEM-768), VMess, Trojan, Shadowsocks,
+Hysteria2, TUIC v5, AnyTLS, NaïveProxy, WireGuard, AmneziaWG, Cloudflare WARP and
+Tailscale — all in one app, in a single VpnService**, so protocols that would normally
+fight each other for Android's one VPN slot coexist in one core. Multi-subscription
+management, rule-based routing, per-app split tunneling, full DNS control, detour
+chains and load balancing. No ads, no telemetry, no account. English and Russian UI.
 
 <p align="center">
-  <a href="https://f-droid.org/en/packages/com.leadaxe.lxbox/"><img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid" height="80"></a>
-  <a href="https://play.google.com/store/apps/details?id=com.leadaxe.lxbox"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play" height="80"></a>
-  <a href="https://github.com/Leadaxe/LxBox"><img src="docs/badges/get-it-on-github.png" alt="Get it on GitHub" height="80"></a>
+  <a href="https://f-droid.org/en/packages/com.leadaxe.lxbox/"><img src="https://f-droid.org/badge/get-it-on.png" alt="Get L×Box on F-Droid" height="80"></a>
+  <a href="https://play.google.com/store/apps/details?id=com.leadaxe.lxbox"><img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get L×Box on Google Play" height="80"></a>
+  <a href="https://github.com/Leadaxe/LxBox/releases/latest"><img src="docs/badges/get-it-on-github.png" alt="Download L×Box APK from GitHub" height="80"></a>
 </p>
 
-**[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README.ru.md)** | **[User Guide](docs/USER_GUIDE.md)** | **[Support the project](docs/DONATE.md)** | **[Public servers registry](docs/PUBLIC_SOURCES.md)**
+**[Download the latest APK](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README.ru.md)** | **[User Guide](docs/USER_GUIDE.md)** | **[Support the project](docs/DONATE.md)** | **[Public servers registry](docs/PUBLIC_SOURCES.md)**
+
+---
+
+## What L×Box is for
+
+- **Run VLESS + WARP + Tailscale at the same time.** Android allows only one active
+  `VpnService`, so a VLESS app, the Cloudflare WARP app and the Tailscale app cannot run
+  together — whichever starts last takes the tunnel. L×Box runs all three as outbounds
+  and endpoints inside one core, with routing rules deciding what goes where.
+- **Chain a proxy through WARP.** Send traffic out through your VLESS server and then
+  through Cloudflare WARP, so the destination site never sees your VPS address. Build it
+  as a **chain** (an explicit multi-hop route you assemble in the UI) or as a **detour**
+  (one node set to go through another) — both are validated before the config is built,
+  with a cycle detector and per-hop latency diagnostics.
+- **Join your tailnet from the phone without the Tailscale app.** A `tailscale` endpoint
+  runs inside the core, with MagicDNS, exit nodes and device ping.
+- **Get past DPI.** REALITY, XHTTP, TLS fragmentation, ECH, uTLS fingerprints,
+  AmneziaWG 1.x/2.0 obfuscation and MASQUE-over-QUIC, all configurable per node.
+- **Manage many subscriptions.** Import by URL, file, QR or pasted link; deduplicate
+  nodes, disable individual servers, rewrite them with filter rules, auto-update on six
+  triggers with anti-spam gates.
+- **Keep the battery.** The core suspends unreachable tunnels instead of retrying them
+  in a loop, and subscription auto-update is gated against request spam.
+
+## Frequently asked questions
+
+**Is L×Box free?** Yes — free and open source under GPL-3.0, with no ads, no trackers,
+no analytics and no account required.
+
+**How is it different from sing-box for Android (SFA)?** SFA is the reference client from
+the SagerNet team: you hand it raw JSON. L×Box has a full UI for subscriptions, nodes,
+routing, DNS and diagnostics, and ships a fork of the core (`sing-box-lx`) that adds
+AmneziaWG 2.0, native XHTTP, a MASQUE outbound, a round-robin load balancer and
+idle-suspend. Raw JSON still works — there is a config editor and config pinning.
+
+**How is it different from Hiddify, NekoBox or Karing?** Those are GUIs over the stock
+sing-box or mihomo core. L×Box ships its own core fork, so it supports transports the
+stock core does not have on the client side — notably Xray's XHTTP, AmneziaWG 2.0 and
+post-quantum VLESS (`mlkem768x25519plus`).
+
+**Does it need root?** No.
+
+**Does it support Cloudflare WARP?** Yes — one tap on *Get WARP* registers an account and
+generates the WireGuard or MASQUE keys on the device. The private key never leaves the
+phone. WARP+ license keys are supported.
+
+**Where can I download it?** [GitHub Releases](https://github.com/Leadaxe/LxBox/releases/latest),
+[F-Droid](https://f-droid.org/en/packages/com.leadaxe.lxbox/) and
+[Google Play](https://play.google.com/store/apps/details?id=com.leadaxe.lxbox).
 
 ---
 
@@ -28,19 +86,19 @@ Use of L×Box is allowed only in strict compliance with the laws of the country 
 ## Screenshots
 
 <p align="center">
-<img src="docs/screenshots/home.jpg" width="240" alt="Home Screen"/>
-<img src="docs/screenshots/routing.jpg" width="240" alt="Routing"/>
-<img src="docs/screenshots/statistics.jpg" width="240" alt="Statistics"/>
+<img src="docs/screenshots/home.jpg" width="240" alt="L×Box home screen — node list with ping and one-tap VPN connect"/>
+<img src="docs/screenshots/routing.jpg" width="240" alt="L×Box routing rules and presets"/>
+<img src="docs/screenshots/statistics.jpg" width="240" alt="L×Box live statistics and connections"/>
 </p>
 <p align="center">
-<img src="docs/screenshots/speed_test.jpg" width="240" alt="Speed Test"/>
-<img src="docs/screenshots/dns_settings.jpg" width="240" alt="DNS Settings"/>
-<img src="docs/screenshots/vpn_settings.jpg" width="240" alt="VPN Settings"/>
+<img src="docs/screenshots/speed_test.jpg" width="240" alt="L×Box built-in speed test"/>
+<img src="docs/screenshots/dns_settings.jpg" width="240" alt="L×Box DNS server groups and rules"/>
+<img src="docs/screenshots/vpn_settings.jpg" width="240" alt="L×Box VPN service settings"/>
 </p>
 <p align="center">
-<img src="docs/screenshots/routing_rules.jpg" width="240" alt="Routing Rules"/>
-<img src="docs/screenshots/app_picker.jpg" width="240" alt="App Picker"/>
-<img src="docs/screenshots/app_settings.jpg" width="240" alt="App Settings"/>
+<img src="docs/screenshots/routing_rules.jpg" width="240" alt="L×Box routing rule editor"/>
+<img src="docs/screenshots/app_picker.jpg" width="240" alt="L×Box per-app split tunneling"/>
+<img src="docs/screenshots/app_settings.jpg" width="240" alt="L×Box application settings"/>
 </p>
 
 ---
