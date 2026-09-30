@@ -112,7 +112,9 @@ are hidden from node selection.
 - **P12. A group is never a detour target and has no detour.** Auto-select
   nodes are not offered in the detour picker; they have no Detour block.
   **Witness:** manual check — a folder with an auto-select node, the detour
-  picker of a folder member does not show it. `no witness` (no unit).
+  picker of a folder member does not show it. **Witness:** unit "a group node
+  is not shown among standalone servers or folder members"
+  (`test/widgets/detour_target_picker_group_excluded_test.dart`).
   **Mutation:** a group in a picker section.
 - **P13. Balancing is an auto-select mode.** "Load balance" gives
   `mode: round_robin` and `balancer{pool, pool_tolerance, sticky_hash}`; an
