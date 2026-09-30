@@ -332,10 +332,7 @@ Future<BuildResult> _buildConfig({
   // §120: sniff-rule теперь обёрнут #if @sniff_enabled в шаблоне — отдельный
   // removal-шаг не нужен (walker дропает array-element при false).
 
-  final tvars = TemplateVars(
-    tlsFragment: vars['tls_fragment'] == 'true',
-    tlsRecordFragment: vars['tls_record_fragment'] == 'true',
-  );
+  const tvars = TemplateVars.empty;
 
   // Реестр rule_set/rules инициализируется из template — template может
   // содержать built-in inline rule_set (например `ru-domains`). Реестр
