@@ -15,6 +15,7 @@
 import '../config/consts.dart'
     show kDetourTagPrefix, kDirectOutboundTag, kBlockOutboundTag;
 import '../services/safe_regex.dart';
+import 'auto_select.dart' show kMaxPoolTolerance;
 import 'parser_config.dart' show DirectionTemplate, DefaultDirection;
 
 /// §393 A3 — верхняя граница ДЕФОЛТНЫХ имён «VPN ①..VPN ⑩» (Unicode-блок
@@ -73,9 +74,15 @@ String defaultLabelForTag(String tag) {
 /// uint16 верхняя граница для `tolerance` (§161 — вне диапазона роняет ядро).
 const int _kToleranceMax = 65535;
 
-/// §161 — клэмп tolerance/pool_tolerance в uint16 [0, 65535]. §219/§221 —
+/// §161 — клэмп tolerance в uint16 [0, 65535] (pool_tolerance — §604 ниже). §219/§221 —
 /// публичная (direction_edit клэмпит в снапшоте, симметрично clampDirectionPool).
 int clampDirectionTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
+
+/// §604 — `balancer.pool_tolerance` Направления и свёртки: предел узла
+/// [kMaxPoolTolerance] (15000 мс), а не uint16. Ядро отвергает > 15000
+/// («must be <= 15000»), проверено на эмуляторе 2026-09-30.
+int clampDirectionPoolTolerance(int v) =>
+    v < 0 ? 0 : (v > kMaxPoolTolerance ? kMaxPoolTolerance : v);
 
 /// §208 — режим выбора узла в auto-группе (urltest, ядро SPEC 019 V2).
 /// `leastTest` — апстрим: один лучший по delay (как было всегда).
@@ -194,7 +201,7 @@ class DirectionAuto {
         mode: mode ?? this.mode,
         pool: pool == null ? this.pool : clampDirectionPool(pool),
         poolTolerance:
-            poolTolerance == null ? this.poolTolerance : clampDirectionTolerance(poolTolerance),
+            poolTolerance == null ? this.poolTolerance : clampDirectionPoolTolerance(poolTolerance),
         stickyHash: stickyHash ?? this.stickyHash,
       );
 
@@ -220,7 +227,7 @@ class DirectionAuto {
       mode: UrltestMode.fromWire(json['mode'] as String?),
       pool: clampDirectionPool((balMap['pool'] as num?)?.toInt() ?? 3),
       poolTolerance:
-          clampDirectionTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
+          clampDirectionPoolTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
       // rawSticky == null (нет balancer) → дефолт; явный [] остаётся пустым.
       stickyHash: rawSticky is List
           ? sticky // (включая пустой [] = выкл)
@@ -239,7 +246,7 @@ class DirectionAuto {
         'mode': mode.wire,
         'balancer': {
           'pool': clampDirectionPool(pool),
-          'pool_tolerance': clampDirectionTolerance(poolTolerance),
+          'pool_tolerance': clampDirectionPoolTolerance(poolTolerance),
           'sticky_hash': stickyHash.map((k) => k.wire).toList(),
         },
       };

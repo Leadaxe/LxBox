@@ -178,7 +178,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
               mode: _autoMode,
               pool: clampDirectionPool(
                   int.tryParse(_autoPoolCtrl.text.trim()) ?? 3),
-              poolTolerance: clampDirectionTolerance(
+              poolTolerance: clampDirectionPoolTolerance(
                   int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0),
               // Set→List в фиксированном порядке enum (детерминизм diff/JSON).
               stickyHash: StickyHashKey.values

@@ -1,5 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/auto_select.dart' show kMaxPoolTolerance;
+import 'package:lxbox/models/codec/source_replace_record.dart';
 import 'package:lxbox/models/direction.dart';
+import 'package:lxbox/services/builder/source_replace_build.dart'
+    show buildAutoGroup;
 import 'package:lxbox/models/parser_config.dart';
 
 void main() {
@@ -367,10 +371,34 @@ void main() {
       expect(const DirectionAuto().copyWith(pool: 0).pool, 1);
     });
 
-    test('poolTolerance clamp как tolerance (uint16)', () {
+    test('§604: poolTolerance clamp по пределу ядра 15000, как у узла', () {
       expect(DirectionAuto.fromJson({
         'balancer': {'pool_tolerance': 999999}
-      }).poolTolerance, 65535);
+      }).poolTolerance, kMaxPoolTolerance);
+      expect(DirectionAuto.fromJson({
+        'balancer': {'pool_tolerance': 20000}
+      }).poolTolerance, 15000);
+      expect(const DirectionAuto().copyWith(poolTolerance: 20000).poolTolerance,
+          15000);
+      expect(
+          (const DirectionAuto(poolTolerance: 20000).toJson()['balancer']
+              as Map)['pool_tolerance'],
+          15000);
+      // Свёртка: запись бэкапа/хранилища и эмиссия группы.
+      expect(
+          directionAutoFromRecord({'pool_tolerance': 20000}).poolTolerance,
+          15000);
+      expect(
+          (buildAutoGroup(
+            tag: 'f-auto',
+            outbounds: const ['a'],
+            a: const DirectionAuto(
+                mode: UrltestMode.roundRobin, poolTolerance: 20000),
+          )['balancer'] as Map)['pool_tolerance'],
+          15000);
+      expect(DirectionAuto.fromJson({
+        'balancer': {'pool_tolerance': 15000}
+      }).poolTolerance, 15000);
       expect(DirectionAuto.fromJson({
         'balancer': {'pool_tolerance': -5}
       }).poolTolerance, 0);
