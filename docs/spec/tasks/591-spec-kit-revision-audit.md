@@ -27,7 +27,7 @@
 Черновой список кандидатов в задачи, собранный из отчётов по фичам. Каждый пункт
 требует подтверждения владельцем перед заведением задачи. Разделы по фичам.
 
-## Сводка раскладки (2026-09-29)
+## Сводка раскладки (2026-09-30)
 
 Каждый буллет ниже получил префикс корзины: `[bug]` — поведение кода неверно, решение владельца не нужно; `[doc]` — устарел живой документ/комментарий/шапка/подсказка в UI, код верен; `[doc-legacy]` — устарела старая `F`-спека (летопись, не чинится; закрыто новой фичей); `[owner]` — нужен выбор владельца (вопрос с вариантами после пункта); `[decided]` — владелец выбрал вариант (решение дописано к пункту и к вопросу); `[test]` — верное поведение без свидетеля; `[moved]` — перечни задач для других фич, учтены таблицами ревизий; `[done]` — уже закрыто (by design / новыми фичами 024–030).
 
@@ -36,8 +36,8 @@
 | [bug] | 43 |
 | [doc] | 60 |
 | [doc-legacy] | 27 |
-| [owner] | 44 |
-| [decided] | 36 |
+| [owner] | 57 |
+| [decided] | 27 |
 | [test] | 28 |
 | [moved] | 17 |
 | [done] | 9 |
@@ -260,7 +260,7 @@
 - [decided] Дублирования узла нет. → Вопрос: Дублирование узла — нужно? (варианты: A да / B нет) → **Решено 2026-09-29: B** — не планируется; граница в 008.
 - [owner] Проверка ядром не блокирует Save при недоступном мосте; для JSON без узла пропускается. → Вопрос: Блокировать Save при недоступном мосте проверки ядром? (варианты: A блокировать / B пропускать)
 - [doc] Тест «пустой Tag → 🪢» проверяет 🕸️. — **проверено 2026-09-30:** НЕ ПОДТВЕРЖДЁН: тест и код согласованы — `expect` ждёт `'🕸️ tailscale'` (`app/test/screens/add_server_wizard_test.dart:273-281`), `app/lib/services/node_emoji.dart:49` даёт 🕸️ для TailscaleSpec; устарело только название теста.
-- [doc] HTTPS в мастере ставит `tls.server_name` = Host; подсказка ведёт на read-only JSON.
+- [done] HTTPS в мастере ставит `tls.server_name` = Host; подсказка ведёт на read-only JSON. — **исправлено 2026-09-30:** подсказка в `add_server_wizard_screen.dart` — «Host is used as the SNI. ALPN, insecure and the other TLS options can be set later on the node's JSON tab (Edit JSON)» (вкладка JSON read-only, правка — кнопкой Edit JSON, 008 → json-and-schema); ключ перебит в `l10n/ru`, `l10n/zh`.
 - [done] P15 без свидетеля (валидация Host/Port SOCKS5/HTTP) — **покрыто 2026-09-30:** `test/screens/add_server_wizard_p15_validation_test.dart` «P15 SOCKS5/HTTP form validation».
 ## 008 — задачи для других фич
 - [moved] 115 → 002; 453 — без функции; 517, 521 → 019; 505 → 007; §578 статус отстал.
@@ -306,14 +306,14 @@
 ## 007 — задачи для других фич
 - [moved] 163, 446, 251, 311 — не отнесены; 583 → 020; 197 → 006; 040, 408 → 009.
 ## 011-SPLIT_TUNNELING — расхождения (кандидаты в задачи)
-- [doc] 046F требует полный перезапуск после правки; по коду лёгкая перезагрузка ядра пересоздаёт интерфейс — вероятно, применяется и так; справка устарела (не проверено на устройстве).
+- [done] 046F требует полный перезапуск после правки; по коду лёгкая перезагрузка ядра пересоздаёт интерфейс — вероятно, применяется и так; справка устарела (не проверено на устройстве). — **исправлено 2026-09-30:** по коду reload пересобирает box-инстанс (`BoxService.kt` → `startOrReloadService`), ядро зовёт `openTun` → `builder.establish()` с `addAllowed/DisallowedApplication` (`BoxVpnService.kt:460-562`); справка вкладки Tunnel apps и комментарий `tun_apps_tab.dart` переписаны («apply when the tunnel is created next — restart or reload the core from the home screen banner»), ключ перебит в `l10n/ru`, `l10n/zh`; в 046F плашка; 011 FEATURE уже говорил «start or core restart». На устройстве не сверено — оговорено в комментарии.
 - [owner] Пакеты применяются только при `tun_auto_route=true`; выключение молча ломает split-tunneling. → Вопрос: Пакеты при `tun_auto_route=false` — предупреждать/блокировать или применять иначе? (варианты: A предупреждать / B применять)
-- [doc] В режиме Proxy вкладка не предупреждает, что список не действует.
+- [done] В режиме Proxy вкладка не предупреждает, что список не действует. — **исправлено 2026-09-30:** в справку вкладки Tunnel apps добавлен абзац «In Proxy mode there is no tun interface, so this list has no effect» (тот же ключ, что и выше); граница в 011 FEATURE (EN+RU) — «об этом сказано в справке вкладки; баннера, зависящего от режима, нет».
 - [decided] 046F: не сделаны снэкбар при добавлении себя в Deny-list, баннер «Config is locked», галочка-переключатель (вместо неё крестик-удаление), «Show system apps» в меню вкладки. → Вопрос: Недоделанные элементы 046F (снэкбар, баннер «Config is locked», галочка, «Show system apps») — доделывать? (варианты: A да / B закрыть) → **Решено 2026-09-29: B** — закрыть, не планируется; граница в 011.
 - [done] Подписи режимов и подсказка на вкладке не локализованы. — **проверено 2026-09-30:** НЕ ПОДТВЕРЖДЁН: подписи и подсказка обёрнуты в `getLocalText.s` (`app/lib/screens/tun_apps_tab.dart:154-251`), ключи в `ru/ui.json:4572,4659`.
 - [bug] Debug API `PUT /settings/tun_apps`: `count` до дедупа; шаблон имени пакета допускает заглавную. — **проверено 2026-09-30:** ЧАСТИЧНО: `count: pkgs.length` до дедупа — да (`app/lib/services/debug/handlers/settings.dart:723`, дедуп в `settings_storage/backup_tun.dart:162-165`); заглавная в regex (`settings.dart:704`) допустима правилами имён пакетов Android — не дефект.
 - [owner] Пикер: «Select all»/«Invert» — только видимые, «Deselect all» — все. → Вопрос: «Deselect all» в пикере — все или только видимые (как Select all/Invert)? (варианты: A все / B видимые)
-- [doc] Метка «auto-skipped» неточна (API 34 принимает неустановленный пакет молча, §539).
+- [done] Метка «auto-skipped» неточна (API 34 принимает неустановленный пакет молча, §539). — **исправлено 2026-09-30:** `tun_apps_tab.dart` — «%s — not installed; the system ignores it» (Builder либо бросает `NameNotFoundException`, либо на API 34 принимает молча — эффекта нет в обоих случаях, §539); ключ перебит в `l10n/ru`, `l10n/zh`, комментарии двух тестов обновлены.
 - [test] P11 — **только на устройстве:** проверка пакета живёт целиком в
   `BoxVpnService.kt` (`addAllowedApplication`/`addDisallowedApplication` ловят
   `NameNotFoundException` на пропущенном пакете, цикл продолжается, туннель
@@ -331,8 +331,8 @@
 - [decided] `ACTIVE_NODE_CHANGED` только при явном выборе, `reason` всегда `user` (047F обещал urltest/automation). → Вопрос: `ACTIVE_NODE_CHANGED` с `reason` urltest/automation (047F) — делать? (варианты: A да / B нет) → **Решено 2026-09-29: B** — не планируется; граница в 014.
 - [owner] `SUB_REFRESH_FAILED` на каждый провал с троттлингом 1/мин (047F — после 5 неудач). → Вопрос: `SUB_REFRESH_FAILED` — на каждый провал с троттлингом (как сейчас) или после 5 неудач (047F)? (варианты: A как сейчас / B после 5)
 - [bug] 042F Won't-fix, но AUTOMATION.md/UI обещают Health-события; переключатель Health ничего не делает. — **проверено 2026-09-30:** ЧАСТИЧНО: won't-fix задокументирован (`042F .../spec.md:5`, `AUTOMATION.md:159-160`), `emitHeartbeatFailed`/`emitLatencyDegraded` без вызовов (`app/lib/services/automation/event_emitter.dart:136-143`); но тумблер Health (`automation_tab.dart:273-284`) выглядит рабочим без пометки — расхождение только в UI.
-- [doc] AUTOMATION.md устарел: «UI in English», «choose a node», текст про «Toggle VPN».
-- [doc] F-INDEX: 047 «Спека» при реализованном.
+- [done] AUTOMATION.md устарел: «UI in English», «choose a node», текст про «Toggle VPN». — **исправлено 2026-09-30:** AUTOMATION.md + .ru.md — подписи и экраны плагина на языке приложения, английскими остаются строки команд/проверок в host (279F); условия «Active node/group =» — тег вводится в текстовое поле (`LocaleConditionEditActivity.kt`: `EditText`, списка нет); строка Toggle VPN — без разрешения VPN открывает приложение за согласием (014 → command-intake).
+- [done] F-INDEX: 047 «Спека» при реализованном. — **исправлено 2026-09-30:** `F-INDEX.md` 047 → Implemented (`LxBoxIntentReceiver.kt`, 047F spec сам уже «Implemented 2026-06-21»).
 - [owner] `VPN_ERROR(tunnel_error)` с сырым текстом ошибки ядра — возможна утечка адреса сервера. → Вопрос: Маскировать сырой текст ошибки ядра в `VPN_ERROR(tunnel_error)`? (варианты: A да / B нет)
 - [done] P13 покрыт юнитом 2026-09-30 (`test/subscription/automation_event_masking_test`).
 - [test] P4 только на устройстве (нативный `LxBoxTileService.kt`, Dart-юнитом не проверить); ручные: P1, P2, P3, P5, P12.
@@ -343,11 +343,11 @@
 - [bug] 025F обещала проверку `host:port` у своего endpoint — проверки нет. — **проверено 2026-09-30:** ПОДТВЕРЖДЁН: `_endpoint.text.trim()` уходит в `addWarp` без проверки формы `host:port` (`app/lib/screens/warp_wizard_screen.dart:344-346` → `app/lib/controllers/subscription_controller.dart:504-552`).
 - [doc-legacy] 025F: маскирование секретов в diag — Debug API намеренно не маскирует (§219), маска только в журнале.
 - [owner] §393: старые ссылки с `network=` не читаются (контракт 0.8.0), `network=h2` молча становится `h3`. → Вопрос: Старые ссылки с `network=` — читать (совместимость) и предупреждать при h2→h3? (варианты: A читать / B отбрасывать явно)
-- [doc] Подсказка «Idle timeout (default 5 min)» vs ядро: `idle_timeout` по умолчанию выключен; `lx.masque.idle_timeout` не отдаётся.
+- [done] Подсказка «Idle timeout (default 5 min)» vs ядро: `idle_timeout` по умолчанию выключен; `lx.masque.idle_timeout` не отдаётся. — **исправлено 2026-09-30:** ядро: узел > `lx.masque.idle_timeout` > выкл (fork SPEC 098, `protocol/masque/idle_default_lx_test.go`), пустое поле мастера ключ не пишет (`_durationOrNull`, `masque_account.dart:111`); подсказка в `warp_wizard_screen.dart` — «empty = never suspended (the core's default)», ключ перебит в `l10n/ru`, `l10n/zh`; та же правка в PROTOCOLS.md (таблица `masque://`) и KERNEL.md (абзац про `lx.masque.idle_timeout`).
 - [owner] SNI MASQUE: пул рекомендует `consumer-masque.cloudflareclient.com`, хотя §393 фиксирует, что с ним h3 не встаёт на RU-каналах. → Вопрос: Рекомендованный SNI MASQUE — сменить с `consumer-masque.cloudflareclient.com`? (варианты: A сменить / B оставить)
 - [owner] Лицензия отбрасывает кэш free-аккаунта; Re-register не удаляет старое устройство (нет DELETE). → Вопрос: Re-register — удалять старое устройство (DELETE) и сохранять кэш free-аккаунта при лицензии? (варианты: A да / B нет)
 - [decided] WARP+ для MASQUE не поддержан (поле скрыто). → Вопрос: WARP+ для MASQUE — поддержать? (варианты: A да / B нет) → **Решено 2026-09-29: B** — не планируется; граница в 015.
-- [doc] 132 статус «not started» при реализованном генераторе (§284); файла задачи 284 нет.
+- [done] 132 статус «not started» при реализованном генераторе (§284); файла задачи 284 нет. — **исправлено 2026-09-30:** `tasks/132` → «Research done; implemented as the WARP endpoint generator» с путями кода (`services/warp/scan/*`) и тестов (`test/warp/scan/*`), ссылкой на 015-WARP; задачи 284 нет — функция описана фичей, задним числом не заводится.
 - [bug] Карточка статуса регистрации не видна (мастер закрывается сразу). — **проверено 2026-09-30:** ПОДТВЕРЖДЁН: `_register` после `setState(_result)` ждёт `onAdded()` и делает `pop()` (`app/lib/screens/warp_wizard_screen.dart:365-375`; MASQUE `:382-406` — без карточки вовсе).
 - [decided] «Вариации вокруг живого IP» — мёртвый код для пользователя. → Вопрос: «Вариации вокруг живого IP» — вывести в UI или удалить мёртвый код? (варианты: A UI / B удалить) → **Решено 2026-09-29: B** — мёртвый код удалить — [593](593-remove-dead-code-after-audit-591.md); граница в 015 · warp-generator.
 - [owner] Умолчание HTTP-версии: генератор/Debug API `h3`, мастер `auto`. → Вопрос: Умолчание HTTP-версии WARP — `h3` (генератор/Debug API) или `auto` (мастер)? (варианты: A h3 / B auto)
@@ -378,10 +378,10 @@
 - [done] Закрепление конфига (§037) P6 (`config_locked`, 409 на `actionRebuildConfig`/`PUT /settings/config_locked`/`GET /state/config_locked`) — промис принадлежит 019-CONFIG_EDITOR (не 027 — в 027 FEATURE.md P1–P19 его нет, 027 только пропускает маршрут), см. строку 027-DEBUG_API «`config_locked` — не промис 027…». — **покрыто 2026-09-30:** `test/services/debug/config_locked_rebuild_gate_test.dart` «locked=true → actionRebuildConfig бросает Conflict до requireSub/Home», «locked=false → gate пропускает, падает дальше на requireSub (не на lock)», «PUT /settings/config_locked {"locked":true} → GET /state/config_locked отдаёт true», «PUT /settings/config_locked {"locked":false} снимает лок». Witness вписан в FEATURE.md (EN+RU).
 - [test] P7 (снятие пина при выключении Debug API) — **только на устройстве:** `_toggleDebugApi` в `app_settings_screen.dart:249-264` — логика виджет-`State`, нет чистого Dart-слоя для юнита; проверять: включить Debug API → закрепить конфиг → выключить Debug API в настройках → пин снят.
 - [owner] Редактор принимает JSON5, `PUT /config` — строгий JSON. → Вопрос: JSON5 в редакторе при строгом JSON в `PUT /config` — унифицировать? (варианты: A строгий везде / B JSON5 везде / C оставить)
-- [doc] Save не предупреждает, что правка сотрётся при пересборке; закрепление спрятано в диагностике.
+- [done] Save не предупреждает, что правка сотрётся при пересборке; закрепление спрятано в диагностике. — **исправлено 2026-09-30:** снэкбар Save в `config_screen.dart` — «Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on)» (019 P5/P6; замок — `diagnostics_tab.dart`, виден при Debug API), ключ перебит в `l10n/ru`, `l10n/zh`.
 - [bug] Не локализованы «Copy server + detour(s)», «Server copied», «Detour copied». — **проверено 2026-09-30:** ПОДТВЕРЖДЁН: литералы без `getLocalText` — `app/lib/screens/outbound_view_screen.dart:244-245`, `app/lib/screens/home/node_actions.dart:115,123,132`; ключей в `ru/ui.json` нет.
 - [test] Нет UI-тестов на 099 и 064; ручные свидетели P5, P6, P7, P10, P11. — **только на устройстве:** 099 (P10, AppBar Copy-аффорданс: одиночная кнопка vs `PopupMenuButton` с `Copy server/detour/server+detours(N)`) и P5 (edit не переживает rebuild) — виджет-рендер/UI, автотеста не требуют (SUBAGENT_BRIEF — не UI-string формат, но и не голая Dart-логика, тест тут был бы тестом дерева виджетов ради самого дерева); P6/P7 — см. правку строки про §037 выше. 064 частично покрыт: логика `skipDisabled` — юнит уже есть (см. FEATURE.md P11 «a disabled json rule is skipped»), непокрыта только сама привязка ViewTab → **только на устройстве:** открыть disabled-правило, вкладка View не пуста.
-- [doc] 007F описывает старый однополевой редактор; шапка 037 устарела.
+- [done] 007F описывает старый однополевой редактор; шапка 037 устарела. — **проверено/исправлено 2026-09-30:** 007F — про форматирование JSON в `ConfigScreen`, а он и сейчас однополевой (`config_screen.dart`, один `TextField`), многовкладочный — экран узла (`outbound_view_screen.dart`), 007F о нём не писал: не устарел. Шапка 037 — статус переписан без самопометки «Draft устарела», добавлено, где замок в UI.
 - [bug] Read-only меню показывает Cut/Paste — не проверено, блокируются ли. — **тест выявил расхождение:** `LxSelectionToolbarController.show` (`lx_code_editor.dart:264-277`) кладёт Cut/Paste безусловно, `readOnly` в контроллер меню не приходит; `CodeLineEditingController.cut()/paste()` из re_editor тоже безусловны (readOnly у пакета — только для клавиатурного ввода). Вход: `LxCodeEditor(readOnly: true)`, long-press → выделение → тап Cut/Paste → ожидалось: блокировка или отсутствие пунктов, получено: текст режется/вставляется как в обычном режиме. Покрыто тестом 2026-09-30: `test/widgets/lx_code_editor_readonly_menu_test.dart` «read-only: тап Cut всё равно вырезает текст (расхождение)», «read-only: тап Paste всё равно подменяет выделение (расхождение)», «read-only: меню всё ещё показывает Cut/Paste (не скрыты)».
 ## 020-APP_SHELL — расхождения (кандидаты в задачи)
 - [bug] Не переводятся: подписи темы System/Light/Dark, результаты проверки обновлений в About, сообщения «Add tile». — **проверено 2026-09-30:** ПОДТВЕРЖДЁН: тема — литералы `'System'/'Light'/'Dark'` (`app/lib/screens/app_settings_screen/widgets/appearance_tab.dart:47-49`; ключ «System» в `ru/ui.json:4369` есть, не используется); About — `_statusLine` литералы (`app/lib/screens/about_screen.dart:430-434`; в `update_status_row.dart:54-58` обёрнуто); «Add tile» — `msg` без обёртки (`app/lib/screens/app_settings_screen.dart:354-362`).
@@ -392,7 +392,7 @@
 - [owner] Вопрос об уведомлениях не показывается повторно после отзыва разрешения (флаг «уже спрашивали»). → Вопрос: Спрашивать про уведомления повторно после отзыва разрешения? (варианты: A да / B нет)
 - [bug] Отклики «выбор узла» и «применение пресета» объявлены, но не вызываются. — **проверено 2026-09-30:** ПОДТВЕРЖДЁН: `onNodeSelect`/`onPresetApply` объявлены (`app/lib/services/haptic_service.dart:44,50`), вызовов в `lib/` нет (зовутся только `onConnectTap`/`onFetchSuccess`).
 - [owner] Тема не входит ни в бэкап, ни в наборы (язык, вибрация, поворот входят) — решение или недосмотр? → Вопрос: Тема не в бэкапе и не в наборах — решение или недосмотр? (варианты: A добавить / B оставить)
-- [doc] Подписи бокового меню устарели («Theme, appearance», «Last 100 events»).
+- [done] Подписи бокового меню устарели («Theme, appearance», «Last 100 events»). — **исправлено 2026-09-30:** `home_drawer.dart` — «General, appearance, diagnostics, automation» (пять вкладок App Settings) и «App and core logs, crashes, profiling» (лимиты `app_log.dart` 300/500, четыре вкладки Debug); ключи перебиты в `l10n/ru`, `l10n/zh`.
 - [doc-legacy] 279F §7.4: язык в General, en/ru — сейчас Appearance (541), три языка (452).
 - [done] P13/P12 — **покрыто 2026-09-30:** `test/services/update_checker_test.dart`
   «maybeCheck — gate (P13)» (toggle off / dev-build / 24ч порог); mutation
