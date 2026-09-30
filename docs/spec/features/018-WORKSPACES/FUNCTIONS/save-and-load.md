@@ -51,7 +51,8 @@ modal "Loading workspace…" indicator.
   the previous slot.
 - **Start after a load — only on its own config.** If the rebuild failed and
   the config stayed "stale", the tunnel is not started; the log says
-  "auto-connect skipped".
+  "auto-connect skipped". The start goes the same way as the Start button —
+  through the core-rejected nodes safeguard.
 - **Completion.** A `load` journal at startup repeats the steps in full (they
   are idempotent) before the first settings read and raises the "config is
   stale" flag. No target — the journal is cleared, the scene stays.
@@ -83,3 +84,4 @@ modal "Loading workspace…" indicator.
 | 4 | [447](../../../tasks/447-v2-24-0-avd-findings.md) | Fixed, no device-verify | Load did not rebuild the config: an explicit flag instead of modification time |
 | 5 | [506](../../../tasks/506-change-review.md) | Released in v2.25.2 | Review: auto-connect after a set switch goes to a bare start, bypassing the core-rejected nodes machine |
 | 6 | [440](../../../tasks/440-remove-storage-v0-migration.md) | Backlog | Remove the old-form migration and the original copy next to the slot |
+| 7 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | Auto-connect after a set switch goes through the core-rejected nodes safeguard |

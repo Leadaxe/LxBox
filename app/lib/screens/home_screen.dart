@@ -506,7 +506,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           // удалась (dirty остался) — на чужом конфиге не стартуем.
           if (autoConnect && mounted) {
             if (!_subController.configDirty) {
-              await _controller.start();
+              // §605 — тот же путь, что у кнопки Start: страховка отказа ядра
+              // (фича 478), иначе набор с отвергаемым узлом не поднимался.
+              await _runWithCoreRejectGuard();
             } else {
               AppLog.I.warning(
                   'workspaces: auto-connect skipped — config still dirty');
