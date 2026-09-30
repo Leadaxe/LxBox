@@ -3805,7 +3805,15 @@ final class _Run {
   void _reportUnknown() {
     final code = section.unknownKeyCode;
     if (code == null) return;
-    for (final name in space.query.names) {
+    // §598 — КОНТЕЙНЕР: текстовая форма ссылки с объектным пространством
+    // (v2rayN). У объектного входа (Xray, sing-box) схемы нет и плоского
+    // слоя тоже, у строки запроса нет объекта — их правила ниже не трогают.
+    final container = space.json != null && space.scheme.isNotEmpty;
+    for (final (name, value) in space.query.pairs) {
+      // §598 — пустое значение ключа контейнера = ключа нет. v2rayN по
+      // обычаю пишет в JSON все ключи, даже незаполненные (`"cs": ""`), и
+      // судить их значит ругаться на то, чего подписка не просила.
+      if (container && value.isEmpty) continue;
       if (_declared.contains(name.toLowerCase())) continue;
       // Тот же ключ, объявленный ПУТЁМ ОБЪЕКТА. Контейнерная форма
       // раскладывается лексером плоским слоем имён, и эта ветка обходит его
@@ -3845,6 +3853,22 @@ final class _Run {
     final json = space.json;
     if (json == null) return;
     for (final e in json.entries) {
+      // §598 — ключ, уже СУЖДЕННЫЙ веткой плоского слоя выше. У формы-
+      // контейнера каждый скалярный ключ верхнего уровня лежит и в объекте,
+      // и в плоском слое, и судился дважды: объявленный лишь как `query.*`
+      // (`host`, `path`, `alpn`, `fp`, `insecure` блоков `transports#uri` и
+      // `tls#uri`) проходил плоскую ветку, но здесь, не будучи ПРОЧИТАННЫМ
+      // (запись не применилась по `when`), звался неизвестным и при
+      // `action: keep` уезжал в тело — откуда гейт давал ему ещё и
+      // `unknown_key`. Приговор ключу один, и выносит его плоская ветка:
+      // объявленный молчит, необъявленный назван ровно раз. Объекту
+      // остаются только ключи, которых в плоском слое нет, — вложенные
+      // объекты и списки.
+      if (space.query.has(e.key)) continue;
+      // Тот же ключ со значением `null` в плоский слой не попал
+      // (`_flattenContainer`: null = отсутствие), и для контейнера это то
+      // же «ключа нет», что и пустая строка выше.
+      if (container && e.value == null) continue;
       if (_consumed.contains('json.${e.key}'.toLowerCase())) continue;
       if (section.ignoredKeys.contains(e.key)) continue;
       // Тот же ключ, ПРОЧИТАННЫЙ ПЛОСКИМ ИМЕНЕМ. Контейнерная форма
