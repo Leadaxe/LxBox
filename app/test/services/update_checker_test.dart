@@ -7,6 +7,19 @@ import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/update_checker.dart';
 
 void main() {
+  // §605 — одно правило для чекера и first-run вопроса: `0.0.0-dev` раньше
+  // проходил проверку вопроса (`contains('-dev.')`), хотя чекер молчал.
+  group('isDevBuild', () {
+    test('dev-сборки', () {
+      expect(UpdateChecker.isDevBuild('0.0.0-dev'), isTrue);
+      expect(UpdateChecker.isDevBuild('2.25.9-dev.3'), isTrue);
+      expect(UpdateChecker.isDevBuild('0.0.0'), isTrue);
+    });
+    test('релиз — не dev', () {
+      expect(UpdateChecker.isDevBuild('2.25.9'), isFalse);
+    });
+  });
+
   group('isNewer — semver comparisons', () {
     test('strict newer patch', () {
       expect(isNewer('v1.4.3', '1.4.2'), isTrue);
