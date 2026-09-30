@@ -192,7 +192,7 @@ Future<void> applyCustomDns(
           e.enabled &&
           dnsSrsCachedPaths[e.id] != null &&
           ((e.server ?? e.body?['server']) is String) &&
-          ((e.server ?? e.body?['server']) as String).isNotEmpty)
+          emittedServerTags.contains(e.server ?? e.body?['server']))
         e.name.isNotEmpty ? e.name : 'dns_srs_${e.id}',
   };
 
@@ -232,6 +232,17 @@ Future<void> applyCustomDns(
               name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'rule_set');
           continue;
         }
+        // §604 — `server` на сервер, которого нет в `dns.servers` (удалён,
+        // выключен, выпал): ядро отвечало бы «DNS server not found» на каждый
+        // запрос. Правило выпадает с кодом. Serverless-действия (без `server`)
+        // не проверяются; выпавшие по detour (§441) входят в
+        // [emittedServerTags] — их лечит [healDetourDroppedDnsRefs].
+        final ruleServer = kept['server'];
+        if (ruleServer is String && !emittedServerTags.contains(ruleServer)) {
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'server');
+          continue;
+        }
         outRules.add(kept);
       case DnsRuleTemplate(:final name):
         final t = templateRulesByName[name];
@@ -255,7 +266,13 @@ Future<void> applyCustomDns(
         final server =
             legacyServer ?? (bodyServer is String ? bodyServer : null);
         final rule = legacyRule ?? body;
-        if (server == null || server.isEmpty) continue;
+        // §604 — без `server` или со `server` на отсутствующий сервер правило
+        // выпадает с кодом (раньше — молча).
+        if (server == null || !emittedServerTags.contains(server)) {
+          reportFragmentDropped(
+              name.isNotEmpty ? name : 'dns_options', 'dns.rules', 'server');
+          continue;
+        }
         final path = dnsSrsCachedPaths[id];
         if (path == null) {
           // §588 (контракт 1.1.101) — файл набора не скачан: набор не попал

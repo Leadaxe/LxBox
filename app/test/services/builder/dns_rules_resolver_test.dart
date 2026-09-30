@@ -22,6 +22,22 @@ import 'package:lxbox/services/builder/if_engine.dart'
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
+/// §604 — шаблон DNS с серверами под все теги, на которые ссылаются правила
+/// этих тестов: правило на сервер вне `dns.servers` сборка теперь отбрасывает.
+final dnsAll = <String, dynamic>{
+  'servers': [
+    for (final t in const [
+      'bar', 'cf', 'cloudflare_doh', 'google_doh', 'local', 'p', 't1', 't',
+      'u', 'x', 'y', 'yandex_doh',
+    ])
+      {
+        'enabled': true,
+        'server': {'tag': t, 'type': 'udp', 'server': '1.1.1.1'},
+      },
+  ],
+  'rules': const [],
+};
+
 void main() {
   late Directory tmp;
   const channel = MethodChannel('plugins.flutter.io/path_provider');
@@ -285,7 +301,7 @@ void main() {
       ]);
 
       final config = <String, dynamic>{};
-      await applyCustomDns(config, {'servers': [], 'rules': []});
+      await applyCustomDns(config, dnsAll);
 
       final dns = config['dns'] as Map<String, dynamic>;
       expect(dns['rules'], [
@@ -301,7 +317,7 @@ void main() {
       final config = <String, dynamic>{};
       await applyCustomDns(
         config,
-        {'servers': [], 'rules': []},
+        dnsAll,
         extraDnsRulesByPresetId: const {
           // §253: пресет может нести несколько правил — legacy-ветка
           // (без dnsMirrors) эмитит ВСЕ, в порядке шаблона.
@@ -333,7 +349,7 @@ void main() {
       final config = <String, dynamic>{};
       await applyCustomDns(
         config,
-        {'servers': [], 'rules': []},
+        dnsAll,
         dnsSrsCachedPaths: const {'ds_test': '/tmp/cn.srs'},
       );
 
@@ -369,7 +385,7 @@ void main() {
       final config = <String, dynamic>{};
       await applyCustomDns(
         config,
-        {'servers': [], 'rules': []},
+        dnsAll,
         dnsSrsCachedPaths: const {'ds_body': '/tmp/body.srs'},
       );
 
@@ -401,7 +417,7 @@ void main() {
         tw,
         () => applyCustomDns(
           config,
-          {'servers': [], 'rules': []},
+          dnsAll,
           // dnsSrsCachedPaths empty → набор не в конфиге
         ),
       );
@@ -437,7 +453,7 @@ void main() {
         final config = configWithSets(const []);
         final tw = TemplateWarnings();
         await collectTemplateWarnings(tw,
-            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+            () => applyCustomDns(config, dnsAll));
 
         final dns = config['dns'] as Map<String, dynamic>;
         expect(dns['rules'], anyOf(isNull, isEmpty));
@@ -459,7 +475,7 @@ void main() {
         final config = configWithSets(const ['z']);
         final tw = TemplateWarnings();
         await collectTemplateWarnings(tw,
-            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+            () => applyCustomDns(config, dnsAll));
 
         expect((config['dns'] as Map)['rules'], anyOf(isNull, isEmpty));
         expect(tw.items.single.params['owner'], 'dns_options');
@@ -478,7 +494,7 @@ void main() {
         final config = configWithSets(const ['z']);
         final tw = TemplateWarnings();
         await collectTemplateWarnings(tw,
-            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+            () => applyCustomDns(config, dnsAll));
 
         expect((config['dns'] as Map)['rules'], [
           {
@@ -500,12 +516,79 @@ void main() {
         final config = configWithSets(const ['ru-direct:ru-domains']);
         final tw = TemplateWarnings();
         await collectTemplateWarnings(tw,
-            () => applyCustomDns(config, {'servers': [], 'rules': []}));
+            () => applyCustomDns(config, dnsAll));
 
         expect((config['dns'] as Map)['rules'], [
           {'rule_set': 'ru-domains', 'server': 'y'},
         ]);
         expect(tw.items, isEmpty);
+      });
+    });
+
+    group('§604: своё правило на сервер вне dns.servers', () {
+      test('inline на отсутствующий сервер выпадает с reason server; '
+          'живой и serverless — эмитятся', () async {
+        await SettingsStorage.saveDnsRulesList([
+          const DnsRuleInline(
+            name: 'Gone',
+            rule: {'domain_suffix': ['a.example'], 'server': 'deleted_dns'},
+          ),
+          const DnsRuleInline(
+            name: 'Live',
+            rule: {'domain_suffix': ['b.example'], 'server': 'y'},
+          ),
+          const DnsRuleInline(
+            name: 'Block',
+            rule: {'domain_suffix': ['c.example'], 'action': 'reject'},
+          ),
+        ]);
+        final config = <String, dynamic>{};
+        final tw = TemplateWarnings();
+        await collectTemplateWarnings(
+            tw, () => applyCustomDns(config, dnsAll));
+
+        expect((config['dns'] as Map)['rules'], [
+          {'domain_suffix': ['b.example'], 'server': 'y'},
+          {'domain_suffix': ['c.example'], 'action': 'reject'},
+        ]);
+        expect([for (final w in tw.items) [w.code, w.params]], [
+          [
+            templateWarnFragmentDropped,
+            {'owner': 'Gone', 'kind': 'dns.rules', 'reason': 'server'}
+          ],
+        ]);
+      });
+
+      test('srs со скачанным файлом, но без server — выпадает с кодом',
+          () async {
+        await SettingsStorage.saveDnsRulesList([
+          const DnsRuleSrs(
+            id: 'ds_ns',
+            name: 'No server',
+            srsUrl: 'https://example.com/a.srs',
+          ),
+          const DnsRuleSrs(
+            id: 'ds_gone',
+            name: 'Gone server',
+            srsUrl: 'https://example.com/b.srs',
+            server: 'deleted_dns',
+          ),
+        ]);
+        final config = <String, dynamic>{};
+        final tw = TemplateWarnings();
+        await collectTemplateWarnings(
+          tw,
+          () => applyCustomDns(config, dnsAll, dnsSrsCachedPaths: const {
+            'ds_ns': '/tmp/a.srs',
+            'ds_gone': '/tmp/b.srs',
+          }),
+        );
+
+        expect((config['dns'] as Map)['rules'], anyOf(isNull, isEmpty));
+        expect(config['route'], isNull,
+            reason: 'набор выпавшего правила в route.rule_set не попадает');
+        expect([for (final w in tw.items) w.params['reason']],
+            ['server', 'server']);
       });
     });
 
@@ -516,7 +599,7 @@ void main() {
       ]);
 
       final config = <String, dynamic>{};
-      await applyCustomDns(config, {'servers': [], 'rules': []});
+      await applyCustomDns(config, dnsAll);
 
       final dns = config['dns'] as Map<String, dynamic>;
       expect(dns['rules'], [
@@ -535,7 +618,7 @@ void main() {
       await applyCustomDns(
         config,
         {
-          'servers': [],
+          'servers': dnsAll['servers'],
           'rules': [
             {'name': 'T', 'server': 't'},
           ],
