@@ -33,14 +33,14 @@
 
 | Корзина | Пунктов |
 |---|---|
-| [bug] | 48 |
+| [bug] | 50 |
 | [doc] | 7 |
 | [doc-legacy] | 27 |
 | [owner] | 57 |
 | [decided] | 27 |
-| [test] | 22 |
+| [test] | 18 |
 | [moved] | 18 |
-| [done] | 75 |
+| [done] | 77 |
 | **Всего** | **281** |
 
 ### Вопросы владельцу
@@ -364,7 +364,7 @@
 - [bug] `fragment_fallback_delay` пишется при любой галке и не валидируется как duration. — **проверено 2026-09-30:** ЧАСТИЧНО: пишется только при `addFragment`/`addRecord` (`app/lib/services/builder/post_steps/tls_transforms.dart:62-91`) — «при любой галке» не подтверждено; значение не валидируется как duration: `vars['tls_fragment_fallback_delay'] ?? '500ms'` без `normalizeSingboxDuration` (`tls_transforms.dart:68`).
 - [owner] Глобальная фрагментация пишется и на hysteria2/tuic (бессмысленно на QUIC). → Вопрос: Не писать глобальную фрагментацию на hysteria2/tuic (QUIC)? (варианты: A не писать / B оставить)
 - [decided] Мёртвые поля флагов фрагментации в модели переменных. → Вопрос: Мёртвые поля флагов фрагментации в модели переменных — удалить? (варианты: A удалить / B оставить) → **Решено 2026-09-29: A** — удалить — [593](593-remove-dead-code-after-audit-591.md).
-- [test] Без юнитов: `certificate_store`, `echConfigList`, конфликт `tls.spoof` с REALITY. P17 без свидетеля.
+- [bug] Без юнитов: `certificate_store`, `echConfigList`, конфликт `tls.spoof` с REALITY. P17 без свидетеля. — **тест выявил расхождение:** P17 обещает пользовательскую настройку «Certificate store» → `certificate.store` в эмитируемом конфиге (секция UI «Certificate store», значения `system`/`mozilla`/`chrome`, дефолт `system`); в коде нет ни экрана, ни поля — `grep -rn -i 'certificate.store\|certStoreOptions\|mozilla' app/lib/` (минус тесты) не находит ничего, кроме собственного текста FEATURE.md; `echConfigList`/`tls.spoof`-REALITY — чистый passthrough без отдельной логики, юнитом не покрыть отдельно от общих passthrough-тестов allowlist'а.
 ## 016 — задачи для других фич
 - [moved] 146, 421 → 015; 127 (псевдо-имена) — совпадение номера; 122F → 021/010.
 ## 018-WORKSPACES — расхождения (кандидаты в задачи)
@@ -455,7 +455,9 @@
 ## 028-TRAFFIC_PROFILER — расхождения (кандидаты в задачи)
 - [done] Уровни уверенности `secondary`/`inferred` спящие; 013 live-events всё ещё перечисляет четыре как действующие. — **исправлено 2026-09-30:** 013 → live-events (EN+RU): в текущем коде `verified`/`unattributed`, `secondary`/`inferred` — спящие значения для чтения старых экспортов, ссылка на 028 → attribution (там уже верно).
 - [done] Старый текст 012 «UID-суффикс срезается» неверен: профайлер его не срезает. — **исправлено 2026-09-30:** текст живёт в `tasks/044F` (§1 «UID suffix», `_stripUid()`), в 012-LIVE_STATE его нет; в 044F добавлена плашка: профайлер суффикс не срезает, строка берётся как есть (028 → attribution, тест `traffic_profiler_test` «UID-suffixed package name»).
-- [test] Без свидетеля: P2 (START очищает / STOP замораживает), P4 (квоты буфера), P17 (Debug API зеркалит экран).
+- [bug] Без свидетеля: P2 (START очищает / STOP замораживает). — **тест выявил расхождение:** вход → STOP затем повторный START, затем ingest ОДНОГО нового conn (id `p2-b`, домен `b.example`) → ожидалось (P2: «START начинает с нуля») буфер `[b.example]` → получено `[b.example, a.example]` — `a.example` из сессии ДО STOP снова в буфере. Причина: `startGlobalRecording()`/`stopGlobalRecording()` чистят `_globalRollingBuffer`/`_globalUnattributedEvents`, но не `_connSnapshots`/`_closedHandled` (`app/lib/services/traffic_profiler.dart:170-201`); при следующем ingest старый id пропадает из `seenIds` → diff-блок (`traffic_profiler.dart:741-778`) трактует его как «закрылся» и эмитит tcpClose в новый буфер.
+- [done] P4 (квоты буфера: hard cap 20000 вытесняет старые сразу при append, unattributed ring — 50). — **покрыто 2026-09-30:** `test/services/traffic_profiler_test.dart` «hard cap 20000 evicts the oldest event immediately on append», «unattributed ring caps at 50 independent of the main buffer».
+- [done] P17 (Debug API зеркалит экран: тот же синглтон, start/stop, событие несёт server/source/группу). — **покрыто 2026-09-30:** `test/services/debug/profiler_handler_test.dart` «/profiler/live/start and /stop drive the same singleton as the screen», «/profiler/live reads the same log the screen shows, with server, source and group trace in the event JSON», «/profiler/live/state mirrors the screen recording state and count».
 
 ## 029-LOCALIZATION — расхождения (кандидаты в задачи)
 - [bug] **Баг**: 17 записей `assets/l10n/ru/ui.json` (строки DNS-групп: «Error TTL», «Win TTL», «Selection mode», «Members», «Group», «Server type», «Fastest — …», «Parallel — …», «Stable — …») записаны плоскими строками, а не `{"value": …}`; движок печатает английский, проверка `ui_check` пропускает. — **проверено 2026-09-30:** ПОДТВЕРЖДЁН: плоские записи `app/assets/l10n/ru/ui.json:1934,2077,2242,2746,3275,4008,4054,4201,4916`; `_lookupValue`: `entry is! Map → null` → английский (`app/lib/services/l10n/get_local_text.dart:117`); `ui_scan` — `containsKey` проходит, `entry is! Map → continue` (`app/tool/l10n/src/ui_scan.dart:317`).

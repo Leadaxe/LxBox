@@ -49,7 +49,9 @@ The feature keeps four principles:
   hard-coded constant.
 - **P4. Buffer quotas.** Events older than the window are purged every 15 s;
   beyond 20,000 the oldest are evicted; the ring of unowned events holds 50.
-  `no witness`.
+  **Witness:** units "hard cap 20000 evicts the oldest event immediately on
+  append", "unattributed ring caps at 50 independent of the main buffer".
+  **Mutation:** raise or remove the cap.
 - **P5. A short connection is seen whole and once.** A connection opened and
   closed between ticks gives both phases; a closed one that keeps arriving in
   snapshots for another 5 min is closed exactly once. **Witness:** units
@@ -124,7 +126,12 @@ The feature keeps four principles:
   activity gate removed.
 - **P17. The Debug API sees what the screen sees.** The `/profiler/live*`
   routes read the same log, start and stop the same recording, and an event
-  in JSON carries the server, the source and the group trace. `no witness`.
+  in JSON carries the server, the source and the group trace. **Witness:**
+  units "/profiler/live/start and /stop drive the same singleton as the
+  screen", "/profiler/live reads the same log the screen shows, with server,
+  source and group trace in the event JSON", "/profiler/live/state mirrors
+  the screen recording state and count". **Mutation:** a separate buffer or
+  state for the Debug API.
 
 ## Controlled parameters
 
