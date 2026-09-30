@@ -4,8 +4,11 @@
 // Builder applyTunPackages() трансформирует это в config.tun.{include,exclude}_package.
 // Native слой BoxVpnService.kt:557-560 далее пробрасывает в VpnService.Builder.
 //
-// Изменения требуют **full VPN restart** (не light reload) — addAllowedApplication
-// applies только на builder.establish(). Banner показывается при tunnel up.
+// Списки применяются в `builder.establish()`: ядро зовёт `openTun` при каждом
+// старте box-инстанса, а reload (`startOrReloadService`) его пересобирает —
+// хватает лёгкой перезагрузки, не только full restart (§076: Home-banner
+// «Apply / Restart»); на устройстве не сверено. В Proxy-режиме tun нет —
+// список не действует.
 
 import 'dart:async';
 
@@ -153,7 +156,7 @@ class _TunAppsTabState extends State<TunAppsTab>
       builder: (ctx) => AlertDialog(
         title: Text(getLocalText.s("Tunnel apps — OS-level split")),
         content: SingleChildScrollView(
-          child: Text(getLocalText.s("This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).")),
+          child: Text(getLocalText.s("This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges apply when the tunnel is created next — restart or reload the core from the home screen banner (Android reads the list only while creating the tun interface).\n\nIn Proxy mode there is no tun interface, so this list has no effect.")),
         ),
         actions: [
           TextButton(
@@ -345,7 +348,7 @@ class _TunAppsTabState extends State<TunAppsTab>
         ),
       ),
       subtitle: Text(
-        uninstalled ? getLocalText.s("%s — uninstalled, auto-skipped", pkg) : pkg,
+        uninstalled ? getLocalText.s("%s — not installed; the system ignores it", pkg) : pkg,
         style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
       ),
       trailing: IconButton(

@@ -71,7 +71,7 @@ Raw-actions (Шаг 1) работают **откуда угодно** — Termux
 |---|---|
 | **L×Box: Start VPN** | one-tap — выбрал, готово, без экрана |
 | **L×Box: Stop VPN** | one-tap |
-| **L×Box: Toggle VPN** | one-tap |
+| **L×Box: Toggle VPN** | one-tap; без разрешения VPN открывает приложение за согласием (как плитка) |
 | **L×Box: Custom…** | открывает экран выбора остальных команд |
 
 «Custom…» — список команд (Switch node · Set group · URL-test group · Refresh
@@ -91,8 +91,8 @@ Host → State / Condition → Plugin → **L×Box** → выбрать пров
 | Условие | Значение |
 |---|---|
 | **VPN is up** | — |
-| **Active node =** | выбрать ноду |
-| **Active group =** | выбрать группу |
+| **Active node =** | ввести тег ноды точно как в приложении (текстовое поле, списка нет) |
+| **Active group =** | ввести тег группы |
 
 Profile активируется, пока условие истинно. Host опрашивает периодически.
 
@@ -105,7 +105,8 @@ Profile активируется, пока условие истинно. Host �
 
 > Под капотом plugin использует стандарт
 > `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и
-> те же команды, что raw-actions ниже. UI плагина — на английском.
+> те же команды, что raw-actions ниже. Подписи и экраны плагина — на языке
+> приложения; строки команд и проверок, которые хранит host, остаются английскими.
 
 ---
 

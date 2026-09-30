@@ -145,7 +145,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     if (!mounted) return;
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(getLocalText.s("Config saved"))),
+        SnackBar(content: Text(getLocalText.s("Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on)."))),
       );
     }
   }

@@ -707,7 +707,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        getLocalText.s("Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults."),
+                        getLocalText.s("Idle timeout suspends the tunnel after inactivity to save battery; empty = never suspended (the core's default). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults."),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),

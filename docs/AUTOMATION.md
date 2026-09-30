@@ -75,7 +75,7 @@ In the host's plugin list L×Box offers **four entries**:
 |---|---|
 | **L×Box: Start VPN** | one tap — select it and you are done, no screen |
 | **L×Box: Stop VPN** | one tap |
-| **L×Box: Toggle VPN** | one tap |
+| **L×Box: Toggle VPN** | one tap; without the VPN permission it opens the app for consent (same as the tile) |
 | **L×Box: Custom…** | opens a screen for choosing the remaining commands |
 
 “Custom…” lists the commands (Switch node · Set group · URL-test group · Refresh
@@ -95,8 +95,8 @@ Host → State / Condition → Plugin → **L×Box** → pick a check:
 | Condition | Value |
 |---|---|
 | **VPN is up** | — |
-| **Active node =** | choose a node |
-| **Active group =** | choose a group |
+| **Active node =** | type the node tag exactly as the app shows it (a text field, no list) |
+| **Active group =** | type the group tag |
 
 The profile stays active while the condition holds. The host polls periodically.
 
@@ -110,7 +110,9 @@ The profile stays active while the condition holds. The host polls periodically.
 
 > Under the hood the plugin uses the standard
 > `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` and
-> the same commands as the raw actions below. The plugin's UI is in English.
+> the same commands as the raw actions below. The plugin's labels and screens
+> follow the app language; the command and check strings stored in the host
+> stay English.
 
 ---
 

@@ -107,7 +107,7 @@ void main() {
 
   // §109 — контракт getAppInfo: null ТОЛЬКО при подтверждённом not-found;
   // timeout/ошибка канала обязаны бросать, не маскироваться под null
-  // (регрессия: ложный «uninstalled, auto-skipped» на Tunnel apps).
+  // (регрессия: ложный «not installed; the system ignores it» на Tunnel apps).
   group('BoxVpnClient.getAppInfo (§109)', () {
     test('{notFound: true} → null (подтверждённый not-found)', () async {
       messenger.setMockMethodCallHandler(channel, (call) async {

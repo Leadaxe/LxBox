@@ -670,7 +670,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(getLocalText.s("HTTPS (TLS to proxy)")),
-              subtitle: Text(getLocalText.s("Connect to the proxy over TLS. Advanced TLS options (SNI, ALPN) can be edited later via node JSON.")),
+              subtitle: Text(getLocalText.s("Connect to the proxy over TLS; Host is used as the SNI. ALPN, insecure and the other TLS options can be set later on the node's JSON tab (Edit JSON).")),
               value: _httpTls,
               onChanged: (v) => setState(() => _httpTls = v),
             ),

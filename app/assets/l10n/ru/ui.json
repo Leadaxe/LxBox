@@ -542,8 +542,8 @@
   "%s — tap to edit": {
     "value": "%s — нажмите, чтобы изменить"
   },
-  "%s — uninstalled, auto-skipped": {
-    "value": "%s — удалено, пропускается автоматически"
+  "%s — not installed; the system ignores it": {
+    "value": "%s — не установлено; система его игнорирует"
   },
   "%s: empty file": {
     "value": "%s: пустой файл"
@@ -1331,8 +1331,8 @@
       "other": "Конфиг пересобран: %d узла"
     }
   },
-  "Config saved": {
-    "value": "Конфиг сохранён"
+  "Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on).": {
+    "value": "Конфиг сохранён. Следующая пересборка его перезапишет; чтобы сохранить, закрепите конфиг в App Settings → Diagnostics (при включённом Debug API)."
   },
   "Config unlocked. Next UI action will rebuild from settings.": {
     "value": "Конфиг разблокирован. Следующее действие в UI пересоберёт его из настроек."
@@ -1346,8 +1346,8 @@
   "Connect a subscription or add a node manually to get started.": {
     "value": "Подключите подписку или добавьте узел вручную, чтобы начать."
   },
-  "Connect to the proxy over TLS. Advanced TLS options (SNI, ALPN) can be edited later via node JSON.": {
-    "value": "Подключаться к прокси по TLS. Тонкие настройки TLS (SNI, ALPN) можно изменить позже через JSON узла."
+  "Connect to the proxy over TLS; Host is used as the SNI. ALPN, insecure and the other TLS options can be set later on the node's JSON tab (Edit JSON).": {
+    "value": "Подключаться к прокси по TLS; Host используется как SNI. ALPN, insecure и прочие настройки TLS можно задать позже на вкладке JSON узла (кнопка правки JSON)."
   },
   "Connected": {
     "value": "Подключено"
@@ -2345,8 +2345,8 @@
   "Idle timeout (min)": {
     "value": "Тайм-аут простоя (мин)"
   },
-  "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
-    "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи (по умолчанию 5 мин). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
+  "Idle timeout suspends the tunnel after inactivity to save battery; empty = never suspended (the core's default). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
+    "value": "Тайм-аут простоя приостанавливает туннель при неактивности ради экономии батареи; пусто = не приостанавливать (умолчание ядра). Keep-alive пингует QUIC-соединение (по умолчанию 30 сек, только HTTP/3). Оставьте поля пустыми для значений по умолчанию."
   },
   "Idle timeout will be raised to %s when the config is built": {
     "value": "При сборке idle timeout будет поднят до %s"
@@ -2608,8 +2608,8 @@
   "Larger values save battery": {
     "value": "Большие значения экономят батарею"
   },
-  "Last 100 events": {
-    "value": "Последние 100 событий"
+  "App and core logs, crashes, profiling": {
+    "value": "Логи приложения и ядра, крэши, профилирование"
   },
   "Last GC": {
     "value": "Последний GC"
@@ -4542,8 +4542,8 @@
   "The whole element as the provider sent it": {
     "value": "Элемент целиком, как прислал провайдер"
   },
-  "Theme, appearance": {
-    "value": "Тема и внешний вид"
+  "General, appearance, diagnostics, automation": {
+    "value": "Общие, внешний вид, диагностика, автоматизация"
   },
   "These depend on dead node \"%1$s\" and are not working:": {
     "value": "Они зависят от мёртвого узла \"%1$s\" и не работают:"
@@ -4572,8 +4572,8 @@
   "This frees %s. Memory profiles cannot be recovered afterwards.": {
     "value": "Освободится %s. Восстановить профили памяти после удаления нельзя."
   },
-  "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).": {
-    "value": "Это разделение туннеля на уровне ОС: оно определяет, какие приложения вообще видят VPN-туннель — пакеты исключённых приложений идут напрямую через мобильную сеть или Wi-Fi, минуя sing-box.\n\n• Выключено — все приложения используют VPN (по умолчанию)\n• Белый список — через VPN идут ТОЛЬКО перечисленные приложения, остальные в обход\n• Чёрный список — перечисленные приложения идут в обход VPN, остальные через туннель\n\nВажно: приложения из белого списка по-прежнему проходят через обычные правила маршрутизации. Приложения в обход туннеля для sing-box невидимы — правила с package_name их не поймают.\n\nИзменения требуют полного перезапуска VPN (Android создаёт tun-интерфейс только при старте)."
+  "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges apply when the tunnel is created next — restart or reload the core from the home screen banner (Android reads the list only while creating the tun interface).\n\nIn Proxy mode there is no tun interface, so this list has no effect.": {
+    "value": "Это разделение туннеля на уровне ОС: оно определяет, какие приложения вообще видят VPN-туннель — пакеты исключённых приложений идут напрямую через мобильную сеть или Wi-Fi, минуя sing-box.\n\n• Выключено — все приложения используют VPN (по умолчанию)\n• Белый список — через VPN идут ТОЛЬКО перечисленные приложения, остальные в обход\n• Чёрный список — перечисленные приложения идут в обход VPN, остальные через туннель\n\nВажно: приложения из белого списка по-прежнему проходят через обычные правила маршрутизации. Приложения в обход туннеля для sing-box невидимы — правила с package_name их не поймают.\n\nИзменения вступают в силу при следующем создании туннеля — перезапустите или перезагрузите ядро из баннера на главном экране (Android читает список только при создании tun-интерфейса).\n\nВ режиме Proxy tun-интерфейса нет, и этот список не действует."
   },
   "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
     "value": "Это узел автовыбора — своего соединения у него нет. Откройте участника, чтобы проверить его."

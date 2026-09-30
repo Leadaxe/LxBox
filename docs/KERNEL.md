@@ -97,8 +97,9 @@ service.
 
 `lx.masque.idle_timeout` is a new global default for masque outbounds without
 their own `idle_timeout`; a node's own key wins, including an explicit `"0"`.
-MASQUE idle stays **off** by default, and LxBox does not write the global key —
-its WARP MASQUE nodes carry their own `idle_timeout` (5m).
+MASQUE idle stays **off** by default, and LxBox does not write the global key;
+a WARP MASQUE node carries `idle_timeout` only when the wizard's field is filled
+(empty = the key is omitted = never suspended).
 
 Every `lx.wg` key acts **only** in builds with `with_lx_idle_suspend` (the mobile
 AAR) — see gotcha 1.

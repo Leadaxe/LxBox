@@ -95,7 +95,7 @@ class HomeDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: Text(getLocalText.s("App Settings")),
-              subtitle: Text(getLocalText.s("Theme, appearance")),
+              subtitle: Text(getLocalText.s("General, appearance, diagnostics, automation")),
               onTap: () => _go(context, const AppSettingsScreen()),
             ),
             const Divider(),
@@ -129,7 +129,7 @@ class HomeDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),
               title: Text(getLocalText.s("Debug")),
-              subtitle: Text(getLocalText.s("Last 100 events")),
+              subtitle: Text(getLocalText.s("App and core logs, crashes, profiling")),
               onTap: () => _go(context, const DebugScreen()),
             ),
             const Divider(),

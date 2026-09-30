@@ -382,8 +382,8 @@
   "%s — tap to edit": {
     "value": "%s — 点击编辑"
   },
-  "%s — uninstalled, auto-skipped": {
-    "value": "%s — 已卸载，自动跳过"
+  "%s — not installed; the system ignores it": {
+    "value": "%s — 未安装；系统会忽略它"
   },
   "%s: empty file": {
     "value": "%s：空文件"
@@ -1135,8 +1135,8 @@
       "other": "配置已重新生成：%d 个节点"
     }
   },
-  "Config saved": {
-    "value": "配置已保存"
+  "Config saved. The next rebuild overwrites it; to keep it, lock the config in App Settings → Diagnostics (Debug API on).": {
+    "value": "配置已保存。下次重建会覆盖它；如需保留，请在应用设置 → 诊断中锁定配置（需开启 Debug API）。"
   },
   "Config unlocked. Next UI action will rebuild from settings.": {
     "value": "配置已解锁。下一次界面操作将依据设置重建。"
@@ -1150,8 +1150,8 @@
   "Connect a subscription or add a node manually to get started.": {
     "value": "添加订阅或手动添加节点即可开始。"
   },
-  "Connect to the proxy over TLS. Advanced TLS options (SNI, ALPN) can be edited later via node JSON.": {
-    "value": "通过 TLS 连接代理。之后可在节点 JSON 里调整高级 TLS 选项（SNI、ALPN）。"
+  "Connect to the proxy over TLS; Host is used as the SNI. ALPN, insecure and the other TLS options can be set later on the node's JSON tab (Edit JSON).": {
+    "value": "通过 TLS 连接代理；Host 用作 SNI。ALPN、insecure 及其它 TLS 选项可稍后在节点的 JSON 标签页（编辑 JSON）中设置。"
   },
   "Connected": {
     "value": "已连接"
@@ -2146,8 +2146,8 @@
   "Idle timeout (min)": {
     "value": "空闲超时（分钟）"
   },
-  "Idle timeout suspends the tunnel after inactivity to save battery (default 5 min). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
-    "value": "空闲超时会在无活动后挂起隧道以省电（默认 5 分钟）。Keep-alive 会为 QUIC 连接保活（默认 30 秒，仅 HTTP/3）。留空则使用默认值。"
+  "Idle timeout suspends the tunnel after inactivity to save battery; empty = never suspended (the core's default). Keep-alive pings the QUIC link (default 30 sec, HTTP/3 only). Leave empty for defaults.": {
+    "value": "空闲超时会在无活动后挂起隧道以省电；留空 = 从不挂起（内核默认）。Keep-alive 会为 QUIC 连接保活（默认 30 秒，仅 HTTP/3）。留空则使用默认值。"
   },
   "Idle timeout will be raised to %s when the config is built": {
     "value": "构建配置时空闲超时会提高到 %s"
@@ -2402,8 +2402,8 @@
   "Larger values save battery": {
     "value": "数值越大越省电"
   },
-  "Last 100 events": {
-    "value": "最近 100 条事件"
+  "App and core logs, crashes, profiling": {
+    "value": "应用与内核日志、崩溃、性能分析"
   },
   "Last GC": {
     "value": "上次 GC"
@@ -4335,8 +4335,8 @@
   "The whole element as the provider sent it": {
     "value": "服务商下发的完整原始元素"
   },
-  "Theme, appearance": {
-    "value": "主题、外观"
+  "General, appearance, diagnostics, automation": {
+    "value": "通用、外观、诊断、自动化"
   },
   "These depend on dead node \"%1$s\" and are not working:": {
     "value": "以下项依赖已失效的节点「%1$s」，当前不可用："
@@ -4365,8 +4365,8 @@
   "This frees %s. Memory profiles cannot be recovered afterwards.": {
     "value": "将释放 %s。内存性能文件删除后无法恢复。"
   },
-  "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges require a full VPN restart to apply (Android creates the tun interface only at start).": {
-    "value": "这是系统级的分应用分流。它决定哪些应用能看到 VPN 隧道——被排除应用的流量会直接走移动网络或 Wi-Fi，不进入 sing-box。\n\n• 关闭 —— 所有应用都走 VPN（默认）\n• 白名单 —— 只有列表内的应用走 VPN，其它走直连\n• 黑名单 —— 列表内的应用绕过 VPN，其它走隧道\n\n注意：白名单里的应用仍会经过你正常的路由规则。绕过隧道的应用对 sing-box 完全不可见——带 package_name 的自定义规则匹配不到它们。\n\n修改需要完整重启 VPN 才能生效（Android 只在启动时创建 tun 接口）。"
+  "This is OS-level split-tunneling. It controls which apps see the VPN tunnel at all — packets from excluded apps go directly via cellular/wifi without entering sing-box.\n\n• Off — every app uses the VPN (default)\n• Allow-list — ONLY listed apps go through VPN; everything else bypasses\n• Deny-list — listed apps bypass VPN; everything else goes through\n\nNote: apps in the Allow-list still go through your normal routing rules. Apps that bypass the tunnel are not visible to sing-box at all — your custom rules with package_name will not match them.\n\nChanges apply when the tunnel is created next — restart or reload the core from the home screen banner (Android reads the list only while creating the tun interface).\n\nIn Proxy mode there is no tun interface, so this list has no effect.": {
+    "value": "这是系统级的分应用分流。它决定哪些应用能看到 VPN 隧道——被排除应用的流量会直接走移动网络或 Wi-Fi，不进入 sing-box。\n\n• 关闭 —— 所有应用都走 VPN（默认）\n• 白名单 —— 只有列表内的应用走 VPN，其它走直连\n• 黑名单 —— 列表内的应用绕过 VPN，其它走隧道\n\n注意：白名单里的应用仍会经过你正常的路由规则。绕过隧道的应用对 sing-box 完全不可见——带 package_name 的自定义规则匹配不到它们。\n\n修改会在下次创建隧道时生效——请从主屏幕横幅重启或重新加载内核（Android 只在创建 tun 接口时读取该列表）。\n\n代理模式下没有 tun 接口，此列表不起作用。"
   },
   "This is an auto-select node — it has no connection of its own. Open a member to diagnose it.": {
     "value": "这是一个自动选择节点——它没有自己的连接。请打开其中的成员节点来诊断。"

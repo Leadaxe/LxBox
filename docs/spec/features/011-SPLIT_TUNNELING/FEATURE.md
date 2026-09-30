@@ -148,8 +148,8 @@ user choice / Debug API / backup
 ## Boundaries
 
 - Proxy mode: split tunneling does not apply — there is no tunnel, and an app
-  goes to the local port by its own proxy setting. The tab does not warn about
-  this in that mode.
+  goes to the local port by its own proxy setting. The tab's help text says
+  so; there is no mode-aware banner.
 - "Allow VPN bypass" is a different mechanism (the app itself decides to go
   around the tunnel), owner — [010-VPN_SERVICE](../010-VPN_SERVICE/FEATURE.md),
   function "Operating modes".

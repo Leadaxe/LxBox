@@ -1366,7 +1366,7 @@ raw `/` inside the base64 is escaped (§106). The default port is `443`.
 | `sni` | The TLS SNI; empty means the core's default (`www.cloudflare.com` since lx.25-rc.4) |
 | `disable_sni` | `1`/`true` produces a ClientHello with no SNI. NOT a synonym for an empty `sni` (which is replaced by the profile's default). §393 |
 | `mtu` | int, default `1280` |
-| `idle_timeout` | A Go duration for the tunnel's idle-suspend (empty means the core's default of `5m`; a negative value disables it, §128) |
+| `idle_timeout` | A Go duration for the tunnel's idle-suspend. Empty = the key is not written and the tunnel is never suspended: the core's default is off, and the global `lx.masque.idle_timeout` (fork SPEC 098) is not written by LxBox; an explicit `0` or a negative value keeps the tunnel up whatever the global default (§128) |
 | `keep_alive` | A Go duration for the QUIC keepalive (empty means `30s`; `vhttp=h3` only) |
 
 **§393 — two generations of names.** The emitter writes only the new ones
