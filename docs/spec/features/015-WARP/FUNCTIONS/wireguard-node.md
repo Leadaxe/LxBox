@@ -83,3 +83,4 @@ Node tag: `🔥☁️ WARP`, `🔥☁️ WARP+`, `🔥⛈️ WARP (AWG 1.5)`,
 | 7 | [386](../../../tasks/386-warp-endpoint-preset-combobox.md) | — | Preset list at the Endpoint field |
 | 8 | [424](../../../tasks/424-warp-preset-recommended-mark-leak.md) | Implemented (unit + widget test) | The "(recommended)" mark does not leak into the value |
 | 9 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | The own endpoint is checked for `host:port` before registration |
+| 10 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | The unused registration status card removed; the wizard closes on success |

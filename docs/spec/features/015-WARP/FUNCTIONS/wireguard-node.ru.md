@@ -78,3 +78,4 @@ WireGuard — транспорт мастера «Get WARP» по умолчан
 | 7 | [386](../../../tasks/386-warp-endpoint-preset-combobox.md) | — | Список пресетов у поля Endpoint |
 | 8 | [424](../../../tasks/424-warp-preset-recommended-mark-leak.md) | Implemented (unit + widget test) | Пометка «(recommended)» не утекает в значение |
 | 9 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Свой endpoint проверяется на `host:port` до регистрации |
+| 10 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Неиспользуемая карточка статуса регистрации удалена; мастер закрывается при успехе |

@@ -3639,12 +3639,6 @@
   "Registered by preset \"%s\". Parameters are edited in the preset rule (Routing → Rules).": {
     "value": "Зарегистрирован пресетом «%s». Параметры редактируются в правиле пресета (Маршрутизация → Правила)."
   },
-  "Registered: WARP": {
-    "value": "Зарегистрировано: WARP"
-  },
-  "Registered: WARP+": {
-    "value": "Зарегистрировано: WARP+"
-  },
   "Registering…": {
     "value": "Регистрация…"
   },

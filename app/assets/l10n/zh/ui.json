@@ -3439,12 +3439,6 @@
   "Registered by preset \"%s\". Parameters are edited in the preset rule (Routing → Rules).": {
     "value": "由预设「%s」注册。参数在该预设规则中编辑（路由 → 规则）。"
   },
-  "Registered: WARP": {
-    "value": "已注册：WARP"
-  },
-  "Registered: WARP+": {
-    "value": "已注册：WARP+"
-  },
   "Registering…": {
     "value": "正在注册…"
   },
