@@ -76,6 +76,9 @@ Future<List<String>> _replaceRaw(
   for (final entry in clean.entries) {
     final key = entry.key;
     final value = entry.value;
+    // §607 — зеркало тумблеров VPN не применяется из снимка и неизвестным
+    // не считается.
+    if (key == SettingsStorage.nativePrefsKey) continue;
     if (!SettingsStorage.allowedTopLevelKeys.contains(key)) {
       dropped.add(key);
       continue;
@@ -137,6 +140,14 @@ Future<List<String>> _replaceRaw(
         }
       }
       if (outVars.isNotEmpty) filtered['vars'] = outVars;
+    }
+    // §607 — зеркало тумблеров VPN получателя переживает замену: без него
+    // экраны до рестарта видели дефолты, а первая запись тумблера создавала
+    // секцию из одного ключа (остальные при старте уезжали в native
+    // дефолтами).
+    final nativePrefs = current[SettingsStorage.nativePrefsKey];
+    if (nativePrefs != null) {
+      filtered[SettingsStorage.nativePrefsKey] = nativePrefs;
     }
     SettingsStorage._cache = filtered;
     await _save();

@@ -9,6 +9,9 @@ import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/backup_service.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
+/// §607 — канал нативных методов VPN (зеркало тумблеров пишет и туда).
+const _vpnMethods = MethodChannel('com.leadaxe.lxbox/methods');
+
 /// §040 backup-restore — round-trip и edge cases для нового single-format
 /// (`storage` + `vpn_settings` блоки).
 void main() {
@@ -911,6 +914,54 @@ void main() {
   // получателя удаляется), неотмеченная не трогается. До §599 replace
   // перезаписывал весь документ настроек и стирал неотмеченные категории.
   // ---------------------------------------------------------------------------
+  group('§607 — закрепление конфига и зеркало тумблеров VPN', () {
+    test('config_locked_for_debug — категория Debug API config', () {
+      expect(BackupService.categoryOfVarKey('config_locked_for_debug'),
+          BackupCategory.debugConfig);
+    });
+
+    test('restore только App settings не ставит замок конфига', () async {
+      await seedStorage(sampleSnapshot());
+      final svc = const BackupService();
+      final contents = await svc.parseImport(jsonEncode({
+        'app': 'lxbox',
+        'kind': 'backup',
+        'storage': {
+          'storage_version': 1,
+          'vars': {'log_level': 'warn', 'config_locked_for_debug': 'true'},
+        },
+      }));
+      for (final merge in [false, true]) {
+        await svc.applyImport(contents,
+            merge: merge, include: {BackupCategory.appSettings});
+        expect(await SettingsStorage.getConfigLockedForDebug(), isFalse,
+            reason: 'merge=$merge: замок едет категорией Debug API config');
+        expect(await SettingsStorage.getVar('log_level', ''), 'warn');
+      }
+    });
+
+    test('замена сохраняет native_prefs получателя, из снимка не берёт',
+        () async {
+      await seedStorage(sampleSnapshot());
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(_vpnMethods, (_) async => null);
+      addTearDown(() => messenger.setMockMethodCallHandler(_vpnMethods, null));
+      await SettingsStorage.setNativeBool(NativePrefsKeys.autoStart, true);
+      final dropped = await SettingsStorage.replaceRaw({
+        'storage_version': 1,
+        'vars': {'log_level': 'warn'},
+        'native_prefs': {NativePrefsKeys.autoStart: false},
+      });
+      expect(dropped, isEmpty,
+          reason: 'зеркало тумблеров — не неизвестный ключ');
+      expect(await SettingsStorage.getNativeBool(NativePrefsKeys.autoStart),
+          isTrue);
+      final raw = await SettingsStorage.exportRaw();
+      expect(raw['native_prefs'], isA<Map>());
+    });
+  });
+
   group('§599 — replace по категориям', () {
     const allCategories = {
       BackupCategory.serverLists,

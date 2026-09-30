@@ -1048,11 +1048,23 @@ class SettingsStorage {
   /// устройства. Экспорт их по умолчанию не включает; замена
   /// ([replaceRaw], `merge=false`) переносит их из текущего стораджа, если
   /// во входящем снимке их нет.
+  ///
+  /// §607 — сюда же закрепление конфига (§037): без Debug API его не снять,
+  /// поэтому оно едет категорией Debug API config вместе с ним, а не App
+  /// settings (иначе restore App settings привозил замок без Debug API и
+  /// пересборка вставала).
   static const Set<String> debugApiVarKeys = {
     'debug_enabled',
     'debug_token',
     'debug_port',
+    'config_locked_for_debug',
   };
+
+  /// §607 — зеркало тумблеров VPN (§189): свойство устройства, как флаги
+  /// [startupPromptVarKeys]. Из снимка [replaceRaw] не берётся (тумблеры
+  /// восстанавливает блок `vpn_settings`), в отброшенные не попадает, замена
+  /// оставляет секцию получателя.
+  static const String nativePrefsKey = 'native_prefs';
 
   /// §447 — одноразовые флаги стартовых промптов («уже спрашивали»): свойство
   /// устройства, а не настройка. Полная замена ([replaceRaw], `merge=false`)
