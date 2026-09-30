@@ -131,7 +131,9 @@ The feature protects two principles:
   action.
 - **P24. A profiler snapshot — only with a live core.** Without the tunnel up
   the snapshot is not taken ("VPN must be running…"); the snapshot server
-  exists only for the duration of one request. `no witness`.
+  exists only for the duration of one request. **Witness:** widget test
+  "capture button does not call pprofProfile when VPN is down". **Mutation:**
+  the VPN-status gate removed from `_capture`.
 
 ## Controlled parameters
 
