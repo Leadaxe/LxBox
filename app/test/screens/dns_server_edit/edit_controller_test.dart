@@ -195,6 +195,16 @@ void main() {
       c.onSniChanged('');
       expect(bodyOf(c).containsKey('tls'), false,
           reason: 'кроме enabled ничего — блок уходит целиком');
+      // tls не объект — прежняя замена, без исключения; видимый JSON в синхроне.
+      c.onBodyTextChanged(
+          '{"type":"tls","server":"9.9.9.9","tls":true}');
+      c.onSniChanged('z.example');
+      expect(bodyOf(c)['tls'], {'enabled': true, 'server_name': 'z.example'});
+      c.onBodyTextChanged('{"type":"tls","server":"9.9.9.9",'
+          '"tls":{"enabled":false,"alpn":["dot"]}}');
+      c.onSniChanged('w.example');
+      expect(c.bodyCtrl.text, contains('"alpn"'));
+      expect(bodyOf(c)['tls']['enabled'], true);
       c.dispose();
     });
 
