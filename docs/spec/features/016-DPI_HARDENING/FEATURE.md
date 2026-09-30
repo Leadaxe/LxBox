@@ -149,8 +149,10 @@ Out of the box: global techniques are off, delay `500ms`, CA store `system`.
   "certificate as a string survives the round trip as a string". **Mutation:**
   lose `pinSHA256` during parsing.
 - **P17. The root CA store is chosen by the user.** "Certificate store" →
-  `certificate.store`. Manual check: `mozilla` → in the resulting config
-  `"certificate": {"store": "mozilla"}`. `no witness` (no unit).
+  `certificate.store` (template variable `certificate_store`, default
+  `system`). **Witness:** `app/test/builder/certificate_store_build_test.dart`
+  — `mozilla` → `"certificate": {"store": "mozilla"}`, without the variable —
+  `system`.
 
 ## Controlled parameters
 

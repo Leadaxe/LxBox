@@ -145,8 +145,10 @@ LxBox защищает TLS-узлы VPN (VLESS, Trojan, AnyTLS и другие) 
   валиден)», «certificate строкой переживает round-trip строкой».
   Мутация: терять `pinSHA256` на разборе.
 - **P17. Хранилище корневых CA выбирает пользователь.** «Certificate
-  store» → `certificate.store`. Ручная проверка: `mozilla` → в итоговом
-  конфиге `"certificate": {"store": "mozilla"}`. `без свидетеля` (юнита нет).
+  store» → `certificate.store` (переменная шаблона `certificate_store`,
+  умолчание `system`). Свидетель:
+  `app/test/builder/certificate_store_build_test.dart` — `mozilla` →
+  `"certificate": {"store": "mozilla"}`, без переменной — `system`.
 
 ## Контролируемые параметры
 
