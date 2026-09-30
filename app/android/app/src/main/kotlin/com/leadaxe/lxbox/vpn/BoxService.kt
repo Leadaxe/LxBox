@@ -788,8 +788,15 @@ class BoxService(
         closeCommandServerAtomic("stopAndAlert: $message")
 
         withContext(Dispatchers.Main) {
-            notification.show(
-                L10n.str(service, R.string.notification_error_title), message)
+            // §605 — ошибка идёт отдельным уведомлением (id=2): постоянное
+            // (id=1) снимается `notification.stop()` ниже и уносило бы текст с
+            // собой — пользователь фонового старта ошибки не видел.
+            // Структурный `alert:<type>:<details>` разбирает Flutter (диалог),
+            // сырой код в шторку не выводим.
+            if (!message.startsWith("alert:")) {
+                notification.showAlert(
+                    L10n.str(service, R.string.notification_error_title), message)
+            }
             if (receiverRegistered) {
                 runCatching { service.unregisterReceiver(receiver) }
                 receiverRegistered = false
