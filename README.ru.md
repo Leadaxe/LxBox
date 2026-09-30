@@ -13,7 +13,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
   <a href="https://github.com/Leadaxe/LxBox"><img src="docs/badges/get-it-on-github.png" alt="Get it on GitHub" height="80"></a>
 </p>
 
-**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE.ru.md)** | **[Поддержать проект](docs/DONATE.ru.md)**
+**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)** | **[Руководство пользователя](docs/USER_GUIDE.ru.md)** | **[Поддержать проект](docs/DONATE.ru.md)** | **[Реестр публичных серверов](docs/PUBLIC_SOURCES.ru.md)**
 
 ---
 
