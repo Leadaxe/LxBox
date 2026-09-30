@@ -283,7 +283,9 @@ const Set<String> _varBlocklist = {
 final _varPutHooks = <String, Future<void> Function(String value)>{
   'app_language': (value) async {
     if (!SettingsStorage.appLanguageValues.contains(value)) {
-      throw const BadRequest('app_language must be "system", "en" or "ru"');
+      // §607 — список из того же множества, что проверка (с §452 там и zh).
+      throw BadRequest('app_language must be one of: '
+          '${SettingsStorage.appLanguageValues.map((v) => '"$v"').join(', ')}');
     }
     await LocaleController.I.set(value);
   },
