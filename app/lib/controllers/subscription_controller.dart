@@ -3157,9 +3157,9 @@ class SubscriptionController extends ChangeNotifier {
       //    0 = «Never (respect server)» — сами не по расписанию, но серверный
       //        заголовок ПРИНИМАЕМ (станет реальным числом → авто по нему);
       //   >0 = обновлять раз в N часов (сервер тоже может переопределить).
-      final nextInterval = current.updateIntervalHours < 0
-          ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
-          : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
+      //   §603 — правило целиком в [nextUpdateIntervalHours].
+      final nextInterval = nextUpdateIntervalHours(
+          current.updateIntervalHours, result.meta?.updateIntervalHours);
       // §302 — import-rules применяем к УЖЕ РАЗОБРАННЫМ узлам (их emit-JSON):
       // REPLACE патчит узел (`patchedJson` → уходит в конфиг), DISABLE даёт
       // identity-хеши для §283. Делаем это ДО GC ниже, чтобы GC (now -

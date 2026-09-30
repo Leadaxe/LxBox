@@ -107,24 +107,32 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
   final owned = client == null;
   final c = client ?? http.Client();
   try {
-    final fetch = await _fetch(source, c);
-    final inline = _inlineHeaders(fetch.body);
-    // inline под капотом, HTTP поверх — HTTP первичны.
-    final merged = <String, String>{...inline, ...fetch.headers};
-    final meta = _metaFromHeaders(merged);
-    final decoded = decode(fetch.body);
-    // §302 — import-rules здесь НЕ применяются: они работают над готовым
-    // JSON узла (`NodeSpec.emit`), а не над текстом тела, и применяются в
-    // контроллере уже после парсинга. Так одно правило работает для всех
-    // форматов подписки (URI-строки / Xray-JSON / INI).
-    // §506 — причины собираются и на прод-пути: см. [ParseResult.dropped].
-    final dropped = <NodeWarning>[];
-    final nodes = parseAll(decoded, dropped: dropped);
-    return ParseResult(
-        nodes, decoded, meta, fetch.body, fetch.headers, dropped);
+    return parseFetched(await _fetch(source, c));
   } finally {
     if (owned) c.close();
   }
+}
+
+/// §603 — разбор уже полученного ответа (тело + HTTP-заголовки) без сети.
+/// Для повторного разбора снапшота файловой подписки и для записей с тем же
+/// URL в одном проходе автообновления: ответ первого фетча разбирается для
+/// каждой записи заново (свои import-правила). [FetchResult.meta] не читается
+/// — метаданные заново собираются из заголовков.
+ParseResult parseFetched(FetchResult fetch) {
+  final inline = _inlineHeaders(fetch.body);
+  // inline под капотом, HTTP поверх — HTTP первичны.
+  final merged = <String, String>{...inline, ...fetch.headers};
+  final meta = _metaFromHeaders(merged);
+  final decoded = decode(fetch.body);
+  // §302 — import-rules здесь НЕ применяются: они работают над готовым
+  // JSON узла (`NodeSpec.emit`), а не над текстом тела, и применяются в
+  // контроллере уже после парсинга. Так одно правило работает для всех
+  // форматов подписки (URI-строки / Xray-JSON / INI).
+  // §506 — причины собираются и на прод-пути: см. [ParseResult.dropped].
+  final dropped = <NodeWarning>[];
+  final nodes = parseAll(decoded, dropped: dropped);
+  return ParseResult(
+      nodes, decoded, meta, fetch.body, fetch.headers, dropped);
 }
 
 // §219 — паттерны на module-level: раньше `_commentPrefixRe` компилился на
@@ -332,6 +340,24 @@ String? _parseContentDispositionFilename(String? header) {
   return out.isEmpty ? null : out;
 }
 
+/// §603 — `profile-update-interval`: целое ≥ 0 (часы), иначе `null`
+/// (заголовок игнорируется). 0 — «по серверу», состояние обратимое.
+int? parseUpdateIntervalHeader(String? raw) {
+  final n = int.tryParse((raw ?? '').trim());
+  return n == null || n < 0 ? null : n;
+}
+
+/// §129/§603 — интервал подписки после успешного фетча.
+///   -1 = «Don't auto-update» пользователя: сервер не переубедит;
+///   < -1 пользователь выставить не может — это отрицательное значение,
+///        принятое от сервера до §603; лечим: серверное (валидное) или 24;
+///   ≥ 0 — серверное значение, если есть, иначе текущее.
+int nextUpdateIntervalHours(int current, int? server) {
+  if (current == -1) return current;
+  if (current < -1) return server ?? 24;
+  return server ?? current;
+}
+
 SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
   // §219 — строим lower-map ОДИН раз: раньше get() линейно сканировал h.keys
   // с .toLowerCase() на каждом, и звался 6 раз → O(n×6). Ключи выше по стеку
@@ -385,7 +411,9 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
       }
     }
   }
-  final updateHours = int.tryParse((updateIntervalRaw ?? '').trim());
+  // §603 — отрицательное значение сервера не принимаем: в контроллере `< 0`
+  // означает «не обновлять» и сервер его больше не переубедил бы.
+  final updateHours = parseUpdateIntervalHeader(updateIntervalRaw);
 
   return SubscriptionMeta(
     uploadBytes: upload,
