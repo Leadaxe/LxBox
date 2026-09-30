@@ -699,7 +699,9 @@ Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
   if (pkgsRaw is! List) {
     throw const BadRequest('field "packages" must be array of strings');
   }
-  final pkgs = <String>[];
+  // §606 — дедуп ЗДЕСЬ, до ответа: хранилище пишет уникальные имена, и
+  // `count` по сырому списку расходился с сохранённым.
+  final pkgs = <String>{};
   // Sing-box внутри Android передаёт package в getPackageInfo — там
   // допускается широкий range символов. Отбрасываем явно невалидное:
   // пустые строки + что-то совсем не похожее на package (`/`, whitespace).
@@ -716,7 +718,7 @@ Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
     pkgs.add(t);
   }
 
-  final cfg = TunAppsConfig(mode: mode, packages: pkgs);
+  final cfg = TunAppsConfig(mode: mode, packages: pkgs.toList());
   await SettingsStorage.setTunApps(cfg);
 
   final extras = await maybeRebuild(req, ctx);

@@ -61,7 +61,8 @@ needed" flag; `GET /settings/tun_apps` returns the current pair.
   Edits accumulate in memory and are written to disk when leaving the screen or
   when the app goes to the background.
 - Debug API: a package name is a Latin letter, then letters/digits/`_`,
-  segments separated by dots; otherwise 400. Empty strings are dropped.
+  segments separated by dots; otherwise 400. Empty strings and duplicates are
+  dropped; `count` in the answer is the number of unique names saved.
 - A package that is not on the device is skipped on tunnel bring-up.
 - In the core's verbose log mode, on every tunnel bring-up the line
   `per-app: mode=… allow_bypass=… applied=N […] not_installed=M […]` is
@@ -86,3 +87,4 @@ needed" flag; `GET /settings/tun_apps` returns the current pair.
 | 6 | [293](../../../tasks/293-vpn-settings-facade.md) | dedup implemented | A single mode check for the screen and the Debug API |
 | 7 | [324](../../../tasks/324-saved-vs-running-canonical-diff.md) | ✅ Implemented (DEVICE-PENDING) | "Config is stale" is compared with the running core taking the list into account |
 | 8 | [539](../../../tasks/539-perapp-debug-log.md) | Done | A summary of applied and uninstalled packages in the verbose log |
+| 9 | [606](../../../tasks/606-audit-591-export-list-tun-warp-dpi-bugs.md) | Done | Debug API `count` after deduplication |
