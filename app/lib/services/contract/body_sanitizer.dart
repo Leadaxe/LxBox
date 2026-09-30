@@ -1880,7 +1880,14 @@ final class _Ctx {
           continue;
         }
         if (_unlessHolds(rel, kept, prefix)) continue;
-        kept.remove(key);
+        final declared = kept.remove(key);
+        // §597 — предикат «задано» ([_meaningful]) судит ОБЕ стороны связи,
+        // не только соседа. Декларант в нулевой форме (`max_concurrency:
+        // "0"` при `max_connections: "4-8"`) — «не задано», как в ядре
+        // (`transport/v2rayxhttp/xmux.go`: конфликт только при обоих > 0):
+        // конфликта нет, кода нет. Само поле всё равно снимается — ноль рядом
+        // с заданным соседом ничего не несёт, и эмит остаётся прежним.
+        if (!_meaningful(declared)) break;
         _relWarn(order, order.indexOf(key), prefix,
             rel['code'] as String? ?? 'field_conflict',
             path: myPath, params: {'with': with0});
