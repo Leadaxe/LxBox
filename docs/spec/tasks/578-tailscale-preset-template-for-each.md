@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Spec. Реализация запущена |
+| Статус | Implemented — `for_each`/`@node`/`#tpl` в `if_engine.dart`, пресет `tailscale` в шаблоне; тесты `test/contract/template_for_each_corpus_test.dart`, `test/services/builder/preset_for_each_test.dart`, `test/builder/tailscale_preset_build_test.dart`; выпущено в v2.25.8 |
 | Дата старта | 2026-09-27 |
 | Дата завершения | — |
 | Коммиты | — |

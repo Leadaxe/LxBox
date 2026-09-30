@@ -13,8 +13,9 @@ import '../../widgets/var_values_model.dart';
 import '../dns_settings_screen/resolved_server.dart';
 
 /// §117 задача 4b — режимы формы создания/редактирования inline-сервера.
-/// Значение = sing-box `type`. Прочие типы (`local`, `h3`, …) формой не
-/// выражаются — редактируются на JSON-вкладке.
+/// Значение = sing-box `type`. Прочие типы (`local`, `tcp`, `fakeip`,
+/// `hosts`, `dhcp`, …) формой не выражаются — редактируются на JSON-вкладке.
+/// §411 — `h3` (DoH3) в форме есть.
 /// §312 — `group` (kernel SPEC 033): группа DNS-серверов с резервированием.
 /// §435 — `tailscale` (NODE_SECTIONS.md §6): MagicDNS через узел tailnet,
 /// вместо адреса — `endpoint` (тег узла), без `detour`.

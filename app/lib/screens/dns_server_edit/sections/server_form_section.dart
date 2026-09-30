@@ -20,7 +20,7 @@ import '../../../services/l10n/locale_controller.dart';
 ///
 /// Поля пишут в канонический `body` контроллера — JSON-вкладка показывает
 /// то же тело live (и наоборот: валидный JSON-edit обновляет форму).
-/// `body.type` вне режимов формы (local, dhcp, …) не выражается —
+/// `body.type` вне режимов формы (local, tcp, fakeip, hosts, dhcp, …) не выражается —
 /// показываем пометку «use JSON tab».
 class ServerFormSection extends StatelessWidget {
   const ServerFormSection({super.key, required this.c});
