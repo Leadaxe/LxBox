@@ -14,6 +14,7 @@
 
 import '../config/consts.dart'
     show kDetourTagPrefix, kDirectOutboundTag, kBlockOutboundTag;
+import '../services/safe_regex.dart';
 import 'parser_config.dart' show DirectionTemplate, DefaultDirection;
 
 /// §393 A3 — верхняя граница ДЕФОЛТНЫХ имён «VPN ①..VPN ⑩» (Unicode-блок
@@ -130,13 +131,18 @@ int clampDirectionPool(int v) => v < 1 ? 1 : v;
 /// [Direction.auto] == null означает «галка auto ВЫКЛ, двойник не эмитится».
 /// `tag` двойника НЕ хранится — производный (`direction.autoTag`).
 class DirectionAuto {
+  /// §604 — умолчания одни на конструктор, чтение записи без ключа и пустое
+  /// поле редактора (раньше `fromJson` и редактор давали `5m`).
+  static const String defaultUrl = 'https://cp.cloudflare.com/generate_204';
+  static const String defaultInterval = '15m';
+
   const DirectionAuto({
-    this.url = 'https://cp.cloudflare.com/generate_204',
+    this.url = defaultUrl,
     // §272 — 15m вместо 5m: на mobile каждый цикл проб дайлит узлы (будит
     // спящие, SPEC 020); с passive_check пробы при живом трафике и так
     // пропускаются, interval задаёт лишь скорость реакции на смерть узла.
     // Существующие Направления хранят своё значение в JSON — их это не меняет.
-    this.interval = '15m',
+    this.interval = defaultInterval,
     this.tolerance = 50,
     this.idleTimeout = '30m',
     this.interruptExistConnections = false,
@@ -205,8 +211,8 @@ class DirectionAuto {
             .toList()
         : kDefaultStickyHash;
     return DirectionAuto(
-      url: json['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
-      interval: json['interval'] as String? ?? '5m',
+      url: json['url'] as String? ?? defaultUrl,
+      interval: json['interval'] as String? ?? defaultInterval,
       tolerance: clampDirectionTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
       idleTimeout: json['idle_timeout'] as String? ?? '30m',
       interruptExistConnections:
@@ -469,6 +475,16 @@ class Direction {
   /// vpn-1 — продуктово-привилегированный: всегда enabled, неудаляемый,
   /// дефолт route_final. Намеренный хардкод (продуктовое решение).
   bool get isRequired => tag == 'vpn-1';
+
+  /// §604 — узлы Направления после [nodeFilter]: регистронезависимо (§301),
+  /// пустой или битый regex → все [tags], [nodeFilterInvert] оставляет
+  /// НЕ совпавшие (§197). Один фильтр на сборку и счётчик экрана Routing.
+  List<String> filterNodeTags(List<String> tags) {
+    if (nodeFilter.isEmpty) return tags;
+    final re = tryCompileRegex(nodeFilter, caseSensitive: false);
+    if (re == null) return tags;
+    return tags.where((t) => re.hasMatch(t) != nodeFilterInvert).toList();
+  }
 
   Direction copyWith({
     String? label,

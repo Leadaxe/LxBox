@@ -163,7 +163,7 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
       clearAuto: !_autoEnabled,
       auto: _autoEnabled
           ? DirectionAuto(
-              url: _autoUrlCtrl.text.trim(),
+              url: _autoUrlValue,
               interval: _autoIntervalValue,
               // §219/§221 — tolerance/pool/poolTolerance клэмпим ЗДЕСЬ (как в
               // DirectionAuto.toJson/copyWith): прямой конструктор не клэмпит,
@@ -890,7 +890,13 @@ class _DirectionEditScreenState extends State<DirectionEditScreen> {
   /// пустое поле — умолчание формы.
   String get _autoIntervalValue {
     final v = _autoIntervalCtrl.text.trim();
-    return v.isEmpty ? '5m' : v;
+    return v.isEmpty ? DirectionAuto.defaultInterval : v;
+  }
+
+  /// §604 — пустой Test URL → умолчание, а не `url: ""` в urltest ядра.
+  String get _autoUrlValue {
+    final v = _autoUrlCtrl.text.trim();
+    return v.isEmpty ? DirectionAuto.defaultUrl : v;
   }
 
   String get _autoIdleValue {

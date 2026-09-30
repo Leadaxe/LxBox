@@ -445,14 +445,8 @@ class _RoutingScreenState extends State<RoutingScreen>
   int _nodeCountFor(Direction direction) {
     final all = _allNodeTags();
     if (all.isEmpty) return -1;
-    if (direction.nodeFilter.isEmpty) return all.length;
-    try {
-      // §301 — регистронезависимо, как основное окно и билдер.
-      final re = RegExp(direction.nodeFilter, caseSensitive: false);
-      return all.where(re.hasMatch).length;
-    } catch (_) {
-      return all.length; // невалидный regex → все ноды (как в билдере)
-    }
+    // §604 — тот же фильтр, что у сборки (с инверсией «Exclude matching»).
+    return direction.filterNodeTags(all).length;
   }
 
   /// Снимок всех node-тегов подписки из ccGroups (union по группам, без самих

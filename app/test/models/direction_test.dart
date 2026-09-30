@@ -82,6 +82,37 @@ void main() {
     });
   });
 
+  group('§604 — умолчания DirectionAuto и фильтр узлов', () {
+    test('fromJson без interval/url → те же умолчания, что конструктор', () {
+      final a = DirectionAuto.fromJson(const {});
+      expect(a.interval, const DirectionAuto().interval);
+      expect(a.interval, '15m');
+      expect(a.url, const DirectionAuto().url);
+    });
+
+    test('filterNodeTags учитывает «Exclude matching»', () {
+      const tags = ['a-DE', 'b-nl', 'c-de'];
+      expect(const Direction(tag: 'vpn-2', label: 'x', nodeFilter: 'de')
+          .filterNodeTags(tags), ['a-DE', 'c-de']);
+      expect(
+          const Direction(
+                  tag: 'vpn-2',
+                  label: 'x',
+                  nodeFilter: 'de',
+                  nodeFilterInvert: true)
+              .filterNodeTags(tags),
+          ['b-nl']);
+      expect(
+          const Direction(tag: 'vpn-2', label: 'x', nodeFilterInvert: true)
+              .filterNodeTags(tags),
+          tags,
+          reason: 'пустой фильтр — все узлы, инверсия не действует');
+      expect(const Direction(tag: 'vpn-2', label: 'x', nodeFilter: '(')
+          .filterNodeTags(tags), tags,
+          reason: 'битый regex — все узлы');
+    });
+  });
+
   group('§393 A3 — include[]', () {
     test('round-trip: список тегов переживает toJson/fromJson', () {
       const c = Direction(
