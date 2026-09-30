@@ -1784,7 +1784,10 @@ final class _Run {
     final pairs = <(String, String)>[];
     void put(String k, Object? v) {
       if (v == null || v is Map || v is List) return;
-      pairs.add((k, '$v'));
+      // §595 — тем же [_scalar], что и `flatten`: `0.0` из `extra` становится
+      // `"0"`, а не `"0.0"` — иначе ядро роняет конфиг на `Atoi`, а
+      // предикат «задано» связей не узнаёт в нём ноль (`field_conflict`).
+      pairs.add((k, _scalar(v)));
     }
 
     for (final e in obj.entries) {

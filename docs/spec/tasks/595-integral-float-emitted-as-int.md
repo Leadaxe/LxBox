@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (баг) |
-| Статус | P (в работе) |
+| Статус | D (сделано) |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/FEATURE.ru.md) |
 | Дата | 2026-09-30 |
 | Связанные | §596 (таймаут старта), фича 478 (страховка core_rejected), корпус `73-github-full` |
@@ -51,6 +51,25 @@ parse xmux.max_connections: strconv.Atoi: parsing "0.0": invalid syntax
 Детектор `field_conflict` для xmux видит `0.0` как ноль: после нормализации
 конфликт не возникает, `max_concurrency` сохраняется.
 
+**Сделано** (коммит `fix(595)`, ветка `worktree-agent-ac16157d188177a9e`):
+
+- Точка нормализации — `integralDoublesToInt` в `app/lib/models/node_spec.dart`,
+  применяется в `NodeSpec.emit` к итоговому телу (после `bodyDelta` и патча
+  import-rules). Копирование по записи: чистое тело возвращается тем же
+  объектом, исходные карты модели не мутируются.
+- Дословное авторское тело (`verbatimBodyOf`,
+  `app/lib/services/builder/verbatim_body.dart`) минует `emit` — там то же
+  правило вызвано явно.
+- Причина `field_conflict` была не в предикате «задано», а раньше: слой
+  `extra` URI-ветки раскладывался в строки через `'$v'`
+  (`_overlayPairs`, `app/lib/services/parser/engine/interpreter.dart`), и
+  `0.0` становился строкой `"0.0"`, которую `_allZeroNumeric` нулём не
+  считает. Теперь пары слоя печатаются тем же `_scalar`, что и `flatten`
+  (PRIMITIVES §0.9): `0.0` → `"0"`, `2.0` → `"2"`. Поле `XmuxRange` реестр
+  объявляет строкой, поэтому в теле `max_connections: "0"` — ядро читает
+  его `Atoi` без ошибки; конфликта нет, `max_concurrency: "16-32"` на месте.
+  Контракт не менялся.
+
 ## Критерии приёмки
 
 1. Узел из строки 8 корпуса `73-github-full` (`shprcdn.homes:7443`) эмитирует
@@ -67,3 +86,12 @@ parse xmux.max_connections: strconv.Atoi: parsing "0.0": invalid syntax
 ## Проверка
 
 Юнит-тест + прогон затронутого тестового файла; эмулятор — вместе с §596.
+
+`app/test/parser/integral_float_emit_test.dart` (6 тестов, зелёный):
+нормализация `0.0 → 0`, `2.0 → 2`, `-3.0 → -3`, `0.5` без изменений,
+вложенные map/list, копирование по записи; узел строки 8 корпуса
+`73-github-full` — `max_connections: "0"`, `max_concurrency: "16-32"`, без
+`field_conflict`; `maxConnections: 2.0` → `"2"`; sing-box JSON с
+`server_port: 443.0` и `xmux` с дробями — в эмите ни одного `double`.
+`flutter analyze` чистый. Эталон корпуса (`expected.json`) и `sing-box check`
+(критерии 3 и 5) — за оркестратором.

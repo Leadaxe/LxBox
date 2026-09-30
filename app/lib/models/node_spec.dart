@@ -38,6 +38,53 @@ Object? deepCopyJson(Object? value) {
   return value;
 }
 
+/// §595 — целое, записанное дробью (`0.0`, `2.0`, `-3.0`), становится целым
+/// (`0`, `2`, `-3`); рекурсивно по вложенным Map/List. Дробь с ненулевой
+/// частью (`0.5`) и нечисловые листья не трогаются.
+///
+/// `jsonDecode` читает `0.0` как `double`, `jsonEncode` пишет его обратно
+/// `0.0`, а Go-ядро на целочисленных полях дробь не принимает
+/// (`strconv.Atoi: parsing "0.0"`) и отвергает конфиг целиком. Смысла ни
+/// одно числовое поле sing-box от записи целым не теряет.
+///
+/// Копирование по записи: если менять нечего, возвращается тот же объект —
+/// `emit` зовут часто (хэш, UI, сборка), и чистое тело копировать незачем.
+/// Изменённая ветка собирается заново, исходные карты не мутируются: часть
+/// тела может принадлежать модели узла.
+Object? integralDoublesToInt(Object? value) {
+  if (value is double) {
+    return value.isFinite && value == value.truncateToDouble() &&
+            value.abs() < 9007199254740992
+        ? value.toInt()
+        : value;
+  }
+  if (value is Map) {
+    Map<String, dynamic>? out;
+    for (final e in value.entries) {
+      final v = e.value;
+      final n = integralDoublesToInt(v);
+      if (!identical(n, v) && out == null) {
+        out = <String, dynamic>{
+          for (final f in value.entries) f.key as String: f.value,
+        };
+      }
+      if (out != null) out[e.key as String] = n;
+    }
+    return out ?? value;
+  }
+  if (value is List) {
+    List<dynamic>? out;
+    for (var i = 0; i < value.length; i++) {
+      final v = value[i];
+      final n = integralDoublesToInt(v);
+      if (!identical(n, v)) out ??= List<dynamic>.of(value);
+      if (out != null) out[i] = n;
+    }
+    return out ?? value;
+  }
+  return value;
+}
+
 sealed class NodeSpec {
   final String id;
   final String tag;
@@ -125,16 +172,22 @@ sealed class NodeSpec {
   /// строит свежие map на каждый вызов): результат `emit` одноразовый,
   /// потребитель волен мутировать его как угодно, сохранённый патч не
   /// пострадает. Отдача по ссылке накапливала префикс билдера в теге.
+  ///
+  /// §595 — выход проходит [integralDoublesToInt]: единая точка на все
+  /// протоколы и все входы (URI, JSON sing-box, Xray, патч, дельта тела).
   SingboxEntry emit(TemplateVars vars) {
     final raw = emitRaw(vars);
     final delta = bodyDelta;
     if (delta != null) delta.applyTo(raw.map, deepCopyJson);
     final patch = patchedJson;
-    if (patch == null) return raw;
-    final copy = deepCopyJson(patch) as Map<String, dynamic>;
+    final body = patch == null
+        ? raw.map
+        : deepCopyJson(patch) as Map<String, dynamic>;
+    final norm = integralDoublesToInt(body) as Map<String, dynamic>;
+    if (identical(norm, body) && patch == null) return raw;
     return switch (raw) {
-      Outbound() => Outbound(copy),
-      Endpoint() => Endpoint(copy),
+      Outbound() => Outbound(norm),
+      Endpoint() => Endpoint(norm),
     };
   }
 
