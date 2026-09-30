@@ -143,6 +143,38 @@ dev; `2.25.9` — нет.
 
 **Приёмка.** Методов в `haptic_service.dart` нет, `flutter analyze` чист.
 
+## 9. (028) Плашка «DNS / router events off» без предмета
+
+**Проблема.** На вкладке Live профайлера при выключенном «Forward sing-box
+logs» висит плашка «DNS / router events off — turn on 'Forward sing-box
+logs'». После §180/§044 профайлер из журнала ядра не берёт ничего (DNS —
+структурный поток `CcChannel.dnsQueries`, владелец — из CommandClient),
+плашка обещает потерю, которой нет.
+
+**Решение.** Удалить виджет `core_logs_hint_banner.dart`, его показ в
+`live_events_tab.dart` и два мёртвых ключа ru/zh. Упоминания в 013
+(core-log, live-events) и 028 (FEATURE, attribution) убрать, EN+RU.
+
+**Приёмка.** Плашки нет; ключей «DNS / router events off» и «— turn on
+'Forward sing-box logs'» в каталогах нет; `hardcoded_check` и `flutter
+analyze` чисты. Тестов на плашку не было.
+
+## 10. (028 P2) Ложный tcpClose после STOP→START
+
+**Проблема.** `startGlobalRecording` чистит буфер, но не `_connSnapshots`.
+Соединение, открытое до STOP, на первом снапшоте после START отсутствует →
+diff-блок `_ingestCcConnections` считает его закрывшимся и кладёт tcpClose
+прошлой сессии в новый буфер.
+
+**Решение.** START сбрасывает и `_connSnapshots`. `_closedHandled` не
+трогаем: ядро держит закрытые соединения до 5 мин, без дедупа их закрытия
+всплыли бы в новой сессии. Идёт в паре с пунктом 2 (переподключение
+записи после рестарта туннеля).
+
+**Приёмка.** Юнит `traffic_profiler_test.dart` «после STOP→START в буфере
+только новая сессия»: conn `a` до STOP, `b` после START → буфер `[b]`, без
+tcpClose. P2 в спеке 028 получает свидетеля.
+
 ## Проверка
 
 Юнит-тесты по затронутым файлам по одному; `flutter analyze` без новых
