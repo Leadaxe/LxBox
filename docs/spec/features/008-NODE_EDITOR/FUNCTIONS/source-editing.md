@@ -43,7 +43,7 @@ answer.
 | the core rejected it | "The core rejected the node: <core text>" |
 | the input had extra content | "Only the node is saved. The rest of the input is not kept." |
 | there were comments | "Comments were removed." |
-| folder member, the text yielded no node | "Could not parse server config — keeping current" |
+| folder member or standalone server, the text yielded no node | "Could not parse server config — keeping current" |
 | success | "Saved" |
 
 ## Rules and invariants
@@ -75,9 +75,8 @@ answer.
 - **The core's verdict** is cleared only if the node body really changed; the
   node is re-enabled then. Editing the name and whitespace does not touch
   the verdict. A node disabled by the person is not enabled by an edit (P9).
-- **A folder member** — transactionally: text without a node is not written
-  (P10). **A standalone server** has no such protection: a link without a
-  node is saved, the record stays empty (a discrepancy, no witness).
+- **A folder member and a standalone server** — transactionally: text
+  without a node is not written, the record stays as it was (P10).
 - **Comments** `//` and `/* */` are stripped before parsing; a custom body
   type unknown to the application is accepted with a warning; a body without
   `type` — refusal (P12).
@@ -106,3 +105,4 @@ answer.
 | 8 | [585](../../../tasks/585-unknown-node-type-accepted.md) | Implemented | Comments stripped, unknown type accepted |
 | 9 | [478F](../../../tasks/478F-core-rejected-node-auto-disable/spec.md) | Released in v2.25.0 | Editing the body clears the core's verdict |
 | 10 | [237](../../../tasks/237-folder-member-node-settings.md) | Implemented | Editing a folder member is transactional |
+| 11 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | A standalone server does not save a source without a node |

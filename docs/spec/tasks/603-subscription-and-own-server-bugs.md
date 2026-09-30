@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (баг) |
-| Статус | P (в работе) |
+| Статус | D (done) |
 | Фича | [001-SUBSCRIPTIONS](../features/001-SUBSCRIPTIONS/FEATURE.md), [008-NODE_EDITOR](../features/008-NODE_EDITOR/FEATURE.md) |
 | Дата | 2026-09-30 |
 | Связанные | аудит §591 (001, 008; вопрос владельцу №5), §027F, §101, §129F, §283F, §302 |
@@ -159,5 +159,24 @@ already updating. Try again later.» (ru, zh — в l10n). Идущий прох
 
 ## Проверка
 
-Юнит-тесты по пунктам (файлы — в разделе «Решение» по мере реализации),
-`flutter analyze` — без новых замечаний.
+Юнит-тесты (все зелёные локально, по одному файлу), `flutter analyze` — чисто,
+`hardcoded_check` — 0/0.
+
+| Пункт | Тест (`app/test/…`) |
+|---|---|
+| 1 | `subscription/file_subscription_test.dart` — «§603 updateAt файловой применяет import-правила…», «§603 вкладка Source файловой…» |
+| 2, 9 | `subscription/auto_updater_pass_test.dart` |
+| 3 | `subscription/update_interval_header_test.dart` |
+| 4 | `services/node_hash_test.dart` — «§603 disabledNodeCount» |
+| 5 | `subscription/http_cache_test.dart` — группа «§603» |
+| 6 | `subscription/core_reject_manual_edit_test.dart` — «§603 битый источник…» |
+| 7 | `screens/entry_delete_title_test.dart` |
+| 8 | `subscription/file_subscription_test.dart` — «file → online», «§603 смена url без фетча…» |
+
+Попутно: удаление кэша старого адреса при смене источника теперь не трогает
+кэш, если тот же URL у другой записи (кэш общий по URL).
+
+Документация: `001-SUBSCRIPTIONS/FUNCTIONS/` (`auto-update`, `file-subscription`,
+`fetch-cache-offline`, `import-rules`), `008-NODE_EDITOR/FUNCTIONS/`
+(`source-editing`, `delete-and-duplicate`), EN и RU, строка §603 в таблицах
+ревизий.
