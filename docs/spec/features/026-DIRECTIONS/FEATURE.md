@@ -125,7 +125,10 @@ no detour layers, no auto twins.
   fallback — `no witness`. **Mutation:** keep the vanished tag — an empty list.
 - **P17. Breaking connections on switch — only by the toggle.** With "Interrupt connections on
   switch" on, after a node is selected the live connections of that Direction are closed; by
-  default — not. `no witness`.
+  default — not. **Witness:** units "switchNode с Interrupt=on закрывает только живые
+  соединения переключаемой группы, не трогая другую", "switchNode с Interrupt=off не
+  закрывает ничего" — **покрыто 2026-09-30:** `test/controllers/interrupt_on_switch_test.dart`.
+  **Mutation:** ignore the toggle — always or never close.
 - **P18. A detour Direction is a permission, not a role.** In the detour picker the Directions
   section contains only enabled Directions with "Use as detour"; they also remain a legitimate
   target of rules and `route.final`; `vpn-1` is never a detour Direction, neither via the UI
