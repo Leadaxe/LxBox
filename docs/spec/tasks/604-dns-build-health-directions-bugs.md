@@ -8,8 +8,8 @@
 | Дата | 2026-09-30 |
 | Связанные | аудит §591 (пункты [bug] 005, 010, 003, 009, 026), §530, §588, §601, §292, §113, §272, §197 |
 
-Восемь пунктов аудита 591 с вердиктом «подтверждён». Пункт про
-`pool_tolerance` 65535/15000 сюда не входит (проверяется на эмуляторе).
+Девять пунктов аудита 591 с вердиктом «подтверждён». Пункт 9 про
+`pool_tolerance` добавлен после проверки на эмуляторе.
 
 ## 1. 005-DNS — правка SNI в форме теряет остальные поля `tls`
 
@@ -143,6 +143,26 @@ Debug API `PUT /settings/vars` и `on_change` пресета.
 
 **Приёмка.** Тест: теги `[a-de, b-nl, c-de]`, фильтр `de`: без инверсии 2,
 с инверсией 1; пустой и битый фильтр → 3.
+
+## 9. 026-DIRECTIONS / 009 — `pool_tolerance` Направления и свёртки до 65535
+
+**Проблема.** У Направления и свёртки источника `pool_tolerance` клэмпится
+`clampDirectionTolerance` в uint16 (65535), у узла автовыбора — в
+`kMaxPoolTolerance = 15000` (`app/lib/models/auto_select.dart`). Эмулятор
+2026-09-30: vpn-1 в `round_robin` с `pool_tolerance` = 20000 — модель приняла
+без обрезки, `check-config` → `config_ok: false`, ядро: «balancer.pool_tolerance
+… must be <= 15000». С 15000 работает. Вне `round_robin` блок `balancer` не
+эмитится.
+
+**Решение.** `clampDirectionPoolTolerance` (0…`kMaxPoolTolerance`) вместо
+uint16 для `pool_tolerance` везде, где значение входит: `DirectionAuto.fromJson`
+/ `copyWith` / `toJson` (хранилище, бэкап, Debug API `PATCH` идёт через
+`fromJson`), запись свёртки `directionAutoFromRecord` / `ToRecord`, редакторы
+Направления и свёртки, эмиссия `buildAutoGroup` (последний рубеж —
+прямой конструктор не клэмпит). `tolerance` остаётся uint16.
+
+**Приёмка.** Тест: 20000 → 15000 из JSON, `copyWith`, `toJson`, записи свёртки и
+в `balancer` собранной группы; 15000 не меняется.
 
 ## Проверка
 

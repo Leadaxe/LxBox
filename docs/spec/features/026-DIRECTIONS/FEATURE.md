@@ -109,9 +109,10 @@ no detour layers, no auto twins.
   node as default", "the first in order among several matches", "no matches → default is not
   set", "default must be in the node-set (not direct-out)". **Mutation:** a default outside the
   members — the core rejects the config.
-- **P14. Tolerances are clamped.** `tolerance` and `pool_tolerance` to 0–65535, `pool` to ≥ 1,
-  on read, on save and in the editor. **Witness:** units "from JSON above 65535 → clamp",
-  "negative → 0", "pool clamp: 0/negative → 1", "poolTolerance clamps like tolerance (uint16)".
+- **P14. Tolerances are clamped.** `tolerance` to 0–65535, `pool_tolerance` to 0–15000 (the
+  core's limit, as for an auto-select node), `pool` to ≥ 1, on read, on save and in the editor.
+  **Witness:** units "from JSON above 65535 → clamp", "negative → 0", "pool clamp: 0/negative →
+  1", "§604: poolTolerance clamp по пределу ядра 15000, как у узла".
   **Mutation:** pass through — the core crashes on a uint16 overflow.
 - **P15. Node selection is applied live.** Choosing another node in a Direction with the tunnel
   up goes to the core as `SelectOutbound`, then the list pulls a fresh group snapshot; the
@@ -246,9 +247,9 @@ core groups ─► home screen dropdown (P16) ─► SelectOutbound (P15) ─►
 - No UI reordering of Directions, and it is not planned (owner decision 2026-09-29, audit [591](../../tasks/591-spec-kit-revision-audit.md)): the
   order changes only through the Debug API (`POST /directions/reorder`). No per-node references
   from a Direction (membership is a regex).
-- Discrepancies kept as they are: `pool_tolerance` clamp 65535 vs the core's 15000 limit; a
-  stored twin without `interval` reads as `5m` while a new one gets `15m`; the row's node count
-  ignores "Exclude matching".
+- The former discrepancies (`pool_tolerance` clamp 65535 vs the core's 15000, `interval` `5m` for
+  a stored twin without the key, the row's node count ignoring "Exclude matching") are fixed
+  in 604.
 
 ## Functions
 

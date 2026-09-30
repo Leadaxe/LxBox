@@ -32,12 +32,12 @@ source folds) enter the selector only. Default traffic is written as `route.fina
 | Test URL / Interval / Tolerance (ms) / Idle timeout | — | `cp.cloudflare.com/generate_204` / `15m` / 50 / `30m` | `url`, `interval`, `tolerance`, `idle_timeout` |
 | Interrupt connections (twin) | on/off | off | `urltest.interrupt_exist_connections` |
 | Mode: Fastest · Load balance | — | Fastest | `mode: round_robin` + `balancer{}` only for Load balance |
-| Pool size / Pool tolerance (ms) / Sticky session by | ≥ 1 / 0–65535 / set | 3 / 0 / process + domain | `balancer.pool`, `pool_tolerance`, `sticky_hash` |
+| Pool size / Pool tolerance (ms) / Sticky session by | ≥ 1 / 0–15000 / set | 3 / 0 / process + domain | `balancer.pool`, `pool_tolerance`, `sticky_hash` |
 | Default traffic | `direct` · Direction · `block` | `vpn-1` | `route.final` |
 
-`tolerance` and `pool_tolerance` are clamped to 0–65535 on read, save and in the editor;
-`pool` to ≥ 1. "Passive health check" from Settings goes into every twin as `passive_check`.
-A stored Direction without `interval` reads as `5m`, a new one gets `15m` (272).
+`tolerance` is clamped to 0–65535, `pool_tolerance` to 0–15000 (the core's limit), on read,
+save, in the editor and at emission; `pool` to ≥ 1. "Passive health check" from Settings goes
+into every twin as `passive_check`. An empty or missing `interval` is `15m` (272, 604).
 
 ## Inputs / Outputs
 
@@ -87,8 +87,6 @@ without nodes for a home-screen snackbar.
 - Measurement parameters of the twin, mass ping and reselection —
   [direction-health.md](direction-health.md); balancing modes, detour rings —
   [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FEATURE.md).
-- The app clamps `pool_tolerance` to 65535 while the core rejects values above 15000 —
-  such a config does not start (591).
 - Source folds and subscription groups are groups of another kind —
   [007-NODE_LIST](../../007-NODE_LIST/FEATURE.md).
 
@@ -105,3 +103,4 @@ without nodes for a home-screen snackbar.
 | 7 | [301](../../../tasks/301-regex-filter-case-insensitive.md) | ✅ implemented | Filters are case-insensitive |
 | 8 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | `include`, normative order, twin as default, chains through a Direction |
 | 9 | [442](../../../tasks/442-urltest-interval-idle-pair.md) | Released v2.24.0 | `interval`/`idle_timeout` pair, editor hint |
+| 10 | [604](../../../tasks/604-dns-build-health-directions-bugs.md) | Done | `pool_tolerance` clamped to the core's 15000, as for a node; one `interval` default |
