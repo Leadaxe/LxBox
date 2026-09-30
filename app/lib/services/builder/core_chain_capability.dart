@@ -130,9 +130,10 @@ bool coreSupportsChain(String coreVersion) {
 /// Биндинг libbox тегов не отдаёт (`Libbox.version()` — только строка
 /// версии, строки `Tags:` как у `sing-box version` нет), а ядро вкомпилировано
 /// в APK: теги известны на сборке. Список — `docs/KERNEL.md` (состав AAR) и
-/// `sing-box-lx cmd/internal/build_libbox/main.go`. Бамп ядра обязан
-/// сверить набор: `core_build_tags_pin_test` падает, пока [kCoreBuildTagsPin]
-/// не совпадёт с `app/android/libbox.version`.
+/// `sing-box-lx cmd/internal/build_libbox/main.go`. Страж один —
+/// `test/contract/node_core_gate_test.dart`: он падает, пока [kCoreBuildTagsPin]
+/// не совпадёт с `app/android/libbox.version`, но сам набор тегов не сверяет
+/// (биндингу его негде взять). Бамп ядра обязан перечитать список руками.
 const String kCoreBuildTagsPin = 'v1.14.2-lx.11';
 
 const Set<String> kCoreBuildTags = {

@@ -142,18 +142,21 @@ registry divergences (for example, [529](../../tasks/529-contract-corpus-local-r
 | 9 | [522](../../tasks/522-kernel-lx9-xmux-local-cancel.md) · [526](../../tasks/526-kernel-lx10-upstream-sync-naive-addr.md) | Released v2.25.3 | 1.14.1-lx.9, lx.10 |
 | 10 | [535](../../tasks/535-kernel-1-14-2-lx1-pin-lx-wg-keys-endpoint-state.md) | Implemented | 1.14.2-lx.1: the `lx` block, `endpointState` |
 | 11 | [557](../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | Implemented | 1.14.2-lx.4: WG/AWG on/off at runtime |
+| 12 | no task — [KERNEL.md → Version history](../../../KERNEL.md#version-history-the-lxbox-relevant-parts), [CHANGELOG 2.25.8](../../../../CHANGELOG.md) | Released v2.25.8 | 1.14.2-lx.5…lx.8: `stable` sync, three MASQUE hangs, XHTTP `max_connections 3` without `xmux` (lx.6); no client change, so no task was opened — the bump is recorded by the pin, KERNEL.md and the changelog |
+| 13 | no task — KERNEL.md, [CHANGELOG 2.25.9](../../../../CHANGELOG.md) | Released v2.25.9 | 1.14.2-lx.9…lx.11: Tailscale control channel over HTTPS (SPEC 111), direct UDP path (SPEC 112), one more `stable` sync; Java surface identical to lx.8 |
 
 Registry revisions (460F, contract syncs, 486, 491, 529) moved to
 [025-CONTRACT_REGISTRY](../025-CONTRACT_REGISTRY/FEATURE.md).
 
 ## Watch for
 
-- **Bumps `v1.14.2-lx.5…lx.8` without a task of their own.** They are in
-  KERNEL.md and CHANGELOG, but not in `tasks/` — this feature has no revision for them.
-- **The build-tag mirror** in the app is a manual copy; the guard checks only
-  the version pin, not the set itself.
-- **Contradictory tag lists in KERNEL.md:** `with_openvpn`/`with_openconnect`
-  are in the AAR tag list and at the same time called "deliberately omitted".
+- **A core bump without a client change gets no task** (rows 12–13): the
+  record is the pin, KERNEL.md's version history and the changelog. A bump
+  that changes the Java surface or the config contract does get one.
+- **The build-tag mirror** in the app (`kCoreBuildTags`) is a manual copy; the
+  guard `node_core_gate_test` checks only that `kCoreBuildTagsPin` equals
+  `app/android/libbox.version`, not the set itself — a bump must re-read the
+  tag list in `build_libbox` by hand.
 - **Upstream strictness changes** (like `format` in an inline rule set on 1.14):
   every "the core became stricter" is a candidate for an import sanitiser.
 

@@ -264,9 +264,15 @@ git push origin vX.Y.Z
 Start §2.6 first — it does not wait for this step.
 
 ```bash
-RUN_ID="$(gh run list --workflow=ci.yml --limit 1 --json databaseId -q '.[0].databaseId')"
-gh run watch "$RUN_ID" --exit-status
+TAG_SHA=$(git rev-parse "vX.Y.Z^{commit}")
+gh api "repos/Leadaxe/LxBox/actions/runs?head_sha=$TAG_SHA" \
+  -q '.workflow_runs[] | "\(.id) \(.event) \(.status) \(.conclusion)"'
+# the `push` run for the tag; repeat until "completed success", then the jobs:
+gh api "repos/Leadaxe/LxBox/actions/runs/<id>/jobs" -q '.jobs[] | "\(.name) \(.conclusion)"'
 ```
+
+Not `gh run list` / `gh run watch` — see §2.1: both hand back a stale run, and a
+green run on a different `head_sha` proves nothing.
 
 At the finish line, expect:
 - The release is published (`draft=false`).
@@ -360,26 +366,29 @@ Console through the Google Play Developer API (§436, see
 [`GOOGLE_PLAY.md`](GOOGLE_PLAY.md#ci-upload)). The job needs the
 `PLAY_SERVICE_ACCOUNT_JSON` secret; without it it logs a warning and skips, so
 forks build as before. Track and release status come from repository
-variables: `PLAY_TRACK` (default `production`) and `PLAY_RELEASE_STATUS`
-(default `draft` — the release lands in the console as a draft and a human
-presses Publish; `completed` sends it to review by itself). Release notes come
+variables: `PLAY_TRACK` (YAML fallback `production`) and `PLAY_RELEASE_STATUS`
+(YAML fallback `draft` — the release lands in the console as a draft and a human
+presses Publish; `completed` sends it to review by itself). **The repository
+is set to `completed`** (§436, owner's decision 2026-09-14): a stable tag goes to
+Google's review on its own, nothing to press. Release notes come
 from `fastlane/metadata/android/<locale>/changelogs/` — the same files F-Droid
 reads; a file over 500 characters fails the `checks` job on push, before any
 tag. `release` and `publish-manifest` do not depend on `google-play`: a failed upload
 leaves the GitHub release intact, and the AAB stays in the `android-aab-release`
 artifact for a manual upload.
 
-⚠ **Three channels mean three incompatible signatures.**
+⚠ **Three channels, two signatures.**
 
 | Channel | Signed with | Updated by |
 |---|---|---|
 | GitHub Releases | our key (`7987aec4/CN=BoxVPN`) | manually, from the release page's APK |
 | Google Play | Google's key (Play App Signing; ours is only the upload key) | Play itself |
-| F-Droid | F-Droid's key | the F-Droid client |
+| F-Droid | our key — the catalogue rebuilds from source, compares the bytes with the GitHub APK and serves **our** APK (`Binaries` + `AllowedAPKSigningKeys`, see [FDROID.md](FDROID.md#reproducibility)) | the F-Droid client |
 
-An APK from one channel **will not install** over another — “signatures do not
-match”. Hence §390: the app knows its own channel and points its update notice at
-the same store it came from.
+A Play build **will not install** over a GitHub or F-Droid one and vice versa —
+“signatures do not match”; GitHub and F-Droid APKs are byte-identical and
+interchangeable. Regardless of the signature, §390 makes the app know its own
+channel and point its update notice at the store it came from.
 
 ⚠ The flag `--dart-define=LXBOX_DISTRIBUTION=play` is set **only on the AAB
 step**. APKs are deliberately built without it: F-Droid compares the bytes of its
@@ -510,9 +519,9 @@ debug build without a clean reinstall.
 - [ ] Local smoke: `scripts/build-local-apk.sh` plus `scripts/install-apk.sh` — it installs over prod without `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (when working from a worktree, do not forget the keystore symlinks).
 - [ ] The commit `docs(release): vX.Y.Z notes` is pushed to `develop` (doc changes only; no pubspec or code bumps).
 - [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; the tag `vX.Y.Z` is pushed **as a separate command**. **NB:** it must be `--no-commit` plus an explicit `commit -m`, not `--no-ff -m` — the latter breaks on “empty commit message” and the tag ends up on the old commit.
-- [ ] `gh run watch` is green; the release holds four APKs `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, signed release; the core version in the APK carries the `-lx` suffix and matches the pin in `app/android/libbox.version` at the tag (check against the file, not from memory).
+- [ ] The tag's CI run is green (§2.5: `gh api …/actions/runs?head_sha=<tag sha>`, every job `success`); the release holds four APKs `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, signed release; the core version in the APK carries the `-lx` suffix and matches the pin in `app/android/libbox.version` at the tag (check against the file, not from memory).
 - [ ] `publish-manifest` ran — `docs/latest.json` is updated in `main`.
-- [ ] `google-play` ran — the release is in the Play Console on the `PLAY_TRACK` track with the tag's universal versionCode; with `PLAY_RELEASE_STATUS=draft` press **Publish** there yourself.
+- [ ] `google-play` ran — the release is in the Play Console on the `PLAY_TRACK` track with the tag's universal versionCode, status “In review” (`PLAY_RELEASE_STATUS=completed`); only if someone has reset the variable to `draft` press **Publish** there yourself.
 - [ ] `main` is merged back into `develop` (§2.6) and pushed — **including the `git checkout HEAD -- app/pubspec.yaml` revert before the commit**.
 - [ ] `git describe` on `develop` shows `vX.Y.Z`.
 - [ ] `gh release view vX.Y.Z --json isLatest` → `{"isLatest":true}`.

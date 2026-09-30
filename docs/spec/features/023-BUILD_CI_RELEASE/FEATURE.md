@@ -147,25 +147,24 @@ Android TV is best-effort (§372): the manifest is compatible, there is no separ
 | 6 | [233](../../tasks/233-minsdk-24.md) | — | minSdk 26 → 24 |
 | 7 | [379](../../tasks/379-version-code-from-version.md) | Implemented (v2.20.0) | code from the version, `--split-per-abi` dropped, real version on the merge into `main` |
 | 8 | [390](../../tasks/390-install-source-aware-update-notice.md) | Done | install channel, the define only on the AAB |
-| 9 | [436](../../tasks/436-google-play-upload-ci.md) | In progress | AAB upload to Play from CI, rc is not published |
+| 9 | [436](../../tasks/436-google-play-upload-ci.md) | Done (first green tag run v2.25.9) | AAB upload to Play from CI with `PLAY_RELEASE_STATUS=completed`, rc is not published |
 | 10 | [486](../../tasks/486-ci-registry-tests.md) | Released v2.25.0 | registry tests are not skipped on CI |
 
 ## Watch for
 
-- **Stale CI descriptions:** 021F (a draft release, a single APK
-  `L×Box-vX.Y.Z.apk`, push to `main` only); the CI table in BUILD.md without
-  `google-play`, `PublicSubsCorpus` and the rc rules; "Versions" in BUILD.md
-  names the core `v1.14.0-lx.28-rc.1` while the pin is `v1.14.2-lx.8`.
-- **A contradiction about the F-Droid signature:** RELEASE_PROCESS.md says
-  "F-Droid's key", FDROID.md — our APK is published under our signature.
-- **A contradiction about the Play channel:** GOOGLE_PLAY.md says "without a
-  build-time define", but in fact the AAB is built with
-  `LXBOX_DISTRIBUTION=play`, and the app reads it.
-- **The RELEASE_PROCESS.md checklist** requires "`gh run watch` is green", while
-  the same document and DEVELOPMENT_GUIDE forbid trusting `gh run watch`.
-- **Play lags behind GitHub** with the `draft` status (the v2.25.8 notes: Play
-  last shipped v2.25.5); §436 is still In progress — check the actual value of
-  `PLAY_RELEASE_STATUS` in the repository settings.
+- **021F is a chronicle**, not a description of today's CI (a draft release, a
+  single APK `L×Box-vX.Y.Z.apk`, push to `main` only); the live description is
+  BUILD.md → CI and RELEASE_PROCESS.md.
+- **The core version in BUILD.md → Versions is a dated snapshot**; the source
+  is `app/android/libbox.version`, and a bump must touch that line too.
+- **Signatures:** GitHub and F-Droid serve the same bytes under our key, Play
+  re-signs — RELEASE_PROCESS.md → "Three channels, two signatures" is the one
+  place that states it; FDROID.md and GOOGLE_PLAY.md refer to it.
+- **The green gate is `gh api` by `head_sha`**, never `gh run list`/`gh run
+  watch` — for the pre-flight check and for the tag run alike.
+- **`PLAY_RELEASE_STATUS` is `completed` in the repository**; the YAML fallback
+  is `draft`. If Play starts lagging behind GitHub again, check the variable
+  first.
 - `(?m)^version:` in the F-Droid regexes is not anchored yet (a commented-out
   line in pubspec could match first); the status of the MR with `'%c + 4'` in
   FDROID.md may be stale.

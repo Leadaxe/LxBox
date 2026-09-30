@@ -1463,8 +1463,9 @@ the Add Server Wizard's Tailscale mode.
 - **Emission:** always into `endpoints[]`. If the body has no `state_directory`, the builder
   writes `<filesDir>/tailscale/<final tag>` (tag sanitized to `[A-Za-z0-9._-]`, the rest → `_`)
   at emission only — the stored body never gets a path (it is machine-specific).
-- **Core gate:** the AAR must carry `with_tailscale` (fork `v1.14.0-lx.38` or newer,
-  `kTailscaleMinCoreVersion`). On an older core the node is **skipped at build** with the
+- **Core gate:** the AAR must carry `with_tailscale` (fork `v1.14.0-lx.38` or newer; the
+  gate is the registry node gate (contract §56): `build_tag` against the tag mirror `kCoreBuildTags` — there is
+  no version constant). On an older core the node is **skipped at build** with the
   `tailscale_core_unsupported` warning line; the rest of the config builds. The node stays in
   storage — it survives a core update and a backup from a desktop.
 - **Directions:** a node without a non-empty `exit_node` is **not** a Direction candidate (it

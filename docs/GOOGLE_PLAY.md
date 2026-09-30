@@ -11,10 +11,13 @@ Related: [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md), [`FDROID.md`](FDROID.md), [
 | Store listing | `fastlane/metadata/android/{en-US,ru}/`, shared with F-Droid |
 
 Unlike F-Droid, Google Play does not build from source: an AAB signed with our
-upload key is uploaded, and Play re-signs it with the app signing key. The
-install channel is detected at runtime from `installingPackageName` (§390), so
-the same source tree produces the GitHub, F-Droid and Play builds without a
-build-time define.
+upload key is uploaded, and Play re-signs it with the app signing key. The same
+source tree produces the GitHub, F-Droid and Play builds; the AAB is the one
+artifact built with `--dart-define=LXBOX_DISTRIBUTION=play` (the CI AAB step
+only, §390), while the APKs carry no define and detect the install channel at
+runtime from `installingPackageName` — see [BUILD.md](BUILD.md#the-flutter-app)
+and [RELEASE_PROCESS.md](RELEASE_PROCESS.md) on why the APKs must stay
+define-free (F-Droid's byte comparison).
 
 ## Milestones
 

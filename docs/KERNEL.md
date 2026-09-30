@@ -279,8 +279,9 @@ unchanged from lx.36 (javap-diff of `PlatformInterface`, `CommandClient`,
 `CommandClientHandler`, `BoxService`, `Libbox` — identical). The upstream
 base is lx.37's: `upstream/stable` b7eb49bb8 (v1.14.0 + 33), submodules
 wireguard-go v0.0.6 / sing-tun v0.9.3. LxBox gates a Tailscale node on this
-version (`kTailscaleMinCoreVersion`, `core_chain_capability.dart`): on an
-older core the node is skipped at build with `tailscale_core_unsupported`.
+version through the build-tag mirror (`with_tailscale` in `kCoreBuildTags`,
+`core_chain_capability.dart`; the registry node gate, contract §56): on an older core the node is skipped at
+build with `tailscale_core_unsupported`.
 
 **`v1.14.0-lx.36`** — two hotfixes on the same upstream base as lx.34 (sing-box
 1.14.0 + 16 post-release commits); nothing in the configuration or on the wire
@@ -899,9 +900,11 @@ re-check the list and move `kCoreBuildTagsPin`; `node_core_gate_test` fails
 until the pin matches `app/android/libbox.version`.
 
 `with_clash_api` is deliberately absent (§122 — CommandClient instead of Clash
-HTTP); `with_usbip` and `with_openvpn` / `with_openconnect` are deliberately
-omitted too (server-side or outside the client's scope — see the comments in
-`build_libbox`).
+HTTP), and so is `with_usbip` (server-side). `with_openvpn` / `with_openconnect`
+are **in** since the SPEC 051 upstream merge (owner's decision 2026-08-05): each
+tag gates one package holding client and server behind the same tag, and the
+server half is accepted as the price of the client — see the `lx:begin openvpn`
+comment in `build_libbox`.
 
 ## ⚠️ Gotchas when bumping the version
 

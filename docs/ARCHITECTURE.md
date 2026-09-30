@@ -11,10 +11,10 @@ The current parser and builder version is **v2** (spec 026, phase 5 completed in
 | Parameter | Value |
 |----------|----------|
 | Android minSdk | **24** (Android 7.0) |
-| Android targetSdk | `flutter.targetSdkVersion` (the current target, usually API 34/35) |
-| Android compileSdk | `flutter.compileSdkVersion` |
+| Android targetSdk | `flutter.targetSdkVersion` — set by the pinned Flutter (`app/android/flutter.version`, 3.47.1 → API 36); not overridden in `build.gradle.kts` |
+| Android compileSdk | `flutter.compileSdkVersion` — same source (3.47.1 → API 36) |
 | JVM | Java 17 |
-| NDK | 28.2.13676358 |
+| NDK | `flutter.ndkVersion` — the NDK the pinned Flutter asks for; not hardcoded in `build.gradle.kts` |
 
 ### Support tiers
 
@@ -167,11 +167,20 @@ Large files are decomposed through `part` or `mixin` (the same library, so libra
 access is preserved) or by extracting widget subtrees. The documented large exceptions
 (where a split would add risk without benefit):
 
-| File | Lines | Why it stays whole |
+| File | Lines (2026-09-30) | Why it stays whole |
 |---|---|---|
-| `services/traffic_profiler.dart` | 1243 | A monolithic stateful singleton: receiving the CC connections and DNS streams, diffing snapshots, confidence and the dual SSE fan-out — all through shared private state and one `ChangeNotifier` contract. |
-| `models/custom_rule.dart` | 618 | Already sealed into `Inline`/`Srs`/`Preset`; the size is inherent to three structurally different kinds. |
-| `android/.../VpnPlugin.kt` | 1084 | One `MethodCallHandler` contract; splitting it would scatter the channel contract across files. |
+| `services/traffic_profiler.dart` (+ `traffic_profiler/internal.dart`, `models.dart`) | 873 | A stateful singleton: receiving the CC connections and DNS streams, diffing snapshots, confidence and the dual SSE fan-out — all through shared private state and one `ChangeNotifier` contract; the models and internals are already split out. |
+| `models/custom_rule.dart` | 1232 | Sealed into `Inline`/`Srs`/`Preset`; the size is inherent to three structurally different kinds. |
+| `android/.../VpnPlugin.kt` | 1561 | One `MethodCallHandler` contract; splitting it would scatter the channel contract across files. |
+
+The list above is the set of *reviewed* exceptions, not the set of large files.
+Nothing enforces the principle: as of 2026-09-30, 23 Dart files under `app/lib`
+exceed 1000 lines (`find app/lib -name '*.dart' | xargs wc -l | sort -rn`), the
+largest being `services/lx_backup.dart` (4493), `services/parser/engine/interpreter.dart`
+(4181), `controllers/subscription_controller.dart` (3582),
+`services/contract/body_sanitizer.dart` (2831), `controllers/home_controller.dart`
+(2037) and `services/parser/engine/emitter.dart` (2012). None of them has been
+reviewed against the principle; they are debt, not documented exceptions.
 
 ### ConfigNode / ParsedConfig (§091 — implemented)
 
