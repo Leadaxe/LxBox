@@ -57,7 +57,9 @@ The feature protects three principles:
   reason". **Mutation**: a threshold without a ceiling.
 - **P4. Reconnect does not start on top of an unstopped tunnel.** If the stop
   was not confirmed, the start is cancelled with the message "reconnect
-  aborted". `no witness`.
+  aborted". **Witness**: unit "stop не подтвердился → reconnect не зовёт
+  startVPN и выставляет stopTimedOutReconnectAborted" (covered 2026-09-30).
+  **Mutation**: starting on top of an unstopped tunnel.
 - **P5. The mode determines the core's inputs.** VPN — only the system tunnel;
   Proxy — only the local port, the system tunnel is not brought up;
   VPN+Proxy — both; routing and DNS rules apply to local-port traffic the same
@@ -114,7 +116,10 @@ The feature protects three principles:
   checks without a core status for longer than 8 s move the tunnel to
   "Connection lost — VPN tunnel is not responding" with an attempt at a
   regular stop; the first check after returning from the background is not
-  penalized. `no witness`.
+  penalized. **Witness**: unit "молчание status-стрима дольше 8с дважды
+  подряд → revoked + tunnelNotResponding + попытка стопа" (covered
+  2026-09-30; the background-resume grace period stays without a witness —
+  see 591). **Mutation**: recognizing a silent core on the first check.
 - **P15. A network change resets hung connections once.** A real interface
   change (Wi-Fi ↔ mobile) after 1.5 s of quiet gives one `resetNetwork`; the
   first connection, an update of the same network's properties and network
