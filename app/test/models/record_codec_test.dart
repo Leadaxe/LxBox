@@ -229,6 +229,17 @@ void main() {
       expect(dnsRuleFromRecord({'kind': 'user', 'name': 'x'}).dropped, contains('body'));
       expect(dnsRuleFromRecord({'kind': 'zzz'}).dropped, contains('zzz'));
     });
+
+    // §593 — `enabled` записи пресета не читается: старый файл с `false`
+    // читается как обычный якорь, обратно пишется `true` (форма контракта).
+    test('preset: enabled:false из хранения игнорируется', () {
+      final r = dnsRuleFromRecord(
+          {'kind': 'preset', 'ref': 'ru-direct', 'enabled': false}).value!;
+      expect(r, const DnsRulePreset(presetId: 'ru-direct'));
+      expect(r.enabled, isTrue);
+      expect(dnsRuleToRecord(r),
+          {'kind': 'preset', 'ref': 'ru-direct', 'enabled': true});
+    });
   });
 
   // §439 §4.2 — путь хранения: `fromRecord(toRecord(x)) == x` для правил всех
@@ -366,7 +377,7 @@ void main() {
           'server': 'my-doh',
         },
       ),
-      DnsRulePreset(presetId: 'ru-direct', enabled: true),
+      DnsRulePreset(presetId: 'ru-direct'),
       DnsRuleSrs(
         name: 'geo',
         id: 'ds_geo',

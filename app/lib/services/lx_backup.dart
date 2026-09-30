@@ -2169,7 +2169,7 @@ DnsRuleRef? _dnsRule0x(Map<String, dynamic> e, String kind) {
       );
     case 'preset':
       final ref = _str(e['ref']);
-      return ref.isEmpty ? null : DnsRulePreset(presetId: ref, enabled: enabled);
+      return ref.isEmpty ? null : DnsRulePreset(presetId: ref);
     default:
       return name.isEmpty
           ? null

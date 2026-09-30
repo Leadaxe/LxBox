@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lxbox/models/codec/dns_record.dart';
 import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
@@ -551,12 +552,47 @@ void main() {
       ]);
     });
 
+    // §593 — запись пресета с `enabled: false` из старого хранения не гасит
+    // DNS пресета: им управляет `dns_enable` (через наличие mirror-записей).
+    test('старая запись пресета с enabled:false — группа эмитится', () async {
+      final legacy = dnsRuleFromRecord(
+          {'kind': 'preset', 'ref': 'ru-direct', 'enabled': false}).value!;
+      await SettingsStorage.saveDnsRulesList([legacy]);
+
+      final config = <String, dynamic>{};
+      await applyCustomDns(
+        config,
+        {'servers': [], 'rules': []},
+        activePresetIdsWithDnsRule: const {'ru-direct'},
+        dnsMirrors: const [
+          DnsMirrorEntry(
+            presetId: 'ru-direct',
+            ruleName: 'ru',
+            body: {
+              'rule_set': ['ru-domains'],
+              'action': 'predefined',
+              'rcode': 'NOERROR',
+            },
+          ),
+        ],
+      );
+
+      final dns = config['dns'] as Map<String, dynamic>;
+      expect(dns['rules'], [
+        {
+          'rule_set': ['ru-domains'],
+          'action': 'predefined',
+          'rcode': 'NOERROR',
+        },
+      ]);
+    });
+
     // §253 — serverless-тело пресета (predefined, без ключа `server`)
     // проходит defensive-гейт эмиссии (гейт только для String-server).
     test('serverless preset-mirror (predefined) эмитится; route-тело — '
         'с server-гейтом', () async {
       await SettingsStorage.saveDnsRulesList([
-        const DnsRulePreset(presetId: 'ru-direct', enabled: true),
+        const DnsRulePreset(presetId: 'ru-direct'),
       ]);
 
       final config = <String, dynamic>{};
@@ -635,7 +671,7 @@ void main() {
           name: 'user-first',
           rule: {'domain': ['x.com'], 'server': 'google_udp'},
         ),
-        const DnsRulePreset(presetId: 'ru-direct', enabled: true),
+        const DnsRulePreset(presetId: 'ru-direct'),
       ]);
 
       final config = <String, dynamic>{};
@@ -710,12 +746,12 @@ void main() {
   group('resolveDnsRulesList — атомарность mirror-группы (решение №6)', () {
     test('kind:preset записи компактятся к позиции первой', () async {
       await SettingsStorage.saveDnsRulesList([
-        const DnsRulePreset(presetId: 'p1', enabled: true),
+        const DnsRulePreset(presetId: 'p1'),
         const DnsRuleInline(
           name: 'user-mid',
           rule: {'domain': ['x.com'], 'server': 's'},
         ),
-        const DnsRulePreset(presetId: 'p2', enabled: true),
+        const DnsRulePreset(presetId: 'p2'),
       ]);
 
       final resolved = await resolveDnsRulesList(

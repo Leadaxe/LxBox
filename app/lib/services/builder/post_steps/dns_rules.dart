@@ -201,15 +201,16 @@ Future<void> applyCustomDns(
       if (dnsMirrors.isNotEmpty) {
         // §117: запись — позиционный якорь группы; тела preset-правил живут
         // в mirror-группе (порядок routing-правил), per-preset тумблер уже
-        // учтён при её сборке (§257: магическая var dns_enable; поле
-        // `enabled` этой записи — мёртвое, билдер его не читает).
+        // учтён при её сборке (§257: магическая var dns_enable; своего
+        // `enabled` у записи нет, §593).
         emitMirrorGroup();
         continue;
       }
       // Legacy-ветка (вызовы без dnsMirrors — shim'ы/старые тесты):
       // позиционная эмиссия тел по записи, как до §117 (§253: правил
-      // может быть несколько — порядок шаблона).
-      if (!entry.enabled) continue;
+      // может быть несколько — порядок шаблона). В сборке ветка тел не
+      // получает: `extraDnsRulesByPresetId` непуст только вместе с
+      // `dnsMirrors` (custom_rules.dart, §117).
       final bodies = extraDnsRulesByPresetId[entry.presetId];
       if (bodies != null) outRules.addAll(bodies);
       continue;
@@ -442,7 +443,7 @@ Future<List<DnsRuleRef>> resolveDnsRulesList({
   for (final pid in activePresetIdsWithDnsRule) {
     if (seenPresetIds.contains(pid)) continue;
     result.insert(
-        templateBlockStart, DnsRulePreset(presetId: pid, enabled: true));
+        templateBlockStart, DnsRulePreset(presetId: pid));
     templateBlockStart++;
   }
 

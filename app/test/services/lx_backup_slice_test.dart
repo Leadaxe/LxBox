@@ -342,7 +342,7 @@ void main() {
       }
       for (final r in const <DnsRuleRef>[
         DnsRuleInline(name: 'n', rule: {'server': 'x'}, enabled: false),
-        DnsRulePreset(presetId: 'ru', enabled: true),
+        DnsRulePreset(presetId: 'ru'),
       ]) {
         covered(BackupRecord.dnsRule, dnsRuleToRecord(r));
       }

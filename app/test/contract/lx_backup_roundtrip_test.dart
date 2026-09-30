@@ -272,7 +272,7 @@ _State _source() {
           'server': 'my-doh',
         },
       ),
-      DnsRulePreset(presetId: 'ru-direct', enabled: true),
+      DnsRulePreset(presetId: 'ru-direct'),
     ],
   )
     ..dnsFinal = 'my-doh'

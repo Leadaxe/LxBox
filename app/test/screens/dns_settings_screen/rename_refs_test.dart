@@ -36,7 +36,7 @@ void main() {
           rule: {'domain': ['x.com'], 'server': 'my-dns'},
         ),
         const DnsRuleSrs(id: 'ds_1', name: 'cn', server: 'my-dns'),
-        const DnsRulePreset(presetId: 'p', enabled: true),
+        const DnsRulePreset(presetId: 'p'),
         // §439 A1 — srs формы §294: server в body.
         const DnsRuleSrs(
           id: 'ds_2',
@@ -72,7 +72,7 @@ void main() {
           reason: 'enum-var с совпавшим текстом не трогается');
       expect((rules[0] as DnsRuleInline).rule['server'], 'home-router');
       expect((rules[1] as DnsRuleSrs).server, 'home-router');
-      expect(rules[2], const DnsRulePreset(presetId: 'p', enabled: true));
+      expect(rules[2], const DnsRulePreset(presetId: 'p'));
       expect((rules[3] as DnsRuleSrs).body,
           {'server': 'home-router', 'query_type': ['A']});
       expect(updated.dnsFinal, 'home-router');

@@ -83,13 +83,13 @@ void main() {
 
     test('ссылки preset/template внутри файла дублем не заводятся', () {
       final got = _apply(const [
-        DnsRulePreset(presetId: 'ru-direct', enabled: true),
-        DnsRulePreset(presetId: 'ru-direct', enabled: true),
+        DnsRulePreset(presetId: 'ru-direct'),
+        DnsRulePreset(presetId: 'ru-direct'),
         DnsRuleTemplate(name: 'Default', enabled: true),
         DnsRuleTemplate(name: 'Default', enabled: true),
       ]);
       expect(got.rules, const [
-        DnsRulePreset(presetId: 'ru-direct', enabled: true),
+        DnsRulePreset(presetId: 'ru-direct'),
         DnsRuleTemplate(name: 'Default', enabled: true),
       ]);
     });
@@ -130,7 +130,7 @@ void main() {
 
     test('ссылка, которая у приёмника есть, не ввозится', () {
       final got = _apply(
-        const [DnsRulePreset(presetId: 'ru-direct', enabled: true)],
+        const [DnsRulePreset(presetId: 'ru-direct')],
         local: const [DnsRulePreset(presetId: 'ru-direct')],
       );
       expect(got.rules, const [DnsRulePreset(presetId: 'ru-direct')],

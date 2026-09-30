@@ -432,7 +432,7 @@ DnsRuleRef? readLegacyDnsRule(Map<String, dynamic> j) {
     case 'preset':
       final pid = j['presetId']?.toString();
       if (pid == null || pid.isEmpty) return null;
-      return DnsRulePreset(presetId: pid, enabled: enabledExplicit);
+      return DnsRulePreset(presetId: pid);
     case 'template':
       final name = j['name']?.toString();
       if (name == null || name.isEmpty) return null;

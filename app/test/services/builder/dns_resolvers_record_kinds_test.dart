@@ -215,7 +215,7 @@ void main() {
           'server': 'my-doh',
         },
       ),
-      DnsRulePreset(presetId: 'ru-direct', enabled: true),
+      DnsRulePreset(presetId: 'ru-direct'),
       DnsRuleSrs(
         name: 'geo',
         id: 'ds_geo',

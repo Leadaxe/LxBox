@@ -1108,12 +1108,12 @@ The tag lives **only** at the record level; the builder synthesizes `body.tag` b
 both saved the result. Two build fixes came with the move to models: a user rule without
 an `enabled` key is emitted, and an srs DNS rule reaches the config.
 
-⚠ §257: on a `kind: preset` rule record the `enabled` field is **dead**: the toggle for a
-preset's DNS block moved to the magic var `dns_enable`
+§257/§593: on a `kind: preset` rule record `enabled` is always written as `true` and never
+read. The toggle for a preset's DNS block is the magic var `dns_enable`
 (`rules[].vars` of the preset rule, see “Magic variables” in TEMPLATE.md). The entry
-remains only as a **positional anchor** for the mirror group (§117) — it decides
-where the preset's DNS rules sit inside `dns.rules`. Neither the builder nor the UI
-reads its `enabled`; auto-discovery keeps writing `enabled: true`, harmlessly.
+is only a **positional anchor** for the mirror group (§117) — it decides where the
+preset's DNS rules sit inside `dns.rules`. The field stays in the record because it is
+part of the contract's record shape; an old file carrying `false` is read as a plain anchor.
 
 ### Migration history
 

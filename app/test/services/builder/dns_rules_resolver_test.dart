@@ -98,7 +98,7 @@ void main() {
       expect(resolved, hasLength(2));
       // Order: preset first (auto-discovery вставляет ПЕРЕД template-блоком),
       // потом template.
-      expect(resolved[0], const DnsRulePreset(presetId: 'ru-direct', enabled: true));
+      expect(resolved[0], const DnsRulePreset(presetId: 'ru-direct'));
       expect(resolved[1],
           const DnsRuleTemplate(name: 'Default → Google DoH', enabled: true));
 
@@ -130,7 +130,7 @@ void main() {
     test('orphan cleanup: kind=template/preset с unknown identifier выбрасываются', () async {
       await SettingsStorage.saveDnsRulesList([
         const DnsRuleTemplate(name: 'Orphan template', enabled: true),
-        const DnsRulePreset(presetId: 'orphan-preset', enabled: true),
+        const DnsRulePreset(presetId: 'orphan-preset'),
         const DnsRuleInline(name: 'My user', rule: {'server': 'cf'}),
       ]);
 
@@ -172,7 +172,7 @@ void main() {
       // Юзер уже видел template, перетащил выше preset
       await SettingsStorage.saveDnsRulesList([
         const DnsRuleTemplate(name: 'A', enabled: true),
-        const DnsRulePreset(presetId: 'p-id', enabled: true),
+        const DnsRulePreset(presetId: 'p-id'),
       ]);
 
       final resolved = await resolveDnsRulesList(
@@ -238,7 +238,7 @@ void main() {
       // kind=rule не распознан → наверх не отдаётся. Auto-discovery видит,
       // что для presetId 'ru-direct' нет записи, и создаёт fresh kind=preset.
       expect(resolved,
-          [const DnsRulePreset(presetId: 'ru-direct', enabled: true)]);
+          [const DnsRulePreset(presetId: 'ru-direct')]);
       expect(await rawRules(), [
         legacy,
         {'kind': 'preset', 'ref': 'ru-direct', 'enabled': true},
@@ -311,7 +311,7 @@ void main() {
 
     test('kind=preset: body из extraDnsRulesByPresetId', () async {
       await SettingsStorage.saveDnsRulesList([
-        const DnsRulePreset(presetId: 'ru-direct', enabled: true),
+        const DnsRulePreset(presetId: 'ru-direct'),
       ]);
 
       final config = <String, dynamic>{};
@@ -609,7 +609,7 @@ void main() {
 
     test('linear order: storage порядок == финальный dns.rules порядок', () async {
       await SettingsStorage.saveDnsRulesList([
-        const DnsRulePreset(presetId: 'p-id', enabled: true),
+        const DnsRulePreset(presetId: 'p-id'),
         const DnsRuleInline(name: 'U', rule: {'server': 'u'}),
         const DnsRuleTemplate(name: 'T', enabled: true),
       ]);
