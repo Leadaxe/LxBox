@@ -34,7 +34,7 @@ Events (prefix `com.leadaxe.lxbox.event.`):
 |-------|--------|----------|------|
 | `VPN_CONNECTED` | — | Lifecycle | the tunnel came up |
 | `VPN_DISCONNECTED` | `reason`: `user` / `error` / `revoked` | Lifecycle | the tunnel went down |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | the tunnel failed (`tunnel_error`) or a command failed (`bad_request`, `conflict`, `not_found`, …, `error`) |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | the tunnel failed (`tunnel_error`) or a command failed (`bad_request`, `conflict`, `not_found`, `switch_failed`, …, `error`) |
 | `VPN_REVOKED` | — | Lifecycle | another app took the VPN slot |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | a new version was found |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | a node was selected explicitly (in the app or by command) |

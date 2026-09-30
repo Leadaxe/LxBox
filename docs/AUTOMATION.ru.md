@@ -141,7 +141,7 @@ Profile активируется, пока условие истинно. Host �
 |---|---|---|---|
 | `VPN_CONNECTED` | — | Lifecycle | Туннель поднят |
 | `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | Туннель упал |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды. `code` = `tunnel_error` (аварийный обрыв туннеля) либо `conflict`/`bad_request`/`not_found`/… (провал команды) |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | Любой error path / провал automation-команды. `code` = `tunnel_error` (аварийный обрыв туннеля) либо `conflict`/`bad_request`/`not_found`/`switch_failed`/… (провал команды; `switch_failed` — ядро отвергло принятый `SWITCH_NODE`) |
 | `VPN_REVOKED` | — | Lifecycle | Другая VPN-app перехватила туннель |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | Найдена новая версия |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | Сменилась активная нода |
@@ -175,8 +175,9 @@ Task "Switch to Russia with confirmation":
      If timeout              → Notify "⚠️ нет ответа"
 ```
 
-При провале команды (нет группы, tunnel down, несуществующая нода/группа и т.п.)
-L×Box эмитит `VPN_ERROR` с `code` (`conflict` / `bad_request` / `not_found` / …)
+При провале команды (нет группы, tunnel down, несуществующая нода/группа, ядро
+отвергло ноду и т.п.) L×Box эмитит `VPN_ERROR` с `code` (`conflict` /
+`bad_request` / `not_found` / `switch_failed` / …)
 и `message` — ждущий Tasker узнаёт о провале вместо тихого fire-and-forget.
 
 > **Важно: для request-response включите обе категории — `Lifecycle` и

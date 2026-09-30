@@ -34,7 +34,7 @@
 |---------|--------|-----------|-------|
 | `VPN_CONNECTED` | — | Lifecycle | туннель поднялся |
 | `VPN_DISCONNECTED` | `reason`: `user` / `error` / `revoked` | Lifecycle | туннель опустился |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | туннель упал (`tunnel_error`) или команда провалилась (`bad_request`, `conflict`, `not_found`, …, `error`) |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | туннель упал (`tunnel_error`) или команда провалилась (`bad_request`, `conflict`, `not_found`, `switch_failed`, …, `error`) |
 | `VPN_REVOKED` | — | Lifecycle | слот VPN забрало другое приложение |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | найдена новая версия |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | узел выбран явно (в приложении или командой) |

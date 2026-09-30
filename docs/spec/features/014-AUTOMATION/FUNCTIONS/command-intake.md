@@ -58,7 +58,8 @@ only in the system log under the `LxBoxIntent` tag.
 - Other commands are executed by the shared handlers with Debug API error
   codes: an empty `tag`/`group` → `bad_request`; no group, tunnel down, config
   lock, app not ready → `conflict`; no group with that name → `not_found`; a
-  config build failure → a core/build error. Every failure is `VPN_ERROR`; a
+  config build failure → a core/build error; the core rejected the node of
+  an accepted `SWITCH_NODE` → `switch_failed`. Every failure is `VPN_ERROR`; a
   raw exception does not leak outside.
 - `SET_GROUP` on a non-existent group does not change the group and does not
   send `ACTIVE_GROUP_CHANGED`.
@@ -94,3 +95,4 @@ only in the system log under the `LxBoxIntent` tag.
 | 6 | [494](../../../tasks/494-debug-api-debts.md) | Released v2.25.0 | Start by command — direct, without the safeguard cycle |
 | 7 | [510](../../../tasks/510-review-findings-after-v2251.md) | Released v2.25.2 | "Stop" by command shuts down the node safeguard cycle |
 | 8 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | Intake follows the saved toggle after a backup restore and a set load |
+| 9 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The core rejecting an accepted `SWITCH_NODE` → `VPN_ERROR(switch_failed)` |

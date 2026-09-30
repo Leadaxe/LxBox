@@ -6,6 +6,7 @@ import '../debug/context.dart';
 import '../debug/contract/errors.dart';
 import '../settings_storage.dart';
 import '../subscription/auto_updater.dart';
+import 'event_emitter.dart';
 
 /// §047 — pure-business action handlers, общие для двух транспортов:
 ///   - **Debug API** (`/action/*`, [debug/handlers/action.dart]) — thin
@@ -42,7 +43,15 @@ Future<void> actionSwitchNode(String tag, DebugContext ctx) async {
   if (!home.state.tunnelUp) {
     throw const Conflict('tunnel not connected');
   }
-  unawaited(home.switchNode(tag));
+  // §605 — отказ ядра после принятой команды: `switchNode` сам его ловит
+  // (lastError), мосту остаётся сообщить ждущему Tasker'у. Текст исключения в
+  // открытый broadcast не идёт — только тег из самой команды.
+  unawaited(home.switchNode(tag).then((ok) {
+    if (!ok) {
+      AutomationEventEmitter.I
+          .emitVpnError('switch_failed', 'node switch failed: "$tag"');
+    }
+  }));
 }
 
 /// `set-group` — сменить активную группу (+ загрузить её ноды).

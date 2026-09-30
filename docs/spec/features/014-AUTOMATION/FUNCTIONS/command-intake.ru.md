@@ -58,7 +58,8 @@ Tasker «Send Intent», цель — Broadcast Receiver) и исполняет �
 - Остальные команды исполняются общими обработчиками с кодами ошибок Debug API:
   пустой `tag`/`group` → `bad_request`; нет группы, опущен туннель, блокировка
   конфига, приложение не готово → `conflict`; нет группы с таким именем →
-  `not_found`; сбой сборки конфига → ошибка ядра/сборки. Каждый провал —
+  `not_found`; сбой сборки конфига → ошибка ядра/сборки; ядро отвергло узел
+  принятого `SWITCH_NODE` → `switch_failed`. Каждый провал —
   `VPN_ERROR`; сырое исключение наружу не уходит.
 - `SET_GROUP` на несуществующую группу не меняет группу и не шлёт
   `ACTIVE_GROUP_CHANGED`.
@@ -93,3 +94,4 @@ Tasker «Send Intent», цель — Broadcast Receiver) и исполняет �
 | 6 | [494](../../../tasks/494-debug-api-debts.md) | Released v2.25.0 | Старт командой — прямой, без цикла страховки |
 | 7 | [510](../../../tasks/510-review-findings-after-v2251.md) | Released v2.25.2 | «Стоп» командой гасит цикл страховки узлов |
 | 8 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Реализовано | Приём следует сохранённому тумблеру после восстановления бэкапа и загрузки набора |
+| 9 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Реализовано | Отказ ядра после принятого `SWITCH_NODE` → `VPN_ERROR(switch_failed)` |

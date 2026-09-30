@@ -1786,9 +1786,12 @@ class HomeController extends ChangeNotifier
     }
   }
 
-  Future<void> switchNode(String nodeTag) async {
+  /// §605 — `false` только когда ядро отвергло выбор (пойманная ошибка):
+  /// automation-мост по нему шлёт `VPN_ERROR`. Ранний выход и уже активная
+  /// нода — `true` (менять нечего, это не отказ).
+  Future<bool> switchNode(String nodeTag) async {
     final group = _state.selectedGroup;
-    if (group == null || !_state.tunnelUp) return;
+    if (group == null || !_state.tunnelUp) return true;
     final prevNode = _state.activeInGroup;
     // §290 — уже активна: не делать re-select и не рвать соединения группы
     // (interrupt-on-switch §143) на ровном месте. Общий путь UI + automation:
@@ -1797,7 +1800,7 @@ class HomeController extends ChangeNotifier
     // timeout — смены нет, поэтому НЕ ACTIVE_NODE_CHANGED.
     if (prevNode == nodeTag) {
       AutomationEventEmitter.I.emitNodeAlreadyActive(nodeTag, group);
-      return;
+      return true;
     }
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
@@ -1847,10 +1850,12 @@ class HomeController extends ChangeNotifier
           .emitNodeChanged(prevNode, nodeTag, group, 'user');
       // §047 Шаг 2 — mirror в native-кеш для Locale condition-плагина.
       BoxVpnClient.I.setAutomationActiveState(node: nodeTag, group: group);
+      return true;
     } catch (e) {
       _emit(_state.copyWith(
           lastError: PrefixedMsg(ErrPrefix.switchFailed, formatUserError(e))));
       _addDebug(DebugSource.app, 'Node switch error: $e');
+      return false;
     } finally {
       _emit(_state.copyWith(busy: false));
     }

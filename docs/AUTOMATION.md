@@ -147,7 +147,7 @@ corresponding category is enabled in the Emit settings.
 |---|---|---|---|
 | `VPN_CONNECTED` | — | Lifecycle | The tunnel came up |
 | `VPN_DISCONNECTED` | `reason` (`user`/`error`/`revoked`) | Lifecycle | The tunnel went down |
-| `VPN_ERROR` | `code`, `message` | Lifecycle | Any error path, or a failed automation command. `code` is `tunnel_error` (the tunnel dropped) or `conflict`/`bad_request`/`not_found`/… (the command failed) |
+| `VPN_ERROR` | `code`, `message` | Lifecycle | Any error path, or a failed automation command. `code` is `tunnel_error` (the tunnel dropped) or `conflict`/`bad_request`/`not_found`/`switch_failed`/… (the command failed; `switch_failed` — the core rejected an accepted `SWITCH_NODE`) |
 | `VPN_REVOKED` | — | Lifecycle | Another VPN app took over the tunnel |
 | `UPDATE_AVAILABLE` | `version`, `url` | Lifecycle | A newer version was found |
 | `ACTIVE_NODE_CHANGED` | `old_tag`, `new_tag`, `group`, `reason` | State | The active node changed |
@@ -183,8 +183,8 @@ Task "Switch to Russia with confirmation":
 ```
 
 When a command fails (no such group, the tunnel is down, a non-existent node or
-group, and so on) L×Box emits `VPN_ERROR` with a `code`
-(`conflict` / `bad_request` / `not_found` / …) and a `message` — so a waiting
+group, the core rejected the node, and so on) L×Box emits `VPN_ERROR` with a
+`code` (`conflict` / `bad_request` / `not_found` / `switch_failed` / …) and a `message` — so a waiting
 Tasker learns about the failure instead of a silent fire-and-forget.
 
 > **Important: enable both `Lifecycle` and `State` for request-response.** A
