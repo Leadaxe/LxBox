@@ -50,8 +50,9 @@ the home screen — "… · fetching subscriptions…".
   categories are not kept (P7).
 - **What survives replace** if the file is silent about it: enabling, port
   and token of the Debug API (§413); "already asked" flags of startup
-  prompts (battery, tile, update check, notifications). A key from the file
-  wins; `wizard_*` flags are never accepted from the file. With the
+  prompts (battery, tile, update check, notifications). A Debug API key
+  from the file wins; the four startup prompt flags are never accepted from
+  the file in either mode and are not counted as unknown keys (§600). With the
   category deselected, VPN toggles stay at the device values.
 - **Merge:** sources are appended by `id` (an existing `id` is not touched);
   the archive's chains, if any, replace the current ones wholesale, an
@@ -95,3 +96,4 @@ the home screen — "… · fetching subscriptions…".
 | 8 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | An old-form block migrates before the preview and the filter |
 | 9 | [447](../../../tasks/447-v2-24-0-avd-findings.md) | Fixed | Replace does not reset startup prompt flags |
 | 10 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Old archives with chains are read with the Server lists checkbox |
+| 11 | [600](../../../tasks/600-backup-startup-prompt-flags-not-unknown.md) | Done | Startup prompt flags in a backup are not "unknown keys" |

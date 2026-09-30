@@ -169,8 +169,61 @@ void main() {
         '1', reason: 'wizard_* из файла не импортируется — остаётся флаг устройства');
     expect(
         await SettingsStorage.getVar(SettingsStorage.notificationPromptVar, ''),
-        '0',
-        reason: 'ключ из allowlist, который в файле есть, побеждает');
+        '1',
+        reason: '§600 — флаг уведомлений обрабатывается как wizard_*');
+  });
+
+  // §600 — флаги стартовых промптов едут в экспорт, импорт их не применяет и
+  // не считает неизвестными ключами; default-deny для чужих ключей прежний.
+  group('§600 — флаги стартовых промптов при импорте', () {
+    const all = {
+      BackupCategory.serverLists,
+      BackupCategory.routing,
+      BackupCategory.appSettings,
+      BackupCategory.debugConfig,
+    };
+
+    for (final merge in [false, true]) {
+      test('export → import (merge=$merge): флаги не в droppedKeys, '
+          'на получателе прежние', () async {
+        await seedStorage(sampleSnapshot());
+        for (final k in SettingsStorage.startupPromptVarKeys) {
+          await SettingsStorage.setVar(k, '1');
+        }
+        final svc = const BackupService();
+        final exported = await svc.buildExport(include: all);
+        final vars = (jsonDecode(exported) as Map)['storage']['vars'] as Map;
+        for (final k in SettingsStorage.startupPromptVarKeys) {
+          expect(vars[k], '1', reason: '$k едет в экспорт');
+        }
+        // Получатель: свои значения флагов.
+        for (final k in SettingsStorage.startupPromptVarKeys) {
+          await SettingsStorage.setVar(k, '0');
+        }
+        final apply = await svc.applyImport(await svc.parseImport(exported),
+            merge: merge, include: all);
+        expect(apply.errors, isEmpty);
+        expect(apply.droppedKeys, isEmpty);
+        for (final k in SettingsStorage.startupPromptVarKeys) {
+          expect(await SettingsStorage.getVar(k, ''), '0',
+              reason: '$k из файла не взят');
+        }
+      });
+
+      test('чужой ключ рядом с флагами отбрасывается (merge=$merge)',
+          () async {
+        await seedStorage(sampleSnapshot());
+        final dropped = await SettingsStorage.replaceRaw({
+          'vars': {
+            for (final k in SettingsStorage.startupPromptVarKeys) k: '1',
+            'alien_var_600': 'x',
+          },
+        }, merge: merge);
+        expect(dropped, ['vars.alien_var_600']);
+        final raw = await SettingsStorage.exportRaw();
+        expect((raw['vars'] as Map).containsKey('alien_var_600'), isFalse);
+      });
+    }
   });
 
   test('replaceRaw with merge=true preserves untouched keys', () async {

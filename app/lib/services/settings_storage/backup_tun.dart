@@ -80,7 +80,9 @@ Future<List<String>> _replaceRaw(
         final vk = v.key.toString();
         if (allowedVars.contains(vk)) {
           outVars[vk] = v.value;
-        } else {
+        } else if (!SettingsStorage.startupPromptVarKeys.contains(vk)) {
+          // §600 — флаги стартовых промптов (свойство устройства, §447) из
+          // файла не применяются и неизвестными не считаются.
           dropped.add('vars.$vk');
         }
       }

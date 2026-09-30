@@ -227,7 +227,9 @@ class SettingsStorage {
     'subscription_device_model',
     // Прочие UI/one-shot флаги
     'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
-    'notif_perm_prompted_v1', // §128 — promt уведомлений показан
+    // §600 — флаги стартовых промптов ([startupPromptVarKeys], вкл.
+    // `notif_perm_prompted_v1`) здесь НЕ перечислены: из файла не применяются,
+    // но и в отброшенные не попадают (см. `_replaceRaw`).
     'allow_rotation', // §220 — снятие портретной фиксации
     'node_list_two_columns', // §541 — две колонки списка узлов на широком окне
     'app_language', // §279 — язык приложения (system|en|ru); НЕ config-var
@@ -1031,8 +1033,9 @@ class SettingsStorage {
   /// устройства, а не настройка. Полная замена ([replaceRaw], `merge=false`)
   /// переносит их из текущего стораджа, как [debugApiVarKeys], если во
   /// входящем снимке их нет: иначе после restore на холодном старте заново
-  /// всплывали «Add tile» и «Check for updates?». `wizard_*` в allowlist
-  /// импорта нет — из файла они не приходят вовсе.
+  /// всплывали «Add tile» и «Check for updates?». В allowlist импорта их нет —
+  /// из файла они не приходят вовсе; §600 — при этом импорт пропускает их
+  /// молча, не записывая в отброшенные «неизвестные» ключи.
   static const String batteryPromptVar = 'wizard_battery_v1';
   static const String addTilePromptVar = 'wizard_addtile_v1';
   static const String updateCheckPromptVar = 'wizard_update_check_v1';

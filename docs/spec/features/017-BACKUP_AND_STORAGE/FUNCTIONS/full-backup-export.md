@@ -62,8 +62,8 @@ Result — "Saved as … (N bytes)", "Saved to Downloads: … (N bytes)" or
 - The category filter works only on known keys; an unknown key goes nowhere
   (garbage cleanup is at the import input).
 - Every key import accepts belongs to some category (P2). The reverse is not
-  guaranteed: `wizard_*` flags are exported with "App settings", but import
-  does not accept them.
+  guaranteed: startup prompt flags are exported with "App settings", but
+  import skips them silently (§600).
 - The `storage` block is absent if it is empty after slicing; `vpn_settings`
   — only when the category is on.
 - The file name and the time in it do not depend on the UI language.

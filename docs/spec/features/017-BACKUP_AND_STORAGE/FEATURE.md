@@ -59,10 +59,13 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   unit tests "not JSON — rejected", "no app/kind markers — rejected", "old
   format without storage — rejected". **Mutation:** partial parsing.
 - **P5. The input is default-deny.** Unknown top-level keys and vars are
-  dropped in both modes and counted ("N unknown keys skipped").
+  dropped in both modes and counted ("N unknown keys skipped"). The
+  "already asked" flags of startup prompts (`wizard_*`,
+  `notif_perm_prompted_v1`) are known-ignored: they travel in the export,
+  import does not apply them and does not count them as unknown (§600).
   **Witness:** unit tests "foreign key dropped", "foreign var dropped, known
-  ones kept", "merge filters too". **Mutation:** filtering only in replace
-  mode.
+  ones kept", "merge filters too", "§600 — flags not in droppedKeys, foreign
+  key next to them dropped". **Mutation:** filtering only in replace mode.
 - **P6. Merge deletes nothing.** Sources are appended by `id`, vars by key,
   whatever is absent in the file stays. **Witness:** unit tests "merge keeps
   untouched keys", "sources are appended by id". **Mutation:** merging
@@ -74,8 +77,9 @@ entry); **the input is default-deny**; **a failure does not wipe settings**
   per category.
 - **P8. Device properties survive replace.** If the file is silent about the
   Debug API and about the "already asked" flags of startup prompts, the
-  current values stay; a key from the file wins; `wizard_*` flags are never
-  accepted from the file. **Witness:** unit tests "replace keeps the Debug
+  current values stay; a Debug API key from the file wins; startup prompt
+  flags (all four, `notif_perm_prompted_v1` included) are never accepted from
+  the file and are not reported as unknown (§600). **Witness:** unit tests "replace keeps the Debug
   API absent in the snapshot", "keys from the snapshot win", "replace keeps
   startup prompt flags". **Mutation:** replacing vars wholesale.
 - **P9. An old backup restores.** A 2.23.2-form block migrates before the
@@ -279,8 +283,8 @@ Start: document → old form? → migration → copy of the original → write
 - A new settings key goes both into the import allowlist and into an export
   category: the asymmetry already lost Directions (§221), auto-ping (§349),
   MASQUE (§219). The guard is P2. The reverse asymmetry is not caught by a
-  test: `wizard_*` flags travel in the backup and give "unknown keys
-  skipped" on your own backup.
+  test. Startup prompt flags travel in the backup on purpose and are
+  skipped silently on import (§600).
 - The replace caption "Wipes existing data in selected categories" does not
   match P7: unselected categories go too.
 - After a restore from "Backup & restore" the screens keep the old snapshot
