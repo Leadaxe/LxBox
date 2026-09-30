@@ -98,3 +98,4 @@ English render of stored errors and warnings for machine surfaces.
 | 3 | [452](../../../tasks/452-zh-localization.md) | Implemented | Chinese native strings; parity check finds languages by directory |
 | 4 | [460F](../../../tasks/460F-contract-registry-bundle/spec.md) | — | Warning registry bundled with English and Russian texts |
 | 5 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: core locale follows the device until the first language change |
+| 6 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done; device check pending | The core locale at process start comes from the saved app language |

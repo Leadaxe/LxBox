@@ -102,3 +102,4 @@ pass in strict mode · the localization tests pass.
 | 3 | [285](../../../tasks/285-getlocaltext-migration.md) | — | Dictionary check on natural keys, strict CI, empty baseline |
 | 4 | [452](../../../tasks/452-zh-localization.md) | Implemented | Checks discover languages by directory; per-language plural forms |
 | 5 | [591](../../../tasks/591-spec-kit-revision-audit.md) | Open | Audit: untranslated spots that pass the checks |
+| 6 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | The ratchet traces a literal through a variable or field; a bare-string dictionary entry fails `ui_check` |

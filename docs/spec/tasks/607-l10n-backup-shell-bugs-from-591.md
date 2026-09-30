@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | B (баг) |
-| Статус | В работе |
+| Статус | D (Done) |
 | Фича | [017-BACKUP_AND_STORAGE](../features/017-BACKUP_AND_STORAGE/FEATURE.md), [019-CONFIG_EDITOR](../features/019-CONFIG_EDITOR/FEATURE.md), [020-APP_SHELL](../features/020-APP_SHELL/FEATURE.md), [029-LOCALIZATION](../features/029-LOCALIZATION/FEATURE.md) |
 | Дата | 2026-09-30 |
 | Связанные | аудит §591, §599 (замена по категориям), §600 (флаги стартовых запросов), §413, §447, §279/§285 (l10n), §037 (закрепление конфига), §189 (зеркало тумблеров VPN) |
@@ -162,3 +162,23 @@ Cut/Paste безусловно; `CodeLineEditingController.cut()/paste()` пак
 
 Затронутые тестовые файлы — по одному; `flutter analyze`; `hardcoded_check` и
 `ui_check` с `--strict`. Остальное — CI.
+
+## Итог
+
+- П. 1–3, 9: все сайты переведены (ru, zh); `hardcoded_check` прослеживает
+  переменные и поля (`_ValueCollector` в `tool/l10n/src/hardcoded_scan.dart`),
+  `_previewCheckbox` зарегистрирован. Попутно переведены найденные расширенным
+  сканом строки About (версия ядра), пояснение зависшего соединения, секция
+  приложений правила, «(optional)» параметров пресета, меню Connect/Reconnect,
+  событие Live-журнала «DNS exchange failed», меню группировки Stats; машинные
+  сайты помечены `// l10n-exempt`. Итог восстановления —
+  `lib/screens/backup_screen/restore_summary.dart`, общий для обоих путей.
+- П. 4: 17 записей переписаны; `ui_scan` — плоская запись = `shape`.
+- П. 5: текст ошибки собирается из `appLanguageValues`.
+- П. 6: `BoxApplication.onCreate` → `L10n.applyLibboxLocale`. Автотеста нет
+  (Kotlin-юнитов в проекте нет); ручная проверка на эмуляторе не проводилась.
+- П. 7: `config_locked_for_debug` ∈ `debugApiVarKeys`.
+- П. 8: `SettingsStorage.nativePrefsKey` — пропускается на входе
+  `replaceRaw` без записи в отброшенные, замена переносит секцию получателя.
+- П. 10: `LxSelectionToolbarController.readOnly`; тест расхождения §591
+  переписан под исправленное поведение.

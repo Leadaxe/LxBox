@@ -95,3 +95,4 @@ errors)» и «· N unknown keys skipped»; кнопка «Restart now». С г�
 | 10 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Старые архивы с цепочками читаются галочкой Server lists |
 | 11 | [600](../../../tasks/600-backup-startup-prompt-flags-not-unknown.md) | Сделано | Флаги стартовых вопросов в бэкапе не «неизвестные ключи» |
 | 12 | [599](../../../tasks/599-backup-replace-per-category.md) | Сделано | Замена заменяет только выбранные категории |
+| 13 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Сделано | Замок конфига — в Debug API config; замена сохраняет зеркало тумблеров VPN; один локализованный итог с числом ошибок для обоих путей, восстановление с главного экрана применяет язык |

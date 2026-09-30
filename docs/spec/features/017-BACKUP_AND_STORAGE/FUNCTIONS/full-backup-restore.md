@@ -99,3 +99,4 @@ the home screen — "… · fetching subscriptions…".
 | 10 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | Old archives with chains are read with the Server lists checkbox |
 | 11 | [600](../../../tasks/600-backup-startup-prompt-flags-not-unknown.md) | Done | Startup prompt flags in a backup are not "unknown keys" |
 | 12 | [599](../../../tasks/599-backup-replace-per-category.md) | Done | Replace replaces only the selected categories |
+| 13 | [607](../../../tasks/607-l10n-backup-shell-bugs-from-591.md) | Done | Config pin in Debug API config; replace keeps the VPN toggles mirror; one localized summary with the error count for both restore paths, home restore applies the language |

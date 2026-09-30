@@ -44,7 +44,10 @@ dart run tool/l10n/kotlin_check.dart [--strict]
   hardcoded display-литерал fail'ит CI. `Text(getLocalText.s("..."))` легален
   (литерал — аргумент getLocalText, не прямой аргумент `Text`). Скан рекурсивно
   спускается в ветки ternary/switch-expression в display-позициях (каждая
-  строковая ветка — самостоятельный сайт). Логика скана —
+  строковая ветка — самостоятельный сайт); §607 — идентификатор в
+  display-позиции (`Text(label)`, `Text(_line!)`) прослеживается до
+  инициализатора и присваиваний локальной переменной (тело функции) или поля
+  (класс). Логика скана —
   `src/hardcoded_scan.dart`, покрыта self-тестом
   `test/tool/hardcoded_scan_test.dart`. Правка текста существующего литерала
   (hotfix) легальна, пока счётчик сайтов файла не растёт — `--write-baseline`.
