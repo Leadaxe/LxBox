@@ -109,4 +109,65 @@ void main() {
       expect(await SettingsStorage.getDismissedUpdateVersion(), '');
     });
   });
+
+  // P13 (020-APP_SHELL) — maybeCheck молчит (не трогает сеть/latest/throttle
+  // timestamp), если гейт не пройден: toggle выключен, dev-build, порог 24ч
+  // не истёк. Сеть в тестах не мокается нигде в репо (http.get не
+  // injectable) — проверяем именно gate-логику ДО сетевого вызова: если бы
+  // maybeCheck дошёл до _check(), тест завис бы/упал на реальном запросе.
+  group('maybeCheck — gate (P13)', () {
+    late Directory tmp;
+    const channel = MethodChannel('plugins.flutter.io/path_provider');
+
+    setUp(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      tmp = await Directory.systemTemp.createTemp('lxbox_update_checker_gate_');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'getApplicationDocumentsDirectory' ||
+            call.method == 'getApplicationDocumentsPath') {
+          return tmp.path;
+        }
+        return null;
+      });
+      SettingsStorage.resetCacheForTesting();
+      UpdateChecker.I.latest.value = null;
+    });
+
+    tearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+      UpdateChecker.I.latest.value = null;
+      try {
+        await tmp.delete(recursive: true);
+      } catch (_) {}
+    });
+
+    test('toggle выключен (default) — не трогает last_update_check', () async {
+      // auto_check_updates default = 'false' (§395) — maybeCheck должен
+      // вернуться до сетевого похода и не тронуть throttle-таймстамп.
+      await UpdateChecker.I.maybeCheck(localVersion: '1.0.0');
+      expect(await SettingsStorage.getLastUpdateCheck(), isNull);
+      expect(UpdateChecker.I.latest.value, isNull);
+    });
+
+    test('dev-build — молчит даже при включённом toggle', () async {
+      await SettingsStorage.setAutoCheckUpdates(true);
+      await UpdateChecker.I.maybeCheck(localVersion: '1.2.0-dev.3');
+      await UpdateChecker.I.maybeCheck(localVersion: '0.0.0-dev');
+      expect(await SettingsStorage.getLastUpdateCheck(), isNull);
+      expect(UpdateChecker.I.latest.value, isNull);
+    });
+
+    test('порог 24ч не истёк — повторный auto-check не идёт в сеть', () async {
+      await SettingsStorage.setAutoCheckUpdates(true);
+      final recent = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+      await SettingsStorage.setLastUpdateCheck(recent);
+      await UpdateChecker.I.maybeCheck(localVersion: '1.0.0');
+      // Если бы порог не сработал — maybeCheck пошёл бы в _check() и
+      // перезаписал last_update_check текущим временем; timestamp должен
+      // остаться нетронутым ("recent").
+      expect(await SettingsStorage.getLastUpdateCheck(), recent);
+    });
+  });
 }

@@ -75,10 +75,17 @@ The feature protects three principles:
   from the cache or the built-in copy. **Witness:** units "§422: without update
   consent — not a single request, the cache is read", "without consent and
   without a cache — the bundled copy, the network is not touched"; for the
-  update check — `no witness`. **Mutation:** the update check default is `true`.
+  update check — unit "maybeCheck: toggle off (default) — last_update_check
+  untouched" (no network reached); a false-positive of the default itself
+  needs HTTP mocking the repo lacks — not covered.
+  **Mutation:** the update check default is `true`.
 - **P13. Auto-check — at most once a day, dev builds stay silent, "Check now"
-  always works.** **Witness:** `no witness`. **Mutation:** the daily threshold is
-  counted from a failed attempt.
+  always works.** **Witness:** units "maybeCheck: toggle off — last_update_check
+  untouched", "maybeCheck: dev build silent even with toggle on", "maybeCheck:
+  24h threshold not elapsed — no re-check"; the daily-threshold-from-failure
+  mutation and "Check now" bypass need HTTP mocking the repo does not have
+  (`http.get` not injectable) — not covered, `no witness` for that part.
+  **Mutation:** the daily threshold is counted from a failed attempt.
 - **P14. The new version notice — only at launch and only from the stored
   result.** The result of a network check appears on the next launch; the
   notice does not pop up over the running app. **Witness:** manual check —
