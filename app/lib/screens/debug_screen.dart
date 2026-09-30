@@ -192,9 +192,9 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
               contentPadding: EdgeInsets.zero,
             ),
           ),
-          // §043/§207: shortcut в Diagnostics tab App Settings'ов — там toggle
-          // "Forward sing-box logs" + Debug API + раздел Profiling (полный
-          // набор pprof-кнопок: goroutine/CPU/heap/allocs).
+          // §043/§207: shortcut в Diagnostics tab App Settings'ов — там только
+          // toggle'ы ("Forward sing-box logs", Debug API, core_logs). Profiling
+          // (pprof-кнопки goroutine/CPU/heap/allocs) — вкладка этого экрана.
           const PopupMenuDivider(),
           PopupMenuItem(
             value: _DebugAction.diagnosticsSettings,

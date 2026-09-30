@@ -31,6 +31,9 @@ codes, so a caller can branch on the code without parsing the message.
 | `keep_servers` | `DELETE /folders/{id}` | bool | members become standalone servers instead of being deleted |
 | Body | `PUT`/`POST`/`PATCH` | a JSON object (`Content-Type: application/json`); `PUT /config` — the raw config object; `PUT /settings/vars/{key}` — `{"value":"…"}` | a non-object body, wrong field type or unknown enum value — 400 |
 
+Every `bool` parameter reads `true`, `1` or `yes` (case-insensitive) as true; any
+other value, `on` included, is false.
+
 Limits: body up to 1 MiB (413); handler deadline 30 s (504).
 
 ## Inputs / Outputs

@@ -645,7 +645,7 @@ rebuild silently no-ops (§037) and your custom config will not be overwritten.
   # Goroutine stacks (a goroutine leak) — returns text, not a .pb
   curl -s -H "$H" "http://127.0.0.1:9269/diag/pprof?profile=goroutine&query=debug=2"
   ```
-  Or from the UI: App Settings → Diagnostics → Profiling (the buttons plus the system share sheet).
+  Or from the UI: drawer → Debug → the Profiling tab (the buttons plus the system share sheet); App Settings → Diagnostics holds only the toggles.
 
 ---
 
