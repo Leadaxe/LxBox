@@ -2267,9 +2267,6 @@
   "Headers copied": {
     "value": "Заголовки скопированы"
   },
-  "Health": {
-    "value": "Работоспособность"
-  },
   "Heap allocated": {
     "value": "Выделено в куче"
   },

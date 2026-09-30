@@ -32,7 +32,7 @@ sent out. Turn it on in **App Settings → Automation**.
    `enabled=false` and no command is accepted at all. That toggle is the
    admission barrier — there is no separate per-app pass (see §157).
 2. Enable the **Emit** categories you want if you would like L×Box to send events
-   out (Lifecycle / State / Subscription / Health).
+   out (Lifecycle / State / Subscription).
 3. In the host application, pick L×Box:
    - **Plugin** (simpler): Action / State → **Plugin → L×Box** → choose a command;
    - **Raw**: **Send Intent** → Action = one of the commands below, Target =
@@ -159,8 +159,8 @@ corresponding category is enabled in the Emit settings.
 ### Reserved (the namespace exists, the source does not yet)
 
 - `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (category
-  **Health**) — these arrive together with the §042 health watchdog. The category
-  is already present in the UI.
+  **Health**) — the names are reserved, there is no source (the health watchdog
+  is not planned) and no toggle in the UI.
 - `PERMISSION_NEEDED` (`permission`, category **Lifecycle**) — reserved for
   runtime-permission prompts; nothing emits it yet.
 

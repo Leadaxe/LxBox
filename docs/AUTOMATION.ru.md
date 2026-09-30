@@ -30,7 +30,7 @@ Intent API) — двумя способами:
    `enabled=false` — команды не принимаются вообще. Это и есть барьер приёма
    (отдельного per-app пропуска нет — см. §157).
 2. Включить нужные **Emit**-категории, если хотите получать события L×Box
-   наружу (Lifecycle / State / Subscription / Health).
+   наружу (Lifecycle / State / Subscription).
 3. В host-приложении выбрать L×Box:
    - **Plugin** (проще): Action / State → **Plugin → L×Box** → выбрать команду;
    - **Raw**: **Send Intent** → Action = одна из команд ниже, Target =
@@ -153,7 +153,8 @@ Profile активируется, пока условие истинно. Host �
 ### Зарезервированные (namespace есть, источника пока нет)
 
 - `HEARTBEAT_FAILED` · `LATENCY_DEGRADED` · `UNATTRIBUTED_BURST` (категория
-  **Health**) — появятся вместе с §042 health watchdog. Категория в UI уже есть.
+  **Health**) — имена зарезервированы, источника нет (health watchdog не
+  планируется), тумблера в UI нет.
 - `PERMISSION_NEEDED` (`permission`, категория **Lifecycle**) — зарезервировано
   под runtime-permission промпты; источника эмиссии пока нет.
 

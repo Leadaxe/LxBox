@@ -83,7 +83,7 @@ The feature protects three principles:
   active node — no-op + NODE_ALREADY_ACTIVE". **Mutation:** re-selecting the
   node again.
 - **P9. Events go out only for enabled categories.** Lifecycle, State,
-  Subscription, Health are enabled independently; all are off by default.
+  Subscription are enabled independently; all are off by default.
   **Witness:** units "all OFF — emit no-op", "lifecycle gate independent of
   state/subs", "state gate emits node/group only". **Mutation:** a shared
   gate for all categories.
@@ -115,7 +115,7 @@ The feature protects three principles:
 | Setting | Values | Default |
 |---------|--------|---------|
 | Accept automation commands | on/off; turning on — via a warning dialog | off |
-| Emit: Lifecycle / State / Subscription / Health | on/off each; first enable — via an explanation | all off |
+| Emit: Lifecycle / State / Subscription | on/off each; first enable — via an explanation | all off |
 | Quick Settings tile → Add | system request to add the tile (Android 13+) | — |
 | First run: offer to add the tile | shown once, where the OS supports it | — |
 
@@ -170,7 +170,7 @@ tile touch / menu item / command / plugin
   "trusted" senders.
 - Health events (`HEARTBEAT_FAILED`, `LATENCY_DEGRADED`, `UNATTRIBUTED_BURST`)
   and `PERMISSION_NEEDED` — the names are reserved, there is no source; the
-  Health category exists in the settings but sends nothing.
+  Health category has no toggle in the settings.
 - Commands other than start/stop/toggle, and all events, require a live app;
   with the UI unloaded the command is skipped without an answer.
 - `ACTIVE_NODE_CHANGED` comes only on an explicit node choice, `reason` is

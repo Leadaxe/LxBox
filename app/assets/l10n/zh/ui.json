@@ -2068,9 +2068,6 @@
   "Headers copied": {
     "value": "请求头已复制"
   },
-  "Health": {
-    "value": "健康状态"
-  },
   "Heap allocated": {
     "value": "堆分配量"
   },

@@ -24,7 +24,6 @@ Received") and can wait for it as the answer to its command.
 | Lifecycle | off |
 | State | off |
 | Subscription | off |
-| Health | off |
 
 The first enable of any category goes through an explanatory dialog (once).
 
@@ -81,8 +80,8 @@ subscription update results; the update check; command failures.
 - A node change by the group's automation (URL test, fallback) yields no
   event — only an explicit selection does.
 - Health (`HEARTBEAT_FAILED`, `LATENCY_DEGRADED`, `UNATTRIBUTED_BURST`) and
-  `PERMISSION_NEEDED` — reserved, there is no source; the Health toggle
-  enables nothing.
+  `PERMISSION_NEEDED` — reserved, there is no source; the Health category
+  has no toggle.
 - Events are sent by the app UI; while it is not loaded, events do not go out,
   even if the tunnel changes status.
 - Depends on OS capabilities: delivery of broadcast events to the subscriber.
@@ -97,3 +96,4 @@ subscription update results; the update check; command failures.
 | 4 | [042F](../../../tasks/042F-health-watchdog/spec.md) | 🚫 Won't-fix | Health events remain reserved without a source |
 | 5 | [219](../../../tasks/219-deep-audit-2026-07.md) | Done (audit) | The rate-limit unit does not check the exact one-minute boundary |
 | 6 | [290](../../../tasks/290-automation-node-switch-gaps.md) | complete | `NODE_ALREADY_ACTIVE`, `VPN_ERROR` on command failure, the "enable both categories" hint |
+| 7 | [605](../../../tasks/605-service-live-automation-workspaces-bugs.md) | Implemented | The dead Health toggle removed; `switch_failed` code |
