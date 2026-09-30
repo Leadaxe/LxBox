@@ -54,7 +54,11 @@ The feature protects three principles:
   the shade.
 - **P4. A failure of the quick toggles does not break the tunnel.** An error
   updating the tile or the icon menu (old OS versions, vendor firmwares) does
-  not hinder start and stop. `no witness`.
+  not hinder start and stop. `no witness` — **только на устройстве
+  2026-09-30:** проверить на старой прошивке/OS, что ошибка обновления
+  `LxBoxTileService`/иконки-меню (`app/android/.../LxBoxTileService.kt`) не
+  мешает старту/остановке туннеля; логика нативная (Kotlin), юнит-тестом
+  Dart не воспроизводится.
 - **P5. External commands are off by default.** While "Accept automation
   commands" is off, neither a direct command nor an automation plugin is
   executed. **Witness:** manual check — `am broadcast -a
@@ -99,7 +103,12 @@ The feature protects three principles:
   manual check — a condition in MacroDroid/Tasker with the app closed.
   **Mutation:** the answer waits for the UI to start.
 - **P13. Events carry no secrets.** Only labels: node tags, group names,
-  status, the masked subscription host. `no witness`.
+  status, the masked subscription host. **Witness:** unit "SUB_REFRESHED /
+  SUB_REFRESH_FAILED — sub_id masked, no token" — **покрыто 2026-09-30:**
+  `test/subscription/automation_event_masking_test` «успешный fetch:
+  SUB_REFRESHED.sub_id замаскирован», «провал fetch:
+  SUB_REFRESH_FAILED.sub_id замаскирован». **Mutation:** the raw
+  subscription URL is passed as `sub_id` instead of the masked host.
 
 ## Controlled parameters
 
