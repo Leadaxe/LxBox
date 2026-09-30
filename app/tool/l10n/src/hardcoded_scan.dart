@@ -24,6 +24,12 @@ import 'sha256.dart';
 // является самостоятельным сайтом (Phase 7 hardening: раньше литерал внутри
 // ternary в display-позиции проходил мимо ratchet).
 //
+// §607 — идентификатор в display-позиции (`Text(label)`, `Text(_line!)`)
+// прослеживается до значений: инициализатор и присваивания локальной
+// переменной в объемлющем теле функции, для поля — во всём классе. Каждое
+// строковое значение — самостоятельный сайт (раньше литерал, положенный в
+// переменную, проходил мимо ratchet).
+//
 // Пропускаются литералы: пустые/без букв (пунктуация, юниты) и строки с
 // комментарием `// l10n-exempt` на той же строке или строкой выше.
 
@@ -175,6 +181,14 @@ class _ScanVisitor extends RecursiveAstVisitor<void> {
       }
       return;
     }
+    if (e is PostfixExpression && e.operator.lexeme == '!') {
+      _check(e.operand);
+      return;
+    }
+    if (e is SimpleIdentifier) {
+      _checkIdentifier(e);
+      return;
+    }
     final text = canonicalLiteral(e);
     if (text == null || text.trim().isEmpty) return;
     if (!_letter.hasMatch(text)) return; // пунктуация/юниты: '—', '·'
@@ -186,9 +200,80 @@ class _ScanVisitor extends RecursiveAstVisitor<void> {
         HardcodedSite(file, line, sha256Hex(text).substring(0, 12), short));
   }
 
+  /// Имена, которые уже прослеживаются (защита от циклов `a = b; b = a`).
+  final Set<String> _tracing = {};
+
+  /// §607 — значения, которые может принимать идентификатор [id]: локальная
+  /// переменная — в ближайшем объемлющем теле функции, где она объявлена;
+  /// иначе поле — во всём объемлющем классе/миксине/расширении.
+  void _checkIdentifier(SimpleIdentifier id) {
+    final name = id.name;
+    if (!_tracing.add(name)) return;
+    try {
+      for (AstNode? n = id.parent; n != null; n = n.parent) {
+        if (n is FunctionBody) {
+          final values = _valuesOf(n, name);
+          if (values != null) {
+            values.forEach(_check);
+            return;
+          }
+        } else if (n is ClassDeclaration ||
+            n is MixinDeclaration ||
+            n is ExtensionDeclaration) {
+          _valuesOf(n, name, fieldsOnly: true)?.forEach(_check);
+          return;
+        }
+      }
+    } finally {
+      _tracing.remove(name);
+    }
+  }
+
+  /// Инициализаторы объявлений [name] и правые части `name = …` внутри
+  /// [scope]; null — объявления [name] в [scope] нет.
+  /// [fieldsOnly] — в классе объявлением считается только поле: одноимённая
+  /// локальная переменная другого метода — не то же самое.
+  List<Expression>? _valuesOf(
+    AstNode scope,
+    String name, {
+    bool fieldsOnly = false,
+  }) {
+    final c = _ValueCollector(name, fieldsOnly: fieldsOnly);
+    scope.accept(c);
+    return c.declared ? c.values : null;
+  }
+
   bool _exempt(int line) {
     bool has(int i) =>
         i >= 0 && i < lines.length && lines[i].contains('// l10n-exempt');
     return has(line - 1) || has(line - 2); // та же строка или строкой выше
+  }
+}
+
+class _ValueCollector extends RecursiveAstVisitor<void> {
+  _ValueCollector(this.name, {required this.fieldsOnly});
+  final String name;
+  final bool fieldsOnly;
+  bool declared = false;
+  final List<Expression> values = [];
+
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
+    if (node.name.lexeme == name &&
+        (!fieldsOnly || node.parent?.parent is FieldDeclaration)) {
+      declared = true;
+      final init = node.initializer;
+      if (init != null) values.add(init);
+    }
+    super.visitVariableDeclaration(node);
+  }
+
+  @override
+  void visitAssignmentExpression(AssignmentExpression node) {
+    final lhs = node.leftHandSide;
+    if (lhs is SimpleIdentifier && lhs.name == name) {
+      values.add(node.rightHandSide);
+    }
+    super.visitAssignmentExpression(node);
   }
 }

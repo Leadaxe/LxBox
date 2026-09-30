@@ -4,6 +4,7 @@
     "showSnack": { "positional": [0], "named": [] },
     "_diagSnack": { "positional": [0], "named": [] },
     "_showError": { "positional": [0, 1], "named": [] },
+    "_previewCheckbox": { "positional": [], "named": ["label"] },
     "showDeleteConfirmDialog": { "positional": [], "named": ["title", "message", "confirmLabel"] }
   }
 }

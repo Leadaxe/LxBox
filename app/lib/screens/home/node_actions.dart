@@ -112,7 +112,7 @@ void copyNodeJson(
         return;
       }
       toCopy = Map<String, dynamic>.from(detour)..remove('detour');
-      label = 'Detour copied';
+      label = getLocalText.s("Detour copied");
     case 'both':
       // §099 — server + ВСЯ цепочка detour'ов (не только первый hop), каждый
       // без своего detour-указателя (standalone outbounds для вставки).
@@ -120,16 +120,18 @@ void copyNodeJson(
       final n = chain.length - 1;
       if (n <= 0) {
         toCopy = Map<String, dynamic>.from(server)..remove('detour');
-        label = 'Server copied';
+        label = getLocalText.s("Server copied");
       } else {
         toCopy = [
           for (final m in chain) Map<String, dynamic>.from(m)..remove('detour'),
         ];
-        label = 'Server + $n detour${n > 1 ? "s" : ""} copied';
+        label = n == 1
+            ? getLocalText.s("Server + 1 detour copied")
+            : getLocalText.plural("Server + %d detours copied", n);
       }
     default: // 'server'
       toCopy = Map<String, dynamic>.from(server)..remove('detour');
-      label = 'Server copied';
+      label = getLocalText.s("Server copied");
   }
 
   final json = const JsonEncoder.withIndent('  ').convert(toCopy);

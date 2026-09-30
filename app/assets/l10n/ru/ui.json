@@ -32,6 +32,9 @@
   "%1$d selected · %2$d shown": {
     "value": "%1$d выбрано · %2$d показано"
   },
+  "%1$d server lists (%2$d subs, %3$d custom)": {
+    "value": "Списков серверов: %1$d (подписок: %2$d, своих: %3$d)"
+  },
   "%1$d servers · %2$d off": {
     "value": {
       "one": "%1$d сервер · %2$d выкл.",
@@ -75,6 +78,22 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d соб."
   },
+  "%d app settings": {
+    "value": {
+      "one": "%d настройка приложения",
+      "few": "%d настройки приложения",
+      "many": "%d настроек приложения",
+      "other": "%d настройки приложения"
+    }
+  },
+  "%d apps selected — tap to edit": {
+    "value": {
+      "one": "Выбрано %d приложение — нажмите, чтобы изменить",
+      "few": "Выбрано %d приложения — нажмите, чтобы изменить",
+      "many": "Выбрано %d приложений — нажмите, чтобы изменить",
+      "other": "Выбрано %d приложения — нажмите, чтобы изменить"
+    }
+  },
   "%d chained": {
     "value": {
       "one": "%d в цепочке",
@@ -89,6 +108,14 @@
       "few": "%d элемента",
       "many": "%d элементов",
       "other": "%d элемента"
+    }
+  },
+  "%d errors": {
+    "value": {
+      "one": "%d ошибка",
+      "few": "%d ошибки",
+      "many": "%d ошибок",
+      "other": "%d ошибки"
     }
   },
   "%d groups": {
@@ -386,6 +413,14 @@
       "other": "%d секунды"
     }
   },
+  "%d server lists": {
+    "value": {
+      "one": "%d список серверов",
+      "few": "%d списка серверов",
+      "many": "%d списков серверов",
+      "other": "%d списка серверов"
+    }
+  },
   "%d servers": {
     "value": {
       "one": "%d сервер",
@@ -402,8 +437,41 @@
       "other": "Удалено %d сервера"
     }
   },
+  "%d unknown keys skipped": {
+    "value": {
+      "one": "%d неизвестный ключ пропущен",
+      "few": "%d неизвестных ключа пропущено",
+      "many": "%d неизвестных ключей пропущено",
+      "other": "%d неизвестного ключа пропущено"
+    }
+  },
+  "%d VPN settings": {
+    "value": {
+      "one": "%d настройка VPN",
+      "few": "%d настройки VPN",
+      "many": "%d настроек VPN",
+      "other": "%d настройки VPN"
+    }
+  },
+  "%d VPN system toggles": {
+    "value": {
+      "one": "%d системный переключатель VPN",
+      "few": "%d системных переключателя VPN",
+      "many": "%d системных переключателей VPN",
+      "other": "%d системного переключателя VPN"
+    }
+  },
   "%s link": {
     "value": "Ссылка %s"
+  },
+  "%s · (optional)": {
+    "value": "%s · (необязательно)"
+  },
+  "(optional)": {
+    "value": "(необязательно)"
+  },
+  "1 app selected — tap to edit": {
+    "value": "Выбрано 1 приложение — нажмите, чтобы изменить"
   },
   "1 server disabled": {
     "value": "Отключено серверов: 1"
@@ -670,6 +738,9 @@
   },
   "ACTIVE": {
     "value": "АКТИВЕН"
+  },
+  "Add tile dismissed.": {
+    "value": "Добавление плитки отменено."
   },
   "Amnezia VPN config": {
     "value": "Конфиг Amnezia VPN"
@@ -1079,8 +1150,23 @@
   "Building config...": {
     "value": "Сборка конфига…"
   },
+  "by Domain": {
+    "value": "по домену"
+  },
+  "by IP": {
+    "value": "по IP"
+  },
   "By routing rule": {
     "value": "По правилам маршрутизации"
+  },
+  "Cannot show prompt right now — try again.": {
+    "value": "Сейчас не удаётся показать запрос — попробуйте ещё раз."
+  },
+  "Check skipped: %s": {
+    "value": "Проверка пропущена: %s"
+  },
+  "Connect": {
+    "value": "Подключить"
   },
   "CONNECTIONS (%d)": {
     "value": "СОЕДИНЕНИЯ (%d)"
@@ -1396,6 +1482,12 @@
   "Copy JSON to clipboard": {
     "value": "Копировать JSON в буфер обмена"
   },
+  "Copy server + detour": {
+    "value": "Копировать сервер + detour"
+  },
+  "Copy server + detours(%d)": {
+    "value": "Копировать сервер + detour'ы (%d)"
+  },
   "Copy URI": {
     "value": "Копировать URI"
   },
@@ -1453,6 +1545,9 @@
   "Could not read file.": {
     "value": "Не удалось прочитать файл."
   },
+  "Could not request tile add (%s). Pull down the status bar → edit tiles → drag L×Box manually.": {
+    "value": "Не удалось запросить добавление плитки (%s). Опустите шторку → изменить плитки → перетащите L×Box вручную."
+  },
   "Couldn't load new source — keeping current subscription": {
     "value": "Не удалось загрузить новый источник — текущая подписка сохранена"
   },
@@ -1494,6 +1589,27 @@
   },
   "Cut": {
     "value": "Вырезать"
+  },
+  "Dark": {
+    "value": "Тёмная"
+  },
+  "Data received (↓), nothing sent (↑0) — the stream looks stuck.": {
+    "value": "Данные получены (↓), ничего не отправлено (↑0) — похоже, поток завис."
+  },
+  "Data sent (↑), no reply (↓0) — the stream looks stuck.": {
+    "value": "Данные отправлены (↑), ответа нет (↓0) — похоже, поток завис."
+  },
+  "Debug API config (sensitive — token included)": {
+    "value": "Конфигурация Debug API (секретно — включая токен)"
+  },
+  "debug config": {
+    "value": "конфигурация Debug API"
+  },
+  "Detour copied": {
+    "value": "Detour скопирован"
+  },
+  "DNS exchange failed: %s": {
+    "value": "Сбой DNS-запроса: %s"
   },
   "DNS Final": {
     "value": "Финальный DNS"
@@ -2080,6 +2196,18 @@
   },
   "Fastest": {
     "value": "Самый быстрый"
+  },
+  "fetching subscriptions…": {
+    "value": "загрузка подписок…"
+  },
+  "Imported: %s": {
+    "value": "Импортировано: %s"
+  },
+  "Light": {
+    "value": "Светлая"
+  },
+  "Loading…": {
+    "value": "Загрузка…"
   },
   "Manual": {
     "value": "Вручную"
@@ -3038,6 +3166,68 @@
   "No valid outbounds in JSON": {
     "value": "В JSON нет валидных outbound-объектов"
   },
+  "Nothing imported": {
+    "value": "Ничего не импортировано"
+  },
+  "Rebuild config + connect": {
+    "value": "Пересобрать конфиг + подключить"
+  },
+  "Rebuild config + reconnect": {
+    "value": "Пересобрать конфиг + переподключить"
+  },
+  "Reconnect": {
+    "value": "Переподключить"
+  },
+  "routing (%d rules)": {
+    "value": {
+      "one": "маршрутизация (%d правило)",
+      "few": "маршрутизация (%d правила)",
+      "many": "маршрутизация (%d правил)",
+      "other": "маршрутизация (%d правила)"
+    }
+  },
+  "Routing — %1$d rules, final: %2$s": {
+    "value": {
+      "one": "Маршрутизация — %1$d правило, final: %2$s",
+      "few": "Маршрутизация — %1$d правила, final: %2$s",
+      "many": "Маршрутизация — %1$d правил, final: %2$s",
+      "other": "Маршрутизация — %1$d правила, final: %2$s"
+    }
+  },
+  "Routing — %d rules": {
+    "value": {
+      "one": "Маршрутизация — %d правило",
+      "few": "Маршрутизация — %d правила",
+      "many": "Маршрутизация — %d правил",
+      "other": "Маршрутизация — %d правила"
+    }
+  },
+  "Select apps…": {
+    "value": "Выбрать приложения…"
+  },
+  "Server + %d detours copied": {
+    "value": {
+      "one": "Сервер + %d detour скопированы",
+      "few": "Сервер + %d detour'а скопированы",
+      "many": "Сервер + %d detour'ов скопированы",
+      "other": "Сервер + %d detour'а скопированы"
+    }
+  },
+  "Server + 1 detour copied": {
+    "value": "Сервер + 1 detour скопированы"
+  },
+  "Server copied": {
+    "value": "Сервер скопирован"
+  },
+  "sing-box %s · via libbox": {
+    "value": "sing-box %s · через libbox"
+  },
+  "sing-box (version unknown)": {
+    "value": "sing-box (версия неизвестна)"
+  },
+  "Stream": {
+    "value": "Поток"
+  },
   "This node cannot be shared as a link.": {
     "value": "Этим узлом нельзя поделиться ссылкой."
   },
@@ -3059,8 +3249,17 @@
   "sleep": {
     "value": "sleep"
   },
+  "Tile added to Quick Settings.": {
+    "value": "Плитка добавлена в быстрые настройки."
+  },
+  "Tile is already in Quick Settings.": {
+    "value": "Плитка уже есть в быстрых настройках."
+  },
   "Two columns on wide screens": {
     "value": "Две колонки на широком экране"
+  },
+  "unknown error": {
+    "value": "неизвестная ошибка"
   },
   "up": {
     "value": "up"
@@ -5289,6 +5488,9 @@
   },
   "yesterday": {
     "value": "вчера"
+  },
+  "Your Android version doesn't support an in-app prompt. Pull down the status bar → edit tiles → drag L×Box to active tiles.": {
+    "value": "Ваша версия Android не поддерживает запрос из приложения. Опустите шторку → изменить плитки → перетащите L×Box в активные."
   },
   "— (default DNS)": {
     "value": "— (DNS по умолчанию)"

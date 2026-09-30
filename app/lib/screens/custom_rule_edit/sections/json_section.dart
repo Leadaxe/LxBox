@@ -24,7 +24,7 @@ class JsonSection extends StatelessWidget {
   final VoidCallback onChanged;
 
   static const String _placeholder =
-      '{ "protocol": "dns", "action": "hijack-dns" }';
+      '{ "protocol": "dns", "action": "hijack-dns" }'; // l10n-exempt: JSON sample
 
   @override
   Widget build(BuildContext context) {

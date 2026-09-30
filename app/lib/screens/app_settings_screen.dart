@@ -350,15 +350,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     final msg = switch (result) {
-      'added' => 'Tile added to Quick Settings.',
-      'already' => 'Tile is already in Quick Settings.',
-      'dismissed' => 'Add tile dismissed.',
-      'unsupported' =>
-        'Your Android version doesn\'t support an in-app prompt. '
-            'Pull down the status bar → edit tiles → drag L×Box to active tiles.',
-      'no_activity' => 'Cannot show prompt right now — try again.',
-      _ => 'Could not request tile add ($result). '
-            'Pull down the status bar → edit tiles → drag L×Box manually.',
+      'added' => getLocalText.s("Tile added to Quick Settings."),
+      'already' => getLocalText.s("Tile is already in Quick Settings."),
+      'dismissed' => getLocalText.s("Add tile dismissed."),
+      'unsupported' => getLocalText.s(
+          "Your Android version doesn't support an in-app prompt. "
+          "Pull down the status bar → edit tiles → drag L×Box to active tiles."),
+      'no_activity' =>
+        getLocalText.s("Cannot show prompt right now — try again."),
+      _ => getLocalText.s(
+          "Could not request tile add (%s). "
+          "Pull down the status bar → edit tiles → drag L×Box manually.",
+          result),
     };
     final duration = (result == 'unsupported' ||
             result.startsWith('error') ||

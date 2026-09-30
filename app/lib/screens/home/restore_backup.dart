@@ -12,6 +12,7 @@ import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/file_import.dart';
+import '../backup_screen/restore_summary.dart';
 
 /// Empty-state quick-restore flow.
 ///
@@ -85,6 +86,9 @@ Future<void> restoreFromBackup(
     );
     // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
     await syncAutomationFromStorage();
+    // §279/§607 — restore мог привезти другой app_language: применить через
+    // владеющий пайплайн, как экран Backup.
+    await LocaleController.I.reloadFromStorage();
     if (!context.mounted) return;
 
     // Re-read storage в in-memory state controller'ов: `applyImport` записал
@@ -98,29 +102,13 @@ Future<void> restoreFromBackup(
     unawaited(
         autoUpdater.maybeUpdateAll(UpdateTrigger.manual, force: true));
 
-    final parts = <String>[];
-    if (apply.serverListsApplied > 0) {
-      parts.add('${apply.serverListsApplied} server lists');
-    }
-    if (apply.routingApplied > 0) parts.add('${apply.routingApplied} rules');
-    if (apply.appSettingsApplied > 0) {
-      parts.add('${apply.appSettingsApplied} app settings');
-    }
-    if (apply.debugConfigApplied > 0) parts.add('debug config');
-    if (apply.vpnSettingsApplied > 0) {
-      parts.add('${apply.vpnSettingsApplied} VPN settings');
-    }
-    final summary = StringBuffer(parts.isEmpty
-        ? 'Imported nothing'
-        : 'Imported: ${parts.join(', ')} · fetching subscriptions…');
-    // §159 — allowlist отбросил неизвестные/чужеродные ключи.
-    if (apply.droppedKeys.isNotEmpty) {
-      summary.write(' · ${apply.droppedKeys.length} unknown keys skipped');
-    }
+    // §607 — тот же локализованный итог, что на экране Backup, с ошибками.
+    final summary =
+        restoreSummaryText(apply, fetchingSubscriptions: true);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(summary.toString()),
+        content: Text(summary),
         duration: const Duration(seconds: 6),
       ),
     );

@@ -93,6 +93,72 @@ final w = Text(switch (x) {
     });
   });
 
+  // §607 — литерал, положенный в переменную или поле, а потом в Text().
+  group('identifier tracing', () {
+    test('local variable initializer (switch) is traced', () {
+      final sites = scan('''
+Widget f(ThemeMode mode) {
+  final label = switch (mode) {
+    ThemeMode.system => 'System',
+    _ => 'Dark',
+  };
+  return Text(label);
+}
+''');
+      expect(sites.map((s) => s.preview), unorderedEquals(['System', 'Dark']));
+    });
+
+    test('assignments inside switch statement are traced', () {
+      final sites = scan('''
+void f(String kind) {
+  String label;
+  switch (kind) {
+    case 'a':
+      label = 'Detour copied';
+    default:
+      label = 'Server copied';
+  }
+  showSnackBar(SnackBar(content: Text(label)));
+}
+''');
+      expect(sites.map((s) => s.preview),
+          unorderedEquals(['Detour copied', 'Server copied']));
+    });
+
+    test('field with ! assigned elsewhere in the class is traced', () {
+      final sites = scan('''
+class _S extends State<W> {
+  String? _line;
+  void check() { _line = "You're up to date"; }
+  Widget build(BuildContext c) => Text(_line!);
+}
+''');
+      expect(sites.map((s) => s.preview), ["You're up to date"]);
+    });
+
+    test('variable holding getLocalText.s(...) is not a site', () {
+      expect(scan('''
+Widget f(bool up) {
+  final label = up ? getLocalText.s("Stop") : getLocalText.s("Start");
+  return Text(label);
+}
+'''), isEmpty);
+    });
+
+    test('same-named local of another method is not a field', () {
+      expect(scan('''
+class _S {
+  String preview() { final tag = 'unnamed'; return tag; }
+  Widget row(String tag) => Text(tag);
+}
+'''), isEmpty);
+    });
+
+    test('parameter is not traced (no declaration in scope)', () {
+      expect(scan('Widget f(String label) => Text(label);'), isEmpty);
+    });
+  });
+
   group('l10n-exempt', () {
     test('same line and line above suppress the site', () {
       expect(

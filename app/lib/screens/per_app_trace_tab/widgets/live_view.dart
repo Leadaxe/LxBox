@@ -309,7 +309,8 @@ class LiveView extends StatelessWidget {
     final String text = switch (e.kind) {
       TrafficEventKind.dnsResolve =>
         ip != null ? '${domain ?? "?"} → $ip' : (domain ?? '?'),
-      TrafficEventKind.dnsFail => 'DNS exchange failed: ${domain ?? "?"}',
+      TrafficEventKind.dnsFail =>
+        getLocalText.s("DNS exchange failed: %s", domain ?? '?'),
       TrafficEventKind.tcpOpen || TrafficEventKind.udpOpen =>
         (domain != null && domain.isNotEmpty)
             ? '$domain:${port ?? "?"}'

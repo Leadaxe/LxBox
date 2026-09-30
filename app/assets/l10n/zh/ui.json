@@ -23,6 +23,9 @@
   "%1$d selected · %2$d shown": {
     "value": "已选 %1$d · 显示 %2$d"
   },
+  "%1$d server lists (%2$d subs, %3$d custom)": {
+    "value": "%1$d 个服务器列表（订阅 %2$d 个，自定义 %3$d 个）"
+  },
   "%1$d servers · %2$d off": {
     "value": {
       "other": "%1$d 个服务器 · %2$d 个已关闭"
@@ -60,6 +63,16 @@
   "%1$s · %2$d events": {
     "value": "%1$s · %2$d 个事件"
   },
+  "%d app settings": {
+    "value": {
+      "other": "%d 项应用设置"
+    }
+  },
+  "%d apps selected — tap to edit": {
+    "value": {
+      "other": "已选 %d 个应用 — 点按编辑"
+    }
+  },
   "%d chained": {
     "value": {
       "other": "%d 个链式"
@@ -68,6 +81,11 @@
   "%d elements": {
     "value": {
       "other": "%d 个元素"
+    }
+  },
+  "%d errors": {
+    "value": {
+      "other": "%d 个错误"
     }
   },
   "%d groups": {
@@ -260,6 +278,11 @@
       "other": "%d 秒"
     }
   },
+  "%d server lists": {
+    "value": {
+      "other": "%d 个服务器列表"
+    }
+  },
   "%d servers": {
     "value": {
       "other": "%d 个服务器"
@@ -270,8 +293,32 @@
       "other": "已删除 %d 个服务器"
     }
   },
+  "%d unknown keys skipped": {
+    "value": {
+      "other": "已跳过 %d 个未知键"
+    }
+  },
+  "%d VPN settings": {
+    "value": {
+      "other": "%d 项 VPN 设置"
+    }
+  },
+  "%d VPN system toggles": {
+    "value": {
+      "other": "%d 个 VPN 系统开关"
+    }
+  },
   "%s link": {
     "value": "%s 链接"
+  },
+  "%s · (optional)": {
+    "value": "%s · （可选）"
+  },
+  "(optional)": {
+    "value": "（可选）"
+  },
+  "1 app selected — tap to edit": {
+    "value": "已选 1 个应用 — 点按编辑"
   },
   "1 server disabled": {
     "value": "已关闭 1 个服务器"
@@ -502,6 +549,9 @@
   },
   "ACTIVE": {
     "value": "在用"
+  },
+  "Add tile dismissed.": {
+    "value": "已取消添加磁贴。"
   },
   "Amnezia VPN config": {
     "value": "Amnezia VPN 配置"
@@ -911,8 +961,23 @@
   "Building config...": {
     "value": "正在构建配置…"
   },
+  "by Domain": {
+    "value": "按域名"
+  },
+  "by IP": {
+    "value": "按 IP"
+  },
   "By routing rule": {
     "value": "按路由规则"
+  },
+  "Cannot show prompt right now — try again.": {
+    "value": "暂时无法显示提示 — 请重试。"
+  },
+  "Check skipped: %s": {
+    "value": "已跳过检查：%s"
+  },
+  "Connect": {
+    "value": "连接"
   },
   "CONNECTIONS (%d)": {
     "value": "连接（%d）"
@@ -1198,6 +1263,12 @@
   "Copy JSON to clipboard": {
     "value": "复制 JSON 到剪贴板"
   },
+  "Copy server + detour": {
+    "value": "复制服务器 + detour"
+  },
+  "Copy server + detours(%d)": {
+    "value": "复制服务器 + detour（%d 个）"
+  },
   "Copy URI": {
     "value": "复制 URI"
   },
@@ -1255,6 +1326,9 @@
   "Could not read file.": {
     "value": "无法读取文件。"
   },
+  "Could not request tile add (%s). Pull down the status bar → edit tiles → drag L×Box manually.": {
+    "value": "无法请求添加磁贴（%s）。下拉状态栏 → 编辑磁贴 → 手动拖入 L×Box。"
+  },
   "Couldn't load new source — keeping current subscription": {
     "value": "无法加载新来源——保留当前订阅"
   },
@@ -1296,6 +1370,27 @@
   },
   "Cut": {
     "value": "剪切"
+  },
+  "Dark": {
+    "value": "深色"
+  },
+  "Data received (↓), nothing sent (↑0) — the stream looks stuck.": {
+    "value": "已接收数据（↓），未发送（↑0）— 连接似乎卡住了。"
+  },
+  "Data sent (↑), no reply (↓0) — the stream looks stuck.": {
+    "value": "已发送数据（↑），无响应（↓0）— 连接似乎卡住了。"
+  },
+  "Debug API config (sensitive — token included)": {
+    "value": "Debug API 配置（敏感 — 含令牌）"
+  },
+  "debug config": {
+    "value": "Debug API 配置"
+  },
+  "Detour copied": {
+    "value": "已复制 detour"
+  },
+  "DNS exchange failed: %s": {
+    "value": "DNS 查询失败：%s"
   },
   "DNS Final": {
     "value": "最终 DNS"
@@ -1870,6 +1965,18 @@
   },
   "Fastest": {
     "value": "最快"
+  },
+  "fetching subscriptions…": {
+    "value": "正在获取订阅…"
+  },
+  "Imported: %s": {
+    "value": "已导入：%s"
+  },
+  "Light": {
+    "value": "浅色"
+  },
+  "Loading…": {
+    "value": "加载中…"
   },
   "Manual": {
     "value": "手动"
@@ -2816,6 +2923,56 @@
   "No valid outbounds in JSON": {
     "value": "JSON 中没有有效的 outbound"
   },
+  "Nothing imported": {
+    "value": "未导入任何内容"
+  },
+  "Rebuild config + connect": {
+    "value": "重建配置并连接"
+  },
+  "Rebuild config + reconnect": {
+    "value": "重建配置并重新连接"
+  },
+  "Reconnect": {
+    "value": "重新连接"
+  },
+  "routing (%d rules)": {
+    "value": {
+      "other": "路由（%d 条规则）"
+    }
+  },
+  "Routing — %1$d rules, final: %2$s": {
+    "value": {
+      "other": "路由 — %1$d 条规则，final：%2$s"
+    }
+  },
+  "Routing — %d rules": {
+    "value": {
+      "other": "路由 — %d 条规则"
+    }
+  },
+  "Select apps…": {
+    "value": "选择应用…"
+  },
+  "Server + %d detours copied": {
+    "value": {
+      "other": "已复制服务器 + %d 个 detour"
+    }
+  },
+  "Server + 1 detour copied": {
+    "value": "已复制服务器 + 1 个 detour"
+  },
+  "Server copied": {
+    "value": "已复制服务器"
+  },
+  "sing-box %s · via libbox": {
+    "value": "sing-box %s · 通过 libbox"
+  },
+  "sing-box (version unknown)": {
+    "value": "sing-box（版本未知）"
+  },
+  "Stream": {
+    "value": "流"
+  },
   "This node cannot be shared as a link.": {
     "value": "此节点无法以链接形式分享。"
   },
@@ -2837,8 +2994,17 @@
   "sleep": {
     "value": "sleep"
   },
+  "Tile added to Quick Settings.": {
+    "value": "磁贴已添加到快捷设置。"
+  },
+  "Tile is already in Quick Settings.": {
+    "value": "磁贴已在快捷设置中。"
+  },
   "Two columns on wide screens": {
     "value": "宽屏时双栏显示"
+  },
+  "unknown error": {
+    "value": "未知错误"
   },
   "up": {
     "value": "up"
@@ -5049,6 +5215,9 @@
   },
   "yesterday": {
     "value": "昨天"
+  },
+  "Your Android version doesn't support an in-app prompt. Pull down the status bar → edit tiles → drag L×Box to active tiles.": {
+    "value": "您的 Android 版本不支持应用内提示。下拉状态栏 → 编辑磁贴 → 将 L×Box 拖入已启用的磁贴。"
   },
   "— (default DNS)": {
     "value": "—（默认 DNS）"

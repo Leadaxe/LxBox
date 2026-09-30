@@ -236,10 +236,12 @@ class _TraceExplorerState extends State<TraceExplorer> {
     final String label;
     if (isLive) {
       icon = Icons.stream;
-      label = 'Stream';
+      label = getLocalText.s("Stream");
     } else {
       icon = Icons.summarize;
-      label = _aggAxis == AggAxis.domain ? 'by Domain' : 'by IP';
+      label = _aggAxis == AggAxis.domain
+          ? getLocalText.s("by Domain")
+          : getLocalText.s("by IP");
     }
     return PopupMenuButton<String>(
       tooltip: getLocalText.s("Grouping"),

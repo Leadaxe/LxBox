@@ -241,8 +241,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   Widget build(BuildContext context) {
     // §099 — лейбл «both»: единственное «detour» или «detours(N)» при N>1.
     final bothLabel = widget.detourCount > 1
-        ? 'Copy server + detours(${widget.detourCount})'
-        : 'Copy server + detour';
+        ? getLocalText.s("Copy server + detours(%d)", widget.detourCount)
+        : getLocalText.s("Copy server + detour");
     // §355 — вкладка Dependents: sick-срез (транзитивные жертвы мёртвого
     // корня) приоритетнее статического «кто через меня ходит». Пусто → нет
     // вкладки (не показываем пустую).

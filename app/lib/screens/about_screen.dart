@@ -138,9 +138,10 @@ class AboutScreen extends StatelessWidget {
                   builder: (ctx, snap) {
                     final v = (snap.data ?? '').trim();
                     final subtitle = switch (snap.connectionState) {
-                      ConnectionState.waiting => 'Loading…',
-                      _ when v.isEmpty => 'sing-box (version unknown)',
-                      _ => 'sing-box $v · via libbox',
+                      ConnectionState.waiting => getLocalText.s("Loading…"),
+                      _ when v.isEmpty =>
+                        getLocalText.s("sing-box (version unknown)"),
+                      _ => getLocalText.s("sing-box %s · via libbox", v),
                     };
                     return ListTile(
                       leading: const Icon(Icons.architecture),
@@ -427,11 +428,13 @@ class _UpdateBlockState extends State<_UpdateBlock> {
         case UpdateCheckKind.newer:
           _statusLine = null; // banner-block ниже сам отрисует info
         case UpdateCheckKind.upToDate:
-          _statusLine = "You're up to date";
+          _statusLine = getLocalText.s("You're up to date");
         case UpdateCheckKind.failed:
-          _statusLine = 'Check failed: ${result.message ?? 'unknown error'}';
+          _statusLine = getLocalText.s("Check failed: %s",
+              result.message ?? getLocalText.s("unknown error"));
         case UpdateCheckKind.skipped:
-          _statusLine = 'Check skipped: ${result.message ?? ''}';
+          _statusLine =
+              getLocalText.s("Check skipped: %s", result.message ?? '');
       }
     });
   }

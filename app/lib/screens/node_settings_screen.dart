@@ -189,7 +189,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _originalTag = node.tag;
     // §130 — protocol у WG и AWG одинаков ('wireguard'); для AWG уточняем
     // подпись «AmneziaWG (wireguard)», чтобы юзер видел, что это AWG-разновидность.
-    _scheme = _isAwg ? 'AmneziaWG (wireguard)' : node.protocol;
+    _scheme = _isAwg
+        ? 'AmneziaWG (wireguard)' // l10n-exempt: protocol name
+        : node.protocol;
     // §435 — у безадресного узла нет «server:port»: Tailscale входит в
     // tailnet сам (tsnet), группа §322 — правило выбора. «:0» не показываем.
     _serverInfo = node is TailscaleSpec

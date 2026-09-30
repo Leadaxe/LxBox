@@ -268,7 +268,9 @@ class _PresetVarWidget extends StatelessWidget {
     // ему ни к чему (§588: `required` без ключа = false).
     final subtitle = (v.required || v.type == 'bool')
         ? v.tooltip
-        : (v.tooltip.isEmpty ? '(optional)' : '${v.tooltip} · (optional)');
+        : (v.tooltip.isEmpty
+            ? getLocalText.s("(optional)")
+            : getLocalText.s("%s · (optional)", v.tooltip));
 
     // §555 — значение и запись для типов без собственной семантики хранения
     // (text / int / text_list / enum с `options_open`): ref-var — глобальный
