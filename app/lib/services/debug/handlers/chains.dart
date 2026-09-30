@@ -65,7 +65,7 @@ Future<DebugResponse> chainsHandler(DebugRequest req, DebugContext ctx) async {
 
   if (path.startsWith('/chains/')) {
     var tag = path.substring('/chains/'.length);
-    // §394 — единственный под-ресурс цепочки: послойная проба. Разбираем до
+    // §393F — единственный под-ресурс цепочки: послойная проба. Разбираем до
     // общей проверки «тег без слэша», иначе `/chains/{tag}/probe` уходил бы
     // в 404 вместе с настоящим мусором.
     if (tag.endsWith('/probe')) {
@@ -93,12 +93,12 @@ Future<DebugResponse> chainsHandler(DebugRequest req, DebugContext ctx) async {
   throw NotFound('chains path: $path');
 }
 
-/// §394 — чем хендлер меряет слои. Шов ради теста: прогон ходит в ядро через
+/// §393F — чем хендлер меряет слои. Шов ради теста: прогон ходит в ядро через
 /// MethodChannel, которого в юнит-тесте нет, а проверять надо СВОЮ логику
 /// хендлера (404/409, форма ответа), не чужой транспорт.
 ChainLayerProbe Function() chainProbeFactory = ChainLayerProbe.new;
 
-/// §394 — `GET /chains/{tag}/probe` — послойная проба цепочки.
+/// §393F — `GET /chains/{tag}/probe` — послойная проба цепочки.
 ///
 /// ТОТ ЖЕ прогон, что блок «Chain positions» вкладки Diagnostics, и намеренно
 /// тот же: инструмент автоматизации, который меряет иначе, чем экран,

@@ -1,6 +1,6 @@
 # §293 — VpnSettings-фасад: унификация 4 входов настроек
 
-**Тип:** structural refactor (Шаг 3b фичи [§291](../tasks/291F-layered-architecture-facades/spec.md)) · **Статус:** дедуп enum РЕАЛИЗОВАН; фасад+экраны pending-device · **Размер:** M
+**Тип:** structural refactor (Шаг 3b фичи [§291](../tasks/291F-layered-architecture-facades/spec.md)) · **Статус:** РЕАЛИЗОВАНО — дедуп enum; фасад `VpnSettingsFacade` (`services/vpn_settings/`) — единственный вход для UI (`vpn_mode_tab.dart`), Debug API (`handlers/settings.dart`) и сборки · **Размер:** M
 
 > **Реализовано (безопасная часть, коммит ниже):** инлайн enum-валидация
 > settings-handler'а сведена к моделям (единый источник, как §292-D):

@@ -1,6 +1,6 @@
 # §211 — диалог «активен другой VPN» перед стартом
 
-> **СТАТУС: СПЕКА.** Native (Kotlin) detect + Dart MethodChannel + UI-диалог.
+> **СТАТУС: РЕАЛИЗОВАНО.** Native (Kotlin) detect + Dart MethodChannel (`BoxVpnClient.isForeignVpnActive`) + UI-диалог (`home/home_dialogs.dart` → `confirmForeignVpnOverride`, вызывается из старта на Home).
 
 ## Проблема
 

@@ -243,8 +243,9 @@ class HomeState {
       !_ownDelays.containsKey(tag) && delayOf(tag) != null;
   final List<DebugEntry> debugEvents;
   final NodeSortMode sortMode;
-  /// §070 — pin direct/auto в pinned section при non-default sort.
-  /// `defaultOrder` mode игнорирует pin (см. `_computeSortedNodes`).
+  /// §070 — pin direct/auto в pinned section. Действует при ЛЮБОМ sortMode,
+  /// включая `defaultOrder`: режим сортировки решает только порядок `rest`
+  /// (см. `_computeSortedNodes`, тест `home_state_sort_test`).
   final bool pinDirect;
   final bool pinAuto;
   /// §070 — pересчитывать sort при manual `runNodeUrltest` (single tag delay

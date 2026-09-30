@@ -20,7 +20,7 @@ class _FakePathProvider extends PathProviderPlatform
   Future<String?> getApplicationDocumentsPath() async => '$tempRoot/docs';
 }
 
-/// §394 — послойная проба цепочки: нарезка слоёв 0..k, схема тегов ядра,
+/// §393F — послойная проба цепочки: нарезка слоёв 0..k, схема тегов ядра,
 /// накопительные значения и дельты, обрыв слоя k помечает k+1.. not reached.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

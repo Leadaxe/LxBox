@@ -39,7 +39,7 @@ class _StubProbe extends ChainLayerProbe {
   }
 }
 
-/// §394 — блок «Chain positions»: ЛОГИКА состояний (что показано при каком
+/// §393F — блок «Chain positions»: ЛОГИКА состояний (что показано при каком
 /// отчёте), без проверки вёрстки и подписей-констант.
 void main() {
   ChainProbeReport reportOf(List<ChainLayerResult> layers) => ChainProbeReport(

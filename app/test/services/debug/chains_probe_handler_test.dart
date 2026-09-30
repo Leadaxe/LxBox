@@ -60,7 +60,7 @@ class _StubProbe extends ChainLayerProbe {
   }
 }
 
-/// §394 — `GET /chains/{tag}/probe`: маршрутизация под-ресурса, предусловия
+/// §393F — `GET /chains/{tag}/probe`: маршрутизация под-ресурса, предусловия
 /// (нет цепочки / нет в собранном конфиге / VPN выключен) и форма ответа.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

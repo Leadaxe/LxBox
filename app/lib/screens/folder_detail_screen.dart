@@ -354,7 +354,14 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             ListTile(
               leading: const Icon(Icons.link),
               title: Text(getLocalText.s("Ping URL & timeout…")),
-              subtitle: Text(getLocalText.s("Shared with the home screen ping")),
+              // §284 — у папки может быть свой URL/тайм-аут; здесь правится
+              // ГЛОБАЛЬНАЯ цель, и подпись не должна обещать, что она действует.
+              subtitle: Text(
+                _folder.pingUrl != null || _folder.pingTimeoutMs != null
+                    ? getLocalText.s(
+                        "Global target; this folder tests with its own URL and timeout")
+                    : getLocalText.s("Shared with the home screen ping"),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 unawaited(_editPingTarget());

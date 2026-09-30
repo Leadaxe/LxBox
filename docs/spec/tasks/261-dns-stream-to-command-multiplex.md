@@ -1,6 +1,6 @@
 # §261 — DNS-стрим: переход на command-мультиплекс ядра (смена парадигмы)
 
-**Статус:** Open — блокирован новым AAR (см. §0)
+**Статус:** Реализовано — DNS-стрим член command-мультиплекса (`BoxCommandClient.kt` → `connectProfilerClient`, `Libbox.CommandDNS` в одном `CommandClientOptions` с `CommandConnections`); отдельной подписки и reconnect-хука §260 больше нет
 **Заменяет:** [§260](260-profiler-dns-stream-reconnect.md) — Kotlin-заплатка (`profilerWanted`
 + reconnect-хук) отменяется; корень чинится в ядре переносом DNS в мультиплекс, клиентский
 reconnect-код удаляется (см. §1.5).
