@@ -107,6 +107,13 @@ final b = getLocalText.s(label);
   });
 
   group('validation — shape', () {
+    test('bare string entry (not {"value": …}) fails', () {
+      // §607 — движок такую запись не читает и печатает английский.
+      final v = validate([use('Error TTL')], {'Error TTL': 'TTL ошибки'});
+      expect(v.hasFail, isTrue);
+      expect(v.findings.single.kind, UiFindingKind.shape);
+    });
+
     test('.plural with incomplete plural forms fails', () {
       final v = validate([use('%d apps', plural: true)], {
         '%d apps': {

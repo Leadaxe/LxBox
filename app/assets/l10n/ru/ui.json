@@ -538,7 +538,9 @@
   "%s · current session": {
     "value": "%s · текущая сессия"
   },
-  "%s · disabled — will be skipped": "%s · выключен — будет пропущен",
+  "%s · disabled — will be skipped": {
+    "value": "%s · выключен — будет пропущен"
+  },
   "%s — tap to edit": {
     "value": "%s — нажмите, чтобы изменить"
   },
@@ -1514,9 +1516,15 @@
   "DNS entries: %d": {
     "value": "DNS-записей: %d"
   },
-  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе.",
-  "DNS group \"%s\" has no usable members — enable or add at least one server.": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер.",
-  "DNS group loop: %s — fix group membership to start the VPN.": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN.",
+  "DNS group \"%1$s\": member \"%2$s\" of type \"%3$s\" is not allowed in a group.": {
+    "value": "DNS-группа «%1$s»: член «%2$s» типа «%3$s» недопустим в группе."
+  },
+  "DNS group \"%s\" has no usable members — enable or add at least one server.": {
+    "value": "DNS-группа «%s» осталась без рабочих членов — включите или добавьте хотя бы один сервер."
+  },
+  "DNS group loop: %s — fix group membership to start the VPN.": {
+    "value": "Цикл DNS-групп: %s — исправьте состав групп, чтобы запустить VPN."
+  },
   "DNS queries are failing": {
     "value": "DNS-запросы не проходят"
   },
@@ -1931,7 +1939,9 @@
   "Error": {
     "value": "Ошибка"
   },
-  "Error TTL": "TTL ошибки",
+  "Error TTL": {
+    "value": "TTL ошибки"
+  },
   "Error: %s": {
     "value": "Ошибка: %s"
   },
@@ -2074,7 +2084,9 @@
   "Manual": {
     "value": "Вручную"
   },
-  "Fastest — race, then stick to the winner": "Fastest — гонка, затем липнет к победителю",
+  "Fastest — race, then stick to the winner": {
+    "value": "Fastest — гонка, затем липнет к победителю"
+  },
   "Feedback": {
     "value": "Отклик"
   },
@@ -2239,7 +2251,9 @@
   "Green up to, ms": {
     "value": "Зелёный до, мс"
   },
-  "Group": "Группа",
+  "Group": {
+    "value": "Группа"
+  },
   "Grouping": {
     "value": "Группировка"
   },
@@ -2526,7 +2540,9 @@
   "Invalid backup": {
     "value": "Некорректная резервная копия"
   },
-  "Invalid duration (e.g. 2m, 90s)": "Неверная длительность (напр. 2m, 90s)",
+  "Invalid duration (e.g. 2m, 90s)": {
+    "value": "Неверная длительность (напр. 2m, 90s)"
+  },
   "Invalid pool JSON — check the structure.": {
     "value": "Некорректный JSON пула — проверьте структуру."
   },
@@ -2740,7 +2756,9 @@
   "Measuring…": {
     "value": "Замеряю…"
   },
-  "Members": "Члены группы",
+  "Members": {
+    "value": "Члены группы"
+  },
   "Members connect through their personal detours": {
     "value": "Члены папки подключаются через свои личные detour"
   },
@@ -2963,7 +2981,9 @@
   "No nodes match. Check the path against a node's JSON.": {
     "value": "Совпадений нет. Сверьте путь с JSON узла."
   },
-  "No other DNS servers to add — create them first": "Других DNS-серверов нет — сначала создайте их",
+  "No other DNS servers to add — create them first": {
+    "value": "Других DNS-серверов нет — сначала создайте их"
+  },
   "No other servers in this folder": {
     "value": "В этой папке нет других серверов"
   },
@@ -3272,7 +3292,9 @@
   "Packet encoding \"%s\" is not one the core knows (xudp, packetaddr), so it was dropped — keeping it would crash the core.": {
     "value": "Упаковка пакетов «%s» ядру неизвестна (оно знает xudp и packetaddr), поэтому отброшена: иначе ядро аварийно завершилось бы."
   },
-  "Parallel — race every query": "Parallel — каждый запрос гонкой",
+  "Parallel — race every query": {
+    "value": "Parallel — каждый запрос гонкой"
+  },
   "Params": {
     "value": "Параметры"
   },
@@ -3999,7 +4021,9 @@
   "Select server": {
     "value": "Показать выбранный сервер"
   },
-  "Selection mode": "Режим выбора",
+  "Selection mode": {
+    "value": "Режим выбора"
+  },
   "Selector \"%1$s\" default \"%2$s\" is not in the options list.": {
     "value": "У селектора «%1$s» значение по умолчанию «%2$s» отсутствует в списке вариантов."
   },
@@ -4045,7 +4069,9 @@
   "Server not found": {
     "value": "Сервер не найден"
   },
-  "Server type": "Тип сервера",
+  "Server type": {
+    "value": "Тип сервера"
+  },
   "Servers": {
     "value": "Серверы"
   },
@@ -4079,7 +4105,9 @@
   "Settings changed — tap to rebuild config": {
     "value": "Настройки изменены — нажмите, чтобы пересобрать конфиг"
   },
-  "Several servers behind one tag — survives a member failure": "Несколько серверов под одним тегом — переживает сбой члена",
+  "Several servers behind one tag — survives a member failure": {
+    "value": "Несколько серверов под одним тегом — переживает сбой члена"
+  },
   "Share": {
     "value": "Поделиться"
   },
@@ -4195,7 +4223,9 @@
   "Speed Test": {
     "value": "Тест скорости"
   },
-  "Stable — stick to one until it fails": "Stable — держится за один, пока тот не сбоит",
+  "Stable — stick to one until it fails": {
+    "value": "Stable — держится за один, пока тот не сбоит"
+  },
   "Stack in use": {
     "value": "Стек занят"
   },
@@ -4916,7 +4946,9 @@
   "Will be enabled": {
     "value": "Будет включён"
   },
-  "Win TTL": "TTL победы",
+  "Win TTL": {
+    "value": "TTL победы"
+  },
   "Wipes existing data in selected categories.": {
     "value": "Стирает текущие данные в выбранных категориях."
   },
@@ -5234,7 +5266,9 @@
   "unknown": {
     "value": "неизвестно"
   },
-  "unknown server — will be skipped": "неизвестный сервер — будет пропущен",
+  "unknown server — will be skipped": {
+    "value": "неизвестный сервер — будет пропущен"
+  },
   "used by %s": {
     "value": "используется: %s"
   },
