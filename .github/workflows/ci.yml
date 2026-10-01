@@ -58,7 +58,7 @@ jobs:
       is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Compute version
@@ -130,7 +130,7 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Flutter version pin
         id: flutter_pin
@@ -285,7 +285,7 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Flutter version pin
         id: flutter_pin
@@ -329,7 +329,7 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           # §379 — versionCode считается из версии, история для него больше не
           # нужна. Полные refs оставлены для git-зависимых шагов (describe).
@@ -556,7 +556,7 @@ jobs:
     #   gh variable set PLAY_RELEASE_STATUS -b completed
     steps:
       - name: Checkout (changelogs + version-code.sh)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           sparse-checkout: |
             scripts/version-code.sh
@@ -642,7 +642,7 @@ jobs:
     if: needs.meta.outputs.is_release == 'true'
     steps:
       - name: Checkout (for release notes)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           sparse-checkout: RELEASE_NOTES.md
           sparse-checkout-cone-mode: false
@@ -696,7 +696,7 @@ jobs:
     if: needs.meta.outputs.is_release == 'true' && needs.meta.outputs.is_prerelease != 'true'
     steps:
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
